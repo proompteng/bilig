@@ -7,15 +7,25 @@ const rootDir = resolve(new URL("..", import.meta.url).pathname);
 const packagesDir = join(rootDir, "packages");
 const packDir = join(rootDir, "build", "npm-packages");
 const textDecoder = new TextDecoder();
+const cliArgs = process.argv.slice(2);
+const requireAlignedVersions = cliArgs.includes("--require-aligned");
+const packageArgs = cliArgs.filter((arg) => arg !== "--require-aligned");
 
-const packageDirs = readdirSync(packagesDir)
-  .map((name) => join(packagesDir, name))
-  .filter((dir) => existsSync(join(dir, "package.json")));
+const packageDirs =
+  packageArgs.length > 0
+    ? packageArgs.map(resolvePackageDir)
+    : readdirSync(packagesDir)
+        .map((name) => join(packagesDir, name))
+        .filter((dir) => existsSync(join(dir, "package.json")));
 
 rmSync(packDir, { recursive: true, force: true });
 mkdirSync(packDir, { recursive: true });
 
 const failures = [];
+
+if (requireAlignedVersions) {
+  validateAlignedVersions(packageDirs, failures);
+}
 
 for (const packageDir of packageDirs) {
   const packageJsonPath = join(packageDir, "package.json");
@@ -61,6 +71,14 @@ console.log(
     2,
   ),
 );
+
+function resolvePackageDir(packageArg) {
+  const resolvedArg = resolve(rootDir, packageArg);
+  if (!existsSync(join(resolvedArg, "package.json"))) {
+    throw new Error(`Package directory does not contain package.json: ${packageArg}`);
+  }
+  return resolvedArg;
+}
 
 function runTextCommand(command, args, options = {}) {
   const result = Bun.spawnSync([command, ...args], {
@@ -155,6 +173,29 @@ function validatePackedManifest(packageLabel, packedManifest, failureMessages) {
     failureMessages.push(
       `${packageLabel}: packed manifest still contains workspace:* dependency ranges`,
     );
+  }
+}
+
+function validateAlignedVersions(packageDirectories, failureMessages) {
+  const versions = new Map();
+  for (const packageDir of packageDirectories) {
+    const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
+    const packageLabel = manifest.name ?? packageDir;
+    const version = manifest.version;
+    if (typeof version !== "string" || version.length === 0) {
+      failureMessages.push(`${packageLabel}: version must be a non-empty string`);
+      continue;
+    }
+    const packagesForVersion = versions.get(version) ?? [];
+    packagesForVersion.push(packageLabel);
+    versions.set(version, packagesForVersion);
+  }
+
+  if (versions.size > 1) {
+    const summary = [...versions.entries()]
+      .map(([version, packageLabels]) => `${version}: ${packageLabels.join(", ")}`)
+      .join(" | ");
+    failureMessages.push(`release package versions must stay aligned (${summary})`);
   }
 }
 

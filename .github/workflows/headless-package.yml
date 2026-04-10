@@ -1,44 +1,30 @@
-name: headless-package
+name: bilig-runtime-packages
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "packages/headless/**"
-      - "packages/core/**"
-      - "packages/formula/**"
-      - "packages/protocol/**"
-      - "docs/public-api.md"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.base.json"
-      - "tsconfig.json"
-      - "tsconfig.workspace-paths.json"
-      - "workspace-resolution.generated.json"
-      - ".github/workflows/headless-package.yml"
-      - "release-please-config.json"
-      - ".release-please-manifest.json"
-      - "packages/headless/CHANGELOG.md"
   pull_request:
     paths:
       - "packages/headless/**"
       - "packages/core/**"
       - "packages/formula/**"
       - "packages/protocol/**"
+      - "packages/workbook-domain/**"
+      - "packages/wasm-kernel/**"
       - "docs/public-api.md"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "scripts/check-package-publish.ts"
+      - "scripts/next-runtime-release-version.ts"
+      - "scripts/runtime-package-set.ts"
+      - "scripts/publish-runtime-package-set.ts"
       - "tsconfig.base.json"
       - "tsconfig.json"
       - "tsconfig.workspace-paths.json"
       - "workspace-resolution.generated.json"
       - ".github/workflows/headless-package.yml"
-      - "release-please-config.json"
-      - ".release-please-manifest.json"
-      - "packages/headless/CHANGELOG.md"
   workflow_dispatch:
     inputs:
       npm_tag:
@@ -51,13 +37,11 @@ on:
         type: boolean
         required: false
         default: false
-      release_mode:
-        description: "prepare → open release PR, publish → release to npm"
-        type: choice
-        default: prepare
-        options:
-          - prepare
-          - publish
+      target_version:
+        description: "Optional explicit runtime package version to release"
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: headless-package-${{ github.ref }}
@@ -65,7 +49,7 @@ concurrency:
 
 jobs:
   verify:
-    name: verify-headless
+    name: verify-runtime-packages
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -110,102 +94,57 @@ jobs:
             packages/headless/src/__tests__/headless-workbook.test.ts \
             packages/headless/src/__tests__/headless-workbook-parity.test.ts
 
-      - name: Build headless dependency chain
+      - name: Build runtime package chain
         run: |
           set -euo pipefail
+          pnpm --filter @bilig/protocol build
+          pnpm --filter @bilig/workbook-domain build
+          pnpm --filter @bilig/wasm-kernel build
           pnpm --filter @bilig/formula build
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
 
-      - name: Pack headless tarball
+      - name: Validate publishable runtime package set
         run: |
           set -euo pipefail
-          rm -rf build/npm-packages-headless
-          mkdir -p build/npm-packages-headless
-          pnpm --filter @bilig/headless pack --pack-destination build/npm-packages-headless
+          pnpm publish:runtime:check
 
-      - name: Upload packed headless artifact
+      - name: Pack runtime package set
+        run: |
+          set -euo pipefail
+          rm -rf build/npm-packages-runtime
+          mkdir -p build/npm-packages-runtime
+
+          package_dirs=(
+            packages/protocol
+            packages/workbook-domain
+            packages/wasm-kernel
+            packages/formula
+            packages/core
+            packages/headless
+          )
+
+          for package_dir in "${package_dirs[@]}"; do
+            (
+              cd "$package_dir"
+              pnpm pack --pack-destination "$GITHUB_WORKSPACE/build/npm-packages-runtime"
+            )
+          done
+
+      - name: Upload packed runtime artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bilig-headless-package
-          path: build/npm-packages-headless/*.tgz
+          name: bilig-runtime-packages
+          path: build/npm-packages-runtime/*.tgz
           if-no-files-found: error
 
-  prepare-release:
-    name: prepare-headless-release
+  publish-release:
+    name: publish-runtime-packages
     runs-on: ubuntu-latest
     needs: verify
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_mode == 'prepare' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24.11.1"
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.10"
-
-      - name: Enable Corepack
-        run: |
-          set -euo pipefail
-          corepack enable
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install dependencies
-        run: |
-          set -euo pipefail
-          pnpm install --frozen-lockfile
-
-      - name: Run release-please for headless package
-        id: release_please
-        uses: googleapis/release-please-action@v4
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          include-component-in-tag: true
-          skip-github-release: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fetch release branch
-        id: release_branch
-        run: |
-          set -euo pipefail
-          branch="release-please--branches--main--components--headless"
-          if git ls-remote --exit-code origin "$branch" >/dev/null 2>&1; then
-            git fetch origin "$branch":"$branch"
-            git checkout "$branch"
-            echo "branch=$branch" >> "$GITHUB_OUTPUT"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "release-please branch $branch not found; nothing to build yet"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build generated release branch
-        if: steps.release_branch.outputs.found == 'true'
-        run: |
-          set -euo pipefail
-          pnpm --filter @bilig/formula build
-          pnpm --filter @bilig/core build
-          pnpm --filter @bilig/headless build
-
-  publish-release:
-    name: publish-headless
-    runs-on: ubuntu-latest
-    needs: verify
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_mode == 'publish' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
       id-token: write
     steps:
       - name: Checkout repository
@@ -243,11 +182,20 @@ jobs:
 
       - name: Derive release metadata
         id: release_meta
+        env:
+          INPUT_NPM_TAG: ${{ github.event.inputs.npm_tag }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          INPUT_TARGET_VERSION: ${{ github.event.inputs.target_version }}
         run: |
           set -euo pipefail
-          version_value=$(node -p "require('./packages/headless/package.json').version")
-          npm_tag_input="${{ github.event.inputs.npm_tag || 'latest' }}"
-          dry_run_input="${{ github.event.inputs.dry_run || 'false' }}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            npm_tag_input="latest"
+            dry_run_input="false"
+          else
+            npm_tag_input="${INPUT_NPM_TAG:-latest}"
+            dry_run_input="${INPUT_DRY_RUN:-false}"
+          fi
 
           case "$dry_run_input" in
             true|True|TRUE) dry_run_value=true ;;
@@ -258,49 +206,90 @@ jobs:
               ;;
           esac
 
+          if [[ -n "${INPUT_TARGET_VERSION:-}" ]]; then
+            version_value="${INPUT_TARGET_VERSION}"
+          else
+            version_value=$(bun scripts/next-runtime-release-version.ts | node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(data.targetVersion);')
+          fi
+
           echo "version=$version_value" >> "$GITHUB_OUTPUT"
           echo "npm_tag=$npm_tag_input" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run_value" >> "$GITHUB_OUTPUT"
+          echo "create_release=$([[ "$dry_run_value" == "true" ]] && echo false || echo true)" >> "$GITHUB_OUTPUT"
 
       - name: Confirm package version
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
-          const pkg = JSON.parse(
-            fs.readFileSync('packages/headless/package.json', 'utf8'),
+          const packagePaths = [
+            'packages/protocol/package.json',
+            'packages/workbook-domain/package.json',
+            'packages/wasm-kernel/package.json',
+            'packages/formula/package.json',
+            'packages/core/package.json',
+            'packages/headless/package.json',
+          ];
+          const packages = packagePaths.map((packagePath) =>
+            JSON.parse(fs.readFileSync(packagePath, 'utf8')),
           );
-          console.log(`Publishing @bilig/headless v${pkg.version}`);
+          const versions = [...new Set(packages.map((pkg) => pkg.version))];
+          if (versions.length !== 1) {
+            throw new Error(
+              `Runtime packages must share one version: ${packages
+                .map((pkg) => `${pkg.name}@${pkg.version}`)
+                .join(', ')}`,
+            );
+          }
+          console.log(`Repository runtime package manifest baseline v${versions[0]}`);
           NODE
 
-      - name: Build headless dependency chain
+      - name: Build runtime package chain
         run: |
           set -euo pipefail
+          pnpm --filter @bilig/protocol build
+          pnpm --filter @bilig/workbook-domain build
+          pnpm --filter @bilig/wasm-kernel build
           pnpm --filter @bilig/formula build
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
 
-      - name: Pack headless tarball
+      - name: Validate publishable runtime package set
         run: |
           set -euo pipefail
-          rm -rf build/npm-packages-headless
-          mkdir -p build/npm-packages-headless
-          pnpm --filter @bilig/headless pack --pack-destination build/npm-packages-headless
+          pnpm publish:runtime:check
 
-      - name: Publish package to npm
+      - name: Create git tag and GitHub release
+        if: steps.release_meta.outputs.create_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag_name="runtime-packages-v${RELEASE_VERSION}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag_name}" >/dev/null 2>&1; then
+            echo "Tag ${tag_name} already exists; skipping release creation"
+            exit 0
+          fi
+
+          notes_file=$(mktemp)
+          {
+            echo "Automated runtime package release."
+            echo
+            echo "- Version: ${RELEASE_VERSION}"
+            echo "- Commit: ${GITHUB_SHA}"
+          } > "$notes_file"
+
+          gh release create "$tag_name" \
+            --target "$GITHUB_SHA" \
+            --title "Runtime packages v${RELEASE_VERSION}" \
+            --notes-file "$notes_file"
+
+      - name: Publish runtime package set to npm
         env:
           NPM_DIST_TAG: ${{ steps.release_meta.outputs.npm_tag }}
           DRY_RUN: ${{ steps.release_meta.outputs.dry_run }}
+          TARGET_VERSION: ${{ steps.release_meta.outputs.version }}
         run: |
           set -euo pipefail
-          tarball_path=$(find build/npm-packages-headless -maxdepth 1 -name '*.tgz' -print -quit)
-          if [[ -z "${tarball_path}" ]]; then
-            echo 'Packed headless tarball not found' >&2
-            exit 1
-          fi
-
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            echo 'Running npm publish in dry-run mode'
-            npm publish "$tarball_path" --tag "$NPM_DIST_TAG" --access public --provenance --dry-run
-          else
-            npm publish "$tarball_path" --tag "$NPM_DIST_TAG" --access public --provenance
-          fi
+          bun scripts/publish-runtime-package-set.ts

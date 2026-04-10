@@ -59,6 +59,9 @@
     "bench:smoke": "bun scripts/perf-smoke.ts",
     "bench:contracts": "bun scripts/bench-contracts.ts",
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
+    "publish:runtime:next-version": "bun scripts/next-runtime-release-version.ts",
+    "publish:runtime:check": "bun scripts/check-package-publish.ts --require-aligned packages/protocol packages/workbook-domain packages/wasm-kernel packages/formula packages/core packages/headless",
+    "publish:runtime": "bun scripts/publish-runtime-package-set.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
     "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm --filter @bilig/web build && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
