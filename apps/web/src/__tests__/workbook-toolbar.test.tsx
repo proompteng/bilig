@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getWorkbookShortcutLabel } from "../shortcut-registry.js";
 import { WorkbookToolbar } from "../workbook-toolbar.js";
 
 afterEach(() => {
@@ -79,6 +80,78 @@ describe("WorkbookToolbar", () => {
     });
 
     expect(onHideCurrentRow).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows shared shortcut labels on alignment buttons", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkbookToolbar
+          canHideCurrentColumn={false}
+          canHideCurrentRow={false}
+          canRedo={false}
+          canUndo={false}
+          canUnhideCurrentColumn={false}
+          canUnhideCurrentRow={false}
+          currentFillColor="#ffffff"
+          currentNumberFormatKind="general"
+          currentTextColor="#111827"
+          horizontalAlignment="left"
+          isBoldActive={false}
+          isItalicActive={false}
+          isUnderlineActive={false}
+          isWrapActive={false}
+          onApplyBorderPreset={() => {}}
+          onClearStyle={() => {}}
+          onFillColorReset={() => {}}
+          onFillColorSelect={() => {}}
+          onFontSizeChange={() => {}}
+          onHideCurrentColumn={() => {}}
+          onHideCurrentRow={() => {}}
+          onHorizontalAlignmentChange={() => {}}
+          onNumberFormatChange={() => {}}
+          onRedo={() => {}}
+          onTextColorReset={() => {}}
+          onTextColorSelect={() => {}}
+          onToggleBold={() => {}}
+          onToggleItalic={() => {}}
+          onToggleUnderline={() => {}}
+          onToggleWrap={() => {}}
+          onUndo={() => {}}
+          onUnhideCurrentColumn={() => {}}
+          onUnhideCurrentRow={() => {}}
+          recentFillColors={[]}
+          recentTextColors={[]}
+          selectedFontSize="11"
+          writesAllowed
+        />,
+      );
+    });
+
+    const alignLeftButton = document.querySelector("[aria-label='Align left']");
+    const alignCenterButton = document.querySelector("[aria-label='Align center']");
+    const alignRightButton = document.querySelector("[aria-label='Align right']");
+
+    expect(alignLeftButton?.getAttribute("title")).toBe(
+      `Align left (${getWorkbookShortcutLabel("align-left")})`,
+    );
+    expect(alignCenterButton?.getAttribute("title")).toBe(
+      `Align center (${getWorkbookShortcutLabel("align-center")})`,
+    );
+    expect(alignRightButton?.getAttribute("title")).toBe(
+      `Align right (${getWorkbookShortcutLabel("align-right")})`,
+    );
 
     await act(async () => {
       root.unmount();
