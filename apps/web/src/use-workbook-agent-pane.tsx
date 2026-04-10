@@ -12,14 +12,18 @@ import {
 import {
   WorkbookAgentSessionSnapshotSchema,
   WorkbookAgentStreamEventSchema,
+  WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
   type WorkbookAgentSessionSnapshot,
   type WorkbookAgentStreamEvent,
+  type WorkbookAgentThreadSummary,
   type WorkbookAgentUiContext,
 } from "@bilig/contracts";
+import { Schema } from "effect";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
+const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
 interface StoredWorkbookAgentThreadRef {
   threadId: string;
@@ -137,6 +141,7 @@ export function useWorkbookAgentPane(input: {
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
+  const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([]);
   const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<WorkbookAgentLiveSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -148,6 +153,20 @@ export function useWorkbookAgentPane(input: {
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
+
+  const loadThreadSummaries = useCallback(async (): Promise<WorkbookAgentThreadSummary[]> => {
+    const response = await fetch(`/v2/documents/${encodeURIComponent(documentId)}/agent/threads`);
+    const payload = (await response.json()) as unknown;
+    if (!response.ok) {
+      throw new Error(
+        resolvePayloadMessage(
+          payload,
+          `Workbook agent request failed with status ${response.status}`,
+        ),
+      );
+    }
+    return decodeUnknownSync(WorkbookAgentThreadSummaryListSchema, payload);
+  }, [documentId]);
 
   const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(() => {
     const candidate = snapshot?.pendingBundle;
@@ -196,8 +215,14 @@ export function useWorkbookAgentPane(input: {
         sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,
       };
+      void loadThreadSummaries()
+        .then((nextThreadSummaries) => {
+          setThreadSummaries(nextThreadSummaries);
+          return nextThreadSummaries;
+        })
+        .catch(() => undefined);
     },
-    [documentId],
+    [documentId, loadThreadSummaries],
   );
 
   const connectStream = useCallback(
@@ -471,6 +496,7 @@ export function useWorkbookAgentPane(input: {
       closeStream();
       sessionRef.current = null;
       recoveringStreamRef.current = false;
+      setThreadSummaries([]);
       setSnapshot(null);
       setIsLoading(false);
       return;
@@ -479,6 +505,21 @@ export function useWorkbookAgentPane(input: {
     lastContextKeyRef.current = "";
     const storedSession = loadStoredSession(documentId);
     sessionRef.current = null;
+
+    const bootstrapThreadSummaries = async () => {
+      try {
+        const nextThreadSummaries = await loadThreadSummaries();
+        if (!cancelled) {
+          setThreadSummaries(nextThreadSummaries);
+        }
+      } catch {
+        if (!cancelled) {
+          setThreadSummaries([]);
+        }
+      }
+    };
+    void bootstrapThreadSummaries();
+
     if (!storedSession) {
       setIsLoading(false);
       return () => {
@@ -518,8 +559,29 @@ export function useWorkbookAgentPane(input: {
     createOrResumeSession,
     documentId,
     enabled,
+    loadThreadSummaries,
     persistSessionSnapshot,
   ]);
+
+  const selectThread = useCallback(
+    async (threadId: string) => {
+      if (sessionRef.current?.threadId === threadId) {
+        return;
+      }
+      try {
+        setIsLoading(true);
+        setError(null);
+        const nextSnapshot = await createOrResumeSession({ threadId }, getContextRef.current());
+        persistSessionSnapshot(nextSnapshot);
+        connectStream(nextSnapshot.sessionId);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [connectStream, createOrResumeSession, persistSessionSnapshot],
+  );
 
   useEffect(() => {
     if (!enabled || !snapshot) {
@@ -684,6 +746,7 @@ export function useWorkbookAgentPane(input: {
   const agentPanel = useMemo(
     () => (
       <WorkbookAgentPanel
+        activeThreadId={snapshot?.threadId ?? sessionRef.current?.threadId ?? null}
         currentContext={currentContext}
         draft={draft}
         executionRecords={executionRecords}
@@ -693,6 +756,7 @@ export function useWorkbookAgentPane(input: {
         preview={preview}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
+        threadSummaries={threadSummaries}
         onApplyPendingBundle={() => {
           void applyPendingBundle("user");
         }}
@@ -707,6 +771,9 @@ export function useWorkbookAgentPane(input: {
         onTogglePendingCommand={togglePendingCommand}
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
+        }}
+        onSelectThread={(threadId) => {
+          void selectThread(threadId);
         }}
         onSubmit={() => {
           void sendPrompt();
@@ -727,8 +794,10 @@ export function useWorkbookAgentPane(input: {
       preview,
       replayExecutionRecord,
       sendPrompt,
+      selectThread,
       snapshot,
       selectAllPendingCommands,
+      threadSummaries,
       togglePendingCommand,
     ],
   );

@@ -126,6 +126,17 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createThreadSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    threadId: "thr-1",
+    scope: "private",
+    updatedAtUnixMs: 100,
+    entryCount: 1,
+    hasPendingBundle: false,
+    ...overrides,
+  };
+}
+
 function AgentHarness(props: {
   readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
 }) {
@@ -215,6 +226,145 @@ describe("workbook agent pane", () => {
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
       "Message",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("loads durable thread summaries into the assistant rail", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads")) {
+        return new Response(
+          JSON.stringify([
+            createThreadSummary({
+              threadId: "thr-shared",
+              scope: "shared",
+              entryCount: 4,
+              hasPendingBundle: true,
+            }),
+            createThreadSummary({
+              threadId: "thr-private",
+              scope: "private",
+              entryCount: 2,
+            }),
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-shared']")).not.toBeNull();
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-private']")).not.toBeNull();
+    expect(host.textContent).toContain("Shared");
+    expect(host.textContent).toContain("Pending");
+    expect(host.textContent).toContain("4 items");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("switches to a durable thread from the summary strip", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    let sessionsRequestBody: unknown;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads")) {
+        return new Response(
+          JSON.stringify([
+            createThreadSummary({
+              threadId: "thr-2",
+              scope: "shared",
+              entryCount: 3,
+            }),
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/agent/sessions")) {
+        sessionsRequestBody = requestBody(init);
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const threadButton = host.querySelector("[data-testid='workbook-agent-thread-thr-2']");
+    expect(threadButton instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(threadButton instanceof HTMLButtonElement)) {
+        throw new Error("Thread button not found");
+      }
+      threadButton.click();
+    });
+
+    expect(MockEventSource.latest?.url).toBe(
+      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
+    );
+    expect(
+      host
+        .querySelector("[data-testid='workbook-agent-thread-thr-2']")
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(sessionsRequestBody).toEqual({
+      threadId: "thr-2",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+    });
 
     await act(async () => {
       root.unmount();
