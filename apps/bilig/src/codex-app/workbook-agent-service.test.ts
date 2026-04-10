@@ -107,6 +107,9 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async applyAgentCommandBundle() {
       return { revision: 2, preview: createPreviewSummary() };
     },
+    async listWorkbookChanges() {
+      return [];
+    },
     async listWorkbookAgentRuns() {
       return [];
     },

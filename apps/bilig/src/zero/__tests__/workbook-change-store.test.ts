@@ -3,6 +3,7 @@ import {
   appendWorkbookChange,
   backfillWorkbookChanges,
   buildWorkbookChangeDescriptor,
+  listWorkbookChanges,
   loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange,
   loadWorkbookChange,
@@ -131,6 +132,96 @@ describe("workbook-change-store", () => {
       null,
       123_456,
     ]);
+  });
+
+  it("lists recent workbook changes in revision-descending order", async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("FROM workbook_change") && text.includes("ORDER BY revision DESC")
+          ? [
+              {
+                revision: 12,
+                actorUserId: "alex@example.com",
+                clientMutationId: null,
+                eventKind: "applyAgentCommandBundle",
+                summary: "Applied preview bundle at revision r12",
+                sheetId: 4,
+                sheetName: "Sheet1",
+                anchorAddress: "B2",
+                rangeJson: {
+                  sheetName: "Sheet1",
+                  startAddress: "B2",
+                  endAddress: "C4",
+                },
+                undoBundleJson: null,
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 1_234,
+              } satisfies QueryResultRow,
+              {
+                revision: 11,
+                actorUserId: "casey@example.com",
+                clientMutationId: "mutation-11",
+                eventKind: "setCellValue",
+                summary: "Updated Sheet1!A1",
+                sheetId: 4,
+                sheetName: "Sheet1",
+                anchorAddress: "A1",
+                rangeJson: {
+                  sheetName: "Sheet1",
+                  startAddress: "A1",
+                  endAddress: "A1",
+                },
+                undoBundleJson: null,
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 1_111,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    await expect(listWorkbookChanges(queryable, { documentId: "doc-1", limit: 2 })).resolves.toEqual([
+      {
+        revision: 12,
+        actorUserId: "alex@example.com",
+        clientMutationId: null,
+        eventKind: "applyAgentCommandBundle",
+        summary: "Applied preview bundle at revision r12",
+        sheetId: 4,
+        sheetName: "Sheet1",
+        anchorAddress: "B2",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "C4",
+        },
+        undoBundle: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAtUnixMs: 1_234,
+      },
+      {
+        revision: 11,
+        actorUserId: "casey@example.com",
+        clientMutationId: "mutation-11",
+        eventKind: "setCellValue",
+        summary: "Updated Sheet1!A1",
+        sheetId: 4,
+        sheetName: "Sheet1",
+        anchorAddress: "A1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+        undoBundle: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAtUnixMs: 1_111,
+      },
+    ]);
+    expect(latestQuery(queryable).values).toEqual(["doc-1", 2]);
   });
 
   it("backfills missing workbook_change rows from authoritative workbook events", async () => {

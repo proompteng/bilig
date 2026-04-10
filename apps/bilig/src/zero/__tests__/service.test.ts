@@ -38,6 +38,7 @@ vi.mock("../presence-store.js", () => ({
 
 vi.mock("../workbook-change-store.js", () => ({
   ensureWorkbookChangeSchema: deps.ensureWorkbookChangeSchema,
+  listWorkbookChanges: vi.fn(async () => []),
 }));
 
 vi.mock("../workbook-agent-run-store.js", () => ({

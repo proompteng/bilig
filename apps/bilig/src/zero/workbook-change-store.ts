@@ -910,6 +910,41 @@ export async function loadLatestRedoableWorkbookChange(
   });
 }
 
+export async function listWorkbookChanges(
+  db: Queryable,
+  input: {
+    readonly documentId: string;
+    readonly limit?: number;
+  },
+): Promise<WorkbookChangeRecord[]> {
+  const result = await db.query<WorkbookChangeSelectRow>(
+    `
+      SELECT revision AS "revision",
+             actor_user_id AS "actorUserId",
+             client_mutation_id AS "clientMutationId",
+             event_kind AS "eventKind",
+             summary AS "summary",
+             sheet_id AS "sheetId",
+             sheet_name AS "sheetName",
+             anchor_address AS "anchorAddress",
+             range_json AS "rangeJson",
+             undo_bundle_json AS "undoBundleJson",
+             reverted_by_revision AS "revertedByRevision",
+             reverts_revision AS "revertsRevision",
+             created_at AS "createdAtUnixMs"
+        FROM workbook_change
+       WHERE workbook_id = $1
+       ORDER BY revision DESC
+       LIMIT $2
+    `,
+    [input.documentId, input.limit ?? 10],
+  );
+  return result.rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(row);
+    return record ? [record] : [];
+  });
+}
+
 export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
   const result = await db.query<WorkbookEventBackfillRow>(
     `

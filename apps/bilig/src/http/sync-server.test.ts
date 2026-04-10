@@ -65,6 +65,9 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async applyAgentCommandBundle() {
       throw new Error("not used");
     },
+    async listWorkbookChanges() {
+      return [];
+    },
     async listWorkbookAgentRuns() {
       return [];
     },

@@ -78,6 +78,15 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     toolNames: [WORKBOOK_AGENT_TOOL_NAMES.getContext, WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange],
   },
   {
+    id: "describe-recent-changes",
+    label: "Describe Recent Changes",
+    focus: "read",
+    description: "Read the latest durable workbook revisions and summarize what changed recently.",
+    prompt:
+      "Describe the most recent workbook changes, highlight the highest-impact revisions first, and cite the affected sheets or ranges when possible.",
+    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges],
+  },
+  {
     id: "edit-selection",
     label: "Edit Selection",
     focus: "edit",

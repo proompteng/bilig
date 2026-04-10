@@ -43,7 +43,11 @@ import {
 } from "./workbook-runtime-store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { ensureZeroPublication } from "./publication-store.js";
-import { ensureWorkbookChangeSchema } from "./workbook-change-store.js";
+import {
+  ensureWorkbookChangeSchema,
+  listWorkbookChanges,
+  type WorkbookChangeRecord,
+} from "./workbook-change-store.js";
 import { ensureZeroSyncSchema } from "./zero-schema-store.js";
 import {
   appendWorkbookAgentRun,
@@ -79,6 +83,7 @@ export interface ZeroSyncService {
     preview: WorkbookAgentPreviewSummary,
     session?: SessionIdentity,
   ): Promise<{ revision: number; preview: WorkbookAgentPreviewSummary }>;
+  listWorkbookChanges(documentId: string, limit?: number): Promise<WorkbookChangeRecord[]>;
   listWorkbookAgentRuns(
     documentId: string,
     actorUserId: string,
@@ -170,6 +175,10 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async applyAgentCommandBundle(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async listWorkbookChanges(): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
 
@@ -455,8 +464,14 @@ class EnabledZeroSyncService implements ZeroSyncService {
     });
   }
 
-  async appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void> {
-    await appendWorkbookAgentRun(this.pool, record);
+  async listWorkbookChanges(
+    documentId: string,
+    limit = 10,
+  ): Promise<WorkbookChangeRecord[]> {
+    return await listWorkbookChanges(this.pool, {
+      documentId,
+      limit,
+    });
   }
 
   async listWorkbookAgentThreadRuns(
@@ -471,6 +486,10 @@ class EnabledZeroSyncService implements ZeroSyncService {
       threadId,
       ...(limit === undefined ? {} : { limit }),
     });
+  }
+
+  async appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void> {
+    await appendWorkbookAgentRun(this.pool, record);
   }
 
   async listWorkbookAgentThreadSummaries(

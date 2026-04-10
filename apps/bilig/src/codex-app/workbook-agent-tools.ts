@@ -59,6 +59,9 @@ const formulaIssueToolArgsSchema = z.object({
   sheetName: z.string().min(1).optional(),
   limit: z.number().int().positive().max(200).optional(),
 });
+const readRecentChangesToolArgsSchema = z.object({
+  limit: z.number().int().positive().max(50).optional(),
+});
 const searchWorkbookToolArgsSchema = z.object({
   query: z.string().trim().min(1),
   sheetName: z.string().min(1).optional(),
@@ -117,6 +120,23 @@ function textToolResult(text: string, success = true): CodexDynamicToolCallResul
 
 function stringifyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function summarizeWorkbookChangeRecord(
+  record: Awaited<ReturnType<ZeroSyncService["listWorkbookChanges"]>>[number],
+) {
+  return {
+    revision: record.revision,
+    actorUserId: record.actorUserId,
+    eventKind: record.eventKind,
+    summary: record.summary,
+    sheetName: record.sheetName,
+    anchorAddress: record.anchorAddress,
+    range: record.range,
+    createdAtUnixMs: record.createdAtUnixMs,
+    revertedByRevision: record.revertedByRevision,
+    revertsRevision: record.revertsRevision,
+  };
 }
 
 function normalizeFormula(formula: string): string {
@@ -481,6 +501,18 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
+      name: WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges,
+      description:
+        "Read the most recent durable workbook changes, including revisions, summaries, and affected ranges.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
       name: WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
       description:
         "Explain one cell, including its current value, formula, version, cycle status, and direct precedents/dependents. Defaults to the current selection when no address is provided.",
@@ -840,6 +872,20 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange: {
         return await inspectWorkbookRange(context, resolveVisibleRange(context.uiContext));
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges: {
+        const args = readRecentChangesToolArgsSchema.parse(request.arguments);
+        const changes = await context.zeroSyncService.listWorkbookChanges(
+          context.documentId,
+          args.limit,
+        );
+        return textToolResult(
+          stringifyJson({
+            documentId: context.documentId,
+            changeCount: changes.length,
+            changes: changes.map((record) => summarizeWorkbookChangeRecord(record)),
+          }),
+        );
       }
       case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments);

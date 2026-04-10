@@ -73,6 +73,9 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
         },
       };
     },
+    async listWorkbookChanges() {
+      return [];
+    },
     async listWorkbookAgentRuns() {
       return [];
     },
@@ -343,6 +346,65 @@ describe("workbook agent tools", () => {
     expect(text).toContain('"query": "gross margin"');
     expect(text).toContain('"address": "A2"');
     expect(text).toContain('"snippet": "Gross Margin"');
+  });
+
+  it("reads recent durable workbook changes", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const listWorkbookChanges = vi.fn(async () => [
+      {
+        revision: 12,
+        actorUserId: "alex@example.com",
+        clientMutationId: null,
+        eventKind: "applyAgentCommandBundle" as const,
+        summary: "Applied preview bundle at revision r12",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        anchorAddress: "B2",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "C4",
+        },
+        undoBundle: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAtUnixMs: 1_234,
+      },
+    ]);
+    zeroSyncService.listWorkbookChanges = listWorkbookChanges;
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-recent-changes",
+        tool: "bilig_read_recent_changes",
+        arguments: {
+          limit: 5,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(listWorkbookChanges).toHaveBeenCalledWith("doc-1", 5);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"changeCount": 1');
+    expect(text).toContain('"revision": 12');
+    expect(text).toContain('"summary": "Applied preview bundle at revision r12"');
+    expect(text).toContain('"startAddress": "B2"');
   });
 
   it("traces multi-hop workbook dependencies from the attached selection", async () => {
