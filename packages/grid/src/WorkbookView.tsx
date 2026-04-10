@@ -77,6 +77,8 @@ interface WorkbookViewProps {
   rowHeights?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
+  onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
+  onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
@@ -138,6 +140,8 @@ export function WorkbookView({
   rowHeights,
   onColumnWidthChange,
   onRowHeightChange,
+  onSetColumnHidden,
+  onSetRowHidden,
   onAutofitColumn,
   onVisibleViewportChange,
   previewRanges,
@@ -227,6 +231,8 @@ export function WorkbookView({
             rowHeights={rowHeights}
             onColumnWidthChange={onColumnWidthChange}
             onRowHeightChange={onRowHeightChange}
+            onSetColumnHidden={onSetColumnHidden}
+            onSetRowHidden={onSetRowHidden}
             onAutofitColumn={onAutofitColumn}
             onVisibleViewportChange={onVisibleViewportChange}
             previewRanges={previewRanges}

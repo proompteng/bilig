@@ -140,6 +140,16 @@ function WorkerWorkbookAppInner({
                   .invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize)
                   .catch(app.reportRuntimeError);
               }}
+              onSetColumnHidden={(columnIndex: number, hidden: boolean) => {
+                void app
+                  .invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden)
+                  .catch(app.reportRuntimeError);
+              }}
+              onSetRowHidden={(rowIndex: number, hidden: boolean) => {
+                void app
+                  .invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden)
+                  .catch(app.reportRuntimeError);
+              }}
               onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}
               onCopyRange={app.copySelectionRange}
