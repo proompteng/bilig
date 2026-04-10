@@ -1,5 +1,6 @@
 import type {
   WorkbookAgentSessionSnapshot,
+  WorkbookAgentTimelineCitation,
   WorkbookAgentStreamEvent,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
@@ -83,6 +84,25 @@ function mergeTimelineEntries(
     merged[existingIndex] = entry;
   }
   return merged;
+}
+
+function createBundleRangeCitations(
+  bundle: Pick<WorkbookAgentCommandBundle, "affectedRanges">,
+): WorkbookAgentTimelineCitation[] {
+  return bundle.affectedRanges.map((range) => ({
+    kind: "range",
+    sheetName: range.sheetName,
+    startAddress: range.startAddress,
+    endAddress: range.endAddress,
+    role: range.role,
+  }));
+}
+
+function appendRevisionCitation(
+  citations: readonly WorkbookAgentTimelineCitation[],
+  revision: number,
+): WorkbookAgentTimelineCitation[] {
+  return [...citations, { kind: "revision", revision }];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -474,6 +494,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       argumentsText: null,
       outputText: null,
       success: null,
+      citations: [],
     });
     sessionState.optimisticUserEntryIdByTurn.set(turn.id, optimisticEntryId);
     sessionState.promptByTurn.set(turn.id, parsed.prompt);
@@ -617,6 +638,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         `${input.appliedBy === "auto" ? "Auto-applied" : "Applied"} ${
           selection.acceptedScope === "partial" ? "selected " : ""
         }preview bundle at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
+        appendRevisionCitation(
+          createBundleRangeCitations(selection.acceptedBundle),
+          result.revision,
+        ),
       ),
     );
     this.touch(sessionState);
@@ -647,6 +672,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         `system-dismiss:${pendingBundle.id}:${this.now()}`,
         pendingBundle.turnId,
         `Dismissed preview bundle: ${pendingBundle.summary}`,
+        createBundleRangeCitations(pendingBundle),
       ),
     );
     this.touch(sessionState);
@@ -690,6 +716,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         `system-replay:${record.id}:${String(this.now())}`,
         replayedBundle.turnId,
         `Replayed prior agent plan as preview bundle: ${replayedBundle.summary}`,
+        createBundleRangeCitations(replayedBundle),
       ),
     );
     this.touch(sessionState);
@@ -795,6 +822,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                     `system-preview:${bundle.id}`,
                     request.turnId,
                     describeWorkbookAgentBundle(bundle),
+                    createBundleRangeCitations(bundle),
                   ),
                 );
                 await this.persistSessionState(sessionState);
@@ -886,6 +914,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             argumentsText: null,
             outputText: null,
             success: null,
+            citations: [],
           } satisfies WorkbookAgentTimelineEntry);
         sessionState.snapshot.entries = upsertEntry(sessionState.snapshot.entries, {
           ...existing,
@@ -916,6 +945,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             argumentsText: null,
             outputText: null,
             success: null,
+            citations: [],
           } satisfies WorkbookAgentTimelineEntry);
         sessionState.snapshot.entries = upsertEntry(sessionState.snapshot.entries, {
           ...existing,

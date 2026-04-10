@@ -68,6 +68,7 @@ function createThreadState() {
         argumentsText: null,
         outputText: null,
         success: null,
+        citations: [],
       },
       {
         id: "system-preview:bundle-1",
@@ -80,6 +81,15 @@ function createThreadState() {
         argumentsText: null,
         outputText: null,
         success: null,
+        citations: [
+          {
+            kind: "range" as const,
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B2",
+            role: "target" as const,
+          },
+        ],
       },
     ],
     pendingBundle: {
@@ -148,6 +158,22 @@ describe("workbook-chat-thread-store", () => {
     );
     expect(bundleInsert?.values?.[3]).toBe("bundle-1");
     expect(bundleInsert?.values?.[7]).toBe("selection");
+    const itemInsert = queryable.calls.find(
+      (call) =>
+        call.text.includes("INSERT INTO workbook_chat_item") &&
+        call.values?.[3] === "system-preview:bundle-1",
+    );
+    expect(itemInsert?.values?.[14]).toBe(
+      JSON.stringify([
+        {
+          kind: "range",
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B2",
+          role: "target",
+        },
+      ]),
+    );
   });
 
   it("loads a durable thread snapshot with entries and a pending bundle", async () => {
@@ -179,6 +205,7 @@ describe("workbook-chat-thread-store", () => {
               argumentsText: entry.argumentsText,
               outputText: entry.outputText,
               success: entry.success,
+              citationsJson: entry.citations,
               sortOrder: index,
             }))
           : null,
@@ -250,6 +277,7 @@ describe("workbook-chat-thread-store", () => {
               argumentsText: entry.argumentsText,
               outputText: entry.outputText,
               success: entry.success,
+              citationsJson: entry.citations,
               sortOrder: index,
             }))
           : null,

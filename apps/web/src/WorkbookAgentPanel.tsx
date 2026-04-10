@@ -13,6 +13,7 @@ import type {
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
+  WorkbookAgentTimelineCitation,
   WorkbookAgentThreadScope,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
@@ -460,6 +461,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       <div className="flex justify-end">
         <div className="max-w-[90%] rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
           {entry.text}
+          <TimelineCitationList citations={entry.citations} />
         </div>
       </div>
     );
@@ -477,6 +479,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         )}
       >
         {entry.text}
+        <TimelineCitationList citations={entry.citations} />
       </div>
     );
   }
@@ -490,6 +493,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
           {entry.text}
         </div>
+        <TimelineCitationList citations={entry.citations} />
       </div>
     );
   }
@@ -513,12 +517,58 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
             {entry.outputText}
           </pre>
         ) : null}
+        <TimelineCitationList citations={entry.citations} />
       </div>
     );
   }
 
   return (
-    <div className={cn(workbookAlertClass({ tone: "danger" }), "px-3 py-2")}>{entry.text}</div>
+    <div className={cn(workbookInsetClass(), "px-3 py-2")}>
+      <div className="text-[11px] leading-5 text-[var(--wb-text-muted)]">{entry.text}</div>
+      <TimelineCitationList citations={entry.citations} />
+    </div>
+  );
+}
+
+function TimelineCitationList(props: {
+  readonly citations: readonly WorkbookAgentTimelineCitation[];
+}) {
+  if (props.citations.length === 0) {
+    return null;
+  }
+  const occurrenceCounts = new Map<string, number>();
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {props.citations.map((citation) => {
+        if (citation.kind === "revision") {
+          const baseKey = `revision:${String(citation.revision)}`;
+          const occurrence = (occurrenceCounts.get(baseKey) ?? 0) + 1;
+          occurrenceCounts.set(baseKey, occurrence);
+          return (
+            <span
+              key={`${baseKey}:${String(occurrence)}`}
+              className={workbookPillClass({ tone: "neutral" })}
+            >
+              r{String(citation.revision)}
+            </span>
+          );
+        }
+        const baseKey = `${citation.kind}:${citation.role}:${citation.sheetName}:${citation.startAddress}:${citation.endAddress}`;
+        const occurrence = (occurrenceCounts.get(baseKey) ?? 0) + 1;
+        occurrenceCounts.set(baseKey, occurrence);
+        return (
+          <span
+            key={`${baseKey}:${String(occurrence)}`}
+            className={workbookPillClass({
+              tone: citation.role === "target" ? "accent" : "neutral",
+            })}
+          >
+            {citation.sheetName}!{citation.startAddress}
+            {citation.startAddress === citation.endAddress ? "" : `:${citation.endAddress}`}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -840,11 +890,9 @@ export function WorkbookAgentPanel(props: {
         ) : null}
         {props.isLoading ? null : props.snapshot && props.snapshot.entries.length > 0 ? (
           <div className="flex flex-col gap-1.5">
-            {props.snapshot.entries
-              .filter((entry) => entry.kind !== "system")
-              .map((entry) => (
-                <WorkbookAgentEntryRow key={entry.id} entry={entry} />
-              ))}
+            {props.snapshot.entries.map((entry) => (
+              <WorkbookAgentEntryRow key={entry.id} entry={entry} />
+            ))}
             {props.executionRecords.length > 0 ? (
               <div className="pt-2">
                 <div className="flex flex-col gap-2">

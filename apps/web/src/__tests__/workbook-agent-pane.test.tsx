@@ -73,6 +73,16 @@ function requestMethod(init: RequestInit | undefined): string {
 }
 
 function createSnapshot(overrides: Record<string, unknown> = {}) {
+  const overrideEntries = Array.isArray(overrides["entries"])
+    ? overrides["entries"].map((entry) =>
+        typeof entry === "object" && entry !== null && !("citations" in entry)
+          ? {
+              ...entry,
+              citations: [],
+            }
+          : entry,
+      )
+    : undefined;
   return {
     sessionId: "agent-session-1",
     documentId: "doc-1",
@@ -105,11 +115,13 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
         argumentsText: null,
         outputText: null,
         success: null,
+        citations: [],
       },
     ],
     pendingBundle: null,
     executionRecords: [],
     ...overrides,
+    ...(overrideEntries ? { entries: overrideEntries } : {}),
   };
 }
 
@@ -235,6 +247,84 @@ describe("workbook agent pane", () => {
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
       "Message",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders cited system timeline entries in the assistant rail", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({ threadId: "thr-1" }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/agent/threads")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.endsWith("/agent/threads/thr-1")) {
+          return new Response(
+            JSON.stringify(
+              createSnapshot({
+                entries: [
+                  {
+                    id: "system-apply:run-1",
+                    kind: "system",
+                    turnId: "turn-1",
+                    text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+                    phase: null,
+                    toolName: null,
+                    toolStatus: null,
+                    argumentsText: null,
+                    outputText: null,
+                    success: null,
+                    citations: [
+                      {
+                        kind: "range",
+                        sheetName: "Sheet1",
+                        startAddress: "B2",
+                        endAddress: "B2",
+                        role: "target",
+                      },
+                      {
+                        kind: "revision",
+                        revision: 7,
+                      },
+                    ],
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        throw new Error(`Unexpected fetch to ${url}`);
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).toContain("Sheet1!B2");
+    expect(host.textContent).toContain("r7");
 
     await act(async () => {
       root.unmount();

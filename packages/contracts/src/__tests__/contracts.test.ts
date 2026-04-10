@@ -4,6 +4,7 @@ import {
   DocumentStateSummarySchema,
   ErrorEnvelopeSchema,
   RuntimeSessionSchema,
+  WorkbookAgentTimelineEntrySchema,
   WorkbookAgentThreadSummarySchema,
 } from "../index.js";
 
@@ -57,5 +58,44 @@ describe("@bilig/contracts", () => {
 
     expect(decoded.ownerUserId).toBe("alex@example.com");
     expect(decoded.hasPendingBundle).toBe(true);
+  });
+
+  it("decodes workbook agent timeline entries with citations", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentTimelineEntrySchema, {
+      id: "system-1",
+      kind: "system",
+      turnId: "turn-1",
+      text: "Applied preview bundle at revision r7",
+      phase: null,
+      toolName: null,
+      toolStatus: null,
+      argumentsText: null,
+      outputText: null,
+      success: null,
+      citations: [
+        {
+          kind: "range",
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A3",
+          role: "target",
+        },
+        {
+          kind: "revision",
+          revision: 7,
+        },
+      ],
+    });
+
+    expect(decoded.citations).toEqual([
+      expect.objectContaining({
+        kind: "range",
+        sheetName: "Sheet1",
+      }),
+      expect.objectContaining({
+        kind: "revision",
+        revision: 7,
+      }),
+    ]);
   });
 });

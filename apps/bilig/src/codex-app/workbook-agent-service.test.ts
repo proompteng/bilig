@@ -531,6 +531,24 @@ describe("workbook agent service", () => {
           }),
         }),
       );
+      expect(applied.entries).toContainEqual(
+        expect.objectContaining({
+          kind: "system",
+          text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+          citations: [
+            expect.objectContaining({
+              kind: "range",
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              endAddress: "B2",
+            }),
+            expect.objectContaining({
+              kind: "revision",
+              revision: 7,
+            }),
+          ],
+        }),
+      );
     } finally {
       await service.close();
     }

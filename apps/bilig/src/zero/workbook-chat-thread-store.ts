@@ -4,6 +4,7 @@ import {
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
 import type {
+  WorkbookAgentTimelineCitation,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentToolStatus,
@@ -44,6 +45,7 @@ interface WorkbookChatItemRow extends QueryResultRow {
   readonly argumentsText?: unknown;
   readonly outputText?: unknown;
   readonly success?: unknown;
+  readonly citationsJson?: unknown;
   readonly sortOrder?: unknown;
 }
 
@@ -119,6 +121,18 @@ function isTimelineKind(value: unknown): value is WorkbookAgentTimelineEntry["ki
   );
 }
 
+function isTimelineCitation(value: unknown): value is WorkbookAgentTimelineCitation {
+  return (
+    (isRecord(value) &&
+      value["kind"] === "range" &&
+      typeof value["sheetName"] === "string" &&
+      typeof value["startAddress"] === "string" &&
+      typeof value["endAddress"] === "string" &&
+      (value["role"] === "target" || value["role"] === "source")) ||
+    (isRecord(value) && value["kind"] === "revision" && typeof value["revision"] === "number")
+  );
+}
+
 function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimelineEntry | null {
   if (
     typeof row.entryId !== "string" ||
@@ -134,7 +148,11 @@ function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimeline
     (row.outputText !== null &&
       row.outputText !== undefined &&
       typeof row.outputText !== "string") ||
-    (row.success !== null && row.success !== undefined && typeof row.success !== "boolean")
+    (row.success !== null && row.success !== undefined && typeof row.success !== "boolean") ||
+    (row.citationsJson !== null &&
+      row.citationsJson !== undefined &&
+      (!Array.isArray(row.citationsJson) ||
+        !row.citationsJson.every((entry) => isTimelineCitation(entry))))
   ) {
     return null;
   }
@@ -153,6 +171,7 @@ function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimeline
     argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
     outputText: typeof row.outputText === "string" ? row.outputText : null,
     success: typeof row.success === "boolean" ? row.success : null,
+    citations: Array.isArray(row.citationsJson) ? [...row.citationsJson] : [],
   };
 }
 
@@ -231,8 +250,13 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       arguments_text TEXT,
       output_text TEXT,
       success BOOLEAN,
+      citations_json JSONB,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
     )
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_item
+      ADD COLUMN IF NOT EXISTS citations_json JSONB;
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_pending_bundle (
@@ -345,10 +369,11 @@ export async function saveWorkbookAgentThreadState(
             tool_status,
             arguments_text,
             output_text,
-            success
+            success,
+            citations_json
           )
           VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
           )
         `,
         [
@@ -366,6 +391,7 @@ export async function saveWorkbookAgentThreadState(
           entry.argumentsText,
           entry.outputText,
           entry.success,
+          JSON.stringify(entry.citations),
         ],
       );
     }),
@@ -494,6 +520,7 @@ export async function loadWorkbookAgentThreadState(
           arguments_text AS "argumentsText",
           output_text AS "outputText",
           success AS "success",
+          citations_json AS "citationsJson",
           sort_order AS "sortOrder"
         FROM workbook_chat_item
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3

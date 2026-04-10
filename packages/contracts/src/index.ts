@@ -69,6 +69,38 @@ export const WorkbookAgentToolStatusSchema = Schema.Union(
 );
 export type WorkbookAgentToolStatus = Schema.Schema.Type<typeof WorkbookAgentToolStatusSchema>;
 
+export const WorkbookAgentRangeCitationRoleSchema = Schema.Literal("target", "source");
+export type WorkbookAgentRangeCitationRole = Schema.Schema.Type<
+  typeof WorkbookAgentRangeCitationRoleSchema
+>;
+
+export const WorkbookAgentRangeCitationSchema = Schema.Struct({
+  kind: Schema.Literal("range"),
+  sheetName: Schema.String,
+  startAddress: Schema.String,
+  endAddress: Schema.String,
+  role: WorkbookAgentRangeCitationRoleSchema,
+});
+export type WorkbookAgentRangeCitation = Schema.Schema.Type<
+  typeof WorkbookAgentRangeCitationSchema
+>;
+
+export const WorkbookAgentRevisionCitationSchema = Schema.Struct({
+  kind: Schema.Literal("revision"),
+  revision: Schema.Number,
+});
+export type WorkbookAgentRevisionCitation = Schema.Schema.Type<
+  typeof WorkbookAgentRevisionCitationSchema
+>;
+
+export const WorkbookAgentTimelineCitationSchema = Schema.Union(
+  WorkbookAgentRangeCitationSchema,
+  WorkbookAgentRevisionCitationSchema,
+);
+export type WorkbookAgentTimelineCitation = Schema.Schema.Type<
+  typeof WorkbookAgentTimelineCitationSchema
+>;
+
 export const WorkbookAgentTimelineEntrySchema = Schema.Struct({
   id: Schema.String,
   kind: WorkbookAgentEntryKindSchema,
@@ -80,6 +112,7 @@ export const WorkbookAgentTimelineEntrySchema = Schema.Struct({
   argumentsText: Schema.Union(Schema.String, Schema.Null),
   outputText: Schema.Union(Schema.String, Schema.Null),
   success: Schema.Union(Schema.Boolean, Schema.Null),
+  citations: Schema.Array(WorkbookAgentTimelineCitationSchema),
 });
 export type WorkbookAgentTimelineEntry = Schema.Schema.Type<
   typeof WorkbookAgentTimelineEntrySchema

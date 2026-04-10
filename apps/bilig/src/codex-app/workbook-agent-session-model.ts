@@ -1,6 +1,10 @@
 import type { CodexThread, CodexThreadItem } from "@bilig/agent-api";
 import { WORKBOOK_AGENT_TOOL_NAMES, renderWorkbookAgentSkillInstructions } from "@bilig/agent-api";
-import type { WorkbookAgentSessionSnapshot, WorkbookAgentTimelineEntry } from "@bilig/contracts";
+import type {
+  WorkbookAgentSessionSnapshot,
+  WorkbookAgentTimelineCitation,
+  WorkbookAgentTimelineEntry,
+} from "@bilig/contracts";
 import { z } from "zod";
 
 export const createSessionBodySchema = z.object({
@@ -188,6 +192,7 @@ export function createSystemEntry(
   id: string,
   turnId: string | null,
   text: string,
+  citations: readonly WorkbookAgentTimelineCitation[] = [],
 ): WorkbookAgentTimelineEntry {
   return {
     id,
@@ -200,6 +205,7 @@ export function createSystemEntry(
     argumentsText: null,
     outputText: null,
     success: null,
+    citations: [...citations],
   };
 }
 
@@ -219,6 +225,7 @@ export function mapThreadItemToEntry(
       argumentsText: null,
       outputText: null,
       success: null,
+      citations: [],
     };
   }
 
@@ -234,6 +241,7 @@ export function mapThreadItemToEntry(
       argumentsText: null,
       outputText: null,
       success: null,
+      citations: [],
     };
   }
 
@@ -249,6 +257,7 @@ export function mapThreadItemToEntry(
       argumentsText: null,
       outputText: null,
       success: null,
+      citations: [],
     };
   }
 
@@ -264,6 +273,7 @@ export function mapThreadItemToEntry(
       argumentsText: stringifyJson(item.arguments),
       outputText: formatToolContentItems(item.contentItems),
       success: item.success,
+      citations: [],
     };
   }
 
