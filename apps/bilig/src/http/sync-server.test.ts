@@ -1040,6 +1040,7 @@ describe("sync-server workbook agent", () => {
             status: "approved",
             decidedByUserId: "alex@example.com",
             decidedAtUnixMs: 12,
+            recommendations: [],
           },
         },
       }),

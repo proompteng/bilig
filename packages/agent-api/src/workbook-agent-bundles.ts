@@ -159,6 +159,13 @@ export interface WorkbookAgentSharedReviewState {
   status: WorkbookAgentSharedReviewStatus;
   decidedByUserId: string | null;
   decidedAtUnixMs: number | null;
+  recommendations: WorkbookAgentSharedReviewRecommendation[];
+}
+
+export interface WorkbookAgentSharedReviewRecommendation {
+  userId: string;
+  decision: Extract<WorkbookAgentSharedReviewStatus, "approved" | "rejected">;
+  decidedAtUnixMs: number;
 }
 
 export interface WorkbookAgentExecutionRecord {
@@ -231,13 +238,26 @@ function isSharedReviewStatus(value: unknown): value is WorkbookAgentSharedRevie
   return value === "pending" || value === "approved" || value === "rejected";
 }
 
+function isSharedReviewRecommendation(
+  value: unknown,
+): value is WorkbookAgentSharedReviewRecommendation {
+  return (
+    isRecord(value) &&
+    typeof value["userId"] === "string" &&
+    (value["decision"] === "approved" || value["decision"] === "rejected") &&
+    typeof value["decidedAtUnixMs"] === "number"
+  );
+}
+
 function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReviewState {
   return (
     isRecord(value) &&
     typeof value["ownerUserId"] === "string" &&
     isSharedReviewStatus(value["status"]) &&
     (value["decidedByUserId"] === null || typeof value["decidedByUserId"] === "string") &&
-    (value["decidedAtUnixMs"] === null || typeof value["decidedAtUnixMs"] === "number")
+    (value["decidedAtUnixMs"] === null || typeof value["decidedAtUnixMs"] === "number") &&
+    Array.isArray(value["recommendations"]) &&
+    value["recommendations"].every((entry) => isSharedReviewRecommendation(entry))
   );
 }
 

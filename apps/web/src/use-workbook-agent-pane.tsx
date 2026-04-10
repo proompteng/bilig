@@ -267,9 +267,20 @@ export function useWorkbookAgentPane(input: {
     sharedReviewOwnerUserId !== null
       ? (pendingBundle?.sharedReview?.decidedByUserId ?? null)
       : null;
-  const canReviewSharedBundle =
+  const sharedReviewRecommendations =
+    sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.recommendations ?? []) : [];
+  const currentUserSharedRecommendation =
+    sharedReviewRecommendations.find((recommendation) => recommendation.userId === currentUserId)
+      ?.decision ?? null;
+  const canFinalizeSharedBundle =
     sharedReviewOwnerUserId !== null &&
     sharedReviewOwnerUserId === currentUserId &&
+    sharedReviewStatus === "pending" &&
+    !isApplyingBundle;
+  const canRecommendSharedBundle =
+    sharedReviewOwnerUserId !== null &&
+    sharedReviewOwnerUserId !== currentUserId &&
+    sharedReviewStatus === "pending" &&
     !isApplyingBundle;
 
   const closeStream = useCallback(() => {
@@ -944,7 +955,10 @@ export function useWorkbookAgentPane(input: {
         sharedReviewOwnerUserId={sharedReviewOwnerUserId}
         sharedReviewStatus={sharedReviewStatus}
         sharedReviewDecidedByUserId={sharedReviewDecidedByUserId}
-        canReviewSharedBundle={canReviewSharedBundle}
+        sharedReviewRecommendations={sharedReviewRecommendations}
+        currentUserSharedRecommendation={currentUserSharedRecommendation}
+        canFinalizeSharedBundle={canFinalizeSharedBundle}
+        canRecommendSharedBundle={canRecommendSharedBundle}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
         threadScope={threadScope}
@@ -1001,7 +1015,9 @@ export function useWorkbookAgentPane(input: {
       pendingBundle,
       preview,
       activeThreadSummary?.ownerUserId,
-      canReviewSharedBundle,
+      canFinalizeSharedBundle,
+      canRecommendSharedBundle,
+      currentUserSharedRecommendation,
       replayExecutionRecord,
       reviewPendingBundle,
       startWorkflow,
@@ -1010,6 +1026,7 @@ export function useWorkbookAgentPane(input: {
       snapshot,
       sharedReviewDecidedByUserId,
       sharedReviewOwnerUserId,
+      sharedReviewRecommendations,
       sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
       selectAllPendingCommands,

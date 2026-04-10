@@ -220,7 +220,7 @@ function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCom
     commands: [...row.commandsJson],
     affectedRanges: [...row.affectedRangesJson],
     estimatedAffectedCells,
-    sharedReview: isSharedReviewState(row.sharedReviewJson) ? row.sharedReviewJson : null,
+    sharedReview: normalizeSharedReviewState(row.sharedReviewJson),
   } satisfies WorkbookAgentCommandBundle;
   return isWorkbookAgentCommandBundle(bundle) ? bundle : null;
 }
@@ -236,8 +236,48 @@ function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReview
     "decidedByUserId" in value &&
     (value.decidedByUserId === null || typeof value.decidedByUserId === "string") &&
     "decidedAtUnixMs" in value &&
-    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number")
+    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number") &&
+    "recommendations" in value &&
+    Array.isArray(value.recommendations) &&
+    value.recommendations.every(
+      (recommendation) =>
+        typeof recommendation === "object" &&
+        recommendation !== null &&
+        "userId" in recommendation &&
+        typeof recommendation.userId === "string" &&
+        "decision" in recommendation &&
+        (recommendation.decision === "approved" || recommendation.decision === "rejected") &&
+        "decidedAtUnixMs" in recommendation &&
+        typeof recommendation.decidedAtUnixMs === "number",
+    )
   );
+}
+
+function normalizeSharedReviewState(value: unknown): WorkbookAgentSharedReviewState | null {
+  if (isSharedReviewState(value)) {
+    return value;
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "ownerUserId" in value &&
+    typeof value.ownerUserId === "string" &&
+    "status" in value &&
+    (value.status === "pending" || value.status === "approved" || value.status === "rejected") &&
+    "decidedByUserId" in value &&
+    (value.decidedByUserId === null || typeof value.decidedByUserId === "string") &&
+    "decidedAtUnixMs" in value &&
+    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number")
+  ) {
+    return {
+      ownerUserId: value.ownerUserId,
+      status: value.status,
+      decidedByUserId: value.decidedByUserId,
+      decidedAtUnixMs: value.decidedAtUnixMs,
+      recommendations: [],
+    };
+  }
+  return null;
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {

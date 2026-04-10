@@ -10,6 +10,7 @@ import type {
   WorkbookAgentPreviewChangeKind,
   WorkbookAgentExecutionRecord,
   WorkbookAgentPreviewSummary,
+  WorkbookAgentSharedReviewRecommendation,
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
@@ -586,7 +587,10 @@ function PendingBundleCard(props: {
   readonly sharedReviewOwnerUserId: string | null;
   readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
   readonly sharedReviewDecidedByUserId: string | null;
-  readonly canReviewSharedBundle: boolean;
+  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[];
+  readonly currentUserSharedRecommendation: "approved" | "rejected" | null;
+  readonly canFinalizeSharedBundle: boolean;
+  readonly canRecommendSharedBundle: boolean;
   readonly selectedCommandIndexes: readonly number[];
   readonly isApplyingBundle: boolean;
   readonly onApply: () => void;
@@ -606,6 +610,16 @@ function PendingBundleCard(props: {
   const sharedReviewDecisionLabel = props.sharedReviewDecidedByUserId
     ? formatWorkbookCollaboratorLabel(props.sharedReviewDecidedByUserId)
     : null;
+  const approvalRecommendationCount = props.sharedReviewRecommendations.filter(
+    (recommendation) => recommendation.decision === "approved",
+  ).length;
+  const rejectionRecommendationCount = props.sharedReviewRecommendations.filter(
+    (recommendation) => recommendation.decision === "rejected",
+  ).length;
+  const recommendationSummary =
+    props.sharedReviewRecommendations.length === 0
+      ? null
+      : `${String(approvalRecommendationCount)} approval ${approvalRecommendationCount === 1 ? "recommendation" : "recommendations"} · ${String(rejectionRecommendationCount)} rejection ${rejectionRecommendationCount === 1 ? "recommendation" : "recommendations"}`;
   const canApply =
     props.preview !== null &&
     !props.isApplyingBundle &&
@@ -714,6 +728,19 @@ function PendingBundleCard(props: {
           thread.
         </div>
       ) : null}
+      {recommendationSummary ? (
+        <div
+          className={cn(
+            workbookInsetClass(),
+            "mt-2 border-transparent px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]",
+          )}
+        >
+          {recommendationSummary}
+          {props.currentUserSharedRecommendation
+            ? ` You recommended ${props.currentUserSharedRecommendation === "approved" ? "approval" : "rejection"}.`
+            : ""}
+        </div>
+      ) : null}
       {sharedReviewOwnerLabel && props.sharedReviewStatus ? (
         <div
           className={cn(
@@ -731,7 +758,7 @@ function PendingBundleCard(props: {
               : `Rejected by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`}
         </div>
       ) : null}
-      {props.canReviewSharedBundle && props.sharedReviewStatus !== null ? (
+      {props.canFinalizeSharedBundle && props.sharedReviewStatus !== null ? (
         <div className="mt-2 flex items-center justify-end gap-2">
           <button
             className={workbookButtonClass({ tone: "neutral" })}
@@ -752,6 +779,30 @@ function PendingBundleCard(props: {
             }}
           >
             Approve
+          </button>
+        </div>
+      ) : null}
+      {props.canRecommendSharedBundle && props.sharedReviewStatus === "pending" ? (
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            className={workbookButtonClass({ tone: "neutral" })}
+            data-testid="workbook-agent-review-reject"
+            type="button"
+            onClick={() => {
+              props.onReview("rejected");
+            }}
+          >
+            Recommend reject
+          </button>
+          <button
+            className={workbookButtonClass({ tone: "accent" })}
+            data-testid="workbook-agent-review-approve"
+            type="button"
+            onClick={() => {
+              props.onReview("approved");
+            }}
+          >
+            Recommend approve
           </button>
         </div>
       ) : null}
@@ -816,7 +867,10 @@ export function WorkbookAgentPanel(props: {
   readonly sharedReviewOwnerUserId: string | null;
   readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
   readonly sharedReviewDecidedByUserId: string | null;
-  readonly canReviewSharedBundle: boolean;
+  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[];
+  readonly currentUserSharedRecommendation: "approved" | "rejected" | null;
+  readonly canFinalizeSharedBundle: boolean;
+  readonly canRecommendSharedBundle: boolean;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
@@ -895,7 +949,10 @@ export function WorkbookAgentPanel(props: {
               sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}
               sharedReviewStatus={props.sharedReviewStatus}
               sharedReviewDecidedByUserId={props.sharedReviewDecidedByUserId}
-              canReviewSharedBundle={props.canReviewSharedBundle}
+              sharedReviewRecommendations={props.sharedReviewRecommendations}
+              currentUserSharedRecommendation={props.currentUserSharedRecommendation}
+              canFinalizeSharedBundle={props.canFinalizeSharedBundle}
+              canRecommendSharedBundle={props.canRecommendSharedBundle}
               selectedCommandIndexes={props.selectedCommandIndexes}
               isApplyingBundle={props.isApplyingBundle}
               onApply={props.onApplyPendingBundle}

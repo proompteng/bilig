@@ -2061,6 +2061,7 @@ describe("workbook agent service", () => {
                 status: "pending",
                 decidedByUserId: null,
                 decidedAtUnixMs: null,
+                recommendations: [],
               },
             },
             updatedAtUnixMs: 100,
@@ -2120,6 +2121,7 @@ describe("workbook agent service", () => {
           sharedReview: expect.objectContaining({
             status: "approved",
             decidedByUserId: "alex@example.com",
+            recommendations: [],
           }),
         }),
       );
@@ -2139,6 +2141,109 @@ describe("workbook agent service", () => {
       expect(applyAgentCommandBundle).toHaveBeenCalled();
       expect(appendWorkbookAgentRun).toHaveBeenCalled();
       expect(applied.pendingBundle).toBeNull();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("records collaborator recommendations before owner approval", async () => {
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-shared",
+            actorUserId: "alex@example.com",
+            scope: "shared",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-shared-review",
+              documentId: "doc-1",
+              threadId: "thr-shared",
+              turnId: "turn-1",
+              goalText: "Normalize the workbook",
+              summary: "Normalize shared workbook structure",
+              scope: "workbook",
+              riskClass: "high",
+              approvalMode: "explicit",
+              baseRevision: 4,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "createSheet",
+                  name: "Summary",
+                },
+              ],
+              affectedRanges: [],
+              estimatedAffectedCells: 0,
+              sharedReview: {
+                ownerUserId: "alex@example.com",
+                status: "pending",
+                decidedByUserId: null,
+                decidedAtUnixMs: null,
+                recommendations: [],
+              },
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "pat@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared-collab",
+          threadId: "thr-shared",
+        },
+      });
+
+      const reviewed = await service.reviewPendingBundle({
+        documentId: "doc-1",
+        sessionId: snapshot.sessionId,
+        bundleId: "bundle-shared-review",
+        session: {
+          userID: "pat@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          decision: "approved",
+        },
+      });
+
+      expect(reviewed.pendingBundle).toEqual(
+        expect.objectContaining({
+          sharedReview: expect.objectContaining({
+            status: "pending",
+            decidedByUserId: null,
+            recommendations: [
+              expect.objectContaining({
+                userId: "pat@example.com",
+                decision: "approved",
+              }),
+            ],
+          }),
+        }),
+      );
+      expect(reviewed.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: expect.stringContaining("pat@example.com recommended approval"),
+          }),
+        ]),
+      );
     } finally {
       await service.close();
     }

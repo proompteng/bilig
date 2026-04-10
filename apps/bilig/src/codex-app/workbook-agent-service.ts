@@ -144,6 +144,7 @@ function createPendingSharedReviewState(ownerUserId: string): WorkbookAgentShare
     status: "pending",
     decidedByUserId: null,
     decidedAtUnixMs: null,
+    recommendations: [],
   };
 }
 
@@ -155,7 +156,10 @@ function normalizeSharedReviewState(
     return null;
   }
   if (bundle.sharedReview && bundle.sharedReview.ownerUserId === sessionState.storageActorUserId) {
-    return bundle.sharedReview;
+    return {
+      ...bundle.sharedReview,
+      recommendations: [...(bundle.sharedReview.recommendations ?? [])],
+    };
   }
   return createPendingSharedReviewState(sessionState.storageActorUserId);
 }
@@ -919,23 +923,34 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    if (sessionState.storageActorUserId !== input.session.userID) {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_SHARED_APPROVAL_REQUIRED",
-        message: "Only the shared thread owner can review this workbook bundle.",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
     const now = this.now();
+    const sharedReview =
+      normalizeSharedReviewState(pendingBundle, sessionState) ??
+      createPendingSharedReviewState(sessionState.storageActorUserId);
+    const isOwnerReviewer = sessionState.storageActorUserId === input.session.userID;
+    const nextSharedReview: WorkbookAgentSharedReviewState = isOwnerReviewer
+      ? {
+          ...sharedReview,
+          status: parsed.decision,
+          decidedByUserId: input.session.userID,
+          decidedAtUnixMs: now,
+        }
+      : {
+          ...sharedReview,
+          recommendations: [
+            ...sharedReview.recommendations.filter(
+              (recommendation) => recommendation.userId !== input.session.userID,
+            ),
+            {
+              userId: input.session.userID,
+              decision: parsed.decision,
+              decidedAtUnixMs: now,
+            },
+          ].toSorted((left, right) => left.userId.localeCompare(right.userId)),
+        };
     const reviewedBundle: WorkbookAgentCommandBundle = {
       ...pendingBundle,
-      sharedReview: {
-        ownerUserId: sessionState.storageActorUserId,
-        status: parsed.decision,
-        decidedByUserId: input.session.userID,
-        decidedAtUnixMs: now,
-      },
+      sharedReview: nextSharedReview,
     };
     sessionState.snapshot.pendingBundle = reviewedBundle;
     sessionState.snapshot.entries = upsertEntry(
@@ -943,7 +958,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       createSystemEntry(
         `system-review:${reviewedBundle.id}:${now}`,
         reviewedBundle.turnId,
-        `${parsed.decision === "approved" ? "Approved" : "Rejected"} shared preview bundle: ${reviewedBundle.summary}`,
+        isOwnerReviewer
+          ? `${parsed.decision === "approved" ? "Approved" : "Rejected"} shared preview bundle: ${reviewedBundle.summary}`
+          : `${input.session.userID} recommended ${parsed.decision === "approved" ? "approval" : "rejection"} for shared preview bundle: ${reviewedBundle.summary}`,
         createBundleRangeCitations(reviewedBundle),
       ),
     );
