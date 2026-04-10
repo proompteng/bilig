@@ -33,6 +33,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Trace selection links",
     summary: "Trace precedents and dependents from the current selection context.",
   },
+  {
+    template: "explainSelectionCell",
+    label: "Explain current cell",
+    summary: "Inspect the selected cell, formula state, and direct workbook links.",
+  },
 ];
 
 export function WorkflowActionStrip(props: {

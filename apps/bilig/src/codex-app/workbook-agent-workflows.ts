@@ -6,6 +6,7 @@ import type {
   WorkbookAgentWorkflowStep,
   WorkbookAgentWorkflowTemplate,
 } from "@bilig/contracts";
+import { ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
 import {
   findWorkbookFormulaIssues,
@@ -125,6 +126,33 @@ function getWorkflowTemplateMetadata(
             label: "Draft trace report",
             runningSummary: "Drafting the durable dependency trace report.",
             pendingSummary: "Waiting to assemble the durable dependency trace report.",
+          },
+        ],
+      };
+    case "explainSelectionCell":
+      return {
+        title: "Explain Current Cell",
+        runningSummary: "Running current cell explanation workflow.",
+        stepPlans: [
+          {
+            stepId: "inspect-selection",
+            label: "Inspect current selection",
+            runningSummary: "Reading the current workbook selection context.",
+            pendingSummary: "Waiting to read the current workbook selection context.",
+          },
+          {
+            stepId: "explain-cell",
+            label: "Explain current cell",
+            runningSummary: "Loading the selected cell value, formula state, and workbook links.",
+            pendingSummary:
+              "Waiting to load the selected cell value, formula state, and workbook links.",
+          },
+          {
+            stepId: "draft-explanation",
+            label: "Draft explanation artifact",
+            runningSummary: "Drafting the durable current-cell explanation artifact.",
+            pendingSummary:
+              "Waiting to assemble the durable current-cell explanation artifact.",
           },
         ],
       };
@@ -317,6 +345,75 @@ function summarizeDependencyTraceMarkdown(
     lines.push("");
   });
   return lines.join("\n").trimEnd();
+}
+
+function serializeWorkflowCellValue(value: {
+  tag: ValueTag;
+  value?: number | boolean | string;
+  code?: number;
+}): string {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return "(empty)";
+    case ValueTag.Number:
+    case ValueTag.Boolean:
+    case ValueTag.String:
+      return String(value.value ?? "");
+    case ValueTag.Error:
+      return typeof value.code === "number" ? formatErrorCode(value.code) : "#ERROR!";
+    default:
+      return "(empty)";
+  }
+}
+
+function summarizeCellExplanationMarkdown(explanation: {
+  readonly sheetName: string;
+  readonly address: string;
+  readonly valueText: string;
+  readonly formula: string | null;
+  readonly format: string | null;
+  readonly version: number;
+  readonly inCycle: boolean;
+  readonly mode: string | null;
+  readonly topoRank: number | null;
+  readonly directPrecedents: readonly string[];
+  readonly directDependents: readonly string[];
+}): string {
+  const lines = [
+    "## Current Cell",
+    "",
+    `Cell: ${explanation.sheetName}!${explanation.address}`,
+    `Value: ${explanation.valueText}`,
+    `Formula: ${explanation.formula ?? "(none)"}`,
+    `Calculation mode: ${explanation.mode ?? "(unknown)"}`,
+    `Version: ${String(explanation.version)}`,
+    `In cycle: ${explanation.inCycle ? "yes" : "no"}`,
+    `Direct precedents: ${String(explanation.directPrecedents.length)}`,
+    `Direct dependents: ${String(explanation.directDependents.length)}`,
+  ];
+  if (explanation.topoRank !== null) {
+    lines.push(`Topological rank: ${String(explanation.topoRank)}`);
+  }
+  if (explanation.format) {
+    lines.push(`Number format: ${explanation.format}`);
+  }
+  lines.push("", "### Direct precedents");
+  if (explanation.directPrecedents.length === 0) {
+    lines.push("- None");
+  } else {
+    for (const precedent of explanation.directPrecedents) {
+      lines.push(`- ${precedent}`);
+    }
+  }
+  lines.push("", "### Direct dependents");
+  if (explanation.directDependents.length === 0) {
+    lines.push("- None");
+  } else {
+    for (const dependent of explanation.directDependents) {
+      lines.push(`- ${dependent}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 export function createWorkflowRunRecord(input: {
@@ -512,6 +609,80 @@ export async function executeWorkbookAgentWorkflow(input: {
             stepId: "draft-trace-report",
             label: "Draft trace report",
             summary: "Prepared the durable dependency trace report for the thread.",
+          },
+        ],
+      };
+    }
+    case "explainSelectionCell": {
+      const selection = input.context?.selection;
+      if (!selection) {
+        throw new Error("Selection context is required for current cell explanation workflows.");
+      }
+      const explanation = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) => {
+        const cell = runtime.engine.explainCell(selection.sheetName, selection.address);
+        return {
+          sheetName: cell.sheetName,
+          address: cell.address,
+          valueText: serializeWorkflowCellValue(cell.value),
+          formula: cell.formula !== undefined ? `=${cell.formula}` : null,
+          format: cell.format ?? null,
+          version: cell.version,
+          inCycle: cell.inCycle,
+          mode: cell.mode ? String(cell.mode) : null,
+          topoRank: cell.topoRank ?? null,
+          directPrecedents: [...cell.directPrecedents],
+          directDependents: [...cell.directDependents],
+        };
+      });
+      return {
+        title: "Explain Current Cell",
+        summary: `Explained ${selection.sheetName}!${selection.address}, including direct precedents and dependents.`,
+        artifact: {
+          kind: "markdown",
+          title: "Current Cell",
+          text: summarizeCellExplanationMarkdown(explanation),
+        },
+        citations: [
+          {
+            kind: "range",
+            sheetName: explanation.sheetName,
+            startAddress: explanation.address,
+            endAddress: explanation.address,
+            role: "target",
+          },
+          ...explanation.directPrecedents.map((address) => ({
+            kind: "range" as const,
+            sheetName: explanation.sheetName,
+            startAddress: address,
+            endAddress: address,
+            role: "source" as const,
+          })),
+          ...explanation.directDependents.map((address) => ({
+            kind: "range" as const,
+            sheetName: explanation.sheetName,
+            startAddress: address,
+            endAddress: address,
+            role: "source" as const,
+          })),
+        ],
+        steps: [
+          {
+            stepId: "inspect-selection",
+            label: "Inspect current selection",
+            summary: `Loaded workbook context for ${selection.sheetName}!${selection.address}.`,
+          },
+          {
+            stepId: "explain-cell",
+            label: "Explain current cell",
+            summary:
+              explanation.formula === null
+                ? `Read the current value and workbook links for ${selection.sheetName}!${selection.address}.`
+                : `Read the current value, formula, and workbook links for ${selection.sheetName}!${selection.address}.`,
+          },
+          {
+            stepId: "draft-explanation",
+            label: "Draft explanation artifact",
+            summary: "Prepared the durable current-cell explanation artifact for the thread.",
           },
         ],
       };

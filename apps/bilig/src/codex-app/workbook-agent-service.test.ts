@@ -640,6 +640,120 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("runs durable current-cell explanation workflows from the active selection", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.setCellFormula("Sheet1", "C1", "B1+1");
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "explainSelectionCell",
+        },
+      });
+
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "explainSelectionCell",
+          title: "Explain Current Cell",
+          status: "completed",
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              stepId: "explain-cell",
+              status: "completed",
+            }),
+          ]),
+          artifact: expect.objectContaining({
+            title: "Current Cell",
+            text: expect.stringContaining("Cell: Sheet1!B1"),
+          }),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Explain Current Cell",
+            citations: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "range",
+                sheetName: "Sheet1",
+                startAddress: "B1",
+                endAddress: "B1",
+              }),
+            ]),
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("allows Codex dynamic tools to start durable workflows inside the active thread", async () => {
     const fakeCodex = new FakeCodexTransport();
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };

@@ -76,6 +76,7 @@ const startWorkflowToolArgsSchema = z.object({
     "describeRecentChanges",
     "findFormulaIssues",
     "traceSelectionDependencies",
+    "explainSelectionCell",
   ]),
 });
 const searchWorkbookToolArgsSchema = z.object({
@@ -571,6 +572,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "describeRecentChanges",
               "findFormulaIssues",
               "traceSelectionDependencies",
+              "explainSelectionCell",
             ],
           },
         },

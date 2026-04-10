@@ -659,6 +659,122 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts current-cell explanation workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-3",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "explainSelectionCell",
+                  title: "Explain Current Cell",
+                  summary: "Explained Sheet1!A1, including direct precedents and dependents.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-selection",
+                      label: "Inspect current selection",
+                      status: "completed",
+                      summary: "Loaded workbook context for Sheet1!A1.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "explain-cell",
+                      label: "Explain current cell",
+                      status: "completed",
+                      summary: "Read the current value and workbook links for Sheet1!A1.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "draft-explanation",
+                      label: "Draft explanation artifact",
+                      status: "completed",
+                      summary: "Prepared the durable current-cell explanation artifact for the thread.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Current Cell",
+                    text: "## Current Cell\n\nCell: Sheet1!A1",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-explainSelectionCell']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+    );
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "explainSelectionCell",
+    });
+    expect(host.textContent).toContain("Explain Current Cell");
+    expect(host.textContent).toContain("Current Cell");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("loads durable thread summaries into the assistant rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

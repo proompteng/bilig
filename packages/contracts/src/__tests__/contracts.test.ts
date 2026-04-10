@@ -146,4 +146,37 @@ describe("@bilig/contracts", () => {
       }),
     );
   });
+
+  it("accepts explain-selection workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-2",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "explainSelectionCell",
+      title: "Explain Current Cell",
+      summary: "Explained Sheet1!B2, including direct precedents and dependents.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-selection",
+          label: "Inspect current selection",
+          status: "completed",
+          summary: "Loaded workbook context for Sheet1!B2.",
+          updatedAtUnixMs: 110,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Current Cell",
+        text: "## Current Cell",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("explainSelectionCell");
+    expect(decoded.artifact?.title).toBe("Current Cell");
+  });
 });
