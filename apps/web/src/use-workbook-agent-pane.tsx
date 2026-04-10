@@ -527,6 +527,7 @@ export function useWorkbookAgentPane(input: {
           );
         }
         persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        perfSession.markFirstAgentApplyVisible?.();
         setError(null);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -538,6 +539,7 @@ export function useWorkbookAgentPane(input: {
       documentId,
       normalizedCommandIndexes,
       pendingBundle,
+      perfSession,
       persistSessionSnapshot,
       preview,
       selectedPendingBundle,

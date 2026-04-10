@@ -18,6 +18,7 @@ export interface WorkbookPerfSession {
   noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void;
   markFirstAuthoritativePatchVisible(): void;
   markFirstAssistantDeltaVisible?(): void;
+  markFirstAgentApplyVisible?(): void;
   markFirstLocalEditApplied?(): void;
   markFirstPasteApplied?(): void;
   markFirstPreviewVisible?(): void;
@@ -113,6 +114,9 @@ export function createWorkbookPerfSession(input: {
     },
     markFirstAssistantDeltaVisible() {
       markEvent("first-assistant-delta-visible");
+    },
+    markFirstAgentApplyVisible() {
+      markEvent("first-agent-apply-visible");
     },
     markFirstLocalEditApplied() {
       markEvent("first-local-edit-applied");

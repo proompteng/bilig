@@ -51,6 +51,8 @@ describe("workbook perf session", () => {
     session.markFirstAuthoritativePatchVisible();
     session.markFirstAssistantDeltaVisible?.();
     session.markFirstAssistantDeltaVisible?.();
+    session.markFirstAgentApplyVisible?.();
+    session.markFirstAgentApplyVisible?.();
     session.markFirstLocalEditApplied?.();
     session.markFirstLocalEditApplied?.();
     session.markFirstPasteApplied?.();
@@ -69,6 +71,7 @@ describe("workbook perf session", () => {
       "perf-doc:session:first-selection-visible",
       "perf-doc:session:first-authoritative-patch-visible",
       "perf-doc:session:first-assistant-delta-visible",
+      "perf-doc:session:first-agent-apply-visible",
       "perf-doc:session:first-local-edit-applied",
       "perf-doc:session:first-paste-applied",
       "perf-doc:session:first-preview-visible",
@@ -100,6 +103,11 @@ describe("workbook perf session", () => {
         name: "perf-doc:session:time-to-first-assistant-delta-visible",
         start: "perf-doc:session:start",
         end: "perf-doc:session:first-assistant-delta-visible",
+      },
+      {
+        name: "perf-doc:session:time-to-first-agent-apply-visible",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-agent-apply-visible",
       },
       {
         name: "perf-doc:session:time-to-first-local-edit-applied",
@@ -175,6 +183,7 @@ describe("workbook perf session", () => {
       });
       session.markFirstAuthoritativePatchVisible();
       session.markFirstAssistantDeltaVisible?.();
+      session.markFirstAgentApplyVisible?.();
       session.markFirstLocalEditApplied?.();
       session.markFirstPasteApplied?.();
       session.markFirstPreviewVisible?.();
