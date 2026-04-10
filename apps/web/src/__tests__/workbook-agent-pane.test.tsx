@@ -543,6 +543,122 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts dependency trace workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-2",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "traceSelectionDependencies",
+                  title: "Trace Selection Dependencies",
+                  summary: "Traced 1 precedent and 1 dependent from Sheet1!B1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-selection",
+                      label: "Inspect current selection",
+                      status: "completed",
+                      summary: "Loaded workbook context for Sheet1!B1.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "trace-links",
+                      label: "Trace workbook links",
+                      status: "completed",
+                      summary: "Traced 1 precedent and 1 dependent.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "draft-trace-report",
+                      label: "Draft trace report",
+                      status: "completed",
+                      summary: "Prepared the durable dependency trace report for the thread.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Dependency Trace",
+                    text: "## Dependency Trace\n\nRoot: Sheet1!B1",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-traceSelectionDependencies']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+    );
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "traceSelectionDependencies",
+    });
+    expect(host.textContent).toContain("Trace Selection Dependencies");
+    expect(host.textContent).toContain("Dependency Trace");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("loads durable thread summaries into the assistant rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

@@ -1,5 +1,6 @@
 import type {
   WorkbookAgentTimelineCitation,
+  WorkbookAgentUiContext,
   WorkbookAgentWorkflowArtifact,
   WorkbookAgentWorkflowRun,
   WorkbookAgentWorkflowStep,
@@ -9,6 +10,7 @@ import type { ZeroSyncService } from "../zero/service.js";
 import {
   findWorkbookFormulaIssues,
   summarizeWorkbookStructure,
+  traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
 
 interface WorkbookAgentWorkflowStepPlan {
@@ -98,6 +100,31 @@ function getWorkflowTemplateMetadata(
             label: "Draft issue report",
             runningSummary: "Drafting the durable formula issue report.",
             pendingSummary: "Waiting to assemble the durable formula issue report.",
+          },
+        ],
+      };
+    case "traceSelectionDependencies":
+      return {
+        title: "Trace Selection Dependencies",
+        runningSummary: "Running dependency trace workflow.",
+        stepPlans: [
+          {
+            stepId: "inspect-selection",
+            label: "Inspect current selection",
+            runningSummary: "Reading the current workbook selection context.",
+            pendingSummary: "Waiting to read the current workbook selection context.",
+          },
+          {
+            stepId: "trace-links",
+            label: "Trace workbook links",
+            runningSummary: "Tracing direct precedents and dependents from the selection.",
+            pendingSummary: "Waiting to trace direct precedents and dependents from the selection.",
+          },
+          {
+            stepId: "draft-trace-report",
+            label: "Draft trace report",
+            runningSummary: "Drafting the durable dependency trace report.",
+            pendingSummary: "Waiting to assemble the durable dependency trace report.",
           },
         ],
       };
@@ -253,6 +280,45 @@ function summarizeFormulaIssuesMarkdown(
   return lines.join("\n");
 }
 
+function summarizeDependencyTraceMarkdown(
+  report: ReturnType<typeof traceWorkbookDependencies>,
+): string {
+  const lines = [
+    "## Dependency Trace",
+    "",
+    `Root: ${report.root.sheetName}!${report.root.address}`,
+    `Direction: ${report.direction}`,
+    `Depth: ${String(report.depth)}`,
+    `Direct precedents discovered: ${String(report.summary.precedentCount)}`,
+    `Direct dependents discovered: ${String(report.summary.dependentCount)}`,
+  ];
+  if (report.summary.truncated) {
+    lines.push("Trace output was truncated to stay inside the workflow node budget.");
+  }
+  lines.push("");
+  if (report.layers.length === 0) {
+    lines.push("No workbook precedents or dependents were found from the current selection.");
+    return lines.join("\n");
+  }
+  report.layers.forEach((layer) => {
+    lines.push(`### Depth ${String(layer.depth)}`);
+    if (layer.precedents.length > 0) {
+      lines.push("Precedents:");
+      layer.precedents.forEach((node) => {
+        lines.push(`- ${node.sheetName}!${node.address}: ${node.valueText}`);
+      });
+    }
+    if (layer.dependents.length > 0) {
+      lines.push("Dependents:");
+      layer.dependents.forEach((node) => {
+        lines.push(`- ${node.sheetName}!${node.address}: ${node.valueText}`);
+      });
+    }
+    lines.push("");
+  });
+  return lines.join("\n").trimEnd();
+}
+
 export function createWorkflowRunRecord(input: {
   runId: string;
   threadId: string;
@@ -288,6 +354,7 @@ export async function executeWorkbookAgentWorkflow(input: {
   documentId: string;
   zeroSyncService: ZeroSyncService;
   workflowTemplate: WorkbookAgentWorkflowTemplate;
+  context?: WorkbookAgentUiContext | null;
 }): Promise<WorkbookAgentWorkflowExecutionResult> {
   switch (input.workflowTemplate) {
     case "summarizeWorkbook": {
@@ -386,6 +453,65 @@ export async function executeWorkbookAgentWorkflow(input: {
             stepId: "draft-issue-report",
             label: "Draft issue report",
             summary: "Prepared the durable formula issue report for the thread.",
+          },
+        ],
+      };
+    }
+    case "traceSelectionDependencies": {
+      const selection = input.context?.selection;
+      if (!selection) {
+        throw new Error("Selection context is required for dependency trace workflows.");
+      }
+      const dependencyTrace = await input.zeroSyncService.inspectWorkbook(
+        input.documentId,
+        (runtime) =>
+          traceWorkbookDependencies(runtime, {
+            sheetName: selection.sheetName,
+            address: selection.address,
+          }),
+      );
+      const citedNodes = [
+        dependencyTrace.root,
+        ...dependencyTrace.layers.flatMap((layer) => [...layer.precedents, ...layer.dependents]),
+      ];
+      return {
+        title: "Trace Selection Dependencies",
+        summary:
+          dependencyTrace.summary.precedentCount === 0 &&
+          dependencyTrace.summary.dependentCount === 0
+            ? `No workbook precedents or dependents were found from ${selection.sheetName}!${selection.address}.`
+            : `Traced ${String(dependencyTrace.summary.precedentCount)} precedent${dependencyTrace.summary.precedentCount === 1 ? "" : "s"} and ${String(dependencyTrace.summary.dependentCount)} dependent${dependencyTrace.summary.dependentCount === 1 ? "" : "s"} from ${selection.sheetName}!${selection.address}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Dependency Trace",
+          text: summarizeDependencyTraceMarkdown(dependencyTrace),
+        },
+        citations: citedNodes.map((node) => ({
+          kind: "range",
+          sheetName: node.sheetName,
+          startAddress: node.address,
+          endAddress: node.address,
+          role: "source",
+        })),
+        steps: [
+          {
+            stepId: "inspect-selection",
+            label: "Inspect current selection",
+            summary: `Loaded workbook context for ${selection.sheetName}!${selection.address}.`,
+          },
+          {
+            stepId: "trace-links",
+            label: "Trace workbook links",
+            summary:
+              dependencyTrace.summary.precedentCount === 0 &&
+              dependencyTrace.summary.dependentCount === 0
+                ? "No workbook precedents or dependents were discovered from the current selection."
+                : `Traced ${String(dependencyTrace.summary.precedentCount)} precedent${dependencyTrace.summary.precedentCount === 1 ? "" : "s"} and ${String(dependencyTrace.summary.dependentCount)} dependent${dependencyTrace.summary.dependentCount === 1 ? "" : "s"}.`,
+          },
+          {
+            stepId: "draft-trace-report",
+            label: "Draft trace report",
+            summary: "Prepared the durable dependency trace report for the thread.",
           },
         ],
       };

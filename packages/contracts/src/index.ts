@@ -143,6 +143,7 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "summarizeWorkbook",
   "describeRecentChanges",
   "findFormulaIssues",
+  "traceSelectionDependencies",
 );
 export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowTemplateSchema

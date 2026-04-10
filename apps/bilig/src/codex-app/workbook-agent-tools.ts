@@ -75,6 +75,7 @@ const startWorkflowToolArgsSchema = z.object({
     "summarizeWorkbook",
     "describeRecentChanges",
     "findFormulaIssues",
+    "traceSelectionDependencies",
   ]),
 });
 const searchWorkbookToolArgsSchema = z.object({
@@ -565,7 +566,12 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         properties: {
           workflowTemplate: {
             type: "string",
-            enum: ["summarizeWorkbook", "describeRecentChanges", "findFormulaIssues"],
+            enum: [
+              "summarizeWorkbook",
+              "describeRecentChanges",
+              "findFormulaIssues",
+              "traceSelectionDependencies",
+            ],
           },
         },
       },

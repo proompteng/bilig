@@ -28,6 +28,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Formula issues",
     summary: "Scan formulas for errors, cycles, and JS-only fallback formulas.",
   },
+  {
+    template: "traceSelectionDependencies",
+    label: "Trace selection links",
+    summary: "Trace precedents and dependents from the current selection context.",
+  },
 ];
 
 export function WorkflowActionStrip(props: {

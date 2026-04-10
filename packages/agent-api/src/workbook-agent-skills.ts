@@ -62,8 +62,9 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "analyze",
     description: "Trace upstream and downstream workbook links from the current selection.",
     prompt:
-      "Trace the dependency graph around the current selection for multiple hops, then explain the most important upstream and downstream cells.",
+      "Trace the dependency graph around the current selection for multiple hops, then explain the most important upstream and downstream cells. Prefer the built-in durable workflow when the user wants that trace saved in the thread.",
     toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       WORKBOOK_AGENT_TOOL_NAMES.getContext,
       WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
       WORKBOOK_AGENT_TOOL_NAMES.traceDependencies,

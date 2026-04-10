@@ -596,6 +596,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         documentId: input.documentId,
         zeroSyncService: this.zeroSyncService,
         workflowTemplate,
+        context: sessionState.snapshot.context,
       });
       const completedAtUnixMs = this.now();
       const completedRun: WorkbookAgentWorkflowRun = {
