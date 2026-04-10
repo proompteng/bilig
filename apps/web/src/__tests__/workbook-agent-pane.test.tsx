@@ -138,6 +138,7 @@ function createThreadSummary(overrides: Record<string, unknown> = {}) {
     updatedAtUnixMs: 100,
     entryCount: 1,
     hasPendingBundle: false,
+    latestEntryText: null,
     ...overrides,
   };
 }
@@ -251,11 +252,13 @@ describe("workbook agent pane", () => {
               scope: "shared",
               entryCount: 4,
               hasPendingBundle: true,
+              latestEntryText: "Applied preview bundle at revision r7",
             }),
             createThreadSummary({
               threadId: "thr-private",
               scope: "private",
               entryCount: 2,
+              latestEntryText: "Preview bundle staged",
             }),
           ]),
           {
@@ -281,6 +284,7 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Shared");
     expect(host.textContent).toContain("Pending");
     expect(host.textContent).toContain("4 items");
+    expect(host.textContent).toContain("Applied preview bundle at revision r7");
 
     await act(async () => {
       root.unmount();

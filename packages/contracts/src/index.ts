@@ -99,6 +99,7 @@ export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   updatedAtUnixMs: Schema.Number,
   entryCount: Schema.Number,
   hasPendingBundle: Schema.Boolean,
+  latestEntryText: Schema.Union(Schema.String, Schema.Null),
 });
 export type WorkbookAgentThreadSummary = Schema.Schema.Type<
   typeof WorkbookAgentThreadSummarySchema

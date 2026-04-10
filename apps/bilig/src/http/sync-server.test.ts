@@ -374,6 +374,7 @@ describe("sync-server workbook agent", () => {
         updatedAtUnixMs: 200,
         entryCount: 3,
         hasPendingBundle: false,
+        latestEntryText: "Applied shared cleanup at revision r7",
       },
       {
         threadId: "thr-1",
@@ -381,6 +382,7 @@ describe("sync-server workbook agent", () => {
         updatedAtUnixMs: 100,
         entryCount: 1,
         hasPendingBundle: true,
+        latestEntryText: "Preview bundle staged",
       },
     ]);
 
@@ -440,6 +442,7 @@ describe("sync-server workbook agent", () => {
           updatedAtUnixMs: 200,
           entryCount: 3,
           hasPendingBundle: false,
+          latestEntryText: "Applied shared cleanup at revision r7",
         },
         {
           threadId: "thr-1",
@@ -447,6 +450,7 @@ describe("sync-server workbook agent", () => {
           updatedAtUnixMs: 100,
           entryCount: 1,
           hasPendingBundle: true,
+          latestEntryText: "Preview bundle staged",
         },
       ]);
     } finally {

@@ -298,6 +298,7 @@ describe("workbook-chat-thread-store", () => {
                 updatedAtUnixMs: 200,
                 entryCount: 3,
                 hasPendingBundle: false,
+                latestEntryText: "Applied shared cleanup at revision r7",
               } satisfies QueryResultRow,
               {
                 threadId: "thr-1",
@@ -305,6 +306,7 @@ describe("workbook-chat-thread-store", () => {
                 updatedAtUnixMs: 100,
                 entryCount: 1,
                 hasPendingBundle: true,
+                latestEntryText: "Preview bundle staged",
               } satisfies QueryResultRow,
             ]
           : null,
@@ -322,6 +324,7 @@ describe("workbook-chat-thread-store", () => {
         updatedAtUnixMs: 200,
         entryCount: 3,
         hasPendingBundle: false,
+        latestEntryText: "Applied shared cleanup at revision r7",
       },
       {
         threadId: "thr-1",
@@ -329,6 +332,7 @@ describe("workbook-chat-thread-store", () => {
         updatedAtUnixMs: 100,
         entryCount: 1,
         hasPendingBundle: true,
+        latestEntryText: "Preview bundle staged",
       },
     ]);
   });
@@ -344,6 +348,7 @@ describe("workbook-chat-thread-store", () => {
                 updatedAtUnixMs: 300,
                 entryCount: 2,
                 hasPendingBundle: false,
+                latestEntryText: "Applied preview bundle at revision r9",
               } satisfies QueryResultRow,
             ]
           : null,
@@ -361,6 +366,7 @@ describe("workbook-chat-thread-store", () => {
         updatedAtUnixMs: 300,
         entryCount: 2,
         hasPendingBundle: false,
+        latestEntryText: "Applied preview bundle at revision r9",
       },
     ]);
     expect(queryable.calls.at(-1)?.text).toContain(

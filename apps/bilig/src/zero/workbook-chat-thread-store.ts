@@ -72,6 +72,7 @@ interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
   readonly hasPendingBundle?: unknown;
+  readonly latestEntryText?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -269,7 +270,10 @@ function normalizeThreadSummary(
     (row.scope !== "private" && row.scope !== "shared") ||
     updatedAtUnixMs === null ||
     entryCount === null ||
-    typeof row.hasPendingBundle !== "boolean"
+    typeof row.hasPendingBundle !== "boolean" ||
+    (row.latestEntryText !== null &&
+      row.latestEntryText !== undefined &&
+      typeof row.latestEntryText !== "string")
   ) {
     return null;
   }
@@ -279,6 +283,7 @@ function normalizeThreadSummary(
     updatedAtUnixMs,
     entryCount,
     hasPendingBundle: row.hasPendingBundle,
+    latestEntryText: typeof row.latestEntryText === "string" ? row.latestEntryText : null,
   };
 }
 
@@ -548,7 +553,8 @@ export async function listWorkbookAgentThreadSummaries(
         thread.scope AS "scope",
         thread.updated_at_unix_ms AS "updatedAtUnixMs",
         COALESCE(item_counts.entry_count, 0) AS "entryCount",
-        pending.bundle_id IS NOT NULL AS "hasPendingBundle"
+        pending.bundle_id IS NOT NULL AS "hasPendingBundle",
+        latest_item.text AS "latestEntryText"
       FROM (
         SELECT ranked.workbook_id, ranked.thread_id, ranked.actor_user_id, ranked.scope, ranked.updated_at_unix_ms
         FROM (
@@ -582,6 +588,17 @@ export async function listWorkbookAgentThreadSummaries(
         ON pending.workbook_id = thread.workbook_id
        AND pending.thread_id = thread.thread_id
        AND pending.actor_user_id = thread.actor_user_id
+      LEFT JOIN LATERAL (
+        SELECT text
+        FROM workbook_chat_item
+        WHERE workbook_id = thread.workbook_id
+          AND thread_id = thread.thread_id
+          AND actor_user_id = thread.actor_user_id
+          AND text IS NOT NULL
+        ORDER BY sort_order DESC
+        LIMIT 1
+      ) AS latest_item
+        ON TRUE
       WHERE thread.workbook_id = $1
         AND (thread.actor_user_id = $2 OR thread.scope = 'shared')
       ORDER BY thread.updated_at_unix_ms DESC

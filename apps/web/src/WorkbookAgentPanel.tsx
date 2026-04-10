@@ -51,6 +51,17 @@ function formatThreadEntryCount(entryCount: number): string {
   return `${entryCount} ${entryCount === 1 ? "item" : "items"}`;
 }
 
+function summarizeThreadActivity(text: string | null): string | null {
+  if (!text) {
+    return null;
+  }
+  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  if (normalized.length === 0) {
+    return null;
+  }
+  return normalized.length <= 64 ? normalized : `${normalized.slice(0, 61)}...`;
+}
+
 function ThreadSummaryStrip(props: {
   readonly activeThreadId: string | null;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
@@ -64,6 +75,7 @@ function ThreadSummaryStrip(props: {
     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
       {props.threadSummaries.map((threadSummary) => {
         const isActive = threadSummary.threadId === props.activeThreadId;
+        const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText);
         return (
           <button
             key={threadSummary.threadId}
@@ -96,6 +108,11 @@ function ThreadSummaryStrip(props: {
             <div className="text-[11px] text-[var(--wb-text-subtle)]">
               {formatThreadEntryCount(threadSummary.entryCount)}
             </div>
+            {latestActivity ? (
+              <div className="line-clamp-2 text-[11px] leading-4 text-[var(--wb-text-muted)]">
+                {latestActivity}
+              </div>
+            ) : null}
           </button>
         );
       })}
