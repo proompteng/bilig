@@ -15,7 +15,14 @@ import {
   writeArrayResult,
   writeResult,
 } from "./result-io";
-import { allocateSpillArrayResult, writeSpillArrayNumber } from "./vm";
+import {
+  allocateOutputString,
+  allocateSpillArrayResult,
+  encodeOutputStringId,
+  writeOutputStringData,
+  writeSpillArrayNumber,
+  writeSpillArrayValue,
+} from "./vm";
 
 const AXIS_AGG_SUM: i32 = 1;
 const AXIS_AGG_AVERAGE: i32 = 2;
@@ -23,6 +30,179 @@ const AXIS_AGG_MIN: i32 = 3;
 const AXIS_AGG_MAX: i32 = 4;
 const AXIS_AGG_COUNT: i32 = 5;
 const AXIS_AGG_COUNTA: i32 = 6;
+
+function writeLiteralTextToSpill(arrayIndex: u32, offset: i32, text: string): void {
+  const outputIndex = allocateOutputString(text.length);
+  for (let index = 0; index < text.length; index += 1) {
+    writeOutputStringData(outputIndex, index, <u16>text.charCodeAt(index));
+  }
+  writeSpillArrayValue(arrayIndex, offset, <u8>ValueTag.String, encodeOutputStringId(outputIndex));
+}
+
+function vectorLength(
+  slot: i32,
+  kindStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+): i32 {
+  const rows = inputRowsFromSlot(slot, kindStack, rangeIndexStack, rangeRowCounts);
+  const cols = inputColsFromSlot(slot, kindStack, rangeIndexStack, rangeColCounts);
+  if (rows <= 0 || cols <= 0 || rows == i32.MIN_VALUE || cols == i32.MIN_VALUE) {
+    return i32.MIN_VALUE;
+  }
+  return rows == 1 || cols == 1 ? rows * cols : i32.MIN_VALUE;
+}
+
+function vectorTagAt(
+  slot: i32,
+  rows: i32,
+  cols: i32,
+  index: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+): u8 {
+  const row = rows == 1 ? 0 : index;
+  const col = rows == 1 ? index : 0;
+  return inputCellTag(
+    slot,
+    row,
+    col,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+  );
+}
+
+function vectorValueAt(
+  slot: i32,
+  rows: i32,
+  cols: i32,
+  index: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+): f64 {
+  const row = rows == 1 ? 0 : index;
+  const col = rows == 1 ? index : 0;
+  return inputCellScalarValue(
+    slot,
+    row,
+    col,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  );
+}
+
+function writeVectorValueToSpill(
+  arrayIndex: u32,
+  offset: i32,
+  slot: i32,
+  rows: i32,
+  cols: i32,
+  index: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+): void {
+  writeSpillArrayValue(
+    arrayIndex,
+    offset,
+    vectorTagAt(
+      slot,
+      rows,
+      cols,
+      index,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+    ),
+    vectorValueAt(
+      slot,
+      rows,
+      cols,
+      index,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    ),
+  );
+}
+
+function findBucketIndex(tags: Array<u8>, values: Array<f64>, tag: u8, value: f64): i32 {
+  for (let index = 0; index < tags.length; index += 1) {
+    if (unchecked(tags[index]) == tag && unchecked(values[index]) == value) {
+      return index;
+    }
+  }
+  return -1;
+}
 
 export function tryApplyArrayFoundationBuiltin(
   builtinId: i32,
@@ -192,6 +372,604 @@ export function tryApplyArrayFoundationBuiltin(
       }
       writeSpillArrayNumber(arrayIndex, outer, sum);
     }
+
+    return writeArrayResult(
+      base,
+      arrayIndex,
+      outputRows,
+      outputCols,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.GroupbySumCanonical && argc == 2) {
+    const rowSlot = base;
+    const valueSlot = base + 1;
+    const rowLength = vectorLength(
+      rowSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    const valueLength = vectorLength(
+      valueSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    if (
+      rowLength == i32.MIN_VALUE ||
+      valueLength == i32.MIN_VALUE ||
+      rowLength != valueLength ||
+      rowLength < 1
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const rowRows = inputRowsFromSlot(rowSlot, kindStack, rangeIndexStack, rangeRowCounts);
+    const rowCols = inputColsFromSlot(rowSlot, kindStack, rangeIndexStack, rangeColCounts);
+    const valueRows = inputRowsFromSlot(valueSlot, kindStack, rangeIndexStack, rangeRowCounts);
+    const valueCols = inputColsFromSlot(valueSlot, kindStack, rangeIndexStack, rangeColCounts);
+    const bucketTags = new Array<u8>();
+    const bucketValues = new Array<f64>();
+    const bucketSums = new Array<f64>();
+    let grandTotal = 0.0;
+
+    for (let index = 1; index < rowLength; index += 1) {
+      const keyTag = vectorTagAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const keyValue = vectorValueAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      const rawValueTag = vectorTagAt(
+        valueSlot,
+        valueRows,
+        valueCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const rawValue = vectorValueAt(
+        valueSlot,
+        valueRows,
+        valueCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      if (keyTag == ValueTag.Error || rawValueTag == ValueTag.Error) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      if (keyTag == ValueTag.Empty && rawValueTag == ValueTag.Empty) {
+        continue;
+      }
+      const bucketIndex = findBucketIndex(bucketTags, bucketValues, keyTag, keyValue);
+      const numericValue = rawValueTag == ValueTag.Number ? rawValue : 0.0;
+      if (bucketIndex >= 0) {
+        bucketSums[bucketIndex] = unchecked(bucketSums[bucketIndex]) + numericValue;
+      } else {
+        bucketTags.push(keyTag);
+        bucketValues.push(keyValue);
+        bucketSums.push(numericValue);
+      }
+      grandTotal += numericValue;
+    }
+
+    const outputRows = bucketTags.length + 2;
+    const outputCols = 2;
+    const arrayIndex = allocateSpillArrayResult(outputRows, outputCols);
+    writeVectorValueToSpill(
+      arrayIndex,
+      0,
+      rowSlot,
+      rowRows,
+      rowCols,
+      0,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+    writeVectorValueToSpill(
+      arrayIndex,
+      1,
+      valueSlot,
+      valueRows,
+      valueCols,
+      0,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+
+    for (let bucket = 0; bucket < bucketTags.length; bucket += 1) {
+      const rowOffset = (bucket + 1) * outputCols;
+      writeSpillArrayValue(
+        arrayIndex,
+        rowOffset,
+        unchecked(bucketTags[bucket]),
+        unchecked(bucketValues[bucket]),
+      );
+      writeSpillArrayNumber(arrayIndex, rowOffset + 1, unchecked(bucketSums[bucket]));
+    }
+
+    const totalRowOffset = (bucketTags.length + 1) * outputCols;
+    writeLiteralTextToSpill(arrayIndex, totalRowOffset, "Total");
+    writeSpillArrayNumber(arrayIndex, totalRowOffset + 1, grandTotal);
+
+    return writeArrayResult(
+      base,
+      arrayIndex,
+      outputRows,
+      outputCols,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.PivotbySumCanonical && argc == 3) {
+    const rowSlot = base;
+    const colSlot = base + 1;
+    const valueSlot = base + 2;
+    const rowLength = vectorLength(
+      rowSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    const colLength = vectorLength(
+      colSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    const valueLength = vectorLength(
+      valueSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    if (
+      rowLength == i32.MIN_VALUE ||
+      colLength == i32.MIN_VALUE ||
+      valueLength == i32.MIN_VALUE ||
+      rowLength != colLength ||
+      rowLength != valueLength ||
+      rowLength < 1
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const rowRows = inputRowsFromSlot(rowSlot, kindStack, rangeIndexStack, rangeRowCounts);
+    const rowCols = inputColsFromSlot(rowSlot, kindStack, rangeIndexStack, rangeColCounts);
+    const colRows = inputRowsFromSlot(colSlot, kindStack, rangeIndexStack, rangeRowCounts);
+    const colCols = inputColsFromSlot(colSlot, kindStack, rangeIndexStack, rangeColCounts);
+    const valueRows = inputRowsFromSlot(valueSlot, kindStack, rangeIndexStack, rangeRowCounts);
+    const valueCols = inputColsFromSlot(valueSlot, kindStack, rangeIndexStack, rangeColCounts);
+    const rowTags = new Array<u8>();
+    const rowValues = new Array<f64>();
+    const colTags = new Array<u8>();
+    const colValues = new Array<f64>();
+
+    for (let index = 1; index < rowLength; index += 1) {
+      const rowTag = vectorTagAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const rowValue = vectorValueAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      const colTag = vectorTagAt(
+        colSlot,
+        colRows,
+        colCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const colValue = vectorValueAt(
+        colSlot,
+        colRows,
+        colCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      const rawValueTag = vectorTagAt(
+        valueSlot,
+        valueRows,
+        valueCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      if (rowTag == ValueTag.Error || colTag == ValueTag.Error || rawValueTag == ValueTag.Error) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      if (rowTag == ValueTag.Empty && colTag == ValueTag.Empty && rawValueTag == ValueTag.Empty) {
+        continue;
+      }
+      if (findBucketIndex(rowTags, rowValues, rowTag, rowValue) < 0) {
+        rowTags.push(rowTag);
+        rowValues.push(rowValue);
+      }
+      if (findBucketIndex(colTags, colValues, colTag, colValue) < 0) {
+        colTags.push(colTag);
+        colValues.push(colValue);
+      }
+    }
+
+    const pivotSums = new Float64Array(rowTags.length * colTags.length);
+    const rowTotals = new Float64Array(rowTags.length);
+    const colTotals = new Float64Array(colTags.length);
+    let grandTotal = 0.0;
+
+    for (let index = 1; index < rowLength; index += 1) {
+      const rowTag = vectorTagAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const rowValue = vectorValueAt(
+        rowSlot,
+        rowRows,
+        rowCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      const colTag = vectorTagAt(
+        colSlot,
+        colRows,
+        colCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const colValue = vectorValueAt(
+        colSlot,
+        colRows,
+        colCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      const valueTag = vectorTagAt(
+        valueSlot,
+        valueRows,
+        valueCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+      );
+      const value = vectorValueAt(
+        valueSlot,
+        valueRows,
+        valueCols,
+        index,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+      );
+      if (rowTag == ValueTag.Empty && colTag == ValueTag.Empty && valueTag == ValueTag.Empty) {
+        continue;
+      }
+      const numericValue = valueTag == ValueTag.Number ? value : 0.0;
+      const rowBucket = findBucketIndex(rowTags, rowValues, rowTag, rowValue);
+      const colBucket = findBucketIndex(colTags, colValues, colTag, colValue);
+      if (rowBucket < 0 || colBucket < 0) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      const pivotIndex = rowBucket * colTags.length + colBucket;
+      pivotSums[pivotIndex] = unchecked(pivotSums[pivotIndex]) + numericValue;
+      rowTotals[rowBucket] = unchecked(rowTotals[rowBucket]) + numericValue;
+      colTotals[colBucket] = unchecked(colTotals[colBucket]) + numericValue;
+      grandTotal += numericValue;
+    }
+
+    const outputRows = rowTags.length + 2;
+    const outputCols = colTags.length + 2;
+    const arrayIndex = allocateSpillArrayResult(outputRows, outputCols);
+    writeVectorValueToSpill(
+      arrayIndex,
+      0,
+      rowSlot,
+      rowRows,
+      rowCols,
+      0,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+    for (let colBucket = 0; colBucket < colTags.length; colBucket += 1) {
+      writeSpillArrayValue(
+        arrayIndex,
+        colBucket + 1,
+        unchecked(colTags[colBucket]),
+        unchecked(colValues[colBucket]),
+      );
+    }
+    writeLiteralTextToSpill(arrayIndex, outputCols - 1, "Total");
+
+    for (let rowBucket = 0; rowBucket < rowTags.length; rowBucket += 1) {
+      const rowOffset = (rowBucket + 1) * outputCols;
+      writeSpillArrayValue(
+        arrayIndex,
+        rowOffset,
+        unchecked(rowTags[rowBucket]),
+        unchecked(rowValues[rowBucket]),
+      );
+      for (let colBucket = 0; colBucket < colTags.length; colBucket += 1) {
+        writeSpillArrayNumber(
+          arrayIndex,
+          rowOffset + colBucket + 1,
+          pivotSums[rowBucket * colTags.length + colBucket],
+        );
+      }
+      writeSpillArrayNumber(arrayIndex, rowOffset + outputCols - 1, rowTotals[rowBucket]);
+    }
+
+    const totalRowOffset = (rowTags.length + 1) * outputCols;
+    writeLiteralTextToSpill(arrayIndex, totalRowOffset, "Total");
+    for (let colBucket = 0; colBucket < colTags.length; colBucket += 1) {
+      writeSpillArrayNumber(arrayIndex, totalRowOffset + colBucket + 1, colTotals[colBucket]);
+    }
+    writeSpillArrayNumber(arrayIndex, totalRowOffset + outputCols - 1, grandTotal);
 
     return writeArrayResult(
       base,

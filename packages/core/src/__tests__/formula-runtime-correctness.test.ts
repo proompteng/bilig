@@ -20,12 +20,35 @@ const productionRuntimeFixtures = canonicalFormulaFixtures.filter((fixture) => {
   );
 });
 
+const groupedArrayProductionFixtures = canonicalFormulaFixtures.filter((fixture) => {
+  const entry = getCompatibilityEntry(fixture.id);
+  return (
+    entry?.wasmStatus === "production" &&
+    (fixture.id === "dynamic-array:groupby-basic" || fixture.id === "dynamic-array:pivotby-basic")
+  );
+});
+
 describe("formula runtime correctness", () => {
   it("keeps canonical text and lookup fixtures in oracle parity on the wasm path", async () => {
     expect(productionRuntimeFixtures.length).toBeGreaterThan(0);
 
     await Promise.all(
       productionRuntimeFixtures.map(async (fixture) => {
+        try {
+          await expectFixtureParity(fixture);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Fixture ${fixture.id} failed: ${message}`, { cause: error });
+        }
+      }),
+    );
+  });
+
+  it("keeps canonical grouped-array SUM fixtures in oracle parity on the wasm path", async () => {
+    expect(groupedArrayProductionFixtures).toHaveLength(2);
+
+    await Promise.all(
+      groupedArrayProductionFixtures.map(async (fixture) => {
         try {
           await expectFixtureParity(fixture);
         } catch (error) {
@@ -98,10 +121,7 @@ function expectedValueToCellValue(expected: ExcelExpectedValue): CellValue {
   }
 }
 
-function expectCellValueLike(
-  actual: CellValue,
-  expected: CellValue,
-): void {
+function expectCellValueLike(actual: CellValue, expected: CellValue): void {
   expect(actual.tag).toBe(expected.tag);
   if (actual.tag === ValueTag.Number && expected.tag === ValueTag.Number) {
     expect(actual.value).toBeCloseTo(expected.value, 7);

@@ -802,20 +802,20 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     "dynamic-array:groupby-basic",
     "dynamic-array",
     "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
-    "implemented-js",
+    "implemented-wasm-production",
     {
       notes:
-        "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending.",
+        "The canonical SUM-form GROUPBY case now lowers onto an internal native grouped-array builtin, so the canonical spill executes on the wasm path with oracle coverage.",
     },
   ),
   entry(
     "dynamic-array:pivotby-basic",
     "dynamic-array",
     "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
-    "implemented-js",
+    "implemented-wasm-production",
     {
       notes:
-        "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending.",
+        "The canonical SUM-form PIVOTBY case now lowers onto an internal native grouped-array builtin, so the canonical pivot spill executes on the wasm path with oracle coverage.",
     },
   ),
   entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-wasm-production", {

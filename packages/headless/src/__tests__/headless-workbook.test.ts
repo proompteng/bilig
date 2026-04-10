@@ -123,6 +123,33 @@ describe("HeadlessWorkbook", () => {
     expect(workbook.getCellValue(cell(sheetId, 1, 0)).tag).toBe(ValueTag.Empty);
   });
 
+  it("replaces literal sheet content in one undoable batch, including clears", () => {
+    const workbook = HeadlessWorkbook.buildFromArray([
+      [1, 2],
+      [3, 4],
+    ]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+
+    const changes = workbook.setSheetContent(sheetId, [
+      [10, 20],
+      [null, 5],
+    ]);
+
+    expect(changes).toHaveLength(4);
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 0))).toBe(10);
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 1))).toBe(20);
+    expect(workbook.getCellSerialized(cell(sheetId, 1, 0))).toBeNull();
+    expect(workbook.getCellSerialized(cell(sheetId, 1, 1))).toBe(5);
+
+    const undoChanges = workbook.undo();
+
+    expect(undoChanges).toHaveLength(4);
+    expect(workbook.getSheetSerialized(sheetId)).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
   it("suppresses readable value getters while evaluation is suspended and flushes on resume", () => {
     const workbook = HeadlessWorkbook.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;

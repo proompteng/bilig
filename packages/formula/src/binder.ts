@@ -2,6 +2,7 @@ import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import {
   getNativeAxisAggregateCode,
+  getNativeGroupedArrayKind,
   getNativeRunningFoldCode,
   isNativeMakearraySumLambda,
   isWasmSafeBuiltinArity,
@@ -170,6 +171,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           return isWasmSafe(rewritten, allowRange);
         }
         const callee = node.callee.toUpperCase();
+        if (getNativeGroupedArrayKind(node) !== null) {
+          return true;
+        }
         if (
           (callee === "BYROW" || callee === "BYCOL") &&
           node.args.length === 2 &&

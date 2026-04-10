@@ -51,36 +51,19 @@
   },
   "canonical": {
     "summary": {
-      "production": 298,
+      "production": 300,
       "total": 300,
-      "percent": 99.3
+      "percent": 100
     },
     "statusCounts": {
       "unsupported": 0,
       "seeded": 0,
-      "implemented-js": 2,
+      "implemented-js": 0,
       "implemented-js-and-wasm-shadow": 0,
-      "implemented-wasm-production": 298,
+      "implemented-wasm-production": 300,
       "blocked": 0
     },
-    "nonProductionRows": [
-      {
-        "id": "dynamic-array:groupby-basic",
-        "family": "dynamic-array",
-        "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
-        "status": "implemented-js",
-        "wasmStatus": "not-started",
-        "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-      },
-      {
-        "id": "dynamic-array:pivotby-basic",
-        "family": "dynamic-array",
-        "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
-        "status": "implemented-js",
-        "wasmStatus": "not-started",
-        "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-      }
-    ]
+    "nonProductionRows": []
   },
   "families": [
     {
@@ -256,36 +239,19 @@
     {
       "family": "dynamic-array",
       "summary": {
-        "production": 14,
+        "production": 16,
         "total": 16,
-        "percent": 87.5
+        "percent": 100
       },
       "statusCounts": {
         "unsupported": 0,
         "seeded": 0,
-        "implemented-js": 2,
+        "implemented-js": 0,
         "implemented-js-and-wasm-shadow": 0,
-        "implemented-wasm-production": 14,
+        "implemented-wasm-production": 16,
         "blocked": 0
       },
-      "nonProductionRows": [
-        {
-          "id": "dynamic-array:groupby-basic",
-          "family": "dynamic-array",
-          "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
-          "status": "implemented-js",
-          "wasmStatus": "not-started",
-          "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-        },
-        {
-          "id": "dynamic-array:pivotby-basic",
-          "family": "dynamic-array",
-          "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
-          "status": "implemented-js",
-          "wasmStatus": "not-started",
-          "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-        }
-      ]
+      "nonProductionRows": []
     },
     {
       "family": "names",
@@ -377,36 +343,19 @@
     {
       "family": "dynamic-array",
       "summary": {
-        "production": 14,
+        "production": 16,
         "total": 16,
-        "percent": 87.5
+        "percent": 100
       },
       "statusCounts": {
         "unsupported": 0,
         "seeded": 0,
-        "implemented-js": 2,
+        "implemented-js": 0,
         "implemented-js-and-wasm-shadow": 0,
-        "implemented-wasm-production": 14,
+        "implemented-wasm-production": 16,
         "blocked": 0
       },
-      "nonProductionRows": [
-        {
-          "id": "dynamic-array:groupby-basic",
-          "family": "dynamic-array",
-          "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
-          "status": "implemented-js",
-          "wasmStatus": "not-started",
-          "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-        },
-        {
-          "id": "dynamic-array:pivotby-basic",
-          "family": "dynamic-array",
-          "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
-          "status": "implemented-js",
-          "wasmStatus": "not-started",
-          "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
-        }
-      ]
+      "nonProductionRows": []
     },
     {
       "family": "names",

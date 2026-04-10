@@ -1,6 +1,7 @@
 import { BuiltinId, FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
+import { getNativeGroupedArrayKind } from "./binder-wasm-rules.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
 import { lowerToPlan, type JsPlanInstruction } from "./js-evaluator.js";
 import { optimizeFormula } from "./optimizer.js";
@@ -348,6 +349,24 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
           return;
         }
         const callee = node.callee.toUpperCase();
+        const nativeGroupedArrayKind = getNativeGroupedArrayKind(node);
+        if (nativeGroupedArrayKind === "groupby-sum-canonical") {
+          emitArgument(node.args[0]!, state);
+          emitArgument(node.args[1]!, state);
+          state.program.push(
+            encodeInstruction(Opcode.CallBuiltin, (BuiltinId.GroupbySumCanonical << 8) | 2),
+          );
+          return;
+        }
+        if (nativeGroupedArrayKind === "pivotby-sum-canonical") {
+          emitArgument(node.args[0]!, state);
+          emitArgument(node.args[1]!, state);
+          emitArgument(node.args[2]!, state);
+          state.program.push(
+            encodeInstruction(Opcode.CallBuiltin, (BuiltinId.PivotbySumCanonical << 8) | 3),
+          );
+          return;
+        }
         if (callee === "IF") {
           if (node.args.length !== 3) {
             throw new Error("IF requires exactly three arguments on the wasm fast path");

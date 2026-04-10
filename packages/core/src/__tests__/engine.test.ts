@@ -4345,8 +4345,8 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "M4")).toEqual({ tag: ValueTag.Number, value: 26 });
 
     expect(engine.getCellValue("Sheet1", "N1")).toEqual({ tag: ValueTag.Number, value: 23 });
-    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.explainCell("Sheet1", "J1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "J1").mode).toBe(FormulaMode.WasmFastPath);
     expect(engine.explainCell("Sheet1", "N1").mode).toBe(FormulaMode.JsOnly);
   });
 

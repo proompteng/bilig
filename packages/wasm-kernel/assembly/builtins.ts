@@ -282,7 +282,12 @@ export function applyBuiltin(
     );
   }
 
-  if ((builtinId == 233 || builtinId == 234 || builtinId == 235) && argc == 2) {
+  if (
+    (builtinId == BuiltinId.ChisqTest ||
+      builtinId == BuiltinId.Chitest ||
+      builtinId == BuiltinId.LegacyChitest) &&
+    argc == 2
+  ) {
     const result = chiSquareTestPValue(
       base,
       rangeIndexStack,
@@ -323,7 +328,7 @@ export function applyBuiltin(
     );
   }
 
-  if ((builtinId == 236 || builtinId == 237) && argc == 2) {
+  if ((builtinId == BuiltinId.Ftest || builtinId == BuiltinId.FTest) && argc == 2) {
     const result = fTestPValue(
       base,
       rangeIndexStack,
@@ -364,7 +369,7 @@ export function applyBuiltin(
     );
   }
 
-  if ((builtinId == 238 || builtinId == 239) && (argc == 2 || argc == 3)) {
+  if ((builtinId == BuiltinId.Ztest || builtinId == BuiltinId.ZTest) && (argc == 2 || argc == 3)) {
     const result = zTestPValue(
       base,
       argc,

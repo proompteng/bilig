@@ -26,8 +26,7 @@
 
 ## Open rows today
 
-- `2` canonical formula rows are not yet `implemented-wasm-production`
-- `dynamic-array:groupby-basic` and `dynamic-array:pivotby-basic` remain JS-only grouped-array follow-ons
-- full WASM-only production routing is not yet closed for the complete canonical worksheet surface because grouped-array lowering is still pending
+- canonical formula production routing is closed for the complete worksheet surface
+- grouped-array expansion now continues as broader non-canonical aggregate coverage and performance work
 - typed binary agent and viewport payload codecs are not yet closed
 - row resize, hide and unhide, context-menu actions, and frozen-pane UX are not implemented in the product shell

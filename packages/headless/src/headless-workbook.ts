@@ -54,6 +54,7 @@ import {
   SheetSizeLimitExceededError,
   UnableToParseError,
 } from "./errors.js";
+import { buildMatrixMutationPlan } from "./matrix-mutation-plan.js";
 import type {
   HeadlessAddressMappingAdapter,
   HeadlessAddressFormatOptions,
@@ -455,6 +456,10 @@ function isCellValueMatrix(value: CellValue | CellValue[][]): value is CellValue
 
 function isHeadlessSheetMatrix(value: RawCellContent | HeadlessSheet): value is HeadlessSheet {
   return Array.isArray(value);
+}
+
+function matrixContainsFormulaContent(content: HeadlessSheet): boolean {
+  return content.some((row) => row.some((cell) => isFormulaContent(cell)));
 }
 
 function stripLeadingEquals(formula: string): string {
@@ -3002,41 +3007,94 @@ export class HeadlessWorkbook {
     serialized: RawCellContent[][],
     sourceAnchor: HeadlessCellAddress,
   ): void {
-    serialized.forEach((row, rowOffset) => {
-      row.forEach((raw, columnOffset) => {
-        const destination = {
-          sheet: targetLeftCorner.sheet,
-          row: targetLeftCorner.row + rowOffset,
-          col: targetLeftCorner.col + columnOffset,
-        };
-        let nextValue = raw;
-        if (typeof raw === "string" && raw.startsWith("=")) {
-          nextValue = `=${translateFormulaReferences(
-            raw.slice(1),
+    if (matrixContainsFormulaContent(serialized)) {
+      serialized.forEach((row, rowOffset) => {
+        row.forEach((raw, columnOffset) => {
+          const destination = {
+            sheet: targetLeftCorner.sheet,
+            row: targetLeftCorner.row + rowOffset,
+            col: targetLeftCorner.col + columnOffset,
+          };
+          let nextValue = raw;
+          if (typeof raw === "string" && raw.startsWith("=")) {
+            nextValue = `=${translateFormulaReferences(
+              raw.slice(1),
+              destination.row - (sourceAnchor.row + rowOffset),
+              destination.col - (sourceAnchor.col + columnOffset),
+            )}`;
+          }
+          this.applyRawContent(
+            this.sheetName(destination.sheet),
+            this.a1(destination),
+            nextValue,
+            destination.sheet,
+          );
+        });
+      });
+      return;
+    }
+
+    const sheetName = this.sheetName(targetLeftCorner.sheet);
+    const { ops, potentialNewCells } = buildMatrixMutationPlan({
+      target: targetLeftCorner,
+      targetSheetName: sheetName,
+      content: serialized,
+      rewriteFormula: (formula, destination, rowOffset, columnOffset) =>
+        this.rewriteFormulaForStorage(
+          translateFormulaReferences(
+            stripLeadingEquals(formula),
             destination.row - (sourceAnchor.row + rowOffset),
             destination.col - (sourceAnchor.col + columnOffset),
-          )}`;
-        }
-        this.applyRawContent(
-          this.sheetName(destination.sheet),
-          this.a1(destination),
-          nextValue,
+          ),
           destination.sheet,
-        );
-      });
+        ),
     });
+    if (ops.length === 0) {
+      return;
+    }
+    this.engine.applyOps(ops, { potentialNewCells });
   }
 
-  private applyMatrixContents(address: HeadlessCellAddress, content: HeadlessSheet): void {
-    content.forEach((row, rowOffset) => {
-      row.forEach((raw, columnOffset) => {
-        this.applyRawContent(
-          this.sheetName(address.sheet),
-          formatAddress(address.row + rowOffset, address.col + columnOffset),
-          raw,
-          address.sheet,
-        );
+  private applyMatrixContents(
+    address: HeadlessCellAddress,
+    content: HeadlessSheet,
+    options: {
+      captureUndo?: boolean;
+      skipNulls?: boolean;
+    } = {},
+  ): void {
+    if (matrixContainsFormulaContent(content)) {
+      content.forEach((row, rowOffset) => {
+        row.forEach((raw, columnOffset) => {
+          if (raw === null && options.skipNulls) {
+            return;
+          }
+          this.applyRawContent(
+            this.sheetName(address.sheet),
+            formatAddress(address.row + rowOffset, address.col + columnOffset),
+            raw,
+            address.sheet,
+          );
+        });
       });
+      return;
+    }
+
+    const sheetName = this.sheetName(address.sheet);
+    const { ops, potentialNewCells } = buildMatrixMutationPlan({
+      target: address,
+      targetSheetName: sheetName,
+      content,
+      skipNulls: options.skipNulls,
+      rewriteFormula: (formula, destination) =>
+        this.rewriteFormulaForStorage(stripLeadingEquals(formula), destination.sheet),
+    });
+    if (ops.length === 0) {
+      return;
+    }
+    this.engine.applyOps(ops, {
+      captureUndo: options.captureUndo,
+      potentialNewCells,
     });
   }
 
@@ -3046,6 +3104,7 @@ export class HeadlessWorkbook {
     options: { duringInitialization: boolean },
   ): void {
     const sheetName = this.sheetName(sheetId);
+    const undoStackStart = options.duringInitialization ? 0 : this.getUndoStack().length;
     const dimensions = this.getSheetDimensions(sheetId);
     if (dimensions.width > 0 && dimensions.height > 0) {
       this.engine.clearRange({
@@ -3054,10 +3113,15 @@ export class HeadlessWorkbook {
         endAddress: formatAddress(dimensions.height - 1, dimensions.width - 1),
       });
     }
-    this.applyMatrixContents({ sheet: sheetId, row: 0, col: 0 }, content);
+    this.applyMatrixContents({ sheet: sheetId, row: 0, col: 0 }, content, {
+      captureUndo: !options.duringInitialization,
+      skipNulls: true,
+    });
     if (options.duringInitialization) {
       this.clearHistoryStacks();
+      return;
     }
+    this.mergeUndoHistory(undoStackStart);
   }
 
   private applyRawContent(

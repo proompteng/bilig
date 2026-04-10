@@ -3,8 +3,8 @@
 ## Current state
 
 - JS is still the semantic oracle
-- canonical production routing is closed for `298` of `300` canonical rows
-- `2` canonical rows remain `implemented-js`
+- canonical production routing is closed for `300` of `300` canonical rows
+- `0` canonical rows remain `implemented-js`
 - `0` canonical rows remain `blocked`
 - the generated source of truth is
   `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`
@@ -15,10 +15,10 @@ The active milestone is the canonical Excel for the web worksheet formula corpus
 
 The current code-backed canonical registry contains `300` rows.
 
-The `2` non-production canonical rows are:
+There are no non-production canonical rows.
 
-- `dynamic-array:groupby-basic`
-- `dynamic-array:pivotby-basic`
+The canonical grouped-array SUM forms for `GROUPBY` and `PIVOTBY` now route through internal
+native grouped-array builtins on the wasm path.
 
 ## Full target
 

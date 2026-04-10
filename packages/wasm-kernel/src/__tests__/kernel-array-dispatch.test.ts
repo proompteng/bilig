@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { BuiltinId, Opcode, ValueTag, type CellValue } from "@bilig/protocol";
 import { createKernel, type KernelInstance } from "../index.js";
 
+const OUTPUT_STRING_BASE = 2147483648;
+
 function encodeCall(builtinId: number, argc: number): number {
   return (Opcode.CallBuiltin << 24) | ((builtinId << 8) | argc);
 }
@@ -70,16 +72,55 @@ function cellIndex(row: number, col: number, width: number): number {
   return row * width + col;
 }
 
-function readSpillValues(kernel: KernelInstance, ownerCellIndex: number): CellValue[] {
+function packStrings(values: readonly string[]): {
+  data: Uint16Array;
+  lengths: Uint32Array;
+  offsets: Uint32Array;
+} {
+  const data: number[] = [];
+  const lengths: number[] = [];
+  const offsets: number[] = [];
+  let offset = 0;
+
+  for (const value of values) {
+    offsets.push(offset);
+    lengths.push(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      data.push(value.charCodeAt(index));
+    }
+    offset += value.length;
+  }
+
+  return {
+    data: Uint16Array.from(data),
+    lengths: Uint32Array.from(lengths),
+    offsets: Uint32Array.from(offsets),
+  };
+}
+
+function readSpillValues(
+  kernel: KernelInstance,
+  ownerCellIndex: number,
+  inputStrings: readonly string[] = [],
+): CellValue[] {
   const offset = kernel.readSpillOffsets()[ownerCellIndex] ?? 0;
   const length = kernel.readSpillLengths()[ownerCellIndex] ?? 0;
   const tags = kernel.readSpillTags();
   const values = kernel.readSpillNumbers();
+  const outputStrings = kernel.readOutputStrings();
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
     if (tag == ValueTag.Number) {
       return { tag, value: rawValue };
+    }
+    if (tag == ValueTag.String) {
+      const stringIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : rawValue;
+      const value =
+        rawValue >= OUTPUT_STRING_BASE
+          ? (outputStrings[stringIndex] ?? "")
+          : (inputStrings[stringIndex] ?? "");
+      return { tag, value, stringId: 0 };
     }
     if (tag == ValueTag.Empty) {
       return { tag };
@@ -181,6 +222,130 @@ describe("wasm kernel array dispatch slab", () => {
       { tag: ValueTag.Number, value: 10 },
       { tag: ValueTag.Number, value: 15 },
       { tag: ValueTag.Number, value: 21 },
+    ]);
+  });
+
+  it("keeps canonical GROUPBY and PIVOTBY spills stable on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 10;
+    kernel.init(80, 4, 1, 8, 16);
+
+    const inputStrings = ["Region", "Product", "Sales", "East", "West", "Widget", "Gizmo"];
+    const packedStrings = packStrings(inputStrings);
+    kernel.uploadStringLengths(packedStrings.lengths);
+    kernel.uploadStrings(packedStrings.offsets, packedStrings.lengths, packedStrings.data);
+
+    const cellTags = new Uint8Array(50);
+    const cellNumbers = new Float64Array(50);
+    const cellStringIds = new Uint32Array(50);
+    const cellErrors = new Uint16Array(50);
+    const writeStringCell = (row: number, col: number, stringId: number) => {
+      const index = cellIndex(row, col, width);
+      cellTags[index] = ValueTag.String;
+      cellStringIds[index] = stringId;
+    };
+    const writeNumberCell = (row: number, col: number, value: number) => {
+      const index = cellIndex(row, col, width);
+      cellTags[index] = ValueTag.Number;
+      cellNumbers[index] = value;
+    };
+
+    writeStringCell(0, 0, 0);
+    writeStringCell(0, 1, 1);
+    writeStringCell(0, 2, 2);
+    writeStringCell(1, 0, 3);
+    writeStringCell(1, 1, 5);
+    writeNumberCell(1, 2, 10);
+    writeStringCell(2, 0, 4);
+    writeStringCell(2, 1, 5);
+    writeNumberCell(2, 2, 7);
+    writeStringCell(3, 0, 3);
+    writeStringCell(3, 1, 6);
+    writeNumberCell(3, 2, 5);
+    writeStringCell(4, 0, 4);
+    writeStringCell(4, 1, 6);
+    writeNumberCell(4, 2, 4);
+
+    kernel.writeCells(cellTags, cellNumbers, cellStringIds, cellErrors);
+    kernel.uploadRangeMembers(
+      Uint32Array.from([
+        cellIndex(0, 0, width),
+        cellIndex(1, 0, width),
+        cellIndex(2, 0, width),
+        cellIndex(3, 0, width),
+        cellIndex(4, 0, width),
+        cellIndex(0, 1, width),
+        cellIndex(1, 1, width),
+        cellIndex(2, 1, width),
+        cellIndex(3, 1, width),
+        cellIndex(4, 1, width),
+        cellIndex(0, 2, width),
+        cellIndex(1, 2, width),
+        cellIndex(2, 2, width),
+        cellIndex(3, 2, width),
+        cellIndex(4, 2, width),
+      ]),
+      Uint32Array.from([0, 5, 10]),
+      Uint32Array.from([5, 5, 5]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([5, 5, 5]), Uint32Array.from([1, 1, 1]));
+
+    const programs = packPrograms([
+      [
+        encodePushRange(0),
+        encodePushRange(2),
+        encodeCall(BuiltinId.GroupbySumCanonical, 2),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(0),
+        encodePushRange(1),
+        encodePushRange(2),
+        encodeCall(BuiltinId.PivotbySumCanonical, 3),
+        encodeRet(),
+      ],
+    ]);
+    kernel.uploadPrograms(
+      programs.programs,
+      programs.offsets,
+      programs.lengths,
+      Uint32Array.from([cellIndex(0, 4, width), cellIndex(0, 7, width)]),
+    );
+    kernel.uploadConstants(new Float64Array(), Uint32Array.from([0, 0]), Uint32Array.from([0, 0]));
+    kernel.evalBatch(Uint32Array.from([cellIndex(0, 4, width), cellIndex(0, 7, width)]));
+
+    expect(kernel.readSpillRows()[cellIndex(0, 4, width)]).toBe(4);
+    expect(kernel.readSpillCols()[cellIndex(0, 4, width)]).toBe(2);
+    expect(readSpillValues(kernel, cellIndex(0, 4, width), inputStrings)).toEqual([
+      { tag: ValueTag.String, value: "Region", stringId: 0 },
+      { tag: ValueTag.String, value: "Sales", stringId: 0 },
+      { tag: ValueTag.String, value: "East", stringId: 0 },
+      { tag: ValueTag.Number, value: 15 },
+      { tag: ValueTag.String, value: "West", stringId: 0 },
+      { tag: ValueTag.Number, value: 11 },
+      { tag: ValueTag.String, value: "Total", stringId: 0 },
+      { tag: ValueTag.Number, value: 26 },
+    ]);
+
+    expect(kernel.readSpillRows()[cellIndex(0, 7, width)]).toBe(4);
+    expect(kernel.readSpillCols()[cellIndex(0, 7, width)]).toBe(4);
+    expect(readSpillValues(kernel, cellIndex(0, 7, width), inputStrings)).toEqual([
+      { tag: ValueTag.String, value: "Region", stringId: 0 },
+      { tag: ValueTag.String, value: "Widget", stringId: 0 },
+      { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+      { tag: ValueTag.String, value: "Total", stringId: 0 },
+      { tag: ValueTag.String, value: "East", stringId: 0 },
+      { tag: ValueTag.Number, value: 10 },
+      { tag: ValueTag.Number, value: 5 },
+      { tag: ValueTag.Number, value: 15 },
+      { tag: ValueTag.String, value: "West", stringId: 0 },
+      { tag: ValueTag.Number, value: 7 },
+      { tag: ValueTag.Number, value: 4 },
+      { tag: ValueTag.Number, value: 11 },
+      { tag: ValueTag.String, value: "Total", stringId: 0 },
+      { tag: ValueTag.Number, value: 17 },
+      { tag: ValueTag.Number, value: 9 },
+      { tag: ValueTag.Number, value: 26 },
     ]);
   });
 });

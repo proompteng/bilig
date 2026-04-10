@@ -23,7 +23,7 @@
 | `lookup-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `statistical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `information` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `dynamic-array` | mixed | mixed | `GROUPBY` and `PIVOTBY` remain JS-only in the canonical slice |
+| `dynamic-array` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `names` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `tables` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `structured-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
@@ -32,11 +32,11 @@
 
 ## Current remaining open rows
 
-- `dynamic-array:groupby-basic` (`implemented-js`)
-- `dynamic-array:pivotby-basic` (`implemented-js`)
+- none
 
 ## Notes
 
 - the canonical corpus excludes `text:case-insensitive-compare` and `information:value-error-display`
 - the `extended` scope exists in the code registry for work that comes after the current canonical corpus
+- grouped-array expansion beyond the canonical SUM forms continues in the `extended` scope
 - this matrix is descriptive of current source code, not of older planning snapshots

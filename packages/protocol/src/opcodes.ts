@@ -251,6 +251,8 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.MakearraySum, name: "__MAKEARRAY_SUM", supportsWasm: true },
   { id: BuiltinId.ByrowAggregate, name: "__BYROW_AGGREGATE", supportsWasm: true },
   { id: BuiltinId.BycolAggregate, name: "__BYCOL_AGGREGATE", supportsWasm: true },
+  { id: BuiltinId.GroupbySumCanonical, name: "__GROUPBY_SUM_CANONICAL", supportsWasm: true },
+  { id: BuiltinId.PivotbySumCanonical, name: "__PIVOTBY_SUM_CANONICAL", supportsWasm: true },
   { id: BuiltinId.ReduceProduct, name: "__REDUCE_PRODUCT", supportsWasm: true },
   { id: BuiltinId.ScanProduct, name: "__SCAN_PRODUCT", supportsWasm: true },
   { id: BuiltinId.Offset, name: "OFFSET", supportsWasm: true },

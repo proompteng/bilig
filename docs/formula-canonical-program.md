@@ -17,14 +17,11 @@ The canonical registry in code currently contains `300` canonical rows.
 
 Current status split:
 
-- `298` rows are `implemented-wasm-production`
-- `2` rows are `implemented-js`
+- `300` rows are `implemented-wasm-production`
+- `0` rows are `implemented-js`
 - `0` rows are `blocked`
 
-The remaining open canonical rows are:
-
-- `dynamic-array:groupby-basic`
-- `dynamic-array:pivotby-basic`
+There are no remaining open canonical rows.
 
 The checked-in registry is the authoritative source of corpus size and composition.
 The generated snapshot at
@@ -32,11 +29,12 @@ The generated snapshot at
 
 ## Remaining semantic focus
 
-The remaining non-production rows break down as:
+Canonical closure is complete.
 
-- dynamic-array:
-  - `dynamic-array:groupby-basic`
-  - `dynamic-array:pivotby-basic`
+The next semantic expansion work is outside the canonical corpus:
+
+- broader grouped-array aggregates beyond the canonical SUM forms
+- larger grouped-array performance and mutation workloads
 
 ## Delivery rule
 

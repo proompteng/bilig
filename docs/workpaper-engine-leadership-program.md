@@ -105,9 +105,9 @@ This is the scorecard that should drive engineering priority.
 | Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity | keep the snapshot artifact green |
 | Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | keep the generated dominance snapshot current |
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
-| Formula production quality | Canonical production closure | `298/300` canonical rows production-closed = `99.3%` | no matching canonical artifact | `bilig` leads on closure, with `2` grouped-array rows still JS-only | close the remaining `2` grouped-array rows and keep the dominance snapshot current |
+| Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula leads | convert the current red workloads into majority `bilig` wins |
+| Performance dominance | Directly comparable benchmark workloads | `1/6` wins in `workpaper-vs-hyperformula.json` | `5/6` wins on current host | HyperFormula still leads overall, but `bilig` now wins range-read | convert the current red workloads into majority `bilig` wins while preserving the new direct-comparable win |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -130,11 +130,12 @@ Current measured values from local repo artifacts and docs:
 - HyperFormula published Excel coverage from the local docs:
   - `350/515` Excel functions = `68%`
 - `bilig` canonical formula production closure:
-  - `298/300` rows = `99.3%`
+  - `300/300` rows = `100%`
 - directly comparable benchmark record:
-  - `WorkPaper` wins: `0/6`
-  - HyperFormula wins: `6/6`
-  - HyperFormula current win range on this host: `1.02x` to `891.37x`
+  - `WorkPaper` wins: `1/6`
+  - HyperFormula wins: `5/6`
+  - `WorkPaper` current direct-comparable win range on this host: `1.01x`
+  - HyperFormula current win range on this host: `6.26x` to `1000.39x`
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -240,9 +241,9 @@ time:
    - `bilig` continues to support multiple workbook instances per process
 3. formula dominance improves beyond breadth-only claims
    - Office-listed formula breadth stays at or above `95%`
-   - canonical production closure reaches at least `98%`
-   - no critical rows remain open in names, tables, structured references, or lambda families
-   - any remaining canonical non-production rows are explicitly documented as non-critical grouped-array follow-ons
+   - canonical production closure remains `100%`
+   - no canonical rows remain open in names, tables, structured references, lambda, or grouped-array families
+   - non-canonical grouped-array follow-ons are tracked as expansion work, not as canonical debt
 4. performance dominance becomes true on comparable workloads
    - `bilig` wins a majority of directly comparable benchmark workloads
    - `bilig` loses none of them by more than `1.25x`
@@ -359,22 +360,23 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- batch-edit recalculation: HyperFormula currently leads by `891.37x`
-- lookup with column indexing: HyperFormula currently leads by `134.77x`
-- lookup without column indexing: HyperFormula currently leads by `79.49x`
-- build from sheets: HyperFormula currently leads by `33.63x`
-- single-edit recalculation: HyperFormula currently leads by `6.19x`
+- batch-edit recalculation: HyperFormula currently leads by `1000.39x`
+- lookup with column indexing: HyperFormula currently leads by `137.50x`
+- lookup without column indexing: HyperFormula currently leads by `75.09x`
+- build from sheets: HyperFormula currently leads by `6.56x`
+- single-edit recalculation: HyperFormula currently leads by `6.26x`
 
-Range-read is close enough that it is lower priority than the others.
+Range-read is now a slight `bilig` win and should be treated as a regression guard, not as a hotspot priority.
 
-### Priority 2: Close formula production-quality gaps
+### Priority 2: Protect formula production-quality leadership
 
-Breadth is already high, but production closure is not yet finished.
+Breadth is already high, and canonical production closure is now finished.
 
-The highest-value remaining canonical closures are:
+The next formula-quality work is expansion beyond the canonical closure:
 
-- `dynamic-array:groupby-basic`
-- `dynamic-array:pivotby-basic`
+- broader `GROUPBY` aggregate support beyond the SUM-only canonical form
+- broader `PIVOTBY` aggregate support beyond the SUM-only canonical form
+- grouped-array performance and stability under larger spill and mutation workloads
 
 This matters because formula dominance is not just “the parser recognizes the name.”
 
@@ -476,7 +478,7 @@ Required work:
 Exit criteria:
 
 - `workpaper-vs-hyperformula.json` includes improved build-path results
-- build workload is no longer a double-digit loss ratio
+- build workload no longer exceeds a `2x` loss ratio
 - no correctness regression in headless parity tests
 
 ### 2. Single-Edit Recalc Hot Path
@@ -722,12 +724,12 @@ Metric:
 
 Current value:
 
-- `298/300` = `99.3%`
+- `300/300` = `100%`
 
 Interpretation:
 
-- strong closure
-- only `2` grouped-array rows remain JS-only in the canonical slice
+- full canonical closure
+- no JS-only rows remain in the canonical slice
 - names, tables, structured references, and lambda canonical rows are now production-closed
 
 ### Layer 3: Strategic Semantics

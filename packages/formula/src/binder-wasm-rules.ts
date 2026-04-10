@@ -1,3 +1,4 @@
+import { MAX_WASM_RANGE_CELLS } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { parseRangeAddress } from "./addressing.js";
 
@@ -153,6 +154,74 @@ export function isCellVectorNode(node: FormulaNode): boolean {
   } catch {
     return false;
   }
+}
+
+function isWasmSafeCellVectorNode(node: FormulaNode): boolean {
+  if (node.kind !== "RangeRef") {
+    return false;
+  }
+  try {
+    const sheetPrefix = node.sheetName ? `${node.sheetName}!` : "";
+    const range = parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`);
+    if (range.kind !== "cells") {
+      return false;
+    }
+    const rows = range.end.row - range.start.row + 1;
+    const cols = range.end.col - range.start.col + 1;
+    return (rows === 1 || cols === 1) && rows * cols <= MAX_WASM_RANGE_CELLS;
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalAggregateName(node: FormulaNode | undefined, expected: string): boolean {
+  return (
+    node?.kind === "NameRef" && node.name.trim().toUpperCase() === expected.trim().toUpperCase()
+  );
+}
+
+function isIntegerLiteral(node: FormulaNode | undefined, expected: number): boolean {
+  return (
+    node?.kind === "NumberLiteral" && Math.trunc(node.value) === expected && node.value === expected
+  );
+}
+
+export type NativeGroupedArrayKind = "groupby-sum-canonical" | "pivotby-sum-canonical";
+
+export function getNativeGroupedArrayKind(node: FormulaNode): NativeGroupedArrayKind | null {
+  if (node.kind !== "CallExpr") {
+    return null;
+  }
+
+  const callee = node.callee.toUpperCase();
+  if (
+    callee === "GROUPBY" &&
+    node.args.length === 5 &&
+    isWasmSafeCellVectorNode(node.args[0]!) &&
+    isWasmSafeCellVectorNode(node.args[1]!) &&
+    isCanonicalAggregateName(node.args[2], "SUM") &&
+    isIntegerLiteral(node.args[3], 3) &&
+    isIntegerLiteral(node.args[4], 1)
+  ) {
+    return "groupby-sum-canonical";
+  }
+
+  if (
+    callee === "PIVOTBY" &&
+    node.args.length === 8 &&
+    isWasmSafeCellVectorNode(node.args[0]!) &&
+    isWasmSafeCellVectorNode(node.args[1]!) &&
+    isWasmSafeCellVectorNode(node.args[2]!) &&
+    isCanonicalAggregateName(node.args[3], "SUM") &&
+    isIntegerLiteral(node.args[4], 3) &&
+    isIntegerLiteral(node.args[5], 1) &&
+    isIntegerLiteral(node.args[6], 0) &&
+    isIntegerLiteral(node.args[7], 1)
+  ) {
+    return "pivotby-sum-canonical";
+  }
+
+  return null;
 }
 
 export function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {

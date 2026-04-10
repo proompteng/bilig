@@ -186,7 +186,19 @@ describe("formula", () => {
     expect(compileFormula('GETPIVOTDATA("Sales",A1)').mode).toBe(0);
   });
 
-  it("keeps workbook-shape grouping formulas on the JS-special path without inventing symbolic aggregate names", () => {
+  it("routes canonical grouped-array SUM fixtures onto the wasm path", () => {
+    const groupBy = compileFormula("GROUPBY(A1:A5,C1:C5,SUM,3,1)");
+    expect(groupBy.mode).toBe(1);
+    expect(groupBy.producesSpill).toBe(true);
+    expect([...groupBy.symbolicNames]).toEqual([]);
+
+    const pivotBy = compileFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)");
+    expect(pivotBy.mode).toBe(1);
+    expect(pivotBy.producesSpill).toBe(true);
+    expect([...pivotBy.symbolicNames]).toEqual([]);
+  });
+
+  it("keeps broader workbook-shape grouping formulas on the JS-special path without inventing symbolic aggregate names", () => {
     const groupBy = compileFormula("GROUPBY(A1:A5,B1:B5,SUM)");
     expect(groupBy.mode).toBe(0);
     expect(groupBy.producesSpill).toBe(true);

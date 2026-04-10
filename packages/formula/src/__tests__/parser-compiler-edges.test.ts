@@ -230,6 +230,12 @@ describe("formula parser/compiler edges", () => {
     expect(bindFormula(parseFormula("TRIMMEAN(A1:A8,0.25)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("MINIFS(A1:A4,B1:B4,1)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("MAXIFS(A1:A4,B1:B4,1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("GROUPBY(A1:A5,C1:C5,SUM,3,1)")).mode).toBe(
+      FormulaMode.WasmFastPath,
+    );
+    expect(bindFormula(parseFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)")).mode).toBe(
+      FormulaMode.WasmFastPath,
+    );
   });
 
   it("keeps non-call and invalid rewritten top-level nodes off the wasm fast path", () => {
