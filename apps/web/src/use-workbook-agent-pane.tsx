@@ -358,7 +358,7 @@ export function useWorkbookAgentPane(input: {
           try {
             setIsLoading(true);
             const response = await fetch(
-              `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
+              `/v2/documents/${encodeURIComponent(documentId)}/agent/threads`,
               {
                 method: "POST",
                 headers: {
@@ -401,7 +401,7 @@ export function useWorkbookAgentPane(input: {
       scope: WorkbookAgentThreadScope,
     ) => {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads`,
         {
           method: "POST",
           headers: {
@@ -734,12 +734,9 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       setError(null);
-      const existingSession = sessionRef.current;
-      const activeSession = existingSession ?? (await ensureSession());
+      const activeSession = await ensureSession();
       const response = await fetch(
-        existingSession
-          ? `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/turns`
-          : `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/turns`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/turns`,
         {
           method: "POST",
           headers: {

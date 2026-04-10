@@ -68,6 +68,10 @@ function requestBody(init: RequestInit | undefined): unknown {
   return JSON.parse(init.body) as unknown;
 }
 
+function requestMethod(init: RequestInit | undefined): string {
+  return init?.method ?? "GET";
+}
+
 function createSnapshot(overrides: Record<string, unknown> = {}) {
   return {
     sessionId: "agent-session-1",
@@ -288,9 +292,9 @@ describe("workbook agent pane", () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     let sessionsRequestBody: unknown;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -305,7 +309,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         sessionsRequestBody = requestBody(init);
         return new Response(
           JSON.stringify(
@@ -380,15 +384,15 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "GET") {
         return new Response(JSON.stringify([]), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -483,7 +487,7 @@ describe("workbook agent pane", () => {
     expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-shared/events");
     const sessionCall = fetchSpy.mock.calls.find(
       ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/agent/sessions") &&
+        requestUrl(requestInput).endsWith("/agent/threads") &&
         typeof requestBody(requestInit) === "object" &&
         requestBody(requestInit) !== null &&
         "scope" in requestBody(requestInit) &&
@@ -506,7 +510,7 @@ describe("workbook agent pane", () => {
     });
     expect(
       fetchSpy.mock.calls.some(([requestInput]) =>
-        requestUrl(requestInput).endsWith("/agent/sessions/agent-session-shared/turns"),
+        requestUrl(requestInput).endsWith("/agent/threads/thr-shared/turns"),
       ),
     ).toBe(true);
 
@@ -707,9 +711,9 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -781,9 +785,9 @@ describe("workbook agent pane", () => {
     });
 
     const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/sessions/agent-session-1/turns"),
+      requestUrl(requestInput).endsWith("/agent/threads/thr-1/turns"),
     );
-    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/sessions/agent-session-1/turns");
+    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/turns");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
 
@@ -803,9 +807,9 @@ describe("workbook agent pane", () => {
         threadId: "thr-1",
       }),
     );
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -897,9 +901,9 @@ describe("workbook agent pane", () => {
         threadId: "thr-1",
       }),
     );
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1173,9 +1177,9 @@ describe("workbook agent pane", () => {
     );
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/sessions")) {
+        if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
           return new Response(JSON.stringify(createSnapshot()), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -1233,9 +1237,9 @@ describe("workbook agent pane", () => {
     );
 
     let resumeCount = 0;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         resumeCount += 1;
         return new Response(
           JSON.stringify(
@@ -1270,8 +1274,9 @@ describe("workbook agent pane", () => {
       await Promise.resolve();
     });
 
-    const sessionCalls = fetchSpy.mock.calls.filter(([input]) =>
-      requestUrl(input).endsWith("/agent/sessions"),
+    const sessionCalls = fetchSpy.mock.calls.filter(
+      ([input, init]) =>
+        requestUrl(input).endsWith("/agent/threads") && requestMethod(init) === "POST",
     );
     expect(sessionCalls).toHaveLength(2);
     expect(requestBody(sessionCalls[0]?.[1])).toEqual({
@@ -1324,9 +1329,9 @@ describe("workbook agent pane", () => {
         threadId: "thr-1",
       }),
     );
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1352,8 +1357,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const bootstrapSessionCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/agent/sessions"),
+    const bootstrapSessionCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        requestUrl(input).endsWith("/agent/threads") && requestMethod(init) === "POST",
     );
     expect(bootstrapSessionCall).toBeDefined();
     expect(requestBody(bootstrapSessionCall?.[1])).toEqual({
@@ -1423,9 +1429,9 @@ describe("workbook agent pane", () => {
       },
     });
     const previewBundle = vi.fn(async () => preview);
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1644,9 +1650,9 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async (bundle) =>
       bundle.commands.length === 1 ? subsetPreview : fullPreview,
     );
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/sessions")) {
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
