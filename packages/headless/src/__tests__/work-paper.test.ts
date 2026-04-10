@@ -14,6 +14,20 @@ function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
 }
 
 describe("WorkPaper", () => {
+  it("matches the published README usage example", () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [[1, "=A1*2"]],
+    });
+
+    const sheetId = workbook.getSheetId("Sheet1")!;
+    const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 });
+
+    expect(value).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+  });
+
   it("is the canonical top-level alias for the headless workbook runtime", () => {
     const config: WorkPaperConfig = {
       useArrayArithmetic: true,
@@ -73,5 +87,33 @@ describe("WorkPaper", () => {
     expect(workbook.getCellSerialized(cell(revenueId, 3, 1))).toBeNull();
     workbook.redo();
     expect(workbook.getCellFormula(cell(revenueId, 3, 1))).toBe("=SUM(B1:B3)");
+  });
+
+  it("keeps compatibility adapters frozen and returns detached adapter results", () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Data: [[1, "=A1*2"]],
+    });
+    const dataId = workbook.getSheetId("Data")!;
+
+    expect(Object.isFrozen(workbook.internals)).toBe(true);
+    expect(Object.isFrozen(workbook.graph)).toBe(true);
+    expect(Object.isFrozen(workbook.rangeMapping)).toBe(true);
+    expect(Object.isFrozen(workbook.arrayMapping)).toBe(true);
+    expect(Object.isFrozen(workbook.sheetMapping)).toBe(true);
+    expect(Object.isFrozen(workbook.addressMapping)).toBe(true);
+    expect(Object.isFrozen(workbook.dependencyGraph)).toBe(true);
+    expect(Object.isFrozen(workbook.evaluator)).toBe(true);
+    expect(Object.isFrozen(workbook.columnSearch)).toBe(true);
+    expect(Object.isFrozen(workbook.lazilyTransformingAstService)).toBe(true);
+
+    const serialized = workbook.rangeMapping.getSerialized({
+      start: cell(dataId, 0, 0),
+      end: cell(dataId, 0, 1),
+    });
+    serialized[0][0] = 999;
+    serialized[0][1] = "=A1*999";
+
+    expect(workbook.getCellSerialized(cell(dataId, 0, 0))).toBe(1);
+    expect(workbook.getCellSerialized(cell(dataId, 0, 1))).toBe("=A1*2");
   });
 });
