@@ -861,11 +861,90 @@ describe("workbook agent tools", () => {
     );
 
     expect(response.success).toBe(true);
-    expect(startWorkflow).toHaveBeenCalledWith("summarizeWorkbook");
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "summarizeWorkbook",
+    });
     const output = response.contentItems.find((item) => item.type === "inputText");
     expect(output?.type).toBe("inputText");
     expect(output && "text" in output ? output.text : "").toContain('"runId": "wf-1"');
     expect(output && "text" in output ? output.text : "").toContain('"title": "Workbook Summary"');
+  });
+
+  it("starts query-driven workbook search workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-search-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "searchWorkbookQuery" as const,
+      title: "Search Workbook",
+      summary: 'Found 2 workbook matches for "revenue".',
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "search-workbook",
+          label: "Search workbook",
+          status: "completed" as const,
+          summary: 'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "draft-search-report",
+          label: "Draft search report",
+          status: "completed" as const,
+          summary: "Prepared the durable workbook search report for the thread.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Workbook Search",
+        text: "## Workbook Search",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-search-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "searchWorkbookQuery",
+          query: "revenue",
+          limit: 10,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "searchWorkbookQuery",
+      query: "revenue",
+      limit: 10,
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain('"runId": "wf-search-1"');
+    expect(output && "text" in output ? output.text : "").toContain('"title": "Search Workbook"');
   });
 
   it("stages column metadata commands for resize operations", async () => {

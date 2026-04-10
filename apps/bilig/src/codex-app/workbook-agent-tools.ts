@@ -28,7 +28,6 @@ import {
 import type {
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
-  WorkbookAgentWorkflowTemplate,
   WorkbookViewport,
 } from "@bilig/contracts";
 import { z } from "zod";
@@ -70,15 +69,30 @@ const formulaIssueToolArgsSchema = z.object({
 const readRecentChangesToolArgsSchema = z.object({
   limit: z.number().int().positive().max(50).optional(),
 });
-const startWorkflowToolArgsSchema = z.object({
-  workflowTemplate: z.enum([
-    "summarizeWorkbook",
-    "describeRecentChanges",
-    "findFormulaIssues",
-    "traceSelectionDependencies",
-    "explainSelectionCell",
-  ]),
-});
+const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
+  z.object({
+    workflowTemplate: z.literal("summarizeWorkbook"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("describeRecentChanges"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("findFormulaIssues"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("traceSelectionDependencies"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("explainSelectionCell"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("searchWorkbookQuery"),
+    query: z.string().trim().min(1),
+    sheetName: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(50).optional(),
+  }),
+]);
+export type WorkbookAgentStartWorkflowRequest = z.infer<typeof startWorkflowToolArgsSchema>;
 const searchWorkbookToolArgsSchema = z.object({
   query: z.string().trim().min(1),
   sheetName: z.string().min(1).optional(),
@@ -484,7 +498,7 @@ export interface WorkbookAgentToolContext {
   readonly zeroSyncService: ZeroSyncService;
   readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle>;
   readonly startWorkflow?: (
-    workflowTemplate: WorkbookAgentWorkflowTemplate,
+    input: WorkbookAgentStartWorkflowRequest,
   ) => Promise<WorkbookAgentWorkflowRun>;
 }
 
@@ -559,7 +573,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for read/report tasks such as workbook summarization or recent-change summaries.",
+        "Start a built-in durable workbook workflow for read/report tasks such as workbook summarization, recent-change summaries, current-cell explanation, or query-driven workbook search.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -573,8 +587,12 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "findFormulaIssues",
               "traceSelectionDependencies",
               "explainSelectionCell",
+              "searchWorkbookQuery",
             ],
           },
+          query: { type: "string" },
+          sheetName: { type: "string" },
+          limit: { type: "number" },
         },
       },
     },
@@ -988,7 +1006,7 @@ export async function handleWorkbookAgentToolCall(
         if (!context.startWorkflow) {
           throw new Error("Built-in workflow execution is not available in this session");
         }
-        return workflowToolResult(await context.startWorkflow(args.workflowTemplate));
+        return workflowToolResult(await context.startWorkflow(args));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments);

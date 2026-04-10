@@ -10,9 +10,17 @@ import { ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
 import {
   findWorkbookFormulaIssues,
+  searchWorkbook,
+  type WorkbookSearchReport,
   summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
+
+export interface WorkbookAgentWorkflowExecutionInput {
+  readonly query?: string;
+  readonly sheetName?: string;
+  readonly limit?: number;
+}
 
 interface WorkbookAgentWorkflowStepPlan {
   readonly stepId: string;
@@ -43,6 +51,7 @@ interface WorkbookAgentWorkflowTemplateMetadata {
 
 function getWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): WorkbookAgentWorkflowTemplateMetadata {
   switch (workflowTemplate) {
     case "summarizeWorkbook":
@@ -156,13 +165,38 @@ function getWorkflowTemplateMetadata(
           },
         ],
       };
+    case "searchWorkbookQuery": {
+      const searchLabel =
+        typeof workflowInput?.query === "string" && workflowInput.query.trim().length > 0
+          ? `"${workflowInput.query.trim()}"`
+          : "the requested query";
+      return {
+        title: "Search Workbook",
+        runningSummary: `Searching the workbook for ${searchLabel}.`,
+        stepPlans: [
+          {
+            stepId: "search-workbook",
+            label: "Search workbook",
+            runningSummary: `Searching workbook sheets, formulas, values, and addresses for ${searchLabel}.`,
+            pendingSummary: `Waiting to search workbook sheets, formulas, values, and addresses for ${searchLabel}.`,
+          },
+          {
+            stepId: "draft-search-report",
+            label: "Draft search report",
+            runningSummary: "Drafting the durable workbook search report.",
+            pendingSummary: "Waiting to assemble the durable workbook search report.",
+          },
+        ],
+      };
+    }
   }
 }
 
 export function describeWorkbookAgentWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): Pick<WorkbookAgentWorkflowTemplateMetadata, "title" | "runningSummary"> {
-  const metadata = getWorkflowTemplateMetadata(workflowTemplate);
+  const metadata = getWorkflowTemplateMetadata(workflowTemplate, workflowInput);
   return {
     title: metadata.title,
     runningSummary: metadata.runningSummary,
@@ -172,23 +206,27 @@ export function describeWorkbookAgentWorkflowTemplate(
 export function createRunningWorkflowSteps(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
   now: number,
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): WorkbookAgentWorkflowStep[] {
-  return getWorkflowTemplateMetadata(workflowTemplate).stepPlans.map((step, index) => ({
-    stepId: step.stepId,
-    label: step.label,
-    status: index === 0 ? "running" : "pending",
-    summary: index === 0 ? step.runningSummary : step.pendingSummary,
-    updatedAtUnixMs: now,
-  }));
+  return getWorkflowTemplateMetadata(workflowTemplate, workflowInput).stepPlans.map(
+    (step, index) => ({
+      stepId: step.stepId,
+      label: step.label,
+      status: index === 0 ? "running" : "pending",
+      summary: index === 0 ? step.runningSummary : step.pendingSummary,
+      updatedAtUnixMs: now,
+    }),
+  );
 }
 
 export function completeWorkflowSteps(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
   stepResults: readonly WorkbookAgentWorkflowStepResult[],
   now: number,
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): WorkbookAgentWorkflowStep[] {
   const resultByStepId = new Map(stepResults.map((step) => [step.stepId, step]));
-  return getWorkflowTemplateMetadata(workflowTemplate).stepPlans.map((step) => {
+  return getWorkflowTemplateMetadata(workflowTemplate, workflowInput).stepPlans.map((step) => {
     const result = resultByStepId.get(step.stepId);
     return {
       stepId: step.stepId,
@@ -205,13 +243,15 @@ export function failWorkflowSteps(
   runningSteps: readonly WorkbookAgentWorkflowStep[],
   errorMessage: string,
   now: number,
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): WorkbookAgentWorkflowStep[] {
   let markedFailure = false;
   const runningStepId = runningSteps.find((step) => step.status === "running")?.stepId;
-  return getWorkflowTemplateMetadata(workflowTemplate).stepPlans.map((step, index) => {
-    const current = runningSteps.find((candidate) => candidate.stepId === step.stepId);
-    if (!markedFailure && (step.stepId === runningStepId || (runningStepId === undefined && index === 0))) {
-      markedFailure = true;
+  return getWorkflowTemplateMetadata(workflowTemplate, workflowInput).stepPlans.map(
+    (step, index) => {
+      const current = runningSteps.find((candidate) => candidate.stepId === step.stepId);
+      if (!markedFailure && (step.stepId === runningStepId || (runningStepId === undefined && index === 0))) {
+        markedFailure = true;
       return {
         stepId: step.stepId,
         label: step.label,
@@ -228,7 +268,8 @@ export function failWorkflowSteps(
       updatedAtUnixMs:
         current?.status === "completed" ? current.updatedAtUnixMs : current?.updatedAtUnixMs ?? now,
     };
-  });
+    },
+  );
 }
 
 function summarizeWorkbookMarkdown(summary: ReturnType<typeof summarizeWorkbookStructure>): string {
@@ -416,6 +457,35 @@ function summarizeCellExplanationMarkdown(explanation: {
   return lines.join("\n");
 }
 
+function summarizeSearchResultsMarkdown(report: WorkbookSearchReport): string {
+  const lines = [
+    "## Workbook Search",
+    "",
+    `Query: ${report.query}`,
+    `Matches: ${String(report.summary.matchCount)}`,
+  ];
+  if (report.summary.truncated) {
+    lines.push("Results were truncated to stay inside the workflow result budget.");
+  }
+  lines.push("");
+  if (report.matches.length === 0) {
+    lines.push("No workbook matches were found for the requested query.");
+    return lines.join("\n");
+  }
+  lines.push("### Top matches");
+  for (const match of report.matches) {
+    if (match.kind === "sheet") {
+      lines.push(`- Sheet ${match.sheetName} [${match.reasons.join(", ")}]`);
+      continue;
+    }
+    const location = `${match.sheetName}!${match.address ?? "?"}`;
+    const snippet =
+      match.formula ?? match.valueText ?? match.inputText ?? match.snippet ?? "(no snippet)";
+    lines.push(`- ${location}: ${snippet} [${match.reasons.join(", ")}]`);
+  }
+  return lines.join("\n");
+}
+
 export function createWorkflowRunRecord(input: {
   runId: string;
   threadId: string;
@@ -452,6 +522,7 @@ export async function executeWorkbookAgentWorkflow(input: {
   zeroSyncService: ZeroSyncService;
   workflowTemplate: WorkbookAgentWorkflowTemplate;
   context?: WorkbookAgentUiContext | null;
+  workflowInput?: WorkbookAgentWorkflowExecutionInput | null;
 }): Promise<WorkbookAgentWorkflowExecutionResult> {
   switch (input.workflowTemplate) {
     case "summarizeWorkbook": {
@@ -683,6 +754,63 @@ export async function executeWorkbookAgentWorkflow(input: {
             stepId: "draft-explanation",
             label: "Draft explanation artifact",
             summary: "Prepared the durable current-cell explanation artifact for the thread.",
+          },
+        ],
+      };
+    }
+    case "searchWorkbookQuery": {
+      const query = input.workflowInput?.query?.trim();
+      if (!query) {
+        throw new Error("A query is required for workbook search workflows.");
+      }
+      const searchReport = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
+        searchWorkbook(runtime, {
+          query,
+          ...(input.workflowInput?.sheetName
+            ? { sheetName: input.workflowInput.sheetName }
+            : {}),
+          ...(input.workflowInput?.limit !== undefined
+            ? { limit: input.workflowInput.limit }
+            : {}),
+        }),
+      );
+      return {
+        title: "Search Workbook",
+        summary:
+          searchReport.summary.matchCount === 0
+            ? `Found no workbook matches for "${query}".`
+            : `Found ${String(searchReport.summary.matchCount)} workbook match${searchReport.summary.matchCount === 1 ? "" : "es"} for "${query}".`,
+        artifact: {
+          kind: "markdown",
+          title: "Workbook Search",
+          text: summarizeSearchResultsMarkdown(searchReport),
+        },
+        citations: searchReport.matches.flatMap((match) =>
+          match.kind === "cell" && match.address
+            ? [
+                {
+                  kind: "range" as const,
+                  sheetName: match.sheetName,
+                  startAddress: match.address,
+                  endAddress: match.address,
+                  role: "source" as const,
+                },
+              ]
+            : [],
+        ),
+        steps: [
+          {
+            stepId: "search-workbook",
+            label: "Search workbook",
+            summary:
+              searchReport.summary.matchCount === 0
+                ? `Searched workbook sheets, formulas, values, and addresses for "${query}" and found no matches.`
+                : `Searched workbook sheets, formulas, values, and addresses for "${query}" and found ${String(searchReport.summary.matchCount)} match${searchReport.summary.matchCount === 1 ? "" : "es"}.`,
+          },
+          {
+            stepId: "draft-search-report",
+            label: "Draft search report",
+            summary: "Prepared the durable workbook search report for the thread.",
           },
         ],
       };

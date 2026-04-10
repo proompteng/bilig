@@ -930,6 +930,84 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("passes query input through workbook search workflows", async () => {
+    const startWorkflow = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        workflowRuns: [
+          {
+            runId: "wf-search-1",
+            threadId: "thr-1",
+            startedByUserId: "alex@example.com",
+            workflowTemplate: "searchWorkbookQuery",
+            title: "Search Workbook",
+            summary: 'Found 1 workbook match for "revenue".',
+            status: "completed" as const,
+            createdAtUnixMs: 1,
+            updatedAtUnixMs: 2,
+            completedAtUnixMs: 2,
+            errorMessage: null,
+            steps: [
+              {
+                stepId: "search-workbook",
+                label: "Search workbook",
+                status: "completed" as const,
+                summary:
+                  'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 1 match.',
+                updatedAtUnixMs: 1,
+              },
+              {
+                stepId: "draft-search-report",
+                label: "Draft search report",
+                status: "completed" as const,
+                summary: "Prepared the durable workbook search report for the thread.",
+                updatedAtUnixMs: 2,
+              },
+            ],
+            artifact: {
+              kind: "markdown" as const,
+              title: "Workbook Search",
+              text: "## Workbook Search",
+            },
+          },
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        startWorkflow,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows",
+        payload: {
+          workflowTemplate: "searchWorkbookQuery",
+          query: "revenue",
+          limit: 5,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(startWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          body: {
+            workflowTemplate: "searchWorkbookQuery",
+            query: "revenue",
+            limit: 5,
+          },
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("reviews workbook agent bundles through the durable thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({

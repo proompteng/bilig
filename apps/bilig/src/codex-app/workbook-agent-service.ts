@@ -33,6 +33,7 @@ import {
 } from "./codex-app-server-client.js";
 import {
   handleWorkbookAgentToolCall,
+  type WorkbookAgentStartWorkflowRequest,
   workbookAgentDynamicToolSpecs,
 } from "./workbook-agent-tools.js";
 import {
@@ -615,7 +616,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const runId = crypto.randomUUID();
     const now = this.now();
     const workflowTemplate = parsed.workflowTemplate;
-    const workflowDescription = describeWorkbookAgentWorkflowTemplate(workflowTemplate);
+    const workflowInput = {
+      ...("query" in parsed ? { query: parsed.query } : {}),
+      ...("sheetName" in parsed && parsed.sheetName ? { sheetName: parsed.sheetName } : {}),
+      ...("limit" in parsed && parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+    };
+    const workflowDescription = describeWorkbookAgentWorkflowTemplate(
+      workflowTemplate,
+      workflowInput,
+    );
     const runningRun = createWorkflowRunRecord({
       runId,
       threadId: sessionState.threadId,
@@ -625,7 +634,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       summary: workflowDescription.runningSummary,
       status: "running",
       now,
-      steps: createRunningWorkflowSteps(workflowTemplate, now),
+      steps: createRunningWorkflowSteps(workflowTemplate, now, workflowInput),
     });
     sessionState.snapshot.workflowRuns = upsertWorkflowRun(
       sessionState.snapshot.workflowRuns,
@@ -650,6 +659,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         zeroSyncService: this.zeroSyncService,
         workflowTemplate,
         context: sessionState.snapshot.context,
+        workflowInput,
       });
       const completedAtUnixMs = this.now();
       const completedRun: WorkbookAgentWorkflowRun = {
@@ -660,7 +670,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         updatedAtUnixMs: completedAtUnixMs,
         completedAtUnixMs,
         artifact: result.artifact,
-        steps: completeWorkflowSteps(workflowTemplate, result.steps, completedAtUnixMs),
+        steps: completeWorkflowSteps(workflowTemplate, result.steps, completedAtUnixMs, workflowInput),
       };
       sessionState.snapshot.workflowRuns = upsertWorkflowRun(
         sessionState.snapshot.workflowRuns,
@@ -690,7 +700,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         updatedAtUnixMs: failedAtUnixMs,
         completedAtUnixMs: failedAtUnixMs,
         errorMessage,
-        steps: failWorkflowSteps(workflowTemplate, runningRun.steps, errorMessage, failedAtUnixMs),
+        steps: failWorkflowSteps(
+          workflowTemplate,
+          runningRun.steps,
+          errorMessage,
+          failedAtUnixMs,
+          workflowInput,
+        ),
         artifact: null,
       };
       sessionState.snapshot.workflowRuns = upsertWorkflowRun(
@@ -1119,7 +1135,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                 this.emitSnapshot(sessionState.threadId);
                 return bundle;
               },
-              startWorkflow: async (workflowTemplate) => {
+              startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
                 const previousRunIds = new Set(
                   sessionState.snapshot.workflowRuns.map((run) => run.runId),
                 );
@@ -1130,17 +1146,17 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                     userID: sessionState.userId,
                     roles: ["editor"],
                   },
-                  body: {
-                    workflowTemplate,
-                  },
+                  body: workflowRequest,
                 });
                 const nextRun =
                   nextSnapshot.workflowRuns.find((run) => !previousRunIds.has(run.runId)) ??
                   nextSnapshot.workflowRuns.find(
-                    (run) => run.workflowTemplate === workflowTemplate,
+                    (run) => run.workflowTemplate === workflowRequest.workflowTemplate,
                   );
                 if (!nextRun) {
-                  throw new Error(`Workflow run not found after starting ${workflowTemplate}`);
+                  throw new Error(
+                    `Workflow run not found after starting ${workflowRequest.workflowTemplate}`,
+                  );
                 }
                 return nextRun;
               },

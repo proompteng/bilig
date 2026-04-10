@@ -754,6 +754,109 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("runs durable workbook search workflows with query input", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Revenue");
+    engine.setCellValue("Revenue", "A1", "Region");
+    engine.setCellValue("Revenue", "B1", "Revenue");
+    engine.setCellFormula("Revenue", "B2", "SUM(B3:B5)");
+    engine.setCellValue("Revenue", "A2", "West");
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "searchWorkbookQuery",
+          query: "revenue",
+          limit: 5,
+        },
+      });
+
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "searchWorkbookQuery",
+          title: "Search Workbook",
+          status: "completed",
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              stepId: "search-workbook",
+              status: "completed",
+            }),
+          ]),
+          artifact: expect.objectContaining({
+            title: "Workbook Search",
+            text: expect.stringContaining("Query: revenue"),
+          }),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Search Workbook",
+            citations: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "range",
+                sheetName: "Revenue",
+              }),
+            ]),
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("allows Codex dynamic tools to start durable workflows inside the active thread", async () => {
     const fakeCodex = new FakeCodexTransport();
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };

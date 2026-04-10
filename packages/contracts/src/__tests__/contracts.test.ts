@@ -179,4 +179,37 @@ describe("@bilig/contracts", () => {
     expect(decoded.workflowTemplate).toBe("explainSelectionCell");
     expect(decoded.artifact?.title).toBe("Current Cell");
   });
+
+  it("accepts search-query workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-3",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "searchWorkbookQuery",
+      title: "Search Workbook",
+      summary: 'Found 2 workbook matches for "revenue".',
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "search-workbook",
+          label: "Search workbook",
+          status: "completed",
+          summary: 'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
+          updatedAtUnixMs: 110,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Workbook Search",
+        text: "## Workbook Search",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("searchWorkbookQuery");
+    expect(decoded.artifact?.title).toBe("Workbook Search");
+  });
 });
