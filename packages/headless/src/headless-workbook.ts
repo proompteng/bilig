@@ -279,7 +279,7 @@ const HEADLESS_PUBLIC_ERROR_NAMES = new Set([
   "HeadlessOperationError",
 ]);
 
-const HEADLESS_VERSION = "0.1.1";
+const HEADLESS_VERSION = "0.1.2";
 const HEADLESS_BUILD_DATE = "2026-04-10";
 const HEADLESS_RELEASE_DATE = "2026-04-10";
 
