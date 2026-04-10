@@ -9,6 +9,10 @@ Date: `2026-04-10`
 This document is the canonical design for the headless spreadsheet layer in `bilig`.
 It supersedes `docs/hyperformula-headless-api-design.md`.
 
+The follow-on engine program for actually beating HyperFormula on runtime work is tracked in:
+
+- `docs/workpaper-engine-leadership-program.md`
+
 The top-level public interface is:
 
 - `WorkPaper` from `@bilig/headless`
