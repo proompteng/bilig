@@ -86,6 +86,15 @@ describe("workbook-workflow-run-store", () => {
     );
     expect(insertQuery?.values?.[12]).toBe(JSON.stringify(createWorkflowRun().steps));
     expect(insertQuery?.values?.[13]).toBe(JSON.stringify(createWorkflowRun().artifact));
+    expect(
+      queryable.calls.find((call) => call.text.includes("DELETE FROM workbook_workflow_step")),
+    ).toBeDefined();
+    expect(
+      queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_workflow_step")),
+    ).toHaveLength(createWorkflowRun().steps.length);
+    expect(
+      queryable.calls.find((call) => call.text.includes("INSERT INTO workbook_workflow_artifact")),
+    ).toBeDefined();
   });
 
   it("loads shared workflow runs for collaborator viewers", async () => {
@@ -114,6 +123,36 @@ describe("workbook-workflow-run-store", () => {
               } satisfies QueryResultRow,
             ]
           : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_step AS step") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? run.steps.map(
+              (step, index) =>
+                ({
+                  runId: run.runId,
+                  stepId: step.stepId,
+                  stepOrder: index,
+                  label: step.label,
+                  status: step.status,
+                  summary: step.summary,
+                  updatedAtUnixMs: step.updatedAtUnixMs,
+                }) satisfies QueryResultRow,
+            )
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_artifact AS artifact") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? [
+              {
+                runId: run.runId,
+                kind: run.artifact?.kind,
+                title: run.artifact?.title,
+                text: run.artifact?.text,
+              } satisfies QueryResultRow,
+            ]
+          : null,
     ]);
 
     const runs = await listWorkbookThreadWorkflowRuns(queryable, {
@@ -133,6 +172,9 @@ describe("workbook-workflow-run-store", () => {
             status: "completed",
           }),
         ]),
+        artifact: expect.objectContaining({
+          title: "Workbook Summary",
+        }),
       }),
     ]);
   });

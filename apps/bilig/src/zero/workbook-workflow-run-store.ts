@@ -22,6 +22,23 @@ interface WorkbookWorkflowRunRow extends QueryResultRow {
   readonly artifactJson?: unknown;
 }
 
+interface WorkbookWorkflowStepRow extends QueryResultRow {
+  readonly runId?: unknown;
+  readonly stepId?: unknown;
+  readonly stepOrder?: unknown;
+  readonly label?: unknown;
+  readonly status?: unknown;
+  readonly summary?: unknown;
+  readonly updatedAtUnixMs?: unknown;
+}
+
+interface WorkbookWorkflowArtifactRow extends QueryResultRow {
+  readonly runId?: unknown;
+  readonly kind?: unknown;
+  readonly title?: unknown;
+  readonly text?: unknown;
+}
+
 function parseNumericValue(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.trunc(value);
@@ -90,14 +107,72 @@ function normalizeWorkflowSteps(value: unknown): WorkbookAgentWorkflowStep[] | n
   }));
 }
 
-function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflowRun | null {
+function normalizeWorkflowStepRow(row: WorkbookWorkflowStepRow): {
+  readonly runId: string;
+  readonly step: WorkbookAgentWorkflowStep;
+  readonly stepOrder: number;
+} | null {
+  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
+  const stepOrder = parseNumericValue(row.stepOrder);
+  if (
+    typeof row.runId !== "string" ||
+    typeof row.stepId !== "string" ||
+    typeof row.label !== "string" ||
+    !isWorkflowStepStatus(row.status) ||
+    typeof row.summary !== "string" ||
+    updatedAtUnixMs === null ||
+    stepOrder === null
+  ) {
+    return null;
+  }
+  return {
+    runId: row.runId,
+    stepOrder,
+    step: {
+      stepId: row.stepId,
+      label: row.label,
+      status: row.status,
+      summary: row.summary,
+      updatedAtUnixMs,
+    },
+  };
+}
+
+function normalizeWorkflowArtifactRow(row: WorkbookWorkflowArtifactRow): {
+  readonly runId: string;
+  readonly artifact: WorkbookAgentWorkflowArtifact;
+} | null {
+  const artifact = {
+    kind: row.kind,
+    title: row.title,
+    text: row.text,
+  };
+  if (typeof row.runId !== "string" || !isMarkdownArtifact(artifact)) {
+    return null;
+  }
+  return {
+    runId: row.runId,
+    artifact,
+  };
+}
+
+function normalizeWorkflowRun(
+  row: WorkbookWorkflowRunRow,
+  hydrated: {
+    readonly steps?: WorkbookAgentWorkflowStep[] | null;
+    readonly artifact?: WorkbookAgentWorkflowArtifact | null;
+  } = {},
+): WorkbookAgentWorkflowRun | null {
   const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
   const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
   const completedAtUnixMs =
     row.completedAtUnixMs === null || row.completedAtUnixMs === undefined
       ? null
       : parseNumericValue(row.completedAtUnixMs);
-  const steps = normalizeWorkflowSteps(row.stepsJson ?? []);
+  const fallbackSteps = normalizeWorkflowSteps(row.stepsJson ?? []);
+  const steps = hydrated.steps ?? fallbackSteps;
+  const artifact =
+    hydrated.artifact ?? (isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null);
   if (
     typeof row.runId !== "string" ||
     typeof row.threadId !== "string" ||
@@ -113,9 +188,7 @@ function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflo
     (row.errorMessage !== null &&
       row.errorMessage !== undefined &&
       typeof row.errorMessage !== "string") ||
-    (row.artifactJson !== null &&
-      row.artifactJson !== undefined &&
-      !isMarkdownArtifact(row.artifactJson))
+    (artifact !== null && !isMarkdownArtifact(artifact))
   ) {
     return null;
   }
@@ -132,8 +205,81 @@ function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflo
     completedAtUnixMs,
     errorMessage: typeof row.errorMessage === "string" ? row.errorMessage : null,
     steps,
-    artifact: isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null,
+    artifact,
   };
+}
+
+async function loadDurableWorkflowSteps(
+  db: Queryable,
+  documentId: string,
+  runIds: readonly string[],
+): Promise<Map<string, WorkbookAgentWorkflowStep[]>> {
+  if (runIds.length === 0) {
+    return new Map();
+  }
+  const result = await db.query<WorkbookWorkflowStepRow>(
+    `
+      SELECT
+        step.run_id AS "runId",
+        step.step_id AS "stepId",
+        step.step_order AS "stepOrder",
+        step.label AS "label",
+        step.status AS "status",
+        step.summary AS "summary",
+        step.updated_at_unix_ms AS "updatedAtUnixMs"
+      FROM workbook_workflow_step AS step
+      WHERE step.workbook_id = $1
+        AND step.run_id = ANY($2::text[])
+      ORDER BY step.run_id ASC, step.step_order ASC
+    `,
+    [documentId, runIds],
+  );
+  const stepsByRunId = new Map<string, WorkbookAgentWorkflowStep[]>();
+  for (const row of result.rows) {
+    const normalized = normalizeWorkflowStepRow(row);
+    if (!normalized) {
+      continue;
+    }
+    const steps = stepsByRunId.get(normalized.runId);
+    if (steps) {
+      steps.push(normalized.step);
+      continue;
+    }
+    stepsByRunId.set(normalized.runId, [normalized.step]);
+  }
+  return stepsByRunId;
+}
+
+async function loadDurableWorkflowArtifacts(
+  db: Queryable,
+  documentId: string,
+  runIds: readonly string[],
+): Promise<Map<string, WorkbookAgentWorkflowArtifact>> {
+  if (runIds.length === 0) {
+    return new Map();
+  }
+  const result = await db.query<WorkbookWorkflowArtifactRow>(
+    `
+      SELECT
+        artifact.run_id AS "runId",
+        artifact.kind AS "kind",
+        artifact.title AS "title",
+        artifact.text AS "text"
+      FROM workbook_workflow_artifact AS artifact
+      WHERE artifact.workbook_id = $1
+        AND artifact.run_id = ANY($2::text[])
+    `,
+    [documentId, runIds],
+  );
+  const artifactsByRunId = new Map<string, WorkbookAgentWorkflowArtifact>();
+  for (const row of result.rows) {
+    const normalized = normalizeWorkflowArtifactRow(row);
+    if (!normalized) {
+      continue;
+    }
+    artifactsByRunId.set(normalized.runId, normalized.artifact);
+  }
+  return artifactsByRunId;
 }
 
 export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<void> {
@@ -156,12 +302,43 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
     )
   `);
   await db.query(`
+    CREATE TABLE IF NOT EXISTS workbook_workflow_step (
+      workbook_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      step_order INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      updated_at_unix_ms BIGINT NOT NULL,
+      PRIMARY KEY (run_id, step_id)
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS workbook_workflow_artifact (
+      run_id TEXT PRIMARY KEY,
+      workbook_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      updated_at_unix_ms BIGINT NOT NULL
+    )
+  `);
+  await db.query(`
     ALTER TABLE workbook_workflow_run
       ADD COLUMN IF NOT EXISTS steps_json JSONB NOT NULL DEFAULT '[]'::jsonb
   `);
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_run_thread_updated_idx
       ON workbook_workflow_run (workbook_id, thread_id, updated_at_unix_ms DESC)
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS workbook_workflow_step_run_order_idx
+      ON workbook_workflow_step (workbook_id, run_id, step_order ASC)
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS workbook_workflow_artifact_run_idx
+      ON workbook_workflow_artifact (workbook_id, run_id)
   `);
 }
 
@@ -226,6 +403,80 @@ export async function upsertWorkbookWorkflowRun(
       JSON.stringify(input.run.artifact),
     ],
   );
+  await db.query(
+    `
+      DELETE FROM workbook_workflow_step
+      WHERE workbook_id = $1
+        AND run_id = $2
+    `,
+    [input.documentId, input.run.runId],
+  );
+  for (const [stepOrder, step] of input.run.steps.entries()) {
+    await db.query(
+      `
+        INSERT INTO workbook_workflow_step (
+          workbook_id,
+          run_id,
+          step_id,
+          step_order,
+          label,
+          status,
+          summary,
+          updated_at_unix_ms
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        input.documentId,
+        input.run.runId,
+        step.stepId,
+        stepOrder,
+        step.label,
+        step.status,
+        step.summary,
+        step.updatedAtUnixMs,
+      ],
+    );
+  }
+  if (input.run.artifact) {
+    await db.query(
+      `
+        INSERT INTO workbook_workflow_artifact (
+          run_id,
+          workbook_id,
+          kind,
+          title,
+          text,
+          updated_at_unix_ms
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (run_id)
+        DO UPDATE SET
+          workbook_id = EXCLUDED.workbook_id,
+          kind = EXCLUDED.kind,
+          title = EXCLUDED.title,
+          text = EXCLUDED.text,
+          updated_at_unix_ms = EXCLUDED.updated_at_unix_ms
+      `,
+      [
+        input.run.runId,
+        input.documentId,
+        input.run.artifact.kind,
+        input.run.artifact.title,
+        input.run.artifact.text,
+        input.run.updatedAtUnixMs,
+      ],
+    );
+    return;
+  }
+  await db.query(
+    `
+      DELETE FROM workbook_workflow_artifact
+      WHERE workbook_id = $1
+        AND run_id = $2
+    `,
+    [input.documentId, input.run.runId],
+  );
 }
 
 export async function listWorkbookThreadWorkflowRuns(
@@ -267,8 +518,28 @@ export async function listWorkbookThreadWorkflowRuns(
     `,
     [input.documentId, input.threadId, input.actorUserId, input.limit ?? 20],
   );
+  const runIds = result.rows.flatMap((row) => (typeof row.runId === "string" ? [row.runId] : []));
+  const [durableSteps, durableArtifacts] = await Promise.all([
+    loadDurableWorkflowSteps(db, input.documentId, runIds),
+    loadDurableWorkflowArtifacts(db, input.documentId, runIds),
+  ]);
   return result.rows.flatMap((row) => {
-    const run = normalizeWorkflowRun(row);
+    const runId = typeof row.runId === "string" ? row.runId : null;
+    const hydrated: {
+      steps?: WorkbookAgentWorkflowStep[] | null;
+      artifact?: WorkbookAgentWorkflowArtifact | null;
+    } = {};
+    if (runId) {
+      const steps = durableSteps.get(runId);
+      if (steps) {
+        hydrated.steps = steps;
+      }
+      const artifact = durableArtifacts.get(runId);
+      if (artifact) {
+        hydrated.artifact = artifact;
+      }
+    }
+    const run = normalizeWorkflowRun(row, hydrated);
     return run ? [run] : [];
   });
 }
