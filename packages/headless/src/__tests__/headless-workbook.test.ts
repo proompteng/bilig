@@ -239,6 +239,76 @@ describe("HeadlessWorkbook", () => {
     });
   });
 
+  it("preserves workbook semantics across rebuildAndRecalculate and non-semantic config rebuilds", () => {
+    const workbook = HeadlessWorkbook.buildFromSheets(
+      {
+        Data: [[1, "=A1*Rate"], [3], [5]],
+        Summary: [["=FILTER(Data!A1:A3,Data!A1:A3>2)"]],
+      },
+      {
+        useStats: false,
+      },
+    );
+    const dataId = workbook.getSheetId("Data")!;
+    const summaryId = workbook.getSheetId("Summary")!;
+
+    workbook.addNamedExpression("Rate", "=2");
+
+    const beforeDataSerialized = workbook.getSheetSerialized(dataId);
+    const beforeSummaryValues = workbook.getRangeValues({
+      start: cell(summaryId, 0, 0),
+      end: cell(summaryId, 1, 0),
+    });
+    const beforeRateValue = workbook.getNamedExpressionValue("Rate");
+    const rebuildChanges = workbook.rebuildAndRecalculate();
+
+    expect(rebuildChanges).toEqual([]);
+    expect(workbook.getSheetSerialized(dataId)).toEqual(beforeDataSerialized);
+    expect(
+      workbook.getRangeValues({
+        start: cell(summaryId, 0, 0),
+        end: cell(summaryId, 1, 0),
+      }),
+    ).toEqual(beforeSummaryValues);
+    expect(workbook.getNamedExpressionValue("Rate")).toEqual(beforeRateValue);
+
+    workbook.updateConfig({
+      useColumnIndex: true,
+      useStats: true,
+    });
+
+    expect(workbook.getCellFormula(cell(dataId, 0, 1))).toBe("=A1*Rate");
+    expect(workbook.getCellValue(cell(dataId, 0, 1))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(
+      workbook.getRangeValues({
+        start: cell(summaryId, 0, 0),
+        end: cell(summaryId, 1, 0),
+      }),
+    ).toEqual(beforeSummaryValues);
+    expect(workbook.getNamedExpressionValue("Rate")).toEqual(beforeRateValue);
+  });
+
+  it("returns changes in deterministic order for cells and named expressions", () => {
+    const workbook = HeadlessWorkbook.buildFromArray([[]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+
+    const changes = workbook.batch(() => {
+      workbook.setCellContents(cell(sheetId, 0, 1), 20);
+      workbook.setCellContents(cell(sheetId, 0, 0), 10);
+      workbook.addNamedExpression("Zulu", "=1");
+      workbook.addNamedExpression("Alpha", "=2");
+    });
+
+    expect(
+      changes.map((change) =>
+        change.kind === "cell" ? `${change.kind}:${change.a1}` : `${change.kind}:${change.name}`,
+      ),
+    ).toEqual(["cell:A1", "cell:B1", "named-expression:Alpha", "named-expression:Zulu"]);
+  });
+
   it("supports once listeners, address formatting, range dependency helpers, and tuple axis operations", () => {
     const workbook = HeadlessWorkbook.buildFromSheets({
       Data: [[1, 2, "=A1+B1"]],
