@@ -1,6 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { getExternalLookupFunction } from "../external-function-adapter.js";
 import type { ArrayValue, EvaluationResult } from "../runtime-values.js";
+import { createLookupCriteriaBuiltins } from "./lookup-criteria-builtins.js";
 import { createLookupDatabaseBuiltins } from "./lookup-database-builtins.js";
 import { createLookupFinancialBuiltins } from "./lookup-financial-builtins.js";
 import { createLookupOrderStatisticsBuiltins } from "./lookup-order-statistics-builtins.js";
@@ -165,53 +166,6 @@ function requireCellRange(arg: LookupBuiltinArgument): RangeBuiltinArgument | Ce
 function getRangeValue(range: RangeBuiltinArgument, row: number, col: number): CellValue {
   const index = row * range.cols + col;
   return range.values[index] ?? { tag: ValueTag.Empty };
-}
-
-function validateCriteriaPairs(
-  criteriaArgs: readonly LookupBuiltinArgument[],
-): { range: RangeBuiltinArgument; criteria: CellValue }[] | CellValue {
-  if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
-    return errorValue(ErrorCode.Value);
-  }
-  const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
-  for (let index = 0; index < criteriaArgs.length; index += 2) {
-    const range = requireCellRange(criteriaArgs[index]!);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    const criteria = criteriaArgs[index + 1]!;
-    if (isRangeArg(criteria)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(criteria)) {
-      return criteria;
-    }
-    rangeCriteriaPairs.push({ range, criteria });
-  }
-  return rangeCriteriaPairs;
-}
-
-function findMatchingRowIndexes(
-  targetRange: RangeBuiltinArgument,
-  criteriaArgs: readonly LookupBuiltinArgument[],
-): number[] | CellValue {
-  const rangeCriteriaPairs = validateCriteriaPairs(criteriaArgs);
-  if (!Array.isArray(rangeCriteriaPairs)) {
-    return rangeCriteriaPairs;
-  }
-  if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== targetRange.values.length)) {
-    return errorValue(ErrorCode.Value);
-  }
-
-  const matchingRows: number[] = [];
-  for (let row = 0; row < targetRange.values.length; row += 1) {
-    if (
-      rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
-    ) {
-      matchingRows.push(row);
-    }
-  }
-  return matchingRows;
 }
 
 function arrayResult(values: CellValue[], rows: number, cols: number): ArrayValue {
@@ -936,6 +890,75 @@ function exactMatch(lookupValue: CellValue, range: RangeBuiltinArgument): number
   return -1;
 }
 
+function hasWildcardPattern(pattern: string): boolean {
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "~") {
+      index += 1;
+      continue;
+    }
+    if (char === "*" || char === "?") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function wildcardPatternToRegExp(pattern: string): RegExp {
+  let source = "^";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === undefined) {
+      continue;
+    }
+    if (char === "~") {
+      const escaped = pattern[index + 1];
+      if (escaped !== undefined) {
+        source += escapeRegexFragment(escaped);
+        index += 1;
+        continue;
+      }
+      source += escapeRegexFragment(char);
+      continue;
+    }
+    if (char === "*") {
+      source += ".*";
+      continue;
+    }
+    if (char === "?") {
+      source += ".";
+      continue;
+    }
+    source += escapeRegexFragment(char);
+  }
+  source += "$";
+  return new RegExp(source, "i");
+}
+
+function escapeRegexFragment(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function unescapeCriteriaPattern(pattern: string): string {
+  let unescaped = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === undefined) {
+      continue;
+    }
+    if (char === "~") {
+      const escaped = pattern[index + 1];
+      if (escaped !== undefined) {
+        unescaped += escaped;
+        index += 1;
+        continue;
+      }
+    }
+    unescaped += char;
+  }
+  return unescaped;
+}
+
 function approximateMatchAscending(lookupValue: CellValue, range: RangeBuiltinArgument): number {
   let best = -1;
   for (let index = 0; index < range.values.length; index += 1) {
@@ -1030,7 +1053,19 @@ const lookupDatabaseBuiltins = createLookupDatabaseBuiltins({
   matchesCriteria,
 });
 
+const lookupCriteriaBuiltins = createLookupCriteriaBuiltins({
+  errorValue,
+  numberResult,
+  isError,
+  isRangeArg,
+  toNumber,
+  requireCellRange,
+  matchesCriteria,
+  numericAggregateCandidate,
+});
+
 export const lookupBuiltins: Record<string, LookupBuiltin> = {
+  ...lookupCriteriaBuiltins,
   ...lookupDatabaseBuiltins,
   ...lookupFinancialBuiltins,
   MATCH: (lookupValue, lookupArray, matchTypeValue = { tag: ValueTag.Number, value: 1 }) => {
@@ -2038,206 +2073,6 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return arrayResult(wrappedValues, rows, cols);
   },
-  COUNTIF: (rangeArg, criteriaArg) => {
-    const range = requireCellRange(rangeArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    if (isRangeArg(criteriaArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(criteriaArg)) {
-      return criteriaArg;
-    }
-    let count = 0;
-    for (const value of range.values) {
-      if (matchesCriteria(value, criteriaArg)) {
-        count += 1;
-      }
-    }
-    return { tag: ValueTag.Number, value: count };
-  },
-  COUNTIFS: (...args) => {
-    if (args.length === 0 || args.length % 2 !== 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
-    for (let index = 0; index < args.length; index += 2) {
-      const range = requireCellRange(args[index]!);
-      if (!isRangeArg(range)) {
-        return range;
-      }
-      const criteria = args[index + 1]!;
-      if (isRangeArg(criteria)) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (isError(criteria)) {
-        return criteria;
-      }
-      rangeCriteriaPairs.push({ range, criteria });
-    }
-    const expectedLength = rangeCriteriaPairs[0]!.range.values.length;
-    if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== expectedLength)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let count = 0;
-    for (let row = 0; row < expectedLength; row += 1) {
-      if (
-        rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
-      ) {
-        count += 1;
-      }
-    }
-    return { tag: ValueTag.Number, value: count };
-  },
-  SUMIF: (rangeArg, criteriaArg, sumRangeArg = rangeArg) => {
-    const range = requireCellRange(rangeArg);
-    const sumRange = requireCellRange(sumRangeArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    if (!isRangeArg(sumRange)) {
-      return sumRange;
-    }
-    if (range.values.length !== sumRange.values.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(criteriaArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(criteriaArg)) {
-      return criteriaArg;
-    }
-
-    let sum = 0;
-    for (let index = 0; index < range.values.length; index += 1) {
-      if (!matchesCriteria(range.values[index]!, criteriaArg)) {
-        continue;
-      }
-      sum += toNumber(sumRange.values[index]!) ?? 0;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  SUMIFS: (sumRangeArg, ...criteriaArgs) => {
-    const sumRange = requireCellRange(sumRangeArg);
-    if (!isRangeArg(sumRange)) {
-      return sumRange;
-    }
-    const matchingRows = findMatchingRowIndexes(sumRange, criteriaArgs);
-    if (!Array.isArray(matchingRows)) {
-      return matchingRows;
-    }
-
-    let sum = 0;
-    for (const row of matchingRows) {
-      sum += toNumber(sumRange.values[row]!) ?? 0;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  AVERAGEIF: (rangeArg, criteriaArg, averageRangeArg = rangeArg) => {
-    const range = requireCellRange(rangeArg);
-    const averageRange = requireCellRange(averageRangeArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    if (!isRangeArg(averageRange)) {
-      return averageRange;
-    }
-    if (range.values.length !== averageRange.values.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(criteriaArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(criteriaArg)) {
-      return criteriaArg;
-    }
-
-    let count = 0;
-    let sum = 0;
-    for (let index = 0; index < range.values.length; index += 1) {
-      if (!matchesCriteria(range.values[index]!, criteriaArg)) {
-        continue;
-      }
-      const numeric = toNumber(averageRange.values[index]!);
-      if (numeric === undefined) {
-        continue;
-      }
-      count += 1;
-      sum += numeric;
-    }
-
-    if (count === 0) {
-      return errorValue(ErrorCode.Div0);
-    }
-    return { tag: ValueTag.Number, value: sum / count };
-  },
-  AVERAGEIFS: (averageRangeArg, ...criteriaArgs) => {
-    const averageRange = requireCellRange(averageRangeArg);
-    if (!isRangeArg(averageRange)) {
-      return averageRange;
-    }
-    const matchingRows = findMatchingRowIndexes(averageRange, criteriaArgs);
-    if (!Array.isArray(matchingRows)) {
-      return matchingRows;
-    }
-
-    let count = 0;
-    let sum = 0;
-    for (const row of matchingRows) {
-      const numeric = toNumber(averageRange.values[row]!);
-      if (numeric === undefined) {
-        continue;
-      }
-      count += 1;
-      sum += numeric;
-    }
-    if (count === 0) {
-      return errorValue(ErrorCode.Div0);
-    }
-    return { tag: ValueTag.Number, value: sum / count };
-  },
-  MINIFS: (minRangeArg, ...criteriaArgs) => {
-    const minRange = requireCellRange(minRangeArg);
-    if (!isRangeArg(minRange)) {
-      return minRange;
-    }
-    const matchingRows = findMatchingRowIndexes(minRange, criteriaArgs);
-    if (!Array.isArray(matchingRows)) {
-      return matchingRows;
-    }
-
-    let minimum = Number.POSITIVE_INFINITY;
-    for (const row of matchingRows) {
-      const numeric = numericAggregateCandidate(minRange.values[row]!);
-      if (numeric === undefined) {
-        continue;
-      }
-      minimum = Math.min(minimum, numeric);
-    }
-    return { tag: ValueTag.Number, value: minimum === Number.POSITIVE_INFINITY ? 0 : minimum };
-  },
-  MAXIFS: (maxRangeArg, ...criteriaArgs) => {
-    const maxRange = requireCellRange(maxRangeArg);
-    if (!isRangeArg(maxRange)) {
-      return maxRange;
-    }
-    const matchingRows = findMatchingRowIndexes(maxRange, criteriaArgs);
-    if (!Array.isArray(matchingRows)) {
-      return matchingRows;
-    }
-
-    let maximum = Number.NEGATIVE_INFINITY;
-    for (const row of matchingRows) {
-      const numeric = numericAggregateCandidate(maxRange.values[row]!);
-      if (numeric === undefined) {
-        continue;
-      }
-      maximum = Math.max(maximum, numeric);
-    }
-    return { tag: ValueTag.Number, value: maximum === Number.NEGATIVE_INFINITY ? 0 : maximum };
-  },
   SUMPRODUCT: (...args) => {
     if (args.length === 0) {
       return errorValue(ErrorCode.Value);
@@ -2576,7 +2411,22 @@ function matchesCriteria(value: CellValue, criteria: CellValue): boolean {
   if (isError(value)) {
     return false;
   }
-  const { operator, operand } = parseCriteria(criteria);
+  let { operator, operand } = parseCriteria(criteria);
+  if (
+    operand.tag === ValueTag.String &&
+    (operator === "=" || operator === "<>") &&
+    hasWildcardPattern(operand.value)
+  ) {
+    const matches = wildcardPatternToRegExp(operand.value).test(toStringValue(value));
+    return operator === "=" ? matches : !matches;
+  }
+  if (operand.tag === ValueTag.String && operand.value.includes("~")) {
+    operand = {
+      tag: ValueTag.String,
+      value: unescapeCriteriaPattern(operand.value),
+      stringId: operand.stringId,
+    };
+  }
   const comparison = compareScalars(value, operand);
   if (comparison === undefined) {
     return false;

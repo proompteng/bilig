@@ -529,6 +529,22 @@ describe("lookup builtins", () => {
       ),
     ).toEqual(num(3));
 
+    expect(
+      COUNTIFS(
+        cellRange(
+          [text("North"), text("south"), text("Northeast"), text("west"), text("Northwest")],
+          5,
+          1,
+        ),
+        text("north*"),
+        cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1),
+        text(">1"),
+      ),
+    ).toEqual(num(2));
+    expect(
+      COUNTIF(cellRange([text("north*"), text("northwest"), text("south")], 3, 1), text("north~*")),
+    ).toEqual(num(1));
+
     expect(SUMIF(cellRange([num(2), num(4), num(-1), num(6)], 4, 1), text(">0"))).toEqual(num(12));
 
     expect(
@@ -540,6 +556,20 @@ describe("lookup builtins", () => {
         text("a"),
       ),
     ).toEqual(num(70));
+
+    expect(
+      SUMIFS(
+        cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1),
+        cellRange(
+          [text("North"), text("south"), text("Northeast"), text("west"), text("Northwest")],
+          5,
+          1,
+        ),
+        text("north*"),
+        cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1),
+        text(">1"),
+      ),
+    ).toEqual(num(8));
 
     expect(AVERAGEIF(cellRange([num(2), num(4), num(-1), num(6)], 4, 1), text(">0"))).toEqual(
       num(4),
