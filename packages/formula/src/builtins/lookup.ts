@@ -1,6 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { getExternalLookupFunction } from "../external-function-adapter.js";
 import type { ArrayValue, EvaluationResult } from "../runtime-values.js";
+import { createLookupArrayShapeBuiltins } from "./lookup-array-shape-builtins.js";
 import { createLookupCriteriaBuiltins } from "./lookup-criteria-builtins.js";
 import { createLookupDatabaseBuiltins } from "./lookup-database-builtins.js";
 import { createLookupFinancialBuiltins } from "./lookup-financial-builtins.js";
@@ -761,21 +762,6 @@ function flattenNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
   return values;
 }
 
-function arrayTextCell(value: CellValue, strict: boolean): string | undefined {
-  switch (value.tag) {
-    case ValueTag.Empty:
-      return "";
-    case ValueTag.Number:
-      return String(value.value);
-    case ValueTag.Boolean:
-      return value.value ? "TRUE" : "FALSE";
-    case ValueTag.String:
-      return strict ? `"${value.value.replace(/"/g, '""')}"` : value.value;
-    case ValueTag.Error:
-      return undefined;
-  }
-}
-
 function sumOfNumbers(arg: LookupBuiltinArgument): number | CellValue {
   const values = flattenNumbers(arg);
   return Array.isArray(values) ? values.reduce((sum, value) => sum + value, 0) : values;
@@ -814,63 +800,6 @@ function rowKey(range: RangeBuiltinArgument, row: number): string | undefined {
     return undefined;
   }
   return JSON.stringify(values.map(normalizeKeyValue));
-}
-
-function clipIndex(value: number, length: number): number | undefined {
-  if (!Number.isFinite(value) || length <= 0) {
-    return undefined;
-  }
-  const index = Math.trunc(value);
-  if (index === 0) {
-    return undefined;
-  }
-  return index < 0 ? Math.max(index, -length) : Math.min(index, length);
-}
-
-function flattenValues(
-  range: RangeBuiltinArgument,
-  scanByCol: boolean,
-  ignoreEmpty = false,
-): CellValue[] {
-  const values: CellValue[] = [];
-  if (scanByCol) {
-    for (let col = 0; col < range.cols; col += 1) {
-      for (let row = 0; row < range.rows; row += 1) {
-        const value = getRangeValue(range, row, col);
-        if (ignoreEmpty && value.tag === ValueTag.Empty) {
-          continue;
-        }
-        values.push(value);
-      }
-    }
-    return values;
-  }
-  for (let row = 0; row < range.rows; row += 1) {
-    for (let col = 0; col < range.cols; col += 1) {
-      const value = getRangeValue(range, row, col);
-      if (ignoreEmpty && value.tag === ValueTag.Empty) {
-        continue;
-      }
-      values.push(value);
-    }
-  }
-  return values;
-}
-
-function getRangeWindowValues(
-  range: RangeBuiltinArgument,
-  rowStart: number,
-  colStart: number,
-  rowCount: number,
-  colCount: number,
-): CellValue[] {
-  const values: CellValue[] = [];
-  for (let row = 0; row < rowCount; row += 1) {
-    for (let col = 0; col < colCount; col += 1) {
-      values.push(getRangeValue(range, rowStart + row, colStart + col));
-    }
-  }
-  return values;
 }
 
 function colKey(range: RangeBuiltinArgument, col: number): string | undefined {
@@ -1036,64 +965,27 @@ const lookupReferenceBuiltins = createLookupReferenceBuiltins({
   getRangeValue,
 });
 
+const lookupArrayShapeBuiltins = createLookupArrayShapeBuiltins({
+  errorValue,
+  arrayResult,
+  isError,
+  isRangeArg,
+  toBoolean,
+  toInteger,
+  requireCellRange,
+  toCellRange,
+  getRangeValue,
+  findFirstNonRange,
+  areRangeArgs,
+  pickRangeRow,
+});
+
 export const lookupBuiltins: Record<string, LookupBuiltin> = {
+  ...lookupArrayShapeBuiltins,
   ...lookupReferenceBuiltins,
   ...lookupCriteriaBuiltins,
   ...lookupDatabaseBuiltins,
   ...lookupFinancialBuiltins,
-  AREAS: (arrayArg) => {
-    const range = requireCellRange(arrayArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    return { tag: ValueTag.Number, value: 1 };
-  },
-  ARRAYTOTEXT: (arrayArg, formatArg = { tag: ValueTag.Number, value: 0 }) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(formatArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const format = toInteger(formatArg);
-    if (format === undefined || (format !== 0 && format !== 1)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const strict = format === 1;
-    const lines: string[] = [];
-    for (let row = 0; row < array.rows; row += 1) {
-      const lineValues: string[] = [];
-      for (let col = 0; col < array.cols; col += 1) {
-        const value = arrayTextCell(getRangeValue(array, row, col), strict);
-        if (value === undefined) {
-          return errorValue(ErrorCode.Value);
-        }
-        lineValues.push(value);
-      }
-      lines.push(strict ? lineValues.join(", ") : lineValues.join("\t"));
-    }
-    const body = lines.join(";");
-    return {
-      tag: ValueTag.String,
-      value: strict ? `{${body}}` : body,
-      stringId: 0,
-    };
-  },
-  COLUMNS: (arrayArg) => {
-    const range = requireCellRange(arrayArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    return { tag: ValueTag.Number, value: range.cols };
-  },
-  ROWS: (arrayArg) => {
-    const range = requireCellRange(arrayArg);
-    if (!isRangeArg(range)) {
-      return range;
-    }
-    return { tag: ValueTag.Number, value: range.rows };
-  },
   ...lookupRegressionBuiltins,
   "CHISQ.TEST": (actualArg, expectedArg) => {
     return chiSquareTestResult(actualArg, expectedArg);
@@ -1123,258 +1015,6 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     return tTestResult(firstArg, secondArg, tailsArg, typeArg);
   },
   ...lookupOrderStatisticsBuiltins,
-  INDEX: (array, rowNumValue, colNumValue = { tag: ValueTag.Number, value: 1 }) => {
-    if (!isRangeArg(array) || array.refKind !== "cells") {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(rowNumValue) || isRangeArg(colNumValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(rowNumValue)) {
-      return rowNumValue;
-    }
-    if (isError(colNumValue)) {
-      return colNumValue;
-    }
-
-    const rawRowNum = toInteger(rowNumValue);
-    const rawColNum = toInteger(colNumValue);
-    if (rawRowNum === undefined || rawColNum === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let rowNum = rawRowNum;
-    let colNum = rawColNum;
-    if (array.rows === 1 && rawColNum === 1) {
-      rowNum = 1;
-      colNum = rawRowNum;
-    }
-
-    if (rowNum < 1 || colNum < 1 || rowNum > array.rows || colNum > array.cols) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    return getRangeValue(array, rowNum - 1, colNum - 1);
-  },
-  OFFSET: (referenceArg, rowsArg, colsArg, heightArg, widthArg, areaNumberArg) => {
-    if (
-      isRangeArg(rowsArg) ||
-      isRangeArg(colsArg) ||
-      isRangeArg(heightArg) ||
-      isRangeArg(widthArg) ||
-      isRangeArg(areaNumberArg)
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (
-      isError(rowsArg) ||
-      isError(colsArg) ||
-      isError(heightArg) ||
-      isError(widthArg) ||
-      isError(areaNumberArg)
-    ) {
-      return isError(rowsArg)
-        ? rowsArg
-        : isError(colsArg)
-          ? colsArg
-          : isError(heightArg)
-            ? heightArg
-            : isError(widthArg)
-              ? widthArg
-              : areaNumberArg;
-    }
-    const reference = toCellRange(referenceArg);
-    if (!isRangeArg(reference)) {
-      return reference;
-    }
-    const rows = toInteger(rowsArg);
-    const cols = toInteger(colsArg);
-    const height = heightArg === undefined ? reference.rows : toInteger(heightArg);
-    const width = widthArg === undefined ? reference.cols : toInteger(widthArg);
-    const areaNumber = areaNumberArg === undefined ? 1 : toInteger(areaNumberArg);
-    if (
-      rows === undefined ||
-      cols === undefined ||
-      height === undefined ||
-      width === undefined ||
-      areaNumber === undefined
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (areaNumber !== 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (height < 1 || width < 1) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const rowStart = rows < 0 ? reference.rows + rows : rows;
-    const colStart = cols < 0 ? reference.cols + cols : cols;
-    if (
-      rowStart < 0 ||
-      colStart < 0 ||
-      rowStart + height > reference.rows ||
-      colStart + width > reference.cols
-    ) {
-      return errorValue(ErrorCode.Ref);
-    }
-    if (height === 1 && width === 1) {
-      return getRangeValue(reference, rowStart, colStart);
-    }
-    return arrayResult(
-      getRangeWindowValues(reference, rowStart, colStart, height, width),
-      height,
-      width,
-    );
-  },
-  TAKE: (arrayArg, rowsArg, colsArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(rowsArg) || isRangeArg(colsArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(rowsArg) || isError(colsArg)) {
-      return rowsArg.tag === ValueTag.Error ? rowsArg : colsArg;
-    }
-
-    const requestedRows = rowsArg === undefined ? array.rows : toInteger(rowsArg);
-    const requestedCols = colsArg === undefined ? array.cols : toInteger(colsArg);
-    if (requestedRows === undefined || requestedCols === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const clippedRows = clipIndex(requestedRows, array.rows);
-    const clippedCols = clipIndex(requestedCols, array.cols);
-    if (clippedRows === undefined || clippedCols === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const rowCount =
-      clippedRows > 0 ? Math.min(clippedRows, array.rows) : Math.min(-clippedRows, array.rows);
-    const colCount =
-      clippedCols > 0 ? Math.min(clippedCols, array.cols) : Math.min(-clippedCols, array.cols);
-    const rowOffset = clippedRows > 0 ? 0 : Math.max(array.rows - rowCount, 0);
-    const colOffset = clippedCols > 0 ? 0 : Math.max(array.cols - colCount, 0);
-    if (rowCount === 0 || colCount === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const values: CellValue[] = [];
-    for (let row = 0; row < rowCount; row += 1) {
-      for (let col = 0; col < colCount; col += 1) {
-        values.push(getRangeValue(array, row + rowOffset, col + colOffset));
-      }
-    }
-    return arrayResult(values, rowCount, colCount);
-  },
-  DROP: (arrayArg, rowsArg, colsArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(rowsArg) || isRangeArg(colsArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(rowsArg) || isError(colsArg)) {
-      return rowsArg.tag === ValueTag.Error ? rowsArg : colsArg;
-    }
-
-    const requestedRows = rowsArg === undefined ? 0 : toInteger(rowsArg);
-    const requestedCols = colsArg === undefined ? 0 : toInteger(colsArg);
-    if (requestedRows === undefined || requestedCols === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const clippedRows = requestedRows === 0 ? 0 : clipIndex(requestedRows, array.rows);
-    const clippedCols = requestedCols === 0 ? 0 : clipIndex(requestedCols, array.cols);
-    if (clippedRows === undefined || clippedCols === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const dropRows =
-      clippedRows >= 0 ? Math.min(clippedRows, array.rows) : Math.min(-clippedRows, array.rows);
-    const dropCols =
-      clippedCols >= 0 ? Math.min(clippedCols, array.cols) : Math.min(-clippedCols, array.cols);
-    const rowCount = array.rows - dropRows;
-    const colCount = array.cols - dropCols;
-    const rowOffset = clippedRows > 0 ? dropRows : 0;
-    const colOffset = clippedCols > 0 ? dropCols : 0;
-    if (rowCount <= 0 || colCount <= 0) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const values: CellValue[] = [];
-    for (let row = 0; row < rowCount; row += 1) {
-      for (let col = 0; col < colCount; col += 1) {
-        values.push(getRangeValue(array, row + rowOffset, col + colOffset));
-      }
-    }
-    return arrayResult(values, rowCount, colCount);
-  },
-  CHOOSECOLS: (arrayArg, ...columnArgs) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (columnArgs.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const selectedCols: number[] = [];
-    for (const arg of columnArgs) {
-      if (isRangeArg(arg)) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (isError(arg)) {
-        return arg;
-      }
-      const selected = toInteger(arg);
-      if (selected === undefined || selected < 1 || selected > array.cols) {
-        return errorValue(ErrorCode.Value);
-      }
-      selectedCols.push(selected - 1);
-    }
-
-    const values: CellValue[] = [];
-    for (let row = 0; row < array.rows; row += 1) {
-      for (const col of selectedCols) {
-        values.push(getRangeValue(array, row, col));
-      }
-    }
-    return arrayResult(values, array.rows, selectedCols.length);
-  },
-  CHOOSEROWS: (arrayArg, ...rowArgs) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (rowArgs.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const selectedRows: number[] = [];
-    for (const arg of rowArgs) {
-      if (isRangeArg(arg)) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (isError(arg)) {
-        return arg;
-      }
-      const selected = toInteger(arg);
-      if (selected === undefined || selected < 1 || selected > array.rows) {
-        return errorValue(ErrorCode.Value);
-      }
-      selectedRows.push(selected - 1);
-    }
-
-    const values: CellValue[] = [];
-    for (const row of selectedRows) {
-      values.push(...pickRangeRow(array, row));
-    }
-    return arrayResult(values, selectedRows.length, array.cols);
-  },
   SORT: (arrayArg, sortIndexArg, sortOrderArg = { tag: ValueTag.Number, value: 1 }, byColArg) => {
     const array = toCellRange(arrayArg);
     if (!isRangeArg(array)) {
@@ -1546,199 +1186,6 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       array.rows,
       array.cols,
     );
-  },
-  TRANSPOSE: (arrayArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (array.rows === 1 && array.cols === 1) {
-      return array.values[0] ?? { tag: ValueTag.Empty };
-    }
-    const values: CellValue[] = [];
-    for (let col = 0; col < array.cols; col += 1) {
-      for (let row = 0; row < array.rows; row += 1) {
-        values.push(getRangeValue(array, row, col));
-      }
-    }
-    return arrayResult(values, array.cols, array.rows);
-  },
-  HSTACK: (...arrayArgs) => {
-    if (arrayArgs.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const arrays = arrayArgs.map(toCellRange);
-    const rangeError = findFirstNonRange(arrays);
-    if (rangeError) {
-      return rangeError;
-    }
-    if (!areRangeArgs(arrays)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const rowCount = Math.max(...arrays.map((array) => array.rows));
-    for (const array of arrays) {
-      if (array.rows !== 1 && array.rows !== rowCount) {
-        return errorValue(ErrorCode.Value);
-      }
-    }
-
-    const values: CellValue[] = [];
-    const totalCols = arrays.reduce((acc, array) => acc + array.cols, 0);
-    for (let row = 0; row < rowCount; row += 1) {
-      for (const array of arrays) {
-        for (let col = 0; col < array.cols; col += 1) {
-          const sourceRow = array.rows === 1 ? 0 : row;
-          values.push(getRangeValue(array, sourceRow, col));
-        }
-      }
-    }
-    return arrayResult(values, rowCount, totalCols);
-  },
-  VSTACK: (...arrayArgs) => {
-    if (arrayArgs.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const arrays = arrayArgs.map(toCellRange);
-    const rangeError = findFirstNonRange(arrays);
-    if (rangeError) {
-      return rangeError;
-    }
-    if (!areRangeArgs(arrays)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const colCount = Math.max(...arrays.map((array) => array.cols));
-    for (const array of arrays) {
-      if (array.cols !== 1 && array.cols !== colCount) {
-        return errorValue(ErrorCode.Value);
-      }
-    }
-
-    const values: CellValue[] = [];
-    const totalRows = arrays.reduce((acc, array) => acc + array.rows, 0);
-    for (const array of arrays) {
-      for (let row = 0; row < array.rows; row += 1) {
-        for (let col = 0; col < colCount; col += 1) {
-          const sourceCol = array.cols === 1 ? 0 : col;
-          values.push(getRangeValue(array, row, sourceCol));
-        }
-      }
-    }
-    return arrayResult(values, totalRows, colCount);
-  },
-  TOCOL: (arrayArg, ignoreArg = { tag: ValueTag.Number, value: 0 }, scanByColArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(ignoreArg) || isRangeArg(scanByColArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(ignoreArg) || isError(scanByColArg)) {
-      return isError(ignoreArg) ? ignoreArg : scanByColArg;
-    }
-    const ignoreValue = ignoreArg === undefined ? 0 : toInteger(ignoreArg);
-    if (ignoreValue === undefined || ![0, 1].includes(ignoreValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const scanByCol = scanByColArg === undefined ? true : toBoolean(scanByColArg);
-    if (scanByCol === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-    const values = flattenValues(array, scanByCol, ignoreValue === 1);
-    return arrayResult(values, values.length, 1);
-  },
-  TOROW: (arrayArg, ignoreArg = { tag: ValueTag.Number, value: 0 }, scanByColArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(ignoreArg) || isRangeArg(scanByColArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(ignoreArg) || isError(scanByColArg)) {
-      return isError(ignoreArg) ? ignoreArg : scanByColArg;
-    }
-    const ignoreValue = ignoreArg === undefined ? 0 : toInteger(ignoreArg);
-    if (ignoreValue === undefined || ![0, 1].includes(ignoreValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const scanByCol = scanByColArg === undefined ? false : toBoolean(scanByColArg);
-    if (scanByCol === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-    const values = flattenValues(array, scanByCol, ignoreValue === 1);
-    return arrayResult(values, 1, values.length);
-  },
-  WRAPROWS: (arrayArg, wrapCountArg, padWithArg, padByColArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(wrapCountArg) || isRangeArg(padWithArg) || isRangeArg(padByColArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(wrapCountArg) || isError(padByColArg)) {
-      return isError(wrapCountArg) ? wrapCountArg : padByColArg;
-    }
-    if (padWithArg !== undefined && isError(padWithArg)) {
-      return padWithArg;
-    }
-    const wrapCount = toInteger(wrapCountArg);
-    if (wrapCount === undefined || wrapCount < 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (padByColArg !== undefined && toBoolean(padByColArg) === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const values = array.values.slice();
-    const rows = Math.ceil(values.length / wrapCount);
-    const cols = wrapCount;
-    const padValue: CellValue = padWithArg === undefined ? errorValue(ErrorCode.NA) : padWithArg;
-    while (values.length < rows * cols) {
-      values.push(padValue);
-    }
-    return arrayResult(values, rows, cols);
-  },
-  WRAPCOLS: (arrayArg, wrapCountArg, padWithArg, padByColArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(wrapCountArg) || isRangeArg(padWithArg) || isRangeArg(padByColArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(wrapCountArg) || isError(padByColArg)) {
-      return isError(wrapCountArg) ? wrapCountArg : padByColArg;
-    }
-    if (padWithArg !== undefined && isError(padWithArg)) {
-      return padWithArg;
-    }
-    const wrapCount = toInteger(wrapCountArg);
-    if (wrapCount === undefined || wrapCount < 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (padByColArg !== undefined && toBoolean(padByColArg) === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const values = array.values.slice();
-    const rows = wrapCount;
-    const cols = Math.ceil(values.length / rows);
-    const padValue: CellValue = padWithArg === undefined ? errorValue(ErrorCode.NA) : padWithArg;
-    const paddedValues = Array.from(
-      { length: rows * cols },
-      (_, index) => values[index] ?? padValue,
-    );
-    const wrappedValues: CellValue[] = [];
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        wrappedValues.push(paddedValues[col * rows + row] ?? padValue);
-      }
-    }
-    return arrayResult(wrappedValues, rows, cols);
   },
   SUMPRODUCT: (...args) => {
     if (args.length === 0) {
