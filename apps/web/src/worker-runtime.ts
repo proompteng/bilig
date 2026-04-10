@@ -44,14 +44,18 @@ import {
 } from "./workbook-sync.js";
 import {
   clonePendingWorkbookMutation,
-  isActivePendingWorkbookMutation,
   markPendingWorkbookMutationAcked,
   markPendingWorkbookMutationFailed,
-  markPendingWorkbookMutationRebased,
   markPendingWorkbookMutationSubmitted,
   queuePendingWorkbookMutationRetry,
   recordPendingWorkbookMutationAttempt,
 } from "./workbook-mutation-journal.js";
+import {
+  buildPendingMutationSummary,
+  markJournalMutationsRebased,
+  replaceJournalMutation,
+  syncPendingMutationsFromJournal,
+} from "./worker-runtime-pending-mutations.js";
 import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
 import {
   createProjectionEngineFromState,
@@ -853,32 +857,24 @@ export class WorkbookWorkerRuntime {
   }
 
   private syncPendingMutationsFromJournal(): void {
-    this.pendingMutations = this.mutationJournalEntries
-      .filter((mutation) => isActivePendingWorkbookMutation(mutation))
-      .map(clonePendingWorkbookMutation);
+    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries);
   }
 
   private replaceJournalMutation(nextMutation: PendingWorkbookMutation): void {
-    this.mutationJournalEntries = this.mutationJournalEntries.map((mutation) =>
-      mutation.id === nextMutation.id ? clonePendingWorkbookMutation(nextMutation) : mutation,
-    );
-    this.syncPendingMutationsFromJournal();
+    const nextState = replaceJournalMutation(this.mutationJournalEntries, nextMutation);
+    this.mutationJournalEntries = nextState.mutationJournalEntries;
+    this.pendingMutations = nextState.pendingMutations;
   }
 
   private async markRemainingJournalMutationsRebased(rebasedAtUnixMs = Date.now()): Promise<void> {
-    const updatedMutations: PendingWorkbookMutation[] = [];
-    this.mutationJournalEntries = this.mutationJournalEntries.map((mutation) => {
-      if (!isActivePendingWorkbookMutation(mutation)) {
-        return mutation;
-      }
-      const updated = Effect.runSync(markPendingWorkbookMutationRebased(mutation, rebasedAtUnixMs));
-      updatedMutations.push(updated);
-      return updated;
-    });
-    this.syncPendingMutationsFromJournal();
+    const nextState = markJournalMutationsRebased(this.mutationJournalEntries, rebasedAtUnixMs);
+    this.mutationJournalEntries = nextState.mutationJournalEntries;
+    this.pendingMutations = nextState.pendingMutations;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await Promise.all(
-        updatedMutations.map((mutation) => this.localStore!.updatePendingMutation(mutation)),
+        nextState.updatedMutations.map((mutation) =>
+          this.localStore!.updatePendingMutation(mutation),
+        ),
       );
     }
   }
@@ -906,22 +902,7 @@ export class WorkbookWorkerRuntime {
   }
 
   private buildPendingMutationSummary(): WorkbookPendingMutationSummarySnapshot {
-    const firstFailed = this.mutationJournalEntries.find(
-      (mutation) => mutation.status === "failed" && mutation.failureMessage !== null,
-    );
-    return {
-      activeCount: this.pendingMutations.length,
-      failedCount: this.mutationJournalEntries.filter((mutation) => mutation.status === "failed")
-        .length,
-      firstFailed: firstFailed
-        ? {
-            id: firstFailed.id,
-            method: firstFailed.method,
-            failureMessage: firstFailed.failureMessage ?? "Mutation failed",
-            attemptCount: firstFailed.attemptCount,
-          }
-        : null,
-    };
+    return buildPendingMutationSummary(this.mutationJournalEntries, this.pendingMutations);
   }
 
   private async getAuthoritativeStateInput(): Promise<{
