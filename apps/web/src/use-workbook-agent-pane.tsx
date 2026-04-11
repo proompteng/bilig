@@ -932,6 +932,10 @@ export function useWorkbookAgentPane(input: {
         setError(null);
         setIsStartingWorkflow(true);
         const activeSession = await ensureSession();
+        const workflowBody: Record<string, unknown> = {
+          ...workflowRequest,
+          context: getContextRef.current(),
+        };
         const response = await fetch(
           `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/workflows`,
           {
@@ -939,7 +943,7 @@ export function useWorkbookAgentPane(input: {
             headers: {
               "content-type": "application/json",
             },
-            body: JSON.stringify(workflowRequest),
+            body: JSON.stringify(workflowBody),
           },
         );
         const payload = (await response.json()) as unknown;

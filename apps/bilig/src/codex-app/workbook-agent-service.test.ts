@@ -21,6 +21,8 @@ class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>();
   private turnCounter = 0;
   lastThreadStartInput: Parameters<CodexAppServerTransport["threadStart"]>[0] | null = null;
+  lastThreadResumeInput: { threadId: string } | null = null;
+  resumeError: unknown = null;
 
   async ensureReady() {
     return {
@@ -48,6 +50,10 @@ class FakeCodexTransport implements CodexAppServerTransport {
   }
 
   async threadResume(input: { threadId: string }) {
+    this.lastThreadResumeInput = input;
+    if (this.resumeError) {
+      throw this.resumeError;
+    }
     return {
       id: input.threadId,
       preview: "",
@@ -1505,6 +1511,401 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("uses the request turn actor and context for shared-thread workflow starts", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    engine.createSheet("Sheet2");
+    engine.setCellValue("Sheet2", "C7", 99);
+    let durableThreadState: WorkbookAgentThreadStateRecord | null = {
+      documentId: "doc-1",
+      threadId: "thr-shared",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      entries: [],
+      pendingBundle: null,
+      updatedAtUnixMs: 100,
+    };
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        async loadWorkbookAgentThreadState() {
+          return durableThreadState ? structuredClone(durableThreadState) : null;
+        },
+        async saveWorkbookAgentThreadState(record: WorkbookAgentThreadStateRecord) {
+          durableThreadState = structuredClone(record);
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared",
+          threadId: "thr-shared",
+        },
+      });
+
+      const caseySnapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-casey",
+          threadId: "thr-shared",
+        },
+      });
+
+      await service.startTurn({
+        documentId: "doc-1",
+        sessionId: caseySnapshot.sessionId,
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          prompt: "Summarize my current sheet",
+          context: {
+            selection: {
+              sheetName: "Sheet2",
+              address: "C7",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      await service.updateContext({
+        documentId: "doc-1",
+        sessionId: caseySnapshot.sessionId,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      const result = await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-shared",
+        turnId: "turn-1",
+        callId: "call-start-workflow",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "summarizeCurrentSheet",
+        },
+      });
+
+      const snapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: caseySnapshot.sessionId,
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(result?.success).toBe(true);
+      expect(snapshot.workflowRuns).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            workflowTemplate: "summarizeCurrentSheet",
+            startedByUserId: "casey@example.com",
+            summary: "Summarized Sheet2 with 1 populated cell and 0 tables.",
+            artifact: expect.objectContaining({
+              text: expect.stringContaining("Sheet: Sheet2"),
+            }),
+          }),
+        ]),
+      );
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      const startedByUserIds = upsertWorkbookWorkflowRun.mock.calls.map(
+        (call) =>
+          (
+            call.at(1) as
+              | {
+                  startedByUserId?: string;
+                }
+              | undefined
+          )?.startedByUserId ?? null,
+      );
+      expect(startedByUserIds).toEqual(["casey@example.com", "casey@example.com"]);
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("rejects starting a second workflow while one is still running", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+
+    let releaseInspection!: () => void;
+    const inspectBarrier = new Promise<void>((resolve) => {
+      releaseInspection = () => {
+        resolve();
+      };
+    });
+    let resolveRunningPersisted!: () => void;
+    const runningPersisted = new Promise<void>((resolve) => {
+      resolveRunningPersisted = () => {
+        resolve();
+      };
+    });
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          await inspectBarrier;
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        async upsertWorkbookWorkflowRun(_documentId, run) {
+          if (run.status === "running") {
+            resolveRunningPersisted();
+          }
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const firstWorkflow = service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      });
+
+      await runningPersisted;
+
+      await expect(
+        service.startWorkflow({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            workflowTemplate: "describeRecentChanges",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_WORKFLOW_ALREADY_RUNNING",
+        statusCode: 409,
+      });
+
+      releaseInspection();
+      await firstWorkflow;
+    } finally {
+      releaseInspection();
+      await service.close();
+    }
+  });
+
+  it("rejects mutating workflows when a preview bundle is already staged", async () => {
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-existing",
+            actorUserId: "alex@example.com",
+            scope: "private",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-existing",
+              documentId: "doc-1",
+              threadId: "thr-existing",
+              turnId: "turn-1",
+              goalText: "Normalize the imported range",
+              summary: "Normalize Sheet1!A1:A20",
+              scope: "sheet",
+              riskClass: "medium",
+              approvalMode: "preview",
+              baseRevision: 4,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "formatRange",
+                  range: {
+                    sheetName: "Sheet1",
+                    startAddress: "A1",
+                    endAddress: "A20",
+                  },
+                  patch: {
+                    font: {
+                      bold: true,
+                    },
+                  },
+                },
+              ],
+              affectedRanges: [
+                {
+                  sheetName: "Sheet1",
+                  startAddress: "A1",
+                  endAddress: "A20",
+                  role: "target",
+                },
+              ],
+              estimatedAffectedCells: 20,
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          threadId: "thr-existing",
+        },
+      });
+
+      await expect(
+        service.startWorkflow({
+          documentId: "doc-1",
+          sessionId: snapshot.sessionId,
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            workflowTemplate: "createSheet",
+            name: "Summary",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
+        statusCode: 409,
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
   it("cancels a running durable workflow without letting late completion overwrite it", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
@@ -2353,6 +2754,99 @@ describe("workbook agent service", () => {
       );
     } finally {
       await serviceB.close();
+    }
+  });
+
+  it("falls back to durable thread state when live thread resume is unavailable", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    fakeCodex.resumeError = new Error("codex resume unavailable");
+    const durableThreadState: WorkbookAgentThreadStateRecord = {
+      documentId: "doc-1",
+      threadId: "thr-durable-only",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: {
+        selection: {
+          sheetName: "Sheet2",
+          address: "C7",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      entries: [
+        {
+          id: "system-1",
+          kind: "system",
+          turnId: null,
+          text: "Recovered durable shared thread history.",
+          phase: null,
+          toolName: null,
+          toolStatus: null,
+          argumentsText: null,
+          outputText: null,
+          success: null,
+          citations: [],
+        },
+      ],
+      pendingBundle: null,
+      updatedAtUnixMs: 100,
+    };
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return structuredClone(durableThreadState);
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-durable-only",
+          threadId: "thr-durable-only",
+        },
+      });
+
+      expect(fakeCodex.lastThreadResumeInput).toEqual(
+        expect.objectContaining({
+          threadId: "thr-durable-only",
+        }),
+      );
+      expect(snapshot.threadId).toBe("thr-durable-only");
+      expect(snapshot.scope).toBe("shared");
+      expect(snapshot.status).toBe("failed");
+      expect(snapshot.lastError).toContain("codex resume unavailable");
+      expect(snapshot.context).toEqual(
+        expect.objectContaining({
+          selection: expect.objectContaining({
+            sheetName: "Sheet2",
+            address: "C7",
+          }),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Recovered durable shared thread history.",
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
     }
   });
 

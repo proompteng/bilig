@@ -73,7 +73,11 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "normalizeCurrentSheetHeaders" ||
     value === "traceSelectionDependencies" ||
     value === "explainSelectionCell" ||
-    value === "searchWorkbookQuery"
+    value === "searchWorkbookQuery" ||
+    value === "createSheet" ||
+    value === "renameCurrentSheet" ||
+    value === "hideCurrentRow" ||
+    value === "hideCurrentColumn"
   );
 }
 
@@ -521,13 +525,18 @@ export async function listWorkbookThreadWorkflowRuns(
         run.steps_json AS "stepsJson",
         run.artifact_json AS "artifactJson"
       FROM workbook_workflow_run AS run
-      LEFT JOIN workbook_chat_thread AS thread
-        ON thread.workbook_id = run.workbook_id
-       AND thread.thread_id = run.thread_id
-       AND thread.actor_user_id = run.actor_user_id
       WHERE run.workbook_id = $1
         AND run.thread_id = $2
-        AND (run.actor_user_id = $3 OR thread.scope = 'shared')
+        AND (
+          run.actor_user_id = $3
+          OR EXISTS (
+            SELECT 1
+            FROM workbook_chat_thread AS thread
+            WHERE thread.workbook_id = run.workbook_id
+              AND thread.thread_id = run.thread_id
+              AND thread.scope = 'shared'
+          )
+        )
       ORDER BY run.updated_at_unix_ms DESC, run.run_id DESC
       LIMIT $4
     `,

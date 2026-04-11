@@ -177,6 +177,119 @@ describe("workbook-workflow-run-store", () => {
         }),
       }),
     ]);
+    expect(queryable.calls[0]?.text).toContain("EXISTS (");
+    expect(queryable.calls[0]?.text).not.toContain("thread.actor_user_id = run.actor_user_id");
+  });
+
+  it("hydrates structural workflow templates from durable rows after reload", async () => {
+    const run = {
+      ...createWorkflowRun(),
+      runId: "workflow-structural-1",
+      workflowTemplate: "hideCurrentRow" as const,
+      title: "Hide Current Row",
+      summary: "Staged a structural preview bundle to hide row 7 on Sheet2.",
+      steps: [
+        {
+          stepId: "resolve-current-row",
+          label: "Resolve current row",
+          status: "completed" as const,
+          summary: "Resolved the selected row as row 7 on Sheet2.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-row-visibility-preview",
+          label: "Stage row visibility preview",
+          status: "completed" as const,
+          summary: "Staged the semantic preview that hides the current row.",
+          updatedAtUnixMs: 120,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Hide Row Preview",
+        text: "## Hide Row Preview",
+      },
+    };
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_workflow_run AS run") &&
+        values?.[1] === "thr-1" &&
+        values?.[2] === "alex@example.com"
+          ? [
+              {
+                runId: run.runId,
+                workbookId: "doc-1",
+                threadId: run.threadId,
+                actorUserId: run.startedByUserId,
+                workflowTemplate: run.workflowTemplate,
+                title: run.title,
+                summary: run.summary,
+                status: run.status,
+                createdAtUnixMs: run.createdAtUnixMs,
+                updatedAtUnixMs: run.updatedAtUnixMs,
+                completedAtUnixMs: run.completedAtUnixMs,
+                errorMessage: run.errorMessage,
+                stepsJson: run.steps,
+                artifactJson: run.artifact,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_step AS step") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? run.steps.map(
+              (step, index) =>
+                ({
+                  runId: run.runId,
+                  stepId: step.stepId,
+                  stepOrder: index,
+                  label: step.label,
+                  status: step.status,
+                  summary: step.summary,
+                  updatedAtUnixMs: step.updatedAtUnixMs,
+                }) satisfies QueryResultRow,
+            )
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_artifact AS artifact") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? [
+              {
+                runId: run.runId,
+                kind: run.artifact?.kind,
+                title: run.artifact?.title,
+                text: run.artifact?.text,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const runs = await listWorkbookThreadWorkflowRuns(queryable, {
+      documentId: "doc-1",
+      actorUserId: "alex@example.com",
+      threadId: "thr-1",
+    });
+
+    expect(runs).toEqual([
+      expect.objectContaining({
+        runId: "workflow-structural-1",
+        workflowTemplate: "hideCurrentRow",
+        title: "Hide Current Row",
+        artifact: expect.objectContaining({
+          title: "Hide Row Preview",
+        }),
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            stepId: "resolve-current-row",
+          }),
+          expect.objectContaining({
+            stepId: "stage-row-visibility-preview",
+          }),
+        ]),
+      }),
+    ]);
   });
 
   it("loads cancelled workflow runs with cancelled steps", async () => {

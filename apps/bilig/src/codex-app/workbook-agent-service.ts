@@ -194,6 +194,8 @@ interface WorkbookAgentSessionState {
   snapshot: MutableWorkbookAgentSessionSnapshot;
   optimisticUserEntryIdByTurn: Map<string, string>;
   promptByTurn: Map<string, string>;
+  turnActorUserIdByTurn: Map<string, string>;
+  turnContextByTurn: Map<string, WorkbookAgentUiContext | null>;
   lastAccessedAt: number;
 }
 
@@ -207,6 +209,33 @@ function toContextRef(context: WorkbookAgentUiContext | null): WorkbookAgentCont
         viewport: { ...context.viewport },
       }
     : null;
+}
+
+function cloneUiContext(context: WorkbookAgentUiContext | null): WorkbookAgentUiContext | null {
+  return context
+    ? {
+        selection: {
+          sheetName: context.selection.sheetName,
+          address: context.selection.address,
+        },
+        viewport: {
+          ...context.viewport,
+        },
+      }
+    : null;
+}
+
+function isMutatingWorkflowTemplate(
+  workflowTemplate: WorkbookAgentWorkflowRun["workflowTemplate"],
+): boolean {
+  return (
+    workflowTemplate === "highlightFormulaIssues" ||
+    workflowTemplate === "normalizeCurrentSheetHeaders" ||
+    workflowTemplate === "createSheet" ||
+    workflowTemplate === "renameCurrentSheet" ||
+    workflowTemplate === "hideCurrentRow" ||
+    workflowTemplate === "hideCurrentColumn"
+  );
 }
 
 export interface WorkbookAgentService {
@@ -426,52 +455,85 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       return cloneSnapshot(sessionState.snapshot);
     }
 
-    const codexClient = await this.getCodexClient();
-    const thread =
-      parsed.threadId === undefined
-        ? await codexClient.threadStart({
-            model: DEFAULT_MODEL,
-            approvalPolicy: "never",
-            sandbox: "read-only",
-            baseInstructions: createWorkbookAgentBaseInstructions(),
-            developerInstructions: createWorkbookAgentDeveloperInstructions(),
-            dynamicTools: workbookAgentDynamicToolSpecs,
-          })
-        : await codexClient.threadResume({
-            threadId: parsed.threadId,
-            baseInstructions: createWorkbookAgentBaseInstructions(),
-            developerInstructions: createWorkbookAgentDeveloperInstructions(),
-          });
+    let thread:
+      | Awaited<ReturnType<CodexAppServerTransport["threadStart"]>>
+       
+      | null = null;
+    let sessionBootstrapError: unknown = null;
+    try {
+      const codexClient = await this.getCodexClient();
+      thread =
+        parsed.threadId === undefined
+          ? await codexClient.threadStart({
+              model: DEFAULT_MODEL,
+              approvalPolicy: "never",
+              sandbox: "read-only",
+              baseInstructions: createWorkbookAgentBaseInstructions(),
+              developerInstructions: createWorkbookAgentDeveloperInstructions(),
+              dynamicTools: workbookAgentDynamicToolSpecs,
+            })
+          : await codexClient.threadResume({
+              threadId: parsed.threadId,
+              baseInstructions: createWorkbookAgentBaseInstructions(),
+              developerInstructions: createWorkbookAgentDeveloperInstructions(),
+            });
+    } catch (error) {
+      if (parsed.threadId === undefined) {
+        throw error;
+      }
+      sessionBootstrapError = error;
+    }
+    const threadId = thread?.id ?? parsed.threadId;
+    if (!threadId) {
+      throw sessionBootstrapError instanceof Error
+        ? sessionBootstrapError
+        : new Error("Workbook agent thread bootstrap failed");
+    }
     const durableThreadState = await this.zeroSyncService.loadWorkbookAgentThreadState(
       input.documentId,
       input.session.userID,
-      thread.id,
+      threadId,
     );
+    if (!thread && !durableThreadState) {
+      throw sessionBootstrapError instanceof Error
+        ? sessionBootstrapError
+        : new Error("Workbook agent thread bootstrap failed");
+    }
     const resolvedScope = durableThreadState?.scope ?? parsed.scope ?? "private";
     const executionRecords = await this.zeroSyncService.listWorkbookAgentThreadRuns(
       input.documentId,
       input.session.userID,
-      thread.id,
+      threadId,
     );
     const workflowRuns = await this.zeroSyncService.listWorkbookThreadWorkflowRuns(
       input.documentId,
       input.session.userID,
-      thread.id,
+      threadId,
     );
-    const codexEntries = buildEntriesFromThread(thread);
+    const codexEntries = thread ? buildEntriesFromThread(thread) : [];
+    const bootstrapErrorMessage =
+      thread || !sessionBootstrapError
+        ? null
+        : sessionBootstrapError instanceof Error
+          ? sessionBootstrapError.message
+          : "Workbook assistant live session is unavailable. Loaded durable thread history only.";
 
     const snapshot: MutableWorkbookAgentSessionSnapshot = {
       sessionId,
       documentId: input.documentId,
-      threadId: thread.id,
+      threadId,
       scope: resolvedScope,
-      status: thread.turns.some((turn) => turn.status === "failed")
+      status: !thread
         ? "failed"
-        : thread.turns.some((turn) => turn.status === "inProgress")
-          ? "inProgress"
-          : "idle",
-      activeTurnId: thread.turns.findLast((turn) => turn.status === "inProgress")?.id ?? null,
-      lastError: thread.turns.findLast((turn) => turn.error?.message)?.error?.message ?? null,
+        : thread.turns.some((turn) => turn.status === "failed")
+          ? "failed"
+          : thread.turns.some((turn) => turn.status === "inProgress")
+            ? "inProgress"
+            : "idle",
+      activeTurnId: thread?.turns.findLast((turn) => turn.status === "inProgress")?.id ?? null,
+      lastError:
+        thread?.turns.findLast((turn) => turn.error?.message)?.error?.message ??
+        bootstrapErrorMessage,
       context: parsed.context ?? durableThreadState?.context ?? null,
       entries: mergeTimelineEntries(codexEntries, durableThreadState?.entries ?? []),
       pendingBundle: durableThreadState?.pendingBundle ?? null,
@@ -484,14 +546,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       userId: input.session.userID,
       storageActorUserId: durableThreadState?.actorUserId ?? input.session.userID,
       scope: resolvedScope,
-      threadId: thread.id,
+      threadId,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),
       promptByTurn: new Map(),
+      turnActorUserIdByTurn: new Map(),
+      turnContextByTurn: new Map(),
       lastAccessedAt: this.now(),
     };
     this.sessions.set(sessionId, sessionState);
-    this.threadToSessionId.set(thread.id, sessionId);
+    this.threadToSessionId.set(threadId, sessionId);
     this.evictIfNeeded();
     await this.persistSessionState(sessionState);
     return cloneSnapshot(snapshot);
@@ -531,6 +595,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (parsed.context) {
       sessionState.snapshot.context = parsed.context;
     }
+    const turnContext = cloneUiContext(parsed.context ?? sessionState.snapshot.context);
     const codexClient = await this.getCodexClient();
     const turn = await codexClient.turnStart({
       threadId: sessionState.threadId,
@@ -552,6 +617,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     });
     sessionState.optimisticUserEntryIdByTurn.set(turn.id, optimisticEntryId);
     sessionState.promptByTurn.set(turn.id, parsed.prompt);
+    sessionState.turnActorUserIdByTurn.set(turn.id, input.session.userID);
+    sessionState.turnContextByTurn.set(turn.id, turnContext);
     sessionState.snapshot.activeTurnId = turn.id;
     sessionState.snapshot.status = "inProgress";
     sessionState.snapshot.lastError = null;
@@ -573,9 +640,32 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionId,
       input.session.userID,
     );
+    if (parsed.context) {
+      sessionState.snapshot.context = parsed.context;
+    }
+    const runningWorkflow = sessionState.snapshot.workflowRuns.find(
+      (run) => run.status === "running",
+    );
+    if (runningWorkflow) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_WORKFLOW_ALREADY_RUNNING",
+        message: `Finish or cancel the running workflow before starting another one: ${runningWorkflow.title}`,
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     const runId = crypto.randomUUID();
     const now = this.now();
     const workflowTemplate = parsed.workflowTemplate;
+    if (sessionState.snapshot.pendingBundle && isMutatingWorkflowTemplate(workflowTemplate)) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
+        message:
+          "Apply or dismiss the staged preview bundle before starting another mutating workflow.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     const workflowTurnId = sessionState.snapshot.activeTurnId ?? createWorkflowTurnId(runId);
     const workflowInput = {
       ...("query" in parsed ? { query: parsed.query } : {}),
@@ -636,7 +726,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         updatedAtUnixMs: completedAtUnixMs,
         completedAtUnixMs,
         artifact: result.artifact,
-        steps: completeWorkflowSteps(workflowTemplate, result.steps, completedAtUnixMs, workflowInput),
+        steps: completeWorkflowSteps(
+          workflowTemplate,
+          result.steps,
+          completedAtUnixMs,
+          workflowInput,
+        ),
       };
       sessionState.snapshot.workflowRuns = upsertWorkflowRun(
         sessionState.snapshot.workflowRuns,
@@ -1035,7 +1130,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     const pendingBundle = sessionState.snapshot.pendingBundle;
     if (!pendingBundle || pendingBundle.id !== input.bundleId) {
-      throw new Error("Workbook agent preview bundle not found");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
+        message: "Workbook agent preview bundle not found",
+        statusCode: 404,
+        retryable: false,
+      });
     }
     sessionState.snapshot.pendingBundle = null;
     sessionState.snapshot.entries = upsertEntry(
@@ -1068,7 +1168,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       (entry) => entry.id === input.recordId,
     );
     if (!record) {
-      throw new Error("Workbook agent execution record not found");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_RUN_NOT_FOUND",
+        message: "Workbook agent execution record not found",
+        statusCode: 404,
+        retryable: false,
+      });
     }
     const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
     const replayedBundle = createWorkbookAgentCommandBundle({
@@ -1161,14 +1266,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         },
         handleDynamicToolCall: (request) => {
           const sessionState = this.getSessionByThreadId(request.threadId);
+          const requestActorUserId = this.resolveTurnActorUserId(sessionState, request.turnId);
+          const requestContext = this.resolveTurnContext(sessionState, request.turnId);
           return handleWorkbookAgentToolCall(
             {
               documentId: sessionState.documentId,
               session: {
-                userID: sessionState.userId,
+                userID: requestActorUserId,
                 roles: ["editor"],
               },
-              uiContext: sessionState.snapshot.context,
+              uiContext: requestContext,
               zeroSyncService: this.zeroSyncService,
               stageCommand: async (command) => {
                 const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(
@@ -1184,7 +1291,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                       sessionState.promptByTurn.get(request.turnId) ??
                       "Update workbook from assistant request",
                     baseRevision,
-                    context: toContextRef(sessionState.snapshot.context),
+                    context: toContextRef(requestContext),
                     command,
                     now: this.now(),
                   }),
@@ -1212,10 +1319,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                   documentId: sessionState.documentId,
                   sessionId: sessionState.sessionId,
                   session: {
-                    userID: sessionState.userId,
+                    userID: requestActorUserId,
                     roles: ["editor"],
                   },
-                  body: workflowRequest,
+                  body: {
+                    ...workflowRequest,
+                    ...(requestContext ? { context: requestContext } : {}),
+                  },
                 });
                 const nextRun =
                   nextSnapshot.workflowRuns.find((run) => !previousRunIds.has(run.runId)) ??
@@ -1268,6 +1378,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         sessionState.snapshot.status =
           notification.params.turn.status === "failed" ? "failed" : "idle";
         sessionState.snapshot.lastError = notification.params.turn.error?.message ?? null;
+        sessionState.promptByTurn.delete(notification.params.turn.id);
+        sessionState.turnActorUserIdByTurn.delete(notification.params.turn.id);
+        sessionState.turnContextByTurn.delete(notification.params.turn.id);
         await this.persistSessionState(sessionState);
         this.emitSnapshot(sessionState.threadId);
         return;
@@ -1381,6 +1494,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
   }
 
+  private resolveTurnActorUserId(sessionState: WorkbookAgentSessionState, turnId: string): string {
+    return sessionState.turnActorUserIdByTurn.get(turnId) ?? sessionState.userId;
+  }
+
+  private resolveTurnContext(
+    sessionState: WorkbookAgentSessionState,
+    turnId: string,
+  ): WorkbookAgentUiContext | null {
+    return cloneUiContext(
+      sessionState.turnContextByTurn.get(turnId) ?? sessionState.snapshot.context,
+    );
+  }
+
   private collectPlanTextForTurn(
     sessionState: WorkbookAgentSessionState,
     turnId: string,
@@ -1416,10 +1542,20 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     userId: string,
   ): WorkbookAgentSessionState {
     if (sessionState.documentId !== documentId) {
-      throw new Error("Workbook agent session document mismatch");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+        message: "Workbook agent session not found",
+        statusCode: 404,
+        retryable: false,
+      });
     }
     if (sessionState.scope !== "shared" && sessionState.userId !== userId) {
-      throw new Error("Workbook agent session user mismatch");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+        message: "Workbook agent session not found",
+        statusCode: 404,
+        retryable: false,
+      });
     }
     return sessionState;
   }

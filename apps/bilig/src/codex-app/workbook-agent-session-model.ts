@@ -7,110 +7,92 @@ import type {
 } from "@bilig/contracts";
 import { z } from "zod";
 
+const workbookAgentUiContextSchema = z.object({
+  selection: z.object({
+    sheetName: z.string().min(1),
+    address: z.string().min(1),
+  }),
+  viewport: z.object({
+    rowStart: z.number().int().nonnegative(),
+    rowEnd: z.number().int().nonnegative(),
+    colStart: z.number().int().nonnegative(),
+    colEnd: z.number().int().nonnegative(),
+  }),
+});
+
 export const createSessionBodySchema = z.object({
   sessionId: z.string().min(1).optional(),
   threadId: z.string().min(1).optional(),
   scope: z.enum(["private", "shared"]).optional(),
-  context: z
-    .object({
-      selection: z.object({
-        sheetName: z.string().min(1),
-        address: z.string().min(1),
-      }),
-      viewport: z.object({
-        rowStart: z.number().int().nonnegative(),
-        rowEnd: z.number().int().nonnegative(),
-        colStart: z.number().int().nonnegative(),
-        colEnd: z.number().int().nonnegative(),
-      }),
-    })
-    .optional(),
+  context: workbookAgentUiContextSchema.optional(),
 });
 
 export const updateContextBodySchema = z.object({
-  context: z.object({
-    selection: z.object({
-      sheetName: z.string().min(1),
-      address: z.string().min(1),
-    }),
-    viewport: z.object({
-      rowStart: z.number().int().nonnegative(),
-      rowEnd: z.number().int().nonnegative(),
-      colStart: z.number().int().nonnegative(),
-      colEnd: z.number().int().nonnegative(),
-    }),
-  }),
+  context: workbookAgentUiContextSchema,
 });
 
 export const startTurnBodySchema = z.object({
   prompt: z.string().trim().min(1),
-  context: z
-    .object({
-      selection: z.object({
-        sheetName: z.string().min(1),
-        address: z.string().min(1),
-      }),
-      viewport: z.object({
-        rowStart: z.number().int().nonnegative(),
-        rowEnd: z.number().int().nonnegative(),
-        colStart: z.number().int().nonnegative(),
-        colEnd: z.number().int().nonnegative(),
-      }),
-    })
-    .optional(),
+  context: workbookAgentUiContextSchema.optional(),
 });
 
-export const startWorkflowBodySchema = z.discriminatedUnion("workflowTemplate", [
-  z.object({
-    workflowTemplate: z.literal("summarizeWorkbook"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("summarizeCurrentSheet"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("describeRecentChanges"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("findFormulaIssues"),
-    sheetName: z.string().min(1).optional(),
-    limit: z.number().int().positive().max(200).optional(),
-  }),
-  z.object({
-    workflowTemplate: z.literal("highlightFormulaIssues"),
-    sheetName: z.string().min(1).optional(),
-    limit: z.number().int().positive().max(200).optional(),
-  }),
-  z.object({
-    workflowTemplate: z.literal("normalizeCurrentSheetHeaders"),
-    sheetName: z.string().min(1).optional(),
-  }),
-  z.object({
-    workflowTemplate: z.literal("traceSelectionDependencies"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("explainSelectionCell"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("searchWorkbookQuery"),
-    query: z.string().trim().min(1),
-    sheetName: z.string().min(1).optional(),
-    limit: z.number().int().positive().max(50).optional(),
-  }),
-  z.object({
-    workflowTemplate: z.literal("createSheet"),
-    name: z.string().trim().min(1),
-  }),
-  z.object({
-    workflowTemplate: z.literal("renameCurrentSheet"),
-    name: z.string().trim().min(1),
-  }),
-  z.object({
-    workflowTemplate: z.literal("hideCurrentRow"),
-  }),
-  z.object({
-    workflowTemplate: z.literal("hideCurrentColumn"),
-  }),
-]);
+export const startWorkflowBodySchema = z
+  .discriminatedUnion("workflowTemplate", [
+    z.object({
+      workflowTemplate: z.literal("summarizeWorkbook"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("summarizeCurrentSheet"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("describeRecentChanges"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("findFormulaIssues"),
+      sheetName: z.string().min(1).optional(),
+      limit: z.number().int().positive().max(200).optional(),
+    }),
+    z.object({
+      workflowTemplate: z.literal("highlightFormulaIssues"),
+      sheetName: z.string().min(1).optional(),
+      limit: z.number().int().positive().max(200).optional(),
+    }),
+    z.object({
+      workflowTemplate: z.literal("normalizeCurrentSheetHeaders"),
+      sheetName: z.string().min(1).optional(),
+    }),
+    z.object({
+      workflowTemplate: z.literal("traceSelectionDependencies"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("explainSelectionCell"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("searchWorkbookQuery"),
+      query: z.string().trim().min(1),
+      sheetName: z.string().min(1).optional(),
+      limit: z.number().int().positive().max(50).optional(),
+    }),
+    z.object({
+      workflowTemplate: z.literal("createSheet"),
+      name: z.string().trim().min(1),
+    }),
+    z.object({
+      workflowTemplate: z.literal("renameCurrentSheet"),
+      name: z.string().trim().min(1),
+    }),
+    z.object({
+      workflowTemplate: z.literal("hideCurrentRow"),
+    }),
+    z.object({
+      workflowTemplate: z.literal("hideCurrentColumn"),
+    }),
+  ])
+  .and(
+    z.object({
+      context: workbookAgentUiContextSchema.optional(),
+    }),
+  );
 
 export const reviewPendingBundleBodySchema = z.object({
   decision: z.enum(["approved", "rejected"]),
