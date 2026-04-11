@@ -186,4 +186,47 @@ describe("worker runtime machine", () => {
 
     actor.stop();
   });
+
+  it("restarts the active session when retry requests a new persistence mode", async () => {
+    const initialController = createController();
+    const restartedController = createController();
+    const createSession = vi
+      .fn<
+        (
+          input: CreateWorkerRuntimeSessionInput,
+          callbacks: WorkerRuntimeSessionCallbacks,
+        ) => Promise<WorkerRuntimeSessionController>
+      >()
+      .mockResolvedValueOnce(initialController)
+      .mockResolvedValueOnce(restartedController);
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: "book-1",
+        replicaId: "browser:test",
+        persistState: true,
+        connectionStateName: "closed",
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createSession,
+      },
+    });
+
+    actor.start();
+
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: "localReady" })).toBe(true);
+    });
+
+    actor.send({ type: "retry", persistState: false });
+
+    await vi.waitFor(() => {
+      expect(createSession).toHaveBeenCalledTimes(2);
+    });
+
+    expect(initialController.dispose).toHaveBeenCalledTimes(1);
+    expect(createSession.mock.calls[1]?.[0].persistState).toBe(false);
+    expect(actor.getSnapshot().context.persistState).toBe(false);
+
+    actor.stop();
+  });
 });

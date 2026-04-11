@@ -46,6 +46,7 @@ import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
 import { useWorkbookSelectionActions } from "./use-workbook-selection-actions.js";
 import { useWorkbookEditorConflict } from "./use-workbook-editor-conflict.js";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
+import { useWorkbookLocalPersistenceHandoff } from "./use-workbook-local-persistence-handoff.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -254,6 +255,12 @@ export function useWorkerWorkbookAppState(input: {
         type: "session.error",
         message: error instanceof Error ? error.message : String(error),
       });
+    },
+    [runtimeActorRef],
+  );
+  const retryRuntime = useCallback(
+    (persistState: boolean) => {
+      runtimeActorRef.send({ type: "retry", persistState });
     },
     [runtimeActorRef],
   );
@@ -595,6 +602,17 @@ export function useWorkerWorkbookAppState(input: {
   );
   const failedPendingMutation = runtimeState?.pendingMutationSummary?.firstFailed ?? null;
   const localPersistenceMode = runtimeState?.localPersistenceMode ?? "ephemeral";
+  const {
+    approvePersistenceTransfer,
+    dismissPersistenceTransferRequest,
+    pendingTransferRequest,
+    requestPersistenceTransfer,
+    transferRequested,
+  } = useWorkbookLocalPersistenceHandoff({
+    documentId,
+    localPersistenceMode,
+    retryRuntime,
+  });
 
   const {
     headerStatus: toolbarHeaderStatus,
@@ -785,11 +803,13 @@ export function useWorkerWorkbookAppState(input: {
     runtimeError,
     runtimeReady,
     retryFailedPendingMutation,
+    approvePersistenceTransfer,
     selectAddress,
     selectedCell,
     selection,
     selectionStatus,
     sideRailId,
+    dismissPersistenceTransferRequest,
     setSideRailWidth,
     setSelectionLabel,
     sheetNames,
@@ -797,7 +817,10 @@ export function useWorkerWorkbookAppState(input: {
     sideRailWidth,
     statusModeLabel,
     localPersistenceMode,
+    pendingTransferRequest,
+    requestPersistenceTransfer,
     subscribeViewport,
+    transferRequested,
     toggleBooleanCell,
     visibleEditorValue,
     workbookReady,

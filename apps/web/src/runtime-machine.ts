@@ -15,6 +15,7 @@ type ConnectionStateName = ZeroConnectionState["name"];
 
 interface WorkerRuntimeMachineContext {
   readonly sessionInput: WorkerRuntimeMachineInput;
+  readonly persistState: boolean;
   readonly controller: WorkerRuntimeSessionController | null;
   readonly handle: WorkerHandle | null;
   readonly runtimeState: WorkbookWorkerStateSnapshot | null;
@@ -24,7 +25,7 @@ interface WorkerRuntimeMachineContext {
 }
 
 type WorkerRuntimeMachineEvent =
-  | { type: "retry" }
+  | { type: "retry"; persistState?: boolean }
   | { type: "error.clear" }
   | { type: "selection.changed"; selection: WorkerRuntimeSelection }
   | { type: "connection.changed"; connectionStateName: ConnectionStateName }
@@ -268,6 +269,7 @@ export function createWorkerRuntimeMachine() {
     initial: "active",
     context: ({ input }) => ({
       sessionInput: input,
+      persistState: input.persistState,
       controller: null,
       handle: null,
       runtimeState: null,
@@ -282,11 +284,23 @@ export function createWorkerRuntimeMachine() {
           src: "runtimeSession",
           input: ({ context }) => ({
             ...context.sessionInput,
+            persistState: context.persistState,
             initialSelection: context.selection,
             connectionStateName: context.connectionStateName,
           }),
         },
         on: {
+          retry: {
+            target: "#workerRuntime.active",
+            reenter: true,
+            actions: assign({
+              persistState: ({ context, event }) => event["persistState"] ?? context.persistState,
+              handle: () => null,
+              controller: () => null,
+              runtimeState: () => null,
+              error: () => null,
+            }),
+          },
           "error.clear": {
             actions: assign({
               error: () => null,
@@ -608,6 +622,7 @@ export function createWorkerRuntimeMachine() {
           retry: {
             target: "active",
             actions: assign({
+              persistState: ({ context, event }) => event["persistState"] ?? context.persistState,
               handle: () => null,
               controller: () => null,
               runtimeState: () => null,

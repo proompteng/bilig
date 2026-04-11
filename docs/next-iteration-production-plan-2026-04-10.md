@@ -21,6 +21,7 @@ Already landed on `main`:
 - server-side rollout flags plus allowlist-based canary controls for shared threads, workflow runner, auto-apply, and workflow families
 - Zero-backed durable thread summaries and workflow-run projections in the browser shell, with SSE kept for live deltas
 - follower-tab degradation messaging when another tab owns the persistent local store
+- deliberate writer-role transfer controls for follower tabs, including persistent-store handoff and runtime restart
 - internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
 - current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, header normalization, number-format normalization, whitespace normalization, formula fill-down cleanup, outlier highlighting, consistent header styling, current-sheet rollup, current-sheet review-tab creation, and a bounded set of structural previews
 
@@ -28,7 +29,6 @@ Still required before this document is honestly complete end to end:
 
 - broader Day-1 workflow families, especially fuller import cleanup, formula repair, reshape/rollup, and more general formatting cleanup
 - fuller collaborator review semantics beyond owner finalization plus recommendations
-- full multi-tab writer/follower UX, especially deliberate lease-transfer behavior instead of follower-only degradation messaging
 - broader observability, dashboards, alerts, and launch playbooks beyond the current internal snapshot/flag surfaces
 
 ## Executive summary

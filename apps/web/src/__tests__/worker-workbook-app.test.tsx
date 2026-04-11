@@ -88,12 +88,17 @@ describe("WorkerWorkbookApp", () => {
         failureMessage: "mutation rejected by server",
         attemptCount: 1,
       },
+      approvePersistenceTransfer: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      pendingTransferRequest: null,
+      requestPersistenceTransfer: vi.fn(),
       retryFailedPendingMutation,
       remoteSyncAvailable: true,
       runtimeError: null,
       runtimeReady: false,
       localPersistenceMode: "ephemeral",
       statusModeLabel: "Live",
+      transferRequested: false,
       workbookReady: false,
       workerHandle: null,
       zeroConfigured: true,
@@ -140,18 +145,24 @@ describe("WorkerWorkbookApp", () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
 
+    const requestPersistenceTransfer = vi.fn();
     useWorkerWorkbookAppState.mockReturnValue({
       agentError: null,
       clearAgentError: vi.fn(),
       clearRuntimeError: vi.fn(),
       editorConflictBanner: null,
       failedPendingMutation: null,
+      approvePersistenceTransfer: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      pendingTransferRequest: null,
+      requestPersistenceTransfer,
       retryFailedPendingMutation: vi.fn(),
       remoteSyncAvailable: true,
       runtimeError: null,
       runtimeReady: true,
       localPersistenceMode: "follower",
       statusModeLabel: "Live",
+      transferRequested: false,
       workbookReady: false,
       workerHandle: null,
       zeroConfigured: true,
@@ -177,6 +188,86 @@ describe("WorkerWorkbookApp", () => {
 
     expect(host.textContent).toContain("Another tab owns this workbook's persistent local store.");
     expect(host.textContent).toContain("following live document state");
+    expect(host.textContent).toContain("Take writer role");
+
+    await act(async () => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(requestPersistenceTransfer).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders writer transfer controls when another tab requests persistence handoff", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const approvePersistenceTransfer = vi.fn();
+    const dismissPersistenceTransferRequest = vi.fn();
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      approvePersistenceTransfer,
+      clearAgentError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      dismissPersistenceTransferRequest,
+      editorConflictBanner: null,
+      failedPendingMutation: null,
+      pendingTransferRequest: {
+        requestId: "req-1",
+        requesterTabId: "tab:other",
+        requestedAtUnixMs: Date.now(),
+      },
+      requestPersistenceTransfer: vi.fn(),
+      retryFailedPendingMutation: vi.fn(),
+      remoteSyncAvailable: true,
+      runtimeError: null,
+      runtimeReady: true,
+      localPersistenceMode: "persistent",
+      statusModeLabel: "Live",
+      transferRequested: false,
+      workbookReady: false,
+      workerHandle: null,
+      zeroConfigured: true,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: "guest:test",
+            defaultDocumentId: "doc-1",
+            persistState: true,
+            zeroCacheUrl: "http://127.0.0.1:4848",
+          }}
+          connectionState={{ name: "connected" }}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain(
+      "Another tab asked to take over this workbook's persistent local store.",
+    );
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Transfer writer role",
+      "Keep this tab writer",
+    ]);
+
+    await act(async () => {
+      buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(approvePersistenceTransfer).toHaveBeenCalledTimes(1);
+    expect(dismissPersistenceTransferRequest).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

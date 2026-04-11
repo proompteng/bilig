@@ -13,6 +13,9 @@ function formatFailedPendingMutationMessage(input: { failureMessage: string }): 
   return `A local change could not be synced. ${input.failureMessage}`;
 }
 
+const persistenceBannerButtonClass =
+  "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1";
+
 export function WorkerWorkbookApp(props: {
   config: BiligRuntimeConfig;
   connectionState: ZeroConnectionState;
@@ -126,9 +129,59 @@ function WorkerWorkbookAppInner({
       ) : null}
       {app.localPersistenceMode === "follower" ? (
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
-          Another tab owns this workbook's persistent local store. This tab is following live
-          document state and edits here will not survive offline periods unless the writer tab is
-          transferred or closed.
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="max-w-[72ch]">
+              Another tab owns this workbook's persistent local store. This tab is following live
+              document state and edits here will not survive offline periods unless the writer tab
+              is transferred or closed.
+              {app.transferRequested ? (
+                <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
+                  Writer transfer requested. This tab will retry persistent ownership as soon as the
+                  writer releases the local store.
+                </div>
+              ) : null}
+            </div>
+            <button
+              className={persistenceBannerButtonClass}
+              onClick={() => {
+                app.requestPersistenceTransfer();
+              }}
+              type="button"
+            >
+              {app.transferRequested ? "Retry writer role" : "Take writer role"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {app.localPersistenceMode === "persistent" && app.pendingTransferRequest ? (
+        <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="max-w-[72ch]">
+              Another tab asked to take over this workbook's persistent local store. Transferring
+              writer ownership will keep this tab live, but its new edits will no longer survive
+              offline periods until it reclaims the writer role.
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className={persistenceBannerButtonClass}
+                onClick={() => {
+                  app.approvePersistenceTransfer();
+                }}
+                type="button"
+              >
+                Transfer writer role
+              </button>
+              <button
+                className={persistenceBannerButtonClass}
+                onClick={() => {
+                  app.dismissPersistenceTransferRequest();
+                }}
+                type="button"
+              >
+                Keep this tab writer
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
       {app.editorConflictBanner}
