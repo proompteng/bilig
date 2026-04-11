@@ -35,6 +35,11 @@ import {
   isCodexAppServerPoolBackpressureError,
 } from "./codex-app-server-pool.js";
 import {
+  getWorkbookAgentWorkflowFamily,
+  resolveWorkbookAgentFeatureFlags,
+  type WorkbookAgentFeatureFlags,
+} from "./workbook-agent-feature-flags.js";
+import {
   handleWorkbookAgentToolCall,
   type WorkbookAgentStartWorkflowRequest,
   workbookAgentDynamicToolSpecs,
@@ -436,6 +441,7 @@ export interface EnabledWorkbookAgentServiceOptions {
   maxQueuedTurnsPerCodexClient?: number;
   maxActiveTurnsPerUser?: number;
   maxActiveTurnsPerDocument?: number;
+  featureFlags?: Partial<WorkbookAgentFeatureFlags>;
 }
 
 class EnabledWorkbookAgentService implements WorkbookAgentService {
@@ -451,6 +457,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   private readonly maxQueuedTurnsPerCodexClient: number;
   private readonly maxActiveTurnsPerUser: number;
   private readonly maxActiveTurnsPerDocument: number;
+  private readonly featureFlags: WorkbookAgentFeatureFlags;
   private readonly sessions = new Map<string, WorkbookAgentSessionState>();
   private readonly threadToSessionId = new Map<string, string>();
   private readonly subscribers = new Map<string, Set<(event: WorkbookAgentStreamEvent) => void>>();
@@ -473,6 +480,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.maxActiveTurnsPerUser = options.maxActiveTurnsPerUser ?? DEFAULT_MAX_ACTIVE_TURNS_PER_USER;
     this.maxActiveTurnsPerDocument =
       options.maxActiveTurnsPerDocument ?? DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT;
+    this.featureFlags = {
+      ...resolveWorkbookAgentFeatureFlags(),
+      ...options.featureFlags,
+    };
   }
 
   private async persistSessionState(sessionState: WorkbookAgentSessionState): Promise<void> {
@@ -494,6 +505,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     body: unknown;
   }): Promise<WorkbookAgentSessionSnapshot> {
     const parsed = createSessionBodySchema.parse(input.body);
+    if (parsed.scope === "shared" && !this.featureFlags.sharedThreadsEnabled) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SHARED_THREADS_DISABLED",
+        message: "Shared workbook assistant threads are currently disabled.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     const sessionId = parsed.sessionId ?? crypto.randomUUID();
     if (parsed.threadId !== undefined) {
       const sharedSession = this.tryGetSessionByThreadId(parsed.threadId);
@@ -564,6 +583,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
       threadId,
     );
+    if (durableThreadState?.scope === "shared" && !this.featureFlags.sharedThreadsEnabled) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SHARED_THREADS_DISABLED",
+        message: "Shared workbook assistant threads are currently disabled.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     if (!thread && !durableThreadState) {
       throw sessionBootstrapError instanceof Error
         ? sessionBootstrapError
@@ -732,6 +759,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionId,
       input.session.userID,
     );
+    if (!this.featureFlags.workflowRunnerEnabled) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_WORKFLOW_RUNNER_DISABLED",
+        message: "Workbook assistant workflows are currently disabled.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     if (parsed.context) {
       sessionState.snapshot.context = parsed.context;
     }
@@ -749,6 +784,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const runId = crypto.randomUUID();
     const now = this.now();
     const workflowTemplate = parsed.workflowTemplate;
+    this.assertWorkflowFamilyEnabled(workflowTemplate);
     if (sessionState.snapshot.pendingBundle && isMutatingWorkflowTemplate(workflowTemplate)) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
@@ -1077,6 +1113,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
         message: "Workbook agent bundle requires manual approval",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto" && !this.featureFlags.autoApplyLowRiskEnabled) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
+        message: "Workbook agent auto-apply is currently disabled.",
         statusCode: 409,
         retryable: false,
       });
@@ -1796,6 +1840,33 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: true,
       });
     }
+  }
+
+  private assertWorkflowFamilyEnabled(
+    workflowTemplate: WorkbookAgentWorkflowRun["workflowTemplate"],
+  ): void {
+    const workflowFamily = getWorkbookAgentWorkflowFamily(workflowTemplate);
+    const familyEnabled =
+      workflowFamily === "report"
+        ? true
+        : workflowFamily === "formula"
+          ? this.featureFlags.formulaWorkflowFamilyEnabled
+          : workflowFamily === "formatting"
+            ? this.featureFlags.formattingWorkflowFamilyEnabled
+            : workflowFamily === "import"
+              ? this.featureFlags.importWorkflowFamilyEnabled
+              : workflowFamily === "rollup"
+                ? this.featureFlags.rollupWorkflowFamilyEnabled
+                : this.featureFlags.structuralWorkflowFamilyEnabled;
+    if (familyEnabled) {
+      return;
+    }
+    throw createWorkbookAgentServiceError({
+      code: "WORKBOOK_AGENT_WORKFLOW_FAMILY_DISABLED",
+      message: `Workbook assistant ${workflowFamily} workflows are currently disabled.`,
+      statusCode: 409,
+      retryable: false,
+    });
   }
 
   private evictIfNeeded(): void {
