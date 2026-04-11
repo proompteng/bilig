@@ -2,7 +2,7 @@
 
 ## Status
 
-Active implementation plan, tightened against the live `main` checkout on 2026-04-10.
+Active implementation plan, tightened against the live `main` checkout on 2026-04-11.
 
 ### Implementation progress on `main`
 
@@ -70,9 +70,9 @@ The current repo already contains the core building blocks we should preserve an
 
 ### What is still missing for the next product-grade iteration
 
-- Zero-backed durable projections for chat thread and workflow run state in the browser shell are still missing.
 - The workflow runtime is real, but the Day-1 workflow set is still incomplete.
-- Multi-tab/browser-lock behavior still needs explicit product UX.
+- Richer collaborator review semantics are still incomplete beyond owner finalization plus collaborator recommendations.
+- Broader observability, dashboards, alerts, and rollout playbooks are still incomplete beyond the current internal snapshot and allowlist controls.
 - Typed binary agent payloads are not fully closed end to end.
 - Some correctness/performance seams remain high risk:
   - projected viewport authority still needs further narrowing
@@ -83,10 +83,11 @@ The current repo already contains the core building blocks we should preserve an
 This plan is intentionally anchored to the code that exists today.
 
 - The browser now talks primarily to durable thread routes under `/v2/documents/:documentId/chat/threads/*`.
-- The browser still rebuilds durable assistant state through direct fetch plus SSE in `apps/web/src/use-workbook-agent-pane.tsx`, instead of rebuilding thread/run state through Zero-backed projections first.
+- The browser now rebuilds durable thread summaries and workflow runs through Zero-backed projections and uses fetch plus SSE in `apps/web/src/use-workbook-agent-pane.tsx` for active thread hydration and live turn deltas.
 - The monolith validates preview/apply authoritatively in `apps/bilig/src/zero/service.ts`, including base-revision checks and preview-summary parity checks before commit.
 - The monolith already persists accepted execution records, chat timeline state, tool calls, pending bundles, and workflow runs.
 - The Codex transport is no longer a singleton client. `apps/bilig/src/codex-app/workbook-agent-service.ts` now uses a bounded pool with per-client queueing and service-level turn quotas.
+- Multi-tab browser-lock behavior is no longer follower-only. The web shell now exposes explicit writer transfer controls and runtime restart on local-store handoff.
 - Any proposed architecture change in this document must preserve those already-correct paths instead of replacing them with a parallel correctness model.
 
 ---
@@ -547,20 +548,21 @@ The agent should not have one global write mode. It needs policy tied to change 
 
 The workbook runtime is already more durable than the chat runtime. That mismatch will become a product-quality problem as soon as the chat is used seriously by multiple collaborators.
 
-### Deliverables
+### Status on `main`
 
-- persist thread metadata and timeline items
-- persist pending bundles, not just accepted execution records
-- support private and shared thread scope
-- reconstruct sessions after monolith restart and browser reconnect
-- broadcast collaborator-visible thread/run state through durable projections
-- keep live delta streaming for immediacy
+Most of this workstream is already landed: durable threads, pending bundles, workflow runs, shared/private scope, durable Zero-backed projections, and reconnect-safe thread state are real on `main`.
+
+### Remaining deliverables
+
+- keep live delta streaming tight against the durable lane without regressing reconnect behavior
+- finish any remaining browser/session compatibility cleanup once the old session route surface can be reduced safely
+- continue hardening collaborator-visible thread/run durability under broader rollout
 
 Explicit cutover requirements:
 
 - current session routes continue to work during migration, but only as wrappers over durable thread state once that state exists
 - `sessionId` remains a transient live-stream handle; `threadId` becomes the durable product identifier
-- browser `sessionStorage` stops being the only recovery path for assistant state
+- browser `sessionStorage` is now only a lightweight supplement for assistant recovery state, not the primary recovery path
 - session eviction in the monolith must no longer imply loss of pending bundle or timeline state
 
 ### Exit gate
@@ -615,13 +617,17 @@ Every supported agent mutation and direct workbook action has one authoritative 
 
 Multiplayer and AI features are only acceptable if they fit inside the existing performance posture.
 
-### Deliverables
+### Status on `main`
+
+The monolith already has bounded Codex pool management, queueing, turn quotas, and internal observability snapshots. The remaining work is to turn that into a broader production-grade performance and operational surface.
+
+### Remaining deliverables
 
 - preserve worker-first hot path and viewport patch model
 - keep Zero narrow and tile-shaped
 - reduce or fully retire temporary local authority layers that can drift under load
 - expand WASM production routing only for proven formula families
-- add codex pool backpressure and queue metrics
+- expand codex pool metrics into broader production dashboards and alerts
 - add collaboration and chat load tests to the existing performance contract
 
 ### Exit gate
@@ -636,13 +642,15 @@ The product remains within the published performance budgets while collaboration
 
 The OPFS-backed local store is a strength, but multi-tab and lease behavior must be a deliberate product surface rather than an incidental lock error.
 
-### Deliverables
+### Status on `main`
 
-- document writer lease / ownership model across tabs
-- follower-tab behavior when a document local store is already locked
-- clean lease transfer path
-- offline banner and degraded-mode messaging that do not block editing
-- local persistence of recent chat state and drafts
+This workstream is now mostly landed. The product has follower-tab behavior, degraded-mode messaging, and a deliberate writer transfer path for persistent local-store ownership.
+
+### Remaining deliverables
+
+- continue polishing the writer lease / ownership model across tabs
+- keep offline banner and degraded-mode messaging from regressing as broader rollout and workflow breadth expand
+- keep local persistence of recent chat state and drafts stable as the browser shell evolves
 
 ### Exit gate
 
@@ -674,21 +682,23 @@ Collaboration and chat features are behind explicit launch gates and observable 
 
 ## Tranche 1 — Make chat durable and document-scoped
 
+### Status on `main`
+
+This tranche is largely landed. Durable thread tables, thread-centric routes, reconnect-safe thread history, pending bundles, and Zero-backed browser projections are already on `main`. The remaining work here is compatibility cleanup and rollout hardening, not first implementation.
+
 ### Build
 
-- introduce durable chat/thread tables
-- persist thread items, tool calls, pending bundles, and workflow metadata
-- keep current session API surface compatible while migrating the web shell to durable threads
-- reconstruct thread state from durable storage on reconnect
-- expose thread list / unread / shared thread summaries through narrow projections
+- keep current session API surface compatible while the remaining compatibility cleanup is finished
+- continue reducing browser dependence on session-era assumptions
+- continue hardening thread list / unread / shared thread summaries through narrow projections
 
 Concrete migration shape:
 
 1. Keep `POST /v2/documents/:documentId/agent/sessions` and related session routes alive.
-2. Change those handlers so they hydrate or create durable thread state first, then return a live session handle.
-3. Keep SSE for active-turn deltas, but serve the initial snapshot from durable thread state rather than from in-memory-only session state.
-4. Migrate the browser from “stored session id plus thread id” to “selected durable thread id plus optional live session id”.
-5. Only after the browser no longer depends on session-scoped history should new thread-centric routes become the primary public API surface.
+2. Those handlers now hydrate or create durable thread state first, then return a live session handle.
+3. Keep SSE for active-turn deltas, but continue serving the initial snapshot from durable thread state rather than from in-memory-only session state.
+4. The browser now centers on a selected durable thread id, with any live session handle treated as transient.
+5. Continue collapsing legacy session behavior into thin compatibility wrappers now that thread-centric routes are the primary browser surface.
 
 ### Result
 
@@ -702,12 +712,14 @@ A monolith restart no longer wipes active workbook chat history or pending bundl
 
 ## Tranche 2 — Shared multiplayer agent experience
 
+### Status on `main`
+
+This tranche is partially landed. Shared threads, collaborator-visible thread/run state, owner-gated approval, and collaborator recommendations already exist. The remaining work is to deepen the review model rather than create it from scratch.
+
 ### Build
 
-- add shared vs private thread scope
-- add collaborator-visible thread and run summaries
-- allow collaborators to inspect pending bundles and approved executions on shared threads
-- add approvals for medium/high-risk shared changes
+- allow collaborators to inspect pending bundles and approved executions on shared threads more richly
+- deepen approvals for medium/high-risk shared changes
 - attach cell/range references to thread items and results
 
 Policy clarification:
@@ -728,13 +740,15 @@ Two collaborators on the same workbook can follow a shared agent thread and unde
 
 ## Tranche 3 — Workflow runtime on top of Codex chat
 
+### Status on `main`
+
+This tranche is partially landed. Durable workflow runs, steps, artifacts, queued execution, cancellation, and a meaningful Day-1 workflow base are already real. The remaining work is workflow breadth and deeper long-running behavior, not first workflow infrastructure.
+
 ### Build
 
-- formalize workflow run types
-- expand tool surface for the Day-1 workflow families
-- add long-running monolith workflow runner for document-wide analysis/transforms
-- stream workflow progress into chat
-- return preview bundles or artifacts from workflow runs
+- expand tool surface for the remaining Day-1 workflow families
+- deepen long-running monolith workflow behavior for heavier document-wide analysis/transforms
+- continue improving workflow progress, preview bundles, and artifacts for richer workflow families
 
 Recommended implementation rule:
 
@@ -753,13 +767,17 @@ The Day-1 workflow families work end-to-end from chat prompt to applied workbook
 
 ## Tranche 4 — Performance and correctness hardening
 
+### Status on `main`
+
+This tranche is partially landed. Pool backpressure, turn quotas, lease transfer behavior, and a broader correctness harness are already in place. The remaining work is broader load validation and production operations.
+
 ### Build
 
 - add perf/load contracts for collaboration + chat
 - close highest-risk local authority seams
-- improve codex pool management and memory isolation
+- continue improving codex pool management and memory isolation
 - expand preview/apply correctness harnesses
-- improve multi-tab writer lease behavior
+- continue improving multi-tab writer lease behavior
 
 Lock the published targets only after Tranche 1 baseline capture. Until then, treat the SLO table in this document as the intended budget direction, not an already-measured guarantee.
 
