@@ -118,10 +118,12 @@ describe("workbook side rail tabs", () => {
 
     const assistantTab = host.querySelector("[data-testid='workbook-side-rail-tab-assistant']");
     const changesTab = host.querySelector("[data-testid='workbook-side-rail-tab-changes']");
+    const tabList = host.querySelector("[role='tablist']");
 
     expect(assistantTab?.getAttribute("aria-selected")).toBe("true");
     expect(assistantTab?.className).toContain("font-semibold");
     expect(changesTab?.textContent).toContain("2");
+    expect(tabList?.className).toContain("w-full");
 
     await act(async () => {
       changesTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

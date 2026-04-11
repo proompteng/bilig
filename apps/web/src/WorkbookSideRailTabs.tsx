@@ -13,7 +13,7 @@ export const railRootClass = cva(
 );
 
 export const railListClass = cva(
-  "relative flex items-end gap-1 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-3 pt-2",
+  "relative flex w-full items-end gap-1 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-3 pt-2",
 );
 
 export const railTabClass = cva(
