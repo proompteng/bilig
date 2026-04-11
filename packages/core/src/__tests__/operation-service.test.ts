@@ -26,25 +26,27 @@ function getOperationService(engine: SpreadsheetEngine): EngineOperationService 
   return operations;
 }
 
+function hasRuntimeStateMetrics(value: unknown): value is {
+  getLastMetrics(): unknown;
+  setLastMetrics(metrics: unknown): void;
+} {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const getLastMetrics = Reflect.get(value, "getLastMetrics");
+  const setLastMetrics = Reflect.get(value, "setLastMetrics");
+  return typeof getLastMetrics === "function" && typeof setLastMetrics === "function";
+}
+
 function getRuntimeState(engine: SpreadsheetEngine): {
   getLastMetrics(): unknown;
   setLastMetrics(metrics: unknown): void;
 } {
   const state = Reflect.get(engine, "state");
-  if (typeof state !== "object" || state === null) {
-    throw new TypeError("Expected engine runtime state");
-  }
-  const getLastMetrics = Reflect.get(state, "getLastMetrics");
-  const setLastMetrics = Reflect.get(state, "setLastMetrics");
-  if (typeof getLastMetrics !== "function" || typeof setLastMetrics !== "function") {
+  if (!hasRuntimeStateMetrics(state)) {
     throw new TypeError("Expected runtime state metric accessors");
   }
-  return {
-    getLastMetrics: () => getLastMetrics.call(state),
-    setLastMetrics: (metrics) => {
-      setLastMetrics.call(state, metrics);
-    },
-  };
+  return state;
 }
 
 function expectBatch<Batch>(batch: Batch | undefined): Batch {

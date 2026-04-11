@@ -9,6 +9,12 @@ import { sheetMetadataToOps } from "../../engine-snapshot-utils.js";
 import { parseCsv, parseCsvCellInput } from "../../csv.js";
 import { createBatch } from "../../replica-state.js";
 import type { WorkbookStore } from "../../workbook-store.js";
+import {
+  cellMutationRefToEngineOp,
+  cloneCellMutationRef,
+  countPotentialNewCellsForMutationRefs,
+  type EngineCellMutationRef,
+} from "../../cell-mutations-at.js";
 import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 import { tryBuildFastMutationHistory } from "./mutation-history-fast-path.js";
@@ -44,6 +50,10 @@ export interface EngineMutationService {
   ) => Effect.Effect<void, EngineMutationError>;
   readonly executeLocalNow: (
     ops: EngineOp[],
+    potentialNewCells?: number,
+  ) => readonly EngineOp[] | null;
+  readonly executeLocalCellMutationsAtNow: (
+    refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
   ) => readonly EngineOp[] | null;
   readonly executeLocal: (
@@ -138,6 +148,11 @@ export function createEngineMutationService(args: {
   readonly applyBatchNow: (
     batch: EngineOpBatch,
     source: "local" | "restore" | "history",
+    potentialNewCells?: number,
+  ) => void;
+  readonly applyLocalCellMutationsAtNow: (
+    refs: readonly EngineCellMutationRef[],
+    batch: EngineOpBatch,
     potentialNewCells?: number,
   ) => void;
 }): EngineMutationService {
@@ -599,6 +614,45 @@ export function createEngineMutationService(args: {
     args.applyBatchNow(batch, source, record.potentialNewCells);
   };
 
+  const executeLocalCellMutationsAtNow = (
+    refs: readonly EngineCellMutationRef[],
+    potentialNewCells?: number,
+  ): readonly EngineOp[] | null => {
+    if (refs.length === 0) {
+      return null;
+    }
+    const nextRefs = refs.map((ref) => cloneCellMutationRef(ref));
+    const nextPotentialNewCells =
+      potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs);
+    const forwardOps = nextRefs.map((ref) => cellMutationRefToEngineOp(args.state.workbook, ref));
+    const fastHistory = tryBuildFastMutationHistory({
+      workbook: args.state.workbook,
+      getCellByIndex: args.getCellByIndex,
+      ops: forwardOps,
+      potentialNewCells: nextPotentialNewCells,
+    });
+    const inverse: TransactionRecord = fastHistory?.inverse ?? {
+      ops: buildInverseOps(forwardOps),
+      potentialNewCells: forwardOps.length,
+    };
+    args.applyLocalCellMutationsAtNow(
+      nextRefs,
+      createBatch(args.state.replicaState, forwardOps),
+      nextPotentialNewCells,
+    );
+    if (args.state.getTransactionReplayDepth() === 0) {
+      args.state.undoStack.push({
+        forward: fastHistory?.forward ?? {
+          ops: canonicalizeForwardOps(forwardOps),
+          potentialNewCells: nextPotentialNewCells,
+        },
+        inverse,
+      });
+      args.state.redoStack.length = 0;
+    }
+    return fastHistory?.undoOps ?? structuredClone(inverse.ops);
+  };
+
   return {
     executeTransactionNow: executeTransactionNow,
     executeTransaction(record, source) {
@@ -650,6 +704,9 @@ export function createEngineMutationService(args: {
         args.state.redoStack.length = 0;
       }
       return fastHistory?.undoOps ?? structuredClone(inverse.ops);
+    },
+    executeLocalCellMutationsAtNow(refs, potentialNewCells) {
+      return executeLocalCellMutationsAtNow(refs, potentialNewCells);
     },
     executeLocal(ops, potentialNewCells) {
       return Effect.try({

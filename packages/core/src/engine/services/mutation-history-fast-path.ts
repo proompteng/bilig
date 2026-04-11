@@ -33,7 +33,7 @@ function isFastSimpleCellOp(op: EngineOp): op is FastSimpleCellOp {
   );
 }
 
-function cloneSimpleCellOp(op: FastSimpleCellOp): EngineOp {
+function cloneSimpleCellOp(op: FastSimpleCellOp): FastSimpleCellOp {
   switch (op.kind) {
     case "setCellValue":
       return {
@@ -70,7 +70,7 @@ function restoreCellOpFromSnapshot(
   getCellByIndex: (cellIndex: number) => CellSnapshot,
   sheetName: string,
   address: string,
-): EngineOp {
+): FastSimpleCellOp {
   const cellIndex = workbook.getCellIndex(sheetName, address);
   if (cellIndex === undefined) {
     return { kind: "clearCell", sheetName, address };
@@ -106,7 +106,7 @@ function buildSimpleCellInverseOp(
   workbook: WorkbookStore,
   getCellByIndex: (cellIndex: number) => CellSnapshot,
   op: FastSimpleCellOp,
-): EngineOp | null {
+): FastSimpleCellOp | null {
   switch (op.kind) {
     case "setCellValue":
     case "setCellFormula":
@@ -129,7 +129,7 @@ function buildSimpleCellInverseOp(
 export function tryBuildFastMutationHistory(
   args: FastMutationHistoryArgs,
 ): FastMutationHistoryResult | null {
-  const forwardOps = Array<EngineOp>(args.ops.length);
+  const forwardOps = Array<FastSimpleCellOp>(args.ops.length);
   for (let index = 0; index < args.ops.length; index += 1) {
     const op = args.ops[index];
     if (op === undefined || !isFastSimpleCellOp(op)) {
@@ -138,9 +138,9 @@ export function tryBuildFastMutationHistory(
     forwardOps[index] = cloneSimpleCellOp(op);
   }
 
-  const inverseOps: EngineOp[] = [];
-  for (let index = args.ops.length - 1; index >= 0; index -= 1) {
-    const op = args.ops[index];
+  const inverseOps: FastSimpleCellOp[] = [];
+  for (let index = forwardOps.length - 1; index >= 0; index -= 1) {
+    const op = forwardOps[index];
     if (op === undefined) {
       return null;
     }

@@ -1,5 +1,4 @@
-import { SpreadsheetEngine, makeCellKey } from "@bilig/core";
-import type { EngineOp } from "@bilig/workbook-domain";
+import { SpreadsheetEngine, makeCellKey, type EngineCellMutationRef } from "@bilig/core";
 import {
   ErrorCode,
   MAX_COLS,
@@ -99,7 +98,6 @@ import type {
   SerializedHeadlessNamedExpression,
 } from "./types.js";
 import { captureTrackedEngineEvent, type TrackedEngineEvent } from "./tracked-engine-event-refs.js";
-import { buildDeferredLiteralHistoryRecord } from "./deferred-literal-history.js";
 
 type ListenerMap = {
   [EventName in HeadlessWorkbookEventName]: Set<HeadlessWorkbookListener<EventName>>;
@@ -975,7 +973,7 @@ export class HeadlessWorkbook {
   private batchStartVisibility: VisibilitySnapshot | null = null;
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null;
   private batchUndoStackLength = 0;
-  private pendingBatchOps: EngineOp[] = [];
+  private pendingBatchOps: EngineCellMutationRef[] = [];
   private pendingBatchPotentialNewCells = 0;
   private evaluationSuspended = false;
   private suspendedVisibility: VisibilitySnapshot | null = null;
@@ -2055,10 +2053,8 @@ export class HeadlessWorkbook {
       temporaryWorkbook.engine.createSheet(scratchSheetName);
       const scratchSheetId = temporaryWorkbook.requireSheetId(scratchSheetName);
       temporaryWorkbook.applyRawContent(
-        scratchSheetName,
-        "A1",
+        { sheet: scratchSheetId, row: 0, col: 0 },
         formula.trim().startsWith("=") ? formula : `=${formula}`,
-        scratchSheetId,
       );
       const spill = temporaryWorkbook.engine
         .getSpillRanges()
@@ -2189,13 +2185,11 @@ export class HeadlessWorkbook {
         this.applyMatrixContents(address, content);
         return;
       }
-      const sheetName = this.sheetName(address.sheet);
-      const a1 = this.a1(address);
-      if (this.enqueueDeferredBatchLiteral(sheetName, a1, content)) {
+      if (this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content)) {
         return;
       }
       this.flushPendingBatchOps();
-      this.applyRawContent(sheetName, a1, content, address.sheet);
+      this.applyRawContent(address, content);
     });
   }
 
@@ -2830,25 +2824,13 @@ export class HeadlessWorkbook {
     const potentialNewCells = this.pendingBatchPotentialNewCells;
     this.pendingBatchOps = [];
     this.pendingBatchPotentialNewCells = 0;
-    const historyRecord = buildDeferredLiteralHistoryRecord(
-      this.engine,
-      ops,
-      potentialNewCells > 0 ? potentialNewCells : undefined,
-    );
-    this.engine.applyOps(ops, {
-      captureUndo: historyRecord === null,
-      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
-      source: "local",
-      trusted: true,
-    });
-    if (historyRecord) {
-      this.pushUndoHistory(historyRecord);
-    }
+    this.engine.applyCellMutationsAt(ops, potentialNewCells > 0 ? potentialNewCells : undefined);
   }
 
   private enqueueDeferredBatchLiteral(
-    sheetName: string,
-    address: string,
+    sheetId: number,
+    row: number,
+    col: number,
     content: RawCellContent,
   ): boolean {
     if (
@@ -2859,10 +2841,13 @@ export class HeadlessWorkbook {
       return false;
     }
     if (content === null) {
-      this.pendingBatchOps.push({ kind: "clearCell", sheetName, address });
+      this.pendingBatchOps.push({ sheetId, mutation: { kind: "clearCell", row, col } });
       return true;
     }
-    this.pendingBatchOps.push({ kind: "setCellValue", sheetName, address, value: content });
+    this.pendingBatchOps.push({
+      sheetId,
+      mutation: { kind: "setCellValue", row, col, value: content },
+    });
     this.pendingBatchPotentialNewCells += 1;
     return true;
   }
@@ -3329,11 +3314,6 @@ export class HeadlessWorkbook {
     this.getRedoStack().length = 0;
   }
 
-  private pushUndoHistory(record: HistoryRecord): void {
-    this.getUndoStack().push(record);
-    this.getRedoStack().length = 0;
-  }
-
   private mergeUndoHistory(startIndex: number): void {
     const undoStack = this.getUndoStack();
     if (undoStack.length - startIndex <= 1) {
@@ -3389,12 +3369,7 @@ export class HeadlessWorkbook {
               destination.col - (sourceAnchor.col + columnOffset),
             )}`;
           }
-          this.applyRawContent(
-            this.sheetName(destination.sheet),
-            this.a1(destination),
-            nextValue,
-            destination.sheet,
-          );
+          this.applyRawContent(destination, nextValue);
         });
       });
       return;
@@ -3527,29 +3502,25 @@ export class HeadlessWorkbook {
     this.mergeUndoHistory(undoStackStart);
   }
 
-  private applyRawContent(
-    sheetName: string,
-    address: string,
-    content: RawCellContent,
-    ownerSheetId: number,
-  ): void {
+  private applyRawContent(address: HeadlessCellAddress, content: RawCellContent): void {
     if (content === null) {
-      this.engine.clearCell(sheetName, address);
+      this.engine.clearCellAt(address.sheet, address.row, address.col);
       return;
     }
     if (typeof content === "boolean" || typeof content === "number") {
-      this.engine.setCellValue(sheetName, address, content);
+      this.engine.setCellValueAt(address.sheet, address.row, address.col, content);
       return;
     }
     if (typeof content === "string" && content.trim().startsWith("=")) {
-      this.engine.setCellFormula(
-        sheetName,
-        address,
-        this.rewriteFormulaForStorage(stripLeadingEquals(content), ownerSheetId),
+      this.engine.setCellFormulaAt(
+        address.sheet,
+        address.row,
+        address.col,
+        this.rewriteFormulaForStorage(stripLeadingEquals(content), address.sheet),
       );
       return;
     }
-    this.engine.setCellValue(sheetName, address, content);
+    this.engine.setCellValueAt(address.sheet, address.row, address.col, content);
   }
 
   private captureFunctionRegistry(): void {

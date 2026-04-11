@@ -532,6 +532,8 @@ export function createEngineServiceRuntime(args: {
       cellState.toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),
     applyBatchNow: (batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),
+    applyLocalCellMutationsAtNow: (refs, batch, potentialNewCells) =>
+      runEngineEffect(operations.applyLocalCellMutationsAt(refs, batch, potentialNewCells)),
   });
   const history = createEngineHistoryService({
     state: args.state,

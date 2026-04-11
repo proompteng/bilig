@@ -1,6 +1,8 @@
 import { Effect } from "effect";
+import { formatAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type EngineEvent } from "@bilig/protocol";
+import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
 import { makeCellEntity } from "../../entity-ids.js";
 import {
   batchOpOrder,
@@ -12,7 +14,12 @@ import {
 import { CellFlags } from "../../cell-store.js";
 import { emptyValue, literalToValue } from "../../engine-value-utils.js";
 import { spillDependencyKey, tableDependencyKey } from "../../engine-metadata-utils.js";
-import { normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from "../../workbook-store.js";
+import {
+  makeCellKey,
+  normalizeDefinedName,
+  pivotKey,
+  type WorkbookPivotRecord,
+} from "../../workbook-store.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 
@@ -40,6 +47,11 @@ export interface EngineOperationService {
   readonly applyBatch: (
     batch: EngineOpBatch,
     source: MutationSource,
+    potentialNewCells?: number,
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly applyLocalCellMutationsAt: (
+    refs: readonly EngineCellMutationRef[],
+    batch: EngineOpBatch,
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>;
   readonly applyDerivedOp: (op: DerivedOp) => Effect.Effect<number[], EngineMutationError>;
@@ -824,6 +836,204 @@ export function createEngineOperationService(args: {
     }
   };
 
+  const applyLocalCellMutationsAtNow = (
+    refs: readonly EngineCellMutationRef[],
+    batch: EngineOpBatch,
+    potentialNewCells?: number,
+  ): void => {
+    args.beginMutationCollection();
+    let changedInputCount = 0;
+    let formulaChangedCount = 0;
+    let explicitChangedCount = 0;
+    let topologyChanged = false;
+    let compileMs = 0;
+    const reservedNewCells = potentialNewCells ?? refs.length;
+    args.state.workbook.cellStore.ensureCapacity(
+      args.state.workbook.cellStore.size + reservedNewCells,
+    );
+    args.resetMaterializedCellScratch(reservedNewCells);
+
+    const sheetNameById = new Map<number, string>();
+    const resolveSheetName = (sheetId: number): string => {
+      const cached = sheetNameById.get(sheetId);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const sheet = args.state.workbook.getSheetById(sheetId);
+      if (!sheet) {
+        throw new Error(`Unknown sheet id: ${sheetId}`);
+      }
+      sheetNameById.set(sheetId, sheet.name);
+      return sheet.name;
+    };
+
+    args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
+    try {
+      refs.forEach((ref, refIndex) => {
+        const { sheetId, mutation } = ref;
+        const sheetName = resolveSheetName(sheetId);
+        const address = formatAddress(mutation.row, mutation.col);
+        const order = batchOpOrder(batch, refIndex);
+        const existingIndex = args.state.workbook.cellKeyToIndex.get(
+          makeCellKey(sheetId, mutation.row, mutation.col),
+        );
+
+        switch (mutation.kind) {
+          case "setCellValue": {
+            if (existingIndex !== undefined) {
+              changedInputCount = args.markPivotRootsChanged(
+                args.clearPivotForCell(existingIndex),
+                changedInputCount,
+              );
+            }
+            const cellIndex = args.state.workbook.ensureCellAt(
+              sheetId,
+              mutation.row,
+              mutation.col,
+            ).cellIndex;
+            changedInputCount = args.markSpillRootsChanged(
+              args.clearOwnedSpill(cellIndex),
+              changedInputCount,
+            );
+            topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+            const value = literalToValue(mutation.value, args.state.strings);
+            args.state.workbook.cellStore.setValue(
+              cellIndex,
+              value,
+              value.tag === ValueTag.String ? value.stringId : 0,
+            );
+            args.state.workbook.cellStore.flags[cellIndex] =
+              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
+              ~(
+                CellFlags.HasFormula |
+                CellFlags.JsOnly |
+                CellFlags.InCycle |
+                CellFlags.SpillChild |
+                CellFlags.PivotOutput
+              );
+            pruneCellIfOrphaned(cellIndex);
+            changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
+            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
+            break;
+          }
+          case "setCellFormula": {
+            if (existingIndex !== undefined) {
+              changedInputCount = args.markPivotRootsChanged(
+                args.clearPivotForCell(existingIndex),
+                changedInputCount,
+              );
+            }
+            const cellIndex = args.state.workbook.ensureCellAt(
+              sheetId,
+              mutation.row,
+              mutation.col,
+            ).cellIndex;
+            changedInputCount = args.markSpillRootsChanged(
+              args.clearOwnedSpill(cellIndex),
+              changedInputCount,
+            );
+            const compileStarted = performance.now();
+            try {
+              args.bindFormula(cellIndex, sheetName, mutation.formula);
+              compileMs += performance.now() - compileStarted;
+              formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
+              topologyChanged = true;
+            } catch {
+              compileMs += performance.now() - compileStarted;
+              topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+              args.setInvalidFormulaValue(cellIndex);
+              changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
+            }
+            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
+            break;
+          }
+          case "clearCell": {
+            if (existingIndex === undefined) {
+              args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
+              break;
+            }
+            changedInputCount = args.markPivotRootsChanged(
+              args.clearPivotForCell(existingIndex),
+              changedInputCount,
+            );
+            changedInputCount = args.markSpillRootsChanged(
+              args.clearOwnedSpill(existingIndex),
+              changedInputCount,
+            );
+            topologyChanged = args.removeFormula(existingIndex) || topologyChanged;
+            args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
+            args.state.workbook.cellStore.flags[existingIndex] =
+              (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
+              ~(
+                CellFlags.HasFormula |
+                CellFlags.JsOnly |
+                CellFlags.InCycle |
+                CellFlags.SpillChild |
+                CellFlags.PivotOutput
+              );
+            pruneCellIfOrphaned(existingIndex);
+            changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
+            explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount);
+            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
+            break;
+          }
+          default:
+            assertNever(mutation);
+        }
+      });
+
+      const reboundCount = formulaChangedCount;
+      formulaChangedCount = args.syncDynamicRanges(formulaChangedCount);
+      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
+    } finally {
+      args.setBatchMutationDepth(args.getBatchMutationDepth() - 1);
+      args.flushWasmProgramSync();
+    }
+
+    markBatchApplied(args.state.replicaState, batch);
+    if (refs.length === 0) {
+      emitBatch(batch);
+      return;
+    }
+
+    if (topologyChanged) {
+      args.rebuildTopoRanks();
+      args.detectCycles();
+    }
+    formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
+    const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
+    let recalculated = args.recalculate(
+      args.composeMutationRoots(changedInputCount, formulaChangedCount),
+      changedInputArray,
+    );
+    recalculated = args.reconcilePivotOutputs(recalculated, false);
+    const changed = args.composeEventChanges(recalculated, explicitChangedCount);
+    const lastMetrics = {
+      ...args.state.getLastMetrics(),
+      batchId: args.state.getLastMetrics().batchId + 1,
+      changedInputCount: changedInputCount + formulaChangedCount,
+      compileMs,
+    };
+    args.state.setLastMetrics(lastMetrics);
+    args.state.events.emit(
+      {
+        kind: "batch",
+        invalidation: "cells",
+        changedCellIndices: changed,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        metrics: lastMetrics,
+      },
+      changed,
+      (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex),
+    );
+    void args.state.getSyncClientConnection()?.send(batch);
+    emitBatch(batch);
+  };
+
   return {
     applyBatch(batch, source, potentialNewCells) {
       return Effect.try({
@@ -833,6 +1043,18 @@ export function createEngineOperationService(args: {
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage(`Failed to apply ${source} batch`, cause),
+            cause,
+          }),
+      });
+    },
+    applyLocalCellMutationsAt(refs, batch, potentialNewCells) {
+      return Effect.try({
+        try: () => {
+          applyLocalCellMutationsAtNow(refs, batch, potentialNewCells);
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to apply local cell mutations", cause),
             cause,
           }),
       });

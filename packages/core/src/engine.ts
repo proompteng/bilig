@@ -22,8 +22,9 @@ import type {
   WorkbookSortSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
-import { Float64Arena, Uint32Arena } from "@bilig/formula";
+import { Float64Arena, Uint32Arena, formatAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
+import type { EngineCellMutationRef } from "./cell-mutations-at.js";
 import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
@@ -458,13 +459,53 @@ export class SpreadsheetEngine {
     return this.getCellValue(sheetName, address);
   }
 
+  setCellValueAt(sheetId: number, row: number, col: number, value: LiteralInput): CellValue {
+    const sheetName = this.workbook.getSheetById(sheetId)?.name;
+    if (!sheetName) {
+      throw new Error(`Unknown sheet id: ${sheetId}`);
+    }
+    const address = formatAddress(row, col);
+    this.runtime.mutation.executeLocalCellMutationsAtNow(
+      [{ sheetId, mutation: { kind: "setCellValue", row, col, value } }],
+      1,
+    );
+    return this.getCellValue(sheetName, address);
+  }
+
   setCellFormula(sheetName: string, address: string, formula: string): CellValue {
     this.executeLocalTransaction([{ kind: "setCellFormula", sheetName, address, formula }]);
     return this.getCellValue(sheetName, address);
   }
 
+  setCellFormulaAt(sheetId: number, row: number, col: number, formula: string): CellValue {
+    const sheetName = this.workbook.getSheetById(sheetId)?.name;
+    if (!sheetName) {
+      throw new Error(`Unknown sheet id: ${sheetId}`);
+    }
+    const address = formatAddress(row, col);
+    this.runtime.mutation.executeLocalCellMutationsAtNow(
+      [{ sheetId, mutation: { kind: "setCellFormula", row, col, formula } }],
+      1,
+    );
+    return this.getCellValue(sheetName, address);
+  }
+
   setCellFormat(sheetName: string, address: string, format: string | null): void {
     this.executeLocalTransaction([{ kind: "setCellFormat", sheetName, address, format }]);
+  }
+
+  clearCellAt(sheetId: number, row: number, col: number): void {
+    this.runtime.mutation.executeLocalCellMutationsAtNow(
+      [{ sheetId, mutation: { kind: "clearCell", row, col } }],
+      0,
+    );
+  }
+
+  applyCellMutationsAt(
+    refs: readonly EngineCellMutationRef[],
+    potentialNewCells?: number,
+  ): readonly EngineOp[] | null {
+    return this.runtime.mutation.executeLocalCellMutationsAtNow(refs, potentialNewCells);
   }
 
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {

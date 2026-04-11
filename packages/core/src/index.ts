@@ -1,4 +1,5 @@
 export * from "./cell-store.js";
+export * from "./cell-mutations-at.js";
 export * from "./cycle-detection.js";
 export * from "./csv.js";
 export * from "./edge-arena.js";
