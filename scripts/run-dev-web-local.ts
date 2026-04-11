@@ -424,7 +424,7 @@ async function resolveWebPort(preferredPort: number): Promise<number> {
     preferredPort,
     explicitPort: process.env["BILIG_WEB_DEV_PORT"],
     label: explicitPortLabel("Web port", preferredPort),
-    canUsePort: isPortAvailable,
+    canUseRequestedPort: isPortAvailable,
   });
 }
 
@@ -433,7 +433,7 @@ async function resolveAppPort(preferredPort: number): Promise<number> {
     preferredPort,
     explicitPort: process.env["PORT"] ?? process.env["BILIG_SYNC_SERVER_PORT"],
     label: explicitPortLabel("App port", preferredPort),
-    canUsePort: isPortAvailable,
+    canUseRequestedPort: isPortAvailable,
   });
 }
 
@@ -446,7 +446,7 @@ async function resolveComposePort(
     preferredPort,
     explicitPort,
     label: explicitPortLabel(name, preferredPort),
-    canUsePort: isPortAvailable,
+    canUseRequestedPort: isPortAvailable,
   });
 }
 
