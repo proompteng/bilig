@@ -1,14 +1,13 @@
 import { Effect } from "effect";
+import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import {
-  ErrorCode,
-  ValueTag,
-  type CellValue,
-} from "@bilig/protocol";
-import {
+  createLookupBuiltinResolver,
   evaluatePlanResult,
   formatAddress,
   isArrayValue,
+  type EvaluationContext,
   type FormulaNode,
+  type RangeBuiltinArgument,
   parseCellAddress,
   parseRangeAddress,
 } from "@bilig/formula";
@@ -45,6 +44,11 @@ export interface EngineFormulaEvaluationService {
   }) => Effect.Effect<CellValue, EngineFormulaEvaluationError>;
 }
 
+interface ExactColumnLookupIndexEntry {
+  columnVersion: number;
+  map: Map<number, number>;
+}
+
 function evaluationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
@@ -53,8 +57,22 @@ function referenceReplacementKey(sheetName: string, address: string): string {
   return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
 }
 
+function exactLookupNumericKey(value: CellValue): number | undefined {
+  switch (value.tag) {
+    case ValueTag.Number:
+      return value.value;
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0;
+    case ValueTag.Empty:
+      return 0;
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined;
+  }
+}
+
 export function createEngineFormulaEvaluationService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas">;
+  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "useColumnIndex">;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: { values: CellValue[]; rows: number; cols: number },
@@ -67,6 +85,8 @@ export function createEngineFormulaEvaluationService(args: {
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ) => CellValue;
 }): EngineFormulaEvaluationService {
+  const exactColumnLookupIndices = new Map<string, ExactColumnLookupIndexEntry>();
+
   const readCellValue = (sheetName: string, address: string): CellValue => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
@@ -107,6 +127,48 @@ export function createEngineFormulaEvaluationService(args: {
     }
     return values;
   };
+
+  const resolveIndexedExactMatch = (
+    lookupValue: CellValue,
+    range: RangeBuiltinArgument,
+  ): number | undefined => {
+    if (!args.state.useColumnIndex || range.refKind !== "cells" || range.cols !== 1) {
+      return undefined;
+    }
+    const lookupKey = exactLookupNumericKey(lookupValue);
+    if (lookupKey === undefined || !range.sheetName || !range.start || !range.end) {
+      return undefined;
+    }
+    const parsedRange = parseRangeAddress(`${range.start}:${range.end}`, range.sheetName);
+    if (parsedRange.kind !== "cells" || parsedRange.start.col !== parsedRange.end.col) {
+      return undefined;
+    }
+    const columnVersion = args.state.workbook.getSheetColumnVersion(
+      range.sheetName,
+      parsedRange.start.col,
+    );
+    const cacheKey = `${range.sheetName}\t${parsedRange.start.col}\t${parsedRange.start.row}\t${parsedRange.end.row}`;
+    let entry = exactColumnLookupIndices.get(cacheKey);
+    if (!entry || entry.columnVersion !== columnVersion) {
+      const map = new Map<number, number>();
+      for (let index = 0; index < range.values.length; index += 1) {
+        const key = exactLookupNumericKey(range.values[index]!);
+        if (key === undefined || map.has(key)) {
+          continue;
+        }
+        map.set(key, index + 1);
+      }
+      entry = { columnVersion, map };
+      exactColumnLookupIndices.set(cacheKey, entry);
+    }
+    return entry.map.get(lookupKey);
+  };
+
+  const lookupBuiltinResolver = args.state.useColumnIndex
+    ? createLookupBuiltinResolver({
+        resolveIndexedExactMatch,
+      })
+    : undefined;
 
   const resolveStructuredReferenceNow = (
     tableName: string,
@@ -192,7 +254,7 @@ export function createEngineFormulaEvaluationService(args: {
     }
 
     visiting.add(visitKey);
-    const evaluationContext = {
+    const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: address,
       resolveCell: (targetSheetName, targetAddress) =>
@@ -244,7 +306,8 @@ export function createEngineFormulaEvaluationService(args: {
         [...args.state.workbook.sheetsByName.values()]
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
-    } as Parameters<typeof evaluatePlanResult>[1];
+      resolveLookupBuiltin: lookupBuiltinResolver,
+    };
     const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
     visiting.delete(visitKey);
     return isArrayValue(result) ? (result.values[0] ?? emptyValue()) : result;
@@ -263,13 +326,10 @@ export function createEngineFormulaEvaluationService(args: {
     columnReplacementAddress?: string;
   }): CellValue => {
     const replacements = new Map<string, { sheetName: string; address: string }>();
-    replacements.set(
-      referenceReplacementKey(request.rowCellSheetName, request.rowCellAddress),
-      {
-        sheetName: request.rowReplacementSheetName,
-        address: request.rowReplacementAddress,
-      },
-    );
+    replacements.set(referenceReplacementKey(request.rowCellSheetName, request.rowCellAddress), {
+      sheetName: request.rowReplacementSheetName,
+      address: request.rowReplacementAddress,
+    });
     if (
       request.columnCellSheetName &&
       request.columnCellAddress &&
@@ -301,12 +361,17 @@ export function createEngineFormulaEvaluationService(args: {
       return [];
     }
 
-    const evaluationContext = {
+    const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: args.state.workbook.getAddress(cellIndex),
-      resolveCell: (targetSheetName: string, address: string) => readCellValue(targetSheetName, address),
-      resolveRange: (targetSheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols") =>
-        readRangeValues(targetSheetName, start, end, refKind),
+      resolveCell: (targetSheetName: string, address: string) =>
+        readCellValue(targetSheetName, address),
+      resolveRange: (
+        targetSheetName: string,
+        start: string,
+        end: string,
+        refKind: "cells" | "rows" | "cols",
+      ) => readRangeValues(targetSheetName, start, end, refKind),
       resolveName: (name: string) => {
         const definedName = args.state.workbook.getDefinedName(name);
         if (!definedName) {
@@ -347,7 +412,8 @@ export function createEngineFormulaEvaluationService(args: {
         [...args.state.workbook.sheetsByName.values()]
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
-    } as Parameters<typeof evaluatePlanResult>[1];
+      resolveLookupBuiltin: lookupBuiltinResolver,
+    };
     const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
 
     const materialization = isArrayValue(result)

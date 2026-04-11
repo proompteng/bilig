@@ -3,6 +3,7 @@ export * from "./addressing.js";
 export * from "./lexer.js";
 export * from "./parser.js";
 export * from "./builtins.js";
+export * from "./builtins/lookup.js";
 export * from "./external-function-adapter.js";
 export * from "./binder.js";
 export * from "./optimizer.js";

@@ -7,7 +7,12 @@ import type {
 } from "@bilig/protocol";
 import { compileFormula } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import type { OpOrder, ReplicaSnapshot, ReplicaState, ReplicaVersionSnapshot } from "../replica-state.js";
+import type {
+  OpOrder,
+  ReplicaSnapshot,
+  ReplicaState,
+  ReplicaVersionSnapshot,
+} from "../replica-state.js";
 import type { EdgeSlice } from "../edge-arena.js";
 import type { EngineEventBus } from "../events.js";
 import type { FormulaTable } from "../formula-table.js";
@@ -39,6 +44,7 @@ export interface CommitOp {
 export interface SpreadsheetEngineOptions {
   workbookName?: string;
   replicaId?: string;
+  useColumnIndex?: boolean;
 }
 
 export interface EngineSyncClientConnection {
@@ -132,6 +138,7 @@ export interface EngineRuntimeState {
   readonly selectionListeners: Set<() => void>;
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
+  readonly useColumnIndex: boolean;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;
@@ -159,6 +166,7 @@ export interface EngineRuntimeStateController {
   readonly selectionListeners: Set<() => void>;
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
+  readonly useColumnIndex: boolean;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;

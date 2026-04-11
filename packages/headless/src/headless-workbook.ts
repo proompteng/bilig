@@ -955,7 +955,7 @@ export class HeadlessWorkbook {
   >();
 
   readonly workbookId = nextWorkbookId++;
-  private engine = new SpreadsheetEngine({ workbookName: "Workbook" });
+  private engine: SpreadsheetEngine;
   private readonly emitter = new HeadlessEmitter();
   private readonly namedExpressions = new Map<string, InternalNamedExpression>();
   private readonly functionSnapshot = new Map<string, InternalFunctionBinding>();
@@ -983,6 +983,10 @@ export class HeadlessWorkbook {
       ...cloneConfig(DEFAULT_CONFIG),
       ...cloneConfig(configInput),
     };
+    this.engine = new SpreadsheetEngine({
+      workbookName: "Workbook",
+      useColumnIndex: this.config.useColumnIndex,
+    });
     this.captureFunctionRegistry();
     this.internals = Object.freeze({
       graph: Object.freeze<HeadlessGraphAdapter>({
@@ -3296,7 +3300,10 @@ export class HeadlessWorkbook {
 
     this.clearFunctionBindings();
     this.namedExpressions.clear();
-    this.engine = new SpreadsheetEngine({ workbookName: "Workbook" });
+    this.engine = new SpreadsheetEngine({
+      workbookName: "Workbook",
+      useColumnIndex: this.config.useColumnIndex,
+    });
     this.config = cloneConfig(nextConfig);
     this.captureFunctionRegistry();
 

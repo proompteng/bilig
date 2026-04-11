@@ -105,6 +105,7 @@ export interface SheetRecord {
   name: string;
   order: number;
   grid: SheetGrid;
+  columnVersions: Uint32Array;
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>;
   columnAxis: Array<WorkbookAxisEntryRecord | undefined>;
   styleRanges: WorkbookStyleRangeRecord[];
@@ -139,6 +140,9 @@ export class WorkbookStore {
 
   constructor(workbookName = "Workbook") {
     this.workbookName = workbookName;
+    this.cellStore.onSetValue = (index) => {
+      this.bumpColumnVersionByCellIndex(index);
+    };
     this.ensureDefaultStyle();
     this.ensureDefaultNumberFormat();
   }
@@ -160,6 +164,7 @@ export class WorkbookStore {
       name,
       order,
       grid: new SheetGrid(),
+      columnVersions: new Uint32Array(MAX_COLS),
       rowAxis: [],
       columnAxis: [],
       styleRanges: [],
@@ -233,6 +238,10 @@ export class WorkbookStore {
     return this.sheetsByName.get(name);
   }
 
+  getSheetColumnVersion(sheetName: string, col: number): number {
+    return this.sheetsByName.get(sheetName)?.columnVersions[col] ?? 0;
+  }
+
   getSheetById(id: number): SheetRecord | undefined {
     return this.sheetsById.get(id);
   }
@@ -265,6 +274,15 @@ export class WorkbookStore {
     this.cellKeyToIndex.set(key, cellIndex);
     sheet.grid.set(row, col, cellIndex);
     return { cellIndex, created: true };
+  }
+
+  private bumpColumnVersionByCellIndex(cellIndex: number): void {
+    const sheet = this.getSheetById(this.cellStore.sheetIds[cellIndex]!);
+    if (!sheet) {
+      return;
+    }
+    const col = this.cellStore.cols[cellIndex]!;
+    sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1;
   }
 
   getCellIndex(sheetName: string, address: string): number | undefined {

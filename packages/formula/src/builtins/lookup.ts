@@ -18,10 +18,19 @@ export interface RangeBuiltinArgument {
   refKind: "cells" | "rows" | "cols";
   rows: number;
   cols: number;
+  sheetName?: string;
+  start?: string;
+  end?: string;
 }
 
 export type LookupBuiltinArgument = CellValue | RangeBuiltinArgument;
 export type LookupBuiltin = (...args: LookupBuiltinArgument[]) => EvaluationResult;
+export interface LookupBuiltinResolverOptions {
+  resolveIndexedExactMatch?: (
+    lookupValue: CellValue,
+    range: RangeBuiltinArgument,
+  ) => number | undefined;
+}
 
 function errorValue(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
@@ -435,18 +444,39 @@ const lookupCriteriaBuiltins = createLookupCriteriaBuiltins({
   numericAggregateCandidate,
 });
 
-const lookupReferenceBuiltins = createLookupReferenceBuiltins({
-  errorValue,
-  numberResult,
-  isError,
-  isRangeArg,
-  toBoolean,
-  toInteger,
-  requireCellVector,
-  toCellRange,
-  compareScalars,
-  getRangeValue,
-});
+function createLookupBuiltinMap(
+  options: LookupBuiltinResolverOptions = {},
+): Record<string, LookupBuiltin> {
+  const lookupReferenceBuiltins = createLookupReferenceBuiltins({
+    errorValue,
+    numberResult,
+    isError,
+    isRangeArg,
+    toBoolean,
+    toInteger,
+    requireCellVector,
+    toCellRange,
+    compareScalars,
+    getRangeValue,
+    ...(options.resolveIndexedExactMatch
+      ? { resolveIndexedExactMatch: options.resolveIndexedExactMatch }
+      : {}),
+  });
+
+  return {
+    ...lookupArrayShapeBuiltins,
+    ...lookupReferenceBuiltins,
+    ...lookupCriteriaBuiltins,
+    ...lookupDatabaseBuiltins,
+    ...lookupFinancialBuiltins,
+    ...lookupHypothesisBuiltins,
+    ...lookupRegressionBuiltins,
+    ...lookupOrderStatisticsBuiltins,
+    ...lookupMatrixBuiltins,
+    ...lookupSortFilterBuiltins,
+    ...externalLookupBuiltins,
+  };
+}
 
 const lookupArrayShapeBuiltins = createLookupArrayShapeBuiltins({
   errorValue,
@@ -463,19 +493,23 @@ const lookupArrayShapeBuiltins = createLookupArrayShapeBuiltins({
   pickRangeRow,
 });
 
-export const lookupBuiltins: Record<string, LookupBuiltin> = {
-  ...lookupArrayShapeBuiltins,
-  ...lookupReferenceBuiltins,
-  ...lookupCriteriaBuiltins,
-  ...lookupDatabaseBuiltins,
-  ...lookupFinancialBuiltins,
-  ...lookupHypothesisBuiltins,
-  ...lookupRegressionBuiltins,
-  ...lookupOrderStatisticsBuiltins,
-  ...lookupMatrixBuiltins,
-  ...lookupSortFilterBuiltins,
-  ...externalLookupBuiltins,
-};
+export const lookupBuiltins: Record<string, LookupBuiltin> = createLookupBuiltinMap();
+
+export function createLookupBuiltinResolver(
+  options: LookupBuiltinResolverOptions = {},
+): (name: string) => LookupBuiltin | undefined {
+  const builtins =
+    options.resolveIndexedExactMatch === undefined
+      ? lookupBuiltins
+      : createLookupBuiltinMap(options);
+  return (name: string) => {
+    const upper = name.toUpperCase();
+    if (upper === "USE.THE.COUNTIF") {
+      return builtins["COUNTIF"];
+    }
+    return builtins[upper] ?? getExternalLookupFunction(name);
+  };
+}
 
 type CriteriaOperator = "=" | "<>" | ">" | ">=" | "<" | "<=";
 
@@ -553,9 +587,5 @@ function parseCriteriaOperand(raw: string): CellValue {
 }
 
 export function getLookupBuiltin(name: string): LookupBuiltin | undefined {
-  const upper = name.toUpperCase();
-  if (upper === "USE.THE.COUNTIF") {
-    return lookupBuiltins["COUNTIF"];
-  }
-  return lookupBuiltins[upper] ?? getExternalLookupFunction(name);
+  return createLookupBuiltinResolver()(name);
 }

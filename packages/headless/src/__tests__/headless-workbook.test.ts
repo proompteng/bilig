@@ -141,6 +141,33 @@ describe("HeadlessWorkbook", () => {
     });
   });
 
+  it("keeps exact MATCH correct when useColumnIndex is enabled", () => {
+    const workbook = HeadlessWorkbook.buildFromSheets(
+      {
+        Bench: [[1, "", "", 2, "=MATCH(D1,A1:A3,0)"], [2], [3]],
+      },
+      { useColumnIndex: true },
+    );
+    const sheetId = workbook.getSheetId("Bench")!;
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+
+    workbook.setCellContents(cell(sheetId, 1, 0), 20);
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    workbook.setCellContents(cell(sheetId, 0, 3), 3);
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+  });
+
   it("replaces literal sheet content in one undoable batch, including clears", () => {
     const workbook = HeadlessWorkbook.buildFromArray([
       [1, 2],

@@ -35,12 +35,8 @@ export interface EngineFormulaBindingService {
     ownerSheetName: string,
     source: string,
   ) => Effect.Effect<void, EngineFormulaBindingError>;
-  readonly clearFormula: (
-    cellIndex: number,
-  ) => Effect.Effect<boolean, EngineFormulaBindingError>;
-  readonly invalidateFormula: (
-    cellIndex: number,
-  ) => Effect.Effect<void, EngineFormulaBindingError>;
+  readonly clearFormula: (cellIndex: number) => Effect.Effect<boolean, EngineFormulaBindingError>;
+  readonly invalidateFormula: (cellIndex: number) => Effect.Effect<void, EngineFormulaBindingError>;
   readonly rewriteCellFormulasForSheetRename: (
     oldSheetName: string,
     newSheetName: string,
@@ -111,12 +107,64 @@ function collectTrackedDependents(
   return [...candidates];
 }
 
+function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
+  switch (node.kind) {
+    case "CallExpr": {
+      const callee = node.callee.trim().toUpperCase();
+      const isIndexedLookupCall =
+        (callee === "MATCH" &&
+          node.args.length >= 2 &&
+          node.args.length <= 3 &&
+          node.args[1]?.kind === "RangeRef" &&
+          node.args[1].refKind === "cells" &&
+          node.args[1].start !== node.args[1].end &&
+          (node.args.length === 2 ||
+            (node.args[2]?.kind === "NumberLiteral" && node.args[2].value === 0))) ||
+        (callee === "XMATCH" &&
+          node.args.length >= 2 &&
+          node.args.length <= 4 &&
+          node.args[1]?.kind === "RangeRef" &&
+          node.args[1].refKind === "cells" &&
+          node.args[1].start !== node.args[1].end &&
+          (node.args.length === 2 ||
+            (node.args[2]?.kind === "NumberLiteral" && node.args[2].value === 0)));
+      return isIndexedLookupCall || node.args.some(hasIndexedExactLookupCandidate);
+    }
+    case "UnaryExpr":
+      return hasIndexedExactLookupCandidate(node.argument);
+    case "BinaryExpr":
+      return (
+        hasIndexedExactLookupCandidate(node.left) || hasIndexedExactLookupCandidate(node.right)
+      );
+    case "InvokeExpr":
+      return (
+        hasIndexedExactLookupCandidate(node.callee) ||
+        node.args.some(hasIndexedExactLookupCandidate)
+      );
+    case "BooleanLiteral":
+    case "CellRef":
+    case "ColumnRef":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "NumberLiteral":
+    case "RangeRef":
+    case "RowRef":
+    case "SpillRef":
+    case "StringLiteral":
+    case "StructuredRef":
+      return false;
+  }
+}
+
 const PUSH_CELL_OPCODE = Number(Opcode.PushCell);
 const PUSH_RANGE_OPCODE = Number(Opcode.PushRange);
 const PUSH_STRING_OPCODE = Number(Opcode.PushString);
 
 export function createEngineFormulaBindingService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "ranges">;
+  readonly state: Pick<
+    EngineRuntimeState,
+    "workbook" | "strings" | "formulas" | "ranges" | "useColumnIndex"
+  >;
   readonly edgeArena: EdgeArena;
   readonly programArena: Uint32Arena;
   readonly constantArena: Float64Arena;
@@ -180,7 +228,9 @@ export function createEngineFormulaBindingService(args: {
       );
     }
     if (dependencyCapacity > args.getDependencyBuildRanges().length) {
-      args.setDependencyBuildRanges(growUint32(args.getDependencyBuildRanges(), dependencyCapacity));
+      args.setDependencyBuildRanges(
+        growUint32(args.getDependencyBuildRanges(), dependencyCapacity),
+      );
     }
     if (dependencyCapacity > args.getDependencyBuildNewRanges().length) {
       args.setDependencyBuildNewRanges(
@@ -191,7 +241,9 @@ export function createEngineFormulaBindingService(args: {
       args.setSymbolicRefBindings(growUint32(args.getSymbolicRefBindings(), symbolicRefCapacity));
     }
     if (symbolicRangeCapacity > args.getSymbolicRangeBindings().length) {
-      args.setSymbolicRangeBindings(growUint32(args.getSymbolicRangeBindings(), symbolicRangeCapacity));
+      args.setSymbolicRangeBindings(
+        growUint32(args.getSymbolicRangeBindings(), symbolicRangeCapacity),
+      );
     }
   };
 
@@ -259,12 +311,16 @@ export function createEngineFormulaBindingService(args: {
     });
   };
 
-
   const compileFormulaForSheet = (
     currentSheetName: string,
     source: string,
   ): ReturnType<typeof compileFormula> => {
     const compiled = compileFormula(source);
+    if (args.state.useColumnIndex && compiled.mode === FormulaMode.WasmFastPath) {
+      if (hasIndexedExactLookupCandidate(compiled.optimizedAst)) {
+        compiled.mode = FormulaMode.JsOnly;
+      }
+    }
     if (
       compiled.symbolicNames.length === 0 &&
       compiled.symbolicTables.length === 0 &&
@@ -284,12 +340,18 @@ export function createEngineFormulaBindingService(args: {
       return compiled;
     }
 
-    return compileFormulaAst(source, resolved.node, {
+    const resolvedCompiled = compileFormulaAst(source, resolved.node, {
       originalAst: compiled.ast,
       symbolicNames: compiled.symbolicNames,
       symbolicTables: compiled.symbolicTables,
       symbolicSpills: compiled.symbolicSpills,
     });
+    if (args.state.useColumnIndex && resolvedCompiled.mode === FormulaMode.WasmFastPath) {
+      if (hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst)) {
+        resolvedCompiled.mode = FormulaMode.JsOnly;
+      }
+    }
+    return resolvedCompiled;
   };
 
   const materializeDependencies = (
@@ -472,7 +534,9 @@ export function createEngineFormulaBindingService(args: {
       args.getSymbolicRefBindings()[index] = args.ensureCellTracked(sheetName, parsed.text);
     }
 
-    const literalStringIds = compiled.symbolicStrings.map((value) => args.state.strings.intern(value));
+    const literalStringIds = compiled.symbolicStrings.map((value) =>
+      args.state.strings.intern(value),
+    );
     const runtimeProgram = new Uint32Array(compiled.program.length);
     runtimeProgram.set(compiled.program);
     compiled.program.forEach((instruction, index) => {
@@ -480,7 +544,9 @@ export function createEngineFormulaBindingService(args: {
       const operand = instruction & 0x00ff_ffff;
       if (opcode === PUSH_CELL_OPCODE) {
         const targetIndex =
-          operand < compiled.symbolicRefs.length ? (args.getSymbolicRefBindings()[operand] ?? 0) : 0;
+          operand < compiled.symbolicRefs.length
+            ? (args.getSymbolicRefBindings()[operand] ?? 0)
+            : 0;
         runtimeProgram[index] = (PUSH_CELL_OPCODE << 24) | (targetIndex & 0x00ff_ffff);
         return;
       }
@@ -552,7 +618,11 @@ export function createEngineFormulaBindingService(args: {
       appendDefinedNameReverseEdge(name, cellIndex);
     });
     runtimeFormula.compiled.symbolicTables.forEach((name) => {
-      appendTrackedReverseEdge(args.reverseState.reverseTableEdges, tableDependencyKey(name), cellIndex);
+      appendTrackedReverseEdge(
+        args.reverseState.reverseTableEdges,
+        tableDependencyKey(name),
+        cellIndex,
+      );
     });
     runtimeFormula.compiled.symbolicSpills.forEach((key) => {
       appendTrackedReverseEdge(

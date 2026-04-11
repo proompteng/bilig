@@ -165,6 +165,7 @@ export class SpreadsheetEngine {
       selectionListeners: this.selectionListeners,
       undoStack: this.undoStack,
       redoStack: this.redoStack,
+      useColumnIndex: options.useColumnIndex ?? false,
       getSelection: () => this.selection,
       setSelection: (selection) => {
         this.selection = selection;

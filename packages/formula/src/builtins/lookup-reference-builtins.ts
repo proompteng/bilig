@@ -14,6 +14,10 @@ interface LookupReferenceBuiltinDeps {
   toCellRange: (arg: LookupBuiltinArgument) => RangeBuiltinArgument | CellValue;
   compareScalars: (left: CellValue, right: CellValue) => number | undefined;
   getRangeValue: (range: RangeBuiltinArgument, row: number, col: number) => CellValue;
+  resolveIndexedExactMatch?: (
+    lookupValue: CellValue,
+    range: RangeBuiltinArgument,
+  ) => number | undefined;
 }
 
 function exactMatch(
@@ -97,7 +101,8 @@ export function createLookupReferenceBuiltins(
 
       const position =
         matchType === 0
-          ? exactMatch(lookupValue, rangeOrError, deps)
+          ? (deps.resolveIndexedExactMatch?.(lookupValue, rangeOrError) ??
+            exactMatch(lookupValue, rangeOrError, deps))
           : matchType === 1
             ? approximateMatchAscending(lookupValue, rangeOrError, deps)
             : approximateMatchDescending(lookupValue, rangeOrError, deps);
@@ -105,7 +110,11 @@ export function createLookupReferenceBuiltins(
       return position === -1 ? deps.errorValue(ErrorCode.NA) : deps.numberResult(position);
     },
     LOOKUP: (lookupValue, lookupVectorArg, resultVectorArg = lookupVectorArg) => {
-      if (deps.isRangeArg(lookupValue) || lookupValue === undefined || resultVectorArg === undefined) {
+      if (
+        deps.isRangeArg(lookupValue) ||
+        lookupValue === undefined ||
+        resultVectorArg === undefined
+      ) {
         return deps.errorValue(ErrorCode.Value);
       }
 

@@ -1,4 +1,5 @@
 import type { ErrorCode, CellValue } from "@bilig/protocol";
+import type { LookupBuiltin } from "./builtins/lookup.js";
 import type { ArrayValue, EvaluationResult } from "./runtime-values.js";
 
 export interface EvaluationContext {
@@ -33,6 +34,7 @@ export interface EvaluationContext {
   }) => CellValue | undefined;
   listSheetNames?: () => string[];
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
+  resolveLookupBuiltin?: (name: string) => LookupBuiltin | undefined;
 }
 
 export interface ReferenceOperand {
@@ -87,6 +89,9 @@ export type StackValue =
       refKind: "cells" | "rows" | "cols";
       rows: number;
       cols: number;
+      sheetName?: string;
+      start?: string;
+      end?: string;
     }
   | {
       kind: "lambda";

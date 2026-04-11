@@ -174,6 +174,9 @@ function cloneStackValue(value: StackValue): StackValue {
       refKind: value.refKind,
       rows: value.rows,
       cols: value.cols,
+      ...(value.sheetName ? { sheetName: value.sheetName } : {}),
+      ...(value.start ? { start: value.start } : {}),
+      ...(value.end ? { end: value.end } : {}),
     };
   }
   if (value.kind === "lambda") {
@@ -367,6 +370,9 @@ function toRangeArgument(value: StackValue): CellValue | RangeBuiltinArgument {
     refKind: value.kind === "range" ? value.refKind : "cells",
     rows: value.rows,
     cols: value.cols,
+    ...(value.kind === "range" && value.sheetName ? { sheetName: value.sheetName } : {}),
+    ...(value.kind === "range" && value.start ? { start: value.start } : {}),
+    ...(value.kind === "range" && value.end ? { end: value.end } : {}),
   };
 }
 
@@ -773,6 +779,9 @@ function executePlan(
             refKind: instruction.refKind,
             rows,
             cols,
+            sheetName: instruction.sheetName ?? context.sheetName,
+            start: instruction.start,
+            end: instruction.end,
           });
         }
         break;
@@ -833,7 +842,9 @@ function executePlan(
           stack.push(specialResult);
           break;
         }
-        const lookupBuiltin = getLookupBuiltin(instruction.callee);
+        const lookupBuiltin =
+          context.resolveLookupBuiltin?.(instruction.callee) ??
+          getLookupBuiltin(instruction.callee);
         if (lookupBuiltin) {
           const args: Array<CellValue | RangeBuiltinArgument> = [];
           for (const rawArg of rawArgs) {

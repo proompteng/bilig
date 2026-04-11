@@ -2614,6 +2614,31 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
   });
 
+  it("uses the indexed js path for exact MATCH when column indexing is enabled", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "indexed-lookup", useColumnIndex: true });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellValue("Sheet1", "D1", 2);
+
+    engine.setCellFormula("Sheet1", "E1", "=MATCH(D1,A1:A3,0)");
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A2", 20);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    engine.setCellValue("Sheet1", "D1", 3);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+  });
+
   it("uses the wasm fast path for exact-parity info and date builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

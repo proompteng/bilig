@@ -15,6 +15,7 @@ export const enum CellFlags {
 export class CellStore {
   size = 0;
   capacity: number;
+  onSetValue: ((index: number) => void) | null = null;
   tags: Uint8Array;
   numbers: Float64Array;
   stringIds: Uint32Array;
@@ -108,6 +109,7 @@ export class CellStore {
             : 0
           : 0;
     this.versions[index] = (this.versions[index] ?? 0) + 1;
+    this.onSetValue?.(index);
   }
 
   getValue(index: number, stringLookup: (id: number) => string): CellValue {
