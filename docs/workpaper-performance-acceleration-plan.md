@@ -26,13 +26,13 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.37x` faster
-  - `single-edit-recalc`: improved from `1.42x` slower to a `WorkPaper` win at `1.06x` faster
-  - `batch-edit-recalc`: improved to `1.61x` slower
-  - `lookup-no-column-index`: improved from `68.76x` slower to a `WorkPaper` win at `1.49x` faster
-  - `lookup-with-column-index`: improved from `124.42x` slower to `1.39x` slower
-  - `lookup-approximate-sorted`: improved from `6.67x` slower to `1.05x` slower
-  - `range-read`: a `WorkPaper` win at `1.03x` faster
+  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.68x` faster
+  - `single-edit-recalc`: improved from `1.42x` slower to a `WorkPaper` win at `1.61x` faster
+  - `batch-edit-recalc`: improved to `1.70x` slower
+  - `lookup-no-column-index`: improved from `68.76x` slower to a `WorkPaper` win at `1.51x` faster
+  - `lookup-with-column-index`: improved from `124.42x` slower to `1.21x` slower
+  - `lookup-approximate-sorted`: improved from `6.67x` slower to a `WorkPaper` win at `1.07x` faster
+  - `range-read`: a `WorkPaper` win at `1.01x` faster
 
 So the remaining performance gap is no longer “lookup is completely fake.” The remaining gap is
 that recalculation overhead is still red. Lookup is now close enough that it no longer dominates
@@ -103,12 +103,12 @@ Current control-suite direct-comparison results from
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
 | --- | ---: | ---: | --- |
-| `build-from-sheets` | `0.829ms` | `3.623ms` | `WorkPaper` `4.37x` faster |
-| `single-edit-recalc` | `1.271ms` | `1.200ms` | `WorkPaper` `1.06x` faster |
-| `batch-edit-recalc` | `1.318ms` | `0.818ms` | HyperFormula `1.61x` faster |
-| `range-read` | `0.208ms` | `0.202ms` | `WorkPaper` `1.03x` faster |
-| `lookup-no-column-index` | `0.194ms` | `0.290ms` | `WorkPaper` `1.49x` faster |
-| `lookup-with-column-index` | `0.172ms` | `0.124ms` | HyperFormula `1.39x` faster |
+| `build-from-sheets` | `0.833ms` | `3.897ms` | `WorkPaper` `4.68x` faster |
+| `single-edit-recalc` | `1.373ms` | `2.211ms` | `WorkPaper` `1.61x` faster |
+| `batch-edit-recalc` | `1.580ms` | `0.927ms` | HyperFormula `1.70x` faster |
+| `range-read` | `0.217ms` | `0.220ms` | `WorkPaper` `1.01x` faster |
+| `lookup-no-column-index` | `0.240ms` | `0.362ms` | `WorkPaper` `1.51x` faster |
+| `lookup-with-column-index` | `0.232ms` | `0.192ms` | HyperFormula `1.21x` faster |
 
 This is the important reading:
 
@@ -123,13 +123,13 @@ This is the important reading:
 
 The broader matrix now makes the remaining risk clearer:
 
-- `WorkPaper` leads `6/13` directly comparable expanded workloads
-- HyperFormula still leads `7/13`
+- `WorkPaper` leads `7/13` directly comparable expanded workloads
+- HyperFormula still leads `6/13`
 - the worst broader deficits are now:
-  - `build-mixed-content`: HyperFormula `4.38x` faster
-  - `single-formula-edit-recalc`: HyperFormula `2.53x` faster
-  - `batch-edit-single-column`: HyperFormula `1.75x` faster
+  - `build-mixed-content`: HyperFormula `3.80x` faster
+  - `batch-edit-single-column`: HyperFormula `1.54x` faster
   - `batch-edit-multi-column`: HyperFormula `1.54x` faster
+  - `single-formula-edit-recalc`: HyperFormula `1.42x` faster
 
 ## Root Cause
 

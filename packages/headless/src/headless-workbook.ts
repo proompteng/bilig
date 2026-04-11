@@ -134,12 +134,13 @@ interface SheetStateSnapshot {
   sheetId: number;
   sheetName: string;
   order: number;
-  cells: Map<string, CellValue>;
+  cells: Map<number, CellValue>;
 }
 
 type VisibilitySnapshot = Map<number, SheetStateSnapshot>;
 type NamedExpressionValueSnapshot = Map<string, CellValue | CellValue[][]>;
 const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map();
+const VISIBILITY_SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 
 interface ClipboardPayload {
   sourceAnchor: HeadlessCellAddress;
@@ -2943,14 +2944,13 @@ export class HeadlessWorkbook {
   private captureVisibilitySnapshot(): VisibilitySnapshot {
     const snapshot = new Map<number, SheetStateSnapshot>();
     this.listSheetRecords().forEach((sheet) => {
-      const cells = new Map<string, CellValue>();
+      const cells = new Map<number, CellValue>();
       sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
-        const address = formatAddress(row, col);
         const value = this.readStoredCellValue(sheet.name, row, col);
         if (value.tag === ValueTag.Empty) {
           return;
         }
-        cells.set(address, value);
+        cells.set(makeCellKey(sheet.id, row, col), value);
       });
       snapshot.set(sheet.id, {
         sheetId: sheet.id,
@@ -2995,25 +2995,30 @@ export class HeadlessWorkbook {
     const cellChanges: HeadlessChange[] = [];
     afterVisibility.forEach((afterSheet, sheetId) => {
       const beforeSheet = beforeVisibility.get(sheetId);
-      const addresses = new Set<string>([
+      const cellKeys = new Set<number>([
         ...(beforeSheet?.cells.keys() ?? []),
         ...afterSheet.cells.keys(),
       ]);
-      [...addresses].toSorted(compareSheetNames).forEach((address) => {
-        const beforeValue = beforeSheet?.cells.get(address) ?? emptyValue();
-        const afterValue = afterSheet.cells.get(address) ?? emptyValue();
-        if (valuesEqual(beforeValue, afterValue)) {
-          return;
-        }
-        const parsed = parseCellAddress(address, afterSheet.sheetName);
-        cellChanges.push({
-          kind: "cell",
-          address: { sheet: sheetId, row: parsed.row, col: parsed.col },
-          sheetName: afterSheet.sheetName,
-          a1: address,
-          newValue: cloneCellValue(afterValue),
+      [...cellKeys]
+        .toSorted((left, right) => left - right)
+        .forEach((cellKey) => {
+          const beforeValue = beforeSheet?.cells.get(cellKey) ?? emptyValue();
+          const afterValue = afterSheet.cells.get(cellKey) ?? emptyValue();
+          if (valuesEqual(beforeValue, afterValue)) {
+            return;
+          }
+          const localKey = cellKey - afterSheet.sheetId * VISIBILITY_SHEET_STRIDE;
+          const row = Math.floor(localKey / MAX_COLS);
+          const col = localKey % MAX_COLS;
+          const address = formatAddress(row, col);
+          cellChanges.push({
+            kind: "cell",
+            address: { sheet: sheetId, row, col },
+            sheetName: afterSheet.sheetName,
+            a1: address,
+            newValue: cloneCellValue(afterValue),
+          });
         });
-      });
     });
     return orderHeadlessCellChanges(cellChanges, this.listSheetRecords());
   }
@@ -3051,17 +3056,18 @@ export class HeadlessWorkbook {
       return sheet.name;
     };
     const ensureMutableSheet = (sheetId: number, sheetName: string): SheetStateSnapshot => {
-      let existing = nextVisibility.get(sheetId);
-      if (!existing) {
-        existing = {
-          sheetId,
-          sheetName,
-          order: this.sheetRecord(sheetId).order,
-          cells: new Map<string, CellValue>(),
-        };
-        nextVisibility.set(sheetId, existing);
+      const existing = nextVisibility.get(sheetId);
+      if (existing) {
+        return existing;
       }
-      return existing;
+      const created: SheetStateSnapshot = {
+        sheetId,
+        sheetName,
+        order: this.sheetRecord(sheetId).order,
+        cells: new Map<number, CellValue>(),
+      };
+      nextVisibility.set(sheetId, created);
+      return created;
     };
 
     const collectDirectChanges = (
@@ -3092,8 +3098,9 @@ export class HeadlessWorkbook {
         if (!sheetName) {
           return null;
         }
+        const cellKey = makeCellKey(sheetId, row, col);
         const address = formatAddress(row, col);
-        const beforeValue = beforeVisibility.get(sheetId)?.cells.get(address) ?? emptyValue();
+        const beforeValue = beforeVisibility.get(sheetId)?.cells.get(cellKey) ?? emptyValue();
         const afterValue = cellStore.getValue(cellIndex, (id) => strings.get(id));
         if (valuesEqual(beforeValue, afterValue)) {
           continue;
@@ -3110,9 +3117,9 @@ export class HeadlessWorkbook {
         previousCol = col;
         const sheet = ensureMutableSheet(sheetId, sheetName);
         if (afterValue.tag === ValueTag.Empty) {
-          sheet.cells.delete(address);
+          sheet.cells.delete(cellKey);
         } else {
-          sheet.cells.set(address, afterValue);
+          sheet.cells.set(cellKey, afterValue);
         }
         changes.push({
           kind: "cell",
@@ -3676,6 +3683,9 @@ export class HeadlessWorkbook {
   }
 
   private rewriteFormulaForStorage(formula: string, ownerSheetId: number): string {
+    if (this.namedExpressions.size === 0 && this.functionAliasLookup.size === 0) {
+      return formula;
+    }
     try {
       const transformed = transformFormulaNode(
         parseFormula(stripLeadingEquals(formula)),
@@ -3696,6 +3706,9 @@ export class HeadlessWorkbook {
   }
 
   private restorePublicFormula(formula: string, ownerSheetId: number): string {
+    if (this.namedExpressions.size === 0 && this.functionAliasLookup.size === 0) {
+      return formula;
+    }
     const transformed = transformFormulaNode(parseFormula(formula), (node) => {
       if (node.kind === "NameRef") {
         return this.rewriteNameRefForPublic(node, ownerSheetId);
