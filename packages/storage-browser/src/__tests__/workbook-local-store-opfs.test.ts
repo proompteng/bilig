@@ -58,4 +58,26 @@ describe("opfs workbook local store", () => {
       }),
     );
   });
+
+  it("treats removeVfs NoModificationAllowedError failures as access-handle lock conflicts", async () => {
+    const removeVfsError = Object.assign(
+      new Error(
+        "Failed to execute 'removeEntry' on 'FileSystemDirectoryHandle': An attempt was made to modify an object where modifications are not allowed.",
+      ),
+      { name: "NoModificationAllowedError" },
+    );
+    installOpfsSAHPoolVfs.mockRejectedValue(removeVfsError);
+
+    const { WorkbookLocalStoreLockedError, createOpfsWorkbookLocalStoreFactory } =
+      await import("../index.js");
+    const factory = createOpfsWorkbookLocalStoreFactory();
+
+    await expect(factory.open("doc-remove-vfs")).rejects.toMatchObject({
+      name: WorkbookLocalStoreLockedError.name,
+      message: "Workbook local store is locked by another tab for doc-remove-vfs",
+    });
+
+    expect(sqlite3InitModule).toHaveBeenCalledTimes(1);
+    expect(installOpfsSAHPoolVfs).toHaveBeenCalledTimes(1);
+  });
 });

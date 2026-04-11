@@ -130,7 +130,9 @@ function isAccessHandleConflict(error: unknown): boolean {
     (error.message.includes("createSyncAccessHandle") &&
       error.message.includes("Access Handles cannot be created")) ||
     (error.name === "NoModificationAllowedError" &&
-      error.message.includes("Access Handles cannot be created"))
+      (error.message.includes("Access Handles cannot be created") ||
+        (error.message.includes("removeEntry") &&
+          error.message.includes("FileSystemDirectoryHandle"))))
   );
 }
 
