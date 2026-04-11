@@ -120,6 +120,17 @@ describe("workbook agent workflows", () => {
     });
   });
 
+  it("describes outlier highlighting through the formatting metadata path", () => {
+    expect(
+      describeWorkbookAgentWorkflowTemplate("highlightCurrentSheetOutliers", {
+        sheetName: "Revenue",
+      }),
+    ).toEqual({
+      title: "Highlight Current Sheet Outliers",
+      runningSummary: "Running outlier highlight workflow for Revenue.",
+    });
+  });
+
   it("executes structural workflow templates without durable workbook inspection", async () => {
     let inspectedWorkbook = false;
     const result = await executeWorkbookAgentWorkflow({
@@ -379,5 +390,87 @@ describe("workbook agent workflows", () => {
         ]),
       }),
     ]);
+  });
+
+  it("executes current-sheet outlier-highlighting workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Revenue");
+          engine.setCellValue("Revenue", "A1", "Region");
+          engine.setCellValue("Revenue", "B1", "Revenue");
+          engine.setCellValue("Revenue", "A2", "West");
+          engine.setCellValue("Revenue", "B2", 100);
+          engine.setCellValue("Revenue", "A3", "East");
+          engine.setCellValue("Revenue", "B3", 105);
+          engine.setCellValue("Revenue", "A4", "North");
+          engine.setCellValue("Revenue", "B4", 98);
+          engine.setCellValue("Revenue", "A5", "South");
+          engine.setCellValue("Revenue", "B5", 102);
+          engine.setCellValue("Revenue", "A6", "Enterprise");
+          engine.setCellValue("Revenue", "B6", 450);
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "highlightCurrentSheetOutliers",
+      context: {
+        selection: {
+          sheetName: "Revenue",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Revenue",
+      },
+    });
+
+    expect(result.title).toBe("Highlight Current Sheet Outliers");
+    expect(result.summary).toContain("Revenue");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "formatRange",
+        range: {
+          sheetName: "Revenue",
+          startAddress: "B6",
+          endAddress: "B6",
+        },
+        patch: expect.objectContaining({
+          fill: expect.objectContaining({
+            backgroundColor: "#FEF3C7",
+          }),
+        }),
+      }),
+    ]);
+    expect(result.artifact).toEqual(
+      expect.objectContaining({
+        title: "Current Sheet Outlier Highlights",
+        text: expect.stringContaining("## Highlighted Numeric Outliers"),
+      }),
+    );
   });
 });

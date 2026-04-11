@@ -245,6 +245,7 @@ function cloneUiContext(context: WorkbookAgentUiContext | null): WorkbookAgentUi
 function isMutatingWorkflowTemplate(workflowTemplate: string): boolean {
   return (
     workflowTemplate === "highlightFormulaIssues" ||
+    workflowTemplate === "highlightCurrentSheetOutliers" ||
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
     workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
     workflowTemplate === "createCurrentSheetRollup" ||

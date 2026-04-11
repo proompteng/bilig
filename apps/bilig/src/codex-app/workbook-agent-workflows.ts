@@ -17,6 +17,10 @@ import {
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
 import {
+  executeFormattingWorkflow,
+  getFormattingWorkflowTemplateMetadata,
+} from "./workbook-agent-formatting-workflows.js";
+import {
   executeFormulaWorkflow,
   getFormulaWorkflowTemplateMetadata,
 } from "./workbook-agent-formula-workflows.js";
@@ -71,6 +75,7 @@ interface WorkbookAgentWorkflowTemplateMetadata {
 }
 
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
+type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers";
 type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders" | "normalizeCurrentSheetNumberFormats";
 type RollupWorkflowTemplate = "createCurrentSheetRollup";
 
@@ -78,6 +83,12 @@ function isFormulaWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is FormulaWorkflowTemplate {
   return workflowTemplate === "findFormulaIssues" || workflowTemplate === "highlightFormulaIssues";
+}
+
+function isFormattingWorkflowTemplate(
+  workflowTemplate: WorkbookAgentWorkflowTemplate,
+): workflowTemplate is FormattingWorkflowTemplate {
+  return workflowTemplate === "highlightCurrentSheetOutliers";
 }
 
 function isImportWorkflowTemplate(
@@ -107,6 +118,10 @@ function getWorkflowTemplateMetadata(
   if (formulaMetadata) {
     return formulaMetadata;
   }
+  const formattingMetadata = getFormattingWorkflowTemplateMetadata(workflowTemplate, workflowInput);
+  if (formattingMetadata) {
+    return formattingMetadata;
+  }
   const importMetadata = getImportWorkflowTemplateMetadata(workflowTemplate, workflowInput);
   if (importMetadata) {
     return importMetadata;
@@ -120,6 +135,7 @@ function getWorkflowTemplateMetadata(
   }
   if (
     isFormulaWorkflowTemplate(workflowTemplate) ||
+    isFormattingWorkflowTemplate(workflowTemplate) ||
     isImportWorkflowTemplate(workflowTemplate) ||
     isRollupWorkflowTemplate(workflowTemplate)
   ) {
@@ -664,6 +680,17 @@ export async function executeWorkbookAgentWorkflow(input: {
   if (formulaResult) {
     return formulaResult;
   }
+  const formattingResult = await executeFormattingWorkflow({
+    documentId: input.documentId,
+    zeroSyncService: input.zeroSyncService,
+    workflowTemplate: input.workflowTemplate,
+    ...(input.context !== undefined ? { context: input.context } : {}),
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
+  });
+  if (formattingResult) {
+    return formattingResult;
+  }
   const importResult = await executeImportWorkflow({
     documentId: input.documentId,
     zeroSyncService: input.zeroSyncService,
@@ -689,6 +716,7 @@ export async function executeWorkbookAgentWorkflow(input: {
   if (
     isStructuralWorkflowTemplate(input.workflowTemplate) ||
     isFormulaWorkflowTemplate(input.workflowTemplate) ||
+    isFormattingWorkflowTemplate(input.workflowTemplate) ||
     isImportWorkflowTemplate(input.workflowTemplate) ||
     isRollupWorkflowTemplate(input.workflowTemplate)
   ) {

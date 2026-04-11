@@ -12,6 +12,7 @@ type WorkflowActionTemplate =
   | "describeRecentChanges"
   | "findFormulaIssues"
   | "highlightFormulaIssues"
+  | "highlightCurrentSheetOutliers"
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "traceSelectionDependencies"
@@ -50,6 +51,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Highlight formula issues",
     summary:
       "Stage a preview bundle that highlights active-sheet formula errors, cycles, and JS-only fallback formulas.",
+  },
+  {
+    template: "highlightCurrentSheetOutliers",
+    label: "Highlight outliers",
+    summary: "Stage a preview bundle that highlights numeric outlier cells on the active sheet.",
   },
   {
     template: "normalizeCurrentSheetHeaders",

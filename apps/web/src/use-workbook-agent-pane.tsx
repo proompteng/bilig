@@ -43,6 +43,7 @@ type RailWorkflowTemplate =
   | "describeRecentChanges"
   | "findFormulaIssues"
   | "highlightFormulaIssues"
+  | "highlightCurrentSheetOutliers"
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "traceSelectionDependencies"
@@ -62,6 +63,7 @@ type WorkbookAgentWorkflowStartRequest =
         RailWorkflowTemplate,
         | "findFormulaIssues"
         | "highlightFormulaIssues"
+        | "highlightCurrentSheetOutliers"
         | "normalizeCurrentSheetHeaders"
         | "normalizeCurrentSheetNumberFormats"
         | "searchWorkbookQuery"
@@ -79,6 +81,11 @@ type WorkbookAgentWorkflowStartRequest =
     }
   | {
       readonly workflowTemplate: "highlightFormulaIssues";
+      readonly sheetName?: string;
+      readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "highlightCurrentSheetOutliers";
       readonly sheetName?: string;
       readonly limit?: number;
     }
@@ -1095,6 +1102,7 @@ export function useWorkbookAgentPane(input: {
           if (
             (workflowTemplate === "findFormulaIssues" ||
               workflowTemplate === "highlightFormulaIssues" ||
+              workflowTemplate === "highlightCurrentSheetOutliers" ||
               workflowTemplate === "normalizeCurrentSheetHeaders" ||
               workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
               workflowTemplate === "createCurrentSheetRollup") &&

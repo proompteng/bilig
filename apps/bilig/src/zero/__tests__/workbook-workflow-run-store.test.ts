@@ -345,6 +345,59 @@ describe("workbook-workflow-run-store", () => {
     ]);
   });
 
+  it("hydrates formatting workflow templates from durable rows after reload", async () => {
+    const run = {
+      ...createWorkflowRun(),
+      runId: "workflow-formatting-1",
+      workflowTemplate: "highlightCurrentSheetOutliers" as const,
+      title: "Highlight Current Sheet Outliers",
+      summary: "Staged outlier highlights for 2 cells across 1 numeric column on Revenue.",
+      artifact: {
+        kind: "markdown" as const,
+        title: "Current Sheet Outlier Highlights",
+        text: "## Highlighted Numeric Outliers",
+      },
+    };
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_workflow_run AS run") &&
+        values?.[1] === "thr-1" &&
+        values?.[2] === "alex@example.com"
+          ? [
+              {
+                runId: run.runId,
+                workbookId: "doc-1",
+                threadId: run.threadId,
+                actorUserId: run.startedByUserId,
+                workflowTemplate: run.workflowTemplate,
+                title: run.title,
+                summary: run.summary,
+                status: run.status,
+                createdAtUnixMs: run.createdAtUnixMs,
+                updatedAtUnixMs: run.updatedAtUnixMs,
+                completedAtUnixMs: run.completedAtUnixMs,
+                errorMessage: run.errorMessage,
+                stepsJson: run.steps,
+                artifactJson: run.artifact,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const runs = await listWorkbookThreadWorkflowRuns(queryable, {
+      documentId: "doc-1",
+      actorUserId: "alex@example.com",
+      threadId: "thr-1",
+    });
+
+    expect(runs).toEqual([
+      expect.objectContaining({
+        runId: "workflow-formatting-1",
+        workflowTemplate: "highlightCurrentSheetOutliers",
+      }),
+    ]);
+  });
+
   it("loads cancelled workflow runs with cancelled steps", async () => {
     const run = {
       ...createWorkflowRun(),

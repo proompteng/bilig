@@ -1256,6 +1256,77 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts outlier-highlight workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-outlier-highlight-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "highlightCurrentSheetOutliers" as const,
+      title: "Highlight Current Sheet Outliers",
+      summary: "Staged outlier highlights for 2 cells across 1 numeric column on Revenue.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-numeric-columns",
+          label: "Inspect numeric columns",
+          status: "completed" as const,
+          summary: "Loaded numeric cells and header labels from Revenue.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Current Sheet Outlier Highlights",
+        text: "## Highlighted Numeric Outliers",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-outlier-highlight-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "highlightCurrentSheetOutliers",
+          sheetName: "Revenue",
+          limit: 10,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "highlightCurrentSheetOutliers",
+      sheetName: "Revenue",
+      limit: 10,
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "highlightCurrentSheetOutliers"',
+    );
+  });
+
   it("starts header-normalization workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

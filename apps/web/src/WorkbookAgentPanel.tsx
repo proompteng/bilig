@@ -899,6 +899,7 @@ export function WorkbookAgentPanel(props: {
       | "describeRecentChanges"
       | "findFormulaIssues"
       | "highlightFormulaIssues"
+      | "highlightCurrentSheetOutliers"
       | "normalizeCurrentSheetHeaders"
       | "normalizeCurrentSheetNumberFormats"
       | "traceSelectionDependencies"

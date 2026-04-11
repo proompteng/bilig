@@ -288,6 +288,47 @@ describe("@bilig/contracts", () => {
     expect(decoded.artifact?.title).toBe("Formula Issue Highlights");
   });
 
+  it("accepts outlier-highlight workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-outlier-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "highlightCurrentSheetOutliers",
+      title: "Highlight Current Sheet Outliers",
+      summary: "Staged outlier highlights for 2 cells across 1 numeric column on Revenue.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-numeric-columns",
+          label: "Inspect numeric columns",
+          status: "completed",
+          summary: "Loaded numeric cells and header labels from Revenue.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-outlier-highlights",
+          label: "Stage outlier highlights",
+          status: "completed",
+          summary:
+            "Prepared 2 semantic formatting commands to highlight numeric outliers on Revenue.",
+          updatedAtUnixMs: 115,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Current Sheet Outlier Highlights",
+        text: "## Highlighted Numeric Outliers",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("highlightCurrentSheetOutliers");
+    expect(decoded.artifact?.title).toBe("Current Sheet Outlier Highlights");
+  });
+
   it("accepts header-normalization workflow templates in durable runs", () => {
     const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
       runId: "workflow-header-1",

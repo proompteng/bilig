@@ -1024,6 +1024,130 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts outlier-highlight workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2")) {
+        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-outlier-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "highlightCurrentSheetOutliers",
+                  title: "Highlight Current Sheet Outliers",
+                  summary:
+                    "Staged outlier highlights for 1 cell across 1 numeric column on Sheet1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-numeric-columns",
+                      label: "Inspect numeric columns",
+                      status: "completed",
+                      summary: "Loaded numeric cells and header labels from Sheet1.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "stage-outlier-highlights",
+                      label: "Stage outlier highlights",
+                      status: "completed",
+                      summary:
+                        "Prepared 1 semantic formatting command to highlight numeric outliers on Sheet1.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Current Sheet Outlier Highlights",
+                    text: "## Highlighted Numeric Outliers",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-highlightCurrentSheetOutliers']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Outlier workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
+    );
+    expectWorkflowStartBody(workflowCall?.[1], {
+      workflowTemplate: "highlightCurrentSheetOutliers",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Highlight Current Sheet Outliers");
+    expect(host.textContent).toContain("Current Sheet Outlier Highlights");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("cancels running workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

@@ -90,6 +90,11 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     limit: z.number().int().positive().max(200).optional(),
   }),
   z.object({
+    workflowTemplate: z.literal("highlightCurrentSheetOutliers"),
+    sheetName: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(100).optional(),
+  }),
+  z.object({
     workflowTemplate: z.literal("normalizeCurrentSheetHeaders"),
     sheetName: z.string().min(1).optional(),
   }),
@@ -615,7 +620,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, import-cleanup tasks like header or number-format normalization, search/report tasks, rollup previews, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting, import-cleanup tasks like header or number-format normalization, search/report tasks, rollup previews, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -629,6 +634,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "describeRecentChanges",
               "findFormulaIssues",
               "highlightFormulaIssues",
+              "highlightCurrentSheetOutliers",
               "normalizeCurrentSheetHeaders",
               "normalizeCurrentSheetNumberFormats",
               "traceSelectionDependencies",
