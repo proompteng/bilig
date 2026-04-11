@@ -271,8 +271,11 @@ function summarizeReasoningText(text: string | null): string | null {
 }
 
 function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
-  const [open, setOpen] = useState(false);
   const bodyText = props.entry.kind === "plan" ? props.entry.text : null;
+  if (!bodyText?.trim().length) {
+    return null;
+  }
+  const [open, setOpen] = useState(false);
   const summary = summarizeReasoningText(bodyText);
 
   return (
@@ -282,10 +285,10 @@ function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }
         setOpen(nextOpen);
       }}
     >
-      <div className={cn(workbookInsetClass(), "px-3 py-1.5")}>
+      <div className="px-1 py-1">
         <Collapsible.Trigger
           aria-label={open ? "Collapse reasoning" : "Expand reasoning"}
-          className="flex w-full items-center gap-2 rounded-[var(--wb-radius-control)] px-0.5 py-1 text-left outline-none transition-colors hover:bg-[var(--wb-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          className="flex w-full items-center gap-2 rounded-[var(--wb-radius-control)] px-1 py-1 text-left outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
           data-testid={`workbook-agent-reasoning-toggle-${props.entry.id}`}
           type="button"
         >
@@ -306,16 +309,10 @@ function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }
           className="overflow-hidden pt-1"
           data-testid={`workbook-agent-reasoning-panel-${props.entry.id}`}
         >
-          <div className="rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-3 py-2">
-            {bodyText ? (
-              <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
-                {bodyText}
-              </div>
-            ) : (
-              <div className="text-[12px] leading-5 text-[var(--wb-text-subtle)]">
-                No reasoning details were included in the Codex event payload.
-              </div>
-            )}
+          <div className="pl-7 pr-2 pb-2">
+            <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
+              {bodyText}
+            </div>
             <TimelineCitationList citations={props.entry.citations} />
           </div>
         </Collapsible.Panel>
@@ -546,12 +543,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       return null;
     }
     return (
-      <div
-        className={cn(
-          workbookInsetClass(),
-          "px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]",
-        )}
-      >
+      <div className="px-1 py-1 text-[13px] leading-5 text-[var(--wb-text)]">
         <WorkbookAgentMarkdown markdown={entry.text} />
         <TimelineCitationList citations={entry.citations} />
       </div>
@@ -564,7 +556,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 
   if (entry.kind === "tool") {
     return (
-      <div className={cn(workbookInsetClass(), "px-3 py-2")}>
+      <div className="px-1 py-1.5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-[var(--wb-text-muted)]">
@@ -586,8 +578,12 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     );
   }
 
+  if (isReasoningPlaceholderEntry(entry)) {
+    return null;
+  }
+
   return (
-    <div className={cn(workbookInsetClass(), "px-3 py-2")}>
+    <div className="px-1 py-1.5">
       <div className="text-[11px] leading-5 text-[var(--wb-text-muted)]">{entry.text}</div>
       <TimelineCitationList citations={entry.citations} />
     </div>

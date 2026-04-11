@@ -142,7 +142,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     });
   });
 
-  it("renders legacy reasoning placeholders as thought rows instead of raw placeholder text", async () => {
+  it("hides legacy reasoning placeholders with no details", async () => {
     const panel = renderPanel({
       id: "system-1",
       kind: "system",
@@ -151,7 +151,7 @@ describe("WorkbookAgentPanel reasoning", () => {
 
     await panel.render();
 
-    expect(panel.host.textContent).toContain("Thought");
+    expect(panel.host.textContent).not.toContain("Thought");
     expect(panel.host.textContent).not.toContain("Codex emitted reasoning.");
 
     await act(async () => {

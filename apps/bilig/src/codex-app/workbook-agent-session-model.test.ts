@@ -3,12 +3,17 @@ import type { CodexThreadItem } from "@bilig/agent-api";
 import { mapThreadItemToEntry } from "./workbook-agent-session-model.js";
 
 describe("workbook-agent-session-model", () => {
-  it("maps reasoning items into plan timeline entries", () => {
+  it("maps reasoning items with summary arrays into plan timeline entries", () => {
     const entry = mapThreadItemToEntry(
       {
         type: "reasoning",
         id: "reasoning-1",
-        text: "Inspecting the workbook structure before changing formulas.",
+        summary: [
+          {
+            type: "summary_text",
+            text: "Inspecting the workbook structure before changing formulas.",
+          },
+        ],
       } satisfies CodexThreadItem,
       "turn-1",
     );

@@ -231,28 +231,29 @@ function isPlanItem(item: CodexThreadItem): item is Extract<CodexThreadItem, { t
   return item.type === "plan" && typeof item.text === "string";
 }
 
+function extractReasoningFragments(value: unknown): string[] {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractReasoningFragments(entry));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  return [
+    ...extractReasoningFragments(value["text"]),
+    ...extractReasoningFragments(value["summary"]),
+    ...extractReasoningFragments(value["content"]),
+  ];
+}
+
 function extractReasoningText(item: CodexThreadItem): string | null {
   if (!isRecord(item) || item.type !== "reasoning") {
     return null;
   }
-  if (typeof item["text"] === "string" && item["text"].trim().length > 0) {
-    return item["text"];
-  }
-  if (typeof item["summary"] === "string" && item["summary"].trim().length > 0) {
-    return item["summary"];
-  }
-  if (Array.isArray(item["content"])) {
-    const text = item["content"]
-      .flatMap((entry) =>
-        isRecord(entry) && typeof entry["text"] === "string" ? [entry["text"]] : [],
-      )
-      .join("\n")
-      .trim();
-    if (text.length > 0) {
-      return text;
-    }
-  }
-  return null;
+  const text = extractReasoningFragments(item).join("\n").trim();
+  return text.length > 0 ? text : null;
 }
 
 function isToolContentItem(item: unknown): item is
