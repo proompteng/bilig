@@ -114,7 +114,7 @@ export function useWorkbookToolbar(input: {
   const statusModeLabel = formatConnectionStateLabel(connectionStateName);
   const statusModeValue = remoteSyncAvailable ? "Live" : statusModeLabel;
   const statusSyncValue =
-    localPersistenceMode === "follower"
+    localPersistenceMode === "follower" && !remoteSyncAvailable
       ? "Follower"
       : !runtimeReady
         ? "Loading"

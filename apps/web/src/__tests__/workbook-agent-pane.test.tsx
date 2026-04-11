@@ -316,7 +316,7 @@ describe("workbook agent pane", () => {
     );
     expect(host.textContent).toContain("Sheet1!A1");
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
-      "Message",
+      "Ask the workbook assistant",
     );
 
     await act(async () => {

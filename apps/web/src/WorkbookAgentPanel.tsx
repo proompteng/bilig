@@ -954,6 +954,55 @@ export function WorkbookAgentPanel(props: {
           onSelectThreadScope={props.onSelectThreadScope}
           onStartNewThread={props.onStartNewThread}
         />
+        <form
+          className="mt-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            props.onSubmit();
+          }}
+        >
+          <label className="sr-only" htmlFor="workbook-agent-input">
+            Ask the workbook assistant
+          </label>
+          <div className="relative">
+            <textarea
+              id="workbook-agent-input"
+              className="min-h-24 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+              data-testid="workbook-agent-input"
+              placeholder="Ask the workbook assistant"
+              value={props.draft}
+              onChange={(event) => {
+                props.onDraftChange(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (isRunning) {
+                  return;
+                }
+                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+                  return;
+                }
+                event.preventDefault();
+                props.onSubmit();
+              }}
+            />
+            <button
+              aria-label={isRunning ? "Stop" : "Send message"}
+              className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-muted)] disabled:text-[var(--wb-text-subtle)] disabled:opacity-70 disabled:shadow-none"
+              data-testid="workbook-agent-send"
+              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+              type="button"
+              onClick={() => {
+                if (isRunning) {
+                  props.onInterrupt();
+                  return;
+                }
+                props.onSubmit();
+              }}
+            >
+              {isRunning ? <StopIcon /> : <SendArrowIcon />}
+            </button>
+          </div>
+        </form>
         <ThreadSummaryStrip
           activeThreadId={props.activeThreadId}
           threadSummaries={props.threadSummaries}
@@ -1040,55 +1089,6 @@ export function WorkbookAgentPanel(props: {
           </div>
         ) : null}
       </div>
-      <form
-        className="border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-2.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          props.onSubmit();
-        }}
-      >
-        <label className="sr-only" htmlFor="workbook-agent-input">
-          Ask the workbook assistant
-        </label>
-        <div className="relative">
-          <textarea
-            id="workbook-agent-input"
-            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
-            data-testid="workbook-agent-input"
-            placeholder="Message"
-            value={props.draft}
-            onChange={(event) => {
-              props.onDraftChange(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (isRunning) {
-                return;
-              }
-              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
-                return;
-              }
-              event.preventDefault();
-              props.onSubmit();
-            }}
-          />
-          <button
-            aria-label={isRunning ? "Stop" : "Send message"}
-            className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-muted)] disabled:text-[var(--wb-text-subtle)] disabled:opacity-70 disabled:shadow-none"
-            data-testid="workbook-agent-send"
-            disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
-            type="button"
-            onClick={() => {
-              if (isRunning) {
-                props.onInterrupt();
-                return;
-              }
-              props.onSubmit();
-            }}
-          >
-            {isRunning ? <StopIcon /> : <SendArrowIcon />}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
