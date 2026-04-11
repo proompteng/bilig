@@ -2371,81 +2371,10 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("starts query-driven workbook search workflows from the rail", async () => {
+  it("does not expose workbook search controls in the tools dropdown", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-search-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "searchWorkbookQuery",
-                  title: "Search Workbook",
-                  summary: 'Found 2 workbook matches for "revenue".',
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "search-workbook",
-                      label: "Search workbook",
-                      status: "completed",
-                      summary:
-                        'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "draft-search-report",
-                      label: "Draft search report",
-                      status: "completed",
-                      summary: "Prepared the durable workbook search report for the thread.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Workbook Search",
-                    text: "## Workbook Search\n\nQuery: revenue",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
 
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -2457,36 +2386,13 @@ describe("workbook agent pane", () => {
 
     await openWorkflowMenu(host);
 
-    const input = document.querySelector("[data-testid='workbook-agent-workflow-search-input']");
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-searchWorkbookQuery']",
-    );
-    expect(input instanceof HTMLInputElement).toBe(true);
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) {
-        throw new Error("Search workflow controls not found");
-      }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Input value setter not found");
-      }
-      Reflect.apply(valueSetter, input, ["revenue"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "searchWorkbookQuery",
-      query: "revenue",
-    });
-    expect(host.textContent).toContain("Search Workbook");
-    expect(host.textContent).toContain("Query: revenue");
+    expect(
+      document.querySelector("[data-testid='workbook-agent-workflow-search-input']"),
+    ).toBeNull();
+    expect(
+      document.querySelector("[data-testid='workbook-agent-workflow-start-searchWorkbookQuery']"),
+    ).toBeNull();
+    expect(host.textContent).not.toContain("Search workbook");
 
     await act(async () => {
       root.unmount();

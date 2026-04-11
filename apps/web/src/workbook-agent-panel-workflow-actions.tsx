@@ -118,7 +118,6 @@ export function WorkflowActionStrip(props: {
     template: "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn",
   ) => void;
 }) {
-  const [searchQuery, setSearchQuery] = useState("");
   const [sheetName, setSheetName] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const compactButtonClass = cn(
@@ -163,16 +162,6 @@ export function WorkflowActionStrip(props: {
     },
     [closeTools, props],
   );
-
-  const runSearchWorkflow = useCallback(() => {
-    const trimmedQuery = searchQuery.trim();
-    if (trimmedQuery.length === 0) {
-      return;
-    }
-    props.onStartSearchWorkflow(trimmedQuery);
-    setSearchQuery("");
-    closeTools();
-  }, [closeTools, props, searchQuery]);
 
   return (
     <Popover.Root
@@ -328,45 +317,6 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Unhide current column"}
-                  </Button>
-                </div>
-              </div>
-              <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
-                <div className={agentPanelSectionTitleClass()}>Search workbook</div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <input
-                    className={agentPanelFieldClass()}
-                    data-testid="workbook-agent-workflow-search-input"
-                    disabled={props.disabled || props.isStartingWorkflow}
-                    placeholder="Search for a concept, value, or formula"
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => {
-                      setSearchQuery(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" &&
-                        searchQuery.trim().length > 0 &&
-                        !(props.disabled || props.isStartingWorkflow)
-                      ) {
-                        event.preventDefault();
-                        runSearchWorkflow();
-                      }
-                    }}
-                  />
-                  <Button
-                    className={cn(primaryCompactButtonClass, "min-w-[5rem]")}
-                    data-testid="workbook-agent-workflow-start-searchWorkbookQuery"
-                    disabled={
-                      props.disabled || props.isStartingWorkflow || searchQuery.trim().length === 0
-                    }
-                    type="button"
-                    onClick={() => {
-                      runSearchWorkflow();
-                    }}
-                  >
-                    {props.isStartingWorkflow ? "Starting…" : "Search"}
                   </Button>
                 </div>
               </div>
