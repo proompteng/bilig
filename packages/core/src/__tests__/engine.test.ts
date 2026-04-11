@@ -4917,6 +4917,38 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("emits full invalidation when importing a snapshot", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+
+    const events: Array<{ invalidation: "cells" | "full"; changedCellIndices: number[] }> = [];
+    const unsubscribe = engine.subscribe((event) => {
+      events.push({
+        invalidation: event.invalidation,
+        changedCellIndices: Array.from(event.changedCellIndices),
+      });
+    });
+
+    engine.importSnapshot({
+      version: 1,
+      workbook: { name: "spec" },
+      sheets: [
+        {
+          id: 1,
+          name: "Sheet1",
+          order: 0,
+          cells: [{ address: "A1", value: 12 }],
+        },
+      ],
+    });
+
+    expect(events.at(-1)).toEqual({
+      invalidation: "full",
+      changedCellIndices: [],
+    });
+    unsubscribe();
+  });
+
   it("emits targeted range invalidation for style-only edits", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

@@ -367,6 +367,7 @@ export function createEngineOperationService(args: {
     source: MutationSource,
     potentialNewCells?: number,
   ): void => {
+    const isRestore = source === "restore";
     args.beginMutationCollection();
     let changedInputCount = 0;
     let formulaChangedCount = 0;
@@ -578,19 +579,23 @@ export function createEngineOperationService(args: {
             break;
           }
           case "setCellValue": {
-            const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
-            if (existingIndex !== undefined) {
-              changedInputCount = args.markPivotRootsChanged(
-                args.clearPivotForCell(existingIndex),
-                changedInputCount,
-              );
+            if (!isRestore) {
+              const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+              if (existingIndex !== undefined) {
+                changedInputCount = args.markPivotRootsChanged(
+                  args.clearPivotForCell(existingIndex),
+                  changedInputCount,
+                );
+              }
             }
             const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
-            changedInputCount = args.markSpillRootsChanged(
-              args.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+            if (!isRestore) {
+              changedInputCount = args.markSpillRootsChanged(
+                args.clearOwnedSpill(cellIndex),
+                changedInputCount,
+              );
+              topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+            }
             const value = literalToValue(op.value, args.state.strings);
             args.state.workbook.cellStore.setValue(
               cellIndex,
@@ -606,25 +611,33 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
-            pruneCellIfOrphaned(cellIndex);
+            if (!isRestore) {
+              pruneCellIfOrphaned(cellIndex);
+            }
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            if (!isRestore) {
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+              args.state.entityVersions.set(entityKeyForOp(op), order);
+            }
             break;
           }
           case "setCellFormula": {
-            const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
-            if (existingIndex !== undefined) {
-              changedInputCount = args.markPivotRootsChanged(
-                args.clearPivotForCell(existingIndex),
+            if (!isRestore) {
+              const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+              if (existingIndex !== undefined) {
+                changedInputCount = args.markPivotRootsChanged(
+                  args.clearPivotForCell(existingIndex),
+                  changedInputCount,
+                );
+              }
+            }
+            const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
+            if (!isRestore) {
+              changedInputCount = args.markSpillRootsChanged(
+                args.clearOwnedSpill(cellIndex),
                 changedInputCount,
               );
             }
-            const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
-            changedInputCount = args.markSpillRootsChanged(
-              args.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
             const compileStarted = performance.now();
             try {
               args.bindFormula(cellIndex, op.sheetName, op.formula);
@@ -643,16 +656,20 @@ export function createEngineOperationService(args: {
               args.setInvalidFormulaValue(cellIndex);
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             }
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            if (!isRestore) {
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+              args.state.entityVersions.set(entityKeyForOp(op), order);
+            }
             break;
           }
           case "setCellFormat": {
             const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
             args.state.workbook.setCellFormat(cellIndex, op.format);
-            pruneCellIfOrphaned(cellIndex);
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            if (!isRestore) {
+              pruneCellIfOrphaned(cellIndex);
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+              args.state.entityVersions.set(entityKeyForOp(op), order);
+            }
             break;
           }
           case "upsertCellStyle":
@@ -774,7 +791,9 @@ export function createEngineOperationService(args: {
       changedInputArray,
     );
     recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots);
-    const changed = args.composeEventChanges(recalculated, explicitChangedCount);
+    const changed = isRestore
+      ? new Uint32Array()
+      : args.composeEventChanges(recalculated, explicitChangedCount);
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -783,7 +802,7 @@ export function createEngineOperationService(args: {
     args.state.setLastMetrics(lastMetrics);
     const event = {
       kind: "batch",
-      invalidation: sheetDeleted || structuralInvalidation ? "full" : "cells",
+      invalidation: isRestore || sheetDeleted || structuralInvalidation ? "full" : "cells",
       changedCellIndices: changed,
       invalidatedRanges,
       invalidatedRows,

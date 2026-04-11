@@ -8,7 +8,6 @@ import {
 import { CellFlags } from "../../cell-store.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
 import { exportSheetMetadata } from "../../engine-snapshot-utils.js";
-import { emptyValue } from "../../engine-value-utils.js";
 import {
   exportReplicaSnapshot as exportReplicaStateSnapshot,
   hydrateReplicaState,
@@ -200,7 +199,6 @@ export function createEngineSnapshotService(args: {
       return Effect.try({
         try: () => {
           args.resetWorkbook();
-          const authoredBlankCells: Array<{ sheetName: string; address: string }> = [];
           const ops: import("@bilig/workbook-domain").EngineOp[] = [
             { kind: "upsertWorkbook", name: snapshot.workbook.name },
           ];
@@ -339,9 +337,6 @@ export function createEngineSnapshotService(args: {
                   address: cell.address,
                   value: cell.value ?? null,
                 });
-                if (cell.value === null && cell.format === undefined) {
-                  authoredBlankCells.push({ sheetName: sheet.name, address: cell.address });
-                }
               }
               if (cell.format !== undefined) {
                 ops.push({
@@ -396,10 +391,6 @@ export function createEngineSnapshotService(args: {
           args.executeRestoreTransaction(
             potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
           );
-          authoredBlankCells.forEach(({ sheetName, address }) => {
-            const { cellIndex } = args.state.workbook.ensureCellRecord(sheetName, address);
-            args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
-          });
         },
         catch: (cause) =>
           new EngineSnapshotError({
