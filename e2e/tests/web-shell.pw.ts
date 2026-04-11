@@ -3,11 +3,12 @@ import fc from "fast-check";
 import { runProperty, shouldRunFuzzSuite } from "../../packages/test-fuzz/src/index.ts";
 import {
   PRIMARY_MODIFIER,
-  PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
-  PRODUCT_ROW_MARKER_WIDTH,
   clickProductCell,
+  clickGridRightEdge,
+  dragProductBodySelection,
+  dragProductColumnResize,
   getProductColumnLeft,
   getProductColumnWidth,
   waitForWorkbookReady,
@@ -18,110 +19,6 @@ type BrowserSelectionAction =
   | { kind: "click"; row: number; col: number }
   | { kind: "shiftClick"; row: number; col: number }
   | { kind: "key"; key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; shift: boolean };
-
-async function dragProductColumnResize(
-  page: Parameters<typeof test>[0]["page"],
-  columnIndex: number,
-  deltaX: number,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const columnLeft = await getProductColumnLeft(page, columnIndex);
-  const columnWidth = await getProductColumnWidth(page, columnIndex);
-  const edgeX = grid.x + columnLeft + columnWidth - 1;
-  const edgeY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
-
-  await page.mouse.move(edgeX, edgeY);
-  await page.mouse.down();
-  await page.mouse.move(edgeX + deltaX, edgeY, { steps: 10 });
-  await page.mouse.up();
-}
-
-async function doubleClickProductColumnResizeHandle(
-  page: Parameters<typeof test>[0]["page"],
-  columnIndex: number,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const columnLeft = await getProductColumnLeft(page, columnIndex);
-  const columnWidth = await getProductColumnWidth(page, columnIndex);
-  const edgeX = grid.x + columnLeft + columnWidth - 1;
-  const headerY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
-  await page.mouse.click(edgeX, headerY, { clickCount: 2 });
-}
-
-async function dragProductHeaderSelection(
-  page: Parameters<typeof test>[0]["page"],
-  axis: "column" | "row",
-  startIndex: number,
-  endIndex: number,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const startColumnLeft = axis === "column" ? await getProductColumnLeft(page, startIndex) : 0;
-  const endColumnLeft = axis === "column" ? await getProductColumnLeft(page, endIndex) : 0;
-  const startColumnWidth = axis === "column" ? await getProductColumnWidth(page, startIndex) : 0;
-  const endColumnWidth = axis === "column" ? await getProductColumnWidth(page, endIndex) : 0;
-  const startX =
-    axis === "column"
-      ? grid.x + startColumnLeft + Math.floor(startColumnWidth / 2)
-      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
-  const startY =
-    axis === "column"
-      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-      : grid.y +
-        PRODUCT_HEADER_HEIGHT +
-        startIndex * PRODUCT_ROW_HEIGHT +
-        Math.floor(PRODUCT_ROW_HEIGHT / 2);
-  const endX =
-    axis === "column"
-      ? grid.x + endColumnLeft + Math.floor(endColumnWidth / 2)
-      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
-  const endY =
-    axis === "column"
-      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-      : grid.y +
-        PRODUCT_HEADER_HEIGHT +
-        endIndex * PRODUCT_ROW_HEIGHT +
-        Math.floor(PRODUCT_ROW_HEIGHT / 2);
-
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(endX, endY, { steps: 8 });
-  await page.mouse.up();
-}
-
-async function clickGridRightEdge(page: Parameters<typeof test>[0]["page"], rowIndex = 2) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const x = grid.x + grid.width - 3;
-  const y =
-    grid.y +
-    PRODUCT_HEADER_HEIGHT +
-    rowIndex * PRODUCT_ROW_HEIGHT +
-    Math.floor(PRODUCT_ROW_HEIGHT / 2);
-  await page.mouse.click(x, y);
-}
 
 async function dragProductFillHandle(
   page: Parameters<typeof test>[0]["page"],
@@ -173,27 +70,6 @@ async function getProductFillHandleDragPoints(
     targetX: targetLeft + targetWidth - 3,
     targetY: targetTop + PRODUCT_ROW_HEIGHT - 3,
   };
-}
-
-async function clickProductBodyOffset(
-  page: Parameters<typeof test>[0]["page"],
-  offsetX: number,
-  rowIndex = 0,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  await page.mouse.click(
-    grid.x + PRODUCT_ROW_MARKER_WIDTH + offsetX,
-    grid.y +
-      PRODUCT_HEADER_HEIGHT +
-      rowIndex * PRODUCT_ROW_HEIGHT +
-      Math.floor(PRODUCT_ROW_HEIGHT / 2),
-  );
 }
 
 async function clickSelectionFuzzCell(
@@ -282,26 +158,6 @@ async function runSelectionFuzzActions(
   await runSelectionFuzzActions(page, grid, actions, index + 1);
 }
 
-async function clickProductCellUpperHalf(
-  page: Parameters<typeof test>[0]["page"],
-  columnIndex: number,
-  rowIndex: number,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const columnLeft = await getProductColumnLeft(page, columnIndex);
-  const columnWidth = await getProductColumnWidth(page, columnIndex);
-  await page.mouse.click(
-    grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + 4,
-  );
-}
-
 async function clickProductSelectedCellTopBorder(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
@@ -320,44 +176,6 @@ async function clickProductSelectedCellTopBorder(
     grid.x + columnLeft + Math.floor(columnWidth / 2),
     grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT - 1,
   );
-}
-
-async function dragProductBodySelection(
-  page: Parameters<typeof test>[0]["page"],
-  startColumn: number,
-  startRow: number,
-  endColumn: number,
-  endRow: number,
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const startLeft = await getProductColumnLeft(page, startColumn);
-  const startWidth = await getProductColumnWidth(page, startColumn);
-  const endLeft = await getProductColumnLeft(page, endColumn);
-  const endWidth = await getProductColumnWidth(page, endColumn);
-
-  const startX = grid.x + startLeft + Math.floor(startWidth / 2);
-  const startY =
-    grid.y +
-    PRODUCT_HEADER_HEIGHT +
-    startRow * PRODUCT_ROW_HEIGHT +
-    Math.floor(PRODUCT_ROW_HEIGHT / 2);
-  const endX = grid.x + endLeft + Math.floor(endWidth / 2);
-  const endY =
-    grid.y +
-    PRODUCT_HEADER_HEIGHT +
-    endRow * PRODUCT_ROW_HEIGHT +
-    Math.floor(PRODUCT_ROW_HEIGHT / 2);
-
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(endX, endY, { steps: 12 });
-  await page.mouse.up();
 }
 
 async function dragProductSelectionBorder(
@@ -394,139 +212,6 @@ async function dragProductSelectionBorder(
   await page.mouse.move(targetX, targetY, { steps: 12 });
   await page.mouse.up();
 }
-
-test("web app keeps sheet tabs and status bar visible in a short viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 2048, height: 220 });
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  const sheetTab = page.getByRole("tab", { name: "Sheet1" });
-  const statusSync = page.getByTestId("status-sync");
-
-  await expect(sheetTab).toBeVisible();
-  await expect(statusSync).toBeVisible();
-
-  const tabBox = await sheetTab.boundingBox();
-  const statusBox = await statusSync.boundingBox();
-  if (!tabBox || !statusBox) {
-    throw new Error("footer controls are not visible");
-  }
-
-  expect(tabBox.y + tabBox.height).toBeLessThanOrEqual(220);
-  expect(statusBox.y + statusBox.height).toBeLessThanOrEqual(220);
-});
-
-test("web app supports column and row header selection", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  const grid = page.getByTestId("sheet-grid");
-
-  await grid.click({
-    position: {
-      x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
-      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
-    },
-  });
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B:B");
-
-  await grid.click({
-    position: {
-      x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2),
-      y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
-    },
-  });
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!2:2");
-});
-
-test("web app supports row and column header drag selection", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  await dragProductHeaderSelection(page, "column", 1, 3);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B:D");
-
-  await dragProductHeaderSelection(page, "row", 1, 3);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!2:4");
-});
-
-test("web app supports rectangular drag selection", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  await dragProductBodySelection(page, 1, 1, 3, 3);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
-});
-
-test("web app keeps the active focus inside the sheet grid when clicking a cell", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  await clickProductCell(page, 2, 2);
-  await expect(page.getByTestId("name-box")).toHaveValue("C3");
-
-  const activeElementState = await page.evaluate(() => {
-    const active = document.activeElement;
-    return {
-      testId: active?.getAttribute("data-testid") ?? null,
-      insideSheetGrid: Boolean(active?.closest('[data-testid="sheet-grid"]')),
-    };
-  });
-
-  expect(activeElementState.insideSheetGrid).toBe(true);
-  expect(activeElementState.testId).not.toBe("sheet-grid");
-});
-
-test("web app maps clicks in the upper half of a cell to that same visible cell", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  await clickProductCellUpperHalf(page, 4, 11);
-  await expect(page.getByTestId("name-box")).toHaveValue("E12");
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!E12");
-
-  await clickProductCellUpperHalf(page, 2, 4);
-  await expect(page.getByTestId("name-box")).toHaveValue("C5");
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
-});
-
-test("web app supports column resize without breaking hit testing", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  await clickProductBodyOffset(page, 82, 0);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
-
-  await dragProductColumnResize(page, 0, -36);
-
-  await clickProductBodyOffset(page, 82, 0);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
-});
-
-test("web app supports column edge double-click autofit", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-
-  const nameBox = page.getByTestId("name-box");
-  const formulaInput = page.getByTestId("formula-input");
-
-  await nameBox.fill("A1");
-  await nameBox.press("Enter");
-  await formulaInput.fill("supercalifragilisticexpialidocious");
-  await formulaInput.press("Enter");
-
-  await clickProductBodyOffset(page, 126, 0);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
-
-  await doubleClickProductColumnResizeHandle(page, 0);
-
-  await clickProductBodyOffset(page, 126, 0);
-  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
-});
 
 test("web app accepts string values and string comparison formulas", async ({ page }) => {
   await page.goto("/");

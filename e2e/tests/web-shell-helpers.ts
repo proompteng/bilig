@@ -94,6 +94,103 @@ export async function clickProductCell(
   }
 }
 
+export async function dragProductColumnResize(page: Page, columnIndex: number, deltaX: number) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  const edgeX = grid.x + columnLeft + columnWidth - 1;
+  const edgeY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+
+  await page.mouse.move(edgeX, edgeY);
+  await page.mouse.down();
+  await page.mouse.move(edgeX + deltaX, edgeY, { steps: 10 });
+  await page.mouse.up();
+}
+
+export async function doubleClickProductColumnResizeHandle(page: Page, columnIndex: number) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  const edgeX = grid.x + columnLeft + columnWidth - 1;
+  const headerY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+  await page.mouse.click(edgeX, headerY, { clickCount: 2 });
+}
+
+export async function dragProductHeaderSelection(
+  page: Page,
+  axis: "column" | "row",
+  startIndex: number,
+  endIndex: number,
+) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const startColumnLeft = axis === "column" ? await getProductColumnLeft(page, startIndex) : 0;
+  const endColumnLeft = axis === "column" ? await getProductColumnLeft(page, endIndex) : 0;
+  const startColumnWidth = axis === "column" ? await getProductColumnWidth(page, startIndex) : 0;
+  const endColumnWidth = axis === "column" ? await getProductColumnWidth(page, endIndex) : 0;
+  const startX =
+    axis === "column"
+      ? grid.x + startColumnLeft + Math.floor(startColumnWidth / 2)
+      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
+  const startY =
+    axis === "column"
+      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
+      : grid.y +
+        PRODUCT_HEADER_HEIGHT +
+        startIndex * PRODUCT_ROW_HEIGHT +
+        Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const endX =
+    axis === "column"
+      ? grid.x + endColumnLeft + Math.floor(endColumnWidth / 2)
+      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
+  const endY =
+    axis === "column"
+      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
+      : grid.y +
+        PRODUCT_HEADER_HEIGHT +
+        endIndex * PRODUCT_ROW_HEIGHT +
+        Math.floor(PRODUCT_ROW_HEIGHT / 2);
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(endX, endY, { steps: 8 });
+  await page.mouse.up();
+}
+
+export async function clickGridRightEdge(page: Page, rowIndex = 2) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const x = grid.x + grid.width - 3;
+  const y =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    rowIndex * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  await page.mouse.click(x, y);
+}
+
 export function getToolbarButton(page: Page, label: string): Locator {
   return page.getByRole("button", { name: label, exact: true });
 }
@@ -257,6 +354,76 @@ export async function selectToolbarActionRange(page: Page) {
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
   await clickProductCell(page, 2, 2, { shift: true });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C3");
+}
+
+export async function clickProductBodyOffset(page: Page, offsetX: number, rowIndex = 0) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  await page.mouse.click(
+    grid.x + PRODUCT_ROW_MARKER_WIDTH + offsetX,
+    grid.y +
+      PRODUCT_HEADER_HEIGHT +
+      rowIndex * PRODUCT_ROW_HEIGHT +
+      Math.floor(PRODUCT_ROW_HEIGHT / 2),
+  );
+}
+
+export async function clickProductCellUpperHalf(page: Page, columnIndex: number, rowIndex: number) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  await page.mouse.click(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + 4,
+  );
+}
+
+export async function dragProductBodySelection(
+  page: Page,
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number,
+) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const startLeft = await getProductColumnLeft(page, startColumn);
+  const startWidth = await getProductColumnWidth(page, startColumn);
+  const endLeft = await getProductColumnLeft(page, endColumn);
+  const endWidth = await getProductColumnWidth(page, endColumn);
+
+  const startX = grid.x + startLeft + Math.floor(startWidth / 2);
+  const startY =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    startRow * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const endX = grid.x + endLeft + Math.floor(endWidth / 2);
+  const endY =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    endRow * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(endX, endY, { steps: 8 });
+  await page.mouse.up();
 }
 
 export async function seedToolbarActionRange(page: Page) {
