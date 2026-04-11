@@ -20,9 +20,13 @@ import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>();
   private turnCounter = 0;
+  private threadCounter = 0;
   lastThreadStartInput: Parameters<CodexAppServerTransport["threadStart"]>[0] | null = null;
   lastThreadResumeInput: { threadId: string } | null = null;
   resumeError: unknown = null;
+  uniqueThreadStart = false;
+  nextTurn: Promise<CodexTurn> | null = null;
+  closeCount = 0;
 
   async ensureReady() {
     return {
@@ -42,8 +46,9 @@ class FakeCodexTransport implements CodexAppServerTransport {
 
   async threadStart(input: Parameters<CodexAppServerTransport["threadStart"]>[0]) {
     this.lastThreadStartInput = input;
+    this.threadCounter += 1;
     return {
-      id: "thr-test",
+      id: this.uniqueThreadStart ? `thr-test-${String(this.threadCounter)}` : "thr-test",
       preview: "",
       turns: [],
     };
@@ -62,6 +67,9 @@ class FakeCodexTransport implements CodexAppServerTransport {
   }
 
   async turnStart(): Promise<CodexTurn> {
+    if (this.nextTurn) {
+      return await this.nextTurn;
+    }
     this.turnCounter += 1;
     return {
       id: `turn-${String(this.turnCounter)}`,
@@ -73,7 +81,9 @@ class FakeCodexTransport implements CodexAppServerTransport {
 
   async turnInterrupt() {}
 
-  async close() {}
+  async close() {
+    this.closeCount += 1;
+  }
 
   emit(notification: CodexServerNotification): void {
     this.listeners.forEach((listener) => listener(notification));
@@ -343,6 +353,159 @@ describe("workbook agent service", () => {
       });
 
       unsubscribe();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("enforces per-user active turn quotas across sessions", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    fakeCodex.uniqueThreadStart = true;
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+      maxActiveTurnsPerUser: 1,
+      maxActiveTurnsPerDocument: 8,
+    });
+
+    try {
+      const sessionA = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-a",
+        },
+      });
+      const sessionB = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-b",
+        },
+      });
+
+      await service.startTurn({
+        documentId: "doc-1",
+        sessionId: sessionA.sessionId,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          prompt: "Inspect Sheet1",
+        },
+      });
+
+      await expect(
+        service.startTurn({
+          documentId: "doc-1",
+          sessionId: sessionB.sessionId,
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            prompt: "Inspect Sheet2",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_USER_TURN_QUOTA_EXCEEDED",
+        statusCode: 429,
+        retryable: true,
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("translates Codex pool backpressure into retryable service errors", async () => {
+    const firstTurnResolver: { current: ((value: CodexTurn) => void) | null } = { current: null };
+    const firstTurn = new Promise<CodexTurn>((resolve) => {
+      firstTurnResolver.current = resolve;
+    });
+    const fakeCodex = new FakeCodexTransport();
+    fakeCodex.uniqueThreadStart = true;
+    fakeCodex.nextTurn = firstTurn;
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+      maxCodexClients: 1,
+      maxConcurrentTurnsPerCodexClient: 1,
+      maxQueuedTurnsPerCodexClient: 0,
+      maxActiveTurnsPerUser: 8,
+      maxActiveTurnsPerDocument: 8,
+    });
+
+    try {
+      const sessionA = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-a",
+        },
+      });
+      const sessionB = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-b",
+        },
+      });
+
+      const firstStartPromise = service.startTurn({
+        documentId: "doc-1",
+        sessionId: sessionA.sessionId,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          prompt: "Run first turn",
+        },
+      });
+
+      await Promise.resolve();
+
+      await expect(
+        service.startTurn({
+          documentId: "doc-1",
+          sessionId: sessionB.sessionId,
+          session: {
+            userID: "casey@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            prompt: "Run second turn",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_TURN_BACKPRESSURE",
+        statusCode: 429,
+        retryable: true,
+      });
+
+      if (firstTurnResolver.current) {
+        firstTurnResolver.current({
+          id: "turn-1",
+          status: "inProgress",
+          items: [],
+          error: null,
+        });
+      }
+      fakeCodex.nextTurn = null;
+      await firstStartPromise;
     } finally {
       await service.close();
     }

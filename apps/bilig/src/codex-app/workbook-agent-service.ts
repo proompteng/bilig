@@ -31,6 +31,10 @@ import {
   type CodexAppServerClientOptions,
 } from "./codex-app-server-client.js";
 import {
+  CodexAppServerClientPool,
+  isCodexAppServerPoolBackpressureError,
+} from "./codex-app-server-pool.js";
+import {
   handleWorkbookAgentToolCall,
   type WorkbookAgentStartWorkflowRequest,
   workbookAgentDynamicToolSpecs,
@@ -70,6 +74,35 @@ import {
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
 const CODEX_APP_SERVER_ARGS = ["app-server", "-c", "analytics.enabled=false"] as const;
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const DEFAULT_MAX_CODEX_CLIENTS = parsePositiveIntegerEnv(
+  process.env["BILIG_CODEX_MAX_CLIENTS"],
+  4,
+);
+const DEFAULT_MAX_CODEX_CONCURRENT_TURNS_PER_CLIENT = parsePositiveIntegerEnv(
+  process.env["BILIG_CODEX_MAX_CONCURRENT_TURNS_PER_CLIENT"],
+  1,
+);
+const DEFAULT_MAX_CODEX_QUEUED_TURNS_PER_CLIENT = parsePositiveIntegerEnv(
+  process.env["BILIG_CODEX_MAX_QUEUED_TURNS_PER_CLIENT"],
+  8,
+);
+const DEFAULT_MAX_ACTIVE_TURNS_PER_USER = parsePositiveIntegerEnv(
+  process.env["BILIG_CODEX_MAX_ACTIVE_TURNS_PER_USER"],
+  4,
+);
+const DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT = parsePositiveIntegerEnv(
+  process.env["BILIG_CODEX_MAX_ACTIVE_TURNS_PER_DOCUMENT"],
+  16,
+);
 
 function upsertEntry(
   entries: readonly WorkbookAgentTimelineEntry[],
@@ -398,6 +431,11 @@ export interface EnabledWorkbookAgentServiceOptions {
   codexClientFactory?: (options: CodexAppServerClientOptions) => CodexAppServerTransport;
   now?: () => number;
   maxSessions?: number;
+  maxCodexClients?: number;
+  maxConcurrentTurnsPerCodexClient?: number;
+  maxQueuedTurnsPerCodexClient?: number;
+  maxActiveTurnsPerUser?: number;
+  maxActiveTurnsPerDocument?: number;
 }
 
 class EnabledWorkbookAgentService implements WorkbookAgentService {
@@ -408,12 +446,17 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   ) => CodexAppServerTransport;
   private readonly now: () => number;
   private readonly maxSessions: number;
+  private readonly maxCodexClients: number;
+  private readonly maxConcurrentTurnsPerCodexClient: number;
+  private readonly maxQueuedTurnsPerCodexClient: number;
+  private readonly maxActiveTurnsPerUser: number;
+  private readonly maxActiveTurnsPerDocument: number;
   private readonly sessions = new Map<string, WorkbookAgentSessionState>();
   private readonly threadToSessionId = new Map<string, string>();
   private readonly subscribers = new Map<string, Set<(event: WorkbookAgentStreamEvent) => void>>();
   private readonly workflowRunTasks = new Map<string, Promise<void>>();
   private readonly workflowAbortControllers = new Map<string, AbortController>();
-  private codexClient: CodexAppServerTransport | null = null;
+  private codexClient: CodexAppServerClientPool | null = null;
   private unsubscribeCodex: (() => void) | null = null;
 
   constructor(options: EnabledWorkbookAgentServiceOptions) {
@@ -422,6 +465,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       options.codexClientFactory ?? ((clientOptions) => new CodexAppServerClient(clientOptions));
     this.now = options.now ?? (() => Date.now());
     this.maxSessions = options.maxSessions ?? 64;
+    this.maxCodexClients = options.maxCodexClients ?? DEFAULT_MAX_CODEX_CLIENTS;
+    this.maxConcurrentTurnsPerCodexClient =
+      options.maxConcurrentTurnsPerCodexClient ?? DEFAULT_MAX_CODEX_CONCURRENT_TURNS_PER_CLIENT;
+    this.maxQueuedTurnsPerCodexClient =
+      options.maxQueuedTurnsPerCodexClient ?? DEFAULT_MAX_CODEX_QUEUED_TURNS_PER_CLIENT;
+    this.maxActiveTurnsPerUser = options.maxActiveTurnsPerUser ?? DEFAULT_MAX_ACTIVE_TURNS_PER_USER;
+    this.maxActiveTurnsPerDocument =
+      options.maxActiveTurnsPerDocument ?? DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT;
   }
 
   private async persistSessionState(sessionState: WorkbookAgentSessionState): Promise<void> {
@@ -611,15 +662,37 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionId,
       input.session.userID,
     );
+    if (sessionState.snapshot.activeTurnId) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_TURN_ALREADY_RUNNING",
+        message: "Finish or interrupt the current assistant turn before starting another one.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    this.assertTurnQuota(input.documentId, input.session.userID);
     if (parsed.context) {
       sessionState.snapshot.context = parsed.context;
     }
     const turnContext = cloneUiContext(parsed.context ?? sessionState.snapshot.context);
     const codexClient = await this.getCodexClient();
-    const turn = await codexClient.turnStart({
-      threadId: sessionState.threadId,
-      prompt: parsed.prompt,
-    });
+    let turn;
+    try {
+      turn = await codexClient.turnStart({
+        threadId: sessionState.threadId,
+        prompt: parsed.prompt,
+      });
+    } catch (error) {
+      if (isCodexAppServerPoolBackpressureError(error)) {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_TURN_BACKPRESSURE",
+          message: error.message,
+          statusCode: 429,
+          retryable: true,
+        });
+      }
+      throw error;
+    }
     const optimisticEntryId = `optimistic-user:${turn.id}`;
     sessionState.snapshot.entries = upsertEntry(sessionState.snapshot.entries, {
       id: optimisticEntryId,
@@ -1332,94 +1405,100 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
 
   private async getCodexClient(): Promise<CodexAppServerTransport> {
     if (!this.codexClient) {
-      this.codexClient = this.codexClientFactory({
-        command: process.env["BILIG_CODEX_BIN"]?.trim() || "codex",
-        args: [...CODEX_APP_SERVER_ARGS],
-        cwd: process.cwd(),
-        env: process.env,
-        onLog: (message) => {
-          if (message.length > 0) {
-            console.error(message);
-          }
-        },
-        handleDynamicToolCall: (request) => {
-          const sessionState = this.getSessionByThreadId(request.threadId);
-          const requestActorUserId = this.resolveTurnActorUserId(sessionState, request.turnId);
-          const requestContext = this.resolveTurnContext(sessionState, request.turnId);
-          return handleWorkbookAgentToolCall(
-            {
-              documentId: sessionState.documentId,
-              session: {
-                userID: requestActorUserId,
-                roles: ["editor"],
-              },
-              uiContext: requestContext,
-              zeroSyncService: this.zeroSyncService,
-              stageCommand: async (command) => {
-                const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(
-                  sessionState.documentId,
-                );
-                const bundle = attachSharedReviewState(
-                  appendWorkbookAgentCommandToBundle({
-                    previousBundle: sessionState.snapshot.pendingBundle,
+      this.codexClient = new CodexAppServerClientPool({
+        codexClientFactory: this.codexClientFactory,
+        maxClients: this.maxCodexClients,
+        maxConcurrentTurnsPerClient: this.maxConcurrentTurnsPerCodexClient,
+        maxQueuedTurnsPerClient: this.maxQueuedTurnsPerCodexClient,
+        clientOptions: {
+          command: process.env["BILIG_CODEX_BIN"]?.trim() || "codex",
+          args: [...CODEX_APP_SERVER_ARGS],
+          cwd: process.cwd(),
+          env: process.env,
+          onLog: (message) => {
+            if (message.length > 0) {
+              console.error(message);
+            }
+          },
+          handleDynamicToolCall: (request) => {
+            const sessionState = this.getSessionByThreadId(request.threadId);
+            const requestActorUserId = this.resolveTurnActorUserId(sessionState, request.turnId);
+            const requestContext = this.resolveTurnContext(sessionState, request.turnId);
+            return handleWorkbookAgentToolCall(
+              {
+                documentId: sessionState.documentId,
+                session: {
+                  userID: requestActorUserId,
+                  roles: ["editor"],
+                },
+                uiContext: requestContext,
+                zeroSyncService: this.zeroSyncService,
+                stageCommand: async (command) => {
+                  const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(
+                    sessionState.documentId,
+                  );
+                  const bundle = attachSharedReviewState(
+                    appendWorkbookAgentCommandToBundle({
+                      previousBundle: sessionState.snapshot.pendingBundle,
+                      documentId: sessionState.documentId,
+                      threadId: sessionState.threadId,
+                      turnId: request.turnId,
+                      goalText:
+                        sessionState.promptByTurn.get(request.turnId) ??
+                        "Update workbook from assistant request",
+                      baseRevision,
+                      context: toContextRef(requestContext),
+                      command,
+                      now: this.now(),
+                    }),
+                    sessionState,
+                  );
+                  sessionState.snapshot.pendingBundle = bundle;
+                  sessionState.snapshot.entries = upsertEntry(
+                    sessionState.snapshot.entries,
+                    createSystemEntry(
+                      `system-preview:${bundle.id}`,
+                      request.turnId,
+                      describeWorkbookAgentBundle(bundle),
+                      createBundleRangeCitations(bundle),
+                    ),
+                  );
+                  await this.persistSessionState(sessionState);
+                  this.emitSnapshot(sessionState.threadId);
+                  return bundle;
+                },
+                startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
+                  const previousRunIds = new Set(
+                    sessionState.snapshot.workflowRuns.map((run) => run.runId),
+                  );
+                  const nextSnapshot = await this.startWorkflow({
                     documentId: sessionState.documentId,
-                    threadId: sessionState.threadId,
-                    turnId: request.turnId,
-                    goalText:
-                      sessionState.promptByTurn.get(request.turnId) ??
-                      "Update workbook from assistant request",
-                    baseRevision,
-                    context: toContextRef(requestContext),
-                    command,
-                    now: this.now(),
-                  }),
-                  sessionState,
-                );
-                sessionState.snapshot.pendingBundle = bundle;
-                sessionState.snapshot.entries = upsertEntry(
-                  sessionState.snapshot.entries,
-                  createSystemEntry(
-                    `system-preview:${bundle.id}`,
-                    request.turnId,
-                    describeWorkbookAgentBundle(bundle),
-                    createBundleRangeCitations(bundle),
-                  ),
-                );
-                await this.persistSessionState(sessionState);
-                this.emitSnapshot(sessionState.threadId);
-                return bundle;
+                    sessionId: sessionState.sessionId,
+                    session: {
+                      userID: requestActorUserId,
+                      roles: ["editor"],
+                    },
+                    body: {
+                      ...workflowRequest,
+                      ...(requestContext ? { context: requestContext } : {}),
+                    },
+                  });
+                  const nextRun =
+                    nextSnapshot.workflowRuns.find((run) => !previousRunIds.has(run.runId)) ??
+                    nextSnapshot.workflowRuns.find(
+                      (run) => run.workflowTemplate === workflowRequest.workflowTemplate,
+                    );
+                  if (!nextRun) {
+                    throw new Error(
+                      `Workflow run not found after starting ${workflowRequest.workflowTemplate}`,
+                    );
+                  }
+                  return nextRun;
+                },
               },
-              startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
-                const previousRunIds = new Set(
-                  sessionState.snapshot.workflowRuns.map((run) => run.runId),
-                );
-                const nextSnapshot = await this.startWorkflow({
-                  documentId: sessionState.documentId,
-                  sessionId: sessionState.sessionId,
-                  session: {
-                    userID: requestActorUserId,
-                    roles: ["editor"],
-                  },
-                  body: {
-                    ...workflowRequest,
-                    ...(requestContext ? { context: requestContext } : {}),
-                  },
-                });
-                const nextRun =
-                  nextSnapshot.workflowRuns.find((run) => !previousRunIds.has(run.runId)) ??
-                  nextSnapshot.workflowRuns.find(
-                    (run) => run.workflowTemplate === workflowRequest.workflowTemplate,
-                  );
-                if (!nextRun) {
-                  throw new Error(
-                    `Workflow run not found after starting ${workflowRequest.workflowTemplate}`,
-                  );
-                }
-                return nextRun;
-              },
-            },
-            request,
-          );
+              request,
+            );
+          },
         },
       });
       await this.codexClient.ensureReady();
@@ -1679,6 +1758,46 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState.lastAccessedAt = this.now();
   }
 
+  private resolveActiveTurnActorUserId(sessionState: WorkbookAgentSessionState): string | null {
+    const activeTurnId = sessionState.snapshot.activeTurnId;
+    if (!activeTurnId) {
+      return null;
+    }
+    return sessionState.turnActorUserIdByTurn.get(activeTurnId) ?? sessionState.userId;
+  }
+
+  private assertTurnQuota(documentId: string, actorUserId: string): void {
+    const activeSessions = [...this.sessions.values()].filter(
+      (sessionState) =>
+        sessionState.snapshot.activeTurnId !== null &&
+        sessionState.snapshot.status === "inProgress",
+    );
+    const activeTurnsForUser = activeSessions.filter(
+      (sessionState) => this.resolveActiveTurnActorUserId(sessionState) === actorUserId,
+    ).length;
+    if (activeTurnsForUser >= this.maxActiveTurnsPerUser) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_USER_TURN_QUOTA_EXCEEDED",
+        message:
+          "Workbook assistant is already running too many turns for this user. Retry once an in-flight turn finishes.",
+        statusCode: 429,
+        retryable: true,
+      });
+    }
+    const activeTurnsForDocument = activeSessions.filter(
+      (sessionState) => sessionState.documentId === documentId,
+    ).length;
+    if (activeTurnsForDocument >= this.maxActiveTurnsPerDocument) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_DOCUMENT_TURN_QUOTA_EXCEEDED",
+        message:
+          "Workbook assistant is already running too many turns for this document. Retry once an in-flight turn finishes.",
+        statusCode: 429,
+        retryable: true,
+      });
+    }
+  }
+
   private evictIfNeeded(): void {
     if (this.sessions.size <= this.maxSessions) {
       return;
@@ -1694,6 +1813,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       if (!evicted) {
         return;
       }
+      this.codexClient?.releaseThread(evicted.threadId);
       this.sessions.delete(evicted.sessionId);
       this.threadToSessionId.delete(evicted.threadId);
       this.subscribers.delete(evicted.threadId);
