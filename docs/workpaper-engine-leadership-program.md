@@ -179,14 +179,14 @@ Surface parity:
 Competitive performance:
 
 - artifact:
-  - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
   - `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
+  - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 - source generator:
-  - `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
   - `scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts`
+  - `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
 - check command:
   - `pnpm workpaper:bench:competitive:check`
-  - `pnpm workpaper:bench:competitive:expanded:check`
+  - `pnpm workpaper:bench:competitive:control:check`
 
 Internal regression baseline:
 

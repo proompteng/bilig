@@ -345,10 +345,13 @@ Workloads must be separated into three categories:
 
 Benchmark reporting requirements:
 
-- artifact path: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- default artifact path: `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
+- control-suite artifact path: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 - regeneration/check commands:
   - `pnpm workpaper:bench:competitive:generate`
   - `pnpm workpaper:bench:competitive:check`
+  - `pnpm workpaper:bench:competitive:control:generate`
+  - `pnpm workpaper:bench:competitive:control:check`
 - every comparable workload must include:
   - exact fixture definition
   - warmup count and sample count
@@ -360,7 +363,7 @@ Benchmark reporting requirements:
   - the exact artifact path
   - the exact measured ratio
 
-Because `workpaper-vs-hyperformula.json` now exists, the correct statement is:
+Because the expanded default artifact now exists, the correct statement is:
 
 - WorkPaper has stronger feature coverage and stronger release/reliability gates than HyperFormula
 - WorkPaper has a checked-in cross-engine benchmark artifact for named workloads
@@ -453,7 +456,7 @@ Completion states:
   - all acceptance criteria above are true
 - competitively-proved
   - platform-complete is true
-  - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json` exists
+  - `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json` exists
   - any comparative superiority claims point to workload-specific evidence in that artifact
 
 ## Bottom Line

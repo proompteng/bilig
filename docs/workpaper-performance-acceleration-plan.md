@@ -61,12 +61,12 @@ The target claim is narrower and stricter than “faster in general”:
 
 The repo now tracks two benchmark artifacts on purpose:
 
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
+  This is the default competitive matrix. It expands the proof surface across more build,
+  mutation, and lookup shapes.
 - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
   This is the narrow control suite. It stays small and stable so regression signals are easy to
   trust.
-- `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
-  This is the broader comparison matrix. It expands the proof surface across more build,
-  mutation, and lookup shapes without replacing the control suite.
 
 ## Source Corpus
 
@@ -96,7 +96,7 @@ Reviewed current `bilig` implementation:
 
 ## Current Measured Gap
 
-Current direct-comparison results from
+Current control-suite direct-comparison results from
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`:
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
@@ -527,6 +527,8 @@ Required commands:
 
 - `pnpm workpaper:bench:competitive:generate`
 - `pnpm workpaper:bench:competitive:check`
+- `pnpm workpaper:bench:competitive:control:generate`
+- `pnpm workpaper:bench:competitive:control:check`
 - targeted `vitest` suites for lookup, engine, and headless paths
 
 ## Risks

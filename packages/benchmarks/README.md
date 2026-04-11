@@ -28,11 +28,12 @@ pnpm workpaper:bench:check
 
 ## WorkPaper vs HyperFormula artifact
 
-The repo also tracks a checked-in competitive benchmark artifact at
-`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`.
+The repo tracks a checked-in competitive benchmark artifact at
+`packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`.
 
-It records directly comparable workloads against HyperFormula `3.2.0`, plus leadership workloads
-that must be labeled unsupported instead of silently omitted.
+This is the default competitive matrix. It records a broader directly comparable workload set
+against HyperFormula `3.2.0`, plus leadership workloads that must be labeled unsupported instead
+of silently omitted.
 
 Refresh or validate it with:
 
@@ -41,15 +42,14 @@ pnpm workpaper:bench:competitive:generate
 pnpm workpaper:bench:competitive:check
 ```
 
-The current control suite is intentionally small and stable. The repo also tracks a broader
-comparison matrix at
-`packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`.
+The narrower control suite is intentionally small and stable. It remains checked in at
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`.
 
 Refresh or validate it with:
 
 ```bash
-pnpm workpaper:bench:competitive:expanded:generate
-pnpm workpaper:bench:competitive:expanded:check
+pnpm workpaper:bench:competitive:control:generate
+pnpm workpaper:bench:competitive:control:check
 ```
 
 ## Named giant-workbook corpus

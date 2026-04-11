@@ -141,10 +141,10 @@ jobs:
           set -euo pipefail
           pnpm workpaper:bench:competitive:check
 
-      - name: Check expanded WorkPaper competitive benchmark artifact shape
+      - name: Check WorkPaper control-suite benchmark artifact shape
         run: |
           set -euo pipefail
-          pnpm workpaper:bench:competitive:expanded:check
+          pnpm workpaper:bench:competitive:control:check
 
       - name: Run WorkPaper external-consumer smoke test
         run: |
