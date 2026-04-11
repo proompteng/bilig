@@ -76,7 +76,7 @@ function createThreadState() {
         turnId: "turn-1",
         text: null,
         phase: null,
-        toolName: "bilig_read_workbook",
+        toolName: "read_workbook",
         toolStatus: "completed" as const,
         argumentsText: '{"sheetName":"Sheet1"}',
         outputText: '{"summary":"Loaded workbook"}',
@@ -204,7 +204,7 @@ describe("workbook-chat-thread-store", () => {
         call.text.includes("INSERT INTO workbook_chat_tool_call") &&
         call.values?.[3] === "tool-call-1",
     );
-    expect(toolInsert?.values?.[6]).toBe("bilig_read_workbook");
+    expect(toolInsert?.values?.[6]).toBe("read_workbook");
     expect(toolInsert?.values?.[8]).toBe('{"sheetName":"Sheet1"}');
     expect(toolInsert?.values?.[9]).toBe('{"summary":"Loaded workbook"}');
   });
@@ -258,7 +258,7 @@ describe("workbook-chat-thread-store", () => {
               kind: entry.kind,
               text: entry.text,
               phase: entry.phase,
-              toolName: entry.toolName,
+              toolName: entry.id === "tool-call-1" ? "bilig_read_workbook" : entry.toolName,
               toolStatus: entry.toolStatus,
               argumentsText: entry.argumentsText,
               outputText: entry.outputText,
@@ -274,7 +274,7 @@ describe("workbook-chat-thread-store", () => {
               .map((entry, index) => ({
                 entryId: entry.id,
                 turnId: entry.turnId,
-                toolName: entry.toolName,
+                toolName: entry.id === "tool-call-1" ? "bilig_read_workbook" : entry.toolName,
                 toolStatus: entry.toolStatus,
                 argumentsText: entry.argumentsText,
                 outputText: entry.outputText,

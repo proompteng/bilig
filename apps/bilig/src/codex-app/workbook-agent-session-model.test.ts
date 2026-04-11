@@ -45,4 +45,27 @@ describe("workbook-agent-session-model", () => {
     expect(entry.kind).toBe("system");
     expect(entry.text).toBe("Codex emitted status.");
   });
+
+  it("normalizes legacy workbook tool names in timeline entries", () => {
+    const entry = mapThreadItemToEntry(
+      {
+        type: "dynamicToolCall",
+        id: "tool-1",
+        tool: "bilig_read_workbook",
+        status: "completed",
+        arguments: { sheetName: "Sheet1" },
+        contentItems: [{ type: "inputText", text: '{"ok":true}' }],
+        success: true,
+      } satisfies CodexThreadItem,
+      "turn-1",
+    );
+
+    expect(entry).toEqual(
+      expect.objectContaining({
+        kind: "tool",
+        toolName: "read_workbook",
+        toolStatus: "completed",
+      }),
+    );
+  });
 });

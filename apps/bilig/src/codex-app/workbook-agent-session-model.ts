@@ -1,4 +1,8 @@
-import type { CodexThread, CodexThreadItem } from "@bilig/agent-api";
+import {
+  normalizeWorkbookAgentToolName,
+  type CodexThread,
+  type CodexThreadItem,
+} from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
   WorkbookAgentTimelineCitation,
@@ -387,7 +391,7 @@ export function mapThreadItemToEntry(
       turnId,
       text: null,
       phase: null,
-      toolName: item.tool,
+      toolName: normalizeWorkbookAgentToolName(item.tool),
       toolStatus: item.status,
       argumentsText: stringifyJson(item.arguments),
       outputText: formatToolContentItems(item.contentItems),

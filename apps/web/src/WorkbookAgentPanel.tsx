@@ -48,10 +48,7 @@ import {
 import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
-import {
-  PreviewRangeList,
-  WorkflowRunRow,
-} from "./workbook-agent-panel-history.js";
+import { PreviewRangeList, WorkflowRunRow } from "./workbook-agent-panel-history.js";
 
 const toolStatusPillClass = cva(
   "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
@@ -93,21 +90,23 @@ function ThreadSummaryStrip(props: {
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly onSelectThread: (threadId: string) => void;
 }) {
-  if (props.threadSummaries.length === 0) {
+  const visibleThreadSummaries = props.threadSummaries.filter(
+    (threadSummary) => threadSummary.threadId !== props.activeThreadId,
+  );
+  if (visibleThreadSummaries.length === 0) {
     return null;
   }
 
   return (
     <div className={agentPanelThreadListClass()}>
-      {props.threadSummaries.map((threadSummary) => {
-        const isActive = threadSummary.threadId === props.activeThreadId;
+      {visibleThreadSummaries.map((threadSummary) => {
         const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText);
         return (
           <Button
             key={threadSummary.threadId}
             aria-label={`Open ${threadSummary.scope} thread ${threadSummary.threadId}`}
-            aria-pressed={isActive}
-            className={agentPanelThreadButtonClass({ active: isActive })}
+            aria-pressed={false}
+            className={agentPanelThreadButtonClass({ active: false })}
             data-testid={`workbook-agent-thread-${threadSummary.threadId}`}
             type="button"
             onClick={() => {
@@ -271,11 +270,23 @@ function isReasoningPlaceholderEntry(entry: WorkbookAgentTimelineEntry): boolean
   return entry.kind === "system" && entry.text?.trim() === "Codex emitted reasoning.";
 }
 
+function renderMarkdownPlainText(markdown: string): string {
+  return markdown
+    .replaceAll(/```[\s\S]*?```/g, " ")
+    .replaceAll(/`([^`]+)`/g, "$1")
+    .replaceAll(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .replaceAll(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
+    .replaceAll(/^#{1,6}\s+/gm, "")
+    .replaceAll(/^>\s?/gm, "")
+    .replaceAll(/[*_~]+/g, " ")
+    .replaceAll(/\s+/g, " ");
+}
+
 function summarizeReasoningText(text: string | null): string | null {
   if (!text) {
     return null;
   }
-  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  const normalized = renderMarkdownPlainText(text).trim().replaceAll(/\s+/g, " ");
   if (normalized.length === 0) {
     return null;
   }
@@ -322,8 +333,8 @@ function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }
           data-testid={`workbook-agent-reasoning-panel-${props.entry.id}`}
         >
           <div className="pl-7 pr-2 pb-2">
-            <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
-              {bodyText}
+            <div className="text-[12px] leading-5 text-[var(--wb-text-muted)]">
+              <WorkbookAgentMarkdown markdown={bodyText} />
             </div>
             <TimelineCitationList citations={props.entry.citations} />
           </div>

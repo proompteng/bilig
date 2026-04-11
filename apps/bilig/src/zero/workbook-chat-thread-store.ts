@@ -1,6 +1,7 @@
 import {
   isWorkbookAgentCommand,
   isWorkbookAgentCommandBundle,
+  normalizeWorkbookAgentToolName,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
@@ -126,6 +127,13 @@ function parseNumericValue(value: unknown): number | null {
   return null;
 }
 
+function normalizeTimelineToolName(toolName: string | null): string | null {
+  if (typeof toolName !== "string") {
+    return null;
+  }
+  return normalizeWorkbookAgentToolName(toolName);
+}
+
 function isWorkbookAgentUiContext(value: unknown): value is WorkbookAgentUiContext {
   return (
     isRecord(value) &&
@@ -199,7 +207,7 @@ function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimeline
     turnId: typeof row.turnId === "string" ? row.turnId : null,
     text: typeof row.text === "string" ? row.text : null,
     phase: typeof row.phase === "string" ? row.phase : null,
-    toolName: typeof row.toolName === "string" ? row.toolName : null,
+    toolName: normalizeTimelineToolName(typeof row.toolName === "string" ? row.toolName : null),
     toolStatus,
     argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
     outputText: typeof row.outputText === "string" ? row.outputText : null,
@@ -239,7 +247,7 @@ function normalizeToolCallRow(row: WorkbookChatToolCallRow): {
   return {
     entryId: row.entryId,
     turnId: typeof row.turnId === "string" ? row.turnId : null,
-    toolName: typeof row.toolName === "string" ? row.toolName : null,
+    toolName: normalizeTimelineToolName(typeof row.toolName === "string" ? row.toolName : null),
     toolStatus,
     argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
     outputText: typeof row.outputText === "string" ? row.outputText : null,
@@ -600,7 +608,7 @@ export async function saveWorkbookAgentThreadState(
           entry.kind,
           entry.text,
           entry.phase,
-          entry.toolName,
+          normalizeTimelineToolName(entry.toolName),
           entry.toolStatus,
           entry.argumentsText,
           entry.outputText,
@@ -646,7 +654,7 @@ export async function saveWorkbookAgentThreadState(
           entry.id,
           index,
           entry.turnId,
-          entry.toolName,
+          normalizeTimelineToolName(entry.toolName),
           entry.toolStatus,
           entry.argumentsText,
           entry.outputText,

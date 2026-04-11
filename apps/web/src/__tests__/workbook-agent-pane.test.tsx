@@ -412,7 +412,7 @@ describe("workbook agent pane", () => {
     });
 
     expect(host.textContent).toContain("Shared");
-    expect(host.textContent).toContain("Completed workflow: Summarize Workbook");
+    expect(host.textContent).toContain("Workflows");
     expect(host.textContent).toContain("Summarize Workbook");
     expect(host.textContent).toContain("Workbook Summary");
 
@@ -2512,17 +2512,77 @@ describe("workbook agent pane", () => {
     });
 
     expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-2/events");
-    expect(
-      host
-        .querySelector("[data-testid='workbook-agent-thread-thr-2']")
-        ?.getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-2']")).toBeNull();
     expect(
       host
         .querySelector("[data-testid='workbook-agent-scope-shared']")
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
     expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/chat/threads/thr-2");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("hides the summary strip when it would only repeat the active thread", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
+        return new Response(
+          JSON.stringify([
+            createThreadSummary({
+              threadId: "thr-1",
+              scope: "private",
+              entryCount: 64,
+              latestEntryText: "Done — prepaid expenses now exists as a sheet.",
+            }),
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads/thr-1")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-1",
+              scope: "private",
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-1']")).toBeNull();
+    expect(host.textContent).not.toContain("64 items");
 
     await act(async () => {
       root.unmount();
@@ -3168,7 +3228,7 @@ describe("workbook agent pane", () => {
                     turnId: "turn-1",
                     text: null,
                     phase: null,
-                    toolName: "bilig_search_workbook",
+                    toolName: "search_workbook",
                     toolStatus: "completed",
                     argumentsText: '{"query":"gross margin"}',
                     outputText: JSON.stringify({
@@ -3193,7 +3253,7 @@ describe("workbook agent pane", () => {
                     turnId: "turn-1",
                     text: null,
                     phase: null,
-                    toolName: "bilig_find_formula_issues",
+                    toolName: "find_formula_issues",
                     toolStatus: "completed",
                     argumentsText: "{}",
                     outputText: JSON.stringify({
@@ -3295,7 +3355,7 @@ describe("workbook agent pane", () => {
                     turnId: "turn-1",
                     text: null,
                     phase: null,
-                    toolName: "bilig_read_workbook",
+                    toolName: "read_workbook",
                     toolStatus: "completed",
                     argumentsText: JSON.stringify({
                       documentId: "bilig-demo",

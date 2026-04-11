@@ -764,7 +764,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     const initialized = expectInitializeResponse(
       await this.request("initialize", {
         clientInfo: {
-          name: "bilig_monolith",
+          name: "monolith",
           title: "Bilig Monolith",
           version: "0.1.0",
         },

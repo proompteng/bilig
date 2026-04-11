@@ -125,13 +125,14 @@ describe("WorkbookAgentPanel reasoning", () => {
     const panel = renderPanel({
       id: "plan-1",
       kind: "plan",
-      text: "Check the visible formulas before applying edits.",
+      text: "**Check** the visible formulas before applying edits.",
     });
 
     await panel.render();
 
     expect(panel.host.textContent).toContain("Thought");
     expect(panel.host.textContent).toContain("Check the visible formulas before applying edits.");
+    expect(panel.host.textContent).not.toContain("**Check**");
 
     const toggle = panel.host.querySelector(
       "[data-testid='workbook-agent-reasoning-toggle-plan-1']",
@@ -148,6 +149,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     expect(
       panel.host.querySelector("[data-testid='workbook-agent-reasoning-panel-plan-1']"),
     ).not.toBeNull();
+    expect(panel.host.textContent).not.toContain("**Check**");
 
     await act(async () => {
       panel.root.unmount();
