@@ -138,13 +138,13 @@ function readScalarValue(
   pooledStrings: readonly string[],
 ): CellValue {
   const tag = kernel.readTags()[cellIndex] ?? ValueTag.Empty;
-  if (tag == ValueTag.Empty) {
+  if (tag === ValueTag.Empty) {
     return { tag };
   }
-  if (tag == ValueTag.Number || tag == ValueTag.Boolean) {
+  if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
     return { tag, value: kernel.readNumbers()[cellIndex] ?? 0 };
   }
-  if (tag == ValueTag.String) {
+  if (tag === ValueTag.String) {
     return {
       tag,
       value: decodeStringValue(
@@ -155,7 +155,7 @@ function readScalarValue(
       stringId: 0,
     };
   }
-  if (tag == ValueTag.Error) {
+  if (tag === ValueTag.Error) {
     return { tag, code: toErrorCode(kernel.readErrors()[cellIndex] ?? 0) };
   }
   throw new Error(`Unexpected scalar tag: ${tag}`);
@@ -174,17 +174,17 @@ function readSpillValues(
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
-    if (tag == ValueTag.String) {
+    if (tag === ValueTag.String) {
       return {
         tag,
         value: decodeStringValue(rawValue, pooledStrings, outputStrings),
         stringId: 0,
       };
     }
-    if (tag == ValueTag.Error) {
+    if (tag === ValueTag.Error) {
       return { tag, code: toErrorCode(rawValue) };
     }
     return { tag: ValueTag.Empty };

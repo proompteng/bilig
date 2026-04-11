@@ -61,6 +61,7 @@ function createMockZeroPresenceHarness(initialValue: unknown): MockZeroPresenceH
 
 function PresenceHarness(props: {
   documentId: string;
+  currentUserId: string;
   sessionId: string;
   selection: { sheetName: string; address: string };
   sheetNames: readonly string[];
@@ -70,6 +71,7 @@ function PresenceHarness(props: {
 }) {
   const collaborators = useWorkbookPresence({
     documentId: props.documentId,
+    currentUserId: props.currentUserId,
     sessionId: props.sessionId,
     selection: props.selection,
     sheetNames: props.sheetNames,
@@ -116,6 +118,7 @@ describe("workbook presence", () => {
       root.render(
         <PresenceHarness
           documentId="doc-1"
+          currentUserId="me@example.com"
           enabled
           selection={{ sheetName: "Sheet1", address: "A1" }}
           sessionId="doc-1:browser:self"
@@ -155,6 +158,65 @@ describe("workbook presence", () => {
     });
   });
 
+  it("does not render other sessions owned by the current user", async () => {
+    const presence = createMockZeroPresenceHarness([
+      {
+        sessionId: "doc-1:browser:stale-self",
+        userId: "guest:facefeed",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "E35",
+        selectionJson: { sheetName: "Sheet1", address: "E35" },
+        updatedAt: Date.now(),
+      },
+      {
+        sessionId: "doc-1:browser:self",
+        userId: "guest:facefeed",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "A1",
+        selectionJson: { sheetName: "Sheet1", address: "A1" },
+        updatedAt: Date.now(),
+      },
+      {
+        sessionId: "doc-1:browser:other",
+        userId: "guest:deadbeef",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "B7",
+        selectionJson: { sheetName: "Sheet1", address: "B7" },
+        updatedAt: Date.now(),
+      },
+    ]);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <PresenceHarness
+          documentId="doc-1"
+          currentUserId="guest:facefeed"
+          enabled
+          selection={{ sheetName: "Sheet1", address: "A1" }}
+          sessionId="doc-1:browser:self"
+          sheetNames={["Sheet1"]}
+          zero={presence.zero}
+          onJump={() => {}}
+        />,
+      );
+    });
+
+    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]?.textContent).toContain("Guest BEEF");
+    expect(host.textContent).not.toContain("Guest FEED");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("drops stale collaborators and keeps publishing heartbeat updates", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-06T12:00:00.000Z"));
@@ -178,6 +240,7 @@ describe("workbook presence", () => {
       root.render(
         <PresenceHarness
           documentId="doc-1"
+          currentUserId="guest:self"
           enabled
           selection={{ sheetName: "Sheet1", address: "A1" }}
           sessionId="doc-1:browser:self"

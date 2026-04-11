@@ -1,5 +1,10 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "denyWarnings": true,
+    "reportUnusedDisableDirectives": "error",
+    "typeAware": true
+  },
   "plugins": ["typescript", "oxc", "unicorn", "promise", "node", "react", "vitest", "jsx-a11y"],
   "ignorePatterns": [
     "**/coverage/**",
@@ -23,6 +28,13 @@
     "@typescript-eslint/no-unsafe-type-assertion": "error",
     "@typescript-eslint/switch-exhaustiveness-check": "error",
     "@typescript-eslint/unbound-method": "error",
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
     "no-constant-condition": [
       "error",
       {

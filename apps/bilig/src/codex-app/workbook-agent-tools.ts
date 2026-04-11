@@ -16,6 +16,7 @@ import type {
   JsonValue,
   WorkbookAgentCommand,
   WorkbookAgentCommandBundle,
+  WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
 import {
   clearRangeArgsSchema,
@@ -564,10 +565,17 @@ export interface WorkbookAgentToolContext {
   readonly session: SessionIdentity;
   readonly uiContext: WorkbookAgentUiContext | null;
   readonly zeroSyncService: ZeroSyncService;
-  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle>;
+  readonly stageCommand: (
+    command: WorkbookAgentCommand,
+  ) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>;
   readonly startWorkflow?: (
     input: WorkbookAgentStartWorkflowRequest,
   ) => Promise<WorkbookAgentWorkflowRun>;
+}
+
+export interface WorkbookAgentStageCommandResult {
+  readonly bundle: WorkbookAgentCommandBundle;
+  readonly executionRecord: WorkbookAgentExecutionRecord | null;
 }
 
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
@@ -641,7 +649,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/repair/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting or consistent header styling, import-cleanup tasks like header, number-format, whitespace normalization, or formula fill-down cleanup, search/report tasks, rollup previews, review-tab creation, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
+        "Run a built-in workbook workflow for durable summaries, analysis, cleanup, search, rollups, review tabs, and safe structural tasks.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -1008,7 +1016,25 @@ async function stageCommandResult(
   context: WorkbookAgentToolContext,
   command: WorkbookAgentCommand,
 ): Promise<CodexDynamicToolCallResult> {
-  const bundle = await context.stageCommand(command);
+  const result = await context.stageCommand(command);
+  const normalized: WorkbookAgentStageCommandResult =
+    "bundle" in result ? result : { bundle: result, executionRecord: null };
+  const bundle = normalized.bundle;
+  if (normalized.executionRecord) {
+    return textToolResult(
+      stringifyJson({
+        applied: true,
+        staged: false,
+        bundleId: bundle.id,
+        summary: `Applied preview bundle at revision r${String(normalized.executionRecord.appliedRevision)}: ${normalized.executionRecord.summary}`,
+        revision: normalized.executionRecord.appliedRevision,
+        scope: normalized.executionRecord.scope,
+        riskClass: normalized.executionRecord.riskClass,
+        estimatedAffectedCells: bundle.estimatedAffectedCells,
+        affectedRanges: bundle.affectedRanges,
+      }),
+    );
+  }
   return textToolResult(
     stringifyJson({
       staged: true,

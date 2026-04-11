@@ -66,6 +66,7 @@ export function useWorkbookAppPanels(input: {
 
   const collaborators = useWorkbookPresence({
     documentId,
+    currentUserId,
     sessionId: `${documentId}:${replicaId}`,
     selection,
     sheetNames,

@@ -97,13 +97,13 @@ function readSpillValues(kernel: KernelInstance, ownerCellIndex: number): CellVa
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
-    if (tag == ValueTag.Empty) {
+    if (tag === ValueTag.Empty) {
       return { tag };
     }
-    if (tag == ValueTag.Error) {
+    if (tag === ValueTag.Error) {
       return { tag, code: decodeErrorCode(rawValue) };
     }
     throw new Error(`Unexpected spill tag: ${tag}`);
@@ -131,7 +131,7 @@ function expectNumberSpill(
   for (let index = 0; index < expected.length; index += 1) {
     const entry = spill[index];
     expect(entry).toMatchObject({ tag: ValueTag.Number });
-    if (!entry || !("value" in entry) || typeof entry.value != "number") {
+    if (!entry || !("value" in entry) || typeof entry.value !== "number") {
       throw new Error("Expected numeric spill entry");
     }
     expect(entry.value).toBeCloseTo(expected[index] ?? 0, digits);

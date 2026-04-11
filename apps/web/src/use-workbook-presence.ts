@@ -46,13 +46,14 @@ function observeZeroMutationResult(result: unknown): void {
 
 export function useWorkbookPresence(input: {
   readonly documentId: string;
+  readonly currentUserId: string;
   readonly sessionId: string;
   readonly selection: WorkerRuntimeSelection;
   readonly sheetNames: readonly string[];
   readonly zero: ZeroPresenceSource;
   readonly enabled: boolean;
 }): readonly WorkbookCollaboratorPresence[] {
-  const { documentId, enabled, selection, sessionId, sheetNames, zero } = input;
+  const { currentUserId, documentId, enabled, selection, sessionId, sheetNames, zero } = input;
   const [presenceRows, setPresenceRows] = useState(
     [] as readonly ReturnType<typeof normalizeWorkbookPresenceRows>[number][],
   );
@@ -136,10 +137,11 @@ export function useWorkbookPresence(input: {
     () =>
       selectActiveWorkbookCollaborators({
         rows: presenceRows,
+        currentUserId,
         currentSessionId: sessionId,
         knownSheetNames: sheetNames,
         now,
       }),
-    [now, presenceRows, sessionId, sheetNames],
+    [currentUserId, now, presenceRows, sessionId, sheetNames],
   );
 }

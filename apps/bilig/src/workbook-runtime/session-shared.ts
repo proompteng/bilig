@@ -1,5 +1,9 @@
-import type { ProtocolFrame, SnapshotChunkFrame } from "@bilig/binary-protocol";
-import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import {
+  WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+  createSnapshotChunkFrames,
+  type ProtocolFrame,
+  type SnapshotChunkFrame,
+} from "@bilig/binary-protocol";
 import { CSV_CONTENT_TYPE, type WorkbookImportContentType } from "@bilig/agent-api";
 import { isWorkbookSnapshot, type WorkbookSnapshot } from "@bilig/protocol";
 

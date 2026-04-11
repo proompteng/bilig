@@ -101,13 +101,13 @@ function readSpillValues(kernel: KernelInstance, ownerCellIndex: number): CellVa
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
-    if (tag == ValueTag.Error) {
+    if (tag === ValueTag.Error) {
       return { tag, code: decodeErrorCode(rawValue) };
     }
-    if (tag == ValueTag.Empty) {
+    if (tag === ValueTag.Empty) {
       return { tag };
     }
     throw new Error(`Unexpected spill tag: ${tag}`);

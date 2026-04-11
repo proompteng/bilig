@@ -1,5 +1,4 @@
 import type { CodexThread, CodexThreadItem } from "@bilig/agent-api";
-import { WORKBOOK_AGENT_TOOL_NAMES, renderWorkbookAgentSkillInstructions } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
   WorkbookAgentTimelineCitation,
@@ -140,26 +139,24 @@ export const reviewPendingBundleBodySchema = z.object({
 
 export function createWorkbookAgentBaseInstructions(): string {
   return [
-    "You are the bilig workbook assistant embedded inside a spreadsheet product.",
-    "Stay narrowly focused on inspecting and editing the active workbook.",
-    "Use the provided bilig workbook tools and dynamic tools for spreadsheet work.",
-    "Do not use filesystem, shell, web, connector, or unrelated tools.",
-    renderWorkbookAgentSkillInstructions(),
+    "You are bilig's workbook assistant inside a spreadsheet product.",
+    "Help with the active workbook only.",
+    "Use only the provided workbook tools.",
+    "If the request needs a capability the tools do not provide, say what is missing.",
   ].join(" ");
 }
 
 export function createWorkbookAgentDeveloperInstructions(): string {
   return [
-    "Before changing cells you have not inspected, read the relevant workbook range first.",
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.startWorkflow} with summarizeWorkbook, summarizeCurrentSheet, describeRecentChanges, findFormulaIssues, highlightFormulaIssues, repairFormulaIssues, highlightCurrentSheetOutliers, styleCurrentSheetHeaders, normalizeCurrentSheetHeaders, normalizeCurrentSheetNumberFormats, normalizeCurrentSheetWhitespace, fillCurrentSheetFormulasDown, traceSelectionDependencies, explainSelectionCell, searchWorkbookQuery, createCurrentSheetRollup, createCurrentSheetReviewTab, createSheet, renameCurrentSheet, hideCurrentRow, hideCurrentColumn, unhideCurrentRow, or unhideCurrentColumn when the request matches those built-in durable workflows and you want the result saved in the thread.`,
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.readWorkbook} first when the user asks for workbook-wide structure, important sheets, or a starting summary and the built-in workflow is not the best fit.`,
-    `When the user refers to the current cell, selection, or visible area, call ${WORKBOOK_AGENT_TOOL_NAMES.getContext}.`,
-    `Prefer ${WORKBOOK_AGENT_TOOL_NAMES.readSelection}, ${WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange}, and ${WORKBOOK_AGENT_TOOL_NAMES.inspectCell} for context-native workbook analysis.`,
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues}, ${WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook}, ${WORKBOOK_AGENT_TOOL_NAMES.traceDependencies}, and ${WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges} for warm-runtime workbook comprehension instead of broad guesswork.`,
-    "All workbook writes must stage semantic preview bundles instead of applying immediately.",
-    "Use the bundle-staging workbook tools to assemble one coherent preview per turn when the task is related.",
-    "After staging workbook changes, summarize the preview and tell the user to review and apply it from the rail.",
-    "If the requested action is outside the available bilig workbook tools, say exactly which workbook capability is missing instead of improvising.",
+    "Inspect before you edit unfamiliar cells or ranges.",
+    "Prefer the smallest workbook tool that matches the request.",
+    "When the request refers to the current cell, selection, or visible area, use the browser workbook context tools first.",
+    "Use workbook or range reads for workbook-wide structure or unseen regions instead of guessing.",
+    "Use the workflow tool only for built-in multi-step or durable tasks.",
+    "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
+    "Other workbook writes should stage one coherent preview bundle per turn.",
+    "After staging a preview bundle, summarize it and tell the user to review and apply it from the rail.",
+    "Do not use non-workbook tools or invent unsupported capabilities.",
   ].join(" ");
 }
 

@@ -1,5 +1,8 @@
-import type { ProtocolFrame, SnapshotChunkFrame } from "@bilig/binary-protocol";
-import { createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import {
+  createSnapshotChunkFrames,
+  type ProtocolFrame,
+  type SnapshotChunkFrame,
+} from "@bilig/binary-protocol";
 import { createCursorWatermarkFrame, createHelloReplayFrames } from "./sync-frame-shared.js";
 
 type AppendBatchFrame = Extract<ProtocolFrame, { kind: "appendBatch" }>;

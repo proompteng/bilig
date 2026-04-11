@@ -109,6 +109,7 @@ function hashToneIndex(value: string): number {
 
 export function selectActiveWorkbookCollaborators(input: {
   readonly rows: readonly WorkbookPresenceCoarseRow[];
+  readonly currentUserId: string;
   readonly currentSessionId: string;
   readonly knownSheetNames: readonly string[];
   readonly now: number;
@@ -117,6 +118,7 @@ export function selectActiveWorkbookCollaborators(input: {
   const staleAfterMs = input.staleAfterMs ?? WORKBOOK_PRESENCE_STALE_AFTER_MS;
   const knownSheets = new Set(input.knownSheetNames);
   return input.rows
+    .filter((row) => row.userId !== input.currentUserId)
     .filter((row) => row.sessionId !== input.currentSessionId)
     .filter((row) => row.updatedAt >= input.now - staleAfterMs)
     .filter((row) => typeof row.sheetName === "string" && knownSheets.has(row.sheetName))

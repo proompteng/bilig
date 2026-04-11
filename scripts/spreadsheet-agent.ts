@@ -1,8 +1,12 @@
 #!/usr/bin/env bun
 
 import { readFile } from "node:fs/promises";
-import type { AgentFrame, AgentResponse } from "../packages/agent-api/src/index.ts";
-import { decodeAgentFrame, encodeAgentFrame } from "../packages/agent-api/src/index.ts";
+import {
+  decodeAgentFrame,
+  encodeAgentFrame,
+  type AgentFrame,
+  type AgentResponse,
+} from "../packages/agent-api/src/index.ts";
 import type {
   CellDateStyle,
   CellNumberFormatInput,

@@ -233,15 +233,18 @@ describe("workbook agent service", () => {
           /^[a-zA-Z0-9_-]+$/.test(tool.name),
         ),
       ).toBe(true);
-      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("bilig workbook tools");
+      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain(
+        "Help with the active workbook only.",
+      );
+      expect(fakeCodex.lastThreadStartInput?.baseInstructions).not.toContain("Tools:");
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        "bilig_read_workbook",
+        "Use the workflow tool only for built-in multi-step or durable tasks.",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        "bilig_start_workflow",
+        "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
       );
-      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        "bilig_search_workbook",
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
+        "summarizeWorkbook",
       );
     } finally {
       await service.close();
@@ -2390,6 +2393,130 @@ describe("workbook agent service", () => {
         ]),
       );
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("applies direct structural tool commands immediately inside the active thread", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const applyAgentCommandBundle = vi.fn(async (_documentId, _bundle, preview) => ({
+      revision: 7,
+      preview,
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-11T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const result = await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-create-sheet",
+        tool: "bilig_create_sheet",
+        arguments: {
+          name: "Prepaid Expenses",
+        },
+      });
+
+      expect(result?.success).toBe(true);
+      const output = result?.contentItems.find((item) => item.type === "inputText");
+      expect(output?.type).toBe("inputText");
+      const text = output && "text" in output ? output.text : "";
+      expect(text).toContain('"applied": true');
+      expect(text).toContain('"staged": false');
+      expect(text).toContain('"revision": 7');
+
+      const snapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([
+        expect.objectContaining({
+          summary: "Create sheet Prepaid Expenses",
+          appliedRevision: 7,
+          appliedBy: "user",
+        }),
+      ]);
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Applied preview bundle at revision r7: Create sheet Prepaid Expenses",
+          }),
+        ]),
+      );
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        "doc-1",
+        expect.objectContaining({
+          commands: [
+            {
+              kind: "createSheet",
+              name: "Prepaid Expenses",
+            },
+          ],
+        }),
+        expect.objectContaining({
+          structuralChanges: ["Create sheet Prepaid Expenses"],
+        }),
+        expect.objectContaining({
+          userID: "alex@example.com",
+        }),
+      );
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
     } finally {
       await service.close();
     }

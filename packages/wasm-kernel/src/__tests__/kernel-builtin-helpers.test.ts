@@ -141,17 +141,17 @@ function readSpillValues(
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
-    if (tag == ValueTag.String) {
+    if (tag === ValueTag.String) {
       return {
         tag,
         value: decodeStringValue(rawValue, pooledStrings, outputStrings),
         stringId: 0,
       };
     }
-    if (tag == ValueTag.Error) {
+    if (tag === ValueTag.Error) {
       return { tag, code: toErrorCode(rawValue) };
     }
     return { tag: ValueTag.Empty };

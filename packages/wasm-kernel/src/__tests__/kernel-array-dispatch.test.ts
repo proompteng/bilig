@@ -111,10 +111,10 @@ function readSpillValues(
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
-    if (tag == ValueTag.String) {
+    if (tag === ValueTag.String) {
       const stringIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : rawValue;
       const value =
         rawValue >= OUTPUT_STRING_BASE
@@ -122,7 +122,7 @@ function readSpillValues(
           : (inputStrings[stringIndex] ?? "");
       return { tag, value, stringId: 0 };
     }
-    if (tag == ValueTag.Empty) {
+    if (tag === ValueTag.Empty) {
       return { tag };
     }
     throw new Error(`Unexpected spill tag: ${tag}`);

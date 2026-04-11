@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
 import { WorkbookStore } from "../workbook-store.js";
-import { createEngineCellStateService } from "../engine/services/cell-state-service.js";
-import type { EngineCellStateService } from "../engine/services/cell-state-service.js";
+import {
+  createEngineCellStateService,
+  type EngineCellStateService,
+} from "../engine/services/cell-state-service.js";
 
 function isEngineCellStateService(value: unknown): value is EngineCellStateService {
   if (typeof value !== "object" || value === null) {

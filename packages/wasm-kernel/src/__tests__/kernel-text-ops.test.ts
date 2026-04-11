@@ -87,14 +87,14 @@ function readSpillValues(kernel: KernelInstance, ownerCellIndex: number): CellVa
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.String) {
+    if (tag === ValueTag.String) {
       return {
         tag,
         value: outputStrings[rawValue - 2147483648] ?? "",
         stringId: 0,
       };
     }
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
     return { tag: ValueTag.Empty };

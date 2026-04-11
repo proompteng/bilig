@@ -123,7 +123,7 @@ function readSpillValues(
   return Array.from({ length }, (_, index) => {
     const tag = tags[offset + index] ?? ValueTag.Empty;
     const rawValue = values[offset + index] ?? 0;
-    if (tag == ValueTag.String) {
+    if (tag === ValueTag.String) {
       const outputIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : -1;
       return {
         tag,
@@ -132,7 +132,7 @@ function readSpillValues(
         stringId: 0,
       };
     }
-    if (tag == ValueTag.Number) {
+    if (tag === ValueTag.Number) {
       return { tag, value: rawValue };
     }
     return { tag: ValueTag.Empty };
