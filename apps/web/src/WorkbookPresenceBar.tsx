@@ -1,31 +1,32 @@
+import { Button } from "@base-ui/react/button";
 import { cn } from "./cn.js";
 import type { WorkbookCollaboratorPresence } from "./workbook-presence-model.js";
-import { workbookSurfaceClass } from "./workbook-shell-chrome.js";
+import { workbookHeaderSurfaceClass } from "./workbook-header-controls.js";
 
 const PRESENCE_TONE_CLASS_NAMES = [
+  {
+    avatar: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)]",
+  },
   {
     avatar: "bg-[var(--color-mauve-200)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#e8efe8] text-[#31533d]",
+    avatar: "bg-[var(--color-mauve-300)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#f3ede1] text-[#7a5b20]",
+    avatar: "bg-[var(--color-mauve-200)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#efe7f6] text-[#654786]",
+    avatar: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#f5e6e6] text-[#8a3b3b]",
+    avatar: "bg-[var(--color-mauve-300)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#e3efef] text-[#2f6260]",
+    avatar: "bg-[var(--color-mauve-200)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#e8ebf6] text-[#40518c]",
-  },
-  {
-    avatar: "bg-[#f0e8f4] text-[#744488]",
+    avatar: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)]",
   },
 ] as const;
 
@@ -43,12 +44,12 @@ export function WorkbookPresenceBar(props: {
         const tone =
           PRESENCE_TONE_CLASS_NAMES[collaborator.toneIndex % PRESENCE_TONE_CLASS_NAMES.length]!;
         return (
-          <button
+          <Button
             key={collaborator.sessionId}
             aria-label={`Jump to ${collaborator.label} at ${collaborator.sheetName}!${collaborator.address}`}
             className={cn(
-              workbookSurfaceClass({ emphasis: "raised" }),
-              "inline-flex h-8 items-center gap-2 px-2.5 text-[12px] font-medium text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
+              workbookHeaderSurfaceClass,
+              "gap-2 px-2.5 text-[12px] font-medium text-[var(--color-mauve-700)] transition-colors hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)] focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-[var(--color-mauve-50)]",
             )}
             data-testid="ax-presence-chip"
             title={`${collaborator.label} • ${collaborator.sheetName}!${collaborator.address}`}
@@ -65,10 +66,10 @@ export function WorkbookPresenceBar(props: {
               {collaborator.initials}
             </span>
             <span className="max-w-28 truncate">{collaborator.label}</span>
-            <span className="hidden text-[11px] text-[var(--wb-text-subtle)] xl:inline">
+            <span className="hidden text-[11px] text-[var(--color-mauve-500)] xl:inline">
               {collaborator.sheetName}!{collaborator.address}
             </span>
-          </button>
+          </Button>
         );
       })}
     </div>

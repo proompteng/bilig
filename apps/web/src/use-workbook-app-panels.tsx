@@ -1,6 +1,10 @@
 import { useMemo, type ReactNode } from "react";
 import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
+import {
+  WorkbookHeaderActionButton,
+  workbookHeaderCountClass,
+} from "./workbook-header-controls.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
@@ -104,36 +108,29 @@ export function useWorkbookAppPanels(input: {
   const sideRailToggleControls = useMemo(
     () => (
       <div
-        className="inline-flex items-center gap-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-1 shadow-[var(--wb-shadow-sm)]"
+        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         data-testid="workbook-side-rail-toggle-group"
       >
         {sideRailTabs.map((tab) => {
           const active = isSideRailOpen && activeSideRailTab === tab.value;
           return (
-            <button
+            <WorkbookHeaderActionButton
               aria-controls={sideRailId}
               aria-expanded={active}
               aria-pressed={active}
-              className={[
-                "inline-flex h-7 items-center gap-1.5 rounded-[calc(var(--wb-radius-control)-1px)] px-2.5 text-[12px] font-medium transition-colors",
-                active
-                  ? "bg-[var(--wb-surface-muted)] text-[var(--wb-text)]"
-                  : "text-[var(--wb-text-subtle)] hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)]",
-              ].join(" ")}
               data-testid={`workbook-side-rail-toggle-${tab.value}`}
+              isActive={active}
+              isGrouped
               key={tab.value}
-              type="button"
               onClick={() => {
                 toggleSideRail(tab.value);
               }}
             >
               <span>{tab.label}</span>
               {typeof tab.count === "number" ? (
-                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--wb-surface-subtle)] px-1.5 text-[10px] font-semibold leading-none text-[var(--wb-text-subtle)]">
-                  {String(Math.min(tab.count, 99))}
-                </span>
+                <span className={workbookHeaderCountClass}>{String(Math.min(tab.count, 99))}</span>
               ) : null}
-            </button>
+            </WorkbookHeaderActionButton>
           );
         })}
       </div>
