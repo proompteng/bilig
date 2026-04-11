@@ -44,6 +44,7 @@ import {
   agentPanelToolbarRowClass,
 } from "./workbook-agent-panel-primitives.js";
 import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
+import { WorkbookAgentProgressRow } from "./workbook-agent-progress-row.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
 import { PreviewRangeList, WorkflowRunRow } from "./workbook-agent-panel-history.js";
@@ -575,24 +576,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       return null;
     }
     if (entry.phase === "progress") {
-      return (
-        <div className="px-1 py-1.5">
-          <div
-            aria-live="polite"
-            className={cn(
-              workbookInsetClass(),
-              "flex items-center gap-2 px-2.5 py-2 text-[12px] leading-5 text-[var(--wb-text-muted)]",
-            )}
-            data-testid="workbook-agent-progress-row"
-            role="status"
-          >
-            <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
-              Responding
-            </span>
-            <span className="min-w-0 truncate">{entry.text}</span>
-          </div>
-        </div>
-      );
+      return <WorkbookAgentProgressRow />;
     }
     return (
       <div className="px-1 py-1 text-[13px] leading-5 text-[var(--wb-text)]">

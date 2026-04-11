@@ -2997,7 +2997,8 @@ describe("workbook agent pane", () => {
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
-    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
+    expect(host.textContent).toContain("Thinking");
+    expect(host.textContent).toContain("Reading selection");
 
     await act(async () => {
       root.unmount();
@@ -3064,7 +3065,8 @@ describe("workbook agent pane", () => {
     });
 
     expect(host.textContent).toContain("yo");
-    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
+    expect(host.textContent).toContain("Thinking");
+    expect(host.textContent).toContain("Reading selection");
     expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
 
     await act(async () => {
@@ -3192,7 +3194,8 @@ describe("workbook agent pane", () => {
       requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
-    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
+    expect(host.textContent).toContain("Thinking");
+    expect(host.textContent).toContain("Reading selection");
 
     await act(async () => {
       root.unmount();

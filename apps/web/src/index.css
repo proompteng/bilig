@@ -62,3 +62,23 @@
     color: #0f172a;
   }
 }
+
+@keyframes workbook-agent-thinking-wave {
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@layer utilities {
+  .workbook-agent-thinking-letter {
+    animation: workbook-agent-thinking-wave 1.15s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+}

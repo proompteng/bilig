@@ -343,7 +343,7 @@ export function useWorkbookAgentPane(input: {
         id: "assistant-progress:pending",
         kind: "assistant",
         turnId: snapshot?.activeTurnId ?? null,
-        text: "Reviewing workbook context and drafting a response.",
+        text: "Thinking",
         phase: "progress",
         toolName: null,
         toolStatus: null,
