@@ -8,6 +8,15 @@ import {
 } from "@bilig/worker-transport";
 import { applyProjectedViewportAxisPatches } from "./projected-viewport-axis-patches.js";
 import { selectProjectedViewportKeysToEvict } from "./projected-viewport-cache-pruning.js";
+import {
+  ackProjectedViewportLocalAxisSize,
+  rollbackProjectedViewportLocalAxisHidden,
+  rollbackProjectedViewportLocalAxisSize,
+  setProjectedViewportLocalAxisHidden,
+  setProjectedViewportLocalAxisSize,
+  type ProjectedViewportLocalAxisResult,
+  type ProjectedViewportLocalAxisState,
+} from "./projected-viewport-local-axis-state.js";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
@@ -237,93 +246,108 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
-    const currentWidth = this.columnWidthsBySheet.get(sheetName)?.[columnIndex];
-    if (currentWidth === width) {
+    const nextState = setProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.columnSizesBySheet,
+        renderedSizesBySheet: this.columnWidthsBySheet,
+        pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      }),
+      index: columnIndex,
+      size: width,
+    });
+    if (!nextState.changed) {
       return;
     }
     this.knownSheets.add(sheetName);
-    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
-    sizes[columnIndex] = width;
-    this.columnSizesBySheet.set(sheetName, sizes);
-    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
-    widths[columnIndex] = this.hiddenColumnsBySheet.get(sheetName)?.[columnIndex] ? 0 : width;
-    this.columnWidthsBySheet.set(sheetName, widths);
-    const pending = { ...this.pendingColumnWidthsBySheet.get(sheetName) };
-    pending[columnIndex] = width;
-    this.pendingColumnWidthsBySheet.set(sheetName, pending);
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.columnSizesBySheet,
+      renderedSizesBySheet: this.columnWidthsBySheet,
+      pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
   ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
-    const pendingWidths = this.pendingColumnWidthsBySheet.get(sheetName);
-    if (!pendingWidths || pendingWidths[columnIndex] !== width) {
+    const nextState = ackProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.columnSizesBySheet,
+        renderedSizesBySheet: this.columnWidthsBySheet,
+        pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      }),
+      index: columnIndex,
+      size: width,
+    });
+    if (!nextState.changed) {
       return;
     }
-    const nextPendingWidths = { ...pendingWidths };
-    delete nextPendingWidths[columnIndex];
-    if (Object.keys(nextPendingWidths).length === 0) {
-      this.pendingColumnWidthsBySheet.delete(sheetName);
-    } else {
-      this.pendingColumnWidthsBySheet.set(sheetName, nextPendingWidths);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.columnSizesBySheet,
+      renderedSizesBySheet: this.columnWidthsBySheet,
+      pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      nextState,
+    });
   }
 
   rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
-    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
-    if (width === undefined) {
-      delete sizes[columnIndex];
-    } else {
-      sizes[columnIndex] = width;
+    const nextState = rollbackProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.columnSizesBySheet,
+        renderedSizesBySheet: this.columnWidthsBySheet,
+        pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      }),
+      index: columnIndex,
+      size: width,
+    });
+    if (!nextState.changed) {
+      return;
     }
-    if (Object.keys(sizes).length === 0) {
-      this.columnSizesBySheet.delete(sheetName);
-    } else {
-      this.columnSizesBySheet.set(sheetName, sizes);
-    }
-
-    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
-    if (width === undefined) {
-      delete widths[columnIndex];
-    } else {
-      widths[columnIndex] = this.hiddenColumnsBySheet.get(sheetName)?.[columnIndex] ? 0 : width;
-    }
-    if (Object.keys(widths).length === 0) {
-      this.columnWidthsBySheet.delete(sheetName);
-    } else {
-      this.columnWidthsBySheet.set(sheetName, widths);
-    }
-
-    const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(sheetName) };
-    delete pendingWidths[columnIndex];
-    if (Object.keys(pendingWidths).length === 0) {
-      this.pendingColumnWidthsBySheet.delete(sheetName);
-    } else {
-      this.pendingColumnWidthsBySheet.set(sheetName, pendingWidths);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.columnSizesBySheet,
+      renderedSizesBySheet: this.columnWidthsBySheet,
+      pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
   setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
+    const nextState = setProjectedViewportLocalAxisHidden({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.columnSizesBySheet,
+        renderedSizesBySheet: this.columnWidthsBySheet,
+        pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      }),
+      index: columnIndex,
+      hidden,
+      size,
+    });
+    if (!nextState.changed) {
+      return;
+    }
     this.knownSheets.add(sheetName);
-    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
-    sizes[columnIndex] = size;
-    this.columnSizesBySheet.set(sheetName, sizes);
-
-    const hiddenColumns = { ...this.hiddenColumnsBySheet.get(sheetName) };
-    if (hidden) {
-      hiddenColumns[columnIndex] = true;
-    } else {
-      delete hiddenColumns[columnIndex];
-    }
-    if (Object.keys(hiddenColumns).length === 0) {
-      this.hiddenColumnsBySheet.delete(sheetName);
-    } else {
-      this.hiddenColumnsBySheet.set(sheetName, hiddenColumns);
-    }
-
-    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
-    widths[columnIndex] = hidden ? 0 : size;
-    this.columnWidthsBySheet.set(sheetName, widths);
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.columnSizesBySheet,
+      renderedSizesBySheet: this.columnWidthsBySheet,
+      pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
@@ -332,132 +356,134 @@ export class ProjectedViewportStore implements GridEngineLike {
     columnIndex: number,
     previous: { hidden: boolean; size: number | undefined },
   ): void {
-    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
-    if (previous.size === undefined) {
-      delete sizes[columnIndex];
-    } else {
-      sizes[columnIndex] = previous.size;
+    const nextState = rollbackProjectedViewportLocalAxisHidden({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.columnSizesBySheet,
+        renderedSizesBySheet: this.columnWidthsBySheet,
+        pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      }),
+      index: columnIndex,
+      previous,
+    });
+    if (!nextState.changed) {
+      return;
     }
-    if (Object.keys(sizes).length === 0) {
-      this.columnSizesBySheet.delete(sheetName);
-    } else {
-      this.columnSizesBySheet.set(sheetName, sizes);
-    }
-
-    const hiddenColumns = { ...this.hiddenColumnsBySheet.get(sheetName) };
-    if (previous.hidden) {
-      hiddenColumns[columnIndex] = true;
-    } else {
-      delete hiddenColumns[columnIndex];
-    }
-    if (Object.keys(hiddenColumns).length === 0) {
-      this.hiddenColumnsBySheet.delete(sheetName);
-    } else {
-      this.hiddenColumnsBySheet.set(sheetName, hiddenColumns);
-    }
-
-    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
-    if (previous.size === undefined) {
-      delete widths[columnIndex];
-    } else {
-      widths[columnIndex] = previous.hidden ? 0 : previous.size;
-    }
-    if (Object.keys(widths).length === 0) {
-      this.columnWidthsBySheet.delete(sheetName);
-    } else {
-      this.columnWidthsBySheet.set(sheetName, widths);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.columnSizesBySheet,
+      renderedSizesBySheet: this.columnWidthsBySheet,
+      pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      hiddenAxesBySheet: this.hiddenColumnsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
-    const currentHeight = this.rowHeightsBySheet.get(sheetName)?.[rowIndex];
-    if (currentHeight === height) {
+    const nextState = setProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.rowSizesBySheet,
+        renderedSizesBySheet: this.rowHeightsBySheet,
+        pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        hiddenAxesBySheet: this.hiddenRowsBySheet,
+      }),
+      index: rowIndex,
+      size: height,
+    });
+    if (!nextState.changed) {
       return;
     }
     this.knownSheets.add(sheetName);
-    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
-    sizes[rowIndex] = height;
-    this.rowSizesBySheet.set(sheetName, sizes);
-    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
-    heights[rowIndex] = this.hiddenRowsBySheet.get(sheetName)?.[rowIndex] ? 0 : height;
-    this.rowHeightsBySheet.set(sheetName, heights);
-    const pending = { ...this.pendingRowHeightsBySheet.get(sheetName) };
-    pending[rowIndex] = height;
-    this.pendingRowHeightsBySheet.set(sheetName, pending);
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.rowSizesBySheet,
+      renderedSizesBySheet: this.rowHeightsBySheet,
+      pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      hiddenAxesBySheet: this.hiddenRowsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
   ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
-    const pendingHeights = this.pendingRowHeightsBySheet.get(sheetName);
-    if (!pendingHeights || pendingHeights[rowIndex] !== height) {
+    const nextState = ackProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.rowSizesBySheet,
+        renderedSizesBySheet: this.rowHeightsBySheet,
+        pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        hiddenAxesBySheet: this.hiddenRowsBySheet,
+      }),
+      index: rowIndex,
+      size: height,
+    });
+    if (!nextState.changed) {
       return;
     }
-    const nextPendingHeights = { ...pendingHeights };
-    delete nextPendingHeights[rowIndex];
-    if (Object.keys(nextPendingHeights).length === 0) {
-      this.pendingRowHeightsBySheet.delete(sheetName);
-    } else {
-      this.pendingRowHeightsBySheet.set(sheetName, nextPendingHeights);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.rowSizesBySheet,
+      renderedSizesBySheet: this.rowHeightsBySheet,
+      pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      hiddenAxesBySheet: this.hiddenRowsBySheet,
+      nextState,
+    });
   }
 
   rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
-    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
-    if (height === undefined) {
-      delete sizes[rowIndex];
-    } else {
-      sizes[rowIndex] = height;
+    const nextState = rollbackProjectedViewportLocalAxisSize({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.rowSizesBySheet,
+        renderedSizesBySheet: this.rowHeightsBySheet,
+        pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        hiddenAxesBySheet: this.hiddenRowsBySheet,
+      }),
+      index: rowIndex,
+      size: height,
+    });
+    if (!nextState.changed) {
+      return;
     }
-    if (Object.keys(sizes).length === 0) {
-      this.rowSizesBySheet.delete(sheetName);
-    } else {
-      this.rowSizesBySheet.set(sheetName, sizes);
-    }
-
-    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
-    if (height === undefined) {
-      delete heights[rowIndex];
-    } else {
-      heights[rowIndex] = this.hiddenRowsBySheet.get(sheetName)?.[rowIndex] ? 0 : height;
-    }
-    if (Object.keys(heights).length === 0) {
-      this.rowHeightsBySheet.delete(sheetName);
-    } else {
-      this.rowHeightsBySheet.set(sheetName, heights);
-    }
-
-    const pendingHeights = { ...this.pendingRowHeightsBySheet.get(sheetName) };
-    delete pendingHeights[rowIndex];
-    if (Object.keys(pendingHeights).length === 0) {
-      this.pendingRowHeightsBySheet.delete(sheetName);
-    } else {
-      this.pendingRowHeightsBySheet.set(sheetName, pendingHeights);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.rowSizesBySheet,
+      renderedSizesBySheet: this.rowHeightsBySheet,
+      pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      hiddenAxesBySheet: this.hiddenRowsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
   setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
+    const nextState = setProjectedViewportLocalAxisHidden({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.rowSizesBySheet,
+        renderedSizesBySheet: this.rowHeightsBySheet,
+        pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        hiddenAxesBySheet: this.hiddenRowsBySheet,
+      }),
+      index: rowIndex,
+      hidden,
+      size,
+    });
+    if (!nextState.changed) {
+      return;
+    }
     this.knownSheets.add(sheetName);
-    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
-    sizes[rowIndex] = size;
-    this.rowSizesBySheet.set(sheetName, sizes);
-
-    const hiddenRows = { ...this.hiddenRowsBySheet.get(sheetName) };
-    if (hidden) {
-      hiddenRows[rowIndex] = true;
-    } else {
-      delete hiddenRows[rowIndex];
-    }
-    if (Object.keys(hiddenRows).length === 0) {
-      this.hiddenRowsBySheet.delete(sheetName);
-    } else {
-      this.hiddenRowsBySheet.set(sheetName, hiddenRows);
-    }
-
-    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
-    heights[rowIndex] = hidden ? 0 : size;
-    this.rowHeightsBySheet.set(sheetName, heights);
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.rowSizesBySheet,
+      renderedSizesBySheet: this.rowHeightsBySheet,
+      pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      hiddenAxesBySheet: this.hiddenRowsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
@@ -466,41 +492,28 @@ export class ProjectedViewportStore implements GridEngineLike {
     rowIndex: number,
     previous: { hidden: boolean; size: number | undefined },
   ): void {
-    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
-    if (previous.size === undefined) {
-      delete sizes[rowIndex];
-    } else {
-      sizes[rowIndex] = previous.size;
+    const nextState = rollbackProjectedViewportLocalAxisHidden({
+      state: this.readLocalAxisState({
+        sheetName,
+        sizesBySheet: this.rowSizesBySheet,
+        renderedSizesBySheet: this.rowHeightsBySheet,
+        pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        hiddenAxesBySheet: this.hiddenRowsBySheet,
+      }),
+      index: rowIndex,
+      previous,
+    });
+    if (!nextState.changed) {
+      return;
     }
-    if (Object.keys(sizes).length === 0) {
-      this.rowSizesBySheet.delete(sheetName);
-    } else {
-      this.rowSizesBySheet.set(sheetName, sizes);
-    }
-
-    const hiddenRows = { ...this.hiddenRowsBySheet.get(sheetName) };
-    if (previous.hidden) {
-      hiddenRows[rowIndex] = true;
-    } else {
-      delete hiddenRows[rowIndex];
-    }
-    if (Object.keys(hiddenRows).length === 0) {
-      this.hiddenRowsBySheet.delete(sheetName);
-    } else {
-      this.hiddenRowsBySheet.set(sheetName, hiddenRows);
-    }
-
-    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
-    if (previous.size === undefined) {
-      delete heights[rowIndex];
-    } else {
-      heights[rowIndex] = previous.hidden ? 0 : previous.size;
-    }
-    if (Object.keys(heights).length === 0) {
-      this.rowHeightsBySheet.delete(sheetName);
-    } else {
-      this.rowHeightsBySheet.set(sheetName, heights);
-    }
+    this.writeLocalAxisState({
+      sheetName,
+      sizesBySheet: this.rowSizesBySheet,
+      renderedSizesBySheet: this.rowHeightsBySheet,
+      pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      hiddenAxesBySheet: this.hiddenRowsBySheet,
+      nextState,
+    });
     this.listeners.forEach((listener) => listener());
   }
 
@@ -693,6 +706,43 @@ export class ProjectedViewportStore implements GridEngineLike {
       this.listeners.forEach((listener) => listener());
     }
     return damage;
+  }
+
+  private readLocalAxisState(args: {
+    sheetName: string;
+    sizesBySheet: Map<string, Record<number, number>>;
+    renderedSizesBySheet: Map<string, Record<number, number>>;
+    pendingSizesBySheet: Map<string, Record<number, number>>;
+    hiddenAxesBySheet: Map<string, Record<number, true>>;
+  }): ProjectedViewportLocalAxisState {
+    return {
+      sizes: args.sizesBySheet.get(args.sheetName) ?? {},
+      renderedSizes: args.renderedSizesBySheet.get(args.sheetName) ?? {},
+      pendingSizes: args.pendingSizesBySheet.get(args.sheetName) ?? {},
+      hiddenAxes: args.hiddenAxesBySheet.get(args.sheetName) ?? {},
+    };
+  }
+
+  private writeLocalAxisState(args: {
+    sheetName: string;
+    sizesBySheet: Map<string, Record<number, number>>;
+    renderedSizesBySheet: Map<string, Record<number, number>>;
+    pendingSizesBySheet: Map<string, Record<number, number>>;
+    hiddenAxesBySheet: Map<string, Record<number, true>>;
+    nextState: ProjectedViewportLocalAxisResult;
+  }): void {
+    args.sizesBySheet.set(args.sheetName, args.nextState.sizes);
+    args.renderedSizesBySheet.set(args.sheetName, args.nextState.renderedSizes);
+    if (Object.keys(args.nextState.pendingSizes).length === 0) {
+      args.pendingSizesBySheet.delete(args.sheetName);
+    } else {
+      args.pendingSizesBySheet.set(args.sheetName, args.nextState.pendingSizes);
+    }
+    if (Object.keys(args.nextState.hiddenAxes).length === 0) {
+      args.hiddenAxesBySheet.delete(args.sheetName);
+    } else {
+      args.hiddenAxesBySheet.set(args.sheetName, args.nextState.hiddenAxes);
+    }
   }
 
   private sheetCellKeys(sheetName: string): Set<string> {
