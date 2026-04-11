@@ -57,15 +57,12 @@ describe("formula compatibility registry", () => {
     expect(snapshot.canonical.summary).toEqual({
       production: canonicalProductionEntries.length,
       total: canonicalRegistryEntries.length,
-      percent: 99.3,
+      percent: 100,
     });
     expect(snapshot.canonical.nonProductionRows.map((row) => row.id).toSorted()).toEqual(
       canonicalOpenRows,
     );
-    expect(canonicalOpenRows).toEqual([
-      "dynamic-array:groupby-basic",
-      "dynamic-array:pivotby-basic",
-    ]);
+    expect(canonicalOpenRows).toEqual([]);
   });
 
   it("keeps the canonical formula fixture corpus and registry in exact lockstep", () => {
