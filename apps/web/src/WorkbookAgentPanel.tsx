@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Button } from "@base-ui/react/button";
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   describeWorkbookAgentCommand,
@@ -100,7 +101,7 @@ function ThreadSummaryStrip(props: {
         const isActive = threadSummary.threadId === props.activeThreadId;
         const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText);
         return (
-          <button
+          <Button
             key={threadSummary.threadId}
             aria-label={`Open ${threadSummary.scope} thread ${threadSummary.threadId}`}
             aria-pressed={isActive}
@@ -136,7 +137,7 @@ function ThreadSummaryStrip(props: {
                 Pending
               </span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -152,7 +153,7 @@ function ThreadScopeControls(props: {
       {(["private", "shared"] as const).map((scope) => {
         const isActive = props.threadScope === scope;
         return (
-          <button
+          <Button
             key={scope}
             aria-pressed={isActive}
             className={agentPanelSegmentedButtonClass({ active: isActive })}
@@ -163,7 +164,7 @@ function ThreadScopeControls(props: {
             }}
           >
             {scope === "shared" ? "Shared" : "Private"}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -658,13 +659,13 @@ function PendingBundleCard(props: {
             {String(selectedCount)}/{String(props.bundle.commands.length)}
           </div>
           {!hasFullSelection ? (
-            <button
+            <Button
               className="text-[11px] font-medium text-[var(--wb-accent)] transition-colors hover:brightness-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
               type="button"
               onClick={props.onSelectAll}
             >
               All
-            </button>
+            </Button>
           ) : null}
         </div>
         <div className="mt-2 flex flex-col gap-2">
@@ -752,7 +753,7 @@ function PendingBundleCard(props: {
       ) : null}
       {props.canFinalizeSharedBundle && props.sharedReviewStatus !== null ? (
         <div className="mt-2 flex items-center justify-end gap-2">
-          <button
+          <Button
             className={workbookButtonClass({ tone: "neutral" })}
             data-testid="workbook-agent-review-reject"
             type="button"
@@ -761,8 +762,8 @@ function PendingBundleCard(props: {
             }}
           >
             Reject
-          </button>
-          <button
+          </Button>
+          <Button
             className={workbookButtonClass({ tone: "accent" })}
             data-testid="workbook-agent-review-approve"
             type="button"
@@ -771,12 +772,12 @@ function PendingBundleCard(props: {
             }}
           >
             Approve
-          </button>
+          </Button>
         </div>
       ) : null}
       {props.canRecommendSharedBundle && props.sharedReviewStatus === "pending" ? (
         <div className="mt-2 flex items-center justify-end gap-2">
-          <button
+          <Button
             className={workbookButtonClass({ tone: "neutral" })}
             data-testid="workbook-agent-review-reject"
             type="button"
@@ -785,8 +786,8 @@ function PendingBundleCard(props: {
             }}
           >
             Recommend reject
-          </button>
-          <button
+          </Button>
+          <Button
             className={workbookButtonClass({ tone: "accent" })}
             data-testid="workbook-agent-review-approve"
             type="button"
@@ -795,7 +796,7 @@ function PendingBundleCard(props: {
             }}
           >
             Recommend approve
-          </button>
+          </Button>
         </div>
       ) : null}
       {props.preview?.cellDiffs?.length ? (
@@ -828,14 +829,14 @@ function PendingBundleCard(props: {
         </div>
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
-        <button
+        <Button
           className={workbookButtonClass({ tone: "neutral" })}
           type="button"
           onClick={props.onDismiss}
         >
           Clear
-        </button>
-        <button
+        </Button>
+        <Button
           className={workbookButtonClass({ tone: "accent", weight: "strong" })}
           data-testid="workbook-agent-apply-pending"
           disabled={!canApply}
@@ -843,7 +844,7 @@ function PendingBundleCard(props: {
           onClick={props.onApply}
         >
           {applyLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -950,14 +951,14 @@ export function WorkbookAgentPanel(props: {
               {resolvedScopeLabel}
             </div>
           </div>
-          <button
+          <Button
             className={agentPanelInlineButtonClass()}
             data-testid="workbook-agent-new-thread"
             type="button"
             onClick={props.onStartNewThread}
           >
             New thread
-          </button>
+          </Button>
         </div>
         <ThreadSummaryStrip
           activeThreadId={props.activeThreadId}
@@ -1083,7 +1084,7 @@ export function WorkbookAgentPanel(props: {
                 props.onSubmit();
               }}
             />
-            <button
+            <Button
               aria-label={isRunning ? "Stop" : "Send message"}
               className={agentPanelComposerSendButtonClass()}
               data-testid="workbook-agent-send"
@@ -1098,7 +1099,7 @@ export function WorkbookAgentPanel(props: {
               }}
             >
               {isRunning ? <StopIcon /> : <SendArrowIcon />}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

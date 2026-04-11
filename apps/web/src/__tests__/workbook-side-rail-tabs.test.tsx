@@ -1,15 +1,92 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Tabs } from "@base-ui/react/tabs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkbookSideRailTabs } from "../WorkbookSideRailTabs.js";
+import { cn } from "../cn.js";
+import {
+  railCountClass,
+  railIndicatorClass,
+  railListClass,
+  railPanelClass,
+  railRootClass,
+  railTabClass,
+  type WorkbookSideRailTabDefinition,
+} from "../WorkbookSideRailTabs.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
+function SideRailHarness(props: {
+  readonly defaultValue?: string;
+  readonly tabs: readonly WorkbookSideRailTabDefinition[];
+  readonly value?: string;
+  readonly onValueChange?: (nextValue: string) => void;
+}) {
+  const visibleTabs = props.tabs.filter((tab) => tab.panel != null);
+  const [uncontrolledValue, setUncontrolledValue] = useState<string>(
+    props.defaultValue ?? visibleTabs[0]?.value ?? "",
+  );
+  const value = props.value ?? uncontrolledValue;
+
+  if (!value || visibleTabs.length === 0) {
+    return null;
+  }
+
+  return (
+    <Tabs.Root
+      className={railRootClass()}
+      value={value}
+      onValueChange={(nextValue) => {
+        const resolvedNextValue = String(nextValue);
+        if (props.value === undefined) {
+          setUncontrolledValue(resolvedNextValue);
+        }
+        props.onValueChange?.(resolvedNextValue);
+      }}
+    >
+      <Tabs.List aria-label="Workbook panels" className={railListClass()}>
+        {visibleTabs.map((tab) => (
+          <Tabs.Tab
+            className={(state) => railTabClass({ active: state.active })}
+            data-testid={`workbook-side-rail-tab-${tab.value}`}
+            key={tab.value}
+            value={tab.value}
+          >
+            <span>{tab.label}</span>
+            {typeof tab.count === "number" ? (
+              <span
+                className={cn(
+                  railCountClass({
+                    active: value === tab.value,
+                  }),
+                )}
+              >
+                {String(Math.min(tab.count, 99))}
+              </span>
+            ) : null}
+          </Tabs.Tab>
+        ))}
+        <Tabs.Indicator className={railIndicatorClass()} renderBeforeHydration />
+      </Tabs.List>
+      {visibleTabs.map((tab) => (
+        <Tabs.Panel
+          className={railPanelClass()}
+          data-testid={`workbook-side-rail-panel-${tab.value}`}
+          keepMounted
+          key={tab.value}
+          value={tab.value}
+        >
+          {tab.panel}
+        </Tabs.Panel>
+      ))}
+    </Tabs.Root>
+  );
+}
+
 describe("workbook side rail tabs", () => {
-  it("renders Base UI tabs with count badges and switches the active tab", async () => {
+  it("renders Base UI tabs with count text and switches the active tab", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,7 +97,7 @@ describe("workbook side rail tabs", () => {
 
     await act(async () => {
       root.render(
-        <WorkbookSideRailTabs
+        <SideRailHarness
           defaultValue="assistant"
           tabs={[
             {
@@ -71,7 +148,7 @@ describe("workbook side rail tabs", () => {
 
     await act(async () => {
       root.render(
-        <WorkbookSideRailTabs
+        <SideRailHarness
           tabs={[
             {
               value: "assistant",

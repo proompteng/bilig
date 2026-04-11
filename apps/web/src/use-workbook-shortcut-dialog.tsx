@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { WorkbookHeaderActionButton } from "./workbook-header-controls.js";
+import { Button } from "@base-ui/react/button";
+import { workbookHeaderActionButtonClass } from "./workbook-header-controls.js";
 import { WorkbookShortcutDialog } from "./WorkbookShortcutDialog.js";
 import { isTextEntryTarget } from "./worker-workbook-app-model.js";
 
@@ -42,13 +43,15 @@ export function useWorkbookShortcutDialog() {
 
   const shortcutHelpButton = useMemo(
     () => (
-      <WorkbookHeaderActionButton
+      <Button
         aria-label="Show keyboard shortcuts"
+        className={workbookHeaderActionButtonClass()}
         data-testid="workbook-shortcut-button"
+        type="button"
         onClick={openShortcutDialog}
       >
         <span className="text-[11px] font-semibold">Shortcuts</span>
-      </WorkbookHeaderActionButton>
+      </Button>
     ),
     [openShortcutDialog],
   );

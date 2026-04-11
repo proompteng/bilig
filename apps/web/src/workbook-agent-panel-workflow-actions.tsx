@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Button } from "@base-ui/react/button";
 import { ChevronDown } from "lucide-react";
 import { Popover } from "@base-ui/react/popover";
 import { cn } from "./cn.js";
@@ -216,7 +217,7 @@ export function WorkflowActionStrip(props: {
             <div className="mt-2 grid gap-2">
               <div className={agentPanelActionGridClass()}>
                 {WORKFLOW_ACTIONS.map((action) => (
-                  <button
+                  <Button
                     key={action.template}
                     className={compactButtonClass}
                     data-testid={`workbook-agent-workflow-start-${action.template}`}
@@ -227,7 +228,7 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : action.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
@@ -254,7 +255,7 @@ export function WorkflowActionStrip(props: {
                   }}
                 />
                 <div className={agentPanelActionGridClass()}>
-                  <button
+                  <Button
                     className={primaryCompactButtonClass}
                     data-testid="workbook-agent-workflow-start-createSheet"
                     disabled={
@@ -266,8 +267,8 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Create sheet"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className={compactButtonClass}
                     data-testid="workbook-agent-workflow-start-renameCurrentSheet"
                     disabled={
@@ -279,10 +280,10 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     Rename current
-                  </button>
+                  </Button>
                 </div>
                 <div className={agentPanelActionGridClass()}>
-                  <button
+                  <Button
                     className={compactButtonClass}
                     data-testid="workbook-agent-workflow-start-hideCurrentRow"
                     disabled={props.disabled || props.isStartingWorkflow}
@@ -292,8 +293,8 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Hide current row"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className={compactButtonClass}
                     data-testid="workbook-agent-workflow-start-hideCurrentColumn"
                     disabled={props.disabled || props.isStartingWorkflow}
@@ -303,10 +304,10 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
-                  </button>
+                  </Button>
                 </div>
                 <div className={agentPanelActionGridClass()}>
-                  <button
+                  <Button
                     className={compactButtonClass}
                     data-testid="workbook-agent-workflow-start-unhideCurrentRow"
                     disabled={props.disabled || props.isStartingWorkflow}
@@ -316,8 +317,8 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Unhide current row"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className={compactButtonClass}
                     data-testid="workbook-agent-workflow-start-unhideCurrentColumn"
                     disabled={props.disabled || props.isStartingWorkflow}
@@ -327,7 +328,7 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Unhide current column"}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
@@ -354,7 +355,7 @@ export function WorkflowActionStrip(props: {
                       }
                     }}
                   />
-                  <button
+                  <Button
                     className={cn(primaryCompactButtonClass, "min-w-[5rem]")}
                     data-testid="workbook-agent-workflow-start-searchWorkbookQuery"
                     disabled={
@@ -366,7 +367,7 @@ export function WorkflowActionStrip(props: {
                     }}
                   >
                     {props.isStartingWorkflow ? "Starting…" : "Search"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
