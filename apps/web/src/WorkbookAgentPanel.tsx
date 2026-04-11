@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Button } from "@base-ui/react/button";
 import { Collapsible } from "@base-ui/react/collapsible";
 import {
@@ -593,43 +593,43 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 function TimelineCitationList(props: {
   readonly citations: readonly WorkbookAgentTimelineCitation[];
 }) {
-  if (props.citations.length === 0) {
+  const segments = summarizeTimelineCitations(props.citations);
+  if (segments.length === 0) {
     return null;
   }
-  const occurrenceCounts = new Map<string, number>();
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {props.citations.map((citation) => {
-        if (citation.kind === "revision") {
-          const baseKey = `revision:${String(citation.revision)}`;
-          const occurrence = (occurrenceCounts.get(baseKey) ?? 0) + 1;
-          occurrenceCounts.set(baseKey, occurrence);
-          return (
-            <span
-              key={`${baseKey}:${String(occurrence)}`}
-              className={workbookPillClass({ tone: "neutral" })}
-            >
-              r{String(citation.revision)}
-            </span>
-          );
-        }
-        const baseKey = `${citation.kind}:${citation.role}:${citation.sheetName}:${citation.startAddress}:${citation.endAddress}`;
-        const occurrence = (occurrenceCounts.get(baseKey) ?? 0) + 1;
-        occurrenceCounts.set(baseKey, occurrence);
-        return (
-          <span
-            key={`${baseKey}:${String(occurrence)}`}
-            className={workbookPillClass({
-              tone: citation.role === "target" ? "accent" : "neutral",
-            })}
-          >
-            {citation.sheetName}!{citation.startAddress}
-            {citation.startAddress === citation.endAddress ? "" : `:${citation.endAddress}`}
-          </span>
-        );
-      })}
+    <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+      {segments.map((segment, index) => (
+        <Fragment key={segment}>
+          {index > 0 ? <span aria-hidden="true"> · </span> : null}
+          <span>{segment}</span>
+        </Fragment>
+      ))}
     </div>
   );
+}
+
+function summarizeTimelineCitations(
+  citations: readonly WorkbookAgentTimelineCitation[],
+): readonly string[] {
+  const seen = new Set<string>();
+  const segments: string[] = [];
+  for (const citation of citations) {
+    if (citation.kind === "revision") {
+      continue;
+    }
+    const address =
+      citation.startAddress === citation.endAddress
+        ? `${citation.sheetName}!${citation.startAddress}`
+        : `${citation.sheetName}!${citation.startAddress}:${citation.endAddress}`;
+    const segment = `${citation.role === "target" ? "Target" : "Source"} ${address}`;
+    if (seen.has(segment)) {
+      continue;
+    }
+    seen.add(segment);
+    segments.push(segment);
+  }
+  return segments;
 }
 
 function PendingBundleCard(props: {

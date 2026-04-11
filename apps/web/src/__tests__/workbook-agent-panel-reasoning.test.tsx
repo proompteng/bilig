@@ -18,6 +18,16 @@ function renderPanel(entry: {
   id: string;
   kind: "plan" | "system";
   text: string | null;
+  citations?: Array<
+    | { kind: "revision"; revision: number }
+    | {
+        kind: "range";
+        sheetName: string;
+        startAddress: string;
+        endAddress: string;
+        role: "source" | "target";
+      }
+  >;
 }) {
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -93,7 +103,7 @@ function renderPanel(entry: {
                   argumentsText: null,
                   outputText: null,
                   success: null,
-                  citations: [],
+                  citations: entry.citations ?? [],
                 },
               ],
               pendingBundle: null,
@@ -123,7 +133,9 @@ describe("WorkbookAgentPanel reasoning", () => {
     expect(panel.host.textContent).toContain("Thought");
     expect(panel.host.textContent).toContain("Check the visible formulas before applying edits.");
 
-    const toggle = panel.host.querySelector("[data-testid='workbook-agent-reasoning-toggle-plan-1']");
+    const toggle = panel.host.querySelector(
+      "[data-testid='workbook-agent-reasoning-toggle-plan-1']",
+    );
     expect(toggle instanceof HTMLButtonElement).toBe(true);
 
     await act(async () => {
@@ -153,6 +165,39 @@ describe("WorkbookAgentPanel reasoning", () => {
 
     expect(panel.host.textContent).not.toContain("Thought");
     expect(panel.host.textContent).not.toContain("Codex emitted reasoning.");
+
+    await act(async () => {
+      panel.root.unmount();
+    });
+  });
+
+  it("renders citations as inline metadata instead of pills", async () => {
+    const panel = renderPanel({
+      id: "system-apply-1",
+      kind: "system",
+      text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+      citations: [
+        {
+          kind: "range",
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B2",
+          role: "target",
+        },
+        {
+          kind: "revision",
+          revision: 7,
+        },
+      ],
+    });
+
+    await panel.render();
+
+    expect(panel.host.textContent).toContain(
+      "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+    );
+    expect(panel.host.textContent).toContain("Target Sheet1!B2");
+    expect(panel.host.textContent).not.toContain("Target Sheet1!B2 · r7");
 
     await act(async () => {
       panel.root.unmount();
