@@ -1254,6 +1254,82 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts header-normalization workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-header-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "normalizeCurrentSheetHeaders" as const,
+      title: "Normalize Current Sheet Headers",
+      summary: "Staged normalized headers for 2 cells on Imports.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-header-row",
+          label: "Inspect header row",
+          status: "completed" as const,
+          summary: "Loaded the used range and current header row from Imports.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "stage-header-normalization",
+          label: "Stage header normalization",
+          status: "completed" as const,
+          summary: "Prepared the semantic write preview that normalizes 2 header cells.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Header Normalization Preview",
+        text: "## Header Normalization Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-header-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "normalizeCurrentSheetHeaders",
+          sheetName: "Imports",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "normalizeCurrentSheetHeaders",
+      sheetName: "Imports",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "normalizeCurrentSheetHeaders"',
+    );
+  });
+
   it("stages column metadata commands for resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

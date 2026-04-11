@@ -70,6 +70,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "describeRecentChanges" ||
     value === "findFormulaIssues" ||
     value === "highlightFormulaIssues" ||
+    value === "normalizeCurrentSheetHeaders" ||
     value === "traceSelectionDependencies" ||
     value === "explainSelectionCell" ||
     value === "searchWorkbookQuery"

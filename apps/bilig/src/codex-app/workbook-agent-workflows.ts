@@ -20,6 +20,10 @@ import {
   getFormulaWorkflowTemplateMetadata,
 } from "./workbook-agent-formula-workflows.js";
 import {
+  executeImportWorkflow,
+  getImportWorkflowTemplateMetadata,
+} from "./workbook-agent-import-workflows.js";
+import {
   executeStructuralWorkflow,
   getStructuralWorkflowTemplateMetadata,
   isStructuralWorkflowTemplate,
@@ -67,9 +71,14 @@ type NonStructuralWorkflowTemplate = Exclude<
   StructuralWorkflowTemplate
 >;
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
+type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders";
 type NonFormulaWorkflowTemplate = Exclude<
   NonStructuralWorkflowTemplate,
   FormulaWorkflowTemplate
+>;
+type NonFormulaOrImportWorkflowTemplate = Exclude<
+  NonFormulaWorkflowTemplate,
+  ImportWorkflowTemplate
 >;
 
 function assertUnsupportedWorkflowTemplate(_workflowTemplate: never): never {
@@ -88,11 +97,16 @@ function getWorkflowTemplateMetadata(
   if (formulaMetadata) {
     return formulaMetadata;
   }
+  const importMetadata = getImportWorkflowTemplateMetadata(workflowTemplate, workflowInput);
+  if (importMetadata) {
+    return importMetadata;
+  }
   if (isStructuralWorkflowTemplate(workflowTemplate)) {
     throw new Error(`Structural workflow metadata resolution fell through: ${workflowTemplate}`);
   }
-  const nonFormulaWorkflowTemplate = workflowTemplate as NonFormulaWorkflowTemplate;
-  switch (nonFormulaWorkflowTemplate) {
+  const nonFormulaOrImportWorkflowTemplate =
+    workflowTemplate as NonFormulaOrImportWorkflowTemplate;
+  switch (nonFormulaOrImportWorkflowTemplate) {
     case "summarizeWorkbook":
       return {
         title: "Summarize Workbook",
@@ -226,7 +240,7 @@ function getWorkflowTemplateMetadata(
       };
     }
   }
-  return assertUnsupportedWorkflowTemplate(nonFormulaWorkflowTemplate);
+  return assertUnsupportedWorkflowTemplate(nonFormulaOrImportWorkflowTemplate);
 }
 
 export function describeWorkbookAgentWorkflowTemplate(
@@ -625,7 +639,17 @@ export async function executeWorkbookAgentWorkflow(input: {
   if (formulaResult) {
     return formulaResult;
   }
-  const workflowTemplate = input.workflowTemplate as NonFormulaWorkflowTemplate;
+  const importResult = await executeImportWorkflow({
+    documentId: input.documentId,
+    zeroSyncService: input.zeroSyncService,
+    workflowTemplate: input.workflowTemplate,
+    ...(input.context !== undefined ? { context: input.context } : {}),
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+  });
+  if (importResult) {
+    return importResult;
+  }
+  const workflowTemplate = input.workflowTemplate as NonFormulaOrImportWorkflowTemplate;
   switch (workflowTemplate) {
     case "summarizeWorkbook": {
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>

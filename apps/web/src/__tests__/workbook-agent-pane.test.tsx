@@ -653,6 +653,116 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts header-normalization workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-header-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "normalizeCurrentSheetHeaders",
+                  title: "Normalize Current Sheet Headers",
+                  summary: "Staged normalized headers for 2 cells on Sheet1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-header-row",
+                      label: "Inspect header row",
+                      status: "completed",
+                      summary: "Loaded the used range and current header row from Sheet1.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "stage-header-normalization",
+                      label: "Stage header normalization",
+                      status: "completed",
+                      summary: "Prepared the semantic write preview that normalizes 2 header cells.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Header Normalization Preview",
+                    text: "## Header Normalization Preview",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetHeaders']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Header normalization workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    );
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "normalizeCurrentSheetHeaders",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Normalize Current Sheet Headers");
+    expect(host.textContent).toContain("Header Normalization Preview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("cancels running workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

@@ -41,9 +41,10 @@ const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSum
 type WorkbookAgentWorkflowStartRequest =
   | {
       readonly workflowTemplate: Exclude<
-        WorkbookAgentWorkflowTemplate,
+        WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
         | "findFormulaIssues"
         | "highlightFormulaIssues"
+        | "normalizeCurrentSheetHeaders"
         | "searchWorkbookQuery"
         | "createSheet"
         | "renameCurrentSheet"
@@ -58,6 +59,10 @@ type WorkbookAgentWorkflowStartRequest =
       readonly workflowTemplate: "highlightFormulaIssues";
       readonly sheetName?: string;
       readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "normalizeCurrentSheetHeaders";
+      readonly sheetName?: string;
     }
   | {
       readonly workflowTemplate: "searchWorkbookQuery";
@@ -1049,7 +1054,8 @@ export function useWorkbookAgentPane(input: {
         onStartWorkflow={(workflowTemplate) => {
           if (
             (workflowTemplate === "findFormulaIssues" ||
-              workflowTemplate === "highlightFormulaIssues") &&
+              workflowTemplate === "highlightFormulaIssues" ||
+              workflowTemplate === "normalizeCurrentSheetHeaders") &&
             currentContext?.selection.sheetName
           ) {
             void startWorkflow({

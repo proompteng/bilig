@@ -286,6 +286,46 @@ describe("@bilig/contracts", () => {
     expect(decoded.artifact?.title).toBe("Formula Issue Highlights");
   });
 
+  it("accepts header-normalization workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-header-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "normalizeCurrentSheetHeaders",
+      title: "Normalize Current Sheet Headers",
+      summary: "Staged normalized headers for 2 cells on Imports.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-header-row",
+          label: "Inspect header row",
+          status: "completed",
+          summary: "Loaded the used range and current header row from Imports.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-header-normalization",
+          label: "Stage header normalization",
+          status: "completed",
+          summary: "Prepared the semantic write preview that normalizes 2 header cells.",
+          updatedAtUnixMs: 115,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Header Normalization Preview",
+        text: "## Header Normalization Preview",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("normalizeCurrentSheetHeaders");
+    expect(decoded.artifact?.title).toBe("Header Normalization Preview");
+  });
+
   it("accepts structural workflow templates in durable runs", () => {
     const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
       runId: "workflow-structural-1",

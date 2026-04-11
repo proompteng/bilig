@@ -9,7 +9,7 @@ import {
 
 interface WorkflowActionDefinition {
   readonly template: Exclude<
-    WorkbookAgentWorkflowTemplate,
+    WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
     "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
   >;
   readonly label: string;
@@ -44,6 +44,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
       "Stage a preview bundle that highlights active-sheet formula errors, cycles, and JS-only fallback formulas.",
   },
   {
+    template: "normalizeCurrentSheetHeaders",
+    label: "Normalize headers",
+    summary:
+      "Stage a preview bundle that trims, titles, and de-duplicates the active sheet header row.",
+  },
+  {
     template: "traceSelectionDependencies",
     label: "Trace selection links",
     summary: "Trace precedents and dependents from the current selection context.",
@@ -60,7 +66,7 @@ export function WorkflowActionStrip(props: {
   readonly isStartingWorkflow: boolean;
   readonly onStartWorkflow: (
     template: Exclude<
-      WorkbookAgentWorkflowTemplate,
+      WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
       "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
     >,
   ) => void;

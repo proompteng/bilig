@@ -134,4 +134,42 @@ describe("WorkflowActionStrip", () => {
       root.unmount();
     });
   });
+
+  it("starts header-normalization workflows from the quick action list", async () => {
+    const onStartWorkflow = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkflowActionStrip
+          disabled={false}
+          isStartingWorkflow={false}
+          onStartNamedWorkflow={vi.fn()}
+          onStartSearchWorkflow={vi.fn()}
+          onStartStructuralWorkflow={vi.fn()}
+          onStartWorkflow={onStartWorkflow}
+        />,
+      );
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetHeaders']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Header normalization workflow button not found");
+      }
+      button.click();
+    });
+
+    expect(onStartWorkflow).toHaveBeenCalledWith("normalizeCurrentSheetHeaders");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
