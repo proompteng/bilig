@@ -3789,7 +3789,8 @@ describe("workbook agent pane", () => {
         preview,
       }),
     );
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain("r4");
+    expect(host.textContent).not.toContain("Executions");
+    expect(host.textContent).not.toContain("Replay");
 
     await act(async () => {
       root.unmount();
@@ -4694,7 +4695,10 @@ describe("workbook agent pane", () => {
         preview: subsetPreview,
       }),
     );
-    expect(host.textContent).toContain("Write cells in Sheet1!C3");
+    expect(host.textContent).toContain("Write cells in Sheet1!B2");
+    expect(host.textContent).not.toContain("Write cells in Sheet1!C3");
+    expect(host.textContent).not.toContain("Executions");
+    expect(host.textContent).not.toContain("Replay");
 
     await act(async () => {
       root.unmount();

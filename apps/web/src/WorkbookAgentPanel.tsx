@@ -49,7 +49,6 @@ import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
 import {
-  ExecutionRecordRow,
   PreviewRangeList,
   WorkflowRunRow,
 } from "./workbook-agent-panel-history.js";
@@ -1134,24 +1133,6 @@ export function WorkbookAgentPanel(props: {
                       run={run}
                       onCancel={() => {
                         props.onCancelWorkflowRun(run.runId);
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {props.executionRecords.length > 0 ? (
-              <div className="pt-2">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                  Executions
-                </div>
-                <div className="flex flex-col gap-2">
-                  {props.executionRecords.slice(0, 5).map((record) => (
-                    <ExecutionRecordRow
-                      key={record.id}
-                      record={record}
-                      onReplay={() => {
-                        props.onReplayExecutionRecord(record.id);
                       }}
                     />
                   ))}
