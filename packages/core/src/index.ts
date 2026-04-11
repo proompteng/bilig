@@ -7,6 +7,7 @@ export * from "./entity-ids.js";
 export * from "./events.js";
 export * from "./formula-table.js";
 export * from "./guards.js";
+export * from "./literal-sheet-loader.js";
 export * from "./range-registry.js";
 export * from "./scheduler.js";
 export * from "./selectors.js";

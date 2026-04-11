@@ -29,6 +29,8 @@ import {
   type NameRefNode,
   type CallExprNode,
 } from "@bilig/formula";
+import { tryLoadInitialLiteralSheet } from "./initial-sheet-load.js";
+import { orderHeadlessCellChanges } from "./change-order.js";
 import {
   ConfigValueTooBigError,
   ConfigValueTooSmallError,
@@ -97,6 +99,10 @@ import type {
   RawCellContent,
   SerializedHeadlessNamedExpression,
 } from "./types.js";
+import {
+  collectTrackedCellRefsFromEvents,
+  type TrackedCellRef,
+} from "./tracked-engine-event-refs.js";
 
 type ListenerMap = {
   [EventName in HeadlessWorkbookEventName]: Set<HeadlessWorkbookListener<EventName>>;
@@ -138,14 +144,6 @@ interface SheetStateSnapshot {
 
 type VisibilitySnapshot = Map<number, SheetStateSnapshot>;
 type NamedExpressionValueSnapshot = Map<string, CellValue | CellValue[][]>;
-
-interface TrackedCellRef {
-  sheetId: number;
-  sheetName: string;
-  address: string;
-  row: number;
-  col: number;
-}
 
 interface ClipboardPayload {
   sourceAnchor: HeadlessCellAddress;
@@ -1109,7 +1107,9 @@ export class HeadlessWorkbook {
     });
     Object.entries(sheets).forEach(([sheetName, sheet]) => {
       const sheetId = workbook.requireSheetId(sheetName);
-      workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+      if (!tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
+        workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+      }
     });
     workbook.clearHistoryStacks();
     workbook.primeChangeTrackingCaches();
@@ -2846,6 +2846,7 @@ export class HeadlessWorkbook {
     this.engine.applyOps(ops, {
       captureUndo: true,
       potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      trusted: true,
     });
   }
 
@@ -2989,9 +2990,7 @@ export class HeadlessWorkbook {
     if (cellIndex === -1) {
       return emptyValue();
     }
-    return cloneCellValue(
-      this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id)),
-    );
+    return this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id));
   }
 
   private captureNamedExpressionValueSnapshot(): NamedExpressionValueSnapshot {
@@ -3006,46 +3005,7 @@ export class HeadlessWorkbook {
   }
 
   private collectTrackedCellRefs(events: readonly EngineEvent[]): TrackedCellRef[] | null {
-    if (events.length === 0) {
-      return [];
-    }
-    const refs = new Map<string, TrackedCellRef>();
-    for (const event of events) {
-      if (
-        event.invalidation === "full" ||
-        event.invalidatedRanges.length > 0 ||
-        event.invalidatedRows.length > 0 ||
-        event.invalidatedColumns.length > 0
-      ) {
-        return null;
-      }
-      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-        const cellIndex = event.changedCellIndices[index]!;
-        const qualifiedAddress = this.engine.workbook.getQualifiedAddress(cellIndex);
-        if (qualifiedAddress.length === 0 || qualifiedAddress.startsWith("!")) {
-          return null;
-        }
-        const separator = qualifiedAddress.indexOf("!");
-        if (separator <= 0 || separator === qualifiedAddress.length - 1) {
-          return null;
-        }
-        const sheetName = qualifiedAddress.slice(0, separator);
-        const address = qualifiedAddress.slice(separator + 1);
-        const sheetId = this.getSheetId(sheetName);
-        if (sheetId === undefined) {
-          return null;
-        }
-        const parsed = parseCellAddress(address, sheetName);
-        refs.set(`${sheetId}:${address}`, {
-          sheetId,
-          sheetName,
-          address,
-          row: parsed.row,
-          col: parsed.col,
-        });
-      }
-    }
-    return [...refs.values()];
+    return collectTrackedCellRefsFromEvents(this.engine, events);
   }
 
   private computeCellChanges(
@@ -3075,7 +3035,7 @@ export class HeadlessWorkbook {
         });
       });
     });
-    return cellChanges.toSorted(compareHeadlessCellChanges(this.listSheetRecords()));
+    return orderHeadlessCellChanges(cellChanges, this.listSheetRecords());
   }
 
   private computeCellChangesFromTrackedEvents(
@@ -3103,12 +3063,7 @@ export class HeadlessWorkbook {
           sheetId: existing.sheetId,
           sheetName: existing.sheetName,
           order: existing.order,
-          cells: new Map(
-            [...existing.cells.entries()].map(([address, value]) => [
-              address,
-              cloneCellValue(value),
-            ]),
-          ),
+          cells: new Map(existing.cells),
         });
         mutableSheets.add(ref.sheetId);
       }
@@ -3138,7 +3093,11 @@ export class HeadlessWorkbook {
     });
 
     return {
-      changes: changes.toSorted(compareHeadlessCellChanges(this.listSheetRecords())),
+      changes: orderHeadlessCellChanges(
+        changes,
+        this.listSheetRecords(),
+        events.length === 1 ? events[0]!.metrics.changedInputCount : undefined,
+      ),
       nextVisibility,
     };
   }
@@ -3366,7 +3325,7 @@ export class HeadlessWorkbook {
     if (ops.length === 0) {
       return;
     }
-    this.engine.applyOps(ops, { potentialNewCells });
+    this.engine.applyOps(ops, { potentialNewCells, trusted: true });
   }
 
   private applyMatrixContents(
@@ -3404,7 +3363,7 @@ export class HeadlessWorkbook {
       if (phaseOps.length === 0) {
         return;
       }
-      this.engine.applyOps(phaseOps, applyOptions);
+      this.engine.applyOps(phaseOps, { ...applyOptions, trusted: true });
     };
 
     if (formulaOps.length === 0) {
@@ -3579,7 +3538,9 @@ export class HeadlessWorkbook {
     });
     Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
       const sheetId = this.requireSheetId(sheetName);
-      this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+      if (!tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
+        this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+      }
     });
     this.clearHistoryStacks();
     this.primeChangeTrackingCaches();
@@ -3897,22 +3858,6 @@ function compareHeadlessNamedExpressionChanges(
     return 0;
   }
   return (left.scope ?? -1) - (right.scope ?? -1) || left.name.localeCompare(right.name);
-}
-
-function compareHeadlessCellChanges(
-  sheets: readonly { id: number; order: number }[],
-): (left: HeadlessChange, right: HeadlessChange) => number {
-  const orderBySheet = new Map(sheets.map((sheet) => [sheet.id, sheet.order]));
-  return (left, right) => {
-    if (left.kind !== "cell" || right.kind !== "cell") {
-      return 0;
-    }
-    return (
-      (orderBySheet.get(left.address.sheet) ?? 0) - (orderBySheet.get(right.address.sheet) ?? 0) ||
-      left.address.row - right.address.row ||
-      left.address.col - right.address.col
-    );
-  };
 }
 
 function sourceRangeRef(sheetName: string, range: HeadlessCellRange): CellRangeRef {

@@ -136,15 +136,18 @@ Current measured values from local repo artifacts and docs:
 - `bilig` canonical formula production closure:
   - `300/300` rows = `100%`
 - directly comparable benchmark record:
-  - `WorkPaper` wins: `1/6`
-  - HyperFormula wins: `5/6`
-  - current `WorkPaper` direct win on this host: range-read at `1.02x` faster
-  - HyperFormula current win range on this host: `3.02x` to `7.30x`
+  - `WorkPaper` wins: `2/6`
+  - HyperFormula wins: `4/6`
+  - current `WorkPaper` direct wins on this host:
+    - build-from-sheets at `4.44x` faster
+    - range-read at `1.08x` faster
+  - HyperFormula current win range on this host: `1.37x` to `7.28x`
   - notable improvements from the latest tranches:
-    - batch-edit recalculation improved from `1000.39x` slower to `7.30x` slower
-    - single-edit recalculation improved to `5.60x` slower after the `WorkPaper` facade stopped cloning or rescanning the workbook on ordinary edits and mixed-sheet imports stopped rebinding against half-built lookup columns
-    - lookup without column indexing improved from `134.35x` slower to `3.02x` slower after the headless full-workbook diff path was removed from ordinary edits
-    - lookup with `useColumnIndex` improved from `134.35x` slower to `5.74x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, and eager index priming landed
+    - build-from-sheets improved from `6.95x` slower to a `WorkPaper` win at `4.44x` faster
+    - batch-edit recalculation improved from `1000.39x` slower to `7.28x` slower
+    - single-edit recalculation improved to `4.88x` slower after the `WorkPaper` facade stopped cloning or rescanning the workbook on ordinary edits and mixed-sheet imports stopped rebinding against half-built lookup columns
+    - lookup without column indexing improved from `134.35x` slower to `1.37x` slower after the headless full-workbook diff path was removed from ordinary edits
+    - lookup with `useColumnIndex` improved from `134.35x` slower to `2.28x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, eager index priming, literal-only direct initialization, and trusted owned-op execution landed
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -369,12 +372,12 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- lookup with column indexing: HyperFormula currently leads by `5.74x`
-- batch-edit recalculation: HyperFormula currently leads by `7.30x`
-- build from sheets: HyperFormula currently leads by `6.95x`
-- single-edit recalculation: HyperFormula currently leads by `5.60x`
-- lookup without column indexing: HyperFormula currently leads by `3.02x`
-- range-read: `WorkPaper` currently leads by `1.02x`
+- batch-edit recalculation: HyperFormula currently leads by `7.28x`
+- single-edit recalculation: HyperFormula currently leads by `4.88x`
+- lookup with column indexing: HyperFormula currently leads by `2.28x`
+- lookup without column indexing: HyperFormula currently leads by `1.37x`
+- range-read: `WorkPaper` currently leads by `1.08x`
+- build from sheets: `WorkPaper` currently leads by `4.44x`
 
 The important trend changes are:
 
@@ -483,7 +486,8 @@ Required work:
 - introduce formula parse/compile cache keyed by canonical source plus config
 - identify repeated-formula patterns and avoid recompiling identical AST/program pairs
 - audit workbook restore path for avoidable object churn
-- reduce serialization overhead in headless build-from-sheets and restore paths
+- preserve the literal-only build-from-sheets fast path while extending the same low-overhead
+  strategy to mixed-content restore paths
 - add benchmark fixtures for:
   - dense literals
   - repeated formulas

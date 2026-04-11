@@ -47,6 +47,7 @@ export interface EngineMutationService {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      trusted?: boolean;
     },
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>;
   readonly captureUndoOps: <Result>(mutate: () => Result) => Effect.Effect<
@@ -626,7 +627,7 @@ export function createEngineMutationService(args: {
     applyOps(ops, options = {}) {
       return Effect.try({
         try: () => {
-          const nextOps = structuredClone([...ops]);
+          const nextOps = options.trusted ? [...ops] : structuredClone([...ops]);
           if (nextOps.length === 0) {
             return null;
           }

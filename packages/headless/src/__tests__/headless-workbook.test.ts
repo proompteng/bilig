@@ -45,6 +45,37 @@ describe("HeadlessWorkbook", () => {
     });
   });
 
+  it("keeps literal-only initialization compatible with named expressions and later formulas", () => {
+    const workbook = HeadlessWorkbook.buildFromSheets(
+      {
+        Bench: [
+          [2, "west", true],
+          [4, null, false],
+        ],
+      },
+      {},
+      [{ name: "BenchTotal", expression: "=SUM(Bench!$A$1:$A$2)" }],
+    );
+    const sheetId = workbook.getSheetId("Bench")!;
+
+    expect(workbook.getNamedExpressionValue("BenchTotal")).toEqual({
+      tag: ValueTag.Number,
+      value: 6,
+    });
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 3), "=BenchTotal+A1");
+
+    expect(changes).toHaveLength(1);
+    expect(workbook.getCellValue(cell(sheetId, 0, 3))).toEqual({
+      tag: ValueTag.Number,
+      value: 8,
+    });
+    expect(workbook.getSheetSerialized(sheetId)).toEqual([
+      [2, "west", true, "=BenchTotal+A1"],
+      [4, null, false, null],
+    ]);
+  });
+
   it("supports sheet-scoped named expressions and restores public formulas", () => {
     const workbook = HeadlessWorkbook.buildFromSheets({
       Summary: [[]],

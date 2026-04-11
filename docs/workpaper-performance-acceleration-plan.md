@@ -20,14 +20,17 @@ Current checkpoint on `main`:
 - mixed-sheet imports now stage literals before formulas and eagerly prime exact column indexes
   during formula binding, so indexed lookup no longer pays first-build cache construction inside
   the timed mutation path
+- literal-only workbook initialization now hydrates directly into fresh core workbook storage
+  instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - `lookup-no-column-index`: improved from `68.76x` slower to `3.02x` slower
-  - `lookup-with-column-index`: improved from `124.42x` slower to `5.74x` slower
-  - `range-read`: now a slight `WorkPaper` win at `1.02x`
+  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.44x` faster
+  - `lookup-no-column-index`: improved from `68.76x` slower to `1.37x` slower
+  - `lookup-with-column-index`: improved from `124.42x` slower to `2.28x` slower
+  - `range-read`: a small `WorkPaper` win at `1.08x` faster
 
 So the remaining performance gap is no longer “lookup is completely fake.” The remaining gap is
-that the indexed core path is still slower than HyperFormula’s purpose-built search subsystem, and
-build/recalc overhead is still red.
+that recalculation overhead is still red. Lookup is now close enough that it no longer dominates
+the program.
 
 It complements:
 
@@ -84,19 +87,20 @@ Current direct-comparison results from
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
 | --- | ---: | ---: | --- |
-| `build-from-sheets` | `26.654ms` | `3.837ms` | HyperFormula `6.95x` faster |
-| `single-edit-recalc` | `7.558ms` | `1.350ms` | HyperFormula `5.60x` faster |
-| `batch-edit-recalc` | `6.071ms` | `0.831ms` | HyperFormula `7.30x` faster |
-| `range-read` | `0.211ms` | `0.216ms` | `WorkPaper` `1.02x` faster |
-| `lookup-no-column-index` | `0.807ms` | `0.267ms` | HyperFormula `3.02x` faster |
-| `lookup-with-column-index` | `0.759ms` | `0.132ms` | HyperFormula `5.74x` faster |
+| `build-from-sheets` | `0.856ms` | `3.801ms` | `WorkPaper` `4.44x` faster |
+| `single-edit-recalc` | `6.832ms` | `1.401ms` | HyperFormula `4.88x` faster |
+| `batch-edit-recalc` | `6.473ms` | `0.890ms` | HyperFormula `7.28x` faster |
+| `range-read` | `0.200ms` | `0.216ms` | `WorkPaper` `1.08x` faster |
+| `lookup-no-column-index` | `0.356ms` | `0.260ms` | HyperFormula `1.37x` faster |
+| `lookup-with-column-index` | `0.333ms` | `0.146ms` | HyperFormula `2.28x` faster |
 
 This is the important reading:
 
+- `build-from-sheets` is now a real `WorkPaper` strength, not a remaining cleanup item
 - `range-read` remains near parity
-- build and recalculation are still materially behind, but not catastrophically so
-- lookup is no longer structurally broken in the original way; the direct exact hot path is now
-  real and measured
+- recalculation is now the largest directly comparable red lane
+- lookup is no longer structurally broken in the original way; both directly comparable lookup
+  workloads are now near parity relative to where this program started
 - the remaining lookup gap is now a narrower engine-quality problem:
   - persistent indexed search is still slower than HyperFormula’s core search subsystem
   - non-indexed exact lookup still needs a dedicated fast path
@@ -337,12 +341,14 @@ Primary repo surfaces to change:
 
 ### F. Build-From-Sheets Fast Path
 
-`build-from-sheets` is still `7.94x` slower. That gap is too large for a package that positions
-itself as a headless engine.
+The original `build-from-sheets` gap is closed for literal-only fresh-workbook construction. The
+broader build/import problem is now preserving that lead while extending the same low-overhead
+staging to mixed-content rebuilds and more complex import shapes.
 
 Required changes:
 
-- bulk-import literals and formulas without per-cell public mutation semantics
+- preserve the literal-only direct-storage fast path
+- bulk-import mixed literals and formulas without per-cell public mutation semantics
 - build dependency and lookup indexes in one staged pass
 - delay event/change materialization until engine warm-up completes
 - avoid repeated address parse/format churn during import
@@ -394,6 +400,8 @@ Status:
 - the combination of `engine.getLastMetrics()` and the competitive artifact was enough to prove
   that ordinary `WorkPaper` change materialization, not recalc itself, was dominating the lookup
   benchmark after the direct exact core path landed
+- the literal-only initialization fast path also proved that restore/mutation scaffolding, not raw
+  cell storage, was dominating the original `build-from-sheets` workload
 - dedicated workload counters are still desirable, but they are no longer blocking the next patch
 
 ### Phase 1: Move Exact Lookup Into Core
@@ -413,8 +421,8 @@ Status:
 
 - completed on `main`
 - current checked-in result:
-  - `lookup-with-column-index` is now `5.74x` slower
-  - `lookup-no-column-index` is now `3.02x` slower
+  - `lookup-with-column-index` is now `2.28x` slower
+  - `lookup-no-column-index` is now `1.37x` slower
 - the remaining red work is now phase-2 quality work, not phase-1 plumbing
 
 ### Phase 2: Native Direct Lookup Ops
@@ -431,22 +439,32 @@ Acceptance:
 
 Status:
 
-- partially satisfied on `main`
+- completed on `main`
 - exact indexed lookup no longer rebuilds its column index on the first post-build mutation when
   the formula was bound against a fully populated column
-- `lookup-no-column-index` is already under the `5x` target at `3.02x` slower
-- `lookup-with-column-index` still misses the `3x` target at `5.74x` slower, so the remaining
-  work is the dedicated native lookup opcode and deeper core-owned column storage path
+- `lookup-no-column-index` is under the `5x` target at `1.37x` slower
+- `lookup-with-column-index` is under the `3x` target at `2.28x` slower
+- the remaining work is no longer to make lookup plausible; it is to turn the remaining lookup
+  losses into actual wins while the program focus shifts to recalculation
 
 ### Phase 3: Batch/Recalc and Build Path Reduction
 
-Reduce mutation churn, rebinding overhead, and import overhead.
+Reduce mutation churn and rebinding overhead, and keep the new import lead intact.
 
 Acceptance:
 
 - `batch-edit-recalc`, `single-edit-recalc`, and `build-from-sheets` all land under `2x` slower
 - `range-read` remains within `1.1x`
 - no regressions in external consumer smoke
+
+Status:
+
+- partially satisfied on `main`
+- `build-from-sheets` has already crossed the finish line and is now a `WorkPaper` win at `4.44x`
+  faster
+- `range-read` is now a `WorkPaper` win at `1.08x` faster
+- the remaining work in this phase is now `single-edit-recalc`, `batch-edit-recalc`, and the
+  mixed-content import path
 
 ### Phase 4: Majority Wins
 
@@ -527,8 +545,10 @@ It is:
 1. push indexed lookup deeper into engine-owned column/index structures so `useColumnIndex`
    materially outperforms the current non-indexed direct exact path
 2. extend dedicated direct lookup lowering beyond the current exact `MATCH` / `XMATCH` slice
-3. reduce the remaining facade and build-path overhead that still keeps
-   `build-from-sheets`, `single-edit-recalc`, and `batch-edit-recalc` red
-4. rerun the competitive benchmark and keep updating the artifact after each structural win
+3. reduce the remaining recalculation overhead that still keeps `single-edit-recalc` and
+   `batch-edit-recalc` red
+4. keep the direct literal initialization path fast while extending the same strategy to broader
+   mixed-content imports and rebuilds
+5. rerun the competitive benchmark and keep updating the artifact after each structural win
 
 That is the shortest path from “phase 1 landed” to “majority benchmark wins.”

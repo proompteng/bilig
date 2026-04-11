@@ -947,6 +947,7 @@ export class SpreadsheetEngine {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      trusted?: boolean;
     } = {},
   ): readonly EngineOp[] | null {
     return runEngineEffect(this.runtime.mutation.applyOps(ops, options));
