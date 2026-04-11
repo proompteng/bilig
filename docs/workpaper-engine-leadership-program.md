@@ -107,7 +107,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | `1/6` wins in `workpaper-vs-hyperformula.json` | `5/6` wins on current host | HyperFormula still leads overall, but `bilig` now wins range-read | convert the current red workloads into majority `bilig` wins while preserving the new direct-comparable win |
+| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula still leads overall, but the batch-edit loss ratio is now dramatically smaller than before | convert the current red workloads into majority `bilig` wins while preserving the new batch-edit progress |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -132,10 +132,11 @@ Current measured values from local repo artifacts and docs:
 - `bilig` canonical formula production closure:
   - `300/300` rows = `100%`
 - directly comparable benchmark record:
-  - `WorkPaper` wins: `1/6`
-  - HyperFormula wins: `5/6`
-  - `WorkPaper` current direct-comparable win range on this host: `1.01x`
-  - HyperFormula current win range on this host: `6.26x` to `1000.39x`
+  - `WorkPaper` wins: `0/6`
+  - HyperFormula wins: `6/6`
+  - current `WorkPaper` closest-to-parity workload on this host: range-read at `1.07x` slower
+  - HyperFormula current win range on this host: `1.07x` to `134.35x`
+  - notable improvement from the latest tranche: batch-edit recalculation improved from `1000.39x` slower to `8.77x` slower
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -360,13 +361,14 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- batch-edit recalculation: HyperFormula currently leads by `1000.39x`
-- lookup with column indexing: HyperFormula currently leads by `137.50x`
-- lookup without column indexing: HyperFormula currently leads by `75.09x`
-- build from sheets: HyperFormula currently leads by `6.56x`
-- single-edit recalculation: HyperFormula currently leads by `6.26x`
+- lookup with column indexing: HyperFormula currently leads by `134.35x`
+- lookup without column indexing: HyperFormula currently leads by `76.27x`
+- batch-edit recalculation: HyperFormula currently leads by `8.77x`
+- build from sheets: HyperFormula currently leads by `7.12x`
+- single-edit recalculation: HyperFormula currently leads by `6.02x`
+- range-read: HyperFormula currently leads by `1.07x`
 
-Range-read is now a slight `bilig` win and should be treated as a regression guard, not as a hotspot priority.
+The important trend change is that batch-edit recalculation is no longer the catastrophic outlier. The last tranche cut that gap from `1000.39x` to `8.77x`, which moves lookup/indexing into the clear top-priority slot.
 
 ### Priority 2: Protect formula production-quality leadership
 
@@ -523,6 +525,9 @@ Likely bottlenecks:
 
 Required work:
 
+- keep the already-landed headless fixes intact:
+  - suppress per-edit snapshot diffing inside outer `batch()`
+  - defer literal cell writes into a single engine-op flush where semantics allow it
 - audit batch path for per-edit repeated work that should be deferred
 - aggregate invalidation metadata during `batch()` / suspended evaluation
 - deduplicate structural change reporting where the public result permits it

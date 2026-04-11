@@ -1,4 +1,5 @@
 import { SpreadsheetEngine } from "@bilig/core";
+import type { EngineOp } from "@bilig/workbook-domain";
 import {
   ErrorCode,
   MAX_COLS,
@@ -460,6 +461,15 @@ function isHeadlessSheetMatrix(value: RawCellContent | HeadlessSheet): value is 
 
 function matrixContainsFormulaContent(content: HeadlessSheet): boolean {
   return content.some((row) => row.some((cell) => isFormulaContent(cell)));
+}
+
+function isDeferredBatchLiteralContent(content: RawCellContent): boolean {
+  return (
+    content === null ||
+    typeof content === "boolean" ||
+    typeof content === "number" ||
+    typeof content === "string"
+  );
 }
 
 function stripLeadingEquals(formula: string): string {
@@ -958,6 +968,8 @@ export class HeadlessWorkbook {
   private batchStartVisibility: VisibilitySnapshot | null = null;
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null;
   private batchUndoStackLength = 0;
+  private pendingBatchOps: EngineOp[] = [];
+  private pendingBatchPotentialNewCells = 0;
   private evaluationSuspended = false;
   private suspendedVisibility: VisibilitySnapshot | null = null;
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
@@ -1338,6 +1350,7 @@ export class HeadlessWorkbook {
     } finally {
       this.batchDepth -= 1;
       if (isOutermost) {
+        this.flushPendingBatchOps();
         this.mergeUndoHistory(this.batchUndoStackLength);
       }
     }
@@ -1529,7 +1542,7 @@ export class HeadlessWorkbook {
   }
 
   getCellFormula(address: HeadlessCellAddress): string | undefined {
-    this.assertNotDisposed();
+    this.prepareReadableState();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     if (!cell.formula) {
       return undefined;
@@ -1551,7 +1564,7 @@ export class HeadlessWorkbook {
   }
 
   getCellSerialized(address: HeadlessCellAddress): RawCellContent {
-    this.assertNotDisposed();
+    this.prepareReadableState();
     return this.cellSnapshotToRawContent(
       this.engine.getCell(this.sheetName(address.sheet), this.a1(address)),
       address.sheet,
@@ -1634,7 +1647,7 @@ export class HeadlessWorkbook {
   }
 
   getSheetDimensions(sheetId: number): HeadlessSheetDimensions {
-    this.assertNotDisposed();
+    this.prepareReadableState();
     const sheet = this.sheetRecord(sheetId);
     let width = 0;
     let height = 0;
@@ -1741,6 +1754,7 @@ export class HeadlessWorkbook {
   }
 
   getCellDependents(address: HeadlessAddressLike): HeadlessDependencyRef[] {
+    this.flushPendingBatchOps();
     if (!isCellRange(address)) {
       return this.toDependencyRefs(
         this.engine.getDependents(this.sheetName(address.sheet), this.a1(address)).directDependents,
@@ -1755,6 +1769,7 @@ export class HeadlessWorkbook {
   }
 
   getCellPrecedents(address: HeadlessAddressLike): HeadlessDependencyRef[] {
+    this.flushPendingBatchOps();
     if (!isCellRange(address)) {
       return this.getDirectPrecedentRefs(address);
     }
@@ -1784,6 +1799,7 @@ export class HeadlessWorkbook {
   }
 
   getCellType(address: HeadlessCellAddress): HeadlessCellType {
+    this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     if (this.isCellEmpty(address)) {
       return "EMPTY";
@@ -1795,17 +1811,20 @@ export class HeadlessWorkbook {
   }
 
   doesCellHaveSimpleValue(address: HeadlessCellAddress): boolean {
+    this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     return !cell.formula && !this.isCellEmpty(address);
   }
 
   doesCellHaveFormula(address: HeadlessCellAddress): boolean {
+    this.flushPendingBatchOps();
     return (
       this.engine.getCell(this.sheetName(address.sheet), this.a1(address)).formula !== undefined
     );
   }
 
   isCellEmpty(address: HeadlessCellAddress): boolean {
+    this.flushPendingBatchOps();
     return (
       this.engine.getCellValue(this.sheetName(address.sheet), this.a1(address)).tag ===
       ValueTag.Empty
@@ -1813,6 +1832,7 @@ export class HeadlessWorkbook {
   }
 
   isCellPartOfArray(address: HeadlessCellAddress): boolean {
+    this.flushPendingBatchOps();
     return this.engine
       .getSpillRanges()
       .some((spill: { sheetName: string; address: string; rows: number; cols: number }) => {
@@ -1865,6 +1885,7 @@ export class HeadlessWorkbook {
   }
 
   getCellValueFormat(address: HeadlessCellAddress): string | undefined {
+    this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     return cell.format;
   }
@@ -2138,10 +2159,17 @@ export class HeadlessWorkbook {
     }
     return this.captureChanges(undefined, () => {
       if (isHeadlessSheetMatrix(content)) {
+        this.flushPendingBatchOps();
         this.applyMatrixContents(address, content);
         return;
       }
-      this.applyRawContent(this.sheetName(address.sheet), this.a1(address), content, address.sheet);
+      const sheetName = this.sheetName(address.sheet);
+      const a1 = this.a1(address);
+      if (this.enqueueDeferredBatchLiteral(sheetName, a1, content)) {
+        return;
+      }
+      this.flushPendingBatchOps();
+      this.applyRawContent(sheetName, a1, content, address.sheet);
     });
   }
 
@@ -2733,6 +2761,46 @@ export class HeadlessWorkbook {
     this.namedExpressions.clear();
   }
 
+  private flushPendingBatchOps(): void {
+    if (this.pendingBatchOps.length === 0) {
+      return;
+    }
+    const ops = this.pendingBatchOps;
+    const potentialNewCells = this.pendingBatchPotentialNewCells;
+    this.pendingBatchOps = [];
+    this.pendingBatchPotentialNewCells = 0;
+    this.engine.applyOps(ops, {
+      captureUndo: true,
+      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+    });
+  }
+
+  private enqueueDeferredBatchLiteral(
+    sheetName: string,
+    address: string,
+    content: RawCellContent,
+  ): boolean {
+    if (
+      this.batchDepth === 0 ||
+      !isDeferredBatchLiteralContent(content) ||
+      isFormulaContent(content)
+    ) {
+      return false;
+    }
+    if (content === null) {
+      this.pendingBatchOps.push({ kind: "clearCell", sheetName, address });
+      return true;
+    }
+    this.pendingBatchOps.push({ kind: "setCellValue", sheetName, address, value: content });
+    this.pendingBatchPotentialNewCells += 1;
+    return true;
+  }
+
+  private prepareReadableState(): void {
+    this.assertNotDisposed();
+    this.flushPendingBatchOps();
+  }
+
   private assertNotDisposed(): void {
     if (this.disposed) {
       throw new HeadlessOperationError("Workbook has been disposed");
@@ -2740,7 +2808,7 @@ export class HeadlessWorkbook {
   }
 
   private assertReadable(): void {
-    this.assertNotDisposed();
+    this.prepareReadableState();
     if (this.evaluationSuspended) {
       throw new HeadlessEvaluationSuspendedError();
     }
@@ -2906,6 +2974,20 @@ export class HeadlessWorkbook {
     mutate: () => void,
   ): HeadlessChange[] {
     this.assertNotDisposed();
+    if (semanticEvent !== undefined) {
+      this.flushPendingBatchOps();
+    }
+    if (semanticEvent === undefined && this.shouldSuppressEvents()) {
+      try {
+        mutate();
+      } catch (error) {
+        if (error instanceof Error && HEADLESS_PUBLIC_ERROR_NAMES.has(error.name)) {
+          throw error;
+        }
+        throw new HeadlessOperationError(this.messageOf(error, "Mutation failed"));
+      }
+      return [];
+    }
     const beforeVisibility = this.captureVisibilitySnapshot();
     const beforeNames = this.captureNamedExpressionValueSnapshot();
     try {
@@ -3007,6 +3089,7 @@ export class HeadlessWorkbook {
     serialized: RawCellContent[][],
     sourceAnchor: HeadlessCellAddress,
   ): void {
+    this.flushPendingBatchOps();
     if (matrixContainsFormulaContent(serialized)) {
       serialized.forEach((row, rowOffset) => {
         row.forEach((raw, columnOffset) => {
@@ -3063,6 +3146,7 @@ export class HeadlessWorkbook {
       skipNulls?: boolean;
     } = {},
   ): void {
+    this.flushPendingBatchOps();
     if (matrixContainsFormulaContent(content)) {
       content.forEach((row, rowOffset) => {
         row.forEach((raw, columnOffset) => {

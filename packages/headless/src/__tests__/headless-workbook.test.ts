@@ -102,17 +102,19 @@ describe("HeadlessWorkbook", () => {
     const workbook = HeadlessWorkbook.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
     const valuesUpdated: number[] = [];
+    const nestedMutationResults: number[] = [];
 
     workbook.on("valuesUpdated", (changes) => {
       valuesUpdated.push(changes.length);
     });
 
     const changes = workbook.batch(() => {
-      workbook.setCellContents(cell(sheetId, 0, 1), "=A1*2");
-      workbook.setCellContents(cell(sheetId, 1, 0), 5);
+      nestedMutationResults.push(workbook.setCellContents(cell(sheetId, 0, 1), "=A1*2").length);
+      nestedMutationResults.push(workbook.setCellContents(cell(sheetId, 1, 0), 5).length);
     });
 
     expect(changes).toHaveLength(2);
+    expect(nestedMutationResults).toEqual([0, 0]);
     expect(valuesUpdated).toEqual([2]);
     expect(workbook.isThereSomethingToUndo()).toBe(true);
 
@@ -121,6 +123,22 @@ describe("HeadlessWorkbook", () => {
     expect(undoChanges).toHaveLength(2);
     expect(workbook.getCellValue(cell(sheetId, 0, 1)).tag).toBe(ValueTag.Empty);
     expect(workbook.getCellValue(cell(sheetId, 1, 0)).tag).toBe(ValueTag.Empty);
+  });
+
+  it("flushes deferred literal edits before formula writes inside a batch", () => {
+    const workbook = HeadlessWorkbook.buildFromArray([[1]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+
+    const changes = workbook.batch(() => {
+      expect(workbook.setCellContents(cell(sheetId, 0, 0), 10)).toEqual([]);
+      expect(workbook.setCellContents(cell(sheetId, 0, 1), "=A1*2")).toEqual([]);
+    });
+
+    expect(changes).toHaveLength(2);
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 20,
+    });
   });
 
   it("replaces literal sheet content in one undoable batch, including clears", () => {
