@@ -950,14 +950,14 @@ export class SpreadsheetEngine {
       trusted?: boolean;
     } = {},
   ): readonly EngineOp[] | null {
-    return runEngineEffect(this.runtime.mutation.applyOps(ops, options));
+    return this.runtime.mutation.applyOpsNow(ops, options);
   }
 
   private executeLocalTransaction(
     ops: EngineOp[],
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
-    return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
+    return this.runtime.mutation.executeLocalNow(ops, potentialNewCells);
   }
 }
 

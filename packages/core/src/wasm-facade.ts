@@ -1,5 +1,5 @@
 import { type CellValue, type ErrorCode, ValueTag } from "@bilig/protocol";
-import { createKernel, type SpreadsheetKernel } from "@bilig/wasm-kernel";
+import { createKernel, createKernelSync, type SpreadsheetKernel } from "@bilig/wasm-kernel";
 import type { CellStore } from "./cell-store.js";
 import type { StringPool } from "./string-pool.js";
 
@@ -59,24 +59,51 @@ export class WasmKernelFacade {
   private kernel: SpreadsheetKernel | null = null;
   private initPromise: Promise<void> | null = null;
   private uploadedStringPoolSize = 0;
+  private storeSynced = false;
 
   get ready(): boolean {
     return this.kernel !== null;
   }
 
   async init(): Promise<void> {
+    if (this.kernel) {
+      return;
+    }
     if (this.initPromise) return this.initPromise;
     this.initPromise = createKernel()
       .then((kernel) => {
-        this.kernel = kernel;
-        kernel.init(64, 64, 64, 64, 64);
+        if (this.kernel === null) {
+          this.kernel = kernel;
+          kernel.init(64, 64, 64, 64, 64);
+          this.storeSynced = false;
+        }
         return undefined;
       })
       .catch(() => {
-        this.kernel = null;
+        if (this.kernel === null) {
+          this.kernel = null;
+        }
         return undefined;
       });
     return this.initPromise;
+  }
+
+  initSyncIfPossible(): boolean {
+    if (this.kernel) {
+      return true;
+    }
+    try {
+      const kernel = createKernelSync();
+      if (this.kernel === null) {
+        this.kernel = kernel;
+        kernel.init(64, 64, 64, 64, 64);
+        this.storeSynced = false;
+      }
+      this.initPromise ??= Promise.resolve();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   ensureCapacity(
@@ -148,6 +175,7 @@ export class WasmKernelFacade {
     if (!this.kernel) {
       return;
     }
+    this.storeSynced = false;
     this.kernel.readTags().fill(0);
     this.kernel.readNumbers().fill(0);
     this.kernel.readStringIds().fill(0);
@@ -171,13 +199,14 @@ export class WasmKernelFacade {
       this.kernel.getRangeCapacity(),
       this.kernel.getMemberCapacity(),
     );
-    if (changedCellIndices === undefined) {
+    if (changedCellIndices === undefined || !this.storeSynced) {
       this.kernel.writeCells(
         store.tags.slice(0, store.size),
         store.numbers.slice(0, store.size),
         store.stringIds.slice(0, store.size),
         store.errors.slice(0, store.size),
       );
+      this.storeSynced = true;
       return;
     }
     if (changedCellIndices.length === 0) {

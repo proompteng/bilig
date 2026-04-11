@@ -172,6 +172,46 @@ describe("HeadlessWorkbook", () => {
     });
   });
 
+  it("undoes and redoes deferred literal-only batches", () => {
+    const workbook = HeadlessWorkbook.buildFromArray([[1], [2]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+
+    const changes = workbook.batch(() => {
+      workbook.setCellContents(cell(sheetId, 0, 0), 10);
+      workbook.setCellContents(cell(sheetId, 1, 0), 20);
+    });
+
+    expect(changes).toHaveLength(2);
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 10,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 20,
+    });
+
+    workbook.undo();
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+
+    workbook.redo();
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 10,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 20,
+    });
+  });
+
   it("keeps exact MATCH correct when useColumnIndex is enabled", () => {
     const workbook = HeadlessWorkbook.buildFromSheets(
       {

@@ -51,6 +51,15 @@ export interface EnginePivotService {
     pivot: WorkbookPivotRecord,
   ) => Effect.Effect<number[], EnginePivotError>;
   readonly clearPivotForCell: (cellIndex: number) => Effect.Effect<number[], EnginePivotError>;
+  readonly materializePivotNow: (pivot: WorkbookPivotRecord) => number[];
+  readonly resolvePivotDataNow: (
+    sheetName: string,
+    address: string,
+    dataField: string,
+    filters: ReadonlyArray<{ field: string; item: CellValue }>,
+  ) => CellValue;
+  readonly clearOwnedPivotNow: (pivot: WorkbookPivotRecord) => number[];
+  readonly clearPivotForCellNow: (cellIndex: number) => number[];
 }
 
 function toPivotDefinition(pivot: WorkbookPivotRecord): PivotDefinitionInput {
@@ -99,7 +108,11 @@ export function createEnginePivotService(args: {
     return true;
   };
 
-  const setPivotOutputCellValue = (cellIndex: number, value: CellValue, ownerKey: string): boolean => {
+  const setPivotOutputCellValue = (
+    cellIndex: number,
+    value: CellValue,
+    ownerKey: string,
+  ): boolean => {
     const currentFlags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
     const currentValue = args.state.workbook.cellStore.getValue(cellIndex, (id) =>
       args.state.strings.get(id),
@@ -243,13 +256,7 @@ export function createEnginePivotService(args: {
       return writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Spill)], changedCellIndices);
     }
     if (isPivotOutputBlocked(pivot, startRow, startCol, rows, cols)) {
-      return writePivotOutput(
-        pivot,
-        1,
-        1,
-        [errorValue(ErrorCode.Blocked)],
-        changedCellIndices,
-      );
+      return writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Blocked)], changedCellIndices);
     }
     return undefined;
   };
@@ -260,7 +267,10 @@ export function createEnginePivotService(args: {
     for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
       const values: CellValue[] = [];
       for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-        const cellIndex = args.state.workbook.getCellIndex(range.sheetName, formatAddress(row, col));
+        const cellIndex = args.state.workbook.getCellIndex(
+          range.sheetName,
+          formatAddress(row, col),
+        );
         values.push(
           cellIndex === undefined
             ? emptyValue()
@@ -313,7 +323,9 @@ export function createEnginePivotService(args: {
         }
       });
 
-      const groupByIndexValues = pivot.groupBy.map((group) => headerLookup.get(group.trim().toUpperCase()));
+      const groupByIndexValues = pivot.groupBy.map((group) =>
+        headerLookup.get(group.trim().toUpperCase()),
+      );
       const valueIndexValues = pivot.values.map((value) =>
         headerLookup.get(value.sourceColumn.trim().toUpperCase()),
       );
@@ -374,7 +386,11 @@ export function createEnginePivotService(args: {
               values.push({ tag: ValueTag.Boolean, value: materialized.numbers[index]! !== 0 });
             } else if (tag === ValueTag.String) {
               const stringId = materialized.stringIds[index]!;
-              values.push({ tag: ValueTag.String, value: args.state.strings.get(stringId), stringId });
+              values.push({
+                tag: ValueTag.String,
+                value: args.state.strings.get(stringId),
+                stringId,
+              });
             } else if (tag === ValueTag.Error) {
               values.push({ tag: ValueTag.Error, code: materialized.errors[index]! });
             }
@@ -390,7 +406,10 @@ export function createEnginePivotService(args: {
       }
     }
 
-    const materialized = materializePivotTable(toPivotDefinition(pivot), readPivotSourceRows(pivot.source));
+    const materialized = materializePivotTable(
+      toPivotDefinition(pivot),
+      readPivotSourceRows(pivot.source),
+    );
     if (materialized.kind === "error") {
       return writePivotOutput(
         pivot,
@@ -577,5 +596,9 @@ export function createEnginePivotService(args: {
           }),
       });
     },
+    materializePivotNow,
+    resolvePivotDataNow,
+    clearOwnedPivotNow,
+    clearPivotForCellNow,
   };
 }

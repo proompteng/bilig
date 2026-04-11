@@ -2,7 +2,12 @@ import { Effect } from "effect";
 import { FormulaMode, ValueTag, type CellSnapshot } from "@bilig/protocol";
 import { makeCellKey } from "../../workbook-store.js";
 import { CellFlags } from "../../cell-store.js";
-import type { EngineRuntimeState, RecalcVolatileState, RuntimeFormula, U32 } from "../runtime-state.js";
+import type {
+  EngineRuntimeState,
+  RecalcVolatileState,
+  RuntimeFormula,
+  U32,
+} from "../runtime-state.js";
 import { EngineRecalcError } from "../errors.js";
 import type { WorkbookPivotRecord } from "../../workbook-store.js";
 import { parseCellAddress, utcDateToExcelSerial } from "@bilig/formula";
@@ -32,6 +37,11 @@ export interface EngineRecalcService {
     baseChanged: U32,
     forceAllPivots?: boolean,
   ) => Effect.Effect<U32, EngineRecalcError>;
+  readonly recalculateNowSync: (
+    changedRoots: readonly number[] | U32,
+    kernelSyncRoots?: readonly number[] | U32,
+  ) => U32;
+  readonly reconcilePivotOutputsNow: (baseChanged: U32, forceAllPivots?: boolean) => U32;
 }
 
 function createRecalcVolatileState(now: () => Date): RecalcVolatileState {
@@ -166,7 +176,9 @@ export function createEngineRecalcService(args: {
       }
     }
 
-    return changedCellIndices.length === 0 ? args.emptyChangedSet() : Uint32Array.from(changedCellIndices);
+    return changedCellIndices.length === 0
+      ? args.emptyChangedSet()
+      : Uint32Array.from(changedCellIndices);
   };
 
   const recalculate = (
@@ -194,7 +206,11 @@ export function createEngineRecalcService(args: {
     let pendingKernelSyncCount = 0;
     const volatileState = createRecalcVolatileState(args.now);
 
-    const flushWasmBatch = (batchCount: number, hasVolatile: boolean, randCount: number): number => {
+    const flushWasmBatch = (
+      batchCount: number,
+      hasVolatile: boolean,
+      randCount: number,
+    ): number => {
       if (batchCount === 0) {
         return 0;
       }
@@ -280,16 +296,16 @@ export function createEngineRecalcService(args: {
         if (formula.compiled.volatile) {
           args.state.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
           args.state.wasm.uploadVolatileRandomValues(
-            consumeVolatileRandomValues(
-              volatileState,
-              formula.compiled.randCallCount,
-              args.random,
-            ),
+            consumeVolatileRandomValues(volatileState, formula.compiled.randCallCount, args.random),
           );
         }
         const batchIndices = Uint32Array.of(cellIndex);
         args.state.wasm.evalBatch(batchIndices);
-        args.state.wasm.syncToStore(args.state.workbook.cellStore, batchIndices, args.state.strings);
+        args.state.wasm.syncToStore(
+          args.state.workbook.cellStore,
+          batchIndices,
+          args.state.strings,
+        );
         const spill = args.state.wasm.readSpill(cellIndex, args.state.strings);
         const spillMaterialization = spill
           ? args.materializeSpill(cellIndex, {
@@ -311,7 +327,11 @@ export function createEngineRecalcService(args: {
             : 0,
         );
         queueKernelSync(cellIndex);
-        for (let spillIndex = 0; spillIndex < spillMaterialization.changedCellIndices.length; spillIndex += 1) {
+        for (
+          let spillIndex = 0;
+          spillIndex < spillMaterialization.changedCellIndices.length;
+          spillIndex += 1
+        ) {
           queueKernelSync(spillMaterialization.changedCellIndices[spillIndex]!);
         }
         noteSpillChanges(spillMaterialization.changedCellIndices);
@@ -388,11 +408,19 @@ export function createEngineRecalcService(args: {
     if (singlePassOrdered !== null) {
       return totalOrderedCount === 0 && allChangedRoots.length === 0
         ? args.emptyChangedSet()
-        : args.composeChangedRootsAndOrdered(allChangedRoots, singlePassOrdered, singlePassOrderedCount);
+        : args.composeChangedRootsAndOrdered(
+            allChangedRoots,
+            singlePassOrdered,
+            singlePassOrderedCount,
+          );
     }
     return totalOrderedCount === 0 && allChangedRoots.length === 0
       ? args.emptyChangedSet()
-      : args.composeChangedRootsAndOrdered(allChangedRoots, Uint32Array.from(allOrdered), allOrdered.length);
+      : args.composeChangedRootsAndOrdered(
+          allChangedRoots,
+          Uint32Array.from(allOrdered),
+          allOrdered.length,
+        );
   };
 
   const reconcilePivotOutputs = (baseChanged: U32, forceAllPivots = false): U32 => {
@@ -405,7 +433,8 @@ export function createEngineRecalcService(args: {
       if (pivotChanged.length === 0) {
         break;
       }
-      aggregate = aggregate.length === 0 ? pivotChanged : args.unionChangedSets(aggregate, pivotChanged);
+      aggregate =
+        aggregate.length === 0 ? pivotChanged : args.unionChangedSets(aggregate, pivotChanged);
       pending = recalculate(pivotChanged, pivotChanged);
       aggregate = pending.length === 0 ? aggregate : args.unionChangedSets(aggregate, pending);
       forceAll = false;
@@ -435,6 +464,8 @@ export function createEngineRecalcService(args: {
           }),
       });
     },
+    recalculateNowSync: recalculate,
+    reconcilePivotOutputsNow: reconcilePivotOutputs,
     recalculateNow() {
       return Effect.try({
         try: () => {
@@ -494,7 +525,9 @@ export function createEngineRecalcService(args: {
 
             for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
               for (let col = region.colStart; col <= region.colEnd; col += 1) {
-                const cellIndex = args.state.workbook.cellKeyToIndex.get(makeCellKey(sheet.id, row, col));
+                const cellIndex = args.state.workbook.cellKeyToIndex.get(
+                  makeCellKey(sheet.id, row, col),
+                );
                 if (cellIndex !== undefined) {
                   changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
                   explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
@@ -550,7 +583,9 @@ export function createEngineRecalcService(args: {
           const wasmResults = wasmChanged.map((idx) => args.getCellByIndex(idx));
 
           const drift: string[] = [];
-          const jsMap = new Map(jsResults.map((result) => [`${result.sheetName}!${result.address}`, result]));
+          const jsMap = new Map(
+            jsResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
+          );
           const wasmMap = new Map(
             wasmResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
           );
@@ -562,7 +597,9 @@ export function createEngineRecalcService(args: {
               continue;
             }
             if (JSON.stringify(jsCell.value) !== JSON.stringify(wasmCell.value)) {
-              drift.push(`${addr}: JS=${JSON.stringify(jsCell.value)} WASM=${JSON.stringify(wasmCell.value)}`);
+              drift.push(
+                `${addr}: JS=${JSON.stringify(jsCell.value)} WASM=${JSON.stringify(wasmCell.value)}`,
+              );
             }
           }
 

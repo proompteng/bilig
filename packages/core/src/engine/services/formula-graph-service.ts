@@ -18,11 +18,17 @@ export interface EngineFormulaGraphService {
   ) => Effect.Effect<void, EngineFormulaGraphError>;
   readonly scheduleWasmProgramSync: () => Effect.Effect<void, EngineFormulaGraphError>;
   readonly flushWasmProgramSync: () => Effect.Effect<void, EngineFormulaGraphError>;
+  readonly rebuildTopoRanksNow: () => void;
+  readonly detectCyclesNow: () => void;
+  readonly scheduleWasmProgramSyncNow: () => void;
+  readonly flushWasmProgramSyncNow: () => void;
 }
 
 function graphErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
+
+const SYNC_WASM_INIT_FORMULA_THRESHOLD = 64;
 
 export function createEngineFormulaGraphService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "formulas" | "ranges" | "wasm">;
@@ -258,11 +264,26 @@ export function createEngineFormulaGraphService(args: {
       args.setWasmProgramSyncPending(true);
       return;
     }
+    if (
+      !args.state.wasm.ready &&
+      (args.state.formulas.size < SYNC_WASM_INIT_FORMULA_THRESHOLD ||
+        !args.state.wasm.initSyncIfPossible())
+    ) {
+      args.setWasmProgramSyncPending(true);
+      return;
+    }
     syncWasmProgramsNow();
   };
 
   const flushWasmProgramSyncNow = (): void => {
     if (!args.getWasmProgramSyncPending()) {
+      return;
+    }
+    if (
+      !args.state.wasm.ready &&
+      (args.state.formulas.size < SYNC_WASM_INIT_FORMULA_THRESHOLD ||
+        !args.state.wasm.initSyncIfPossible())
+    ) {
       return;
     }
     args.setWasmProgramSyncPending(false);
@@ -330,5 +351,9 @@ export function createEngineFormulaGraphService(args: {
           }),
       });
     },
+    rebuildTopoRanksNow,
+    detectCyclesNow,
+    scheduleWasmProgramSyncNow,
+    flushWasmProgramSyncNow,
   };
 }

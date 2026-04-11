@@ -28,6 +28,22 @@ export interface EngineCellStateService {
     sourceSheetName?: string,
     sourceAddress?: string,
   ) => Effect.Effect<EngineOp[], EngineCellStateError>;
+  readonly captureStoredCellOpsNow: (
+    cellIndex: number,
+    sheetName: string,
+    address: string,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ) => EngineOp[];
+  readonly restoreCellOpsNow: (sheetName: string, address: string) => EngineOp[];
+  readonly readRangeCellsNow: (range: CellRangeRef) => CellSnapshot[][];
+  readonly toCellStateOpsNow: (
+    sheetName: string,
+    address: string,
+    snapshot: CellSnapshot,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ) => EngineOp[];
 }
 
 function cellStateErrorMessage(message: string, cause: unknown): string {
@@ -199,5 +215,9 @@ export function createEngineCellStateService(args: {
           }),
       });
     },
+    captureStoredCellOpsNow,
+    restoreCellOpsNow,
+    readRangeCellsNow,
+    toCellStateOpsNow,
   };
 }

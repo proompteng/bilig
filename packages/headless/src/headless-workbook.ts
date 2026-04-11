@@ -103,6 +103,7 @@ import {
   collectTrackedCellRefsFromEvents,
   type TrackedCellRef,
 } from "./tracked-engine-event-refs.js";
+import { buildDeferredLiteralHistoryRecord } from "./deferred-literal-history.js";
 
 type ListenerMap = {
   [EventName in HeadlessWorkbookEventName]: Set<HeadlessWorkbookListener<EventName>>;
@@ -144,6 +145,7 @@ interface SheetStateSnapshot {
 
 type VisibilitySnapshot = Map<number, SheetStateSnapshot>;
 type NamedExpressionValueSnapshot = Map<string, CellValue | CellValue[][]>;
+const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map();
 
 interface ClipboardPayload {
   sourceAnchor: HeadlessCellAddress;
@@ -2843,11 +2845,19 @@ export class HeadlessWorkbook {
     const potentialNewCells = this.pendingBatchPotentialNewCells;
     this.pendingBatchOps = [];
     this.pendingBatchPotentialNewCells = 0;
+    const historyRecord = buildDeferredLiteralHistoryRecord(
+      this.engine,
+      ops,
+      potentialNewCells > 0 ? potentialNewCells : undefined,
+    );
     this.engine.applyOps(ops, {
-      captureUndo: true,
+      captureUndo: historyRecord === null,
       potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
       trusted: true,
     });
+    if (historyRecord) {
+      this.pushUndoHistory(historyRecord);
+    }
   }
 
   private enqueueDeferredBatchLiteral(
@@ -2994,6 +3004,9 @@ export class HeadlessWorkbook {
   }
 
   private captureNamedExpressionValueSnapshot(): NamedExpressionValueSnapshot {
+    if (this.namedExpressions.size === 0) {
+      return EMPTY_NAMED_EXPRESSION_VALUES;
+    }
     const snapshot = new Map<string, CellValue | CellValue[][]>();
     [...this.namedExpressions.values()].forEach((expression) => {
       snapshot.set(
@@ -3047,33 +3060,25 @@ export class HeadlessWorkbook {
       return null;
     }
 
-    const nextVisibility = new Map(beforeVisibility);
-    const mutableSheets = new Set<number>();
+    const nextVisibility = beforeVisibility;
     const ensureMutableSheet = (ref: TrackedCellRef): SheetStateSnapshot => {
-      const existing =
-        nextVisibility.get(ref.sheetId) ??
-        ({
+      let existing = nextVisibility.get(ref.sheetId);
+      if (!existing) {
+        existing = {
           sheetId: ref.sheetId,
           sheetName: ref.sheetName,
           order: this.sheetRecord(ref.sheetId).order,
           cells: new Map<string, CellValue>(),
-        } satisfies SheetStateSnapshot);
-      if (!mutableSheets.has(ref.sheetId)) {
-        nextVisibility.set(ref.sheetId, {
-          sheetId: existing.sheetId,
-          sheetName: existing.sheetName,
-          order: existing.order,
-          cells: new Map(existing.cells),
-        });
-        mutableSheets.add(ref.sheetId);
+        };
+        nextVisibility.set(ref.sheetId, existing);
       }
-      return nextVisibility.get(ref.sheetId)!;
+      return existing;
     };
 
     const changes: HeadlessChange[] = [];
     refs.forEach((ref) => {
       const beforeValue = beforeVisibility.get(ref.sheetId)?.cells.get(ref.address) ?? emptyValue();
-      const afterValue = this.readStoredCellValue(ref.sheetName, ref.row, ref.col);
+      const afterValue = ref.value;
       if (valuesEqual(beforeValue, afterValue)) {
         return;
       }
@@ -3130,7 +3135,10 @@ export class HeadlessWorkbook {
     beforeVisibility: VisibilitySnapshot,
     beforeNames: NamedExpressionValueSnapshot,
   ): HeadlessChange[] {
-    const afterNames = this.captureNamedExpressionValueSnapshot();
+    const hasNamedExpressions = this.namedExpressions.size > 0;
+    const afterNames = hasNamedExpressions
+      ? this.captureNamedExpressionValueSnapshot()
+      : EMPTY_NAMED_EXPRESSION_VALUES;
     const fastPath = this.computeCellChangesFromTrackedEvents(
       beforeVisibility,
       this.drainTrackedEngineEvents(),
@@ -3145,7 +3153,9 @@ export class HeadlessWorkbook {
       this.visibilityCache = afterVisibility;
     }
     this.namedExpressionValueCache = afterNames;
-    return [...cellChanges, ...this.computeNamedExpressionChanges(beforeNames, afterNames)];
+    return hasNamedExpressions
+      ? [...cellChanges, ...this.computeNamedExpressionChanges(beforeNames, afterNames)]
+      : cellChanges;
   }
 
   private captureChanges(
@@ -3238,6 +3248,11 @@ export class HeadlessWorkbook {
 
   private clearHistoryStacks(): void {
     this.getUndoStack().length = 0;
+    this.getRedoStack().length = 0;
+  }
+
+  private pushUndoHistory(record: HistoryRecord): void {
+    this.getUndoStack().push(record);
     this.getRedoStack().length = 0;
   }
 

@@ -11,6 +11,7 @@ import { createBatch } from "../../replica-state.js";
 import type { WorkbookStore } from "../../workbook-store.js";
 import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
+import { tryBuildFastMutationHistory } from "./mutation-history-fast-path.js";
 
 function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
@@ -33,14 +34,31 @@ function getMatrixCell(
 }
 
 export interface EngineMutationService {
+  readonly executeTransactionNow: (
+    record: TransactionRecord,
+    source: "local" | "restore" | "history",
+  ) => void;
   readonly executeTransaction: (
     record: TransactionRecord,
     source: "local" | "restore" | "history",
   ) => Effect.Effect<void, EngineMutationError>;
+  readonly executeLocalNow: (
+    ops: EngineOp[],
+    potentialNewCells?: number,
+  ) => readonly EngineOp[] | null;
   readonly executeLocal: (
     ops: EngineOp[],
     potentialNewCells?: number,
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>;
+  readonly applyOpsNow: (
+    ops: readonly EngineOp[],
+    options?: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+      trusted?: boolean;
+    },
+  ) => readonly EngineOp[] | null;
   readonly applyOps: (
     ops: readonly EngineOp[],
     options?: {
@@ -108,6 +126,7 @@ export function createEngineMutationService(args: {
     count: number,
   ) => EngineOp[];
   readonly restoreCellOps: (sheetName: string, address: string) => EngineOp[];
+  readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
   readonly readRangeCells: (range: CellRangeRef) => CellSnapshot[][];
   readonly toCellStateOps: (
     sheetName: string,
@@ -581,6 +600,7 @@ export function createEngineMutationService(args: {
   };
 
   return {
+    executeTransactionNow: executeTransactionNow,
     executeTransaction(record, source) {
       return Effect.try({
         try: () => {
@@ -593,30 +613,47 @@ export function createEngineMutationService(args: {
           }),
       });
     },
+    executeLocalNow(ops, potentialNewCells) {
+      if (ops.length === 0) {
+        return null;
+      }
+      const forward: TransactionRecord =
+        potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
+      const fastHistory = tryBuildFastMutationHistory(
+        potentialNewCells === undefined
+          ? {
+              workbook: args.state.workbook,
+              getCellByIndex: args.getCellByIndex,
+              ops,
+            }
+          : {
+              workbook: args.state.workbook,
+              getCellByIndex: args.getCellByIndex,
+              ops,
+              potentialNewCells,
+            },
+      );
+      const inverse: TransactionRecord = fastHistory?.inverse ?? {
+        ops: buildInverseOps(ops),
+        potentialNewCells: ops.length,
+      };
+      executeTransactionNow(forward, "local");
+      if (args.state.getTransactionReplayDepth() === 0) {
+        args.state.undoStack.push({
+          forward:
+            fastHistory?.forward ??
+            (potentialNewCells === undefined
+              ? { ops: canonicalizeForwardOps(ops) }
+              : { ops: canonicalizeForwardOps(ops), potentialNewCells }),
+          inverse,
+        });
+        args.state.redoStack.length = 0;
+      }
+      return fastHistory?.undoOps ?? structuredClone(inverse.ops);
+    },
     executeLocal(ops, potentialNewCells) {
       return Effect.try({
-        try: () => {
-          if (ops.length === 0) {
-            return null;
-          }
-          const forward: TransactionRecord =
-            potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
-          const inverse: TransactionRecord = {
-            ops: buildInverseOps(ops),
-            potentialNewCells: ops.length,
-          };
-          executeTransactionNow(forward, "local");
-          if (args.state.getTransactionReplayDepth() === 0) {
-            const historyForwardOps = canonicalizeForwardOps(ops);
-            const historyForward: TransactionRecord =
-              potentialNewCells === undefined
-                ? { ops: historyForwardOps }
-                : { ops: historyForwardOps, potentialNewCells };
-            args.state.undoStack.push({ forward: historyForward, inverse });
-            args.state.redoStack.length = 0;
-          }
-          return structuredClone(inverse.ops);
-        },
+        try: () => this.executeLocalNow(ops, potentialNewCells),
         catch: (cause) =>
           new EngineMutationError({
             message: "Failed to execute local transaction",
@@ -624,24 +661,25 @@ export function createEngineMutationService(args: {
           }),
       });
     },
+    applyOpsNow(ops, options = {}) {
+      const nextOps = options.trusted ? Array.from(ops) : structuredClone([...ops]);
+      if (nextOps.length === 0) {
+        return null;
+      }
+      if (options.captureUndo) {
+        return this.executeLocalNow(nextOps, options.potentialNewCells);
+      }
+      executeTransactionNow(
+        options.potentialNewCells === undefined
+          ? { ops: nextOps }
+          : { ops: nextOps, potentialNewCells: options.potentialNewCells },
+        options.source ?? "restore",
+      );
+      return null;
+    },
     applyOps(ops, options = {}) {
       return Effect.try({
-        try: () => {
-          const nextOps = options.trusted ? [...ops] : structuredClone([...ops]);
-          if (nextOps.length === 0) {
-            return null;
-          }
-          if (options.captureUndo) {
-            return Effect.runSync(this.executeLocal(nextOps, options.potentialNewCells));
-          }
-          executeTransactionNow(
-            options.potentialNewCells === undefined
-              ? { ops: nextOps }
-              : { ops: nextOps, potentialNewCells: options.potentialNewCells },
-            options.source ?? "restore",
-          );
-          return null;
-        },
+        try: () => this.applyOpsNow(ops, options),
         catch: (cause) =>
           new EngineMutationError({
             message: "Failed to apply engine operations",

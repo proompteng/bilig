@@ -862,8 +862,38 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
   return WebAssembly.instantiate(bytes, imports);
 }
 
+function loadWasmModuleSync(): WebAssembly.WebAssemblyInstantiatedSource {
+  if (!isNodeLike()) {
+    throw new Error("Synchronous wasm kernel loading is only supported in Node-like runtimes");
+  }
+  const wasmUrl = new URL("../build/release.wasm", import.meta.url);
+  const imports = {
+    env: {
+      abort(_message: number, _fileName: number, lineNumber: number, columnNumber: number) {
+        throw new Error(`AssemblyScript abort at ${lineNumber}:${columnNumber}`);
+      },
+    },
+  };
+  const fs = process.getBuiltinModule("fs") as typeof import("node:fs") | undefined;
+  if (!fs) {
+    throw new Error("Node fs module is unavailable");
+  }
+  const bytes = fs.readFileSync(wasmUrl);
+  const module = new WebAssembly.Module(bytes);
+  const instance = new WebAssembly.Instance(module, imports);
+  return { module, instance };
+}
+
 export async function createKernel(): Promise<SpreadsheetKernel> {
   const { instance } = await loadWasmModule();
+  if (!isRawKernelExports(instance.exports)) {
+    throw new Error("WASM exports did not match the kernel contract");
+  }
+  return new KernelHandle(instance.exports);
+}
+
+export function createKernelSync(): SpreadsheetKernel {
+  const { instance } = loadWasmModuleSync();
   if (!isRawKernelExports(instance.exports)) {
     throw new Error("WASM exports did not match the kernel contract");
   }

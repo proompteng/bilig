@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { ValueTag } from "@bilig/protocol";
+import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import { createReplicaState } from "../replica-state.js";
 import { SpreadsheetEngine } from "../engine.js";
 import { createEngineMutationService } from "../engine/services/mutation-service.js";
@@ -32,6 +32,14 @@ function getMutationService(engine: SpreadsheetEngine): EngineMutationService {
   return mutation;
 }
 
+const EMPTY_CELL_SNAPSHOT: CellSnapshot = {
+  sheetName: "Sheet1",
+  address: "A1",
+  value: { tag: ValueTag.Empty },
+  flags: 0,
+  version: 0,
+};
+
 describe("EngineMutationService", () => {
   it("clears redo history when a new local transaction lands", () => {
     const replicaState = createReplicaState("local");
@@ -53,6 +61,7 @@ describe("EngineMutationService", () => {
       captureRowRangeCellState: () => [],
       captureColumnRangeCellState: () => [],
       restoreCellOps: () => [{ kind: "upsertWorkbook", name: "inverse" }],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
       applyBatchNow: (batch) => {
         batches.push(batch);
       },
@@ -87,6 +96,7 @@ describe("EngineMutationService", () => {
       captureRowRangeCellState: () => [],
       captureColumnRangeCellState: () => [],
       restoreCellOps: () => [{ kind: "upsertWorkbook", name: "inverse" }],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
       applyBatchNow: () => {},
     });
 
@@ -119,6 +129,7 @@ describe("EngineMutationService", () => {
       captureRowRangeCellState: () => [],
       captureColumnRangeCellState: () => [],
       restoreCellOps: () => [],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
       applyBatchNow: (batch) => {
         batches.push(batch);
       },
@@ -245,6 +256,51 @@ describe("EngineMutationService", () => {
       address: "B2",
       formula: "A2*3",
     });
+  });
+
+  it("fast-paths simple cell mutation history without restore callbacks", () => {
+    const replicaState = createReplicaState("local");
+    const workbook = new WorkbookStore("fast-history");
+    const sheet = workbook.createSheet("Sheet1");
+    const cell = workbook.ensureCellAt(sheet.id, 0, 0);
+    workbook.cellStore.setValue(cell.cellIndex, { tag: ValueTag.Number, value: 7 }, 0);
+    let replayDepth = 0;
+    const service = createEngineMutationService({
+      state: {
+        workbook,
+        replicaState,
+        undoStack: [],
+        redoStack: [],
+        getTransactionReplayDepth: () => replayDepth,
+        setTransactionReplayDepth: (next) => {
+          replayDepth = next;
+        },
+      },
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      restoreCellOps: () => {
+        throw new Error("restoreCellOps should not be used for simple cell history");
+      },
+      getCellByIndex: () => ({
+        sheetName: "Sheet1",
+        address: "A1",
+        value: { tag: ValueTag.Number, value: 7 },
+        flags: 0,
+        version: 0,
+      }),
+      applyBatchNow: () => {},
+    });
+
+    const inverseOps = Effect.runSync(
+      service.executeLocal([
+        { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 },
+      ]),
+    );
+
+    expect(inverseOps).toEqual([
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
+    ]);
   });
 
   it("does not synthesize blank column identities in delete undo ops", async () => {

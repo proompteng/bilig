@@ -61,6 +61,26 @@ export interface EngineFormulaBindingService {
     formulaChangedCount: number,
     candidates?: readonly number[] | U32,
   ) => Effect.Effect<number, EngineFormulaBindingError>;
+  readonly bindFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void;
+  readonly clearFormulaNow: (cellIndex: number) => boolean;
+  readonly invalidateFormulaNow: (cellIndex: number) => void;
+  readonly rebindFormulaCellsNow: (
+    candidates: readonly number[],
+    formulaChangedCount: number,
+  ) => number;
+  readonly rebindDefinedNameDependentsNow: (
+    names: readonly string[],
+    formulaChangedCount: number,
+  ) => number;
+  readonly rebindTableDependentsNow: (
+    tableNames: readonly string[],
+    formulaChangedCount: number,
+  ) => number;
+  readonly rebindFormulasForSheetNow: (
+    sheetName: string,
+    formulaChangedCount: number,
+    candidates?: readonly number[] | U32,
+  ) => number;
 }
 
 function formulaBindingErrorMessage(message: string, cause: unknown): string {
@@ -976,5 +996,23 @@ export function createEngineFormulaBindingService(args: {
           }),
       });
     },
+    bindFormulaNow,
+    clearFormulaNow,
+    invalidateFormulaNow,
+    rebindFormulaCellsNow,
+    rebindDefinedNameDependentsNow(names, formulaChangedCount) {
+      return rebindFormulaCellsNow(
+        collectTrackedDependents(args.reverseState.reverseDefinedNameEdges, names),
+        formulaChangedCount,
+      );
+    },
+    rebindTableDependentsNow(tableNames, formulaChangedCount) {
+      const normalized = tableNames.map((name) => tableDependencyKey(name));
+      return rebindFormulaCellsNow(
+        collectTrackedDependents(args.reverseState.reverseTableEdges, normalized),
+        formulaChangedCount,
+      );
+    },
+    rebindFormulasForSheetNow,
   };
 }

@@ -363,9 +363,8 @@ export function createEngineServiceRuntime(args: {
   const evaluation = createEngineFormulaEvaluationService({
     state: args.state,
     lookup,
-    materializeSpill: (cellIndex, arrayValue) =>
-      runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),
-    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
+    materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
+    clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
     resolvePivotData: (sheetName, address, dataField, filters) =>
       runEngineEffect(
         requireService(pivot, "pivot").resolvePivotData(sheetName, address, dataField, filters),
@@ -374,18 +373,16 @@ export function createEngineServiceRuntime(args: {
   binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
     lookup,
-    ensureCellTracked: (sheetName, address) =>
-      runEngineEffect(support.ensureCellTracked(sheetName, address)),
+    ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
     ensureCellTrackedByCoords: (sheetId, row, col) =>
-      runEngineEffect(support.ensureCellTrackedByCoords(sheetId, row, col)),
-    markFormulaChanged: (cellIndex, count) =>
-      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
+      support.ensureCellTrackedByCoordsNow(sheetId, row, col),
+    markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
     resolveStructuredReference: (tableName, columnName) =>
       runEngineEffect(evaluation.resolveStructuredReference(tableName, columnName)),
     resolveSpillReference: (currentSheetName, sheetName, address) =>
       runEngineEffect(evaluation.resolveSpillReference(currentSheetName, sheetName, address)),
     forEachSheetCell: (sheetId, fn) => traversal.forEachSheetCellNow(sheetId, fn),
-    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
+    scheduleWasmProgramSync: () => graph.scheduleWasmProgramSyncNow(),
   });
   const read = createEngineReadService({
     state: args.state,
@@ -407,18 +404,16 @@ export function createEngineServiceRuntime(args: {
       pivotOutputOwners: args.pivotState.pivotOutputOwners,
     },
     captureStoredCellOps: (cellIndex, sheetName, address, sourceSheetName, sourceAddress) =>
-      runEngineEffect(
-        cellState.captureStoredCellOps(
-          cellIndex,
-          sheetName,
-          address,
-          sourceSheetName,
-          sourceAddress,
-        ),
+      cellState.captureStoredCellOpsNow(
+        cellIndex,
+        sheetName,
+        address,
+        sourceSheetName,
+        sourceAddress,
       ),
-    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
+    removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     clearOwnedPivot: (pivotRecord) =>
-      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
+      requireService(pivot, "pivot").clearOwnedPivotNow(pivotRecord),
     rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
   });
   const maintenance = createEngineMaintenanceService({
@@ -439,32 +434,28 @@ export function createEngineServiceRuntime(args: {
   });
   recalc = createEngineRecalcService({
     ...args.recalc,
-    beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
-    markInputChanged: (cellIndex, count) =>
-      runEngineEffect(support.markInputChanged(cellIndex, count)),
-    markFormulaChanged: (cellIndex, count) =>
-      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
-    markExplicitChanged: (cellIndex, count) =>
-      runEngineEffect(support.markExplicitChanged(cellIndex, count)),
+    beginMutationCollection: () => support.beginMutationCollectionNow(),
+    markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
+    markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
+    markExplicitChanged: (cellIndex, count) => support.markExplicitChangedNow(cellIndex, count),
     composeMutationRoots: (changedInputCount, formulaChangedCount) =>
-      runEngineEffect(support.composeMutationRoots(changedInputCount, formulaChangedCount)),
+      support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) =>
-      runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
-    unionChangedSets: (...sets) => runEngineEffect(support.unionChangedSets(...sets)),
+      support.composeEventChangesNow(recalculated, explicitChangedCount),
+    unionChangedSets: (...sets) => support.unionChangedSetsNow(...sets),
     composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
-      runEngineEffect(support.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount)),
-    emptyChangedSet: () => runEngineEffect(support.unionChangedSets()),
-    ensureRecalcScratchCapacity: (size) => runEngineEffect(scratch.ensureRecalcCapacity(size)),
+      support.composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount),
+    emptyChangedSet: () => support.unionChangedSetsNow(),
+    ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     getPendingKernelSync: () => scratch.getPendingKernelSyncNow(),
     getWasmBatch: () => scratch.getWasmBatchNow(),
-    getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
-    materializeSpill: (cellIndex, arrayValue) =>
-      runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),
-    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
+    getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
+    clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
     evaluateUnsupportedFormula: (cellIndex) =>
       runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivotRecord) =>
-      runEngineEffect(requireService(pivot, "pivot").materializePivot(pivotRecord)),
+      requireService(pivot, "pivot").materializePivotNow(pivotRecord),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
   });
   operations = createEngineOperationService({
@@ -479,59 +470,51 @@ export function createEngineServiceRuntime(args: {
         binding.rewriteCellFormulasForSheetRename(oldSheetName, newSheetName, formulaChangedCount),
       ),
     rebindDefinedNameDependents: (names, formulaChangedCount) =>
-      runEngineEffect(binding.rebindDefinedNameDependents(names, formulaChangedCount)),
+      binding.rebindDefinedNameDependentsNow(names, formulaChangedCount),
     rebindTableDependents: (tableNames, formulaChangedCount) =>
-      runEngineEffect(binding.rebindTableDependents(tableNames, formulaChangedCount)),
+      binding.rebindTableDependentsNow(tableNames, formulaChangedCount),
     rebindFormulaCells: (candidates, formulaChangedCount) =>
-      runEngineEffect(binding.rebindFormulaCells(candidates, formulaChangedCount)),
+      binding.rebindFormulaCellsNow(candidates, formulaChangedCount),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
-      runEngineEffect(binding.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates)),
+      binding.rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
     removeSheetRuntime: (sheetName, explicitChangedCount) =>
-      runEngineEffect(support.removeSheetRuntime(sheetName, explicitChangedCount)),
+      support.removeSheetRuntimeNow(sheetName, explicitChangedCount),
     applyStructuralAxisOp: (op) => runEngineEffect(structure.applyStructuralAxisOp(op)),
-    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
+    clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
     clearPivotForCell: (cellIndex) =>
-      runEngineEffect(requireService(pivot, "pivot").clearPivotForCell(cellIndex)),
+      requireService(pivot, "pivot").clearPivotForCellNow(cellIndex),
     clearOwnedPivot: (pivotRecord) =>
-      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
-    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
+      requireService(pivot, "pivot").clearOwnedPivotNow(pivotRecord),
+    removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     bindFormula: (cellIndex, ownerSheetName, source) =>
-      runEngineEffect(binding.bindFormula(cellIndex, ownerSheetName, source)),
-    setInvalidFormulaValue: (cellIndex) => runEngineEffect(binding.invalidateFormula(cellIndex)),
-    beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
-    markInputChanged: (cellIndex, count) =>
-      runEngineEffect(support.markInputChanged(cellIndex, count)),
-    markFormulaChanged: (cellIndex, count) =>
-      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
-    markVolatileFormulasChanged: (count) =>
-      runEngineEffect(support.markVolatileFormulasChanged(count)),
+      binding.bindFormulaNow(cellIndex, ownerSheetName, source),
+    setInvalidFormulaValue: (cellIndex) => binding.invalidateFormulaNow(cellIndex),
+    beginMutationCollection: () => support.beginMutationCollectionNow(),
+    markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
+    markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
+    markVolatileFormulasChanged: (count) => support.markVolatileFormulasChangedNow(count),
     markSpillRootsChanged: (cellIndices, count) =>
-      runEngineEffect(support.markSpillRootsChanged(cellIndices, count)),
+      support.markSpillRootsChangedNow(cellIndices, count),
     markPivotRootsChanged: (cellIndices, count) =>
-      runEngineEffect(support.markPivotRootsChanged(cellIndices, count)),
-    markExplicitChanged: (cellIndex, count) =>
-      runEngineEffect(support.markExplicitChanged(cellIndex, count)),
+      support.markPivotRootsChangedNow(cellIndices, count),
+    markExplicitChanged: (cellIndex, count) => support.markExplicitChangedNow(cellIndex, count),
     composeMutationRoots: (changedInputCount, formulaChangedCount) =>
-      runEngineEffect(support.composeMutationRoots(changedInputCount, formulaChangedCount)),
+      support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) =>
-      runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
-    getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
+      support.composeEventChangesNow(recalculated, explicitChangedCount),
+    getChangedInputBuffer: () => support.getChangedInputBufferNow(),
     estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
-    ensureCellTracked: (sheetName, address) =>
-      runEngineEffect(support.ensureCellTracked(sheetName, address)),
+    ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
     resetMaterializedCellScratch: (expectedSize) =>
-      runEngineEffect(support.resetMaterializedCellScratch(expectedSize)),
-    syncDynamicRanges: (formulaChangedCount) =>
-      runEngineEffect(support.syncDynamicRanges(formulaChangedCount)),
-    rebuildTopoRanks: () => runEngineEffect(graph.rebuildTopoRanks()),
-    detectCycles: () => runEngineEffect(graph.detectCycles()),
+      support.resetMaterializedCellScratchNow(expectedSize),
+    syncDynamicRanges: (formulaChangedCount) => support.syncDynamicRangesNow(formulaChangedCount),
+    rebuildTopoRanks: () => graph.rebuildTopoRanksNow(),
+    detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) =>
-      runEngineEffect(requireService(recalc, "recalc").recalculate(changedRoots, kernelSyncRoots)),
+      requireService(recalc, "recalc").recalculateNowSync(changedRoots, kernelSyncRoots),
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
-      runEngineEffect(
-        requireService(recalc, "recalc").reconcilePivotOutputs(baseChanged, forceAllPivots),
-      ),
-    flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
+      requireService(recalc, "recalc").reconcilePivotOutputsNow(baseChanged, forceAllPivots),
+    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
   });
   const mutation = createEngineMutationService({
@@ -542,13 +525,11 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(maintenance.captureRowRangeCellState(sheetName, start, count)),
     captureColumnRangeCellState: (sheetName, start, count) =>
       runEngineEffect(maintenance.captureColumnRangeCellState(sheetName, start, count)),
-    restoreCellOps: (sheetName, address) =>
-      runEngineEffect(cellState.restoreCellOps(sheetName, address)),
-    readRangeCells: (range) => runEngineEffect(cellState.readRangeCells(range)),
+    restoreCellOps: (sheetName, address) => cellState.restoreCellOpsNow(sheetName, address),
+    getCellByIndex: args.getCellByIndex,
+    readRangeCells: (range) => cellState.readRangeCellsNow(range),
     toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
-      runEngineEffect(
-        cellState.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
-      ),
+      cellState.toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),
     applyBatchNow: (batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),
   });
@@ -560,10 +541,10 @@ export function createEngineServiceRuntime(args: {
   pivot = createEnginePivotService({
     ...args.pivot,
     ensureCellTrackedByCoords: (sheetId, row, col) =>
-      runEngineEffect(support.ensureCellTrackedByCoords(sheetId, row, col)),
+      support.ensureCellTrackedByCoordsNow(sheetId, row, col),
     forEachSheetCell: (sheetId, fn) => traversal.forEachSheetCellNow(sheetId, fn),
-    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
-    flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
+    scheduleWasmProgramSync: () => graph.scheduleWasmProgramSyncNow(),
+    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     applyDerivedOp: (op) => runEngineEffect(operations.applyDerivedOp(op)),
   });
   const snapshot = createEngineSnapshotService({

@@ -8,9 +8,8 @@ function scratchErrorMessage(message: string, cause: unknown): string {
 }
 
 export interface EngineRuntimeScratchService {
-  readonly ensureRecalcCapacity: (
-    size: number,
-  ) => Effect.Effect<void, EngineRuntimeScratchError>;
+  readonly ensureRecalcCapacity: (size: number) => Effect.Effect<void, EngineRuntimeScratchError>;
+  readonly ensureRecalcCapacityNow: (size: number) => void;
   readonly getPendingKernelSyncNow: () => U32;
   readonly setPendingKernelSyncNow: (next: U32) => void;
   readonly getWasmBatchNow: () => U32;
@@ -133,6 +132,7 @@ export function createEngineRuntimeScratchService(): EngineRuntimeScratchService
           }),
       });
     },
+    ensureRecalcCapacityNow,
     getPendingKernelSyncNow: () => pendingKernelSync,
     setPendingKernelSyncNow: (next) => {
       pendingKernelSync = next;

@@ -77,9 +77,7 @@ export interface EngineMutationSupportService {
     row: number,
     col: number,
   ) => Effect.Effect<number, EngineMutationError>;
-  readonly clearOwnedSpill: (
-    cellIndex: number,
-  ) => Effect.Effect<number[], EngineMutationError>;
+  readonly clearOwnedSpill: (cellIndex: number) => Effect.Effect<number[], EngineMutationError>;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: { values: CellValue[]; rows: number; cols: number },
@@ -97,6 +95,35 @@ export interface EngineMutationSupportService {
   readonly resetMaterializedCellScratch: (
     expectedSize: number,
   ) => Effect.Effect<void, EngineMutationError>;
+  readonly beginMutationCollectionNow: () => void;
+  readonly markInputChangedNow: (cellIndex: number, count: number) => number;
+  readonly markFormulaChangedNow: (cellIndex: number, count: number) => number;
+  readonly markVolatileFormulasChangedNow: (count: number) => number;
+  readonly markSpillRootsChangedNow: (cellIndices: readonly number[], count: number) => number;
+  readonly markPivotRootsChangedNow: (cellIndices: readonly number[], count: number) => number;
+  readonly markExplicitChangedNow: (cellIndex: number, count: number) => number;
+  readonly composeMutationRootsNow: (changedInputCount: number, formulaChangedCount: number) => U32;
+  readonly composeEventChangesNow: (recalculated: U32, explicitChangedCount: number) => U32;
+  readonly unionChangedSetsNow: (...sets: Array<readonly number[] | U32>) => U32;
+  readonly composeChangedRootsAndOrderedNow: (
+    changedRoots: readonly number[] | U32,
+    ordered: U32,
+    orderedCount: number,
+  ) => U32;
+  readonly getChangedInputBufferNow: () => U32;
+  readonly ensureCellTrackedNow: (sheetName: string, address: string) => number;
+  readonly ensureCellTrackedByCoordsNow: (sheetId: number, row: number, col: number) => number;
+  readonly clearOwnedSpillNow: (cellIndex: number) => number[];
+  readonly materializeSpillNow: (
+    cellIndex: number,
+    arrayValue: { values: CellValue[]; rows: number; cols: number },
+  ) => SpillMaterialization;
+  readonly removeSheetRuntimeNow: (
+    sheetName: string,
+    explicitChangedCount: number,
+  ) => { changedInputCount: number; formulaChangedCount: number; explicitChangedCount: number };
+  readonly syncDynamicRangesNow: (formulaChangedCount: number) => number;
+  readonly resetMaterializedCellScratchNow: (expectedSize: number) => void;
 }
 
 export function createEngineMutationSupportService(args: {
@@ -765,10 +792,7 @@ export function createEngineMutationSupportService(args: {
         try: () => removeSheetRuntimeNow(sheetName, explicitChangedCount),
         catch: (cause) =>
           new EngineMutationError({
-            message: mutationErrorMessage(
-              `Failed to remove sheet runtime for ${sheetName}`,
-              cause,
-            ),
+            message: mutationErrorMessage(`Failed to remove sheet runtime for ${sheetName}`, cause),
             cause,
           }),
       });
@@ -797,6 +821,120 @@ export function createEngineMutationSupportService(args: {
             cause,
           }),
       });
+    },
+    beginMutationCollectionNow,
+    markInputChangedNow,
+    markFormulaChangedNow,
+    markVolatileFormulasChangedNow(count) {
+      args.state.formulas.forEach((formula, cellIndex) => {
+        if (!formula.compiled.volatile) {
+          return;
+        }
+        count = markFormulaChangedNow(cellIndex, count);
+      });
+      return count;
+    },
+    markSpillRootsChangedNow(cellIndices, count) {
+      for (let index = 0; index < cellIndices.length; index += 1) {
+        count = markInputChangedNow(cellIndices[index]!, count);
+      }
+      return count;
+    },
+    markPivotRootsChangedNow(cellIndices, count) {
+      for (let index = 0; index < cellIndices.length; index += 1) {
+        count = markInputChangedNow(cellIndices[index]!, count);
+      }
+      return count;
+    },
+    markExplicitChangedNow,
+    composeMutationRootsNow,
+    composeEventChangesNow(recalculated, explicitChangedCount) {
+      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
+      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
+        args.setChangedUnionEpoch(1);
+        args.getChangedUnionSeen().fill(0);
+      }
+      let changedCount = 0;
+      for (let index = 0; index < explicitChangedCount; index += 1) {
+        const cellIndex = args.getExplicitChangedBuffer()[index]!;
+        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
+          continue;
+        }
+        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch();
+        args.getChangedUnion()[changedCount] = cellIndex;
+        changedCount += 1;
+      }
+      for (let index = 0; index < recalculated.length; index += 1) {
+        const cellIndex = recalculated[index]!;
+        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
+          continue;
+        }
+        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch();
+        args.getChangedUnion()[changedCount] = cellIndex;
+        changedCount += 1;
+      }
+      return args.getChangedUnion().subarray(0, changedCount);
+    },
+    unionChangedSetsNow(...sets) {
+      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
+      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
+        args.setChangedUnionEpoch(1);
+        args.getChangedUnionSeen().fill(0);
+      }
+      let changedCount = 0;
+      for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
+        const set = sets[setIndex]!;
+        for (let index = 0; index < set.length; index += 1) {
+          const cellIndex = set[index]!;
+          if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
+            continue;
+          }
+          args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch();
+          args.getChangedUnion()[changedCount] = cellIndex;
+          changedCount += 1;
+        }
+      }
+      return args.getChangedUnion().subarray(0, changedCount);
+    },
+    composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount) {
+      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
+      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
+        args.setChangedUnionEpoch(1);
+        args.getChangedUnionSeen().fill(0);
+      }
+      let changedCount = 0;
+      for (let index = 0; index < changedRoots.length; index += 1) {
+        const cellIndex = changedRoots[index]!;
+        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
+          continue;
+        }
+        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch();
+        args.getChangedUnion()[changedCount] = cellIndex;
+        changedCount += 1;
+      }
+      for (let index = 0; index < orderedCount; index += 1) {
+        const cellIndex = ordered[index]!;
+        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
+          continue;
+        }
+        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch();
+        args.getChangedUnion()[changedCount] = cellIndex;
+        changedCount += 1;
+      }
+      return args.getChangedUnion().subarray(0, changedCount);
+    },
+    getChangedInputBufferNow: () => args.getChangedInputBuffer(),
+    ensureCellTrackedNow,
+    ensureCellTrackedByCoordsNow,
+    clearOwnedSpillNow,
+    materializeSpillNow,
+    removeSheetRuntimeNow,
+    syncDynamicRangesNow,
+    resetMaterializedCellScratchNow(expectedSize) {
+      args.setMaterializedCellCount(0);
+      if (expectedSize > args.getMaterializedCells().length) {
+        args.setMaterializedCells(growUint32(args.getMaterializedCells(), expectedSize));
+      }
     },
   };
 }
