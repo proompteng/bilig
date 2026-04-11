@@ -1,3 +1,4 @@
+import type { WorkbookAgentCommand } from "@bilig/agent-api";
 import type {
   WorkbookAgentTimelineCitation,
   WorkbookAgentUiContext,
@@ -15,11 +16,16 @@ import {
   summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
+import {
+  executeStructuralWorkflow,
+  getStructuralWorkflowTemplateMetadata,
+} from "./workbook-agent-structural-workflows.js";
 
 export interface WorkbookAgentWorkflowExecutionInput {
   readonly query?: string;
   readonly sheetName?: string;
   readonly limit?: number;
+  readonly name?: string;
 }
 
 interface WorkbookAgentWorkflowStepPlan {
@@ -41,6 +47,8 @@ export interface WorkbookAgentWorkflowExecutionResult {
   readonly artifact: WorkbookAgentWorkflowArtifact;
   readonly citations: readonly WorkbookAgentTimelineCitation[];
   readonly steps: readonly WorkbookAgentWorkflowStepResult[];
+  readonly commands?: readonly WorkbookAgentCommand[];
+  readonly goalText?: string;
 }
 
 interface WorkbookAgentWorkflowTemplateMetadata {
@@ -53,6 +61,10 @@ function getWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
   workflowInput?: WorkbookAgentWorkflowExecutionInput | null,
 ): WorkbookAgentWorkflowTemplateMetadata {
+  const structuralMetadata = getStructuralWorkflowTemplateMetadata(workflowTemplate, workflowInput);
+  if (structuralMetadata) {
+    return structuralMetadata;
+  }
   switch (workflowTemplate) {
     case "summarizeWorkbook":
       return {
@@ -211,6 +223,8 @@ function getWorkflowTemplateMetadata(
         ],
       };
     }
+    default:
+      throw new Error(`Unsupported workflow template: ${workflowTemplate}`);
   }
 }
 
@@ -625,6 +639,14 @@ export async function executeWorkbookAgentWorkflow(input: {
   context?: WorkbookAgentUiContext | null;
   workflowInput?: WorkbookAgentWorkflowExecutionInput | null;
 }): Promise<WorkbookAgentWorkflowExecutionResult> {
+  const structuralResult = executeStructuralWorkflow({
+    workflowTemplate: input.workflowTemplate,
+    ...(input.context !== undefined ? { context: input.context } : {}),
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+  });
+  if (structuralResult) {
+    return structuralResult;
+  }
   switch (input.workflowTemplate) {
     case "summarizeWorkbook": {
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
@@ -997,5 +1019,7 @@ export async function executeWorkbookAgentWorkflow(input: {
         ],
       };
     }
+    default:
+      throw new Error(`Unsupported workflow template: ${input.workflowTemplate}`);
   }
 }

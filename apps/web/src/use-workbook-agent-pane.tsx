@@ -42,7 +42,10 @@ type WorkbookAgentWorkflowStartRequest =
   | {
       readonly workflowTemplate: Exclude<
         WorkbookAgentWorkflowTemplate,
-        "findFormulaIssues" | "searchWorkbookQuery"
+        | "findFormulaIssues"
+        | "searchWorkbookQuery"
+        | "createSheet"
+        | "renameCurrentSheet"
       >;
     }
   | {
@@ -55,6 +58,14 @@ type WorkbookAgentWorkflowStartRequest =
       readonly query: string;
       readonly sheetName?: string;
       readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "createSheet";
+      readonly name: string;
+    }
+  | {
+      readonly workflowTemplate: "renameCurrentSheet";
+      readonly name: string;
     };
 
 interface WorkbookAgentLiveSession {

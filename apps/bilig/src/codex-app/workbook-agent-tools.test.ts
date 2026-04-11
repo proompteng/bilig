@@ -870,6 +870,82 @@ describe("workbook agent tools", () => {
     expect(output && "text" in output ? output.text : "").toContain('"title": "Workbook Summary"');
   });
 
+  it("starts structural create-sheet workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-create-sheet-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "createSheet" as const,
+      title: "Create Sheet",
+      summary: "Staged a structural preview bundle to create Forecast.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "plan-sheet-create",
+          label: "Plan sheet creation",
+          status: "completed" as const,
+          summary: "Prepared the semantic sheet-creation command for Forecast.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "stage-structural-preview",
+          label: "Stage structural preview",
+          status: "completed" as const,
+          summary: "Staged the structural preview bundle in the thread rail.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Create Sheet Preview",
+        text: "## Create Sheet Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-create-sheet-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "createSheet",
+          name: "Forecast",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "createSheet",
+      name: "Forecast",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "createSheet"',
+    );
+  });
+
   it("starts query-driven workbook search workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

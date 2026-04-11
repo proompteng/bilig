@@ -1,6 +1,5 @@
 import type {
   WorkbookAgentSessionSnapshot,
-  WorkbookAgentTimelineCitation,
   WorkbookAgentStreamEvent,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
@@ -58,6 +57,15 @@ import {
   executeWorkbookAgentWorkflow,
   failWorkflowSteps,
 } from "./workbook-agent-workflows.js";
+import {
+  appendRevisionCitation,
+  attachSharedReviewState,
+  createBundleRangeCitations,
+  createPendingSharedReviewState,
+  createWorkflowTurnId,
+  needsSharedOwnerReview,
+  normalizeSharedReviewState,
+} from "./workbook-agent-bundle-state.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
 const CODEX_APP_SERVER_ARGS = ["app-server", "-c", "analytics.enabled=false"] as const;
@@ -111,69 +119,6 @@ function mergeTimelineEntries(
     merged[existingIndex] = entry;
   }
   return merged;
-}
-
-function createBundleRangeCitations(
-  bundle: Pick<WorkbookAgentCommandBundle, "affectedRanges">,
-): WorkbookAgentTimelineCitation[] {
-  return bundle.affectedRanges.map((range) => ({
-    kind: "range",
-    sheetName: range.sheetName,
-    startAddress: range.startAddress,
-    endAddress: range.endAddress,
-    role: range.role,
-  }));
-}
-
-function appendRevisionCitation(
-  citations: readonly WorkbookAgentTimelineCitation[],
-  revision: number,
-): WorkbookAgentTimelineCitation[] {
-  return [...citations, { kind: "revision", revision }];
-}
-
-function needsSharedOwnerReview(
-  sessionState: Pick<WorkbookAgentSessionState, "scope" | "storageActorUserId">,
-  bundle: Pick<WorkbookAgentCommandBundle, "riskClass">,
-): boolean {
-  return sessionState.scope === "shared" && bundle.riskClass !== "low";
-}
-
-function createPendingSharedReviewState(ownerUserId: string): WorkbookAgentSharedReviewState {
-  return {
-    ownerUserId,
-    status: "pending",
-    decidedByUserId: null,
-    decidedAtUnixMs: null,
-    recommendations: [],
-  };
-}
-
-function normalizeSharedReviewState(
-  bundle: WorkbookAgentCommandBundle,
-  sessionState: Pick<WorkbookAgentSessionState, "scope" | "storageActorUserId">,
-): WorkbookAgentSharedReviewState | null {
-  if (!needsSharedOwnerReview(sessionState, bundle)) {
-    return null;
-  }
-  if (bundle.sharedReview && bundle.sharedReview.ownerUserId === sessionState.storageActorUserId) {
-    return {
-      ...bundle.sharedReview,
-      recommendations: [...(bundle.sharedReview.recommendations ?? [])],
-    };
-  }
-  return createPendingSharedReviewState(sessionState.storageActorUserId);
-}
-
-function attachSharedReviewState(
-  bundle: WorkbookAgentCommandBundle,
-  sessionState: Pick<WorkbookAgentSessionState, "scope" | "storageActorUserId">,
-): WorkbookAgentCommandBundle {
-  const sharedReview = normalizeSharedReviewState(bundle, sessionState);
-  return {
-    ...bundle,
-    sharedReview,
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -631,10 +576,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const runId = crypto.randomUUID();
     const now = this.now();
     const workflowTemplate = parsed.workflowTemplate;
+    const workflowTurnId = sessionState.snapshot.activeTurnId ?? createWorkflowTurnId(runId);
     const workflowInput = {
       ...("query" in parsed ? { query: parsed.query } : {}),
       ...("sheetName" in parsed && parsed.sheetName ? { sheetName: parsed.sheetName } : {}),
       ...("limit" in parsed && parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+      ...("name" in parsed ? { name: parsed.name } : {}),
     };
     const workflowDescription = describeWorkbookAgentWorkflowTemplate(
       workflowTemplate,
@@ -659,7 +606,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       sessionState.snapshot.entries,
       createSystemEntry(
         `system-workflow-start:${runId}`,
-        sessionState.snapshot.activeTurnId,
+        workflowTurnId,
         `Started workflow: ${runningRun.title}`,
       ),
     );
@@ -695,11 +642,37 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         sessionState.snapshot.workflowRuns,
         completedRun,
       );
+      if (result.commands && result.commands.length > 0) {
+        const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
+        const workflowBundle = attachSharedReviewState(
+          createWorkbookAgentCommandBundle({
+            documentId: input.documentId,
+            threadId: sessionState.threadId,
+            turnId: workflowTurnId,
+            goalText: result.goalText ?? result.title,
+            baseRevision,
+            context: toContextRef(sessionState.snapshot.context),
+            commands: result.commands,
+            now: completedAtUnixMs,
+          }),
+          sessionState,
+        );
+        sessionState.snapshot.pendingBundle = workflowBundle;
+        sessionState.snapshot.entries = upsertEntry(
+          sessionState.snapshot.entries,
+          createSystemEntry(
+            `system-preview:${workflowBundle.id}`,
+            workflowTurnId,
+            describeWorkbookAgentBundle(workflowBundle),
+            createBundleRangeCitations(workflowBundle),
+          ),
+        );
+      }
       sessionState.snapshot.entries = upsertEntry(
         sessionState.snapshot.entries,
         createSystemEntry(
           `system-workflow-complete:${runId}`,
-          sessionState.snapshot.activeTurnId,
+          workflowTurnId,
           `Completed workflow: ${result.title}`,
           result.citations,
         ),
@@ -740,7 +713,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         sessionState.snapshot.entries,
         createSystemEntry(
           `system-workflow-failed:${runId}`,
-          sessionState.snapshot.activeTurnId,
+          workflowTurnId,
           failedRun.errorMessage ?? `Workflow failed: ${runningRun.title}`,
         ),
       );

@@ -894,7 +894,10 @@ export function WorkbookAgentPanel(props: {
   readonly onCancelWorkflowRun: (runId: string) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onStartWorkflow: (
-    template: Exclude<WorkbookAgentWorkflowRun["workflowTemplate"], "searchWorkbookQuery">,
+    template: Exclude<
+      WorkbookAgentWorkflowRun["workflowTemplate"],
+      "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
+    >,
   ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
   readonly onSubmit: () => void;

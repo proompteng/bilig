@@ -96,6 +96,20 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     sheetName: z.string().min(1).optional(),
     limit: z.number().int().positive().max(50).optional(),
   }),
+  z.object({
+    workflowTemplate: z.literal("createSheet"),
+    name: z.string().trim().min(1),
+  }),
+  z.object({
+    workflowTemplate: z.literal("renameCurrentSheet"),
+    name: z.string().trim().min(1),
+  }),
+  z.object({
+    workflowTemplate: z.literal("hideCurrentRow"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("hideCurrentColumn"),
+  }),
 ]);
 export type WorkbookAgentStartWorkflowRequest = z.infer<typeof startWorkflowToolArgsSchema>;
 const searchWorkbookToolArgsSchema = z.object({
@@ -578,7 +592,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for read/report tasks such as workbook summarization, recent-change summaries, current-cell explanation, or query-driven workbook search.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and hide-current-row/column.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -588,16 +602,22 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
             type: "string",
             enum: [
               "summarizeWorkbook",
+              "summarizeCurrentSheet",
               "describeRecentChanges",
               "findFormulaIssues",
               "traceSelectionDependencies",
               "explainSelectionCell",
               "searchWorkbookQuery",
+              "createSheet",
+              "renameCurrentSheet",
+              "hideCurrentRow",
+              "hideCurrentColumn",
             ],
           },
           query: { type: "string" },
           sheetName: { type: "string" },
           limit: { type: "number" },
+          name: { type: "string" },
         },
       },
     },

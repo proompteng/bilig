@@ -246,6 +246,39 @@ describe("@bilig/contracts", () => {
     expect(decoded.artifact?.title).toBe("Workbook Search");
   });
 
+  it("accepts structural workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-structural-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "createSheet",
+      title: "Create Sheet",
+      summary: "Staged a structural preview bundle to create Forecast.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "plan-sheet-create",
+          label: "Plan sheet creation",
+          status: "completed",
+          summary: "Prepared the semantic sheet-creation command for Forecast.",
+          updatedAtUnixMs: 110,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Create Sheet Preview",
+        text: "## Create Sheet Preview",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("createSheet");
+    expect(decoded.artifact?.title).toBe("Create Sheet Preview");
+  });
+
   it("accepts cancelled workflow runs", () => {
     const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
       runId: "workflow-4",

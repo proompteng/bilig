@@ -979,6 +979,150 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("stages create-sheet preview bundles from durable workflows", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const getWorkbookHeadRevision = vi.fn(async () => 7);
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        getWorkbookHeadRevision,
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "createSheet",
+          name: "Forecast",
+        },
+      });
+
+      expect(getWorkbookHeadRevision).toHaveBeenCalledWith("doc-1");
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "createSheet",
+          status: "completed",
+          artifact: expect.objectContaining({
+            title: "Create Sheet Preview",
+          }),
+        }),
+      );
+      expect(snapshot.pendingBundle).toEqual(
+        expect.objectContaining({
+          baseRevision: 7,
+          turnId: expect.stringContaining("workflow:"),
+          commands: [expect.objectContaining({ kind: "createSheet", name: "Forecast" })],
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: expect.stringContaining("Staged preview bundle"),
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Create Sheet",
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("stages rename-sheet preview bundles from durable workflows", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+    });
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Revenue",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "renameCurrentSheet",
+          name: "Forecast",
+        },
+      });
+
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "renameCurrentSheet",
+          status: "completed",
+          artifact: expect.objectContaining({
+            title: "Rename Sheet Preview",
+          }),
+        }),
+      );
+      expect(snapshot.pendingBundle).toEqual(
+        expect.objectContaining({
+          commands: [
+            expect.objectContaining({
+              kind: "renameSheet",
+              currentName: "Revenue",
+              nextName: "Forecast",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("allows Codex dynamic tools to start durable workflows inside the active thread", async () => {
     const fakeCodex = new FakeCodexTransport();
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };

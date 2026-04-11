@@ -8,7 +8,10 @@ import {
 } from "./workbook-shell-chrome.js";
 
 interface WorkflowActionDefinition {
-  readonly template: Exclude<WorkbookAgentWorkflowTemplate, "searchWorkbookQuery">;
+  readonly template: Exclude<
+    WorkbookAgentWorkflowTemplate,
+    "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
+  >;
   readonly label: string;
   readonly summary: string;
 }
@@ -50,7 +53,10 @@ export function WorkflowActionStrip(props: {
   readonly disabled: boolean;
   readonly isStartingWorkflow: boolean;
   readonly onStartWorkflow: (
-    template: Exclude<WorkbookAgentWorkflowTemplate, "searchWorkbookQuery">,
+    template: Exclude<
+      WorkbookAgentWorkflowTemplate,
+      "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
+    >,
   ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
 }) {
