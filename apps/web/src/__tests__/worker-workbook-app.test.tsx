@@ -1,8 +1,40 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import type { Action, ToastT, ToastToDismiss } from "sonner";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkerWorkbookApp } from "../WorkerWorkbookApp.js";
+
+async function flushToasts(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function findActiveToast(id: string): ToastT | null {
+  return (
+    toast
+      .getToasts()
+      .find(
+        (entry: ToastT | ToastToDismiss): entry is ToastT =>
+          !("dismiss" in entry) && entry.id === id,
+      ) ?? null
+  );
+}
+
+function getToastAction(activeToast: ToastT | null): Action {
+  if (
+    !activeToast ||
+    !activeToast.action ||
+    typeof activeToast.action !== "object" ||
+    !("onClick" in activeToast.action)
+  ) {
+    throw new Error("Expected toast action object");
+  }
+  return activeToast.action;
+}
 
 const { useWorkerWorkbookAppState } = vi.hoisted(() => ({
   useWorkerWorkbookAppState: vi.fn(),
@@ -34,6 +66,7 @@ vi.mock("../use-workbook-shortcut-dialog.js", () => ({
 
 describe("WorkerWorkbookApp", () => {
   afterEach(() => {
+    toast.dismiss();
     vi.clearAllMocks();
     document.body.innerHTML = "";
   });
@@ -82,17 +115,16 @@ describe("WorkerWorkbookApp", () => {
         />,
       );
     });
+    await flushToasts();
 
-    expect(host.textContent).toContain("A local change could not be synced.");
-    expect(host.textContent).toContain("mutation rejected by server");
-
-    const retryButton = host.querySelector(
-      "[data-testid='workbook-toast-pending-mutation-pending-1-action']",
+    const pendingToast = findActiveToast("pending-mutation-pending-1");
+    expect(pendingToast?.title).toBe(
+      "A local change could not be synced. mutation rejected by server",
     );
-    expect(retryButton).not.toBeNull();
+    const retryAction = getToastAction(pendingToast);
 
     await act(async () => {
-      retryButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      Reflect.apply(retryAction.onClick, undefined, [new MouseEvent("click")]);
     });
 
     expect(retryFailedPendingMutation).toHaveBeenCalledTimes(1);

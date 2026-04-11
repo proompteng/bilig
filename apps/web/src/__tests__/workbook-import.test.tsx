@@ -5,9 +5,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkbookLoadedResponse } from "@bilig/agent-api";
 import { CSV_CONTENT_TYPE, XLSX_CONTENT_TYPE } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
+import type { ToastT, ToastToDismiss } from "sonner";
+import { toast } from "sonner";
 import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { resolveWorkbookImportContentType } from "../workbook-import-client.js";
 import { useWorkbookImportPane } from "../use-workbook-import-pane.js";
+
+async function flushToasts(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function findActiveToast(id: string): ToastT | null {
+  return (
+    toast
+      .getToasts()
+      .find(
+        (entry: ToastT | ToastToDismiss): entry is ToastT =>
+          !("dismiss" in entry) && entry.id === id,
+      ) ?? null
+  );
+}
 
 function setInputFiles(input: HTMLInputElement, files: readonly File[]): void {
   Object.defineProperty(input, "files", {
@@ -80,6 +100,7 @@ function ImportHarness(props: {
 }
 
 afterEach(() => {
+  toast.dismiss();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
 });
@@ -214,8 +235,11 @@ describe("workbook import", () => {
     await act(async () => {
       input?.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    await flushToasts();
 
-    expect(host.textContent).toContain("Only local CSV and XLSX files can be staged");
+    expect(findActiveToast("import-error")?.title).toBe(
+      "Only local CSV and XLSX files can be staged for workbook import.",
+    );
 
     const file = new File(["Name,Value\nalpha,12"], "metrics.csv", { type: CSV_CONTENT_TYPE });
     setInputFiles(input!, [file]);

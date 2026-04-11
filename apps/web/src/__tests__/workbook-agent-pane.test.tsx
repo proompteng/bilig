@@ -2,8 +2,28 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ToastT, ToastToDismiss } from "sonner";
+import { toast } from "sonner";
 import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
+
+async function flushToasts(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function findActiveToast(id: string): ToastT | null {
+  return (
+    toast
+      .getToasts()
+      .find(
+        (entry: ToastT | ToastToDismiss): entry is ToastT =>
+          !("dismiss" in entry) && entry.id === id,
+      ) ?? null
+  );
+}
 
 class MockEventSource {
   static latest: MockEventSource | null = null;
@@ -72,6 +92,31 @@ function requestMethod(init: RequestInit | undefined): string {
   return init?.method ?? "GET";
 }
 
+function createDefaultWorkflowContext() {
+  return {
+    selection: {
+      sheetName: "Sheet1",
+      address: "A1",
+    },
+    viewport: {
+      rowStart: 0,
+      rowEnd: 10,
+      colStart: 0,
+      colEnd: 5,
+    },
+  };
+}
+
+function expectWorkflowStartBody(
+  init: RequestInit | undefined,
+  expected: Record<string, unknown>,
+): void {
+  expect(requestBody(init)).toEqual({
+    ...expected,
+    context: createDefaultWorkflowContext(),
+  });
+}
+
 function createSnapshot(overrides: Record<string, unknown> = {}) {
   const overrideEntries = Array.isArray(overrides["entries"])
     ? overrides["entries"].map((entry) =>
@@ -91,18 +136,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     status: "idle",
     activeTurnId: null,
     lastError: null,
-    context: {
-      selection: {
-        sheetName: "Sheet1",
-        address: "A1",
-      },
-      viewport: {
-        rowStart: 0,
-        rowEnd: 10,
-        colStart: 0,
-        colEnd: 5,
-      },
-    },
+    context: createDefaultWorkflowContext(),
     entries: [
       {
         id: "assistant-1",
@@ -207,6 +241,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  toast.dismiss();
   vi.restoreAllMocks();
   window.sessionStorage.clear();
   document.body.innerHTML = "";
@@ -531,7 +566,7 @@ describe("workbook agent pane", () => {
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
     expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-2/workflows");
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "findFormulaIssues",
       sheetName: "Sheet1",
     });
@@ -595,7 +630,8 @@ describe("workbook agent pane", () => {
                       stepId: "stage-issue-highlights",
                       label: "Stage issue highlights",
                       status: "completed",
-                      summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+                      summary:
+                        "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
                       updatedAtUnixMs: 2,
                     },
                   ],
@@ -641,7 +677,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "highlightFormulaIssues",
       sheetName: "Sheet1",
     });
@@ -705,7 +741,8 @@ describe("workbook agent pane", () => {
                       stepId: "stage-header-normalization",
                       label: "Stage header normalization",
                       status: "completed",
-                      summary: "Prepared the semantic write preview that normalizes 2 header cells.",
+                      summary:
+                        "Prepared the semantic write preview that normalizes 2 header cells.",
                       updatedAtUnixMs: 2,
                     },
                   ],
@@ -751,7 +788,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "normalizeCurrentSheetHeaders",
       sheetName: "Sheet1",
     });
@@ -999,7 +1036,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "traceSelectionDependencies",
     });
     expect(host.textContent).toContain("Trace Selection Dependencies");
@@ -1110,7 +1147,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "summarizeCurrentSheet",
     });
     expect(host.textContent).toContain("Summarize Current Sheet");
@@ -1227,7 +1264,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "explainSelectionCell",
     });
     expect(host.textContent).toContain("Explain Current Cell");
@@ -1346,7 +1383,7 @@ describe("workbook agent pane", () => {
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
       requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(requestBody(workflowCall?.[1])).toEqual({
+    expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "searchWorkbookQuery",
       query: "revenue",
     });
@@ -2261,8 +2298,9 @@ describe("workbook agent pane", () => {
       }
       submit.click();
     });
+    await flushToasts();
 
-    expect(host.textContent).toContain("Retry in a moment.");
+    expect(findActiveToast("agent-error")?.title).toBe("Retry in a moment.");
     expect(host.textContent).not.toContain(
       "thread/start.dynamicTools requires experimentalApi capability",
     );

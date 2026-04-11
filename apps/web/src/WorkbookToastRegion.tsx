@@ -1,12 +1,15 @@
-import { cva } from "class-variance-authority";
-import { cn } from "./cn.js";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
+import type { RefObject } from "react";
+import { Toaster, toast } from "sonner";
+import type { ExternalToast, ToastClassnames } from "sonner";
 import {
-  workbookAlertClass,
   workbookButtonClass,
   workbookSurfaceClass,
+  workbookAlertClass,
 } from "./workbook-shell-chrome.js";
+import "sonner/dist/styles.css";
 
-interface WorkbookToastAction {
+export interface WorkbookToastAction {
   readonly label: string;
   readonly onAction: () => void;
 }
@@ -19,90 +22,123 @@ export interface WorkbookToast {
   readonly onDismiss?: () => void;
 }
 
-const toastViewportClass = cva(
-  "pointer-events-none absolute top-3 right-3 z-40 flex w-[min(26rem,calc(100%-1.5rem))] flex-col gap-2",
-);
+const WORKBOOK_TOASTER_ID = "workbook";
 
-const toastClass = cva(
-  "pointer-events-auto flex items-start gap-3 rounded-[var(--wb-radius-panel)] px-3 py-3 shadow-[var(--wb-shadow-md)]",
-  {
-    variants: {
-      tone: {
-        error: workbookAlertClass({ tone: "danger" }),
-        neutral: cn(workbookSurfaceClass({ emphasis: "raised" }), "text-[var(--wb-text)]"),
-      },
-    },
-    defaultVariants: {
-      tone: "neutral",
-    },
-  },
-);
+function toastClassNames(tone: WorkbookToast["tone"]): ToastClassnames {
+  const isError = tone === "error";
+  return {
+    toast: [
+      "pointer-events-auto flex items-start gap-3 rounded-[var(--wb-radius-panel)] px-3 py-3 shadow-[var(--wb-shadow-md)]",
+      isError
+        ? workbookAlertClass({ tone: "danger" })
+        : `${workbookSurfaceClass({ emphasis: "raised" })} text-[var(--wb-text)]`,
+    ].join(" "),
+    content: "min-w-0 flex-1",
+    title: "break-words text-[12px] leading-5",
+    actionButton: workbookButtonClass({
+      size: "sm",
+      tone: isError ? "danger" : "neutral",
+    }),
+    closeButton: isError
+      ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ead0d0] text-[#8f2d2d] transition-colors hover:bg-[#fff3f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ead0d0] focus-visible:ring-offset-1"
+      : "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--wb-border)] text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
+  };
+}
 
-const toastDismissClass = cva(
-  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-  {
-    variants: {
-      tone: {
-        error: "border-[#ead0d0] text-[#8f2d2d] hover:bg-[#fff3f3] focus-visible:ring-[#ead0d0]",
-        neutral:
-          "border-[var(--wb-border)] text-[var(--wb-text-muted)] hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:ring-[var(--wb-accent-ring)]",
-      },
-    },
-    defaultVariants: {
-      tone: "neutral",
-    },
-  },
-);
+function buildToastOptions(
+  workbookToast: WorkbookToast,
+  ignoredDismissIdsRef: RefObject<Set<string>>,
+): ExternalToast {
+  return {
+    id: workbookToast.id,
+    toasterId: WORKBOOK_TOASTER_ID,
+    duration: Number.POSITIVE_INFINITY,
+    unstyled: true,
+    icon: null,
+    testId: `workbook-toast-${workbookToast.id}`,
+    classNames: toastClassNames(workbookToast.tone),
+    closeButton: workbookToast.onDismiss !== undefined,
+    dismissible: workbookToast.onDismiss !== undefined,
+    ...(workbookToast.action
+      ? {
+          action: {
+            label: workbookToast.action.label,
+            onClick: () => {
+              workbookToast.action?.onAction();
+            },
+          },
+        }
+      : {}),
+    ...(workbookToast.onDismiss
+      ? {
+          onDismiss: () => {
+            if (ignoredDismissIdsRef.current?.delete(workbookToast.id)) {
+              return;
+            }
+            workbookToast.onDismiss?.();
+          },
+        }
+      : {}),
+  };
+}
 
-const toastActionClass = cva("shrink-0", {
-  variants: {
-    tone: {
-      error: workbookButtonClass({ size: "sm", tone: "danger" }),
-      neutral: workbookButtonClass({ size: "sm", tone: "neutral" }),
-    },
-  },
-  defaultVariants: {
-    tone: "neutral",
-  },
-});
+function dismissToastProgrammatically(
+  id: string,
+  ignoredDismissIdsRef: RefObject<Set<string>>,
+): void {
+  ignoredDismissIdsRef.current?.add(id);
+  toast.dismiss(id);
+}
 
 export function WorkbookToastRegion(props: { readonly toasts: readonly WorkbookToast[] }) {
-  if (props.toasts.length === 0) {
-    return null;
-  }
+  const activeIdsRef = useRef(new Set<string>());
+  const ignoredDismissIdsRef = useRef(new Set<string>());
+
+  const dismissActiveToasts = useEffectEvent(() => {
+    for (const activeId of activeIdsRef.current) {
+      dismissToastProgrammatically(activeId, ignoredDismissIdsRef);
+    }
+    activeIdsRef.current.clear();
+  });
+
+  useLayoutEffect(() => {
+    const nextIds = new Set(props.toasts.map((workbookToast) => workbookToast.id));
+    for (const activeId of activeIdsRef.current) {
+      if (nextIds.has(activeId)) {
+        continue;
+      }
+      dismissToastProgrammatically(activeId, ignoredDismissIdsRef);
+      activeIdsRef.current.delete(activeId);
+    }
+
+    for (const workbookToast of props.toasts) {
+      const options = buildToastOptions(workbookToast, ignoredDismissIdsRef);
+      if (workbookToast.tone === "error") {
+        toast.error(workbookToast.message, options);
+      } else {
+        toast(workbookToast.message, options);
+      }
+      activeIdsRef.current.add(workbookToast.id);
+    }
+  }, [props.toasts]);
+
+  useEffect(() => {
+    return () => {
+      dismissActiveToasts();
+    };
+  }, []);
 
   return (
-    <div aria-live="polite" className={toastViewportClass()} data-testid="workbook-toast-region">
-      {props.toasts.map((toast) => (
-        <div
-          className={cn(toastClass({ tone: toast.tone ?? "neutral" }))}
-          data-testid={`workbook-toast-${toast.id}`}
-          key={toast.id}
-          role={toast.tone === "error" ? "alert" : "status"}
-        >
-          <div className="min-w-0 flex-1 break-words text-[12px] leading-5">{toast.message}</div>
-          {toast.action ? (
-            <button
-              className={cn(toastActionClass({ tone: toast.tone ?? "neutral" }))}
-              data-testid={`workbook-toast-${toast.id}-action`}
-              type="button"
-              onClick={toast.action.onAction}
-            >
-              {toast.action.label}
-            </button>
-          ) : null}
-          {toast.onDismiss ? (
-            <button
-              aria-label="Dismiss"
-              className={cn(toastDismissClass({ tone: toast.tone ?? "neutral" }))}
-              type="button"
-              onClick={toast.onDismiss}
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-      ))}
-    </div>
+    <Toaster
+      closeButton={false}
+      containerAriaLabel="Workbook notifications"
+      id={WORKBOOK_TOASTER_ID}
+      offset={12}
+      position="top-right"
+      toastOptions={{
+        closeButtonAriaLabel: "Dismiss",
+      }}
+      visibleToasts={4}
+    />
   );
 }
