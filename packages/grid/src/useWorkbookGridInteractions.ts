@@ -10,23 +10,16 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { formatAddress } from "@bilig/formula";
-import { ValueTag } from "@bilig/protocol";
 import {
   createRectangleSelectionFromRange,
   createGridSelection,
-  createSheetSelection,
   rectangleToAddresses,
 } from "./gridSelection.js";
 import {
   resolveFillHandlePreviewRange,
   resolveFillHandleSelectionRange,
 } from "./gridFillHandle.js";
-import {
-  resolveMovedRange,
-  resolveSelectionMoveAnchorCell,
-  sameRectangle,
-} from "./gridRangeMove.js";
+import { resolveSelectionMoveAnchorCell } from "./gridRangeMove.js";
 import {
   resolveColumnResizeTarget,
   type HeaderSelection,
@@ -34,8 +27,6 @@ import {
   type VisibleRegionState,
 } from "./gridPointer.js";
 import { resolveGridHoverState, sameGridHoverState } from "./gridHover.js";
-import { cellToEditorSeed } from "./gridCells.js";
-import { isHandledGridKey } from "./gridKeyboard.js";
 import type { InternalClipboardRange } from "./gridInternalClipboard.js";
 import {
   finishGridResize,
@@ -52,18 +43,27 @@ import {
 import {
   applyGridClipboardValues,
   captureGridClipboardSelection,
-  getNormalizedGridKeyboardKey,
   handleGridCopyCapture,
   handleGridPasteCapture,
 } from "./gridClipboardKeyboardController.js";
+import {
+  beginWorkbookGridEdit,
+  openWorkbookGridHeaderContextMenuFromKeyboard,
+  selectEntireWorkbookSheet,
+  toggleWorkbookGridBooleanCell,
+} from "./gridInteractionCommands.js";
+import {
+  beginWorkbookGridColumnResize,
+  beginWorkbookGridRowResize,
+} from "./gridResizeInteractions.js";
+import { beginWorkbookGridRangeMove } from "./gridRangeMoveInteractions.js";
+import { handleWorkbookGridKeyDownCapture } from "./gridKeyboardCapture.js";
 import type { Item } from "./gridTypes.js";
-import type { Rectangle } from "./gridTypes.js";
 import type {
   EditSelectionBehavior,
   WorkbookGridSurfaceProps,
 } from "./workbookGridSurfaceTypes.js";
 import { useWorkbookGridContextMenu } from "./useWorkbookGridContextMenu.js";
-import { resolveKeyboardHeaderContextMenuTarget } from "./workbookGridContextMenuTarget.js";
 import { useWorkbookGridKeyboardHandler } from "./useWorkbookGridKeyboardHandler.js";
 import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
 import { useWorkbookGridPointerResolvers } from "./useWorkbookGridPointerResolvers.js";
@@ -189,9 +189,6 @@ export function useWorkbookGridInteractions(
   const fillHandleCleanupRef = useRef<(() => void) | null>(null);
   const fillHandlePointerIdRef = useRef<number | null>(null);
   const rangeMoveCleanupRef = useRef<(() => void) | null>(null);
-  const rangeMoveSourceRangeRef = useRef<Rectangle | null>(null);
-  const rangeMovePreviewRangeRef = useRef<Rectangle | null>(null);
-  const rangeMoveAnchorOffsetRef = useRef<Item | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const activeSheetRef = useRef(sheetName);
   const interactionState = useMemo(
@@ -229,10 +226,13 @@ export function useWorkbookGridInteractions(
     fillPreviewRangeRef.current = fillPreviewRange;
   }, [fillPreviewRange]);
   useEffect(() => {
+    const fillHandleCleanup = fillHandleCleanupRef.current;
+    const rangeMoveCleanup = rangeMoveCleanupRef.current;
+    const resizeCleanup = resizeCleanupRef.current;
     return () => {
-      fillHandleCleanupRef.current?.();
-      rangeMoveCleanupRef.current?.();
-      resizeCleanupRef.current?.();
+      fillHandleCleanup?.();
+      rangeMoveCleanup?.();
+      resizeCleanup?.();
     };
   }, []);
   useLayoutEffect(() => {
@@ -266,31 +266,39 @@ export function useWorkbookGridInteractions(
   }, [focusGrid, isEditingCell]);
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
-      onBeginEdit(
-        seed ?? cellToEditorSeed(engine.getCell(sheetName, selectedAddr)),
+      beginWorkbookGridEdit({
+        engine,
+        onBeginEdit,
+        sheetName,
+        address: selectedAddr,
+        seed,
         selectionBehavior,
-      );
+      });
     },
     [engine, onBeginEdit, selectedAddr, sheetName],
   );
   const beginEditAt = useCallback(
     (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
-      onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)), selectionBehavior);
+      beginWorkbookGridEdit({
+        engine,
+        onBeginEdit,
+        sheetName,
+        address: addr,
+        seed,
+        selectionBehavior,
+      });
     },
     [engine, onBeginEdit, sheetName],
   );
   const toggleBooleanCellAt = useCallback(
     (col: number, row: number): boolean => {
-      if (!onToggleBooleanCell) {
-        return false;
-      }
-      const address = formatAddress(row, col);
-      const snapshot = engine.getCell(sheetName, address);
-      if (snapshot.value.tag !== ValueTag.Boolean) {
-        return false;
-      }
-      onToggleBooleanCell(sheetName, address, !snapshot.value.value);
-      return true;
+      return toggleWorkbookGridBooleanCell({
+        engine,
+        onToggleBooleanCell,
+        sheetName,
+        col,
+        row,
+      });
     },
     [engine, onToggleBooleanCell, sheetName],
   );
@@ -370,34 +378,18 @@ export function useWorkbookGridInteractions(
     visibleRegion,
   });
   const openHeaderContextMenuFromKeyboard = useCallback(() => {
-    const hostBounds = hostRef.current?.getBoundingClientRect();
-    if (!hostBounds) {
-      return false;
-    }
-    const currentCell = gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row];
-    const targetCellBounds =
-      gridSelection.rows.length > 0 && gridSelection.columns.length === 0
-        ? getCellScreenBounds(currentCell[0], gridSelection.rows.first() ?? currentCell[1])
-        : gridSelection.columns.length > 0 && gridSelection.rows.length === 0
-          ? getCellScreenBounds(gridSelection.columns.first() ?? currentCell[0], currentCell[1])
-          : undefined;
-    const target = resolveKeyboardHeaderContextMenuTarget({
+    return openWorkbookGridHeaderContextMenuFromKeyboard({
+      hostBounds: hostRef.current?.getBoundingClientRect(),
       gridSelection,
-      targetCellBounds,
-      hostLeft: hostBounds.left,
-      hostTop: hostBounds.top,
-      rowMarkerWidth: gridMetrics.rowMarkerWidth,
-      headerHeight: gridMetrics.headerHeight,
+      selectedCell: [selectedCell.col, selectedCell.row],
+      getCellScreenBounds,
+      gridMetrics,
+      openContextMenuForTarget: contextMenu.openContextMenuForTarget,
     });
-    if (!target) {
-      return false;
-    }
-    return contextMenu.openContextMenuForTarget(target);
   }, [
     contextMenu,
     getCellScreenBounds,
-    gridMetrics.headerHeight,
-    gridMetrics.rowMarkerWidth,
+    gridMetrics,
     gridSelection,
     hostRef,
     selectedCell.col,
@@ -605,67 +597,23 @@ export function useWorkbookGridInteractions(
       if (!selectionRange) {
         return;
       }
-      const sourceRange = selectionRange;
-      const anchorOffset: Item = [pointerCell[0] - sourceRange.x, pointerCell[1] - sourceRange.y];
-      rangeMoveCleanupRef.current?.();
-      rangeMoveSourceRangeRef.current = sourceRange;
-      rangeMovePreviewRangeRef.current = sourceRange;
-      rangeMoveAnchorOffsetRef.current = anchorOffset;
-      setIsRangeMoveDragging(true);
-      setHoverState({ cell: null, header: null, cursor: "grabbing" });
       if (isEditingCell) {
         onCommitEdit();
       }
       focusGrid();
-
-      const move = (nativeEvent: PointerEvent) => {
-        const nextPointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
-        if (!nextPointerCell) {
-          return;
-        }
-        const nextRange = resolveMovedRange(sourceRange, nextPointerCell, anchorOffset);
-        if (sameRectangle(rangeMovePreviewRangeRef.current, nextRange)) {
-          return;
-        }
-        rangeMovePreviewRangeRef.current = nextRange;
-        setGridSelection(createRectangleSelectionFromRange(nextRange));
-      };
-
-      const cleanup = (clientX?: number, clientY?: number) => {
-        window.removeEventListener("pointermove", move, true);
-        window.removeEventListener("pointerup", up, true);
-        rangeMoveCleanupRef.current = null;
-        rangeMoveSourceRangeRef.current = null;
-        rangeMovePreviewRangeRef.current = null;
-        rangeMoveAnchorOffsetRef.current = null;
-        setIsRangeMoveDragging(false);
-        if (clientX !== undefined && clientY !== undefined) {
-          refreshHoverState(clientX, clientY, 0);
-        }
-      };
-
-      const up = (nativeEvent: PointerEvent) => {
-        const resolvedSourceRange = rangeMoveSourceRangeRef.current ?? sourceRange;
-        const resolvedTargetRange = rangeMovePreviewRangeRef.current ?? resolvedSourceRange;
-        cleanup(nativeEvent.clientX, nativeEvent.clientY);
-        setGridSelection(createRectangleSelectionFromRange(resolvedTargetRange));
-        onSelect(formatAddress(resolvedTargetRange.y, resolvedTargetRange.x));
-        if (sameRectangle(resolvedSourceRange, resolvedTargetRange)) {
-          return;
-        }
-        const sourceAddresses = rectangleToAddresses(resolvedSourceRange);
-        const targetAddresses = rectangleToAddresses(resolvedTargetRange);
-        onMoveRange(
-          sourceAddresses.startAddress,
-          sourceAddresses.endAddress,
-          targetAddresses.startAddress,
-          targetAddresses.endAddress,
-        );
-      };
-
-      rangeMoveCleanupRef.current = cleanup;
-      window.addEventListener("pointermove", move, true);
-      window.addEventListener("pointerup", up, true);
+      beginWorkbookGridRangeMove({
+        cleanupRef: rangeMoveCleanupRef,
+        listenerTarget: window,
+        sourceRange: selectionRange,
+        pointerCell,
+        resolvePointerCell,
+        setGridSelection,
+        onSelect,
+        onMoveRange,
+        refreshHoverState,
+        setIsRangeMoveDragging,
+        setHoverState,
+      });
     },
     [
       focusGrid,
@@ -684,39 +632,22 @@ export function useWorkbookGridInteractions(
 
   const beginColumnResize = useCallback(
     (columnIndex: number, startClientX: number) => {
-      resizeCleanupRef.current?.();
-      startGridResize(interactionState);
-      setActiveResizeColumn(columnIndex);
-      const startWidth = columnWidths[columnIndex] ?? gridMetrics.columnWidth;
-
-      const handlePointerMove = (nativeEvent: PointerEvent) => {
-        previewColumnWidth(columnIndex, startWidth + (nativeEvent.clientX - startClientX));
-      };
-
-      const cleanup = (nativeEvent?: PointerEvent) => {
-        window.removeEventListener("pointermove", handlePointerMove, true);
-        window.removeEventListener("pointerup", handlePointerUp, true);
-        resizeCleanupRef.current = null;
-        setActiveResizeColumn(null);
-        finishGridResize(interactionState);
-        if (nativeEvent) {
-          refreshHoverState(nativeEvent.clientX, nativeEvent.clientY, 0);
-        }
-      };
-
-      const handlePointerUp = (nativeEvent: PointerEvent) => {
-        const finalWidth = getPreviewColumnWidth(columnIndex) ?? startWidth;
-        if (finalWidth === startWidth) {
-          clearColumnResizePreview(columnIndex);
-        } else {
-          commitColumnWidth(columnIndex, finalWidth);
-        }
-        cleanup(nativeEvent);
-      };
-
-      resizeCleanupRef.current = cleanup;
-      window.addEventListener("pointermove", handlePointerMove, true);
-      window.addEventListener("pointerup", handlePointerUp, true);
+      beginWorkbookGridColumnResize({
+        cleanupRef: resizeCleanupRef,
+        listenerTarget: window,
+        startResize: () => startGridResize(interactionState),
+        finishResize: () => finishGridResize(interactionState),
+        refreshHoverState,
+        setActiveResizeColumn,
+        previewColumnWidth,
+        getPreviewColumnWidth,
+        clearColumnResizePreview,
+        commitColumnWidth,
+        columnIndex,
+        startClientX,
+        columnWidths,
+        defaultColumnWidth: gridMetrics.columnWidth,
+      });
     },
     [
       clearColumnResizePreview,
@@ -733,39 +664,22 @@ export function useWorkbookGridInteractions(
 
   const beginRowResize = useCallback(
     (rowIndex: number, startClientY: number) => {
-      resizeCleanupRef.current?.();
-      startGridResize(interactionState);
-      setActiveResizeRow(rowIndex);
-      const startHeight = rowHeights[rowIndex] ?? gridMetrics.rowHeight;
-
-      const handlePointerMove = (nativeEvent: PointerEvent) => {
-        previewRowHeight(rowIndex, startHeight + (nativeEvent.clientY - startClientY));
-      };
-
-      const cleanup = (nativeEvent?: PointerEvent) => {
-        window.removeEventListener("pointermove", handlePointerMove, true);
-        window.removeEventListener("pointerup", handlePointerUp, true);
-        resizeCleanupRef.current = null;
-        setActiveResizeRow(null);
-        finishGridResize(interactionState);
-        if (nativeEvent) {
-          refreshHoverState(nativeEvent.clientX, nativeEvent.clientY, 0);
-        }
-      };
-
-      const handlePointerUp = (nativeEvent: PointerEvent) => {
-        const finalHeight = getPreviewRowHeight(rowIndex) ?? startHeight;
-        if (finalHeight === startHeight) {
-          clearRowResizePreview(rowIndex);
-        } else {
-          commitRowHeight(rowIndex, finalHeight);
-        }
-        cleanup(nativeEvent);
-      };
-
-      resizeCleanupRef.current = cleanup;
-      window.addEventListener("pointermove", handlePointerMove, true);
-      window.addEventListener("pointerup", handlePointerUp, true);
+      beginWorkbookGridRowResize({
+        cleanupRef: resizeCleanupRef,
+        listenerTarget: window,
+        startResize: () => startGridResize(interactionState),
+        finishResize: () => finishGridResize(interactionState),
+        refreshHoverState,
+        setActiveResizeRow,
+        previewRowHeight,
+        getPreviewRowHeight,
+        clearRowResizePreview,
+        commitRowHeight,
+        rowIndex,
+        startClientY,
+        rowHeights,
+        defaultRowHeight: gridMetrics.rowHeight,
+      });
     },
     [
       clearRowResizePreview,
@@ -781,53 +695,29 @@ export function useWorkbookGridInteractions(
   );
 
   const handleSelectEntireSheet = useCallback(() => {
-    if (isEditingCell) {
-      onCommitEdit();
-    }
-    setGridSelection(createSheetSelection());
-    onSelect(formatAddress(0, 0));
-    focusGrid();
+    selectEntireWorkbookSheet({
+      isEditingCell,
+      onCommitEdit,
+      setGridSelection,
+      onSelect,
+      focusGrid,
+    });
   }, [focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection]);
 
   return {
     handleFillHandlePointerDown,
     handleGridKey,
     handleHostKeyDownCapture: (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
-      resetGridPointerInteraction(interactionState, {
-        clearIgnoreNextPointerSelection: true,
+      handleWorkbookGridKeyDownCapture({
+        event,
+        handleGridKey,
+        openHeaderContextMenuFromKeyboard,
+        resetPointerInteraction: () => {
+          resetGridPointerInteraction(interactionState, {
+            clearIgnoreNextPointerSelection: true,
+          });
+        },
       });
-      if (normalizedKey === "ContextMenu" || (event.shiftKey && normalizedKey === "F10")) {
-        if (openHeaderContextMenuFromKeyboard()) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-
-      if (
-        !isHandledGridKey({
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          key: normalizedKey,
-          metaKey: event.metaKey,
-        })
-      ) {
-        return;
-      }
-
-      handleGridKey({
-        altKey: event.altKey,
-        cancel: () => event.stopPropagation(),
-        ctrlKey: event.ctrlKey,
-        key: normalizedKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        preventDefault: () => event.preventDefault(),
-      });
-      if (event.defaultPrevented) {
-        event.stopPropagation();
-      }
     },
     handleHostCopyCapture: (event: ReactClipboardEvent<HTMLDivElement>) => {
       handleGridCopyCapture({
