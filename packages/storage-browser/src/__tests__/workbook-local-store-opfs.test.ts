@@ -1,9 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const installOpfsSAHPoolVfs = vi.fn();
-const sqlite3InitModule = vi.fn(async () => ({
+const sqliteConfigError = vi.fn();
+const sqliteConfigWarn = vi.fn();
+const sqliteRuntime = {
   installOpfsSAHPoolVfs,
-}));
+  config: {
+    error: (...args: unknown[]) => {
+      sqliteConfigError(...args);
+    },
+    warn: (...args: unknown[]) => {
+      sqliteConfigWarn(...args);
+    },
+  },
+};
+const sqlite3InitModule = vi.fn(async () => sqliteRuntime);
 
 vi.mock("@sqlite.org/sqlite-wasm", () => ({
   default: sqlite3InitModule,
@@ -13,6 +24,8 @@ describe("opfs workbook local store", () => {
   beforeEach(() => {
     installOpfsSAHPoolVfs.mockReset();
     sqlite3InitModule.mockClear();
+    sqliteConfigError.mockReset();
+    sqliteConfigWarn.mockReset();
     delete (globalThis as { document?: Document }).document;
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
@@ -106,13 +119,14 @@ describe("opfs workbook local store", () => {
       { name: "NoModificationAllowedError" },
     );
     installOpfsSAHPoolVfs.mockImplementation(async () => {
-      console.error(
+      sqliteRuntime.config.error(
         "bilig-opfs-sahpool removeVfs() failed with no recovery strategy:",
         removeVfsError,
       );
       throw removeVfsError;
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sqliteErrorCount = sqliteConfigError.mock.calls.length;
 
     try {
       const { WorkbookLocalStoreLockedError, createOpfsWorkbookLocalStoreFactory } =
@@ -124,6 +138,7 @@ describe("opfs workbook local store", () => {
         message: "Workbook local store is locked by another tab for doc-suppressed-remove-vfs",
       });
       expect(consoleError).not.toHaveBeenCalled();
+      expect(sqliteConfigError.mock.calls.length).toBe(sqliteErrorCount);
     } finally {
       consoleError.mockRestore();
     }

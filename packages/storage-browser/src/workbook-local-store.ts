@@ -157,12 +157,39 @@ function isOpfsLockDiagnostic(args: readonly unknown[], vfsName: string): boolea
   );
 }
 
+type SqliteLogger = (...args: unknown[]) => void;
+
+function getSqliteConfigLogger(
+  sqlite3: Sqlite3Static,
+  key: "error" | "warn",
+): SqliteLogger | null {
+  if (!isRecord(sqlite3) || !isRecord(sqlite3["config"])) {
+    return null;
+  }
+  const logger = sqlite3["config"][key];
+  return typeof logger === "function" ? (logger as SqliteLogger) : null;
+}
+
+function setSqliteConfigLogger(
+  sqlite3: Sqlite3Static,
+  key: "error" | "warn",
+  logger: SqliteLogger | null,
+): void {
+  if (!logger || !isRecord(sqlite3) || !isRecord(sqlite3["config"])) {
+    return;
+  }
+  sqlite3["config"][key] = logger;
+}
+
 async function withSuppressedOpfsLockDiagnostics<T>(
+  sqlite3: Sqlite3Static,
   vfsName: string,
   task: () => Promise<T>,
 ): Promise<T> {
   const originalError = console.error;
   const originalWarn = console.warn;
+  const originalSqliteError = getSqliteConfigLogger(sqlite3, "error");
+  const originalSqliteWarn = getSqliteConfigLogger(sqlite3, "warn");
   console.error = ((...args: unknown[]) => {
     if (!isOpfsLockDiagnostic(args, vfsName)) {
       originalError(...args);
@@ -173,11 +200,27 @@ async function withSuppressedOpfsLockDiagnostics<T>(
       originalWarn(...args);
     }
   }) as typeof console.warn;
+  if (originalSqliteError) {
+    setSqliteConfigLogger(sqlite3, "error", (...args: unknown[]) => {
+      if (!isOpfsLockDiagnostic(args, vfsName)) {
+        originalSqliteError(...args);
+      }
+    });
+  }
+  if (originalSqliteWarn) {
+    setSqliteConfigLogger(sqlite3, "warn", (...args: unknown[]) => {
+      if (!isOpfsLockDiagnostic(args, vfsName)) {
+        originalSqliteWarn(...args);
+      }
+    });
+  }
   try {
     return await task();
   } finally {
     console.error = originalError;
     console.warn = originalWarn;
+    setSqliteConfigLogger(sqlite3, "error", originalSqliteError);
+    setSqliteConfigLogger(sqlite3, "warn", originalSqliteWarn);
   }
 }
 
@@ -327,6 +370,7 @@ async function getSqliteRuntime(
       const sqlite3 = await sqlite3InitModule();
       try {
         const poolUtil = await withSuppressedOpfsLockDiagnostics(
+          sqlite3,
           options.vfsName,
           async () =>
             await sqlite3.installOpfsSAHPoolVfs({
