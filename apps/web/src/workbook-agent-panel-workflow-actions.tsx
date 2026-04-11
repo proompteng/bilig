@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { cn } from "./cn.js";
 import { workbookButtonClass, workbookInsetClass } from "./workbook-shell-chrome.js";
+import {
+  agentPanelActionButtonClass,
+  agentPanelActionGridClass,
+  agentPanelFieldClass,
+  agentPanelSectionClass,
+  agentPanelSectionHeaderClass,
+  agentPanelSectionHintClass,
+  agentPanelSectionTitleClass,
+  agentPanelToggleButtonClass,
+} from "./workbook-agent-panel-primitives.js";
 
 type WorkflowActionTemplate =
   | "summarizeWorkbook"
@@ -28,11 +38,11 @@ interface WorkflowActionDefinition {
 const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
   {
     template: "summarizeWorkbook",
-    label: "Summarize workbook",
+    label: "Workbook summary",
   },
   {
     template: "summarizeCurrentSheet",
-    label: "Summarize current sheet",
+    label: "Sheet summary",
   },
   {
     template: "describeRecentChanges",
@@ -40,15 +50,15 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
   },
   {
     template: "findFormulaIssues",
-    label: "Sheet formula issues",
+    label: "Scan formulas",
   },
   {
     template: "highlightFormulaIssues",
-    label: "Highlight formula issues",
+    label: "Highlight formulas",
   },
   {
     template: "repairFormulaIssues",
-    label: "Repair formula issues",
+    label: "Repair formulas",
   },
   {
     template: "highlightCurrentSheetOutliers",
@@ -64,19 +74,19 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
   },
   {
     template: "normalizeCurrentSheetNumberFormats",
-    label: "Normalize number formats",
+    label: "Normalize formats",
   },
   {
     template: "normalizeCurrentSheetWhitespace",
-    label: "Normalize whitespace",
+    label: "Normalize text",
   },
   {
     template: "fillCurrentSheetFormulasDown",
-    label: "Fill formulas down",
+    label: "Fill formulas",
   },
   {
     template: "createCurrentSheetRollup",
-    label: "Create sheet rollup",
+    label: "Rollup sheet",
   },
   {
     template: "createCurrentSheetReviewTab",
@@ -84,11 +94,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
   },
   {
     template: "traceSelectionDependencies",
-    label: "Trace selection links",
+    label: "Trace links",
   },
   {
     template: "explainSelectionCell",
-    label: "Explain current cell",
+    label: "Explain cell",
   },
 ];
 
@@ -110,29 +120,26 @@ export function WorkflowActionStrip(props: {
   const [isExpanded, setIsExpanded] = useState(false);
   const compactButtonClass = cn(
     workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" }),
-    "h-auto w-full px-3 py-2 text-center leading-4 whitespace-normal",
+    agentPanelActionButtonClass({ emphasis: "subtle" }),
   );
   const primaryCompactButtonClass = cn(
     workbookButtonClass({ size: "sm", tone: "accent", weight: "strong" }),
-    "h-auto w-full px-3 py-2 text-center leading-4 whitespace-normal",
+    agentPanelActionButtonClass({ emphasis: "strong" }),
   );
-  const fieldClass =
-    "min-w-0 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-2.5 py-1.5 text-[11px] text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-accent)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]";
-  const sectionClass =
-    "grid gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2";
 
   return (
     <div className={cn(workbookInsetClass(), "mt-2 px-2 py-2")}>
-      <div className="flex items-center justify-between gap-2">
+      <div className={agentPanelSectionHeaderClass()}>
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-            Workflows
-          </div>
-          <div className="text-[11px] text-[var(--wb-text-muted)]">Optional shortcuts.</div>
+          <div className={agentPanelSectionTitleClass()}>Workflows</div>
+          <div className={agentPanelSectionHintClass()}>Optional shortcuts</div>
         </div>
         <button
           aria-expanded={isExpanded}
-          className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "strong" })}
+          className={cn(
+            workbookButtonClass({ size: "sm", tone: "neutral", weight: "strong" }),
+            agentPanelToggleButtonClass(),
+          )}
           data-testid="workbook-agent-workflow-toggle"
           disabled={props.disabled || props.isStartingWorkflow}
           type="button"
@@ -144,29 +151,26 @@ export function WorkflowActionStrip(props: {
         </button>
       </div>
       <div className={cn("mt-2 grid gap-2", !isExpanded && "hidden")} hidden={!isExpanded}>
-        {WORKFLOW_ACTIONS.map((action) => (
-          <button
-            key={action.template}
-            className={cn(
-              workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" }),
-              "h-auto items-start justify-start px-3 py-2 text-left",
-            )}
-            data-testid={`workbook-agent-workflow-start-${action.template}`}
-            disabled={props.disabled || props.isStartingWorkflow}
-            type="button"
-            onClick={() => {
-              props.onStartWorkflow(action.template);
-            }}
-          >
-            <span className="text-[11px] font-semibold text-[var(--wb-text)]">
+        <div className={agentPanelActionGridClass()}>
+          {WORKFLOW_ACTIONS.map((action) => (
+            <button
+              key={action.template}
+              className={compactButtonClass}
+              data-testid={`workbook-agent-workflow-start-${action.template}`}
+              disabled={props.disabled || props.isStartingWorkflow}
+              type="button"
+              onClick={() => {
+                props.onStartWorkflow(action.template);
+              }}
+            >
               {props.isStartingWorkflow ? "Starting…" : action.label}
-            </span>
-          </button>
-        ))}
-        <div className={sectionClass}>
-          <div className="text-[11px] font-semibold text-[var(--wb-text)]">Structure</div>
+            </button>
+          ))}
+        </div>
+        <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
+          <div className={agentPanelSectionTitleClass()}>Structure</div>
           <input
-            className={fieldClass}
+            className={agentPanelFieldClass()}
             data-testid="workbook-agent-structural-sheet-name-input"
             disabled={props.disabled || props.isStartingWorkflow}
             placeholder="Sheet name"
@@ -187,7 +191,7 @@ export function WorkflowActionStrip(props: {
               }
             }}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className={agentPanelActionGridClass()}>
             <button
               className={primaryCompactButtonClass}
               data-testid="workbook-agent-workflow-start-createSheet"
@@ -213,7 +217,7 @@ export function WorkflowActionStrip(props: {
               Rename current
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className={agentPanelActionGridClass()}>
             <button
               className={compactButtonClass}
               data-testid="workbook-agent-workflow-start-hideCurrentRow"
@@ -237,7 +241,7 @@ export function WorkflowActionStrip(props: {
               {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className={agentPanelActionGridClass()}>
             <button
               className={compactButtonClass}
               data-testid="workbook-agent-workflow-start-unhideCurrentRow"
@@ -262,11 +266,11 @@ export function WorkflowActionStrip(props: {
             </button>
           </div>
         </div>
-        <div className={sectionClass}>
-          <div className="text-[11px] font-semibold text-[var(--wb-text)]">Search workbook</div>
+        <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
+          <div className={agentPanelSectionTitleClass()}>Search workbook</div>
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
             <input
-              className={fieldClass}
+              className={agentPanelFieldClass()}
               data-testid="workbook-agent-workflow-search-input"
               disabled={props.disabled || props.isStartingWorkflow}
               placeholder="Search for a concept, value, or formula"
