@@ -200,6 +200,7 @@ export function createEngineSnapshotService(args: {
       return Effect.try({
         try: () => {
           args.resetWorkbook();
+          const authoredBlankCells: Array<{ sheetName: string; address: string }> = [];
           const ops: import("@bilig/workbook-domain").EngineOp[] = [
             { kind: "upsertWorkbook", name: snapshot.workbook.name },
           ];
@@ -338,6 +339,9 @@ export function createEngineSnapshotService(args: {
                   address: cell.address,
                   value: cell.value ?? null,
                 });
+                if (cell.value === null && cell.format === undefined) {
+                  authoredBlankCells.push({ sheetName: sheet.name, address: cell.address });
+                }
               }
               if (cell.format !== undefined) {
                 ops.push({
@@ -392,14 +396,9 @@ export function createEngineSnapshotService(args: {
           args.executeRestoreTransaction(
             potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
           );
-          snapshot.sheets.forEach((sheet) => {
-            sheet.cells.forEach((cell) => {
-              if (cell.formula !== undefined || cell.value !== null) {
-                return;
-              }
-              const { cellIndex } = args.state.workbook.ensureCellRecord(sheet.name, cell.address);
-              args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
-            });
+          authoredBlankCells.forEach(({ sheetName, address }) => {
+            const { cellIndex } = args.state.workbook.ensureCellRecord(sheetName, address);
+            args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
           });
         },
         catch: (cause) =>
