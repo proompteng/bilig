@@ -7,7 +7,6 @@ import {
   type WorkbookAgentPreviewSummary,
 } from "@bilig/agent-api";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
-import { formatAddress, indexToColumn } from "@bilig/formula";
 import {
   createOpfsWorkbookLocalStoreFactory,
   type WorkbookLocalStore,
@@ -72,6 +71,7 @@ import {
   acquireProjectionEngine,
   scheduleProjectionEngineMaterialization,
 } from "./worker-runtime-projection-engine.js";
+import { WorkerRuntimeProjectionCommands } from "./worker-runtime-projection-commands.js";
 import {
   createProjectionEngineFromState,
   createWorkbookEngineFromState,
@@ -219,6 +219,16 @@ export class WorkbookWorkerRuntime {
     markProjectionMatchesLocalStore: () => {
       this.projectionMatchesLocalStore = true;
     },
+  });
+  private readonly projectionCommands = new WorkerRuntimeProjectionCommands({
+    markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
+    getProjectionEngine: () => this.getProjectionEngine(),
+    getCell: (sheetName, address) => this.getCell(sheetName, address),
+    minColumnWidth: MIN_COLUMN_WIDTH,
+    maxColumnWidth: MAX_COLUMN_WIDTH,
+    autofitCharWidth: AUTOFIT_CHAR_WIDTH,
+    autofitPadding: AUTOFIT_PADDING,
+    formatCellDisplayValue,
   });
 
   constructor(
@@ -655,66 +665,51 @@ export class WorkbookWorkerRuntime {
     address: string,
     value: CellSnapshot["input"],
   ): Promise<CellSnapshot> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).setCellValue(sheetName, address, value ?? null);
-    return this.getCell(sheetName, address);
+    return await this.projectionCommands.setCellValue(sheetName, address, value);
   }
 
   async setCellFormula(sheetName: string, address: string, formula: string): Promise<CellSnapshot> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).setCellFormula(sheetName, address, formula);
-    return this.getCell(sheetName, address);
+    return await this.projectionCommands.setCellFormula(sheetName, address, formula);
   }
 
   async setRangeStyle(range: CellRangeRef, patch: CellStylePatch): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).setRangeStyle(range, patch);
+    await this.projectionCommands.setRangeStyle(range, patch);
   }
 
   async clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).clearRangeStyle(range, fields);
+    await this.projectionCommands.clearRangeStyle(range, fields);
   }
 
   async setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).setRangeNumberFormat(range, format);
+    await this.projectionCommands.setRangeNumberFormat(range, format);
   }
 
   async clearRangeNumberFormat(range: CellRangeRef): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).clearRangeNumberFormat(range);
+    await this.projectionCommands.clearRangeNumberFormat(range);
   }
 
   async clearRange(range: CellRangeRef): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).clearRange(range);
+    await this.projectionCommands.clearRange(range);
   }
 
   async clearCell(sheetName: string, address: string): Promise<CellSnapshot> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).clearCell(sheetName, address);
-    return this.getCell(sheetName, address);
+    return await this.projectionCommands.clearCell(sheetName, address);
   }
 
   async renderCommit(ops: CommitOp[]): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).renderCommit(ops);
+    await this.projectionCommands.renderCommit(ops);
   }
 
   async fillRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).fillRange(source, target);
+    await this.projectionCommands.fillRange(source, target);
   }
 
   async copyRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).copyRange(source, target);
+    await this.projectionCommands.copyRange(source, target);
   }
 
   async moveRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).moveRange(source, target);
+    await this.projectionCommands.moveRange(source, target);
   }
 
   async updateRowMetadata(
@@ -724,15 +719,7 @@ export class WorkbookWorkerRuntime {
     height: number | null,
     hidden: boolean | null,
   ): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    const normalizedHeight = height === null ? null : Math.max(1, Math.round(height));
-    (await this.getProjectionEngine()).updateRowMetadata(
-      sheetName,
-      startRow,
-      count,
-      normalizedHeight,
-      hidden,
-    );
+    await this.projectionCommands.updateRowMetadata(sheetName, startRow, count, height, hidden);
   }
 
   async updateColumnMetadata(
@@ -742,50 +729,25 @@ export class WorkbookWorkerRuntime {
     width: number | null,
     hidden: boolean | null,
   ): Promise<number | null> {
-    this.markProjectionDivergedFromLocalStore();
-    const normalizedWidth =
-      width === null
-        ? null
-        : Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
-    (await this.getProjectionEngine()).updateColumnMetadata(
+    return await this.projectionCommands.updateColumnMetadata(
       sheetName,
       startCol,
       count,
-      normalizedWidth,
+      width,
       hidden,
     );
-    return normalizedWidth;
   }
 
   async updateColumnWidth(sheetName: string, columnIndex: number, width: number): Promise<number> {
-    const normalizedWidth = await this.updateColumnMetadata(sheetName, columnIndex, 1, width, null);
-    return normalizedWidth ?? width;
+    return await this.projectionCommands.updateColumnWidth(sheetName, columnIndex, width);
   }
 
   async setFreezePane(sheetName: string, rows: number, cols: number): Promise<void> {
-    this.markProjectionDivergedFromLocalStore();
-    (await this.getProjectionEngine()).setFreezePane(
-      sheetName,
-      Math.max(0, Math.round(rows)),
-      Math.max(0, Math.round(cols)),
-    );
+    await this.projectionCommands.setFreezePane(sheetName, rows, cols);
   }
 
   async autofitColumn(sheetName: string, columnIndex: number): Promise<number> {
-    const engine = await this.getProjectionEngine();
-    const sheet = engine.workbook.getSheet(sheetName);
-    let widest = indexToColumn(columnIndex).length * AUTOFIT_CHAR_WIDTH;
-
-    sheet?.grid.forEachCellEntry((_cellIndex, row, col) => {
-      if (col !== columnIndex) {
-        return;
-      }
-      const snapshot = engine.getCell(sheetName, formatAddress(row, col));
-      const display = formatCellDisplayValue(snapshot.value, snapshot.format);
-      widest = Math.max(widest, display.length * AUTOFIT_CHAR_WIDTH);
-    });
-
-    return await this.updateColumnWidth(sheetName, columnIndex, widest + AUTOFIT_PADDING);
+    return await this.projectionCommands.autofitColumn(sheetName, columnIndex);
   }
 
   subscribe(listener: (event: EngineEvent) => void): () => void {
