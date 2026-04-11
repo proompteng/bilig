@@ -28,20 +28,20 @@ function toastClassNames(tone: WorkbookToast["tone"]): ToastClassnames {
   const isError = tone === "error";
   return {
     toast: [
-      "pointer-events-auto flex items-start gap-3 rounded-[var(--wb-radius-panel)] px-3 py-3 shadow-[var(--wb-shadow-md)]",
+      "pointer-events-auto relative flex w-[min(28rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] items-start gap-3 rounded-[var(--wb-radius-panel)] px-3 py-3 pr-11 shadow-[var(--wb-shadow-md)] [--toast-close-button-start:auto] [--toast-close-button-end:0.625rem] [--toast-close-button-transform:none]",
       isError
         ? workbookAlertClass({ tone: "danger" })
         : `${workbookSurfaceClass({ emphasis: "raised" })} text-[var(--wb-text)]`,
     ].join(" "),
-    content: "min-w-0 flex-1",
-    title: "break-words text-[12px] leading-5",
+    content: "min-w-0 flex flex-1 flex-col justify-center gap-0.5",
+    title: "break-words text-[13px] font-medium leading-5",
     actionButton: workbookButtonClass({
       size: "sm",
       tone: isError ? "danger" : "neutral",
     }),
     closeButton: isError
-      ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ead0d0] text-[#8f2d2d] transition-colors hover:bg-[#fff3f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ead0d0] focus-visible:ring-offset-1"
-      : "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--wb-border)] text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
+      ? "inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#ead0d0] bg-[#fffdfd] text-[#8f2d2d] transition-colors hover:bg-[#fff3f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ead0d0] focus-visible:ring-offset-1"
+      : "inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
   };
 }
 

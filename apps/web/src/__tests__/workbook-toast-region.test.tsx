@@ -76,6 +76,8 @@ describe("WorkbookToastRegion", () => {
 
     const activeToast = findActiveToast("error-1");
     expect(activeToast?.title).toBe("Remote sync failed.");
+    expect(activeToast?.classNames?.toast).toContain("w-[min(28rem,calc(100vw-1.5rem))]");
+    expect(activeToast?.classNames?.toast).toContain("[--toast-close-button-end:0.625rem]");
     const retryAction = getToastAction(activeToast);
 
     await act(async () => {
@@ -129,6 +131,42 @@ describe("WorkbookToastRegion", () => {
     await flushToasts();
 
     expect(onDismiss).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("pins the dismiss button inside the toast and reserves content width", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkbookToastRegion
+          toasts={[
+            {
+              id: "error-3",
+              tone: "error",
+              message: "Failed to capture undo ops",
+              onDismiss: () => {},
+            },
+          ]}
+        />,
+      );
+    });
+    await flushToasts();
+
+    const activeToast = findActiveToast("error-3");
+    expect(activeToast?.classNames?.toast).toContain("pr-11");
+    expect(activeToast?.classNames?.content).toBe(
+      "min-w-0 flex flex-1 flex-col justify-center gap-0.5",
+    );
 
     await act(async () => {
       root.unmount();
