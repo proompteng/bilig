@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Collapsible } from "@base-ui/react/collapsible";
+import { Popover } from "@base-ui/react/popover";
 import { cn } from "./cn.js";
 import { workbookButtonClass } from "./workbook-shell-chrome.js";
 import {
@@ -119,7 +119,7 @@ export function WorkflowActionStrip(props: {
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sheetName, setSheetName] = useState("");
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const compactButtonClass = cn(
     workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" }),
     agentPanelActionButtonClass({ emphasis: "subtle" }),
@@ -128,18 +128,62 @@ export function WorkflowActionStrip(props: {
     workbookButtonClass({ size: "sm", tone: "accent", weight: "strong" }),
     agentPanelActionButtonClass({ emphasis: "strong" }),
   );
+  const closeTools = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const runWorkflow = useCallback(
+    (template: WorkflowActionTemplate) => {
+      props.onStartWorkflow(template);
+      closeTools();
+    },
+    [closeTools, props],
+  );
+
+  const runNamedWorkflow = useCallback(
+    (template: "createSheet" | "renameCurrentSheet") => {
+      const trimmedName = sheetName.trim();
+      if (trimmedName.length === 0) {
+        return;
+      }
+      props.onStartNamedWorkflow(template, trimmedName);
+      setSheetName("");
+      closeTools();
+    },
+    [closeTools, props, sheetName],
+  );
+
+  const runStructuralWorkflow = useCallback(
+    (
+      template: "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn",
+    ) => {
+      props.onStartStructuralWorkflow(template);
+      closeTools();
+    },
+    [closeTools, props],
+  );
+
+  const runSearchWorkflow = useCallback(() => {
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery.length === 0) {
+      return;
+    }
+    props.onStartSearchWorkflow(trimmedQuery);
+    setSearchQuery("");
+    closeTools();
+  }, [closeTools, props, searchQuery]);
 
   return (
-    <Collapsible.Root
-      className="w-full"
-      open={isExpanded}
+    <Popover.Root
+      modal={false}
+      open={isOpen}
       onOpenChange={(nextOpen) => {
-        setIsExpanded(nextOpen);
+        setIsOpen(nextOpen);
       }}
     >
       <div className="flex items-center justify-end">
-        <Collapsible.Trigger
-          aria-expanded={isExpanded}
+        <Popover.Trigger
+          aria-expanded={isOpen}
           className={cn(
             workbookButtonClass({ size: "sm", tone: "neutral", weight: "strong" }),
             "min-w-[5rem] gap-1.5",
@@ -152,186 +196,183 @@ export function WorkflowActionStrip(props: {
           <ChevronDown
             className={cn(
               "h-3.5 w-3.5 shrink-0 stroke-[1.75] transition-transform",
-              isExpanded && "rotate-180",
+              isOpen && "rotate-180",
             )}
           />
-        </Collapsible.Trigger>
+        </Popover.Trigger>
       </div>
-      <Collapsible.Panel keepMounted>
-        <div
-          className={cn(agentPanelToolsPanelClass(), !isExpanded && "hidden")}
-          hidden={!isExpanded}
-        >
-          <div className={agentPanelSectionHeaderClass()}>
-            <div className="min-w-0">
-              <div className={agentPanelSectionTitleClass()}>Assistant tools</div>
-              <div className={agentPanelSectionHintClass()}>Run a structured helper</div>
-            </div>
-          </div>
-          <div className="mt-2 grid gap-2">
-            <div className={agentPanelActionGridClass()}>
-              {WORKFLOW_ACTIONS.map((action) => (
-                <button
-                  key={action.template}
-                  className={compactButtonClass}
-                  data-testid={`workbook-agent-workflow-start-${action.template}`}
-                  disabled={props.disabled || props.isStartingWorkflow}
-                  type="button"
-                  onClick={() => {
-                    props.onStartWorkflow(action.template);
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : action.label}
-                </button>
-              ))}
-            </div>
-            <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
-              <div className={agentPanelSectionTitleClass()}>Structure</div>
-              <input
-                className={agentPanelFieldClass()}
-                data-testid="workbook-agent-structural-sheet-name-input"
-                disabled={props.disabled || props.isStartingWorkflow}
-                placeholder="Sheet name"
-                type="text"
-                value={sheetName}
-                onChange={(event) => {
-                  setSheetName(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    sheetName.trim().length > 0 &&
-                    !(props.disabled || props.isStartingWorkflow)
-                  ) {
-                    event.preventDefault();
-                    props.onStartNamedWorkflow("createSheet", sheetName.trim());
-                    setSheetName("");
-                  }
-                }}
-              />
-              <div className={agentPanelActionGridClass()}>
-                <button
-                  className={primaryCompactButtonClass}
-                  data-testid="workbook-agent-workflow-start-createSheet"
-                  disabled={
-                    props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0
-                  }
-                  type="button"
-                  onClick={() => {
-                    props.onStartNamedWorkflow("createSheet", sheetName.trim());
-                    setSheetName("");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Create sheet"}
-                </button>
-                <button
-                  className={compactButtonClass}
-                  data-testid="workbook-agent-workflow-start-renameCurrentSheet"
-                  disabled={
-                    props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0
-                  }
-                  type="button"
-                  onClick={() => {
-                    props.onStartNamedWorkflow("renameCurrentSheet", sheetName.trim());
-                    setSheetName("");
-                  }}
-                >
-                  Rename current
-                </button>
-              </div>
-              <div className={agentPanelActionGridClass()}>
-                <button
-                  className={compactButtonClass}
-                  data-testid="workbook-agent-workflow-start-hideCurrentRow"
-                  disabled={props.disabled || props.isStartingWorkflow}
-                  type="button"
-                  onClick={() => {
-                    props.onStartStructuralWorkflow("hideCurrentRow");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Hide current row"}
-                </button>
-                <button
-                  className={compactButtonClass}
-                  data-testid="workbook-agent-workflow-start-hideCurrentColumn"
-                  disabled={props.disabled || props.isStartingWorkflow}
-                  type="button"
-                  onClick={() => {
-                    props.onStartStructuralWorkflow("hideCurrentColumn");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
-                </button>
-              </div>
-              <div className={agentPanelActionGridClass()}>
-                <button
-                  className={compactButtonClass}
-                  data-testid="workbook-agent-workflow-start-unhideCurrentRow"
-                  disabled={props.disabled || props.isStartingWorkflow}
-                  type="button"
-                  onClick={() => {
-                    props.onStartStructuralWorkflow("unhideCurrentRow");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Unhide current row"}
-                </button>
-                <button
-                  className={compactButtonClass}
-                  data-testid="workbook-agent-workflow-start-unhideCurrentColumn"
-                  disabled={props.disabled || props.isStartingWorkflow}
-                  type="button"
-                  onClick={() => {
-                    props.onStartStructuralWorkflow("unhideCurrentColumn");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Unhide current column"}
-                </button>
+      <Popover.Portal keepMounted>
+        <Popover.Positioner align="end" className="z-[1000]" side="top" sideOffset={8}>
+          <Popover.Popup
+            aria-label="Assistant tools"
+            className={cn(agentPanelToolsPanelClass(), "mt-0 w-[22rem] max-w-[calc(100vw-2rem)]")}
+          >
+            <div className={agentPanelSectionHeaderClass()}>
+              <div className="min-w-0">
+                <div className={agentPanelSectionTitleClass()}>Assistant tools</div>
+                <div className={agentPanelSectionHintClass()}>Run a structured helper</div>
               </div>
             </div>
-            <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
-              <div className={agentPanelSectionTitleClass()}>Search workbook</div>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <div className="mt-2 grid gap-2">
+              <div className={agentPanelActionGridClass()}>
+                {WORKFLOW_ACTIONS.map((action) => (
+                  <button
+                    key={action.template}
+                    className={compactButtonClass}
+                    data-testid={`workbook-agent-workflow-start-${action.template}`}
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    type="button"
+                    onClick={() => {
+                      runWorkflow(action.template);
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : action.label}
+                  </button>
+                ))}
+              </div>
+              <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
+                <div className={agentPanelSectionTitleClass()}>Structure</div>
                 <input
                   className={agentPanelFieldClass()}
-                  data-testid="workbook-agent-workflow-search-input"
+                  data-testid="workbook-agent-structural-sheet-name-input"
                   disabled={props.disabled || props.isStartingWorkflow}
-                  placeholder="Search for a concept, value, or formula"
+                  placeholder="Sheet name"
                   type="text"
-                  value={searchQuery}
+                  value={sheetName}
                   onChange={(event) => {
-                    setSearchQuery(event.target.value);
+                    setSheetName(event.target.value);
                   }}
                   onKeyDown={(event) => {
                     if (
                       event.key === "Enter" &&
-                      searchQuery.trim().length > 0 &&
+                      sheetName.trim().length > 0 &&
                       !(props.disabled || props.isStartingWorkflow)
                     ) {
                       event.preventDefault();
-                      props.onStartSearchWorkflow(searchQuery.trim());
-                      setSearchQuery("");
+                      runNamedWorkflow("createSheet");
                     }
                   }}
                 />
-                <button
-                  className={cn(primaryCompactButtonClass, "min-w-[5rem]")}
-                  data-testid="workbook-agent-workflow-start-searchWorkbookQuery"
-                  disabled={
-                    props.disabled || props.isStartingWorkflow || searchQuery.trim().length === 0
-                  }
-                  type="button"
-                  onClick={() => {
-                    props.onStartSearchWorkflow(searchQuery.trim());
-                    setSearchQuery("");
-                  }}
-                >
-                  {props.isStartingWorkflow ? "Starting…" : "Search"}
-                </button>
+                <div className={agentPanelActionGridClass()}>
+                  <button
+                    className={primaryCompactButtonClass}
+                    data-testid="workbook-agent-workflow-start-createSheet"
+                    disabled={
+                      props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0
+                    }
+                    type="button"
+                    onClick={() => {
+                      runNamedWorkflow("createSheet");
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Create sheet"}
+                  </button>
+                  <button
+                    className={compactButtonClass}
+                    data-testid="workbook-agent-workflow-start-renameCurrentSheet"
+                    disabled={
+                      props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0
+                    }
+                    type="button"
+                    onClick={() => {
+                      runNamedWorkflow("renameCurrentSheet");
+                    }}
+                  >
+                    Rename current
+                  </button>
+                </div>
+                <div className={agentPanelActionGridClass()}>
+                  <button
+                    className={compactButtonClass}
+                    data-testid="workbook-agent-workflow-start-hideCurrentRow"
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    type="button"
+                    onClick={() => {
+                      runStructuralWorkflow("hideCurrentRow");
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Hide current row"}
+                  </button>
+                  <button
+                    className={compactButtonClass}
+                    data-testid="workbook-agent-workflow-start-hideCurrentColumn"
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    type="button"
+                    onClick={() => {
+                      runStructuralWorkflow("hideCurrentColumn");
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
+                  </button>
+                </div>
+                <div className={agentPanelActionGridClass()}>
+                  <button
+                    className={compactButtonClass}
+                    data-testid="workbook-agent-workflow-start-unhideCurrentRow"
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    type="button"
+                    onClick={() => {
+                      runStructuralWorkflow("unhideCurrentRow");
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Unhide current row"}
+                  </button>
+                  <button
+                    className={compactButtonClass}
+                    data-testid="workbook-agent-workflow-start-unhideCurrentColumn"
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    type="button"
+                    onClick={() => {
+                      runStructuralWorkflow("unhideCurrentColumn");
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Unhide current column"}
+                  </button>
+                </div>
+              </div>
+              <div className={cn(agentPanelSectionClass(), "grid gap-2")}>
+                <div className={agentPanelSectionTitleClass()}>Search workbook</div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                  <input
+                    className={agentPanelFieldClass()}
+                    data-testid="workbook-agent-workflow-search-input"
+                    disabled={props.disabled || props.isStartingWorkflow}
+                    placeholder="Search for a concept, value, or formula"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => {
+                      setSearchQuery(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        searchQuery.trim().length > 0 &&
+                        !(props.disabled || props.isStartingWorkflow)
+                      ) {
+                        event.preventDefault();
+                        runSearchWorkflow();
+                      }
+                    }}
+                  />
+                  <button
+                    className={cn(primaryCompactButtonClass, "min-w-[5rem]")}
+                    data-testid="workbook-agent-workflow-start-searchWorkbookQuery"
+                    disabled={
+                      props.disabled || props.isStartingWorkflow || searchQuery.trim().length === 0
+                    }
+                    type="button"
+                    onClick={() => {
+                      runSearchWorkflow();
+                    }}
+                  >
+                    {props.isStartingWorkflow ? "Starting…" : "Search"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </Collapsible.Panel>
-    </Collapsible.Root>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

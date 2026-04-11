@@ -16,6 +16,18 @@ describe("WorkflowActionStrip", () => {
     document.body.innerHTML = "";
   });
 
+  async function openToolsMenu(host: HTMLElement): Promise<void> {
+    const toggle = host.querySelector("[data-testid='workbook-agent-workflow-toggle']");
+    expect(toggle instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(toggle instanceof HTMLButtonElement)) {
+        throw new Error("Tools toggle not found");
+      }
+      toggle.click();
+    });
+  }
+
   it("starts create-sheet workflows with the provided sheet name", async () => {
     const onStartNamedWorkflow = vi.fn();
     const host = document.createElement("div");
@@ -35,8 +47,14 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const input = host.querySelector("[data-testid='workbook-agent-structural-sheet-name-input']");
-    const button = host.querySelector("[data-testid='workbook-agent-workflow-start-createSheet']");
+    await openToolsMenu(host);
+
+    const input = document.querySelector(
+      "[data-testid='workbook-agent-structural-sheet-name-input']",
+    );
+    const button = document.querySelector(
+      "[data-testid='workbook-agent-workflow-start-createSheet']",
+    );
     expect(input instanceof HTMLInputElement).toBe(true);
     expect(button instanceof HTMLButtonElement).toBe(true);
 
@@ -80,7 +98,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-hideCurrentRow']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -118,7 +138,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-unhideCurrentColumn']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -156,7 +178,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-highlightFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -194,7 +218,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-repairFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -232,7 +258,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-highlightCurrentSheetOutliers']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -270,7 +298,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetHeaders']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -308,7 +338,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetNumberFormats']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -346,7 +378,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetWhitespace']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -384,7 +418,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    await openToolsMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-fillCurrentSheetFormulasDown']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -422,7 +458,7 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-styleCurrentSheetHeaders']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -460,7 +496,7 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-createCurrentSheetReviewTab']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -498,7 +534,7 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector(
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-createCurrentSheetRollup']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);

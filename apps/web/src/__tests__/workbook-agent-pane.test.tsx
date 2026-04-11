@@ -270,6 +270,18 @@ function AgentHarness(props: {
   );
 }
 
+async function openWorkflowMenu(host: HTMLElement): Promise<void> {
+  const toggle = host.querySelector("[data-testid='workbook-agent-workflow-toggle']");
+  expect(toggle instanceof HTMLButtonElement).toBe(true);
+
+  await act(async () => {
+    if (!(toggle instanceof HTMLButtonElement)) {
+      throw new Error("Workflow menu toggle not found");
+    }
+    toggle.click();
+  });
+}
+
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   window.sessionStorage.clear();
@@ -651,7 +663,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-findFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -784,7 +798,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-highlightFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -896,7 +912,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-repairFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1009,7 +1027,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetHeaders']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1125,7 +1145,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetNumberFormats']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1241,7 +1263,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetWhitespace']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1357,7 +1381,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-fillCurrentSheetFormulasDown']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1473,7 +1499,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-styleCurrentSheetHeaders']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1589,7 +1617,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-createCurrentSheetReviewTab']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1705,7 +1735,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-createCurrentSheetRollup']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1827,7 +1859,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-highlightCurrentSheetOutliers']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -1956,7 +1990,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    const button = document.querySelector(
       "[data-testid='workbook-agent-cancel-workflow-wf-running-1']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -2077,7 +2111,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-traceSelectionDependencies']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -2188,7 +2224,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-summarizeCurrentSheet']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -2305,7 +2343,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-explainSelectionCell']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
@@ -2415,8 +2455,10 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const input = host.querySelector("[data-testid='workbook-agent-workflow-search-input']");
-    const button = host.querySelector(
+    await openWorkflowMenu(host);
+
+    const input = document.querySelector("[data-testid='workbook-agent-workflow-search-input']");
+    const button = document.querySelector(
       "[data-testid='workbook-agent-workflow-start-searchWorkbookQuery']",
     );
     expect(input instanceof HTMLInputElement).toBe(true);
