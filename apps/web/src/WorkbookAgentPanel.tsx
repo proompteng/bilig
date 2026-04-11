@@ -29,6 +29,14 @@ import {
   workbookPillClass,
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
+import {
+  agentPanelComposerFrameClass,
+  agentPanelComposerSendButtonClass,
+  agentPanelComposerTextareaClass,
+  agentPanelInlineButtonClass,
+  agentPanelSegmentedButtonClass,
+  agentPanelSegmentedGroupClass,
+} from "./workbook-agent-panel-primitives.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
 import {
@@ -139,21 +147,14 @@ function ThreadComposerControls(props: {
 }) {
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1">
+      <div className={agentPanelSegmentedGroupClass()}>
         {(["private", "shared"] as const).map((scope) => {
           const isActive = props.threadScope === scope;
           return (
             <button
               key={scope}
               aria-pressed={isActive}
-              className={cn(
-                workbookButtonClass({
-                  size: "sm",
-                  tone: isActive ? "accent" : "neutral",
-                  weight: isActive ? "strong" : "regular",
-                }),
-                "px-2.5",
-              )}
+              className={agentPanelSegmentedButtonClass({ active: isActive })}
               data-testid={`workbook-agent-scope-${scope}`}
               type="button"
               onClick={() => {
@@ -166,7 +167,7 @@ function ThreadComposerControls(props: {
         })}
       </div>
       <button
-        className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "strong" })}
+        className={agentPanelInlineButtonClass()}
         data-testid="workbook-agent-new-thread"
         type="button"
         onClick={props.onStartNewThread}
@@ -964,10 +965,10 @@ export function WorkbookAgentPanel(props: {
           <label className="sr-only" htmlFor="workbook-agent-input">
             Ask the workbook assistant
           </label>
-          <div className="relative">
+          <div className={agentPanelComposerFrameClass()}>
             <textarea
               id="workbook-agent-input"
-              className="min-h-24 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+              className={agentPanelComposerTextareaClass()}
               data-testid="workbook-agent-input"
               placeholder="Ask the workbook assistant"
               value={props.draft}
@@ -987,7 +988,7 @@ export function WorkbookAgentPanel(props: {
             />
             <button
               aria-label={isRunning ? "Stop" : "Send message"}
-              className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-muted)] disabled:text-[var(--wb-text-subtle)] disabled:opacity-70 disabled:shadow-none"
+              className={agentPanelComposerSendButtonClass()}
               data-testid="workbook-agent-send"
               disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
               type="button"
