@@ -105,7 +105,7 @@ This is the scorecard that should drive engineering priority.
 
 | Axis | Metric | Current `bilig` evidence | Current HyperFormula evidence | Current position | Next proof needed |
 | --- | --- | --- | --- | --- | --- |
-| Surface parity | Public method inventory | `132/132` method names present on `HeadlessWorkbook` / `WorkPaper` | local checkout baseline | parity | keep the snapshot artifact green |
+| Surface parity | Public method inventory | `132/132` method names present on `WorkPaper` | local checkout baseline | parity | keep the snapshot artifact green |
 | Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity | keep the snapshot artifact green |
 | Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | keep the generated dominance snapshot current |
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
@@ -442,7 +442,7 @@ Build and load path:
 - `packages/core/src/engine.ts`
 - `packages/formula/src/parser.ts`
 - `packages/formula/src/compiler.ts`
-- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/work-paper-runtime.ts`
 
 Single-edit and batch recalculation:
 
@@ -468,7 +468,7 @@ Spill, arrays, and structured references:
 
 Serialization, export, and public boundary cost:
 
-- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/work-paper-runtime.ts`
 - `packages/headless/src/types.ts`
 - `packages/core/src/engine/services/event-service.ts`
 - `packages/core/src/engine/services/history-service.ts`
@@ -650,7 +650,7 @@ Goal:
 Required work:
 
 - measure internal compute vs external change serialization separately
-- optimize `HeadlessChange[]` construction order and allocation behavior
+- optimize `WorkPaperChange[]` construction order and allocation behavior
 - ensure adapters and public reads are detached without excessive copying
 - consider fast-path representations internally with stable public conversion at the boundary
 

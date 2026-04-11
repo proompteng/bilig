@@ -7,7 +7,6 @@ Date: `2026-04-10`
 ## Status
 
 This document is the canonical design for the headless spreadsheet layer in `bilig`.
-It supersedes `docs/hyperformula-headless-api-design.md`.
 
 The follow-on engine program for actually beating HyperFormula on runtime work is tracked in:
 
@@ -16,8 +15,6 @@ The follow-on engine program for actually beating HyperFormula on runtime work i
 The top-level public interface is:
 
 - `WorkPaper` from `@bilig/headless`
-
-`HeadlessWorkbook` remains exported as a compatibility alias for existing callers, but it is no longer the primary design name.
 
 ## Source Corpus
 
@@ -45,7 +42,7 @@ Reviewed HyperFormula checkout:
 
 Reviewed `bilig` surfaces:
 
-- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/work-paper-runtime.ts`
 - `packages/headless/src/types.ts`
 - `packages/headless/src/work-paper.ts`
 - `packages/core/src/engine.ts`
@@ -92,9 +89,9 @@ The current `bilig` headless class already matches HyperFormula much more closel
 
 Measured from the local source trees:
 
-- public class method inventory: `132 / 132` HyperFormula method names are present on `HeadlessWorkbook`
+- public class method inventory: `132 / 132` HyperFormula method names are present on `WorkPaper`
 - additional `bilig` method beyond HyperFormula: `dispose`
-- config inventory: `38 / 38` HyperFormula config keys are present on `HeadlessConfig`
+- config inventory: `38 / 38` HyperFormula config keys are present on `WorkPaperConfig`
 
 That means the remaining design gap is not the absence of a headless API. The gap is:
 
@@ -149,7 +146,7 @@ Rules:
 
 As of this revision, the following are already proved in-repo:
 
-- `WorkPaper` is the canonical public API and `HeadlessWorkbook` remains a compatibility alias
+- `WorkPaper` is the canonical public API
 - HyperFormula public method/category and config-key parity by surface name is checked against the local checkout snapshot
 - external consumers can install the runtime tarballs into clean Node and Vite projects without monorepo context
 - the runtime package workflow verifies publishability, smoke installs, parity tests, and benchmark-baseline shape
@@ -179,18 +176,6 @@ Canonical public import:
 import { WorkPaper } from "@bilig/headless";
 ```
 
-Compatibility import retained:
-
-```ts
-import { HeadlessWorkbook } from "@bilig/headless";
-```
-
-Compatibility rule:
-
-- `WorkPaper` and `HeadlessWorkbook` refer to the same runtime class in v1
-- new documentation, examples, and integration guidance use `WorkPaper`
-- `HeadlessWorkbook` stays supported until a future major version removes or de-emphasizes it
-
 Primary branded types:
 
 - `WorkPaperConfig`
@@ -211,7 +196,7 @@ Primary branded types:
 
 | Area                             | HyperFormula signal from checkout | WorkPaper target                                                  | Current `bilig` position            |
 | -------------------------------- | --------------------------------- | ----------------------------------------------------------------- | ----------------------------------- |
-| Headless factories               | README, `HyperFormula.ts`         | `WorkPaper.buildEmpty/buildFromArray/buildFromSheets`             | implemented                         |
+| WorkPaper factories              | README, `HyperFormula.ts`         | `WorkPaper.buildEmpty/buildFromArray/buildFromSheets`             | implemented                         |
 | Reads and writes                 | basic operations guide            | full workbook CRUD surface                                        | implemented                         |
 | Clipboard                        | clipboard guide                   | copy, cut, paste, fill-range helpers                              | implemented                         |
 | Undo/redo                        | undo-redo guide                   | history with explicit clear/reset helpers                         | implemented                         |
@@ -241,7 +226,7 @@ Layers:
 3. `@bilig/core`
    - authoritative `SpreadsheetEngine`, dependency graph, history, spill behavior, tables
 4. `@bilig/headless`
-   - `WorkPaper` API, compatibility aliases, event model, adapters, npm-facing contract
+   - `WorkPaper` API, event model, adapters, npm-facing contract
 
 This keeps engine semantics in one place and avoids a second spreadsheet runtime that can drift.
 
@@ -287,7 +272,7 @@ HyperFormula documents batching, evaluation suspension, address mapping policy, 
 
 Performance requirements:
 
-- no regression relative to current `HeadlessWorkbook` behavior on read, write, batch, and rebuild paths
+- no regression relative to current `WorkPaper` behavior on read, write, batch, and rebuild paths
 - benchmark suites for:
   - workbook build from sheets
   - single-cell write with recalculation
@@ -403,7 +388,7 @@ Deferred-feature exit criteria:
 ### Phase 1: Contract stabilization
 
 - make `WorkPaper` the canonical public entrypoint
-- retain `HeadlessWorkbook` as a compatibility alias
+- keep the public runtime surface single-named as `WorkPaper`
 - publish WorkPaper-branded type aliases for external consumers
 - update package docs and public API docs to center `WorkPaper`
 
@@ -437,7 +422,7 @@ This design is not speculative. The repo work paired with it does the following:
 - adds a CI-safe parity test against that generated snapshot
 - adds a WorkPaper benchmark suite and repo command
 - adds a WorkPaper-vs-HyperFormula benchmark suite and checked-in artifact
-- keeps `HeadlessWorkbook` working for compatibility
+- keeps `WorkPaper` as the only top-level runtime name
 
 ## Acceptance Criteria
 

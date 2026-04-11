@@ -1,17 +1,17 @@
-import type { HeadlessChange } from "./types.js";
+import type { WorkPaperChange } from "./work-paper-types.js";
 
 type SheetOrder = readonly { id: number; order: number }[];
 
-export function orderHeadlessCellChanges(
-  changes: HeadlessChange[],
+export function orderWorkPaperCellChanges(
+  changes: WorkPaperChange[],
   sheets: SheetOrder,
   explicitChangedCount?: number,
-): HeadlessChange[] {
+): WorkPaperChange[] {
   if (changes.length < 2) {
     return changes;
   }
 
-  const compare = compareHeadlessCellChanges(sheets);
+  const compare = compareWorkPaperCellChanges(sheets);
   const split =
     explicitChangedCount === undefined ? undefined : Math.min(explicitChangedCount, changes.length);
 
@@ -32,9 +32,9 @@ export function orderHeadlessCellChanges(
   return changes.toSorted(compare);
 }
 
-function compareHeadlessCellChanges(
+function compareWorkPaperCellChanges(
   sheets: SheetOrder,
-): (left: HeadlessChange, right: HeadlessChange) => number {
+): (left: WorkPaperChange, right: WorkPaperChange) => number {
   const orderBySheet = new Map(sheets.map((sheet) => [sheet.id, sheet.order]));
   return (left, right) => {
     if (left.kind !== "cell" || right.kind !== "cell") {
@@ -49,8 +49,8 @@ function compareHeadlessCellChanges(
 }
 
 function isSortedCellChangeSlice(
-  changes: readonly HeadlessChange[],
-  compare: (left: HeadlessChange, right: HeadlessChange) => number,
+  changes: readonly WorkPaperChange[],
+  compare: (left: WorkPaperChange, right: WorkPaperChange) => number,
   start: number,
   end: number,
 ): boolean {
@@ -63,11 +63,11 @@ function isSortedCellChangeSlice(
 }
 
 function mergeSortedCellChangeSlices(
-  changes: readonly HeadlessChange[],
-  compare: (left: HeadlessChange, right: HeadlessChange) => number,
+  changes: readonly WorkPaperChange[],
+  compare: (left: WorkPaperChange, right: WorkPaperChange) => number,
   split: number,
-): HeadlessChange[] {
-  const merged: HeadlessChange[] = [];
+): WorkPaperChange[] {
+  const merged: WorkPaperChange[] = [];
   let leftIndex = 0;
   let rightIndex = split;
   while (leftIndex < split && rightIndex < changes.length) {

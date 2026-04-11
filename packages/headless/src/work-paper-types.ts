@@ -3,60 +3,60 @@ import type { EvaluationResult } from "@bilig/formula";
 
 export type RawCellContent = LiteralInput | string;
 
-export type HeadlessSheet = readonly (readonly RawCellContent[])[];
-export type HeadlessSheets = Record<string, HeadlessSheet>;
+export type WorkPaperSheet = readonly (readonly RawCellContent[])[];
+export type WorkPaperSheets = Record<string, WorkPaperSheet>;
 
-export interface HeadlessCellAddress {
+export interface WorkPaperCellAddress {
   sheet: number;
   col: number;
   row: number;
 }
 
-export interface HeadlessCellRange {
-  start: HeadlessCellAddress;
-  end: HeadlessCellAddress;
+export interface WorkPaperCellRange {
+  start: WorkPaperCellAddress;
+  end: WorkPaperCellAddress;
 }
 
-export interface HeadlessAddressFormatOptions {
+export interface WorkPaperAddressFormatOptions {
   includeSheetName?: boolean;
 }
 
-export type HeadlessAddressLike = HeadlessCellAddress | HeadlessCellRange;
-export type HeadlessAxisInterval = readonly [start: number, count?: number];
-export type HeadlessAxisSwapMapping = readonly [from: number, to: number];
+export type WorkPaperAddressLike = WorkPaperCellAddress | WorkPaperCellRange;
+export type WorkPaperAxisInterval = readonly [start: number, count?: number];
+export type WorkPaperAxisSwapMapping = readonly [from: number, to: number];
 
-export interface HeadlessSheetDimensions {
+export interface WorkPaperSheetDimensions {
   width: number;
   height: number;
 }
 
-export type HeadlessChange = HeadlessCellChange | HeadlessNamedExpressionChange;
+export type WorkPaperChange = WorkPaperCellChange | WorkPaperNamedExpressionChange;
 
-export interface HeadlessCellChange {
+export interface WorkPaperCellChange {
   kind: "cell";
-  address: HeadlessCellAddress;
+  address: WorkPaperCellAddress;
   sheetName: string;
   a1: string;
   newValue: CellValue;
 }
 
-export interface HeadlessNamedExpressionChange {
+export interface WorkPaperNamedExpressionChange {
   kind: "named-expression";
   name: string;
   scope?: number;
   newValue: CellValue | CellValue[][];
 }
 
-export interface HeadlessNamedExpression {
+export interface WorkPaperNamedExpression {
   name: string;
   expression: RawCellContent;
   scope?: number;
   options?: Record<string, string | number | boolean>;
 }
 
-export interface SerializedHeadlessNamedExpression extends HeadlessNamedExpression {}
+export interface SerializedWorkPaperNamedExpression extends WorkPaperNamedExpression {}
 
-export type HeadlessFunctionArgumentType =
+export type WorkPaperFunctionArgumentType =
   | "STRING"
   | "NUMBER"
   | "BOOLEAN"
@@ -67,8 +67,8 @@ export type HeadlessFunctionArgumentType =
   | "COMPLEX"
   | "ANY";
 
-export interface HeadlessFunctionArgument {
-  argumentType: HeadlessFunctionArgumentType;
+export interface WorkPaperFunctionArgument {
+  argumentType: WorkPaperFunctionArgumentType;
   passSubtype?: boolean;
   defaultValue?: unknown;
   optionalArg?: boolean;
@@ -78,9 +78,9 @@ export interface HeadlessFunctionArgument {
   greaterThan?: number;
 }
 
-export interface HeadlessFunctionMetadata {
+export interface WorkPaperFunctionMetadata {
   method: string;
-  parameters?: HeadlessFunctionArgument[];
+  parameters?: WorkPaperFunctionArgument[];
   repeatLastArgs?: number;
   expandRanges?: boolean;
   returnNumberType?: string;
@@ -92,28 +92,28 @@ export interface HeadlessFunctionMetadata {
   vectorizationForbidden?: boolean;
 }
 
-export interface HeadlessFunctionPlugin {
-  implementedFunctions: Record<string, HeadlessFunctionMetadata>;
+export interface WorkPaperFunctionPlugin {
+  implementedFunctions: Record<string, WorkPaperFunctionMetadata>;
   aliases?: Record<string, string>;
 }
 
-export interface HeadlessFunctionPluginDefinition extends HeadlessFunctionPlugin {
+export interface WorkPaperFunctionPluginDefinition extends WorkPaperFunctionPlugin {
   id: string;
   functions?: Record<string, (...args: CellValue[]) => EvaluationResult | CellValue>;
 }
 
-export type HeadlessFunctionTranslationsPackage = Record<string, Record<string, string>>;
+export type WorkPaperFunctionTranslationsPackage = Record<string, Record<string, string>>;
 
-export interface HeadlessLanguagePackage {
+export interface WorkPaperLanguagePackage {
   readonly functions?: Record<string, string>;
   readonly errors?: Record<string, string>;
   readonly ui?: Record<string, string>;
   readonly [key: string]: unknown;
 }
 
-export type HeadlessLicenseKeyValidityState = "valid" | "invalid" | "expired" | "missing";
+export type WorkPaperLicenseKeyValidityState = "valid" | "invalid" | "expired" | "missing";
 
-export interface HeadlessConfig {
+export interface WorkPaperConfig {
   accentSensitive?: boolean;
   caseSensitive?: boolean;
   caseFirst?: "upper" | "lower" | "false";
@@ -124,7 +124,7 @@ export interface HeadlessConfig {
   functionArgSeparator?: string;
   decimalSeparator?: "." | ",";
   evaluateNullToZero?: boolean;
-  functionPlugins?: HeadlessFunctionPluginDefinition[];
+  functionPlugins?: WorkPaperFunctionPluginDefinition[];
   ignorePunctuation?: boolean;
   language?: string;
   ignoreWhiteSpace?: "standard" | "any";
@@ -154,48 +154,48 @@ export interface HeadlessConfig {
   useWildcards?: boolean;
 }
 
-export interface HeadlessWorkbookDetailedEventMap {
+export interface WorkPaperDetailedEventMap {
   sheetAdded: { sheetId: number; sheetName: string };
-  sheetRemoved: { sheetId: number; sheetName: string; changes: HeadlessChange[] };
+  sheetRemoved: { sheetId: number; sheetName: string; changes: WorkPaperChange[] };
   sheetRenamed: { sheetId: number; oldName: string; newName: string };
-  namedExpressionAdded: { name: string; scope?: number; changes: HeadlessChange[] };
-  namedExpressionRemoved: { name: string; scope?: number; changes: HeadlessChange[] };
-  valuesUpdated: { changes: HeadlessChange[] };
+  namedExpressionAdded: { name: string; scope?: number; changes: WorkPaperChange[] };
+  namedExpressionRemoved: { name: string; scope?: number; changes: WorkPaperChange[] };
+  valuesUpdated: { changes: WorkPaperChange[] };
   evaluationSuspended: {};
-  evaluationResumed: { changes: HeadlessChange[] };
+  evaluationResumed: { changes: WorkPaperChange[] };
 }
 
-export interface HeadlessWorkbookEventMap {
+export interface WorkPaperEventMap {
   sheetAdded: [sheetName: string];
-  sheetRemoved: [sheetName: string, changes: HeadlessChange[]];
+  sheetRemoved: [sheetName: string, changes: WorkPaperChange[]];
   sheetRenamed: [oldName: string, newName: string];
-  namedExpressionAdded: [name: string, changes: HeadlessChange[]];
-  namedExpressionRemoved: [name: string, changes: HeadlessChange[]];
-  valuesUpdated: [changes: HeadlessChange[]];
+  namedExpressionAdded: [name: string, changes: WorkPaperChange[]];
+  namedExpressionRemoved: [name: string, changes: WorkPaperChange[]];
+  valuesUpdated: [changes: WorkPaperChange[]];
   evaluationSuspended: [];
-  evaluationResumed: [changes: HeadlessChange[]];
+  evaluationResumed: [changes: WorkPaperChange[]];
 }
 
-export type HeadlessWorkbookEventName = keyof HeadlessWorkbookEventMap;
+export type WorkPaperEventName = keyof WorkPaperEventMap;
 
-export type HeadlessWorkbookListener<EventName extends HeadlessWorkbookEventName> = (
-  ...args: HeadlessWorkbookEventMap[EventName]
+export type WorkPaperListener<EventName extends WorkPaperEventName> = (
+  ...args: WorkPaperEventMap[EventName]
 ) => void;
 
-export type HeadlessWorkbookDetailedListener<EventName extends HeadlessWorkbookEventName> = (
-  payload: HeadlessWorkbookDetailedEventMap[EventName],
+export type WorkPaperDetailedListener<EventName extends WorkPaperEventName> = (
+  payload: WorkPaperDetailedEventMap[EventName],
 ) => void;
 
-export type HeadlessCellType = "EMPTY" | "VALUE" | "FORMULA" | "ARRAY";
-export type HeadlessCellValueType = "EMPTY" | "NUMBER" | "STRING" | "BOOLEAN" | "ERROR";
-export type HeadlessCellValueDetailedType = HeadlessCellValueType | "DATE" | "TIME" | "DATETIME";
+export type WorkPaperCellType = "EMPTY" | "VALUE" | "FORMULA" | "ARRAY";
+export type WorkPaperCellValueType = "EMPTY" | "NUMBER" | "STRING" | "BOOLEAN" | "ERROR";
+export type WorkPaperCellValueDetailedType = WorkPaperCellValueType | "DATE" | "TIME" | "DATETIME";
 
-export type HeadlessDependencyRef =
-  | { kind: "cell"; address: HeadlessCellAddress }
-  | { kind: "range"; range: HeadlessCellRange }
+export type WorkPaperDependencyRef =
+  | { kind: "cell"; address: WorkPaperCellAddress }
+  | { kind: "range"; range: WorkPaperCellRange }
   | { kind: "name"; name: string };
 
-export interface HeadlessDateTime {
+export interface WorkPaperDateTime {
   year: number;
   month: number;
   day: number;
@@ -204,72 +204,72 @@ export interface HeadlessDateTime {
   seconds: number;
 }
 
-export interface HeadlessStats {
+export interface WorkPaperStats {
   batchDepth: number;
   evaluationSuspended: boolean;
   lastMetrics: RecalcMetrics;
 }
 
-export interface HeadlessGraphAdapter {
-  getDependents(reference: HeadlessAddressLike): HeadlessDependencyRef[];
-  getPrecedents(reference: HeadlessAddressLike): HeadlessDependencyRef[];
+export interface WorkPaperGraphAdapter {
+  getDependents(reference: WorkPaperAddressLike): WorkPaperDependencyRef[];
+  getPrecedents(reference: WorkPaperAddressLike): WorkPaperDependencyRef[];
 }
 
-export interface HeadlessRangeMappingAdapter {
-  getValues(range: HeadlessCellRange): CellValue[][];
-  getSerialized(range: HeadlessCellRange): RawCellContent[][];
+export interface WorkPaperRangeMappingAdapter {
+  getValues(range: WorkPaperCellRange): CellValue[][];
+  getSerialized(range: WorkPaperCellRange): RawCellContent[][];
 }
 
-export interface HeadlessArrayMappingAdapter {
-  isPartOfArray(address: HeadlessCellAddress): boolean;
-  getFormula(address: HeadlessCellAddress): string | undefined;
+export interface WorkPaperArrayMappingAdapter {
+  isPartOfArray(address: WorkPaperCellAddress): boolean;
+  getFormula(address: WorkPaperCellAddress): string | undefined;
 }
 
-export interface HeadlessSheetMappingAdapter {
+export interface WorkPaperSheetMappingAdapter {
   getSheetName(sheetId: number): string | undefined;
   getSheetId(name: string): number | undefined;
   getSheetNames(): string[];
   countSheets(): number;
 }
 
-export interface HeadlessAddressMappingAdapter {
-  has(address: HeadlessCellAddress): boolean;
-  getValue(address: HeadlessCellAddress): CellValue;
-  getFormula(address: HeadlessCellAddress): string | undefined;
+export interface WorkPaperAddressMappingAdapter {
+  has(address: WorkPaperCellAddress): boolean;
+  getValue(address: WorkPaperCellAddress): CellValue;
+  getFormula(address: WorkPaperCellAddress): string | undefined;
 }
 
-export interface HeadlessDependencyGraphAdapter {
-  getCellDependents(reference: HeadlessAddressLike): HeadlessDependencyRef[];
-  getCellPrecedents(reference: HeadlessAddressLike): HeadlessDependencyRef[];
+export interface WorkPaperDependencyGraphAdapter {
+  getCellDependents(reference: WorkPaperAddressLike): WorkPaperDependencyRef[];
+  getCellPrecedents(reference: WorkPaperAddressLike): WorkPaperDependencyRef[];
 }
 
-export interface HeadlessEvaluatorAdapter {
-  recalculate(): HeadlessChange[];
+export interface WorkPaperEvaluatorAdapter {
+  recalculate(): WorkPaperChange[];
   calculateFormula(formula: string, scope?: number): CellValue | CellValue[][];
 }
 
-export interface HeadlessColumnSearchAdapter {
+export interface WorkPaperColumnSearchAdapter {
   find(
     sheetId: number,
     column: number,
     matcher: string | ((value: CellValue) => boolean),
-  ): HeadlessCellAddress[];
+  ): WorkPaperCellAddress[];
 }
 
-export interface HeadlessLazilyTransformingAstServiceAdapter {
+export interface WorkPaperLazilyTransformingAstServiceAdapter {
   normalizeFormula(formula: string): string;
   validateFormula(formula: string): boolean;
   getNamedExpressionsFromFormula(formula: string): string[];
 }
 
-export interface HeadlessWorkbookInternals {
-  graph: HeadlessGraphAdapter;
-  rangeMapping: HeadlessRangeMappingAdapter;
-  arrayMapping: HeadlessArrayMappingAdapter;
-  sheetMapping: HeadlessSheetMappingAdapter;
-  addressMapping: HeadlessAddressMappingAdapter;
-  dependencyGraph: HeadlessDependencyGraphAdapter;
-  evaluator: HeadlessEvaluatorAdapter;
-  columnSearch: HeadlessColumnSearchAdapter;
-  lazilyTransformingAstService: HeadlessLazilyTransformingAstServiceAdapter;
+export interface WorkPaperInternals {
+  graph: WorkPaperGraphAdapter;
+  rangeMapping: WorkPaperRangeMappingAdapter;
+  arrayMapping: WorkPaperArrayMappingAdapter;
+  sheetMapping: WorkPaperSheetMappingAdapter;
+  addressMapping: WorkPaperAddressMappingAdapter;
+  dependencyGraph: WorkPaperDependencyGraphAdapter;
+  evaluator: WorkPaperEvaluatorAdapter;
+  columnSearch: WorkPaperColumnSearchAdapter;
+  lazilyTransformingAstService: WorkPaperLazilyTransformingAstServiceAdapter;
 }

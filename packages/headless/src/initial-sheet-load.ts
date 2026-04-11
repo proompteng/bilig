@@ -1,10 +1,10 @@
 import { loadLiteralSheetIntoEmptySheet, type SpreadsheetEngine } from "@bilig/core";
-import type { HeadlessSheet } from "./types.js";
+import type { WorkPaperSheet } from "./work-paper-types.js";
 
 export function tryLoadInitialLiteralSheet(
   engine: SpreadsheetEngine,
   sheetId: number,
-  content: HeadlessSheet,
+  content: WorkPaperSheet,
 ): boolean {
   if (sheetContainsFormulaContent(content)) {
     return false;
@@ -13,7 +13,7 @@ export function tryLoadInitialLiteralSheet(
   return true;
 }
 
-function sheetContainsFormulaContent(content: HeadlessSheet): boolean {
+function sheetContainsFormulaContent(content: WorkPaperSheet): boolean {
   return content.some((row) =>
     row.some((value) => typeof value === "string" && value.trim().startsWith("=")),
   );

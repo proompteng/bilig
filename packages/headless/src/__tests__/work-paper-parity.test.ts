@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 
 import {
-  HeadlessWorkbook,
   LanguageAlreadyRegisteredError,
   LanguageNotRegisteredError,
   NamedExpressionDoesNotExistError,
@@ -12,14 +11,15 @@ import {
   NoRelativeAddressesAllowedError,
   NotAFormulaError,
   NothingToPasteError,
-  type HeadlessCellAddress,
-  type HeadlessConfig,
-  type HeadlessFunctionPluginDefinition,
+  WorkPaper,
+  WorkPaperCellAddress,
+  WorkPaperConfig,
+  WorkPaperFunctionPluginDefinition,
 } from "../index.js";
 
 const TEST_LANGUAGE_CODE = "hf-parity";
 
-const CUSTOM_PLUGIN: HeadlessFunctionPluginDefinition = {
+const CUSTOM_PLUGIN: WorkPaperFunctionPluginDefinition = {
   id: "hf-parity-plugin",
   implementedFunctions: {
     DOUBLE: { method: "DOUBLE" },
@@ -34,7 +34,7 @@ const CUSTOM_PLUGIN: HeadlessFunctionPluginDefinition = {
   },
 };
 
-function createConfigFixture(): HeadlessConfig {
+function createConfigFixture(): WorkPaperConfig {
   return {
     accentSensitive: true,
     caseSensitive: true,
@@ -77,20 +77,20 @@ function createConfigFixture(): HeadlessConfig {
   };
 }
 
-function cell(sheet: number, row: number, col: number): HeadlessCellAddress {
+function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
   return { sheet, row, col };
 }
 
 afterEach(() => {
-  HeadlessWorkbook.unregisterAllFunctions();
-  if (HeadlessWorkbook.getRegisteredLanguagesCodes().includes(TEST_LANGUAGE_CODE)) {
-    HeadlessWorkbook.unregisterLanguage(TEST_LANGUAGE_CODE);
+  WorkPaper.unregisterAllFunctions();
+  if (WorkPaper.getRegisteredLanguagesCodes().includes(TEST_LANGUAGE_CODE)) {
+    WorkPaper.unregisterLanguage(TEST_LANGUAGE_CODE);
   }
 });
 
-describe("HeadlessWorkbook parity surface", () => {
+describe("WorkPaper parity surface", () => {
   it("covers static factories, config inventory, and registry APIs", () => {
-    expect(Object.keys(HeadlessWorkbook.defaultConfig).toSorted()).toEqual([
+    expect(Object.keys(WorkPaper.defaultConfig).toSorted()).toEqual([
       "accentSensitive",
       "arrayColumnSeparator",
       "arrayRowSeparator",
@@ -131,43 +131,41 @@ describe("HeadlessWorkbook parity surface", () => {
       "useWildcards",
     ]);
 
-    expect(HeadlessWorkbook.buildEmpty().getSheetNames()).toEqual([]);
-    expect(HeadlessWorkbook.buildFromArray([[1]]).getSheetNames()).toEqual(["Sheet1"]);
+    expect(WorkPaper.buildEmpty().getSheetNames()).toEqual([]);
+    expect(WorkPaper.buildFromArray([[1]]).getSheetNames()).toEqual(["Sheet1"]);
     expect(
-      HeadlessWorkbook.buildFromSheets({
+      WorkPaper.buildFromSheets({
         Alpha: [[1]],
         Beta: [[2]],
       }).getSheetNames(),
     ).toEqual(["Alpha", "Beta"]);
 
-    expect(() => HeadlessWorkbook.getLanguage(TEST_LANGUAGE_CODE)).toThrow(
-      LanguageNotRegisteredError,
-    );
+    expect(() => WorkPaper.getLanguage(TEST_LANGUAGE_CODE)).toThrow(LanguageNotRegisteredError);
 
-    HeadlessWorkbook.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
-    expect(HeadlessWorkbook.getRegisteredLanguagesCodes()).toContain(TEST_LANGUAGE_CODE);
-    expect(HeadlessWorkbook.getLanguage(TEST_LANGUAGE_CODE)).toEqual({ functions: {} });
-    expect(() => HeadlessWorkbook.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} })).toThrow(
+    WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
+    expect(WorkPaper.getRegisteredLanguagesCodes()).toContain(TEST_LANGUAGE_CODE);
+    expect(WorkPaper.getLanguage(TEST_LANGUAGE_CODE)).toEqual({ functions: {} });
+    expect(() => WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} })).toThrow(
       LanguageAlreadyRegisteredError,
     );
 
-    HeadlessWorkbook.registerFunctionPlugin(CUSTOM_PLUGIN, {
+    WorkPaper.registerFunctionPlugin(CUSTOM_PLUGIN, {
       [TEST_LANGUAGE_CODE]: { DOUBLE: "DUPLO" },
     });
 
-    expect(HeadlessWorkbook.getRegisteredFunctionNames(TEST_LANGUAGE_CODE)).toContain("DUPLO");
-    expect(HeadlessWorkbook.getFunctionPlugin("DOUBLE")?.id).toBe(CUSTOM_PLUGIN.id);
-    expect(HeadlessWorkbook.getAllFunctionPlugins().map((plugin) => plugin.id)).toContain(
+    expect(WorkPaper.getRegisteredFunctionNames(TEST_LANGUAGE_CODE)).toContain("DUPLO");
+    expect(WorkPaper.getFunctionPlugin("DOUBLE")?.id).toBe(CUSTOM_PLUGIN.id);
+    expect(WorkPaper.getAllFunctionPlugins().map((plugin) => plugin.id)).toContain(
       CUSTOM_PLUGIN.id,
     );
   });
 
   it("covers all config keys through build, clone, and update paths", () => {
-    HeadlessWorkbook.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
-    HeadlessWorkbook.registerFunctionPlugin(CUSTOM_PLUGIN);
+    WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
+    WorkPaper.registerFunctionPlugin(CUSTOM_PLUGIN);
 
     const config = createConfigFixture();
-    const workbook = HeadlessWorkbook.buildFromArray([[1]], config);
+    const workbook = WorkPaper.buildFromArray([[1]], config);
     const snapshot = workbook.getConfig();
 
     expect(snapshot).toMatchObject({
@@ -307,7 +305,7 @@ describe("HeadlessWorkbook parity surface", () => {
   });
 
   it("covers the read surface, formula helpers, and dependency helpers", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       Data: [[1, '=HYPERLINK("https://example.com","Docs")', "=A1+1"]],
       Calc: [[10]],
     });
@@ -404,7 +402,7 @@ describe("HeadlessWorkbook parity surface", () => {
   });
 
   it("covers mutations, preflights, history controls, clipboard, and fill helpers", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1, 2, "=A1+B1"]]);
+    const workbook = WorkPaper.buildFromArray([[1, 2, "=A1+B1"]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     expect(workbook.isItPossibleToSetCellContents(cell(sheetId, 1, 1), 5)).toBe(true);
@@ -432,7 +430,7 @@ describe("HeadlessWorkbook parity surface", () => {
     workbook.setRowOrder(sheetId, [0, 1, 2]);
     workbook.setColumnOrder(sheetId, [0, 1, 2]);
 
-    const fillWorkbook = HeadlessWorkbook.buildFromArray([[1, 2, "=A1+B1"]]);
+    const fillWorkbook = WorkPaper.buildFromArray([[1, 2, "=A1+B1"]]);
     const fillSheetId = fillWorkbook.getSheetId("Sheet1")!;
     const copied = fillWorkbook.copy({
       start: cell(fillSheetId, 0, 0),
@@ -473,7 +471,7 @@ describe("HeadlessWorkbook parity surface", () => {
   });
 
   it("covers sheet lifecycle, named expressions, events, and internal adapters", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       Data: [[1, "=Rate+1"]],
     });
     const events: string[] = [];

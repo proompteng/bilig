@@ -64,12 +64,13 @@ export function extractClassSurface(sourceText: string, className: string): Clas
   const staticMethods = new Set<string>();
   const instanceAccessors = new Set<string>();
   const instanceMethods = new Set<string>();
+  const classPattern = new RegExp(`\\bclass\\s+${escapeRegExp(className)}\\b`);
 
   for (const line of lines) {
     const trimmed = line.trim();
 
     if (!inClass) {
-      if (trimmed.includes(`class ${className}`)) {
+      if (classPattern.test(trimmed)) {
         inClass = true;
         depth += countBraces(line);
       }
@@ -204,4 +205,8 @@ function extractBlockContents(sourceText: string, anchorText: string): string | 
   }
 
   return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

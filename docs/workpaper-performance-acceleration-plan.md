@@ -354,7 +354,7 @@ Required changes:
 
 1. reduce change-object churn during bulk edit paths
 2. keep dirty-frontier tracking in compact engine-owned structures
-3. avoid materializing public `HeadlessChange[]` until a public API call actually needs them
+3. avoid materializing public `WorkPaperChange[]` until a public API call actually needs them
 4. cache formula binding products by normalized source where possible
 5. batch structural invalidation and reverse-edge maintenance more aggressively
 
@@ -363,7 +363,7 @@ Primary repo surfaces to change:
 - `packages/core/src/engine/services/mutation-service.ts`
 - `packages/core/src/engine/services/recalc-service.ts`
 - `packages/core/src/engine/services/formula-binding-service.ts`
-- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/work-paper-runtime.ts`
 
 ### F. Build-From-Sheets Fast Path
 
@@ -381,7 +381,7 @@ Required changes:
 
 Primary repo surfaces to change:
 
-- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/work-paper-runtime.ts`
 - `packages/core/src/engine.ts`
 - `packages/core/src/workbook-store.ts`
 - `packages/core/src/engine/services/formula-binding-service.ts`

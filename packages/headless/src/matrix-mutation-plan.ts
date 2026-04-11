@@ -1,6 +1,6 @@
 import { formatAddress } from "@bilig/formula";
 import type { LiteralInput } from "@bilig/protocol";
-import type { HeadlessCellAddress, HeadlessSheet, RawCellContent } from "./types.js";
+import type { WorkPaperCellAddress, WorkPaperSheet, RawCellContent } from "./work-paper-types.js";
 
 export type MatrixMutationOp =
   | { kind: "clearCell"; sheetName: string; address: string }
@@ -16,12 +16,12 @@ export interface MatrixMutationPlan {
 }
 
 interface BuildMatrixMutationPlanArgs {
-  target: HeadlessCellAddress;
+  target: WorkPaperCellAddress;
   targetSheetName: string;
-  content: HeadlessSheet;
+  content: WorkPaperSheet;
   rewriteFormula: (
     formula: string,
-    destination: HeadlessCellAddress,
+    destination: WorkPaperCellAddress,
     rowOffset: number,
     columnOffset: number,
   ) => string;
@@ -60,7 +60,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
 
   args.content.forEach((row, rowOffset) => {
     row.forEach((raw, columnOffset) => {
-      const destination: HeadlessCellAddress = {
+      const destination: WorkPaperCellAddress = {
         sheet: args.target.sheet,
         row: args.target.row + rowOffset,
         col: args.target.col + columnOffset,

@@ -2,27 +2,27 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 
 import {
-  HeadlessEvaluationSuspendedError,
-  HeadlessWorkbook,
-  type HeadlessCellAddress,
+  EvaluationSuspendedError as WorkPaperEvaluationSuspendedError,
+  WorkPaper,
+  WorkPaperCellAddress,
 } from "../index.js";
 
 const TEST_LANGUAGE_CODE = "xHF";
 
-function cell(sheet: number, row: number, col: number): HeadlessCellAddress {
+function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
   return { sheet, row, col };
 }
 
 afterEach(() => {
-  HeadlessWorkbook.unregisterAllFunctions();
-  if (HeadlessWorkbook.getRegisteredLanguagesCodes().includes(TEST_LANGUAGE_CODE)) {
-    HeadlessWorkbook.unregisterLanguage(TEST_LANGUAGE_CODE);
+  WorkPaper.unregisterAllFunctions();
+  if (WorkPaper.getRegisteredLanguagesCodes().includes(TEST_LANGUAGE_CODE)) {
+    WorkPaper.unregisterLanguage(TEST_LANGUAGE_CODE);
   }
 });
 
-describe("HeadlessWorkbook", () => {
+describe("WorkPaper", () => {
   it("builds from named sheets and exposes stable sheet ids and serialization helpers", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       Summary: [[1, "=A1*2"]],
       Detail: [[3]],
     });
@@ -46,7 +46,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("keeps literal-only initialization compatible with named expressions and later formulas", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets(
+    const workbook = WorkPaper.buildFromSheets(
       {
         Bench: [
           [2, "west", true],
@@ -76,8 +76,38 @@ describe("HeadlessWorkbook", () => {
     ]);
   });
 
+  it("builds mixed literal and formula sheets without seeding undo history", () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 10, "label-1", true, "=A1+B1", "=E1*2"],
+        [2, 20, "label-2", false, "=A2+B2", "=E2*2"],
+      ],
+    });
+    const sheetId = workbook.getSheetId("Bench")!;
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+      tag: ValueTag.Number,
+      value: 11,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 5))).toEqual({
+      tag: ValueTag.Number,
+      value: 44,
+    });
+    expect(workbook.isThereSomethingToUndo()).toBe(false);
+
+    const changes = workbook.setCellContents(cell(sheetId, 1, 1), 30);
+
+    expect(
+      changes.map((change) => (change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "")),
+    ).toEqual(["Bench!B2", "Bench!E2", "Bench!F2"]);
+    expect(workbook.getCellValue(cell(sheetId, 1, 5))).toEqual({
+      tag: ValueTag.Number,
+      value: 64,
+    });
+  });
+
   it("supports sheet-scoped named expressions and restores public formulas", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       Summary: [[]],
       Detail: [[]],
     });
@@ -130,7 +160,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("coalesces batch history into one undo entry and emits one values update", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1]]);
+    const workbook = WorkPaper.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
     const valuesUpdated: number[] = [];
     const nestedMutationResults: number[] = [];
@@ -157,7 +187,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("flushes deferred literal edits before formula writes inside a batch", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1]]);
+    const workbook = WorkPaper.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     const changes = workbook.batch(() => {
@@ -173,7 +203,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("undoes and redoes deferred literal-only batches", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1], [2]]);
+    const workbook = WorkPaper.buildFromArray([[1], [2]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     const changes = workbook.batch(() => {
@@ -213,7 +243,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("keeps exact MATCH correct when useColumnIndex is enabled", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets(
+    const workbook = WorkPaper.buildFromSheets(
       {
         Bench: [[1, "", "", 2, "=MATCH(D1,A1:A3,0)"], [2], [3]],
       },
@@ -246,7 +276,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("replaces literal sheet content in one undoable batch, including clears", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([
+    const workbook = WorkPaper.buildFromArray([
       [1, 2],
       [3, 4],
     ]);
@@ -272,8 +302,30 @@ describe("HeadlessWorkbook", () => {
     ]);
   });
 
+  it("replaces mixed sheet content in one undoable batch and binds formulas against loaded literals", () => {
+    const workbook = WorkPaper.buildFromArray([[0]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+
+    const changes = workbook.setSheetContent(sheetId, [
+      [1, 10, "=A1+B1"],
+      [2, 20, "=A2+B2"],
+    ]);
+
+    expect(changes).toHaveLength(6);
+    expect(workbook.getCellFormula(cell(sheetId, 0, 2))).toBe("=A1+B1");
+    expect(workbook.getCellValue(cell(sheetId, 1, 2))).toEqual({
+      tag: ValueTag.Number,
+      value: 22,
+    });
+
+    const undoChanges = workbook.undo();
+
+    expect(undoChanges).toHaveLength(6);
+    expect(workbook.getSheetSerialized(sheetId)).toEqual([[0]]);
+  });
+
   it("keeps deferred literal batch updates correct across multiple sheets", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       First: [[1], ["=A1*2"]],
       Second: [[3]],
     });
@@ -307,7 +359,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("suppresses readable value getters while evaluation is suspended and flushes on resume", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1]]);
+    const workbook = WorkPaper.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
     const events: string[] = [];
 
@@ -325,7 +377,7 @@ describe("HeadlessWorkbook", () => {
     workbook.setCellContents(cell(sheetId, 0, 1), "=A1+1");
 
     expect(() => workbook.getCellValue(cell(sheetId, 0, 1))).toThrow(
-      HeadlessEvaluationSuspendedError,
+      WorkPaperEvaluationSuspendedError,
     );
 
     const changes = workbook.resumeEvaluation();
@@ -339,7 +391,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("supports custom scalar functions and clipboard translation for pasted formulas", () => {
-    HeadlessWorkbook.registerFunctionPlugin({
+    WorkPaper.registerFunctionPlugin({
       id: "custom-math",
       implementedFunctions: {
         DOUBLE: { method: "DOUBLE" },
@@ -354,7 +406,7 @@ describe("HeadlessWorkbook", () => {
       },
     });
 
-    const workbook = HeadlessWorkbook.buildFromArray([[2]]);
+    const workbook = WorkPaper.buildFromArray([[2]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     workbook.setCellContents(cell(sheetId, 0, 1), "=DOUBLE(A1)");
@@ -400,9 +452,9 @@ describe("HeadlessWorkbook", () => {
       },
     } as const;
 
-    HeadlessWorkbook.registerFunctionPlugin(plugin);
+    WorkPaper.registerFunctionPlugin(plugin);
 
-    const workbook = HeadlessWorkbook.buildFromArray([[2]], { functionPlugins: [plugin] });
+    const workbook = WorkPaper.buildFromArray([[2]], { functionPlugins: [plugin] });
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     workbook.setCellContents(cell(sheetId, 0, 1), "=DOUBLE(A1)");
@@ -423,7 +475,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("preserves workbook semantics across rebuildAndRecalculate and non-semantic config rebuilds", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets(
+    const workbook = WorkPaper.buildFromSheets(
       {
         Data: [[1, "=A1*Rate"], [3], [5]],
         Summary: [["=FILTER(Data!A1:A3,Data!A1:A3>2)"]],
@@ -475,7 +527,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("returns changes in deterministic order for cells and named expressions", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[]]);
+    const workbook = WorkPaper.buildFromArray([[]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     const changes = workbook.batch(() => {
@@ -493,7 +545,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("supports once listeners, address formatting, range dependency helpers, and tuple axis operations", () => {
-    const workbook = HeadlessWorkbook.buildFromSheets({
+    const workbook = WorkPaper.buildFromSheets({
       Data: [[1, 2, "=A1+B1"]],
     });
     const sheetId = workbook.getSheetId("Data")!;
@@ -529,7 +581,7 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("uses HyperFormula-like optional returns for missing lookups and formula grids", () => {
-    const workbook = HeadlessWorkbook.buildFromArray([[1, "=A1+1"]]);
+    const workbook = WorkPaper.buildFromArray([[1, "=A1+1"]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
 
     expect(workbook.getSheetId("Missing")).toBeUndefined();
@@ -545,8 +597,8 @@ describe("HeadlessWorkbook", () => {
   });
 
   it("applies function translations to registered languages and exposes license validity", () => {
-    HeadlessWorkbook.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
-    HeadlessWorkbook.registerFunctionPlugin(
+    WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
+    WorkPaper.registerFunctionPlugin(
       {
         id: "custom-math",
         implementedFunctions: {
@@ -560,8 +612,8 @@ describe("HeadlessWorkbook", () => {
       },
     );
 
-    expect(HeadlessWorkbook.getRegisteredFunctionNames(TEST_LANGUAGE_CODE)).toContain("DUPLO");
-    expect(HeadlessWorkbook.buildEmpty().licenseKeyValidityState).toBe("valid");
-    expect(HeadlessWorkbook.buildEmpty({ licenseKey: "" }).licenseKeyValidityState).toBe("missing");
+    expect(WorkPaper.getRegisteredFunctionNames(TEST_LANGUAGE_CODE)).toContain("DUPLO");
+    expect(WorkPaper.buildEmpty().licenseKeyValidityState).toBe("valid");
+    expect(WorkPaper.buildEmpty({ licenseKey: "" }).licenseKeyValidityState).toBe("missing");
   });
 });

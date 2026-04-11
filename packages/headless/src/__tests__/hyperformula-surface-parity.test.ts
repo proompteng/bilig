@@ -17,8 +17,8 @@ describe("WorkPaper HyperFormula snapshot parity", () => {
   it("matches the checked-in HyperFormula class surface snapshot", () => {
     const snapshot = loadSnapshot();
     const currentSurface = extractClassSurface(
-      readFileSync(new URL("../headless-workbook.ts", import.meta.url), "utf8"),
-      "HeadlessWorkbook",
+      readFileSync(new URL("../work-paper-runtime.ts", import.meta.url), "utf8"),
+      "WorkPaper",
     );
 
     expect(currentSurface.staticMembers).toEqual(snapshot.classSurface.staticMembers);
@@ -32,8 +32,8 @@ describe("WorkPaper HyperFormula snapshot parity", () => {
   it("matches the checked-in HyperFormula config-key snapshot", () => {
     const snapshot = loadSnapshot();
     const currentConfigKeys = extractInterfaceKeys(
-      readFileSync(new URL("../types.ts", import.meta.url), "utf8"),
-      "HeadlessConfig",
+      readFileSync(new URL("../work-paper-types.ts", import.meta.url), "utf8"),
+      "WorkPaperConfig",
     );
 
     expect(currentConfigKeys).toEqual(snapshot.configKeys);

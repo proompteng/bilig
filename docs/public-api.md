@@ -68,7 +68,7 @@ The canonical engine surface includes:
 - `disconnectSyncClient`
 - `getSyncState`
 
-## Headless workbook surface
+## WorkPaper surface
 
 `@bilig/headless` exposes `WorkPaper`, a HyperFormula-style headless workbook API on top
 of `@bilig/core`:
@@ -87,8 +87,7 @@ of `@bilig/core`:
   `sheetMapping`, `addressMapping`, `dependencyGraph`, `evaluator`,
   `columnSearch`, and `lazilyTransformingAstService`
 
-`HeadlessWorkbook` remains exported as a compatibility alias, but `WorkPaper` is the
-canonical top-level contract.
+`WorkPaper` is the canonical top-level contract.
 
 ### Core types added in the current tranche
 

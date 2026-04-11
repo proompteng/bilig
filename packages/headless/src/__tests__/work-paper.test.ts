@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 
 import {
-  HeadlessWorkbook,
   WorkPaper,
   type WorkPaperCellAddress,
   type WorkPaperCellRange,
@@ -28,7 +27,7 @@ describe("WorkPaper", () => {
     });
   });
 
-  it("is the canonical top-level alias for the headless workbook runtime", () => {
+  it("is the canonical top-level headless workbook runtime", () => {
     const config: WorkPaperConfig = {
       useArrayArithmetic: true,
       useColumnIndex: true,
@@ -47,7 +46,6 @@ describe("WorkPaper", () => {
       end: cell(sheetId, 1, 1),
     };
 
-    expect(WorkPaper).toBe(HeadlessWorkbook);
     expect(workbook.getRangeValues(spillRange)).toEqual([
       [{ tag: ValueTag.Number, value: 3 }],
       [{ tag: ValueTag.Number, value: 4 }],

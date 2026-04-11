@@ -28,15 +28,15 @@ import {
   type CallExprNode,
 } from "@bilig/formula";
 import { tryLoadInitialLiteralSheet } from "./initial-sheet-load.js";
-import { orderHeadlessCellChanges } from "./change-order.js";
+import { orderWorkPaperCellChanges } from "./change-order.js";
 import {
   ConfigValueTooBigError,
   ConfigValueTooSmallError,
-  HeadlessArgumentError,
-  HeadlessEvaluationSuspendedError,
-  HeadlessOperationError,
-  HeadlessParseError,
-  HeadlessSheetError,
+  WorkPaperArgumentError,
+  WorkPaperEvaluationSuspendedError,
+  WorkPaperOperationError,
+  WorkPaperParseError,
+  WorkPaperSheetError,
   ExpectedOneOfValuesError,
   FunctionPluginValidationError,
   InvalidArgumentsError,
@@ -55,64 +55,64 @@ import {
   SheetNameAlreadyTakenError,
   SheetSizeLimitExceededError,
   UnableToParseError,
-} from "./errors.js";
+} from "./work-paper-errors.js";
 import { buildMatrixMutationPlan } from "./matrix-mutation-plan.js";
 import type {
-  HeadlessAddressMappingAdapter,
-  HeadlessAddressFormatOptions,
-  HeadlessAddressLike,
-  HeadlessArrayMappingAdapter,
-  HeadlessAxisInterval,
-  HeadlessAxisSwapMapping,
-  HeadlessCellAddress,
-  HeadlessCellRange,
-  HeadlessCellType,
-  HeadlessCellValueDetailedType,
-  HeadlessCellValueType,
-  HeadlessChange,
-  HeadlessColumnSearchAdapter,
-  HeadlessConfig,
-  HeadlessDateTime,
-  HeadlessDependencyGraphAdapter,
-  HeadlessDependencyRef,
-  HeadlessEvaluatorAdapter,
-  HeadlessFunctionPluginDefinition,
-  HeadlessFunctionTranslationsPackage,
-  HeadlessGraphAdapter,
-  HeadlessLanguagePackage,
-  HeadlessLazilyTransformingAstServiceAdapter,
-  HeadlessLicenseKeyValidityState,
-  HeadlessNamedExpression,
-  HeadlessRangeMappingAdapter,
-  HeadlessSheet,
-  HeadlessSheetDimensions,
-  HeadlessSheetMappingAdapter,
-  HeadlessSheets,
-  HeadlessStats,
-  HeadlessWorkbookDetailedEventMap,
-  HeadlessWorkbookDetailedListener,
-  HeadlessWorkbookEventName,
-  HeadlessWorkbookInternals,
-  HeadlessWorkbookListener,
+  WorkPaperAddressMappingAdapter,
+  WorkPaperAddressFormatOptions,
+  WorkPaperAddressLike,
+  WorkPaperArrayMappingAdapter,
+  WorkPaperAxisInterval,
+  WorkPaperAxisSwapMapping,
+  WorkPaperCellAddress,
+  WorkPaperCellRange,
+  WorkPaperCellType,
+  WorkPaperCellValueDetailedType,
+  WorkPaperCellValueType,
+  WorkPaperChange,
+  WorkPaperColumnSearchAdapter,
+  WorkPaperConfig,
+  WorkPaperDateTime,
+  WorkPaperDependencyGraphAdapter,
+  WorkPaperDependencyRef,
+  WorkPaperEvaluatorAdapter,
+  WorkPaperFunctionPluginDefinition,
+  WorkPaperFunctionTranslationsPackage,
+  WorkPaperGraphAdapter,
+  WorkPaperLanguagePackage,
+  WorkPaperLazilyTransformingAstServiceAdapter,
+  WorkPaperLicenseKeyValidityState,
+  WorkPaperNamedExpression,
+  WorkPaperRangeMappingAdapter,
+  WorkPaperSheet,
+  WorkPaperSheetDimensions,
+  WorkPaperSheetMappingAdapter,
+  WorkPaperSheets,
+  WorkPaperStats,
+  WorkPaperDetailedEventMap,
+  WorkPaperDetailedListener,
+  WorkPaperEventName,
+  WorkPaperInternals,
+  WorkPaperListener,
   RawCellContent,
-  SerializedHeadlessNamedExpression,
-} from "./types.js";
+  SerializedWorkPaperNamedExpression,
+} from "./work-paper-types.js";
 import { captureTrackedEngineEvent, type TrackedEngineEvent } from "./tracked-engine-event-refs.js";
 
 type ListenerMap = {
-  [EventName in HeadlessWorkbookEventName]: Set<HeadlessWorkbookListener<EventName>>;
+  [EventName in WorkPaperEventName]: Set<WorkPaperListener<EventName>>;
 };
 
 type DetailedListenerMap = {
-  [EventName in HeadlessWorkbookEventName]: Set<HeadlessWorkbookDetailedListener<EventName>>;
+  [EventName in WorkPaperEventName]: Set<WorkPaperDetailedListener<EventName>>;
 };
 
 type DetailedEvent = {
-  [EventName in HeadlessWorkbookEventName]: {
+  [EventName in WorkPaperEventName]: {
     eventName: EventName;
-    payload: HeadlessWorkbookDetailedEventMap[EventName];
+    payload: WorkPaperDetailedEventMap[EventName];
   };
-}[HeadlessWorkbookEventName];
+}[WorkPaperEventName];
 
 interface InternalNamedExpression {
   publicName: string;
@@ -143,7 +143,7 @@ const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map();
 const VISIBILITY_SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 
 interface ClipboardPayload {
-  sourceAnchor: HeadlessCellAddress;
+  sourceAnchor: WorkPaperCellAddress;
   serialized: RawCellContent[][];
   values: CellValue[][];
 }
@@ -165,7 +165,7 @@ interface HistoryRecord {
   inverse: { ops: unknown[]; potentialNewCells?: number };
 }
 
-const DEFAULT_CONFIG: Readonly<HeadlessConfig> = Object.freeze({
+const DEFAULT_CONFIG: Readonly<WorkPaperConfig> = Object.freeze({
   accentSensitive: false,
   caseSensitive: false,
   caseFirst: "false",
@@ -206,7 +206,7 @@ const DEFAULT_CONFIG: Readonly<HeadlessConfig> = Object.freeze({
   useWildcards: true,
 });
 
-const HEADLESS_CONFIG_KEYS = [
+const WORKPAPER_CONFIG_KEYS = [
   "accentSensitive",
   "caseSensitive",
   "caseFirst",
@@ -245,9 +245,9 @@ const HEADLESS_CONFIG_KEYS = [
   "undoLimit",
   "useRegularExpressions",
   "useWildcards",
-] as const satisfies readonly (keyof HeadlessConfig)[];
+] as const satisfies readonly (keyof WorkPaperConfig)[];
 
-const HEADLESS_PUBLIC_ERROR_NAMES = new Set([
+const WORKPAPER_PUBLIC_ERROR_NAMES = new Set([
   "ConfigValueTooBigError",
   "ConfigValueTooSmallError",
   "EvaluationSuspendedError",
@@ -275,19 +275,19 @@ const HEADLESS_PUBLIC_ERROR_NAMES = new Set([
   "SourceLocationHasArrayError",
   "TargetLocationHasArrayError",
   "UnableToParseError",
-  "HeadlessArgumentError",
-  "HeadlessConfigError",
-  "HeadlessSheetError",
-  "HeadlessNamedExpressionError",
-  "HeadlessClipboardError",
-  "HeadlessEvaluationSuspendedError",
-  "HeadlessParseError",
-  "HeadlessOperationError",
+  "WorkPaperArgumentError",
+  "WorkPaperConfigError",
+  "WorkPaperSheetError",
+  "WorkPaperNamedExpressionError",
+  "WorkPaperClipboardError",
+  "WorkPaperEvaluationSuspendedError",
+  "WorkPaperParseError",
+  "WorkPaperOperationError",
 ]);
 
-const HEADLESS_VERSION = "0.1.2";
-const HEADLESS_BUILD_DATE = "2026-04-10";
-const HEADLESS_RELEASE_DATE = "2026-04-10";
+const WORKPAPER_VERSION = "0.1.2";
+const WORKPAPER_BUILD_DATE = "2026-04-10";
+const WORKPAPER_RELEASE_DATE = "2026-04-10";
 
 const globalCustomFunctions = new Map<
   string,
@@ -324,8 +324,8 @@ function ensureCustomAdapterInstalled(): void {
 }
 
 function clonePluginDefinition(
-  plugin: HeadlessFunctionPluginDefinition,
-): HeadlessFunctionPluginDefinition {
+  plugin: WorkPaperFunctionPluginDefinition,
+): WorkPaperFunctionPluginDefinition {
   return {
     ...plugin,
     implementedFunctions: Object.fromEntries(
@@ -339,7 +339,7 @@ function clonePluginDefinition(
   };
 }
 
-function cloneConfig(config: HeadlessConfig): HeadlessConfig {
+function cloneConfig(config: WorkPaperConfig): WorkPaperConfig {
   return {
     ...config,
     currencySymbol: config.currencySymbol ? [...config.currencySymbol] : undefined,
@@ -448,7 +448,7 @@ function makeNamedExpressionKey(name: string, scope?: number): string {
 }
 
 function makeInternalScopedName(scope: number, name: string): string {
-  return `__BILIG_HEADLESS_SCOPE_${scope}_${normalizeName(name)}`;
+  return `__BILIG_WORKPAPER_SCOPE_${scope}_${normalizeName(name)}`;
 }
 
 function isFormulaContent(content: RawCellContent): content is string {
@@ -459,11 +459,11 @@ function isCellValueMatrix(value: CellValue | CellValue[][]): value is CellValue
   return Array.isArray(value);
 }
 
-function isHeadlessSheetMatrix(value: RawCellContent | HeadlessSheet): value is HeadlessSheet {
+function isWorkPaperSheetMatrix(value: RawCellContent | WorkPaperSheet): value is WorkPaperSheet {
   return Array.isArray(value);
 }
 
-function matrixContainsFormulaContent(content: HeadlessSheet): boolean {
+function matrixContainsFormulaContent(content: WorkPaperSheet): boolean {
   return content.some((row) => row.some((cell) => isFormulaContent(cell)));
 }
 
@@ -486,7 +486,7 @@ function assertRowAndColumn(value: number, label: string): void {
   }
 }
 
-function assertRange(range: HeadlessCellRange): void {
+function assertRange(range: WorkPaperCellRange): void {
   assertRowAndColumn(range.start.sheet, "start.sheet");
   assertRowAndColumn(range.start.row, "start.row");
   assertRowAndColumn(range.start.col, "start.col");
@@ -494,11 +494,11 @@ function assertRange(range: HeadlessCellRange): void {
   assertRowAndColumn(range.end.row, "end.row");
   assertRowAndColumn(range.end.col, "end.col");
   if (range.start.sheet !== range.end.sheet) {
-    throw new HeadlessArgumentError("Ranges must stay on a single sheet");
+    throw new WorkPaperArgumentError("Ranges must stay on a single sheet");
   }
 }
 
-function isCellRange(value: HeadlessAddressLike): value is HeadlessCellRange {
+function isCellRange(value: WorkPaperAddressLike): value is WorkPaperCellRange {
   return "start" in value && "end" in value;
 }
 
@@ -657,9 +657,9 @@ function compareSheetNames(left: string, right: string): number {
   return left.localeCompare(right);
 }
 
-function checkHeadlessLicenseKeyValidity(
+function checkWorkPaperLicenseKeyValidity(
   licenseKey: string | undefined,
-): HeadlessLicenseKeyValidityState {
+): WorkPaperLicenseKeyValidityState {
   if (!licenseKey || licenseKey.trim().length === 0) {
     return "missing";
   }
@@ -673,7 +673,7 @@ function checkHeadlessLicenseKeyValidity(
   return "invalid";
 }
 
-function validateHeadlessConfig(config: HeadlessConfig): void {
+function validateWorkPaperConfig(config: WorkPaperConfig): void {
   if (config.maxRows !== undefined && (!Number.isInteger(config.maxRows) || config.maxRows < 1)) {
     throw new ConfigValueTooSmallError("maxRows", 1);
   }
@@ -729,8 +729,8 @@ function validateHeadlessConfig(config: HeadlessConfig): void {
 
 function validateSheetWithinLimits(
   sheetName: string,
-  sheet: HeadlessSheet,
-  config: HeadlessConfig,
+  sheet: WorkPaperSheet,
+  config: WorkPaperConfig,
 ): void {
   const height = sheet.length;
   const width = Math.max(0, ...sheet.map((row) => row.length));
@@ -748,7 +748,7 @@ function isHistoryRecordArray(value: unknown): value is HistoryRecord[] {
   return Array.isArray(value);
 }
 
-function withEventChanges(event: QueuedEvent, changes: HeadlessChange[]): QueuedEvent {
+function withEventChanges(event: QueuedEvent, changes: WorkPaperChange[]): QueuedEvent {
   switch (event.eventName) {
     case "sheetAdded":
       return event;
@@ -794,7 +794,7 @@ function formatQualifiedCellAddress(
   return sheetName ? `${quoteSheetNameIfNeeded(sheetName)}!${base}` : base;
 }
 
-class HeadlessEmitter {
+class WorkPaperEmitter {
   private readonly listeners: ListenerMap = {
     sheetAdded: new Set(),
     sheetRemoved: new Set(),
@@ -817,50 +817,50 @@ class HeadlessEmitter {
     evaluationResumed: new Set(),
   };
 
-  on<EventName extends HeadlessWorkbookEventName>(
+  on<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
     this.listeners[eventName].add(listener);
   }
 
-  off<EventName extends HeadlessWorkbookEventName>(
+  off<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
     this.listeners[eventName].delete(listener);
   }
 
-  once<EventName extends HeadlessWorkbookEventName>(
+  once<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
-    const wrapper: HeadlessWorkbookListener<EventName> = (...args) => {
+    const wrapper: WorkPaperListener<EventName> = (...args) => {
       this.off(eventName, wrapper);
       listener(...args);
     };
     this.on(eventName, wrapper);
   }
 
-  onDetailed<EventName extends HeadlessWorkbookEventName>(
+  onDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
     this.detailedListeners[eventName].add(listener);
   }
 
-  offDetailed<EventName extends HeadlessWorkbookEventName>(
+  offDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
     this.detailedListeners[eventName].delete(listener);
   }
 
-  onceDetailed<EventName extends HeadlessWorkbookEventName>(
+  onceDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
-    const wrapper: HeadlessWorkbookDetailedListener<EventName> = (payload) => {
+    const wrapper: WorkPaperDetailedListener<EventName> = (payload) => {
       this.offDetailed(eventName, wrapper);
       listener(payload);
     };
@@ -945,28 +945,28 @@ class HeadlessEmitter {
   }
 }
 
-export class HeadlessWorkbook {
-  static version = HEADLESS_VERSION;
-  static buildDate = HEADLESS_BUILD_DATE;
-  static releaseDate = HEADLESS_RELEASE_DATE;
-  static readonly languages: Record<string, HeadlessLanguagePackage> = {};
-  static readonly defaultConfig: HeadlessConfig = cloneConfig(DEFAULT_CONFIG);
+export class WorkPaper {
+  static version = WORKPAPER_VERSION;
+  static buildDate = WORKPAPER_BUILD_DATE;
+  static releaseDate = WORKPAPER_RELEASE_DATE;
+  static readonly languages: Record<string, WorkPaperLanguagePackage> = {};
+  static readonly defaultConfig: WorkPaperConfig = cloneConfig(DEFAULT_CONFIG);
 
-  private static readonly languageRegistry = new Map<string, HeadlessLanguagePackage>();
+  private static readonly languageRegistry = new Map<string, WorkPaperLanguagePackage>();
   private static readonly functionPluginRegistry = new Map<
     string,
-    HeadlessFunctionPluginDefinition
+    WorkPaperFunctionPluginDefinition
   >();
 
   readonly workbookId = nextWorkbookId++;
   private engine: SpreadsheetEngine;
-  private readonly emitter = new HeadlessEmitter();
+  private readonly emitter = new WorkPaperEmitter();
   private readonly namedExpressions = new Map<string, InternalNamedExpression>();
   private readonly functionSnapshot = new Map<string, InternalFunctionBinding>();
   private readonly functionAliasLookup = new Map<string, InternalFunctionBinding>();
   private readonly internalFunctionLookup = new Map<string, InternalFunctionBinding>();
-  readonly internals: HeadlessWorkbookInternals;
-  private config: HeadlessConfig;
+  readonly internals: WorkPaperInternals;
+  private config: WorkPaperConfig;
   private clipboard: ClipboardPayload | null = null;
   private visibilityCache: VisibilitySnapshot | null = null;
   private namedExpressionValueCache: NamedExpressionValueSnapshot | null = null;
@@ -981,12 +981,13 @@ export class HeadlessWorkbook {
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
   private queuedEvents: QueuedEvent[] = [];
   private trackedEngineEvents: TrackedEngineEvent[] = [];
+  private engineEventCaptureEnabled = true;
   private unsubscribeEngineEvents: (() => void) | null = null;
   private disposed = false;
 
-  private constructor(configInput: HeadlessConfig = {}) {
+  private constructor(configInput: WorkPaperConfig = {}) {
     ensureCustomAdapterInstalled();
-    validateHeadlessConfig(configInput);
+    validateWorkPaperConfig(configInput);
     this.config = {
       ...cloneConfig(DEFAULT_CONFIG),
       ...cloneConfig(configInput),
@@ -994,45 +995,46 @@ export class HeadlessWorkbook {
     this.engine = new SpreadsheetEngine({
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
+      trackReplicaVersions: false,
     });
     this.attachEngineEventTracking();
     this.captureFunctionRegistry();
     this.internals = Object.freeze({
-      graph: Object.freeze<HeadlessGraphAdapter>({
+      graph: Object.freeze<WorkPaperGraphAdapter>({
         getDependents: (reference) => this.getCellDependents(reference),
         getPrecedents: (reference) => this.getCellPrecedents(reference),
       }),
-      rangeMapping: Object.freeze<HeadlessRangeMappingAdapter>({
+      rangeMapping: Object.freeze<WorkPaperRangeMappingAdapter>({
         getValues: (range) => this.getRangeValues(range),
         getSerialized: (range) => this.getRangeSerialized(range),
       }),
-      arrayMapping: Object.freeze<HeadlessArrayMappingAdapter>({
+      arrayMapping: Object.freeze<WorkPaperArrayMappingAdapter>({
         isPartOfArray: (address) => this.isCellPartOfArray(address),
         getFormula: (address) => this.getCellFormula(address),
       }),
-      sheetMapping: Object.freeze<HeadlessSheetMappingAdapter>({
+      sheetMapping: Object.freeze<WorkPaperSheetMappingAdapter>({
         getSheetName: (sheetId) => this.getSheetName(sheetId),
         getSheetId: (name) => this.getSheetId(name),
         getSheetNames: () => this.getSheetNames(),
         countSheets: () => this.countSheets(),
       }),
-      addressMapping: Object.freeze<HeadlessAddressMappingAdapter>({
+      addressMapping: Object.freeze<WorkPaperAddressMappingAdapter>({
         has: (address) => !this.isCellEmpty(address) || this.doesCellHaveFormula(address),
         getValue: (address) => this.getCellValue(address),
         getFormula: (address) => this.getCellFormula(address),
       }),
-      dependencyGraph: Object.freeze<HeadlessDependencyGraphAdapter>({
+      dependencyGraph: Object.freeze<WorkPaperDependencyGraphAdapter>({
         getCellDependents: (reference) => this.getCellDependents(reference),
         getCellPrecedents: (reference) => this.getCellPrecedents(reference),
       }),
-      evaluator: Object.freeze<HeadlessEvaluatorAdapter>({
+      evaluator: Object.freeze<WorkPaperEvaluatorAdapter>({
         recalculate: () => this.rebuildAndRecalculate(),
         calculateFormula: (formula, scope) => this.calculateFormula(formula, scope),
       }),
-      columnSearch: Object.freeze<HeadlessColumnSearchAdapter>({
+      columnSearch: Object.freeze<WorkPaperColumnSearchAdapter>({
         find: (sheetId, column, matcher) => {
           const dimensions = this.getSheetDimensions(sheetId);
-          const matches: HeadlessCellAddress[] = [];
+          const matches: WorkPaperCellAddress[] = [];
           for (let row = 0; row < dimensions.height; row += 1) {
             const address = { sheet: sheetId, row, col: column };
             const value = this.getCellValue(address);
@@ -1047,7 +1049,7 @@ export class HeadlessWorkbook {
           return matches;
         },
       }),
-      lazilyTransformingAstService: Object.freeze<HeadlessLazilyTransformingAstServiceAdapter>({
+      lazilyTransformingAstService: Object.freeze<WorkPaperLazilyTransformingAstServiceAdapter>({
         normalizeFormula: (formula) => this.normalizeFormula(formula),
         validateFormula: (formula) => this.validateFormula(formula),
         getNamedExpressionsFromFormula: (formula) => this.getNamedExpressionsFromFormula(formula),
@@ -1056,12 +1058,14 @@ export class HeadlessWorkbook {
   }
 
   static buildEmpty(
-    configInput: HeadlessConfig = {},
-    namedExpressions: readonly SerializedHeadlessNamedExpression[] = [],
-  ): HeadlessWorkbook {
-    const workbook = new HeadlessWorkbook(configInput);
-    namedExpressions.forEach((expression) => {
-      workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+    configInput: WorkPaperConfig = {},
+    namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
+  ): WorkPaper {
+    const workbook = new WorkPaper(configInput);
+    workbook.withEngineEventCaptureDisabled(() => {
+      namedExpressions.forEach((expression) => {
+        workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+      });
     });
     workbook.clearHistoryStacks();
     workbook.primeChangeTrackingCaches();
@@ -1069,40 +1073,42 @@ export class HeadlessWorkbook {
   }
 
   static buildFromArray(
-    sheet: HeadlessSheet,
-    configInput: HeadlessConfig = {},
-    namedExpressions: readonly SerializedHeadlessNamedExpression[] = [],
-  ): HeadlessWorkbook {
+    sheet: WorkPaperSheet,
+    configInput: WorkPaperConfig = {},
+    namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
+  ): WorkPaper {
     return this.buildFromSheets({ Sheet1: sheet }, configInput, namedExpressions);
   }
 
   static buildFromSheets(
-    sheets: HeadlessSheets,
-    configInput: HeadlessConfig = {},
-    namedExpressions: readonly SerializedHeadlessNamedExpression[] = [],
-  ): HeadlessWorkbook {
-    const workbook = new HeadlessWorkbook(configInput);
+    sheets: WorkPaperSheets,
+    configInput: WorkPaperConfig = {},
+    namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
+  ): WorkPaper {
+    const workbook = new WorkPaper(configInput);
     Object.entries(sheets).forEach(([sheetName, sheet]) => {
       validateSheetWithinLimits(sheetName, sheet, workbook.config);
     });
-    Object.keys(sheets).forEach((sheetName) => {
-      workbook.engine.createSheet(sheetName);
-    });
-    namedExpressions.forEach((expression) => {
-      workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
-    });
-    Object.entries(sheets).forEach(([sheetName, sheet]) => {
-      const sheetId = workbook.requireSheetId(sheetName);
-      if (!tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
-        workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
-      }
+    workbook.withEngineEventCaptureDisabled(() => {
+      Object.keys(sheets).forEach((sheetName) => {
+        workbook.engine.createSheet(sheetName);
+      });
+      namedExpressions.forEach((expression) => {
+        workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+      });
+      Object.entries(sheets).forEach(([sheetName, sheet]) => {
+        const sheetId = workbook.requireSheetId(sheetName);
+        if (!tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
+          workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+        }
+      });
     });
     workbook.clearHistoryStacks();
     workbook.primeChangeTrackingCaches();
     return workbook;
   }
 
-  static getLanguage(languageCode: string): HeadlessLanguagePackage {
+  static getLanguage(languageCode: string): WorkPaperLanguagePackage {
     const language = this.languageRegistry.get(languageCode);
     if (!language) {
       throw new LanguageNotRegisteredError(languageCode);
@@ -1110,7 +1116,7 @@ export class HeadlessWorkbook {
     return structuredClone(language);
   }
 
-  static registerLanguage(languageCode: string, languagePackage: HeadlessLanguagePackage): void {
+  static registerLanguage(languageCode: string, languagePackage: WorkPaperLanguagePackage): void {
     if (this.languageRegistry.has(languageCode)) {
       throw new LanguageAlreadyRegisteredError(languageCode);
     }
@@ -1130,8 +1136,8 @@ export class HeadlessWorkbook {
   }
 
   static registerFunctionPlugin(
-    plugin: HeadlessFunctionPluginDefinition,
-    translations?: HeadlessFunctionTranslationsPackage,
+    plugin: WorkPaperFunctionPluginDefinition,
+    translations?: WorkPaperFunctionTranslationsPackage,
   ): void {
     this.functionPluginRegistry.set(plugin.id, clonePluginDefinition(plugin));
     if (translations) {
@@ -1139,15 +1145,15 @@ export class HeadlessWorkbook {
     }
   }
 
-  static unregisterFunctionPlugin(plugin: HeadlessFunctionPluginDefinition | string): void {
+  static unregisterFunctionPlugin(plugin: WorkPaperFunctionPluginDefinition | string): void {
     const pluginId = typeof plugin === "string" ? plugin : plugin.id;
     this.functionPluginRegistry.delete(pluginId);
   }
 
   static registerFunction(
     functionId: string,
-    plugin: HeadlessFunctionPluginDefinition,
-    translations?: HeadlessFunctionTranslationsPackage,
+    plugin: WorkPaperFunctionPluginDefinition,
+    translations?: WorkPaperFunctionTranslationsPackage,
   ): void {
     const existing = this.functionPluginRegistry.get(plugin.id);
     const nextPlugin = clonePluginDefinition(existing ?? plugin);
@@ -1201,7 +1207,7 @@ export class HeadlessWorkbook {
     return functions.map((name) => language.functions?.[name] ?? name).toSorted(compareSheetNames);
   }
 
-  static getFunctionPlugin(functionId: string): HeadlessFunctionPluginDefinition | undefined {
+  static getFunctionPlugin(functionId: string): WorkPaperFunctionPluginDefinition | undefined {
     const normalized = functionId.trim().toUpperCase();
     const plugin = [...this.functionPluginRegistry.values()].find(
       (candidate) =>
@@ -1211,17 +1217,19 @@ export class HeadlessWorkbook {
     return plugin ? clonePluginDefinition(plugin) : undefined;
   }
 
-  static getAllFunctionPlugins(): HeadlessFunctionPluginDefinition[] {
+  static getAllFunctionPlugins(): WorkPaperFunctionPluginDefinition[] {
     return [...this.functionPluginRegistry.values()].map((plugin) => clonePluginDefinition(plugin));
   }
 
-  private static loadFunctionTranslations(translations: HeadlessFunctionTranslationsPackage): void {
+  private static loadFunctionTranslations(
+    translations: WorkPaperFunctionTranslationsPackage,
+  ): void {
     Object.entries(translations).forEach(([languageCode, functionTranslations]) => {
       const existing = this.languageRegistry.get(languageCode);
       if (!existing) {
         throw new LanguageNotRegisteredError(languageCode);
       }
-      const nextLanguage: HeadlessLanguagePackage = {
+      const nextLanguage: WorkPaperLanguagePackage = {
         ...structuredClone(existing),
         functions: {
           ...existing.functions,
@@ -1233,103 +1241,103 @@ export class HeadlessWorkbook {
     });
   }
 
-  on<EventName extends HeadlessWorkbookEventName>(
+  on<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
     this.assertNotDisposed();
     this.emitter.on(eventName, listener);
   }
 
-  once<EventName extends HeadlessWorkbookEventName>(
+  once<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
     this.assertNotDisposed();
     this.emitter.once(eventName, listener);
   }
 
-  off<EventName extends HeadlessWorkbookEventName>(
+  off<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookListener<EventName>,
+    listener: WorkPaperListener<EventName>,
   ): void {
     this.emitter.off(eventName, listener);
   }
 
-  onDetailed<EventName extends HeadlessWorkbookEventName>(
+  onDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
     this.assertNotDisposed();
     this.emitter.onDetailed(eventName, listener);
   }
 
-  onceDetailed<EventName extends HeadlessWorkbookEventName>(
+  onceDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
     this.assertNotDisposed();
     this.emitter.onceDetailed(eventName, listener);
   }
 
-  offDetailed<EventName extends HeadlessWorkbookEventName>(
+  offDetailed<EventName extends WorkPaperEventName>(
     eventName: EventName,
-    listener: HeadlessWorkbookDetailedListener<EventName>,
+    listener: WorkPaperDetailedListener<EventName>,
   ): void {
     this.emitter.offDetailed(eventName, listener);
   }
 
-  getConfig(): HeadlessConfig {
+  getConfig(): WorkPaperConfig {
     return cloneConfig(this.config);
   }
 
-  get graph(): HeadlessGraphAdapter {
+  get graph(): WorkPaperGraphAdapter {
     return this.internals.graph;
   }
 
-  get rangeMapping(): HeadlessRangeMappingAdapter {
+  get rangeMapping(): WorkPaperRangeMappingAdapter {
     return this.internals.rangeMapping;
   }
 
-  get arrayMapping(): HeadlessArrayMappingAdapter {
+  get arrayMapping(): WorkPaperArrayMappingAdapter {
     return this.internals.arrayMapping;
   }
 
-  get sheetMapping(): HeadlessSheetMappingAdapter {
+  get sheetMapping(): WorkPaperSheetMappingAdapter {
     return this.internals.sheetMapping;
   }
 
-  get addressMapping(): HeadlessAddressMappingAdapter {
+  get addressMapping(): WorkPaperAddressMappingAdapter {
     return this.internals.addressMapping;
   }
 
-  get dependencyGraph(): HeadlessDependencyGraphAdapter {
+  get dependencyGraph(): WorkPaperDependencyGraphAdapter {
     return this.internals.dependencyGraph;
   }
 
-  get evaluator(): HeadlessEvaluatorAdapter {
+  get evaluator(): WorkPaperEvaluatorAdapter {
     return this.internals.evaluator;
   }
 
-  get columnSearch(): HeadlessColumnSearchAdapter {
+  get columnSearch(): WorkPaperColumnSearchAdapter {
     return this.internals.columnSearch;
   }
 
-  get lazilyTransformingAstService(): HeadlessLazilyTransformingAstServiceAdapter {
+  get lazilyTransformingAstService(): WorkPaperLazilyTransformingAstServiceAdapter {
     return this.internals.lazilyTransformingAstService;
   }
 
-  get licenseKeyValidityState(): HeadlessLicenseKeyValidityState {
-    return checkHeadlessLicenseKeyValidity(this.config.licenseKey);
+  get licenseKeyValidityState(): WorkPaperLicenseKeyValidityState {
+    return checkWorkPaperLicenseKeyValidity(this.config.licenseKey);
   }
 
-  updateConfig(next: HeadlessConfig): void {
+  updateConfig(next: WorkPaperConfig): void {
     this.assertNotDisposed();
     const merged = {
       ...this.config,
       ...cloneConfig(next),
     };
-    const hasChanges = HEADLESS_CONFIG_KEYS.some(
+    const hasChanges = WORKPAPER_CONFIG_KEYS.some(
       (key) => Object.hasOwn(next, key) && this.config[key] !== next[key],
     );
     if (!hasChanges) {
@@ -1338,7 +1346,7 @@ export class HeadlessWorkbook {
     this.rebuildWithConfig(merged);
   }
 
-  getStats(): HeadlessStats {
+  getStats(): WorkPaperStats {
     this.assertNotDisposed();
     return {
       batchDepth: this.batchDepth,
@@ -1347,13 +1355,13 @@ export class HeadlessWorkbook {
     };
   }
 
-  rebuildAndRecalculate(): HeadlessChange[] {
+  rebuildAndRecalculate(): WorkPaperChange[] {
     return this.captureChanges(undefined, () => {
       this.rebuildWithConfig(this.config);
     });
   }
 
-  batch(batchOperations: () => void): HeadlessChange[] {
+  batch(batchOperations: () => void): WorkPaperChange[] {
     this.assertNotDisposed();
     const isOutermost = this.batchDepth === 0;
     if (isOutermost) {
@@ -1402,7 +1410,7 @@ export class HeadlessWorkbook {
     this.emitter.emitDetailed({ eventName: "evaluationSuspended", payload: {} });
   }
 
-  resumeEvaluation(): HeadlessChange[] {
+  resumeEvaluation(): WorkPaperChange[] {
     this.assertNotDisposed();
     if (!this.evaluationSuspended) {
       return [];
@@ -1426,7 +1434,7 @@ export class HeadlessWorkbook {
     return this.evaluationSuspended;
   }
 
-  undo(): HeadlessChange[] {
+  undo(): WorkPaperChange[] {
     this.assertNotDisposed();
     return this.captureChanges(undefined, () => {
       if (!this.engine.undo()) {
@@ -1435,7 +1443,7 @@ export class HeadlessWorkbook {
     });
   }
 
-  redo(): HeadlessChange[] {
+  redo(): WorkPaperChange[] {
     this.assertNotDisposed();
     return this.captureChanges(undefined, () => {
       if (!this.engine.redo()) {
@@ -1460,7 +1468,7 @@ export class HeadlessWorkbook {
     this.getRedoStack().length = 0;
   }
 
-  copy(range: HeadlessCellRange): CellValue[][] {
+  copy(range: WorkPaperCellRange): CellValue[][] {
     this.assertReadable();
     assertRange(range);
     const serialized = this.getRangeSerialized(range);
@@ -1473,7 +1481,7 @@ export class HeadlessWorkbook {
     return values;
   }
 
-  cut(range: HeadlessCellRange): CellValue[][] {
+  cut(range: WorkPaperCellRange): CellValue[][] {
     this.assertReadable();
     const values = this.copy(range);
     this.batch(() => {
@@ -1482,7 +1490,7 @@ export class HeadlessWorkbook {
     return values;
   }
 
-  paste(targetLeftCorner: HeadlessCellAddress): HeadlessChange[] {
+  paste(targetLeftCorner: WorkPaperCellAddress): WorkPaperChange[] {
     this.assertNotDisposed();
     if (!this.clipboard) {
       throw new NothingToPasteError();
@@ -1505,8 +1513,8 @@ export class HeadlessWorkbook {
   }
 
   getFillRangeData(
-    source: HeadlessCellRange,
-    target: HeadlessCellRange,
+    source: WorkPaperCellRange,
+    target: WorkPaperCellRange,
     offsetsFromTarget = false,
   ): RawCellContent[][] {
     assertRange(source);
@@ -1549,14 +1557,14 @@ export class HeadlessWorkbook {
     return output;
   }
 
-  getCellValue(address: HeadlessCellAddress): CellValue {
+  getCellValue(address: WorkPaperCellAddress): CellValue {
     this.assertReadable();
     return cloneCellValue(
       this.engine.getCellValue(this.sheetName(address.sheet), this.a1(address)),
     );
   }
 
-  getCellFormula(address: HeadlessCellAddress): string | undefined {
+  getCellFormula(address: WorkPaperCellAddress): string | undefined {
     this.prepareReadableState();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     if (!cell.formula) {
@@ -1565,7 +1573,7 @@ export class HeadlessWorkbook {
     return `=${this.restorePublicFormula(cell.formula, address.sheet)}`;
   }
 
-  getCellHyperlink(address: HeadlessCellAddress): string | undefined {
+  getCellHyperlink(address: WorkPaperCellAddress): string | undefined {
     const formula = this.getCellFormula(address);
     if (!formula) {
       return undefined;
@@ -1578,7 +1586,7 @@ export class HeadlessWorkbook {
     return firstArgument?.kind === "StringLiteral" ? firstArgument.value : undefined;
   }
 
-  getCellSerialized(address: HeadlessCellAddress): RawCellContent {
+  getCellSerialized(address: WorkPaperCellAddress): RawCellContent {
     this.prepareReadableState();
     return this.cellSnapshotToRawContent(
       this.engine.getCell(this.sheetName(address.sheet), this.a1(address)),
@@ -1586,7 +1594,7 @@ export class HeadlessWorkbook {
     );
   }
 
-  getRangeValues(range: HeadlessCellRange): CellValue[][] {
+  getRangeValues(range: WorkPaperCellRange): CellValue[][] {
     this.assertReadable();
     const ref = this.rangeRef(range);
     return this.engine
@@ -1594,11 +1602,11 @@ export class HeadlessWorkbook {
       .map((row: readonly CellValue[]) => row.map((value: CellValue) => cloneCellValue(value)));
   }
 
-  getRangeFormulas(range: HeadlessCellRange): Array<Array<string | undefined>> {
+  getRangeFormulas(range: WorkPaperCellRange): Array<Array<string | undefined>> {
     return this.getDenseRange(range, (address) => this.getCellFormula(address));
   }
 
-  getRangeSerialized(range: HeadlessCellRange): RawCellContent[][] {
+  getRangeSerialized(range: WorkPaperCellRange): RawCellContent[][] {
     return this.getDenseRange(range, (address) => this.getCellSerialized(address));
   }
 
@@ -1655,13 +1663,13 @@ export class HeadlessWorkbook {
     );
   }
 
-  getAllSheetsDimensions(): Record<string, HeadlessSheetDimensions> {
+  getAllSheetsDimensions(): Record<string, WorkPaperSheetDimensions> {
     return Object.fromEntries(
       this.listSheetRecords().map((sheet) => [sheet.name, this.getSheetDimensions(sheet.id)]),
     );
   }
 
-  getSheetDimensions(sheetId: number): HeadlessSheetDimensions {
+  getSheetDimensions(sheetId: number): WorkPaperSheetDimensions {
     this.prepareReadableState();
     const sheet = this.sheetRecord(sheetId);
     let width = 0;
@@ -1676,7 +1684,7 @@ export class HeadlessWorkbook {
   simpleCellAddressFromString(
     value: string,
     defaultSheetId?: number,
-  ): HeadlessCellAddress | undefined {
+  ): WorkPaperCellAddress | undefined {
     this.assertNotDisposed();
     const defaultSheetName =
       defaultSheetId !== undefined
@@ -1700,7 +1708,10 @@ export class HeadlessWorkbook {
     }
   }
 
-  simpleCellRangeFromString(value: string, defaultSheetId?: number): HeadlessCellRange | undefined {
+  simpleCellRangeFromString(
+    value: string,
+    defaultSheetId?: number,
+  ): WorkPaperCellRange | undefined {
     this.assertNotDisposed();
     const defaultSheetName =
       defaultSheetId !== undefined
@@ -1728,8 +1739,8 @@ export class HeadlessWorkbook {
   }
 
   simpleCellAddressToString(
-    address: HeadlessCellAddress,
-    optionsOrContextSheetId: HeadlessAddressFormatOptions | number = {},
+    address: WorkPaperCellAddress,
+    optionsOrContextSheetId: WorkPaperAddressFormatOptions | number = {},
   ): string {
     this.assertNotDisposed();
     const includeSheetName =
@@ -1744,8 +1755,8 @@ export class HeadlessWorkbook {
   }
 
   simpleCellRangeToString(
-    range: HeadlessCellRange,
-    optionsOrContextSheetId: HeadlessAddressFormatOptions | number = {},
+    range: WorkPaperCellRange,
+    optionsOrContextSheetId: WorkPaperAddressFormatOptions | number = {},
   ): string {
     const includeSheetName =
       typeof optionsOrContextSheetId === "number"
@@ -1768,7 +1779,7 @@ export class HeadlessWorkbook {
     });
   }
 
-  getCellDependents(address: HeadlessAddressLike): HeadlessDependencyRef[] {
+  getCellDependents(address: WorkPaperAddressLike): WorkPaperDependencyRef[] {
     this.flushPendingBatchOps();
     if (!isCellRange(address)) {
       return this.toDependencyRefs(
@@ -1783,7 +1794,7 @@ export class HeadlessWorkbook {
     );
   }
 
-  getCellPrecedents(address: HeadlessAddressLike): HeadlessDependencyRef[] {
+  getCellPrecedents(address: WorkPaperAddressLike): WorkPaperDependencyRef[] {
     this.flushPendingBatchOps();
     if (!isCellRange(address)) {
       return this.getDirectPrecedentRefs(address);
@@ -1813,7 +1824,7 @@ export class HeadlessWorkbook {
     return this.listSheetRecords().length;
   }
 
-  getCellType(address: HeadlessCellAddress): HeadlessCellType {
+  getCellType(address: WorkPaperCellAddress): WorkPaperCellType {
     this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     if (this.isCellEmpty(address)) {
@@ -1825,20 +1836,20 @@ export class HeadlessWorkbook {
     return cell.formula ? "FORMULA" : "VALUE";
   }
 
-  doesCellHaveSimpleValue(address: HeadlessCellAddress): boolean {
+  doesCellHaveSimpleValue(address: WorkPaperCellAddress): boolean {
     this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     return !cell.formula && !this.isCellEmpty(address);
   }
 
-  doesCellHaveFormula(address: HeadlessCellAddress): boolean {
+  doesCellHaveFormula(address: WorkPaperCellAddress): boolean {
     this.flushPendingBatchOps();
     return (
       this.engine.getCell(this.sheetName(address.sheet), this.a1(address)).formula !== undefined
     );
   }
 
-  isCellEmpty(address: HeadlessCellAddress): boolean {
+  isCellEmpty(address: WorkPaperCellAddress): boolean {
     this.flushPendingBatchOps();
     return (
       this.engine.getCellValue(this.sheetName(address.sheet), this.a1(address)).tag ===
@@ -1846,7 +1857,7 @@ export class HeadlessWorkbook {
     );
   }
 
-  isCellPartOfArray(address: HeadlessCellAddress): boolean {
+  isCellPartOfArray(address: WorkPaperCellAddress): boolean {
     this.flushPendingBatchOps();
     return this.engine
       .getSpillRanges()
@@ -1864,7 +1875,7 @@ export class HeadlessWorkbook {
       });
   }
 
-  getCellValueType(address: HeadlessCellAddress): HeadlessCellValueType {
+  getCellValueType(address: WorkPaperCellAddress): WorkPaperCellValueType {
     const value = this.getCellValue(address);
     switch (value.tag) {
       case ValueTag.Number:
@@ -1881,7 +1892,7 @@ export class HeadlessWorkbook {
     }
   }
 
-  getCellValueDetailedType(address: HeadlessCellAddress): HeadlessCellValueDetailedType {
+  getCellValueDetailedType(address: WorkPaperCellAddress): WorkPaperCellValueDetailedType {
     const type = this.getCellValueType(address);
     if (type !== "NUMBER") {
       return type;
@@ -1899,7 +1910,7 @@ export class HeadlessWorkbook {
     return type;
   }
 
-  getCellValueFormat(address: HeadlessCellAddress): string | undefined {
+  getCellValueFormat(address: WorkPaperCellAddress): string | undefined {
     this.flushPendingBatchOps();
     const cell = this.engine.getCell(this.sheetName(address.sheet), this.a1(address));
     return cell.format;
@@ -1919,7 +1930,7 @@ export class HeadlessWorkbook {
     return isFormulaContent(expression.expression) ? expression.expression : undefined;
   }
 
-  getNamedExpression(name: string, scope?: number): HeadlessNamedExpression | undefined {
+  getNamedExpression(name: string, scope?: number): WorkPaperNamedExpression | undefined {
     const expression = this.namedExpressions.get(makeNamedExpressionKey(name, scope));
     if (!expression) {
       return undefined;
@@ -1937,7 +1948,7 @@ export class HeadlessWorkbook {
     expression: RawCellContent,
     scope?: number,
     options?: Record<string, string | number | boolean>,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     if (!this.isItPossibleToAddNamedExpression(expressionName, expression, scope)) {
       throw new NamedExpressionNameIsAlreadyTakenError(expressionName);
     }
@@ -1964,7 +1975,7 @@ export class HeadlessWorkbook {
     expression: RawCellContent,
     scope?: number,
     options?: Record<string, string | number | boolean>,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     if (!this.isItPossibleToChangeNamedExpression(expressionName, expression, scope)) {
       throw new NamedExpressionDoesNotExistError(expressionName);
     }
@@ -1976,7 +1987,7 @@ export class HeadlessWorkbook {
     });
   }
 
-  removeNamedExpression(expressionName: string, scope?: number): HeadlessChange[] {
+  removeNamedExpression(expressionName: string, scope?: number): WorkPaperChange[] {
     if (!this.isItPossibleToRemoveNamedExpression(expressionName, scope)) {
       throw new NamedExpressionDoesNotExistError(expressionName);
     }
@@ -2004,7 +2015,7 @@ export class HeadlessWorkbook {
       .toSorted(compareSheetNames);
   }
 
-  getAllNamedExpressionsSerialized(): SerializedHeadlessNamedExpression[] {
+  getAllNamedExpressionsSerialized(): SerializedWorkPaperNamedExpression[] {
     return [...this.namedExpressions.values()]
       .map((expression) => ({
         name: expression.publicName,
@@ -2025,7 +2036,7 @@ export class HeadlessWorkbook {
     try {
       return `=${serializeFormula(parseFormula(stripLeadingEquals(formula)))}`;
     } catch (error) {
-      throw new HeadlessParseError(this.messageOf(error, `Unable to normalize formula`));
+      throw new WorkPaperParseError(this.messageOf(error, `Unable to normalize formula`));
     }
   }
 
@@ -2034,7 +2045,7 @@ export class HeadlessWorkbook {
       throw new NotAFormulaError();
     }
     try {
-      const temporaryWorkbook = new HeadlessWorkbook(this.getConfig());
+      const temporaryWorkbook = new WorkPaper(this.getConfig());
       const serializedSheets = this.getAllSheetsSerialized();
       Object.keys(serializedSheets).forEach((sheetName) => {
         temporaryWorkbook.engine.createSheet(sheetName);
@@ -2050,7 +2061,7 @@ export class HeadlessWorkbook {
       });
       temporaryWorkbook.clearHistoryStacks();
       const scratchSheetName =
-        scope !== undefined ? `__HEADLESS_CALC_${scope}__` : "__HEADLESS_CALC__";
+        scope !== undefined ? `__WORKPAPER_CALC_${scope}__` : "__WORKPAPER_CALC__";
       temporaryWorkbook.engine.createSheet(scratchSheetName);
       const scratchSheetId = temporaryWorkbook.requireSheetId(scratchSheetName);
       temporaryWorkbook.applyRawContent(
@@ -2072,7 +2083,7 @@ export class HeadlessWorkbook {
       temporaryWorkbook.dispose();
       return value;
     } catch (error) {
-      throw new HeadlessParseError(this.messageOf(error, "Unable to calculate formula"));
+      throw new WorkPaperParseError(this.messageOf(error, "Unable to calculate formula"));
     }
   }
 
@@ -2086,7 +2097,7 @@ export class HeadlessWorkbook {
       collectFormulaNameRefs(parsed, names);
       return [...names].toSorted(compareSheetNames);
     } catch (error) {
-      throw new HeadlessParseError(this.messageOf(error, "Unable to inspect formula"));
+      throw new WorkPaperParseError(this.messageOf(error, "Unable to inspect formula"));
     }
   }
 
@@ -2104,7 +2115,7 @@ export class HeadlessWorkbook {
 
   getRegisteredFunctionNames(languageCode?: string): string[] {
     const code = languageCode ?? this.config.language ?? "enGB";
-    const language = HeadlessWorkbook.languageRegistry.get(code);
+    const language = WorkPaper.languageRegistry.get(code);
     const functions = [...this.functionSnapshot.values()]
       .filter((binding) => binding.publicName === binding.publicName.toUpperCase())
       .map((binding) => binding.publicName)
@@ -2115,26 +2126,26 @@ export class HeadlessWorkbook {
     return functions.map((name) => language.functions?.[name] ?? name);
   }
 
-  getFunctionPlugin(functionId: string): HeadlessFunctionPluginDefinition | undefined {
+  getFunctionPlugin(functionId: string): WorkPaperFunctionPluginDefinition | undefined {
     const binding = this.functionAliasLookup.get(functionId.trim().toUpperCase());
     if (!binding) {
       return undefined;
     }
-    const plugin = HeadlessWorkbook.functionPluginRegistry.get(binding.pluginId);
+    const plugin = WorkPaper.functionPluginRegistry.get(binding.pluginId);
     return plugin ? clonePluginDefinition(plugin) : undefined;
   }
 
-  getAllFunctionPlugins(): HeadlessFunctionPluginDefinition[] {
+  getAllFunctionPlugins(): WorkPaperFunctionPluginDefinition[] {
     const pluginIds = new Set(
       [...this.functionSnapshot.values()].map((binding) => binding.pluginId),
     );
     return [...pluginIds]
-      .map((pluginId) => HeadlessWorkbook.functionPluginRegistry.get(pluginId))
-      .filter((plugin): plugin is HeadlessFunctionPluginDefinition => plugin !== undefined)
+      .map((pluginId) => WorkPaper.functionPluginRegistry.get(pluginId))
+      .filter((plugin): plugin is WorkPaperFunctionPluginDefinition => plugin !== undefined)
       .map((plugin) => clonePluginDefinition(plugin));
   }
 
-  numberToDateTime(value: number): HeadlessDateTime | undefined {
+  numberToDateTime(value: number): WorkPaperDateTime | undefined {
     const dateParts = excelSerialToDateParts(value);
     if (!dateParts) {
       return undefined;
@@ -2155,7 +2166,9 @@ export class HeadlessWorkbook {
     };
   }
 
-  numberToDate(value: number): Omit<HeadlessDateTime, "hours" | "minutes" | "seconds"> | undefined {
+  numberToDate(
+    value: number,
+  ): Omit<WorkPaperDateTime, "hours" | "minutes" | "seconds"> | undefined {
     const dateTime = this.numberToDateTime(value);
     if (!dateTime) {
       return undefined;
@@ -2164,7 +2177,9 @@ export class HeadlessWorkbook {
     return { year, month, day };
   }
 
-  numberToTime(value: number): Pick<HeadlessDateTime, "hours" | "minutes" | "seconds"> | undefined {
+  numberToTime(
+    value: number,
+  ): Pick<WorkPaperDateTime, "hours" | "minutes" | "seconds"> | undefined {
     const dateTime = this.numberToDateTime(value);
     if (!dateTime) {
       return undefined;
@@ -2174,14 +2189,14 @@ export class HeadlessWorkbook {
   }
 
   setCellContents(
-    address: HeadlessCellAddress,
-    content: RawCellContent | HeadlessSheet,
-  ): HeadlessChange[] {
+    address: WorkPaperCellAddress,
+    content: RawCellContent | WorkPaperSheet,
+  ): WorkPaperChange[] {
     if (!this.isItPossibleToSetCellContents(address, content)) {
-      throw new HeadlessOperationError("Cell contents cannot be set");
+      throw new WorkPaperOperationError("Cell contents cannot be set");
     }
     return this.captureChanges(undefined, () => {
-      if (isHeadlessSheetMatrix(content)) {
+      if (isWorkPaperSheetMatrix(content)) {
         this.flushPendingBatchOps();
         this.applyMatrixContents(address, content);
         return;
@@ -2194,19 +2209,19 @@ export class HeadlessWorkbook {
     });
   }
 
-  swapRowIndexes(sheetId: number, rowA: number, rowB: number): HeadlessChange[];
+  swapRowIndexes(sheetId: number, rowA: number, rowB: number): WorkPaperChange[];
   swapRowIndexes(
     sheetId: number,
-    rowMappings: readonly HeadlessAxisSwapMapping[],
-  ): HeadlessChange[];
+    rowMappings: readonly WorkPaperAxisSwapMapping[],
+  ): WorkPaperChange[];
   swapRowIndexes(
     sheetId: number,
-    rowAOrMappings: number | readonly HeadlessAxisSwapMapping[],
+    rowAOrMappings: number | readonly WorkPaperAxisSwapMapping[],
     rowB?: number,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     const mappings = this.normalizeAxisSwapMappings("row", rowAOrMappings, rowB);
     if (!this.isItPossibleToSwapRowIndexes(sheetId, mappings)) {
-      throw new HeadlessOperationError("Rows cannot be swapped");
+      throw new WorkPaperOperationError("Rows cannot be swapped");
     }
     return this.batch(() => {
       mappings.forEach(([rowA, mappedRowB]) => {
@@ -2224,9 +2239,9 @@ export class HeadlessWorkbook {
     });
   }
 
-  setRowOrder(sheetId: number, rowOrder: readonly number[]): HeadlessChange[] {
+  setRowOrder(sheetId: number, rowOrder: readonly number[]): WorkPaperChange[] {
     if (!this.isItPossibleToSetRowOrder(sheetId, rowOrder)) {
-      throw new HeadlessOperationError("Row order is invalid");
+      throw new WorkPaperOperationError("Row order is invalid");
     }
     const current = rowOrder.toSorted((left, right) => left - right);
     return this.batch(() => {
@@ -2242,19 +2257,19 @@ export class HeadlessWorkbook {
     });
   }
 
-  swapColumnIndexes(sheetId: number, columnA: number, columnB: number): HeadlessChange[];
+  swapColumnIndexes(sheetId: number, columnA: number, columnB: number): WorkPaperChange[];
   swapColumnIndexes(
     sheetId: number,
-    columnMappings: readonly HeadlessAxisSwapMapping[],
-  ): HeadlessChange[];
+    columnMappings: readonly WorkPaperAxisSwapMapping[],
+  ): WorkPaperChange[];
   swapColumnIndexes(
     sheetId: number,
-    columnAOrMappings: number | readonly HeadlessAxisSwapMapping[],
+    columnAOrMappings: number | readonly WorkPaperAxisSwapMapping[],
     columnB?: number,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     const mappings = this.normalizeAxisSwapMappings("column", columnAOrMappings, columnB);
     if (!this.isItPossibleToSwapColumnIndexes(sheetId, mappings)) {
-      throw new HeadlessOperationError("Columns cannot be swapped");
+      throw new WorkPaperOperationError("Columns cannot be swapped");
     }
     return this.batch(() => {
       mappings.forEach(([columnA, mappedColumnB]) => {
@@ -2272,9 +2287,9 @@ export class HeadlessWorkbook {
     });
   }
 
-  setColumnOrder(sheetId: number, columnOrder: readonly number[]): HeadlessChange[] {
+  setColumnOrder(sheetId: number, columnOrder: readonly number[]): WorkPaperChange[] {
     if (!this.isItPossibleToSetColumnOrder(sheetId, columnOrder)) {
-      throw new HeadlessOperationError("Column order is invalid");
+      throw new WorkPaperOperationError("Column order is invalid");
     }
     const current = columnOrder.toSorted((left, right) => left - right);
     return this.batch(() => {
@@ -2290,17 +2305,17 @@ export class HeadlessWorkbook {
     });
   }
 
-  addRows(sheetId: number, start: number, count?: number): HeadlessChange[];
-  addRows(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): HeadlessChange[];
+  addRows(sheetId: number, start: number, count?: number): WorkPaperChange[];
+  addRows(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): WorkPaperChange[];
   addRows(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
-  ): HeadlessChange[] {
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
+  ): WorkPaperChange[] {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals);
     if (!this.isItPossibleToAddRows(sheetId, ...indexes)) {
-      throw new HeadlessOperationError("Rows cannot be added");
+      throw new WorkPaperOperationError("Rows cannot be added");
     }
     return this.batch(() => {
       indexes.forEach(([start, amount]) => {
@@ -2309,17 +2324,17 @@ export class HeadlessWorkbook {
     });
   }
 
-  removeRows(sheetId: number, start: number, count?: number): HeadlessChange[];
-  removeRows(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): HeadlessChange[];
+  removeRows(sheetId: number, start: number, count?: number): WorkPaperChange[];
+  removeRows(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): WorkPaperChange[];
   removeRows(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
-  ): HeadlessChange[] {
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
+  ): WorkPaperChange[] {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals);
     if (!this.isItPossibleToRemoveRows(sheetId, ...indexes)) {
-      throw new HeadlessOperationError("Rows cannot be removed");
+      throw new WorkPaperOperationError("Rows cannot be removed");
     }
     return this.batch(() => {
       indexes
@@ -2330,17 +2345,17 @@ export class HeadlessWorkbook {
     });
   }
 
-  addColumns(sheetId: number, start: number, count?: number): HeadlessChange[];
-  addColumns(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): HeadlessChange[];
+  addColumns(sheetId: number, start: number, count?: number): WorkPaperChange[];
+  addColumns(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): WorkPaperChange[];
   addColumns(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
-  ): HeadlessChange[] {
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
+  ): WorkPaperChange[] {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals);
     if (!this.isItPossibleToAddColumns(sheetId, ...indexes)) {
-      throw new HeadlessOperationError("Columns cannot be added");
+      throw new WorkPaperOperationError("Columns cannot be added");
     }
     return this.batch(() => {
       indexes.forEach(([start, amount]) => {
@@ -2349,17 +2364,17 @@ export class HeadlessWorkbook {
     });
   }
 
-  removeColumns(sheetId: number, start: number, count?: number): HeadlessChange[];
-  removeColumns(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): HeadlessChange[];
+  removeColumns(sheetId: number, start: number, count?: number): WorkPaperChange[];
+  removeColumns(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): WorkPaperChange[];
   removeColumns(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
-  ): HeadlessChange[] {
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
+  ): WorkPaperChange[] {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals);
     if (!this.isItPossibleToRemoveColumns(sheetId, ...indexes)) {
-      throw new HeadlessOperationError("Columns cannot be removed");
+      throw new WorkPaperOperationError("Columns cannot be removed");
     }
     return this.batch(() => {
       indexes
@@ -2370,9 +2385,9 @@ export class HeadlessWorkbook {
     });
   }
 
-  moveCells(source: HeadlessCellRange, target: HeadlessCellAddress): HeadlessChange[] {
+  moveCells(source: WorkPaperCellRange, target: WorkPaperCellAddress): WorkPaperChange[] {
     if (!this.isItPossibleToMoveCells(source, target)) {
-      throw new HeadlessOperationError("Cells cannot be moved");
+      throw new WorkPaperOperationError("Cells cannot be moved");
     }
     const sourceHeight = source.end.row - source.start.row;
     const sourceWidth = source.end.col - source.start.col;
@@ -2385,18 +2400,18 @@ export class HeadlessWorkbook {
     });
   }
 
-  moveRows(sheetId: number, start: number, count: number, target: number): HeadlessChange[] {
+  moveRows(sheetId: number, start: number, count: number, target: number): WorkPaperChange[] {
     if (!this.isItPossibleToMoveRows(sheetId, start, count, target)) {
-      throw new HeadlessOperationError("Rows cannot be moved");
+      throw new WorkPaperOperationError("Rows cannot be moved");
     }
     return this.captureChanges(undefined, () => {
       this.engine.moveRows(this.sheetName(sheetId), start, count, target);
     });
   }
 
-  moveColumns(sheetId: number, start: number, count: number, target: number): HeadlessChange[] {
+  moveColumns(sheetId: number, start: number, count: number, target: number): WorkPaperChange[] {
     if (!this.isItPossibleToMoveColumns(sheetId, start, count, target)) {
-      throw new HeadlessOperationError("Columns cannot be moved");
+      throw new WorkPaperOperationError("Columns cannot be moved");
     }
     return this.captureChanges(undefined, () => {
       this.engine.moveColumns(this.sheetName(sheetId), start, count, target);
@@ -2414,7 +2429,7 @@ export class HeadlessWorkbook {
     this.drainTrackedEngineEvents();
     this.engine.createSheet(name);
     const sheetId = this.requireSheetId(name);
-    const payload: HeadlessWorkbookDetailedEventMap["sheetAdded"] = { sheetId, sheetName: name };
+    const payload: WorkPaperDetailedEventMap["sheetAdded"] = { sheetId, sheetName: name };
     if (this.shouldSuppressEvents()) {
       this.queuedEvents.push({ eventName: "sheetAdded", payload });
     } else {
@@ -2427,9 +2442,9 @@ export class HeadlessWorkbook {
     return name;
   }
 
-  removeSheet(sheetId: number): HeadlessChange[] {
+  removeSheet(sheetId: number): WorkPaperChange[] {
     if (!this.isItPossibleToRemoveSheet(sheetId)) {
-      throw new HeadlessSheetError(`Sheet '${sheetId}' cannot be removed`);
+      throw new WorkPaperSheetError(`Sheet '${sheetId}' cannot be removed`);
     }
     const sheetName = this.sheetName(sheetId);
     return this.captureChanges(
@@ -2447,9 +2462,9 @@ export class HeadlessWorkbook {
     );
   }
 
-  clearSheet(sheetId: number): HeadlessChange[] {
+  clearSheet(sheetId: number): WorkPaperChange[] {
     if (!this.isItPossibleToClearSheet(sheetId)) {
-      throw new HeadlessSheetError(`Sheet '${sheetId}' cannot be cleared`);
+      throw new WorkPaperSheetError(`Sheet '${sheetId}' cannot be cleared`);
     }
     return this.captureChanges(undefined, () => {
       const dimensions = this.getSheetDimensions(sheetId);
@@ -2464,18 +2479,18 @@ export class HeadlessWorkbook {
     });
   }
 
-  setSheetContent(sheetId: number, content: HeadlessSheet): HeadlessChange[] {
+  setSheetContent(sheetId: number, content: WorkPaperSheet): WorkPaperChange[] {
     if (!this.isItPossibleToReplaceSheetContent(sheetId, content)) {
-      throw new HeadlessSheetError(`Sheet '${sheetId}' cannot be replaced`);
+      throw new WorkPaperSheetError(`Sheet '${sheetId}' cannot be replaced`);
     }
     return this.captureChanges(undefined, () => {
       this.replaceSheetContentInternal(sheetId, content, { duringInitialization: false });
     });
   }
 
-  renameSheet(sheetId: number, nextName: string): HeadlessChange[] {
+  renameSheet(sheetId: number, nextName: string): WorkPaperChange[] {
     if (!this.isItPossibleToRenameSheet(sheetId, nextName)) {
-      throw new HeadlessSheetError(`Sheet '${sheetId}' cannot be renamed to '${nextName}'`);
+      throw new WorkPaperSheetError(`Sheet '${sheetId}' cannot be renamed to '${nextName}'`);
     }
     const oldName = this.sheetName(sheetId);
     const newName = nextName.trim();
@@ -2495,13 +2510,13 @@ export class HeadlessWorkbook {
   }
 
   isItPossibleToSetCellContents(
-    address: HeadlessCellAddress,
-    content?: RawCellContent | HeadlessSheet,
+    address: WorkPaperCellAddress,
+    content?: RawCellContent | WorkPaperSheet,
   ): boolean;
-  isItPossibleToSetCellContents(range: HeadlessCellRange): boolean;
+  isItPossibleToSetCellContents(range: WorkPaperCellRange): boolean;
   isItPossibleToSetCellContents(
-    addressOrRange: HeadlessAddressLike,
-    content?: RawCellContent | HeadlessSheet,
+    addressOrRange: WorkPaperAddressLike,
+    content?: RawCellContent | WorkPaperSheet,
   ): boolean {
     this.assertNotDisposed();
     if (isCellRange(addressOrRange)) {
@@ -2523,7 +2538,7 @@ export class HeadlessWorkbook {
     }
     if (Array.isArray(content)) {
       if (!content.every((row) => Array.isArray(row))) {
-        throw new HeadlessArgumentError("Content matrix must be a two-dimensional array");
+        throw new WorkPaperArgumentError("Content matrix must be a two-dimensional array");
       }
       const height = content.length;
       const width = Math.max(0, ...content.map((row) => row.length));
@@ -2541,11 +2556,11 @@ export class HeadlessWorkbook {
   isItPossibleToSwapRowIndexes(sheetId: number, rowA: number, rowB: number): boolean;
   isItPossibleToSwapRowIndexes(
     sheetId: number,
-    rowMappings: readonly HeadlessAxisSwapMapping[],
+    rowMappings: readonly WorkPaperAxisSwapMapping[],
   ): boolean;
   isItPossibleToSwapRowIndexes(
     sheetId: number,
-    rowAOrMappings: number | readonly HeadlessAxisSwapMapping[],
+    rowAOrMappings: number | readonly WorkPaperAxisSwapMapping[],
     rowB?: number,
   ): boolean {
     this.sheetRecord(sheetId);
@@ -2571,11 +2586,11 @@ export class HeadlessWorkbook {
   isItPossibleToSwapColumnIndexes(sheetId: number, columnA: number, columnB: number): boolean;
   isItPossibleToSwapColumnIndexes(
     sheetId: number,
-    columnMappings: readonly HeadlessAxisSwapMapping[],
+    columnMappings: readonly WorkPaperAxisSwapMapping[],
   ): boolean;
   isItPossibleToSwapColumnIndexes(
     sheetId: number,
-    columnAOrMappings: number | readonly HeadlessAxisSwapMapping[],
+    columnAOrMappings: number | readonly WorkPaperAxisSwapMapping[],
     columnB?: number,
   ): boolean {
     this.sheetRecord(sheetId);
@@ -2599,12 +2614,12 @@ export class HeadlessWorkbook {
   }
 
   isItPossibleToAddRows(sheetId: number, start: number, count?: number): boolean;
-  isItPossibleToAddRows(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): boolean;
+  isItPossibleToAddRows(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): boolean;
   isItPossibleToAddRows(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
   ): boolean {
     this.sheetRecord(sheetId);
     return this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals).every(
@@ -2617,12 +2632,12 @@ export class HeadlessWorkbook {
   }
 
   isItPossibleToRemoveRows(sheetId: number, start: number, count?: number): boolean;
-  isItPossibleToRemoveRows(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): boolean;
+  isItPossibleToRemoveRows(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): boolean;
   isItPossibleToRemoveRows(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
   ): boolean {
     this.sheetRecord(sheetId);
     return this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals).every(
@@ -2635,12 +2650,12 @@ export class HeadlessWorkbook {
   }
 
   isItPossibleToAddColumns(sheetId: number, start: number, count?: number): boolean;
-  isItPossibleToAddColumns(sheetId: number, ...indexes: readonly HeadlessAxisInterval[]): boolean;
+  isItPossibleToAddColumns(sheetId: number, ...indexes: readonly WorkPaperAxisInterval[]): boolean;
   isItPossibleToAddColumns(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
   ): boolean {
     this.sheetRecord(sheetId);
     return this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals).every(
@@ -2655,13 +2670,13 @@ export class HeadlessWorkbook {
   isItPossibleToRemoveColumns(sheetId: number, start: number, count?: number): boolean;
   isItPossibleToRemoveColumns(
     sheetId: number,
-    ...indexes: readonly HeadlessAxisInterval[]
+    ...indexes: readonly WorkPaperAxisInterval[]
   ): boolean;
   isItPossibleToRemoveColumns(
     sheetId: number,
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    ...restIntervals: readonly HeadlessAxisInterval[]
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    ...restIntervals: readonly WorkPaperAxisInterval[]
   ): boolean {
     this.sheetRecord(sheetId);
     return this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals).every(
@@ -2673,7 +2688,7 @@ export class HeadlessWorkbook {
     );
   }
 
-  isItPossibleToMoveCells(source: HeadlessCellRange, target: HeadlessCellAddress): boolean {
+  isItPossibleToMoveCells(source: WorkPaperCellRange, target: WorkPaperCellAddress): boolean {
     assertRange(source);
     assertRowAndColumn(target.sheet, "target.sheet");
     assertRowAndColumn(target.row, "target.row");
@@ -2705,7 +2720,7 @@ export class HeadlessWorkbook {
   isItPossibleToAddSheet(sheetName: string): boolean {
     const trimmed = sheetName.trim();
     if (trimmed.length === 0) {
-      throw new HeadlessArgumentError("Sheet name must be non-empty");
+      throw new WorkPaperArgumentError("Sheet name must be non-empty");
     }
     return !this.doesSheetExist(trimmed);
   }
@@ -2718,10 +2733,10 @@ export class HeadlessWorkbook {
     return this.engine.workbook.getSheetById(sheetId) !== undefined;
   }
 
-  isItPossibleToReplaceSheetContent(sheetId: number, content: HeadlessSheet): boolean {
+  isItPossibleToReplaceSheetContent(sheetId: number, content: WorkPaperSheet): boolean {
     this.sheetRecord(sheetId);
     if (!content.every((row) => Array.isArray(row))) {
-      throw new HeadlessArgumentError("Sheet content must be a two-dimensional array");
+      throw new WorkPaperArgumentError("Sheet content must be a two-dimensional array");
     }
     const height = content.length;
     const width = Math.max(0, ...content.map((row) => row.length));
@@ -2734,7 +2749,7 @@ export class HeadlessWorkbook {
     this.sheetRecord(sheetId);
     const trimmed = nextName.trim();
     if (trimmed.length === 0) {
-      throw new HeadlessArgumentError("Sheet name must be non-empty");
+      throw new WorkPaperArgumentError("Sheet name must be non-empty");
     }
     const existing = this.engine.workbook.getSheet(trimmed);
     return !existing || existing.id === sheetId;
@@ -2787,8 +2802,23 @@ export class HeadlessWorkbook {
     this.unsubscribeEngineEvents?.();
     this.trackedEngineEvents = [];
     this.unsubscribeEngineEvents = this.engine.subscribe((event) => {
+      if (!this.engineEventCaptureEnabled) {
+        return;
+      }
       this.trackedEngineEvents.push(captureTrackedEngineEvent(event));
     });
+  }
+
+  private withEngineEventCaptureDisabled<T>(callback: () => T): T {
+    const previous = this.engineEventCaptureEnabled;
+    this.engineEventCaptureEnabled = false;
+    this.trackedEngineEvents = [];
+    try {
+      return callback();
+    } finally {
+      this.engineEventCaptureEnabled = previous;
+      this.trackedEngineEvents = [];
+    }
   }
 
   private drainTrackedEngineEvents(): TrackedEngineEvent[] {
@@ -2860,14 +2890,14 @@ export class HeadlessWorkbook {
 
   private assertNotDisposed(): void {
     if (this.disposed) {
-      throw new HeadlessOperationError("Workbook has been disposed");
+      throw new WorkPaperOperationError("Workbook has been disposed");
     }
   }
 
   private assertReadable(): void {
     this.prepareReadableState();
     if (this.evaluationSuspended) {
-      throw new HeadlessEvaluationSuspendedError();
+      throw new WorkPaperEvaluationSuspendedError();
     }
   }
 
@@ -2891,16 +2921,16 @@ export class HeadlessWorkbook {
     return sheetId;
   }
 
-  private a1(address: Pick<HeadlessCellAddress, "row" | "col">): string {
+  private a1(address: Pick<WorkPaperCellAddress, "row" | "col">): string {
     return formatAddress(address.row, address.col);
   }
 
-  private rangeRef(range: HeadlessCellRange): CellRangeRef {
+  private rangeRef(range: WorkPaperCellRange): CellRangeRef {
     assertRange(range);
     return sourceRangeRef(this.sheetName(range.start.sheet), range);
   }
 
-  private getDirectPrecedentStrings(address: HeadlessCellAddress): string[] {
+  private getDirectPrecedentStrings(address: WorkPaperCellAddress): string[] {
     const precedents = new Set<string>(
       this.engine.getDependencies(this.sheetName(address.sheet), this.a1(address)).directPrecedents,
     );
@@ -2913,7 +2943,7 @@ export class HeadlessWorkbook {
     return [...precedents];
   }
 
-  private getDirectPrecedentRefs(address: HeadlessCellAddress): HeadlessDependencyRef[] {
+  private getDirectPrecedentRefs(address: WorkPaperCellAddress): WorkPaperDependencyRef[] {
     return this.toDependencyRefs(this.getDirectPrecedentStrings(address));
   }
 
@@ -2924,8 +2954,8 @@ export class HeadlessWorkbook {
   }
 
   private getDenseRange<Value>(
-    range: HeadlessCellRange,
-    read: (address: HeadlessCellAddress) => Value,
+    range: WorkPaperCellRange,
+    read: (address: WorkPaperCellAddress) => Value,
   ): Value[][] {
     assertRange(range);
     const height = range.end.row - range.start.row + 1;
@@ -2943,10 +2973,12 @@ export class HeadlessWorkbook {
 
   private captureVisibilitySnapshot(): VisibilitySnapshot {
     const snapshot = new Map<number, SheetStateSnapshot>();
+    const strings = this.engine.strings;
+    const cellStore = this.engine.workbook.cellStore;
     this.listSheetRecords().forEach((sheet) => {
       const cells = new Map<number, CellValue>();
-      sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
-        const value = this.readStoredCellValue(sheet.name, row, col);
+      sheet.grid.forEachCellEntry((cellIndex: number, row: number, col: number) => {
+        const value = cellStore.getValue(cellIndex, (id) => strings.get(id));
         if (value.tag === ValueTag.Empty) {
           return;
         }
@@ -2960,18 +2992,6 @@ export class HeadlessWorkbook {
       });
     });
     return snapshot;
-  }
-
-  private readStoredCellValue(sheetName: string, row: number, col: number): CellValue {
-    const sheet = this.engine.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return emptyValue();
-    }
-    const cellIndex = sheet.grid.get(row, col);
-    if (cellIndex === -1) {
-      return emptyValue();
-    }
-    return this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id));
   }
 
   private captureNamedExpressionValueSnapshot(): NamedExpressionValueSnapshot {
@@ -2991,8 +3011,8 @@ export class HeadlessWorkbook {
   private computeCellChanges(
     beforeVisibility: VisibilitySnapshot,
     afterVisibility: VisibilitySnapshot,
-  ): HeadlessChange[] {
-    const cellChanges: HeadlessChange[] = [];
+  ): WorkPaperChange[] {
+    const cellChanges: WorkPaperChange[] = [];
     afterVisibility.forEach((afterSheet, sheetId) => {
       const beforeSheet = beforeVisibility.get(sheetId);
       const cellKeys = new Set<number>([
@@ -3016,17 +3036,17 @@ export class HeadlessWorkbook {
             address: { sheet: sheetId, row, col },
             sheetName: afterSheet.sheetName,
             a1: address,
-            newValue: cloneCellValue(afterValue),
+            newValue: afterValue,
           });
         });
     });
-    return orderHeadlessCellChanges(cellChanges, this.listSheetRecords());
+    return orderWorkPaperCellChanges(cellChanges, this.listSheetRecords());
   }
 
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
-  ): { changes: HeadlessChange[]; nextVisibility: VisibilitySnapshot } | null {
+  ): { changes: WorkPaperChange[]; nextVisibility: VisibilitySnapshot } | null {
     if (
       events.some(
         (event) =>
@@ -3073,8 +3093,8 @@ export class HeadlessWorkbook {
     const collectDirectChanges = (
       changedCellIndices: Uint32Array,
       seen: Set<number> | null,
-    ): { changes: HeadlessChange[]; isSorted: boolean } | null => {
-      const changes: HeadlessChange[] = [];
+    ): { changes: WorkPaperChange[]; isSorted: boolean } | null => {
+      const changes: WorkPaperChange[] = [];
       let previousSheetId = -1;
       let previousRow = -1;
       let previousCol = -1;
@@ -3126,7 +3146,7 @@ export class HeadlessWorkbook {
           address: { sheet: sheetId, row, col },
           sheetName,
           a1: address,
-          newValue: cloneCellValue(afterValue),
+          newValue: afterValue,
         });
       }
       return { changes, isSorted };
@@ -3141,7 +3161,7 @@ export class HeadlessWorkbook {
       return {
         changes: direct.isSorted
           ? direct.changes
-          : orderHeadlessCellChanges(
+          : orderWorkPaperCellChanges(
               direct.changes,
               this.listSheetRecords(),
               event.explicitChangedCount,
@@ -3171,7 +3191,7 @@ export class HeadlessWorkbook {
     return {
       changes: direct.isSorted
         ? direct.changes
-        : orderHeadlessCellChanges(direct.changes, this.listSheetRecords()),
+        : orderWorkPaperCellChanges(direct.changes, this.listSheetRecords()),
       nextVisibility,
     };
   }
@@ -3179,8 +3199,8 @@ export class HeadlessWorkbook {
   private computeNamedExpressionChanges(
     beforeNames: NamedExpressionValueSnapshot,
     afterNames: NamedExpressionValueSnapshot,
-  ): HeadlessChange[] {
-    const namedExpressionChanges: HeadlessChange[] = [];
+  ): WorkPaperChange[] {
+    const namedExpressionChanges: WorkPaperChange[] = [];
     afterNames.forEach((afterValue, key) => {
       const beforeValue = beforeNames.get(key);
       if (matrixValuesEqual(beforeValue, afterValue)) {
@@ -3197,13 +3217,13 @@ export class HeadlessWorkbook {
         newValue: cloneNamedExpressionValue(afterValue),
       });
     });
-    return namedExpressionChanges.toSorted(compareHeadlessNamedExpressionChanges);
+    return namedExpressionChanges.toSorted(compareWorkPaperNamedExpressionChanges);
   }
 
   private computeChangesAfterMutation(
     beforeVisibility: VisibilitySnapshot,
     beforeNames: NamedExpressionValueSnapshot,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     const hasNamedExpressions = this.namedExpressions.size > 0;
     const afterNames = hasNamedExpressions
       ? this.captureNamedExpressionValueSnapshot()
@@ -3212,7 +3232,7 @@ export class HeadlessWorkbook {
       beforeVisibility,
       this.drainTrackedEngineEvents(),
     );
-    let cellChanges: HeadlessChange[];
+    let cellChanges: WorkPaperChange[];
     if (fastPath) {
       cellChanges = fastPath.changes;
       this.visibilityCache = fastPath.nextVisibility;
@@ -3230,7 +3250,7 @@ export class HeadlessWorkbook {
   private captureChanges(
     semanticEvent: QueuedEvent | undefined,
     mutate: () => void,
-  ): HeadlessChange[] {
+  ): WorkPaperChange[] {
     this.assertNotDisposed();
     if (semanticEvent !== undefined) {
       this.flushPendingBatchOps();
@@ -3239,10 +3259,10 @@ export class HeadlessWorkbook {
       try {
         mutate();
       } catch (error) {
-        if (error instanceof Error && HEADLESS_PUBLIC_ERROR_NAMES.has(error.name)) {
+        if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
           throw error;
         }
-        throw new HeadlessOperationError(this.messageOf(error, "Mutation failed"));
+        throw new WorkPaperOperationError(this.messageOf(error, "Mutation failed"));
       }
       if (semanticEvent) {
         this.queuedEvents.push(semanticEvent);
@@ -3255,10 +3275,10 @@ export class HeadlessWorkbook {
     try {
       mutate();
     } catch (error) {
-      if (error instanceof Error && HEADLESS_PUBLIC_ERROR_NAMES.has(error.name)) {
+      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
         throw error;
       }
-      throw new HeadlessOperationError(this.messageOf(error, "Mutation failed"));
+      throw new WorkPaperOperationError(this.messageOf(error, "Mutation failed"));
     }
     const changes =
       semanticEvent === undefined
@@ -3347,16 +3367,16 @@ export class HeadlessWorkbook {
     return `Sheet${index}`;
   }
 
-  private buildNullMatrixForRange(range: HeadlessCellRange): RawCellContent[][] {
+  private buildNullMatrixForRange(range: WorkPaperCellRange): RawCellContent[][] {
     const height = range.end.row - range.start.row + 1;
     const width = range.end.col - range.start.col + 1;
     return Array.from({ length: height }, () => Array.from({ length: width }, () => null));
   }
 
   private applySerializedMatrix(
-    targetLeftCorner: HeadlessCellAddress,
+    targetLeftCorner: WorkPaperCellAddress,
     serialized: RawCellContent[][],
-    sourceAnchor: HeadlessCellAddress,
+    sourceAnchor: WorkPaperCellAddress,
   ): void {
     this.flushPendingBatchOps();
     if (matrixContainsFormulaContent(serialized)) {
@@ -3403,8 +3423,8 @@ export class HeadlessWorkbook {
   }
 
   private applyMatrixContents(
-    address: HeadlessCellAddress,
-    content: HeadlessSheet,
+    address: WorkPaperCellAddress,
+    content: WorkPaperSheet,
     options: {
       captureUndo?: boolean;
       deferLiteralAddresses?: ReadonlySet<string>;
@@ -3439,11 +3459,13 @@ export class HeadlessWorkbook {
       }
       this.engine.applyOps(phaseOps, { ...applyOptions, trusted: true });
     };
+    const phaseSource = options.captureUndo === false ? "restore" : "local";
 
     if (formulaOps.length === 0) {
       applyPlannedOps(ops, {
         captureUndo: options.captureUndo,
         potentialNewCells,
+        source: phaseSource,
       });
       return;
     }
@@ -3451,22 +3473,23 @@ export class HeadlessWorkbook {
     applyPlannedOps(leadingOps, {
       captureUndo: options.captureUndo,
       potentialNewCells,
+      source: phaseSource,
     });
     applyPlannedOps(formulaOps, {
       captureUndo: options.captureUndo,
       potentialNewCells,
-      source: "local",
+      source: phaseSource,
     });
     applyPlannedOps(trailingLiteralOps, {
       captureUndo: options.captureUndo,
       potentialNewCells,
-      source: "local",
+      source: phaseSource,
     });
   }
 
   private replaceSheetContentInternal(
     sheetId: number,
-    content: HeadlessSheet,
+    content: WorkPaperSheet,
     options: { duringInitialization: boolean },
   ): void {
     const sheetName = this.sheetName(sheetId);
@@ -3508,7 +3531,7 @@ export class HeadlessWorkbook {
     this.mergeUndoHistory(undoStackStart);
   }
 
-  private applyRawContent(address: HeadlessCellAddress, content: RawCellContent): void {
+  private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
     if (content === null) {
       this.engine.clearCellAt(address.sheet, address.row, address.col);
       return;
@@ -3534,13 +3557,13 @@ export class HeadlessWorkbook {
       this.config.functionPlugins && this.config.functionPlugins.length > 0
         ? new Set(this.config.functionPlugins.map((plugin) => plugin.id))
         : undefined;
-    HeadlessWorkbook.functionPluginRegistry.forEach((plugin) => {
+    WorkPaper.functionPluginRegistry.forEach((plugin) => {
       if (allowedPluginIds && !allowedPluginIds.has(plugin.id)) {
         return;
       }
       Object.keys(plugin.implementedFunctions).forEach((functionId) => {
         const normalized = functionId.trim().toUpperCase();
-        const internalName = `__BILIG_HEADLESS_FN_${this.workbookId}_${normalized}`;
+        const internalName = `__BILIG_WORKPAPER_FN_${this.workbookId}_${normalized}`;
         const implementation = plugin.functions?.[normalized];
         const binding: InternalFunctionBinding = {
           pluginId: plugin.id,
@@ -3574,8 +3597,8 @@ export class HeadlessWorkbook {
     this.internalFunctionLookup.clear();
   }
 
-  private rebuildWithConfig(nextConfig: HeadlessConfig): void {
-    validateHeadlessConfig(nextConfig);
+  private rebuildWithConfig(nextConfig: WorkPaperConfig): void {
+    validateWorkPaperConfig(nextConfig);
     const serializedSheets = this.getAllSheetsSerialized();
     Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
       validateSheetWithinLimits(sheetName, sheet, nextConfig);
@@ -3595,22 +3618,25 @@ export class HeadlessWorkbook {
     this.engine = new SpreadsheetEngine({
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
+      trackReplicaVersions: false,
     });
     this.attachEngineEventTracking();
     this.config = cloneConfig(nextConfig);
     this.captureFunctionRegistry();
 
-    Object.keys(serializedSheets).forEach((sheetName) => {
-      this.engine.createSheet(sheetName);
-    });
-    serializedNamedExpressions.forEach((expression) => {
-      this.upsertNamedExpressionInternal(expression, { duringInitialization: true });
-    });
-    Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
-      const sheetId = this.requireSheetId(sheetName);
-      if (!tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
-        this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
-      }
+    this.withEngineEventCaptureDisabled(() => {
+      Object.keys(serializedSheets).forEach((sheetName) => {
+        this.engine.createSheet(sheetName);
+      });
+      serializedNamedExpressions.forEach((expression) => {
+        this.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+      });
+      Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
+        const sheetId = this.requireSheetId(sheetName);
+        if (!tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
+          this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+        }
+      });
     });
     this.clearHistoryStacks();
     this.primeChangeTrackingCaches();
@@ -3622,19 +3648,19 @@ export class HeadlessWorkbook {
   }
 
   private normalizeAxisIntervals(
-    startOrInterval: number | HeadlessAxisInterval,
-    countOrInterval?: number | HeadlessAxisInterval,
-    restIntervals: readonly HeadlessAxisInterval[] = [],
+    startOrInterval: number | WorkPaperAxisInterval,
+    countOrInterval?: number | WorkPaperAxisInterval,
+    restIntervals: readonly WorkPaperAxisInterval[] = [],
   ): Array<[number, number]> {
     if (typeof startOrInterval === "number") {
       if (Array.isArray(countOrInterval)) {
-        throw new HeadlessArgumentError("Axis interval count must be a number");
+        throw new WorkPaperArgumentError("Axis interval count must be a number");
       }
       const resolvedCount = typeof countOrInterval === "number" ? countOrInterval : 1;
       return [[startOrInterval, resolvedCount]];
     }
     if (typeof countOrInterval === "number") {
-      throw new HeadlessArgumentError("Axis interval count is only valid with a numeric start");
+      throw new WorkPaperArgumentError("Axis interval count is only valid with a numeric start");
     }
     return [startOrInterval, ...(countOrInterval ? [countOrInterval] : []), ...restIntervals].map(
       ([start, count]) => [start, count ?? 1] as [number, number],
@@ -3643,12 +3669,12 @@ export class HeadlessWorkbook {
 
   private normalizeAxisSwapMappings(
     label: "row" | "column",
-    startOrMappings: number | readonly HeadlessAxisSwapMapping[],
+    startOrMappings: number | readonly WorkPaperAxisSwapMapping[],
     end?: number,
-  ): HeadlessAxisSwapMapping[] {
+  ): WorkPaperAxisSwapMapping[] {
     if (typeof startOrMappings === "number") {
       if (end === undefined) {
-        throw new HeadlessArgumentError(`${label} swap requires two indexes`);
+        throw new WorkPaperArgumentError(`${label} swap requires two indexes`);
       }
       return [[startOrMappings, end]];
     }
@@ -3656,12 +3682,12 @@ export class HeadlessWorkbook {
   }
 
   private collectRangeDependencies(
-    range: HeadlessCellRange,
-    readDependencies: (address: HeadlessCellAddress) => readonly string[],
-  ): HeadlessDependencyRef[] {
+    range: WorkPaperCellRange,
+    readDependencies: (address: WorkPaperCellAddress) => readonly string[],
+  ): WorkPaperDependencyRef[] {
     assertRange(range);
     const seen = new Set<string>();
-    const collected: HeadlessDependencyRef[] = [];
+    const collected: WorkPaperDependencyRef[] = [];
     this.getDenseRange(range, (address) => address).forEach((row) => {
       row.forEach((address) => {
         this.toDependencyRefs(readDependencies(address)).forEach((dependency) => {
@@ -3701,7 +3727,7 @@ export class HeadlessWorkbook {
       );
       return serializeFormula(transformed);
     } catch (error) {
-      throw new HeadlessParseError(this.messageOf(error, "Unable to store formula"));
+      throw new WorkPaperParseError(this.messageOf(error, "Unable to store formula"));
     }
   }
 
@@ -3790,7 +3816,7 @@ export class HeadlessWorkbook {
   }
 
   private upsertNamedExpressionInternal(
-    expression: SerializedHeadlessNamedExpression,
+    expression: SerializedWorkPaperNamedExpression,
     options: { duringInitialization: boolean },
   ): void {
     this.validateNamedExpression(expression.name, expression.expression, expression.scope);
@@ -3870,7 +3896,7 @@ export class HeadlessWorkbook {
     }
   }
 
-  private toDependencyRefs(values: readonly string[]): HeadlessDependencyRef[] {
+  private toDependencyRefs(values: readonly string[]): WorkPaperDependencyRef[] {
     return values.map((value) => {
       try {
         const parsedCell = parseCellAddress(value);
@@ -3881,7 +3907,7 @@ export class HeadlessWorkbook {
             row: parsedCell.row,
             col: parsedCell.col,
           },
-        } satisfies HeadlessDependencyRef;
+        } satisfies WorkPaperDependencyRef;
       } catch {
         try {
           const parsedRange = parseRangeAddress(value);
@@ -3904,13 +3930,13 @@ export class HeadlessWorkbook {
                   col: parsedRange.end.col,
                 },
               },
-            } satisfies HeadlessDependencyRef;
+            } satisfies WorkPaperDependencyRef;
           }
         } catch {
-          return { kind: "name", name: value } satisfies HeadlessDependencyRef;
+          return { kind: "name", name: value } satisfies WorkPaperDependencyRef;
         }
       }
-      return { kind: "name", name: value } satisfies HeadlessDependencyRef;
+      return { kind: "name", name: value } satisfies WorkPaperDependencyRef;
     });
   }
 
@@ -3926,9 +3952,9 @@ function cloneNamedExpressionValue(value: CellValue | CellValue[][]): CellValue 
   return value.map((row) => row.map((cell) => cloneCellValue(cell)));
 }
 
-function compareHeadlessNamedExpressionChanges(
-  left: HeadlessChange,
-  right: HeadlessChange,
+function compareWorkPaperNamedExpressionChanges(
+  left: WorkPaperChange,
+  right: WorkPaperChange,
 ): number {
   if (left.kind !== "named-expression" || right.kind !== "named-expression") {
     return 0;
@@ -3936,7 +3962,7 @@ function compareHeadlessNamedExpressionChanges(
   return (left.scope ?? -1) - (right.scope ?? -1) || left.name.localeCompare(right.name);
 }
 
-function sourceRangeRef(sheetName: string, range: HeadlessCellRange): CellRangeRef {
+function sourceRangeRef(sheetName: string, range: WorkPaperCellRange): CellRangeRef {
   return {
     sheetName,
     startAddress: formatAddress(range.start.row, range.start.col),

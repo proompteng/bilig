@@ -1,7 +1,7 @@
 {
   "name": "@bilig/headless",
   "version": "0.1.2",
-  "description": "Headless spreadsheet workbook facade for bilig with HyperFormula-style workflows.",
+  "description": "WorkPaper spreadsheet workbook facade for bilig with HyperFormula-style workflows.",
   "keywords": [
     "bilig",
     "formula",
@@ -38,7 +38,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@bilig/core": "workspace:*",
