@@ -6,7 +6,6 @@ import {
   type ViewportPatch,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
-import { applyProjectedViewportAxisPatches } from "./projected-viewport-axis-patches.js";
 import { selectProjectedViewportKeysToEvict } from "./projected-viewport-cache-pruning.js";
 import {
   ackProjectedViewportLocalAxisSize,
@@ -17,6 +16,11 @@ import {
   type ProjectedViewportLocalAxisResult,
   type ProjectedViewportLocalAxisState,
 } from "./projected-viewport-local-axis-state.js";
+import {
+  applyProjectedViewportPatch,
+  cellSnapshotSignature,
+  shouldKeepCurrentSnapshot,
+} from "./projected-viewport-patch-application.js";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
@@ -25,91 +29,6 @@ const EMPTY_FREEZE = 0;
 const DEFAULT_STYLE_ID = "style-0";
 const MAX_CACHED_CELLS_PER_SHEET = 6000;
 type CellItem = readonly [number, number];
-
-function snapshotValueKey(snapshot: CellSnapshot): string {
-  switch (snapshot.value.tag) {
-    case ValueTag.Number:
-      return `n:${snapshot.value.value}`;
-    case ValueTag.Boolean:
-      return `b:${snapshot.value.value ? 1 : 0}`;
-    case ValueTag.String:
-      return `s:${snapshot.value.stringId}:${snapshot.value.value}`;
-    case ValueTag.Error:
-      return `e:${snapshot.value.code}`;
-    case ValueTag.Empty:
-      return "empty";
-  }
-  return "empty";
-}
-
-function cellSnapshotSignature(snapshot: CellSnapshot): string {
-  return [
-    snapshot.version,
-    snapshot.flags,
-    snapshot.formula ?? "",
-    snapshot.format ?? "",
-    snapshot.styleId ?? "",
-    snapshot.numberFormatId ?? "",
-    snapshot.input ?? "",
-    snapshotValueKey(snapshot),
-  ].join("|");
-}
-
-function shouldKeepCurrentSnapshot(current: CellSnapshot, incoming: CellSnapshot): boolean {
-  if (
-    current.formula !== undefined &&
-    incoming.formula === undefined &&
-    incoming.input === undefined
-  ) {
-    return true;
-  }
-  if (current.version > incoming.version) {
-    return true;
-  }
-  if (current.version < incoming.version) {
-    return false;
-  }
-  // Zero source/eval rows can briefly lag the worker patch and drop formula metadata while
-  // keeping the same cell version. Preserve the local formula snapshot until source metadata
-  // catches up.
-  return current.formula !== undefined && incoming.formula === undefined;
-}
-
-function cellStyleSignature(style: CellStyleRecord): string {
-  const fill = style.fill?.backgroundColor ?? "";
-  const font = style.font;
-  const alignment = style.alignment;
-  const borders = style.borders;
-  return [
-    fill,
-    font?.family ?? "",
-    font?.size ?? "",
-    font?.bold ? 1 : 0,
-    font?.italic ? 1 : 0,
-    font?.underline ? 1 : 0,
-    font?.color ?? "",
-    alignment?.horizontal ?? "",
-    alignment?.vertical ?? "",
-    alignment?.wrap ? 1 : 0,
-    alignment?.indent ?? "",
-    borders?.top ? `${borders.top.style}:${borders.top.weight}:${borders.top.color}` : "",
-    borders?.right ? `${borders.right.style}:${borders.right.weight}:${borders.right.color}` : "",
-    borders?.bottom
-      ? `${borders.bottom.style}:${borders.bottom.weight}:${borders.bottom.color}`
-      : "",
-    borders?.left ? `${borders.left.style}:${borders.left.weight}:${borders.left.color}` : "",
-  ].join("|");
-}
-
-function isCellInsideViewport(snapshot: CellSnapshot, viewport: Viewport): boolean {
-  const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
-  return (
-    parsed.row >= viewport.rowStart &&
-    parsed.row <= viewport.rowEnd &&
-    parsed.col >= viewport.colStart &&
-    parsed.col <= viewport.colEnd
-  );
-}
 
 interface CellSubscription {
   sheetName: string;
@@ -586,126 +505,32 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
-    this.knownSheets.add(patch.viewport.sheetName);
-    const nextFreezeRows = patch.freezeRows ?? 0;
-    const nextFreezeCols = patch.freezeCols ?? 0;
-    const freezeChanged =
-      this.freezeRowsBySheet.get(patch.viewport.sheetName) !== nextFreezeRows ||
-      this.freezeColsBySheet.get(patch.viewport.sheetName) !== nextFreezeCols;
-    this.freezeRowsBySheet.set(patch.viewport.sheetName, nextFreezeRows);
-    this.freezeColsBySheet.set(patch.viewport.sheetName, nextFreezeCols);
-
-    const changedKeys = new Set<string>();
-    const changedStyleIds = new Set<string>();
-    const damagedCellKeys = new Set<string>();
-    const damage: { cell: CellItem }[] = [];
-    patch.styles.forEach((style) => {
-      const current = this.cellStyles.get(style.id);
-      if (!current || cellStyleSignature(current) !== cellStyleSignature(style)) {
-        changedStyleIds.add(style.id);
-      }
-      this.cellStyles.set(style.id, style);
+    const result = applyProjectedViewportPatch({
+      state: {
+        cellSnapshots: this.cellSnapshots,
+        cellKeysBySheet: this.cellKeysBySheet,
+        cellStyles: this.cellStyles,
+        columnSizesBySheet: this.columnSizesBySheet,
+        columnWidthsBySheet: this.columnWidthsBySheet,
+        pendingColumnWidthsBySheet: this.pendingColumnWidthsBySheet,
+        rowSizesBySheet: this.rowSizesBySheet,
+        rowHeightsBySheet: this.rowHeightsBySheet,
+        pendingRowHeightsBySheet: this.pendingRowHeightsBySheet,
+        hiddenColumnsBySheet: this.hiddenColumnsBySheet,
+        hiddenRowsBySheet: this.hiddenRowsBySheet,
+        freezeRowsBySheet: this.freezeRowsBySheet,
+        freezeColsBySheet: this.freezeColsBySheet,
+        knownSheets: this.knownSheets,
+      },
+      patch,
+      touchCellKey: (key) => this.touchCellKey(key),
     });
-    if (patch.full) {
-      const incomingKeys = new Set(
-        patch.cells.map((cell) => `${patch.viewport.sheetName}!${cell.snapshot.address}`),
-      );
-      const sheetCellKeys = this.cellKeysBySheet.get(patch.viewport.sheetName);
-      if (sheetCellKeys) {
-        for (const key of sheetCellKeys) {
-          if (incomingKeys.has(key)) {
-            continue;
-          }
-          const snapshot = this.cellSnapshots.get(key);
-          if (!snapshot || !isCellInsideViewport(snapshot, patch.viewport)) {
-            continue;
-          }
-          this.cellSnapshots.delete(key);
-          sheetCellKeys.delete(key);
-          changedKeys.add(key);
-          if (!damagedCellKeys.has(key)) {
-            const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
-            damage.push({ cell: [parsed.col, parsed.row] });
-            damagedCellKeys.add(key);
-          }
-        }
-      }
-    }
-    for (const cell of patch.cells) {
-      const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`;
-      const current = this.cellSnapshots.get(key);
-      if (current) {
-        const incoming = cell.snapshot;
-        if (shouldKeepCurrentSnapshot(current, incoming)) {
-          continue;
-        }
-        if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {
-          if (
-            incoming.styleId &&
-            changedStyleIds.has(incoming.styleId) &&
-            !damagedCellKeys.has(key)
-          ) {
-            damage.push({ cell: [cell.col, cell.row] });
-            damagedCellKeys.add(key);
-          }
-          continue;
-        }
-      }
-      this.cellSnapshots.set(key, cell.snapshot);
-      this.touchCellKey(key);
-      this.sheetCellKeys(patch.viewport.sheetName).add(key);
-      changedKeys.add(key);
-      if (!damagedCellKeys.has(key)) {
-        damage.push({ cell: [cell.col, cell.row] });
-        damagedCellKeys.add(key);
-      }
-    }
-
-    let axisChanged = false;
-    if (patch.columns.length > 0) {
-      const nextColumns = applyProjectedViewportAxisPatches({
-        patches: patch.columns,
-        sizes: this.columnSizesBySheet.get(patch.viewport.sheetName) ?? {},
-        renderedSizes: this.columnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
-        pendingSizes: this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
-        hiddenAxes: this.hiddenColumnsBySheet.get(patch.viewport.sheetName) ?? {},
-      });
-      this.columnSizesBySheet.set(patch.viewport.sheetName, nextColumns.sizes);
-      this.columnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.renderedSizes);
-      this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.pendingSizes);
-      if (Object.keys(nextColumns.hiddenAxes).length === 0) {
-        this.hiddenColumnsBySheet.delete(patch.viewport.sheetName);
-      } else {
-        this.hiddenColumnsBySheet.set(patch.viewport.sheetName, nextColumns.hiddenAxes);
-      }
-      axisChanged = axisChanged || nextColumns.axisChanged;
-    }
-
-    if (patch.rows.length > 0) {
-      const nextRows = applyProjectedViewportAxisPatches({
-        patches: patch.rows,
-        sizes: this.rowSizesBySheet.get(patch.viewport.sheetName) ?? {},
-        renderedSizes: this.rowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
-        pendingSizes: this.pendingRowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
-        hiddenAxes: this.hiddenRowsBySheet.get(patch.viewport.sheetName) ?? {},
-      });
-      this.rowSizesBySheet.set(patch.viewport.sheetName, nextRows.sizes);
-      this.rowHeightsBySheet.set(patch.viewport.sheetName, nextRows.renderedSizes);
-      this.pendingRowHeightsBySheet.set(patch.viewport.sheetName, nextRows.pendingSizes);
-      if (Object.keys(nextRows.hiddenAxes).length === 0) {
-        this.hiddenRowsBySheet.delete(patch.viewport.sheetName);
-      } else {
-        this.hiddenRowsBySheet.set(patch.viewport.sheetName, nextRows.hiddenAxes);
-      }
-      axisChanged = axisChanged || nextRows.axisChanged;
-    }
-
     this.pruneSheetCache(patch.viewport.sheetName);
-    this.notifyCellSubscriptions(changedKeys);
-    if (damage.length > 0 || axisChanged || freezeChanged) {
+    this.notifyCellSubscriptions(result.changedKeys);
+    if (result.damage.length > 0 || result.axisChanged || result.freezeChanged) {
       this.listeners.forEach((listener) => listener());
     }
-    return damage;
+    return result.damage;
   }
 
   private readLocalAxisState(args: {
@@ -814,7 +639,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.cellAccessTicks.set(key, this.nextCellAccessTick++);
   }
 
-  private notifyCellSubscriptions(changedKeys: Set<string>): void {
+  private notifyCellSubscriptions(changedKeys: ReadonlySet<string>): void {
     this.cellSubscriptions.forEach((subscription) => {
       for (const address of subscription.addresses) {
         if (changedKeys.has(`${subscription.sheetName}!${address}`)) {
