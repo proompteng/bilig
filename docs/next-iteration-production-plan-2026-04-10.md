@@ -29,7 +29,10 @@ Still required before this document is honestly complete end to end:
 
 - broader Day-1 workflow families, especially fuller import cleanup, reshape/rollup, and more general formatting cleanup
 - fuller collaborator review semantics beyond owner finalization plus recommendations
-- broader observability, dashboards, alerts, and launch playbooks beyond the current internal snapshot/flag surfaces
+
+Explicitly deferred for now:
+
+- production dashboards, alerts, and rollout playbooks beyond the current internal snapshot and allowlist controls
 
 ## Executive summary
 
@@ -72,7 +75,6 @@ The current repo already contains the core building blocks we should preserve an
 
 - The workflow runtime is real, but the Day-1 workflow set is still incomplete.
 - Richer collaborator review semantics are still incomplete beyond owner finalization plus collaborator recommendations.
-- Broader observability, dashboards, alerts, and rollout playbooks are still incomplete beyond the current internal snapshot and allowlist controls.
 - Typed binary agent payloads are not fully closed end to end.
 - Some correctness/performance seams remain high risk:
   - projected viewport authority still needs further narrowing
@@ -627,7 +629,6 @@ The monolith already has bounded Codex pool management, queueing, turn quotas, a
 - keep Zero narrow and tile-shaped
 - reduce or fully retire temporary local authority layers that can drift under load
 - expand WASM production routing only for proven formula families
-- expand codex pool metrics into broader production dashboards and alerts
 - add collaboration and chat load tests to the existing performance contract
 
 ### Exit gate
@@ -669,12 +670,11 @@ This product is already sophisticated enough that correctness regressions and me
 - replay tests for preview/apply mismatch and stale bundle scenarios
 - property tests for workflow replay and partial acceptance invariants
 - deterministic integration harnesses for chat, tool streaming, and reconnect
-- production dashboards and alerts for codex pool, Zero lag, memory, and preview mismatch rate
 - feature flags and canary rollout for shared chat, auto-apply, and workflow families
 
 ### Exit gate
 
-Collaboration and chat features are behind explicit launch gates and observable with production dashboards before broad rollout.
+Collaboration and chat features are behind explicit launch gates with enough internal visibility to support staged rollout.
 
 ---
 
@@ -870,7 +870,9 @@ Roll out behind separate flags for:
 
 ### 14.2 Observability
 
-Add dashboards and alerts for:
+Deferred for now beyond the existing internal snapshot and feature-flag surfaces.
+
+Future production dashboards and alerts should cover:
 
 - monolith RSS / heap / GC pause
 - codex pool busy count and queue depth
@@ -920,9 +922,7 @@ The release is ready only when all of the following are true:
 
 ### Operational readiness
 
-- dashboards and alerts exist for the new surfaces
 - feature flags can disable shared chat, workflow runner, and auto-apply independently
-- migration and recovery playbooks are documented
 - canary rollout is clean before broad exposure
 - legacy `/agent/sessions` behavior is either a thin compatibility layer over durable threads or removed
 
