@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { ZeroSyncService } from "../zero/service.js";
+import type { WorkbookStructureSummary } from "./workbook-agent-comprehension.js";
 import {
   describeWorkbookAgentWorkflowTemplate,
   executeWorkbookAgentWorkflow,
 } from "./workbook-agent-workflows.js";
 
-function createZeroSyncStub(input?: { onInspectWorkbook?: () => void }): ZeroSyncService {
+function createZeroSyncStub(input?: {
+  onInspectWorkbook?: () => void;
+  inspectWorkbookResult?: WorkbookStructureSummary;
+}): ZeroSyncService {
   return {
     enabled: true,
     async initialize() {},
@@ -18,6 +22,9 @@ function createZeroSyncStub(input?: { onInspectWorkbook?: () => void }): ZeroSyn
     },
     async inspectWorkbook() {
       input?.onInspectWorkbook?.();
+      if (input?.inspectWorkbookResult) {
+        return input.inspectWorkbookResult;
+      }
       throw new Error("inspectWorkbook should not be called");
     },
     async applyServerMutator() {
@@ -109,5 +116,67 @@ describe("workbook agent workflows", () => {
         hidden: true,
       },
     ]);
+  });
+
+  it("executes summarize workbook through the durable inspection path", async () => {
+    let inspectedWorkbook = false;
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        onInspectWorkbook: () => {
+          inspectedWorkbook = true;
+        },
+        inspectWorkbookResult: {
+          summary: {
+            sheetCount: 1,
+            totalCellCount: 3,
+            totalFormulaCellCount: 1,
+            tableCount: 0,
+            pivotCount: 0,
+            spillCount: 0,
+            filterCount: 0,
+            sortCount: 0,
+            hiddenRowIndexCount: 0,
+            hiddenColumnIndexCount: 0,
+          },
+          sheets: [
+            {
+              name: "Sheet1",
+              order: 0,
+              cellCount: 3,
+              formulaCellCount: 1,
+              usedRange: {
+                startAddress: "A1",
+                endAddress: "B2",
+              },
+              freezePane: null,
+              filterCount: 0,
+              sortCount: 0,
+              tableCount: 0,
+              pivotCount: 0,
+              spillCount: 0,
+              rowMetadata: {
+                regionCount: 0,
+                hiddenIndexCount: 0,
+                explicitSizeIndexCount: 0,
+              },
+              columnMetadata: {
+                regionCount: 0,
+                hiddenIndexCount: 0,
+                explicitSizeIndexCount: 0,
+              },
+              tables: [],
+              pivots: [],
+              spills: [],
+            },
+          ],
+        },
+      }),
+      workflowTemplate: "summarizeWorkbook",
+    });
+
+    expect(inspectedWorkbook).toBe(true);
+    expect(result.title).toBe("Summarize Workbook");
+    expect(result.summary).toContain("Summarized workbook structure across 1 sheet");
   });
 });
