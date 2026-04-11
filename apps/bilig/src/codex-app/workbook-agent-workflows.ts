@@ -74,7 +74,10 @@ interface WorkbookAgentWorkflowTemplateMetadata {
   readonly stepPlans: readonly WorkbookAgentWorkflowStepPlan[];
 }
 
-type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
+type FormulaWorkflowTemplate =
+  | "findFormulaIssues"
+  | "highlightFormulaIssues"
+  | "repairFormulaIssues";
 type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers" | "styleCurrentSheetHeaders";
 type ImportWorkflowTemplate =
   | "normalizeCurrentSheetHeaders"
@@ -86,7 +89,11 @@ type RollupWorkflowTemplate = "createCurrentSheetRollup" | "createCurrentSheetRe
 function isFormulaWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is FormulaWorkflowTemplate {
-  return workflowTemplate === "findFormulaIssues" || workflowTemplate === "highlightFormulaIssues";
+  return (
+    workflowTemplate === "findFormulaIssues" ||
+    workflowTemplate === "highlightFormulaIssues" ||
+    workflowTemplate === "repairFormulaIssues"
+  );
 }
 
 function isFormattingWorkflowTemplate(
@@ -686,6 +693,7 @@ export async function executeWorkbookAgentWorkflow(input: {
     documentId: input.documentId,
     zeroSyncService: input.zeroSyncService,
     workflowTemplate: input.workflowTemplate,
+    ...(input.context !== undefined ? { context: input.context } : {}),
     ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
     ...(input.signal !== undefined ? { signal: input.signal } : {}),
   });

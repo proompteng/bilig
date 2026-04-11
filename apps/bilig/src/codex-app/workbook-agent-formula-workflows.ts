@@ -1,17 +1,24 @@
+import { parseCellAddress, translateFormulaReferences } from "@bilig/formula";
 import type { WorkbookAgentCommand } from "@bilig/agent-api";
 import type {
   WorkbookAgentTimelineCitation,
+  WorkbookAgentUiContext,
   WorkbookAgentWorkflowArtifact,
   WorkbookAgentWorkflowTemplate,
 } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
-import { findWorkbookFormulaIssues } from "./workbook-agent-comprehension.js";
+import {
+  findWorkbookFormulaIssues,
+  type WorkbookFormulaIssue,
+} from "./workbook-agent-comprehension.js";
 import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
 export interface FormulaWorkflowExecutionInput {
   readonly sheetName?: string;
   readonly limit?: number;
 }
+
+const MAX_FORMULA_REPAIR_ROW_DISTANCE = 5;
 
 interface FormulaWorkflowStepPlan {
   readonly stepId: string;
@@ -40,6 +47,18 @@ export interface FormulaWorkflowExecutionResult {
   readonly steps: readonly FormulaWorkflowStepResult[];
   readonly commands?: readonly WorkbookAgentCommand[];
   readonly goalText?: string;
+}
+
+interface FormulaRepairRecommendation {
+  readonly issue: WorkbookFormulaIssue;
+  readonly sourceAddress: string;
+  readonly sourceFormula: string;
+  readonly repairedFormula: string;
+}
+
+interface FormulaRepairSkip {
+  readonly issue: WorkbookFormulaIssue;
+  readonly reason: string;
 }
 
 function summarizeFormulaIssueKinds(
@@ -105,6 +124,43 @@ function summarizeHighlightedFormulaIssuesMarkdown(
   return lines.join("\n");
 }
 
+function summarizeRepairFormulaIssuesMarkdown(input: {
+  readonly report: ReturnType<typeof findWorkbookFormulaIssues>;
+  readonly repaired: readonly FormulaRepairRecommendation[];
+  readonly skipped: readonly FormulaRepairSkip[];
+}): string {
+  const lines = [
+    "## Formula Repair Preview",
+    "",
+    `Scanned formula cells: ${String(input.report.summary.scannedFormulaCells)}`,
+    `Issues found: ${String(input.report.summary.issueCount)}`,
+    `Repairs staged: ${String(input.repaired.length)}`,
+    `Issues skipped: ${String(input.skipped.length)}`,
+    "",
+  ];
+  if (input.repaired.length === 0) {
+    lines.push("No safe formula repairs were inferred from neighboring healthy formulas.");
+  } else {
+    lines.push("### Staged repairs");
+    input.repaired.forEach((repair) => {
+      lines.push(
+        `- ${repair.issue.sheetName}!${repair.issue.address}: replace ${repair.issue.formula} with =${repair.repairedFormula} using ${repair.sourceAddress} (${repair.sourceFormula}) as the source pattern`,
+      );
+    });
+  }
+  if (input.skipped.length > 0) {
+    lines.push("", "### Skipped issues");
+    input.skipped.forEach((skip) => {
+      lines.push(`- ${skip.issue.sheetName}!${skip.issue.address}: ${skip.reason}`);
+    });
+  }
+  lines.push(
+    "",
+    `Only issue cells with a nearby healthy formula in the same column, within ${String(MAX_FORMULA_REPAIR_ROW_DISTANCE)} rows, are staged for repair.`,
+  );
+  return lines.join("\n");
+}
+
 function createIssueCitations(
   report: ReturnType<typeof findWorkbookFormulaIssues>,
   role: "source" | "target",
@@ -116,6 +172,159 @@ function createIssueCitations(
     endAddress: issue.address,
     role,
   }));
+}
+
+function createRepairCitations(
+  repaired: readonly FormulaRepairRecommendation[],
+): WorkbookAgentTimelineCitation[] {
+  return repaired.flatMap((repair) => [
+    {
+      kind: "range" as const,
+      sheetName: repair.issue.sheetName,
+      startAddress: repair.sourceAddress,
+      endAddress: repair.sourceAddress,
+      role: "source" as const,
+    },
+    {
+      kind: "range" as const,
+      sheetName: repair.issue.sheetName,
+      startAddress: repair.issue.address,
+      endAddress: repair.issue.address,
+      role: "target" as const,
+    },
+  ]);
+}
+
+function resolveWorkflowSheetName(input: {
+  readonly workflowInput?: FormulaWorkflowExecutionInput | null;
+  readonly context?: WorkbookAgentUiContext | null;
+}): string | null {
+  const explicitName = input.workflowInput?.sheetName?.trim();
+  if (explicitName && explicitName.length > 0) {
+    return explicitName;
+  }
+  return input.context?.selection.sheetName ?? null;
+}
+
+function buildFormulaRepairPlan(input: {
+  readonly runtime: {
+    readonly engine: {
+      exportSnapshot: () => {
+        readonly sheets: readonly {
+          readonly name: string;
+          readonly cells: readonly {
+            readonly address: string;
+            readonly formula?: string;
+          }[];
+        }[];
+      };
+    };
+  };
+  readonly report: ReturnType<typeof findWorkbookFormulaIssues>;
+}): {
+  readonly repaired: readonly FormulaRepairRecommendation[];
+  readonly skipped: readonly FormulaRepairSkip[];
+} {
+  const snapshot = input.runtime.engine.exportSnapshot();
+  const sheetByName = new Map(snapshot.sheets.map((sheet) => [sheet.name, sheet] as const));
+  const issueAddressSet = new Set(
+    input.report.issues.map((issue) => `${issue.sheetName}!${issue.address}`),
+  );
+  const repaired: FormulaRepairRecommendation[] = [];
+  const skipped: FormulaRepairSkip[] = [];
+
+  for (const issue of input.report.issues) {
+    if (issue.issueKinds.includes("cycle")) {
+      skipped.push({
+        issue,
+        reason: "Skipped because cyclic formulas need manual review instead of inferred rewrites.",
+      });
+      continue;
+    }
+    const sheet = sheetByName.get(issue.sheetName);
+    if (!sheet) {
+      skipped.push({
+        issue,
+        reason: "Skipped because the durable snapshot for the issue sheet was unavailable.",
+      });
+      continue;
+    }
+    const target = parseCellAddress(issue.address, issue.sheetName);
+    const candidate = sheet.cells
+      .flatMap((cell) => {
+        if (!cell.formula || cell.address === issue.address) {
+          return [];
+        }
+        if (issueAddressSet.has(`${issue.sheetName}!${cell.address}`)) {
+          return [];
+        }
+        const source = parseCellAddress(cell.address, issue.sheetName);
+        if (source.col !== target.col) {
+          return [];
+        }
+        const rowDistance = Math.abs(source.row - target.row);
+        if (rowDistance === 0 || rowDistance > MAX_FORMULA_REPAIR_ROW_DISTANCE) {
+          return [];
+        }
+        return [{ cell, source, rowDistance }] as const;
+      })
+      .toSorted((left, right) => {
+        if (left.rowDistance !== right.rowDistance) {
+          return left.rowDistance - right.rowDistance;
+        }
+        const leftAbove = left.source.row < target.row ? 0 : 1;
+        const rightAbove = right.source.row < target.row ? 0 : 1;
+        if (leftAbove !== rightAbove) {
+          return leftAbove - rightAbove;
+        }
+        return left.source.row - right.source.row;
+      })[0];
+    if (!candidate) {
+      skipped.push({
+        issue,
+        reason: `Skipped because there is no healthy formula in the same column within ${String(MAX_FORMULA_REPAIR_ROW_DISTANCE)} rows.`,
+      });
+      continue;
+    }
+    try {
+      const sourceFormula = candidate.cell.formula;
+      if (!sourceFormula) {
+        skipped.push({
+          issue,
+          reason: `Skipped because the source formula at ${candidate.cell.address} is missing.`,
+        });
+        continue;
+      }
+      const repairedFormula = translateFormulaReferences(
+        sourceFormula,
+        target.row - candidate.source.row,
+        target.col - candidate.source.col,
+      );
+      if (`=${repairedFormula}` === issue.formula) {
+        skipped.push({
+          issue,
+          reason: `Skipped because the translated formula from ${candidate.cell.address} matches the current formula text.`,
+        });
+        continue;
+      }
+      repaired.push({
+        issue,
+        sourceAddress: candidate.cell.address,
+        sourceFormula: `=${sourceFormula}`,
+        repairedFormula,
+      });
+    } catch (error) {
+      skipped.push({
+        issue,
+        reason:
+          error instanceof Error && error.message.length > 0
+            ? `Skipped because translating the source formula from ${candidate.cell.address} failed: ${error.message}`
+            : `Skipped because translating the source formula from ${candidate.cell.address} failed.`,
+      });
+    }
+  }
+
+  return { repaired, skipped };
 }
 
 export function getFormulaWorkflowTemplateMetadata(
@@ -178,6 +387,46 @@ export function getFormulaWorkflowTemplateMetadata(
       ],
     };
   }
+  if (workflowTemplate === "repairFormulaIssues") {
+    return {
+      title: "Repair Formula Issues",
+      runningSummary: `Running formula repair workflow for ${scopeLabel}.`,
+      stepPlans: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          runningSummary: workflowInput?.sheetName
+            ? `Scanning ${workflowInput.sheetName} formulas for repairable errors, cycles, and JS-only fallbacks.`
+            : "Scanning workbook formulas for repairable errors, cycles, and JS-only fallbacks.",
+          pendingSummary: workflowInput?.sheetName
+            ? `Waiting to scan ${workflowInput.sheetName} formulas for repairable errors, cycles, and JS-only fallbacks.`
+            : "Waiting to scan workbook formulas for repairable errors, cycles, and JS-only fallbacks.",
+        },
+        {
+          stepId: "infer-formula-repairs",
+          label: "Infer formula repairs",
+          runningSummary:
+            "Comparing issue cells against nearby healthy formulas in the same column.",
+          pendingSummary:
+            "Waiting to compare issue cells against nearby healthy formulas in the same column.",
+        },
+        {
+          stepId: "stage-formula-repairs",
+          label: "Stage formula repairs",
+          runningSummary:
+            "Staging semantic write previews for the formula repairs that passed the safety checks.",
+          pendingSummary:
+            "Waiting to stage semantic write previews for the formula repairs that passed the safety checks.",
+        },
+        {
+          stepId: "draft-repair-report",
+          label: "Draft repair report",
+          runningSummary: "Drafting the durable formula repair report.",
+          pendingSummary: "Waiting to assemble the durable formula repair report.",
+        },
+      ],
+    };
+  }
   return null;
 }
 
@@ -186,23 +435,40 @@ export async function executeFormulaWorkflow(input: {
   zeroSyncService: ZeroSyncService;
   workflowTemplate: WorkbookAgentWorkflowTemplate;
   workflowInput?: FormulaWorkflowExecutionInput | null;
+  context?: WorkbookAgentUiContext | null;
   signal?: AbortSignal;
 }): Promise<FormulaWorkflowExecutionResult | null> {
   if (
     input.workflowTemplate !== "findFormulaIssues" &&
-    input.workflowTemplate !== "highlightFormulaIssues"
+    input.workflowTemplate !== "highlightFormulaIssues" &&
+    input.workflowTemplate !== "repairFormulaIssues"
   ) {
     return null;
   }
   throwIfWorkflowCancelled(input.signal);
-  const formulaIssues = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
-    findWorkbookFormulaIssues(runtime, {
-      ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
-      ...(input.workflowInput?.limit !== undefined ? { limit: input.workflowInput.limit } : {}),
-    }),
+  const resolvedSheetName = resolveWorkflowSheetName({
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.context !== undefined ? { context: input.context } : {}),
+  });
+  const formulaInspection = await input.zeroSyncService.inspectWorkbook(
+    input.documentId,
+    (runtime) => {
+      const report = findWorkbookFormulaIssues(runtime, {
+        ...(resolvedSheetName ? { sheetName: resolvedSheetName } : {}),
+        ...(input.workflowInput?.limit !== undefined ? { limit: input.workflowInput.limit } : {}),
+      });
+      return {
+        report,
+        ...(input.workflowTemplate === "repairFormulaIssues"
+          ? { repairPlan: buildFormulaRepairPlan({ runtime, report }) }
+          : {}),
+      };
+    },
   );
   throwIfWorkflowCancelled(input.signal);
-  const scopeLabel = input.workflowInput?.sheetName ? ` on ${input.workflowInput.sheetName}` : "";
+  const formulaIssues = formulaInspection.report;
+  const scopeLabel = resolvedSheetName ? ` on ${resolvedSheetName}` : "";
+
   if (input.workflowTemplate === "findFormulaIssues") {
     return {
       title: "Find Formula Issues",
@@ -233,18 +499,83 @@ export async function executeFormulaWorkflow(input: {
       ],
     };
   }
+
+  if (input.workflowTemplate === "highlightFormulaIssues") {
+    return {
+      title: "Highlight Formula Issues",
+      summary:
+        formulaIssues.summary.issueCount === 0
+          ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues to highlight.`
+          : `Staged highlight formatting for ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}${scopeLabel}.`,
+      artifact: {
+        kind: "markdown",
+        title: "Formula Issue Highlights",
+        text: summarizeHighlightedFormulaIssuesMarkdown(formulaIssues),
+      },
+      citations: createIssueCitations(formulaIssues, "target"),
+      steps: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          summary:
+            formulaIssues.summary.issueCount === 0
+              ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues.`
+              : `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found ${String(formulaIssues.summary.issueCount)} issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}.`,
+        },
+        {
+          stepId: "stage-issue-highlights",
+          label: "Stage issue highlights",
+          summary:
+            formulaIssues.summary.issueCount === 0
+              ? "No issue highlight commands were staged because no formula issues were found."
+              : `Prepared ${String(formulaIssues.issues.length)} semantic formatting command${formulaIssues.issues.length === 1 ? "" : "s"} to highlight the detected formula issues.`,
+        },
+        {
+          stepId: "draft-highlight-report",
+          label: "Draft highlight report",
+          summary: "Prepared the durable formula highlight report for the thread.",
+        },
+      ],
+      commands: formulaIssues.issues.map((issue) => ({
+        kind: "formatRange" as const,
+        range: {
+          sheetName: issue.sheetName,
+          startAddress: issue.address,
+          endAddress: issue.address,
+        },
+        patch: {
+          fill: {
+            backgroundColor: "#FEE2E2",
+          },
+          font: {
+            bold: true,
+            color: "#991B1B",
+          },
+        },
+      })),
+      goalText: resolvedSheetName
+        ? `Highlight formula issues on ${resolvedSheetName}`
+        : "Highlight formula issues in the workbook",
+    };
+  }
+
+  const repairPlan = formulaInspection.repairPlan ?? { repaired: [], skipped: [] };
   return {
-    title: "Highlight Formula Issues",
+    title: "Repair Formula Issues",
     summary:
-      formulaIssues.summary.issueCount === 0
-        ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues to highlight.`
-        : `Staged highlight formatting for ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}${scopeLabel}.`,
+      repairPlan.repaired.length === 0
+        ? `Scanned ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}${scopeLabel} and found no safe repairs to stage.`
+        : `Staged ${String(repairPlan.repaired.length)} formula repair${repairPlan.repaired.length === 1 ? "" : "s"}${scopeLabel} from nearby healthy formulas.`,
     artifact: {
       kind: "markdown",
-      title: "Formula Issue Highlights",
-      text: summarizeHighlightedFormulaIssuesMarkdown(formulaIssues),
+      title: "Formula Repair Preview",
+      text: summarizeRepairFormulaIssuesMarkdown({
+        report: formulaIssues,
+        repaired: repairPlan.repaired,
+        skipped: repairPlan.skipped,
+      }),
     },
-    citations: createIssueCitations(formulaIssues, "target"),
+    citations: createRepairCitations(repairPlan.repaired),
     steps: [
       {
         stepId: "scan-formula-cells",
@@ -255,38 +586,42 @@ export async function executeFormulaWorkflow(input: {
             : `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found ${String(formulaIssues.summary.issueCount)} issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}.`,
       },
       {
-        stepId: "stage-issue-highlights",
-        label: "Stage issue highlights",
+        stepId: "infer-formula-repairs",
+        label: "Infer formula repairs",
         summary:
-          formulaIssues.summary.issueCount === 0
-            ? "No issue highlight commands were staged because no formula issues were found."
-            : `Prepared ${String(formulaIssues.issues.length)} semantic formatting command${formulaIssues.issues.length === 1 ? "" : "s"} to highlight the detected formula issues.`,
+          repairPlan.repaired.length === 0
+            ? `Compared issue cells${scopeLabel} against nearby healthy formulas and found no safe repair candidates.`
+            : `Matched ${String(repairPlan.repaired.length)} issue cell${repairPlan.repaired.length === 1 ? "" : "s"}${scopeLabel} to nearby healthy formula patterns.`,
       },
       {
-        stepId: "draft-highlight-report",
-        label: "Draft highlight report",
-        summary: "Prepared the durable formula highlight report for the thread.",
+        stepId: "stage-formula-repairs",
+        label: "Stage formula repairs",
+        summary:
+          repairPlan.repaired.length === 0
+            ? "No formula repair preview was staged because every issue was ambiguous or unsafe to rewrite automatically."
+            : `Prepared ${String(repairPlan.repaired.length)} semantic write command${repairPlan.repaired.length === 1 ? "" : "s"} for the repair preview bundle.`,
+      },
+      {
+        stepId: "draft-repair-report",
+        label: "Draft repair report",
+        summary: "Prepared the durable formula repair report for the thread.",
       },
     ],
-    commands: formulaIssues.issues.map((issue) => ({
-      kind: "formatRange" as const,
-      range: {
-        sheetName: issue.sheetName,
-        startAddress: issue.address,
-        endAddress: issue.address,
-      },
-      patch: {
-        fill: {
-          backgroundColor: "#FEE2E2",
-        },
-        font: {
-          bold: true,
-          color: "#991B1B",
-        },
-      },
-    })),
-    goalText: input.workflowInput?.sheetName
-      ? `Highlight formula issues on ${input.workflowInput.sheetName}`
-      : "Highlight formula issues in the workbook",
+    ...(repairPlan.repaired.length > 0
+      ? {
+          commands: repairPlan.repaired.map(
+            (repair) =>
+              ({
+                kind: "writeRange" as const,
+                sheetName: repair.issue.sheetName,
+                startAddress: repair.issue.address,
+                values: [[{ formula: repair.repairedFormula }]],
+              }) satisfies WorkbookAgentCommand,
+          ),
+          goalText: resolvedSheetName
+            ? `Repair formula issues on ${resolvedSheetName}`
+            : "Repair formula issues in the workbook",
+        }
+      : {}),
   };
 }

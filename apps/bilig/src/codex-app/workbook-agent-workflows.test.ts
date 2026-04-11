@@ -755,4 +755,79 @@ describe("workbook agent workflows", () => {
       }),
     );
   });
+
+  it("executes formula-repair workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Sheet1");
+          engine.setCellValue("Sheet1", "A1", 10);
+          engine.setCellValue("Sheet1", "A2", 12);
+          engine.setCellValue("Sheet1", "A3", 14);
+          engine.setCellFormula("Sheet1", "B1", "A1*2");
+          engine.setCellFormula("Sheet1", "B2", "1/0");
+          engine.setCellFormula("Sheet1", "B3", "1/0");
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "repairFormulaIssues",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Sheet1",
+      },
+    });
+
+    expect(result.title).toBe("Repair Formula Issues");
+    expect(result.summary).toContain("Staged 2 formula repairs");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "writeRange",
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        values: [[{ formula: "A2*2" }]],
+      }),
+      expect.objectContaining({
+        kind: "writeRange",
+        sheetName: "Sheet1",
+        startAddress: "B3",
+        values: [[{ formula: "A3*2" }]],
+      }),
+    ]);
+    expect(result.artifact).toEqual(
+      expect.objectContaining({
+        title: "Formula Repair Preview",
+        text: expect.stringContaining("## Formula Repair Preview"),
+      }),
+    );
+  });
 });

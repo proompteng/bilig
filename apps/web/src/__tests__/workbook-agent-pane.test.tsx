@@ -813,6 +813,118 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts repair-formula workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-repair-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "repairFormulaIssues",
+                  title: "Repair Formula Issues",
+                  summary: "Staged 1 formula repair on Sheet1 from nearby healthy formulas.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "scan-formula-cells",
+                      label: "Scan formula cells",
+                      status: "completed",
+                      summary: "Scanned 2 formula cells on Sheet1 and found 1 issue.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "stage-formula-repairs",
+                      label: "Stage formula repairs",
+                      status: "completed",
+                      summary: "Prepared 1 semantic write command for the repair preview bundle.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Formula Repair Preview",
+                    text: "## Formula Repair Preview",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-repairFormulaIssues']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Repair workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
+    );
+    expectWorkflowStartBody(workflowCall?.[1], {
+      workflowTemplate: "repairFormulaIssues",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Repair Formula Issues");
+    expect(host.textContent).toContain("Formula Repair Preview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("starts header-normalization workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

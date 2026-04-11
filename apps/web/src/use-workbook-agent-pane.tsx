@@ -48,6 +48,7 @@ type RailWorkflowTemplate =
   | "describeRecentChanges"
   | "findFormulaIssues"
   | "highlightFormulaIssues"
+  | "repairFormulaIssues"
   | "highlightCurrentSheetOutliers"
   | "styleCurrentSheetHeaders"
   | "normalizeCurrentSheetHeaders"
@@ -72,6 +73,7 @@ type WorkbookAgentWorkflowStartRequest =
         RailWorkflowTemplate,
         | "findFormulaIssues"
         | "highlightFormulaIssues"
+        | "repairFormulaIssues"
         | "highlightCurrentSheetOutliers"
         | "styleCurrentSheetHeaders"
         | "normalizeCurrentSheetHeaders"
@@ -94,6 +96,11 @@ type WorkbookAgentWorkflowStartRequest =
     }
   | {
       readonly workflowTemplate: "highlightFormulaIssues";
+      readonly sheetName?: string;
+      readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "repairFormulaIssues";
       readonly sheetName?: string;
       readonly limit?: number;
     }
@@ -1189,6 +1196,7 @@ export function useWorkbookAgentPane(input: {
           if (
             (workflowTemplate === "findFormulaIssues" ||
               workflowTemplate === "highlightFormulaIssues" ||
+              workflowTemplate === "repairFormulaIssues" ||
               workflowTemplate === "highlightCurrentSheetOutliers" ||
               workflowTemplate === "styleCurrentSheetHeaders" ||
               workflowTemplate === "normalizeCurrentSheetHeaders" ||

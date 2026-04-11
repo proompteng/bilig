@@ -99,6 +99,7 @@ export function getWorkbookAgentWorkflowFamily(
       return "report";
     case "findFormulaIssues":
     case "highlightFormulaIssues":
+    case "repairFormulaIssues":
       return "formula";
     case "highlightCurrentSheetOutliers":
     case "styleCurrentSheetHeaders":

@@ -70,6 +70,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "describeRecentChanges" ||
     value === "findFormulaIssues" ||
     value === "highlightFormulaIssues" ||
+    value === "repairFormulaIssues" ||
     value === "highlightCurrentSheetOutliers" ||
     value === "styleCurrentSheetHeaders" ||
     value === "normalizeCurrentSheetHeaders" ||
@@ -80,6 +81,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "explainSelectionCell" ||
     value === "searchWorkbookQuery" ||
     value === "createCurrentSheetRollup" ||
+    value === "createCurrentSheetReviewTab" ||
     value === "createSheet" ||
     value === "renameCurrentSheet" ||
     value === "hideCurrentRow" ||

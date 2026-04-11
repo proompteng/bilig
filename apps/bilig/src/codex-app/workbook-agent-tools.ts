@@ -90,6 +90,11 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     limit: z.number().int().positive().max(200).optional(),
   }),
   z.object({
+    workflowTemplate: z.literal("repairFormulaIssues"),
+    sheetName: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(200).optional(),
+  }),
+  z.object({
     workflowTemplate: z.literal("highlightCurrentSheetOutliers"),
     sheetName: z.string().min(1).optional(),
     limit: z.number().int().positive().max(100).optional(),
@@ -636,7 +641,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting or consistent header styling, import-cleanup tasks like header, number-format, whitespace normalization, or formula fill-down cleanup, search/report tasks, rollup previews, review-tab creation, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/repair/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting or consistent header styling, import-cleanup tasks like header, number-format, whitespace normalization, or formula fill-down cleanup, search/report tasks, rollup previews, review-tab creation, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -650,6 +655,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "describeRecentChanges",
               "findFormulaIssues",
               "highlightFormulaIssues",
+              "repairFormulaIssues",
               "highlightCurrentSheetOutliers",
               "styleCurrentSheetHeaders",
               "normalizeCurrentSheetHeaders",

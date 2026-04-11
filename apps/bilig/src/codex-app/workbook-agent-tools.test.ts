@@ -1256,6 +1256,84 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts repair-formula workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-formula-repair-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "repairFormulaIssues" as const,
+      title: "Repair Formula Issues",
+      summary: "Staged 1 formula repair on Sheet1 from nearby healthy formulas.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          status: "completed" as const,
+          summary: "Scanned 2 formula cells on Sheet1 and found 1 issue.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "stage-formula-repairs",
+          label: "Stage formula repairs",
+          status: "completed" as const,
+          summary: "Prepared 1 semantic write command for the repair preview bundle.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Formula Repair Preview",
+        text: "## Formula Repair Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-repair-formula-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "repairFormulaIssues",
+          sheetName: "Sheet1",
+          limit: 25,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "repairFormulaIssues",
+      sheetName: "Sheet1",
+      limit: 25,
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "repairFormulaIssues"',
+    );
+  });
+
   it("starts outlier-highlight workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

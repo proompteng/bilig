@@ -23,11 +23,11 @@ Already landed on `main`:
 - follower-tab degradation messaging when another tab owns the persistent local store
 - deliberate writer-role transfer controls for follower tabs, including persistent-store handoff and runtime restart
 - internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
-- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, header normalization, number-format normalization, whitespace normalization, formula fill-down cleanup, outlier highlighting, consistent header styling, current-sheet rollup, current-sheet review-tab creation, and a bounded set of structural previews
+- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/repair/highlighting, header normalization, number-format normalization, whitespace normalization, formula fill-down cleanup, outlier highlighting, consistent header styling, current-sheet rollup, current-sheet review-tab creation, and a bounded set of structural previews
 
 Still required before this document is honestly complete end to end:
 
-- broader Day-1 workflow families, especially fuller import cleanup, formula repair, reshape/rollup, and more general formatting cleanup
+- broader Day-1 workflow families, especially fuller import cleanup, reshape/rollup, and more general formatting cleanup
 - fuller collaborator review semantics beyond owner finalization plus recommendations
 - broader observability, dashboards, alerts, and launch playbooks beyond the current internal snapshot/flag surfaces
 

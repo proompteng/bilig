@@ -12,6 +12,7 @@ type WorkflowActionTemplate =
   | "describeRecentChanges"
   | "findFormulaIssues"
   | "highlightFormulaIssues"
+  | "repairFormulaIssues"
   | "highlightCurrentSheetOutliers"
   | "styleCurrentSheetHeaders"
   | "normalizeCurrentSheetHeaders"
@@ -55,6 +56,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Highlight formula issues",
     summary:
       "Stage a preview bundle that highlights active-sheet formula errors, cycles, and JS-only fallback formulas.",
+  },
+  {
+    template: "repairFormulaIssues",
+    label: "Repair formula issues",
+    summary:
+      "Stage a preview bundle that repairs active-sheet formula issue cells from nearby healthy formula patterns when the rewrite is safe.",
   },
   {
     template: "highlightCurrentSheetOutliers",
