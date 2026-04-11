@@ -2,6 +2,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOp } from "@bilig/workbook-domain";
 import {
   ErrorCode,
+  type EngineEvent,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
@@ -138,6 +139,14 @@ interface SheetStateSnapshot {
 type VisibilitySnapshot = Map<number, SheetStateSnapshot>;
 type NamedExpressionValueSnapshot = Map<string, CellValue | CellValue[][]>;
 
+interface TrackedCellRef {
+  sheetId: number;
+  sheetName: string;
+  address: string;
+  row: number;
+  col: number;
+}
+
 interface ClipboardPayload {
   sourceAnchor: HeadlessCellAddress;
   serialized: RawCellContent[][];
@@ -155,6 +164,17 @@ type QueuedEvent = Extract<
       | "namedExpressionRemoved";
   }
 >;
+
+function cloneTrackedEngineEvent(event: EngineEvent): EngineEvent {
+  return {
+    ...event,
+    changedCellIndices: Array.from(event.changedCellIndices),
+    invalidatedRanges: event.invalidatedRanges.map((range) => ({ ...range })),
+    invalidatedRows: event.invalidatedRows.map((range) => ({ ...range })),
+    invalidatedColumns: event.invalidatedColumns.map((range) => ({ ...range })),
+    metrics: { ...event.metrics },
+  };
+}
 
 interface HistoryRecord {
   forward: { ops: unknown[]; potentialNewCells?: number };
@@ -964,6 +984,8 @@ export class HeadlessWorkbook {
   readonly internals: HeadlessWorkbookInternals;
   private config: HeadlessConfig;
   private clipboard: ClipboardPayload | null = null;
+  private visibilityCache: VisibilitySnapshot | null = null;
+  private namedExpressionValueCache: NamedExpressionValueSnapshot | null = null;
   private batchDepth = 0;
   private batchStartVisibility: VisibilitySnapshot | null = null;
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null;
@@ -974,6 +996,8 @@ export class HeadlessWorkbook {
   private suspendedVisibility: VisibilitySnapshot | null = null;
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
   private queuedEvents: QueuedEvent[] = [];
+  private trackedEngineEvents: EngineEvent[] = [];
+  private unsubscribeEngineEvents: (() => void) | null = null;
   private disposed = false;
 
   private constructor(configInput: HeadlessConfig = {}) {
@@ -987,6 +1011,7 @@ export class HeadlessWorkbook {
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
     });
+    this.attachEngineEventTracking();
     this.captureFunctionRegistry();
     this.internals = Object.freeze({
       graph: Object.freeze<HeadlessGraphAdapter>({
@@ -1055,6 +1080,7 @@ export class HeadlessWorkbook {
       workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
     });
     workbook.clearHistoryStacks();
+    workbook.primeChangeTrackingCaches();
     return workbook;
   }
 
@@ -1086,6 +1112,7 @@ export class HeadlessWorkbook {
       workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
     });
     workbook.clearHistoryStacks();
+    workbook.primeChangeTrackingCaches();
     return workbook;
   }
 
@@ -1344,9 +1371,10 @@ export class HeadlessWorkbook {
     this.assertNotDisposed();
     const isOutermost = this.batchDepth === 0;
     if (isOutermost) {
-      this.batchStartVisibility = this.captureVisibilitySnapshot();
-      this.batchStartNamedValues = this.captureNamedExpressionValueSnapshot();
+      this.batchStartVisibility = this.ensureVisibilityCache();
+      this.batchStartNamedValues = this.ensureNamedExpressionValueCache();
       this.batchUndoStackLength = this.getUndoStack().length;
+      this.drainTrackedEngineEvents();
     }
     this.batchDepth += 1;
     try {
@@ -1361,11 +1389,9 @@ export class HeadlessWorkbook {
     if (!isOutermost) {
       return [];
     }
-    const changes = this.computeChanges(
+    const changes = this.computeChangesAfterMutation(
       this.batchStartVisibility ?? new Map(),
-      this.captureVisibilitySnapshot(),
       this.batchStartNamedValues ?? new Map(),
-      this.captureNamedExpressionValueSnapshot(),
     );
     this.batchStartVisibility = null;
     this.batchStartNamedValues = null;
@@ -1384,8 +1410,9 @@ export class HeadlessWorkbook {
       return;
     }
     this.evaluationSuspended = true;
-    this.suspendedVisibility = this.captureVisibilitySnapshot();
-    this.suspendedNamedValues = this.captureNamedExpressionValueSnapshot();
+    this.suspendedVisibility = this.ensureVisibilityCache();
+    this.suspendedNamedValues = this.ensureNamedExpressionValueCache();
+    this.drainTrackedEngineEvents();
     this.emitter.emitDetailed({ eventName: "evaluationSuspended", payload: {} });
   }
 
@@ -1394,11 +1421,9 @@ export class HeadlessWorkbook {
     if (!this.evaluationSuspended) {
       return [];
     }
-    const changes = this.computeChanges(
+    const changes = this.computeChangesAfterMutation(
       this.suspendedVisibility ?? new Map(),
-      this.captureVisibilitySnapshot(),
       this.suspendedNamedValues ?? new Map(),
-      this.captureNamedExpressionValueSnapshot(),
     );
     this.evaluationSuspended = false;
     this.suspendedVisibility = null;
@@ -2023,11 +2048,21 @@ export class HeadlessWorkbook {
       throw new NotAFormulaError();
     }
     try {
-      const temporaryWorkbook = HeadlessWorkbook.buildFromSheets(
-        this.getAllSheetsSerialized(),
-        this.getConfig(),
-        this.getAllNamedExpressionsSerialized(),
-      );
+      const temporaryWorkbook = new HeadlessWorkbook(this.getConfig());
+      const serializedSheets = this.getAllSheetsSerialized();
+      Object.keys(serializedSheets).forEach((sheetName) => {
+        temporaryWorkbook.engine.createSheet(sheetName);
+      });
+      this.getAllNamedExpressionsSerialized().forEach((expression) => {
+        temporaryWorkbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+      });
+      Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
+        const sheetId = temporaryWorkbook.requireSheetId(sheetName);
+        temporaryWorkbook.replaceSheetContentInternal(sheetId, sheet, {
+          duringInitialization: true,
+        });
+      });
+      temporaryWorkbook.clearHistoryStacks();
       const scratchSheetName =
         scope !== undefined ? `__HEADLESS_CALC_${scope}__` : "__HEADLESS_CALC__";
       temporaryWorkbook.engine.createSheet(scratchSheetName);
@@ -2392,8 +2427,9 @@ export class HeadlessWorkbook {
     if (!this.isItPossibleToAddSheet(name)) {
       throw new SheetNameAlreadyTakenError(name);
     }
-    const beforeVisibility = this.captureVisibilitySnapshot();
-    const beforeNames = this.captureNamedExpressionValueSnapshot();
+    const beforeVisibility = this.ensureVisibilityCache();
+    const beforeNames = this.ensureNamedExpressionValueCache();
+    this.drainTrackedEngineEvents();
     this.engine.createSheet(name);
     const sheetId = this.requireSheetId(name);
     const payload: HeadlessWorkbookDetailedEventMap["sheetAdded"] = { sheetId, sheetName: name };
@@ -2402,12 +2438,7 @@ export class HeadlessWorkbook {
     } else {
       this.emitter.emitDetailed({ eventName: "sheetAdded", payload });
     }
-    const changes = this.computeChanges(
-      beforeVisibility,
-      this.captureVisibilitySnapshot(),
-      beforeNames,
-      this.captureNamedExpressionValueSnapshot(),
-    );
+    const changes = this.computeChangesAfterMutation(beforeVisibility, beforeNames);
     if (!this.shouldSuppressEvents() && changes.length > 0) {
       this.emitter.emitDetailed({ eventName: "valuesUpdated", payload: { changes } });
     }
@@ -2758,11 +2789,50 @@ export class HeadlessWorkbook {
       return;
     }
     this.disposed = true;
+    this.unsubscribeEngineEvents?.();
+    this.unsubscribeEngineEvents = null;
     this.emitter.clear();
     this.clearFunctionBindings();
     this.clipboard = null;
+    this.visibilityCache = null;
+    this.namedExpressionValueCache = null;
     this.queuedEvents = [];
+    this.trackedEngineEvents = [];
     this.namedExpressions.clear();
+  }
+
+  private attachEngineEventTracking(): void {
+    this.unsubscribeEngineEvents?.();
+    this.trackedEngineEvents = [];
+    this.unsubscribeEngineEvents = this.engine.subscribe((event) => {
+      this.trackedEngineEvents.push(cloneTrackedEngineEvent(event));
+    });
+  }
+
+  private drainTrackedEngineEvents(): EngineEvent[] {
+    const events = this.trackedEngineEvents;
+    this.trackedEngineEvents = [];
+    return events;
+  }
+
+  private primeChangeTrackingCaches(): void {
+    this.visibilityCache = this.captureVisibilitySnapshot();
+    this.namedExpressionValueCache = this.captureNamedExpressionValueSnapshot();
+    this.drainTrackedEngineEvents();
+  }
+
+  private ensureVisibilityCache(): VisibilitySnapshot {
+    if (!this.visibilityCache) {
+      this.visibilityCache = this.captureVisibilitySnapshot();
+    }
+    return this.visibilityCache;
+  }
+
+  private ensureNamedExpressionValueCache(): NamedExpressionValueSnapshot {
+    if (!this.namedExpressionValueCache) {
+      this.namedExpressionValueCache = this.captureNamedExpressionValueSnapshot();
+    }
+    return this.namedExpressionValueCache;
   }
 
   private flushPendingBatchOps(): void {
@@ -2894,11 +2964,11 @@ export class HeadlessWorkbook {
       const cells = new Map<string, CellValue>();
       sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
         const address = formatAddress(row, col);
-        const value = this.engine.getCellValue(sheet.name, address);
+        const value = this.readStoredCellValue(sheet.name, row, col);
         if (value.tag === ValueTag.Empty) {
           return;
         }
-        cells.set(address, cloneCellValue(value));
+        cells.set(address, value);
       });
       snapshot.set(sheet.id, {
         sheetId: sheet.id,
@@ -2908,6 +2978,20 @@ export class HeadlessWorkbook {
       });
     });
     return snapshot;
+  }
+
+  private readStoredCellValue(sheetName: string, row: number, col: number): CellValue {
+    const sheet = this.engine.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return emptyValue();
+    }
+    const cellIndex = sheet.grid.get(row, col);
+    if (cellIndex === -1) {
+      return emptyValue();
+    }
+    return cloneCellValue(
+      this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id)),
+    );
   }
 
   private captureNamedExpressionValueSnapshot(): NamedExpressionValueSnapshot {
@@ -2921,11 +3005,52 @@ export class HeadlessWorkbook {
     return snapshot;
   }
 
-  private computeChanges(
+  private collectTrackedCellRefs(events: readonly EngineEvent[]): TrackedCellRef[] | null {
+    if (events.length === 0) {
+      return [];
+    }
+    const refs = new Map<string, TrackedCellRef>();
+    for (const event of events) {
+      if (
+        event.invalidation === "full" ||
+        event.invalidatedRanges.length > 0 ||
+        event.invalidatedRows.length > 0 ||
+        event.invalidatedColumns.length > 0
+      ) {
+        return null;
+      }
+      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+        const cellIndex = event.changedCellIndices[index]!;
+        const qualifiedAddress = this.engine.workbook.getQualifiedAddress(cellIndex);
+        if (qualifiedAddress.length === 0 || qualifiedAddress.startsWith("!")) {
+          return null;
+        }
+        const separator = qualifiedAddress.indexOf("!");
+        if (separator <= 0 || separator === qualifiedAddress.length - 1) {
+          return null;
+        }
+        const sheetName = qualifiedAddress.slice(0, separator);
+        const address = qualifiedAddress.slice(separator + 1);
+        const sheetId = this.getSheetId(sheetName);
+        if (sheetId === undefined) {
+          return null;
+        }
+        const parsed = parseCellAddress(address, sheetName);
+        refs.set(`${sheetId}:${address}`, {
+          sheetId,
+          sheetName,
+          address,
+          row: parsed.row,
+          col: parsed.col,
+        });
+      }
+    }
+    return [...refs.values()];
+  }
+
+  private computeCellChanges(
     beforeVisibility: VisibilitySnapshot,
     afterVisibility: VisibilitySnapshot,
-    beforeNames: NamedExpressionValueSnapshot,
-    afterNames: NamedExpressionValueSnapshot,
   ): HeadlessChange[] {
     const cellChanges: HeadlessChange[] = [];
     afterVisibility.forEach((afterSheet, sheetId) => {
@@ -2950,6 +3075,78 @@ export class HeadlessWorkbook {
         });
       });
     });
+    return cellChanges.toSorted(compareHeadlessCellChanges(this.listSheetRecords()));
+  }
+
+  private computeCellChangesFromTrackedEvents(
+    beforeVisibility: VisibilitySnapshot,
+    events: readonly EngineEvent[],
+  ): { changes: HeadlessChange[]; nextVisibility: VisibilitySnapshot } | null {
+    const refs = this.collectTrackedCellRefs(events);
+    if (refs === null) {
+      return null;
+    }
+
+    const nextVisibility = new Map(beforeVisibility);
+    const mutableSheets = new Set<number>();
+    const ensureMutableSheet = (ref: TrackedCellRef): SheetStateSnapshot => {
+      const existing =
+        nextVisibility.get(ref.sheetId) ??
+        ({
+          sheetId: ref.sheetId,
+          sheetName: ref.sheetName,
+          order: this.sheetRecord(ref.sheetId).order,
+          cells: new Map<string, CellValue>(),
+        } satisfies SheetStateSnapshot);
+      if (!mutableSheets.has(ref.sheetId)) {
+        nextVisibility.set(ref.sheetId, {
+          sheetId: existing.sheetId,
+          sheetName: existing.sheetName,
+          order: existing.order,
+          cells: new Map(
+            [...existing.cells.entries()].map(([address, value]) => [
+              address,
+              cloneCellValue(value),
+            ]),
+          ),
+        });
+        mutableSheets.add(ref.sheetId);
+      }
+      return nextVisibility.get(ref.sheetId)!;
+    };
+
+    const changes: HeadlessChange[] = [];
+    refs.forEach((ref) => {
+      const beforeValue = beforeVisibility.get(ref.sheetId)?.cells.get(ref.address) ?? emptyValue();
+      const afterValue = this.readStoredCellValue(ref.sheetName, ref.row, ref.col);
+      if (valuesEqual(beforeValue, afterValue)) {
+        return;
+      }
+      const sheet = ensureMutableSheet(ref);
+      if (afterValue.tag === ValueTag.Empty) {
+        sheet.cells.delete(ref.address);
+      } else {
+        sheet.cells.set(ref.address, afterValue);
+      }
+      changes.push({
+        kind: "cell",
+        address: { sheet: ref.sheetId, row: ref.row, col: ref.col },
+        sheetName: ref.sheetName,
+        a1: ref.address,
+        newValue: cloneCellValue(afterValue),
+      });
+    });
+
+    return {
+      changes: changes.toSorted(compareHeadlessCellChanges(this.listSheetRecords())),
+      nextVisibility,
+    };
+  }
+
+  private computeNamedExpressionChanges(
+    beforeNames: NamedExpressionValueSnapshot,
+    afterNames: NamedExpressionValueSnapshot,
+  ): HeadlessChange[] {
     const namedExpressionChanges: HeadlessChange[] = [];
     afterNames.forEach((afterValue, key) => {
       const beforeValue = beforeNames.get(key);
@@ -2967,10 +3164,29 @@ export class HeadlessWorkbook {
         newValue: cloneNamedExpressionValue(afterValue),
       });
     });
-    return [
-      ...cellChanges.toSorted(compareHeadlessCellChanges(this.listSheetRecords())),
-      ...namedExpressionChanges.toSorted(compareHeadlessNamedExpressionChanges),
-    ];
+    return namedExpressionChanges.toSorted(compareHeadlessNamedExpressionChanges);
+  }
+
+  private computeChangesAfterMutation(
+    beforeVisibility: VisibilitySnapshot,
+    beforeNames: NamedExpressionValueSnapshot,
+  ): HeadlessChange[] {
+    const afterNames = this.captureNamedExpressionValueSnapshot();
+    const fastPath = this.computeCellChangesFromTrackedEvents(
+      beforeVisibility,
+      this.drainTrackedEngineEvents(),
+    );
+    let cellChanges: HeadlessChange[];
+    if (fastPath) {
+      cellChanges = fastPath.changes;
+      this.visibilityCache = fastPath.nextVisibility;
+    } else {
+      const afterVisibility = this.captureVisibilitySnapshot();
+      cellChanges = this.computeCellChanges(beforeVisibility, afterVisibility);
+      this.visibilityCache = afterVisibility;
+    }
+    this.namedExpressionValueCache = afterNames;
+    return [...cellChanges, ...this.computeNamedExpressionChanges(beforeNames, afterNames)];
   }
 
   private captureChanges(
@@ -2981,7 +3197,7 @@ export class HeadlessWorkbook {
     if (semanticEvent !== undefined) {
       this.flushPendingBatchOps();
     }
-    if (semanticEvent === undefined && this.shouldSuppressEvents()) {
+    if (this.shouldSuppressEvents()) {
       try {
         mutate();
       } catch (error) {
@@ -2990,10 +3206,14 @@ export class HeadlessWorkbook {
         }
         throw new HeadlessOperationError(this.messageOf(error, "Mutation failed"));
       }
+      if (semanticEvent) {
+        this.queuedEvents.push(semanticEvent);
+      }
       return [];
     }
-    const beforeVisibility = this.captureVisibilitySnapshot();
-    const beforeNames = this.captureNamedExpressionValueSnapshot();
+    const beforeVisibility = this.ensureVisibilityCache();
+    const beforeNames = this.ensureNamedExpressionValueCache();
+    this.drainTrackedEngineEvents();
     try {
       mutate();
     } catch (error) {
@@ -3002,12 +3222,19 @@ export class HeadlessWorkbook {
       }
       throw new HeadlessOperationError(this.messageOf(error, "Mutation failed"));
     }
-    const changes = this.computeChanges(
-      beforeVisibility,
-      this.captureVisibilitySnapshot(),
-      beforeNames,
-      this.captureNamedExpressionValueSnapshot(),
-    );
+    const changes =
+      semanticEvent === undefined
+        ? this.computeChangesAfterMutation(beforeVisibility, beforeNames)
+        : (() => {
+            const afterVisibility = this.captureVisibilitySnapshot();
+            const afterNames = this.captureNamedExpressionValueSnapshot();
+            this.visibilityCache = afterVisibility;
+            this.namedExpressionValueCache = afterNames;
+            return [
+              ...this.computeCellChanges(beforeVisibility, afterVisibility),
+              ...this.computeNamedExpressionChanges(beforeNames, afterNames),
+            ];
+          })();
     if (semanticEvent) {
       const event = withEventChanges(semanticEvent, changes);
       if (this.shouldSuppressEvents()) {
@@ -3304,6 +3531,7 @@ export class HeadlessWorkbook {
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
     });
+    this.attachEngineEventTracking();
     this.config = cloneConfig(nextConfig);
     this.captureFunctionRegistry();
 
@@ -3318,10 +3546,11 @@ export class HeadlessWorkbook {
       this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
     });
     this.clearHistoryStacks();
+    this.primeChangeTrackingCaches();
     this.clipboard = clipboard;
     if (suspended) {
-      this.suspendedVisibility = this.captureVisibilitySnapshot();
-      this.suspendedNamedValues = this.captureNamedExpressionValueSnapshot();
+      this.suspendedVisibility = this.ensureVisibilityCache();
+      this.suspendedNamedValues = this.ensureNamedExpressionValueCache();
     }
   }
 

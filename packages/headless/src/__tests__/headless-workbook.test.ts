@@ -155,13 +155,19 @@ describe("HeadlessWorkbook", () => {
       value: 2,
     });
 
-    workbook.setCellContents(cell(sheetId, 1, 0), 20);
+    const missingMatchChanges = workbook.setCellContents(cell(sheetId, 1, 0), 20);
+    expect(
+      missingMatchChanges.map((change) => (change.kind === "cell" ? change.a1 : change.kind)),
+    ).toEqual(["E1", "A2"]);
     expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
     });
 
-    workbook.setCellContents(cell(sheetId, 0, 3), 3);
+    const restoredMatchChanges = workbook.setCellContents(cell(sheetId, 0, 3), 3);
+    expect(
+      restoredMatchChanges.map((change) => (change.kind === "cell" ? change.a1 : change.kind)),
+    ).toEqual(["D1", "E1"]);
     expect(workbook.getCellValue(cell(sheetId, 0, 4))).toMatchObject({
       tag: ValueTag.Number,
       value: 3,
