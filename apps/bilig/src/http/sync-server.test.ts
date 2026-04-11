@@ -604,6 +604,64 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("creates or resumes workbook chat threads through the durable chat route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-thread",
+        threadId: "thr-shared",
+        scope: "shared",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/chat/threads",
+        payload: {
+          threadId: "thr-shared",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: expect.objectContaining({
+            threadId: "thr-shared",
+          }),
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          sessionId: "agent-session-thread",
+          threadId: "thr-shared",
+          scope: "shared",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("loads workbook agent thread snapshots through a thread-specific route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
@@ -628,6 +686,49 @@ describe("sync-server workbook agent", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.headers["cache-control"]).toBe("no-store");
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-shared",
+          },
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          sessionId: "agent-session-thread",
+          threadId: "thr-shared",
+          scope: "shared",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("loads workbook chat thread snapshots through a thread-specific route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-thread",
+        threadId: "thr-shared",
+        scope: "shared",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/chat/threads/thr-shared",
+      });
+
+      expect(response.statusCode).toBe(200);
       expect(createSession).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
@@ -742,6 +843,74 @@ describe("sync-server workbook agent", () => {
           threadId: "thr-2",
           status: "inProgress",
           activeTurnId: "turn-1",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("starts workbook chat turns through a durable chat thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const startTurn = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        status: "inProgress",
+        activeTurnId: "turn-1",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+        startTurn,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/turns",
+        payload: {
+          prompt: "Summarize this thread",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: expect.objectContaining({
+            threadId: "thr-2",
+          }),
+        }),
+      );
+      expect(startTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          body: expect.objectContaining({
+            prompt: "Summarize this thread",
+          }),
         }),
       );
     } finally {
@@ -1830,6 +1999,40 @@ describe("sync-server workbook agent", () => {
       const response = await app.inject({
         method: "GET",
         url: "/v2/documents/doc-1/agent/threads/thr-1/events",
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          error: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+          message: "Workbook agent session not found",
+          retryable: true,
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns a structured not-found envelope when the chat thread event stream is stale", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        async createSession() {
+          throw createWorkbookAgentServiceError({
+            code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+            message: "Workbook agent session not found",
+            statusCode: 404,
+            retryable: true,
+          });
+        },
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/chat/threads/thr-1/events",
       });
 
       expect(response.statusCode).toBe(404);

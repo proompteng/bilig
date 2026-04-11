@@ -266,13 +266,13 @@ describe("workbook agent pane", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/threads")) {
+        if (url.endsWith("/chat/threads")) {
           return new Response(JSON.stringify([]), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
         }
-        if (url.endsWith("/agent/threads/thr-1")) {
+        if (url.endsWith("/chat/threads/thr-1")) {
           return new Response(
             JSON.stringify(
               createSnapshot({
@@ -419,7 +419,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -434,7 +434,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -510,7 +510,7 @@ describe("workbook agent pane", () => {
 
     const createThreadCall = fetchSpy.mock.calls.find(
       ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/agent/threads") &&
+        requestUrl(requestInput).endsWith("/chat/threads") &&
         requestMethod(requestInit) === "POST",
     );
     expect(requestBody(createThreadCall?.[1])).toEqual({
@@ -529,9 +529,9 @@ describe("workbook agent pane", () => {
       scope: "private",
     });
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
-    expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-2/workflows");
+    expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-2/workflows");
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "findFormulaIssues",
       sheetName: "Sheet1",
@@ -554,7 +554,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1/workflows/wf-running-1/cancel")) {
+      if (url.endsWith("/chat/threads/thr-1/workflows/wf-running-1/cancel")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -661,10 +661,10 @@ describe("workbook agent pane", () => {
     });
 
     const cancelCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-1/workflows/wf-running-1/cancel"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-1/workflows/wf-running-1/cancel"),
     );
     expect(cancelCall?.[0]).toBe(
-      "/v2/documents/doc-1/agent/threads/thr-1/workflows/wf-running-1/cancel",
+      "/v2/documents/doc-1/chat/threads/thr-1/workflows/wf-running-1/cancel",
     );
     expect(requestMethod(cancelCall?.[1])).toBe("POST");
     expect(host.textContent).toContain("Cancelled");
@@ -684,7 +684,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -699,7 +699,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -781,7 +781,7 @@ describe("workbook agent pane", () => {
     });
 
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "traceSelectionDependencies",
@@ -800,7 +800,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -815,7 +815,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -891,7 +891,7 @@ describe("workbook agent pane", () => {
     });
 
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "summarizeCurrentSheet",
@@ -910,7 +910,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -925,7 +925,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1008,7 +1008,7 @@ describe("workbook agent pane", () => {
     });
 
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "explainSelectionCell",
@@ -1027,7 +1027,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1042,7 +1042,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1127,7 +1127,7 @@ describe("workbook agent pane", () => {
     });
 
     const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
     );
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "searchWorkbookQuery",
@@ -1147,7 +1147,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads")) {
+      if (url.endsWith("/chat/threads")) {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -1200,7 +1200,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -1215,7 +1215,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads/thr-2")) {
+      if (url.endsWith("/chat/threads/thr-2")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1253,7 +1253,7 @@ describe("workbook agent pane", () => {
       threadButton.click();
     });
 
-    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-2/events");
+    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-2/events");
     expect(
       host
         .querySelector("[data-testid='workbook-agent-thread-thr-2']")
@@ -1264,7 +1264,7 @@ describe("workbook agent pane", () => {
         .querySelector("[data-testid='workbook-agent-scope-shared']")
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/agent/threads/thr-2");
+    expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/chat/threads/thr-2");
 
     await act(async () => {
       root.unmount();
@@ -1277,13 +1277,13 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
         return new Response(JSON.stringify([]), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1375,10 +1375,10 @@ describe("workbook agent pane", () => {
       );
     });
 
-    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-shared/events");
+    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-shared/events");
     const sessionCall = fetchSpy.mock.calls.find(
       ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/agent/threads") &&
+        requestUrl(requestInput).endsWith("/chat/threads") &&
         typeof requestBody(requestInit) === "object" &&
         requestBody(requestInit) !== null &&
         "scope" in requestBody(requestInit) &&
@@ -1401,7 +1401,7 @@ describe("workbook agent pane", () => {
     });
     expect(
       fetchSpy.mock.calls.some(([requestInput]) =>
-        requestUrl(requestInput).endsWith("/agent/threads/thr-shared/turns"),
+        requestUrl(requestInput).endsWith("/chat/threads/thr-shared/turns"),
       ),
     ).toBe(true);
 
@@ -1418,7 +1418,7 @@ describe("workbook agent pane", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/threads")) {
+        if (url.endsWith("/chat/threads")) {
           return new Response(JSON.stringify([]), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -1518,7 +1518,7 @@ describe("workbook agent pane", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/threads")) {
+        if (url.endsWith("/chat/threads")) {
           return new Response(JSON.stringify([]), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -1604,7 +1604,7 @@ describe("workbook agent pane", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -1676,9 +1676,9 @@ describe("workbook agent pane", () => {
     });
 
     const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-1/turns"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
-    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/turns");
+    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
 
@@ -1700,13 +1700,13 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.endsWith("/agent/threads/thr-1/turns")) {
+      if (url.endsWith("/chat/threads/thr-1/turns")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1772,9 +1772,9 @@ describe("workbook agent pane", () => {
     });
 
     const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/agent/threads/thr-1/turns"),
+      requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
-    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/turns");
+    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
 
     await act(async () => {
       root.unmount();
@@ -1794,7 +1794,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1876,9 +1876,9 @@ describe("workbook agent pane", () => {
     });
 
     const interruptCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/agent/threads/thr-1/interrupt"),
+      requestUrl(input).endsWith("/chat/threads/thr-1/interrupt"),
     );
-    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/interrupt");
+    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/interrupt");
 
     await act(async () => {
       root.unmount();
@@ -2070,7 +2070,7 @@ describe("workbook agent pane", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
           return new Response(JSON.stringify(createSnapshot()), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -2096,7 +2096,7 @@ describe("workbook agent pane", () => {
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
       "Thinking",
     );
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
 
     await act(async () => {
       MockEventSource.latest?.emit({
@@ -2130,7 +2130,7 @@ describe("workbook agent pane", () => {
     let resumeCount = 0;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
         resumeCount += 1;
         return new Response(
           JSON.stringify(
@@ -2157,7 +2157,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
 
     await act(async () => {
       MockEventSource.latest?.emitError();
@@ -2167,10 +2167,10 @@ describe("workbook agent pane", () => {
 
     const sessionCalls = fetchSpy.mock.calls.filter(
       ([input, init]) =>
-        requestUrl(input).endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET",
+        requestUrl(input).endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET",
     );
     expect(sessionCalls).toHaveLength(2);
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toBe(
       JSON.stringify({
         threadId: "thr-1",
@@ -2194,7 +2194,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2221,10 +2221,10 @@ describe("workbook agent pane", () => {
     });
 
     const bootstrapSessionCall = fetchSpy.mock.calls.find(([input, init]) => {
-      return requestUrl(input).endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET";
+      return requestUrl(input).endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET";
     });
     expect(bootstrapSessionCall).toBeDefined();
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
       '"threadId":"thr-1"',
     );
@@ -2278,7 +2278,7 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2457,7 +2457,7 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2564,7 +2564,7 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && (init?.method ?? "GET") === "GET") {
+      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -2579,7 +2579,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2692,7 +2692,7 @@ describe("workbook agent pane", () => {
     });
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && (init?.method ?? "GET") === "GET") {
+      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -2707,7 +2707,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2891,7 +2891,7 @@ describe("workbook agent pane", () => {
     });
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && (init?.method ?? "GET") === "GET") {
+      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
         return new Response(
           JSON.stringify([
             createThreadSummary({
@@ -2906,7 +2906,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -3114,7 +3114,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({

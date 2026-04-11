@@ -337,8 +337,44 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
+  app.get(
+    "/v2/documents/:documentId/chat/threads",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.listThreads({
+          documentId: request.params.documentId,
+          session,
+        });
+      });
+    },
+  );
+
   app.post(
     "/v2/documents/:documentId/agent/threads",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads",
     async (
       request: FastifyRequest<{
         Params: { documentId: string };
@@ -376,8 +412,56 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
+  app.get(
+    "/v2/documents/:documentId/chat/threads/:threadId",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+      });
+    },
+  );
+
   app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/turns",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            ...request.body,
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.startTurn({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/turns",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string };
@@ -426,6 +510,33 @@ export function createSyncServer(options: SyncServerOptions = {}) {
 
   app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/context",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.updateContext({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/context",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string };
@@ -538,7 +649,60 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/workflows",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.startWorkflow({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/workflows/:runId/cancel",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; runId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.cancelWorkflow({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          runId: request.params.runId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/workflows/:runId/cancel",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string; runId: string };
@@ -583,6 +747,31 @@ export function createSyncServer(options: SyncServerOptions = {}) {
 
   app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/interrupt",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.interruptTurn({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/interrupt",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string };
@@ -709,7 +898,80 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/apply",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+        Body: {
+          appliedBy?: "user" | "auto";
+          commandIndexes?: number[];
+          preview?: unknown;
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        const commandIndexes =
+          request.body &&
+          typeof request.body === "object" &&
+          Array.isArray(request.body.commandIndexes)
+            ? request.body.commandIndexes
+            : undefined;
+        return await service.applyPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
+          ...(commandIndexes ? { commandIndexes } : {}),
+          preview:
+            request.body && typeof request.body === "object" && "preview" in request.body
+              ? (request.body.preview ?? null)
+              : null,
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/review",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+        Body: {
+          decision?: "approved" | "rejected";
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.reviewPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/review",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string; bundleId: string };
@@ -784,6 +1046,32 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/dismiss",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.dismissPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/runs/:recordId/replay",
     async (
       request: FastifyRequest<{
@@ -828,8 +1116,100 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
+  app.post(
+    "/v2/documents/:documentId/chat/threads/:threadId/runs/:recordId/replay",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; recordId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.replayExecutionRecord({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          recordId: request.params.recordId,
+          session,
+        });
+      });
+    },
+  );
+
   app.get(
     "/v2/documents/:documentId/agent/threads/:threadId/events",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>;
+      try {
+        sessionSnapshot = await workbookAgentService.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+      } catch (error) {
+        if (isWorkbookAgentServiceError(error)) {
+          reply.code(error.statusCode);
+          return createErrorEnvelope(error.code, error.message, error.retryable);
+        }
+        throw error;
+      }
+
+      reply.hijack();
+      const raw = reply.raw;
+      raw.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      });
+
+      const writeEvent = (event: WorkbookAgentStreamEvent) => {
+        raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      writeEvent({
+        type: "snapshot",
+        snapshot: sessionSnapshot,
+      });
+
+      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
+        writeEvent(event);
+      });
+      const keepalive = setInterval(() => {
+        raw.write(":keepalive\n\n");
+      }, 15_000);
+
+      request.raw.on("close", () => {
+        clearInterval(keepalive);
+        unsubscribe();
+      });
+      return reply;
+    },
+  );
+
+  app.get(
+    "/v2/documents/:documentId/chat/threads/:threadId/events",
     async (
       request: FastifyRequest<{
         Params: { documentId: string; threadId: string };

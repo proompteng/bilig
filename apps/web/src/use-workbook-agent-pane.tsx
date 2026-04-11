@@ -96,7 +96,7 @@ function createSessionResumeBody(
 }
 
 function threadSnapshotUrl(documentId: string, threadId: string): string {
-  return `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(threadId)}`;
+  return `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(threadId)}`;
 }
 
 function updateSnapshotFromDelta(
@@ -197,7 +197,7 @@ export function useWorkbookAgentPane(input: {
   const loadThreadSummaries = useCallback(async (): Promise<
     readonly WorkbookAgentThreadSummary[]
   > => {
-    const response = await fetch(`/v2/documents/${encodeURIComponent(documentId)}/agent/threads`);
+    const response = await fetch(`/v2/documents/${encodeURIComponent(documentId)}/chat/threads`);
     const payload = (await response.json()) as unknown;
     if (!response.ok) {
       throw new Error(
@@ -318,7 +318,7 @@ export function useWorkbookAgentPane(input: {
     (threadId: string) => {
       closeStream();
       const source = new EventSource(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(threadId)}/events`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(threadId)}/events`,
       );
       source.addEventListener("message", (message) => {
         try {
@@ -390,7 +390,7 @@ export function useWorkbookAgentPane(input: {
   const createSession = useCallback(
     async (context: WorkbookAgentUiContext, scope: WorkbookAgentThreadScope) => {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads`,
         {
           method: "POST",
           headers: {
@@ -509,7 +509,7 @@ export function useWorkbookAgentPane(input: {
       try {
         setIsApplyingBundle(true);
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
           {
             method: "POST",
             headers: {
@@ -727,7 +727,7 @@ export function useWorkbookAgentPane(input: {
         return;
       }
       void fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/context`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/context`,
         {
           method: "POST",
           headers: {
@@ -753,7 +753,7 @@ export function useWorkbookAgentPane(input: {
       setError(null);
       const activeSession = await ensureSession();
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/turns`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/turns`,
         {
           method: "POST",
           headers: {
@@ -789,7 +789,7 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/interrupt`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/interrupt`,
         {
           method: "POST",
         },
@@ -816,7 +816,7 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
         {
           method: "POST",
           headers: {
@@ -849,7 +849,7 @@ export function useWorkbookAgentPane(input: {
       }
       try {
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/review`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/review`,
           {
             method: "POST",
             headers: {
@@ -881,7 +881,7 @@ export function useWorkbookAgentPane(input: {
       const activeSession = await ensureSession();
       try {
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/runs/${encodeURIComponent(recordId)}/replay`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/runs/${encodeURIComponent(recordId)}/replay`,
           {
             method: "POST",
           },
@@ -911,7 +911,7 @@ export function useWorkbookAgentPane(input: {
         setIsStartingWorkflow(true);
         const activeSession = await ensureSession();
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/workflows`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/workflows`,
           {
             method: "POST",
             headers: {
@@ -949,7 +949,7 @@ export function useWorkbookAgentPane(input: {
         setError(null);
         setCancellingWorkflowRunId(runId);
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/workflows/${encodeURIComponent(runId)}/cancel`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/workflows/${encodeURIComponent(runId)}/cancel`,
           {
             method: "POST",
           },
