@@ -432,6 +432,22 @@ describe("WorkPaper", () => {
     });
   });
 
+  it("evaluates scratch formulas without mutating workbook sheets or undo history", () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [[2, 3]],
+    });
+    const beforeSheetNames = workbook.getSheetNames();
+    const beforeCanUndo = workbook.isThereSomethingToUndo();
+
+    expect(workbook.calculateFormula("=SUM(Sheet1!A1:B1)")).toMatchObject({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+
+    expect(workbook.getSheetNames()).toEqual(beforeSheetNames);
+    expect(workbook.isThereSomethingToUndo()).toBe(beforeCanUndo);
+  });
+
   it("rebuilds engine state when config changes affect available function plugins", () => {
     const plugin = {
       id: "custom-math",

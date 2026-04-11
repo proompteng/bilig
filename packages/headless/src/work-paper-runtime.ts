@@ -98,6 +98,8 @@ import type {
   SerializedWorkPaperNamedExpression,
 } from "./work-paper-types.js";
 import { captureTrackedEngineEvent, type TrackedEngineEvent } from "./tracked-engine-event-refs.js";
+import { calculateWorkPaperFormulaInScratchWorkbook } from "./work-paper-scratch-evaluator.js";
+import { replaceWorkPaperSheetContent } from "./work-paper-sheet-replacement.js";
 
 type ListenerMap = {
   [EventName in WorkPaperEventName]: Set<WorkPaperListener<EventName>>;
@@ -2078,43 +2080,36 @@ export class WorkPaper {
       throw new WorkPaperNotAFormulaError();
     }
     try {
-      const temporaryWorkbook = new WorkPaper(this.getConfig());
-      const serializedSheets = this.getAllSheetsSerialized();
-      Object.keys(serializedSheets).forEach((sheetName) => {
-        temporaryWorkbook.engine.createSheet(sheetName);
+      return calculateWorkPaperFormulaInScratchWorkbook({
+        createWorkbook: (config) => {
+          const temporaryWorkbook = new WorkPaper(config);
+          return {
+            engine: temporaryWorkbook.engine,
+            registerNamedExpression: (expression) => {
+              temporaryWorkbook.upsertNamedExpressionInternal(expression, {
+                duringInitialization: true,
+              });
+            },
+            requireSheetId: (sheetName) => temporaryWorkbook.requireSheetId(sheetName),
+            replaceSheetContent: (sheetId, sheet) => {
+              temporaryWorkbook.replaceSheetContentInternal(sheetId, sheet, {
+                duringInitialization: true,
+              });
+            },
+            clearHistoryStacks: () => temporaryWorkbook.clearHistoryStacks(),
+            applyRawContent: (address, content) =>
+              temporaryWorkbook.applyRawContent(address, content),
+            getRangeValues: (range) => temporaryWorkbook.getRangeValues(range),
+            getCellValue: (address) => temporaryWorkbook.getCellValue(address),
+            dispose: () => temporaryWorkbook.dispose(),
+          };
+        },
+        config: this.getConfig(),
+        serializedSheets: this.getAllSheetsSerialized(),
+        namedExpressions: this.getAllNamedExpressionsSerialized(),
+        formula,
+        scope,
       });
-      this.getAllNamedExpressionsSerialized().forEach((expression) => {
-        temporaryWorkbook.upsertNamedExpressionInternal(expression, { duringInitialization: true });
-      });
-      Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
-        const sheetId = temporaryWorkbook.requireSheetId(sheetName);
-        temporaryWorkbook.replaceSheetContentInternal(sheetId, sheet, {
-          duringInitialization: true,
-        });
-      });
-      temporaryWorkbook.clearHistoryStacks();
-      const scratchSheetName =
-        scope !== undefined ? `__WORKPAPER_CALC_${scope}__` : "__WORKPAPER_CALC__";
-      temporaryWorkbook.engine.createSheet(scratchSheetName);
-      const scratchSheetId = temporaryWorkbook.requireSheetId(scratchSheetName);
-      temporaryWorkbook.applyRawContent(
-        { sheet: scratchSheetId, row: 0, col: 0 },
-        formula.trim().startsWith("=") ? formula : `=${formula}`,
-      );
-      const spill = temporaryWorkbook.engine
-        .getSpillRanges()
-        .find(
-          (candidate: { sheetName: string; address: string; rows: number; cols: number }) =>
-            candidate.sheetName === scratchSheetName && candidate.address === "A1",
-        );
-      const value = spill
-        ? temporaryWorkbook.getRangeValues({
-            start: { sheet: scratchSheetId, row: 0, col: 0 },
-            end: { sheet: scratchSheetId, row: spill.rows - 1, col: spill.cols - 1 },
-          })
-        : temporaryWorkbook.getCellValue({ sheet: scratchSheetId, row: 0, col: 0 });
-      temporaryWorkbook.dispose();
-      return value;
     } catch (error) {
       throw new WorkPaperParseError(this.messageOf(error, "Unable to calculate formula"));
     }
@@ -3529,43 +3524,20 @@ export class WorkPaper {
     content: WorkPaperSheet,
     options: { duringInitialization: boolean },
   ): void {
-    const sheetName = this.sheetName(sheetId);
-    const undoStackStart = options.duringInitialization ? 0 : this.getUndoStack().length;
-    const deferredLiteralAddresses = new Set<string>();
-    this.engine.workbook
-      .listSpills()
-      .filter((spill) => spill.sheetName === sheetName)
-      .forEach((spill) => {
-        const owner = parseCellAddress(spill.address, spill.sheetName);
-        for (let rowOffset = 0; rowOffset < spill.rows; rowOffset += 1) {
-          for (let colOffset = 0; colOffset < spill.cols; colOffset += 1) {
-            if (rowOffset === 0 && colOffset === 0) {
-              continue;
-            }
-            deferredLiteralAddresses.add(
-              formatAddress(owner.row + rowOffset, owner.col + colOffset),
-            );
-          }
-        }
-      });
-    const dimensions = this.getSheetDimensions(sheetId);
-    if (dimensions.width > 0 && dimensions.height > 0) {
-      this.engine.clearRange({
-        sheetName,
-        startAddress: "A1",
-        endAddress: formatAddress(dimensions.height - 1, dimensions.width - 1),
-      });
-    }
-    this.applyMatrixContents({ sheet: sheetId, row: 0, col: 0 }, content, {
-      captureUndo: !options.duringInitialization,
-      deferLiteralAddresses: deferredLiteralAddresses,
-      skipNulls: true,
+    replaceWorkPaperSheetContent({
+      sheetId,
+      sheetName: this.sheetName(sheetId),
+      content,
+      duringInitialization: options.duringInitialization,
+      listSpills: () => this.engine.workbook.listSpills(),
+      getSheetDimensions: (nextSheetId) => this.getSheetDimensions(nextSheetId),
+      clearRange: (input) => this.engine.clearRange(input),
+      applyMatrixContents: (address, nextContent, applyOptions) =>
+        this.applyMatrixContents(address, nextContent, applyOptions),
+      clearHistoryStacks: () => this.clearHistoryStacks(),
+      getUndoStackLength: () => this.getUndoStack().length,
+      mergeUndoHistory: (undoStackStart) => this.mergeUndoHistory(undoStackStart),
     });
-    if (options.duringInitialization) {
-      this.clearHistoryStacks();
-      return;
-    }
-    this.mergeUndoHistory(undoStackStart);
   }
 
   private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
