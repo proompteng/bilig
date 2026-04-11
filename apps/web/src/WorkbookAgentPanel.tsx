@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, type CSSProperties, useEffect, useRef, useState } from "react";
 import { Button } from "@base-ui/react/button";
 import { Collapsible } from "@base-ui/react/collapsible";
 import {
@@ -62,6 +62,24 @@ const toolStatusPillClass = cva(
     },
   },
 );
+
+const agentPanelThemeStyle: CSSProperties & Record<`--${string}`, string> = {
+  "--wb-app-bg": "var(--color-mauve-50)",
+  "--wb-surface": "white",
+  "--wb-surface-subtle": "var(--color-mauve-50)",
+  "--wb-surface-muted": "var(--color-mauve-100)",
+  "--wb-border": "var(--color-mauve-200)",
+  "--wb-border-strong": "var(--color-mauve-300)",
+  "--wb-grid-border": "var(--color-mauve-100)",
+  "--wb-text": "var(--color-mauve-950)",
+  "--wb-text-muted": "var(--color-mauve-700)",
+  "--wb-text-subtle": "var(--color-mauve-500)",
+  "--wb-accent": "var(--color-mauve-900)",
+  "--wb-accent-soft": "var(--color-mauve-100)",
+  "--wb-accent-ring": "var(--color-mauve-400)",
+  "--wb-hover": "var(--color-mauve-100)",
+  "--wb-shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
 
 function contextLabel(context: WorkbookAgentUiContext | null): string {
   if (!context) {
@@ -553,7 +571,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   if (entry.kind === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
+        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <WorkbookAgentMarkdown markdown={entry.text ?? ""} />
           <TimelineCitationList citations={entry.citations} />
         </div>
@@ -1070,9 +1088,10 @@ export function WorkbookAgentPanel(props: {
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col"
+      className="flex h-full min-h-0 w-full flex-col bg-[var(--wb-app-bg)]"
       data-testid="workbook-agent-panel"
       id="workbook-agent-panel"
+      style={agentPanelThemeStyle}
     >
       <div className={agentPanelHeaderClass()}>
         <div className={agentPanelToolbarRowClass()}>

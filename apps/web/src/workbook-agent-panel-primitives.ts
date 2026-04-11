@@ -1,11 +1,11 @@
 import { cva } from "class-variance-authority";
 
 export const agentPanelHeaderClass = cva(
-  "border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2.5",
+  "border-b border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-3 py-2.5",
 );
 
 export const agentPanelFooterClass = cva(
-  "border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2.5",
+  "border-t border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-3 py-2.5",
 );
 
 export const agentPanelToolbarRowClass = cva("flex flex-wrap items-center justify-between gap-2");
