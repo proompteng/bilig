@@ -93,6 +93,8 @@ describe("publication-store", () => {
     expect(query.text).toContain(`ALTER PUBLICATION "${DEFAULT_ZERO_PUBLICATION}" ADD TABLE`);
     expect(query.text).toContain(`public."presence_coarse"`);
     expect(query.text).toContain(`public."workbook_change"`);
+    expect(query.text).toContain(`public."workbook_chat_thread"`);
+    expect(query.text).toContain(`public."workbook_workflow_run"`);
     expect(query.text).not.toContain(`public."workbooks"`);
     expect(query.text).not.toContain(`public."defined_names"`);
   });

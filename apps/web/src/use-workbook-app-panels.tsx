@@ -65,6 +65,8 @@ export function useWorkbookAppPanels(input: {
       enabled: runtimeReady,
       getContext: getAgentContext,
       previewBundle: previewAgentBundle,
+      zero,
+      zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
     });
 
   const sideRailTabs = useMemo(

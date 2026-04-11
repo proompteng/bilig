@@ -9,6 +9,10 @@ export const workbookQueryArgsSchema = z.object({
   documentId: z.string().min(1),
 });
 
+export const workbookThreadArgsSchema = workbookQueryArgsSchema.extend({
+  threadId: z.string().min(1),
+});
+
 const workbookSheetArgsSchema = workbookQueryArgsSchema
   .extend({
     sheetId: z.string().min(1).optional(),
@@ -128,6 +132,19 @@ const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
     .orderBy("revision", "desc"),
 );
 
+const workbookChatThreadByWorkbook = defineQuery(
+  workbookQueryArgsSchema,
+  ({ args: { documentId } }) =>
+    zql.workbook_chat_thread.where("workbookId", documentId).orderBy("updatedAtUnixMs", "desc"),
+);
+
+const workbookWorkflowRunByThread = defineQuery(workbookThreadArgsSchema, ({ args }) =>
+  zql.workbook_workflow_run
+    .where("workbookId", args.documentId)
+    .where("threadId", args.threadId)
+    .orderBy("updatedAtUnixMs", "desc"),
+);
+
 export const queries = defineQueries({
   workbook: {
     get: workbookGet,
@@ -186,5 +203,17 @@ export const queries = defineQueries({
   },
   workbookChanges: {
     byWorkbook: workbookChangeByWorkbook,
+  },
+  workbookChatThread: {
+    byWorkbook: workbookChatThreadByWorkbook,
+  },
+  workbookAgentThread: {
+    byWorkbook: workbookChatThreadByWorkbook,
+  },
+  workbookWorkflowRun: {
+    byThread: workbookWorkflowRunByThread,
+  },
+  workbookAgentWorkflowRun: {
+    byThread: workbookWorkflowRunByThread,
   },
 });

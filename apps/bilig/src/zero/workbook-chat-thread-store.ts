@@ -33,6 +33,9 @@ interface WorkbookChatThreadRow extends QueryResultRow {
   readonly scope?: unknown;
   readonly contextJson?: unknown;
   readonly updatedAtUnixMs?: unknown;
+  readonly entryCount?: unknown;
+  readonly hasPendingBundle?: unknown;
+  readonly latestEntryText?: unknown;
 }
 
 interface WorkbookChatItemRow extends QueryResultRow {
@@ -349,9 +352,24 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       actor_user_id TEXT NOT NULL,
       scope TEXT NOT NULL DEFAULT 'private',
       context_json JSONB,
+      entry_count BIGINT NOT NULL DEFAULT 0,
+      has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE,
+      latest_entry_text TEXT,
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
     )
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS entry_count BIGINT NOT NULL DEFAULT 0;
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS latest_entry_text TEXT;
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_chat_item (
@@ -462,6 +480,11 @@ export async function saveWorkbookAgentThreadState(
   db: Queryable,
   record: WorkbookAgentThreadStateRecord,
 ): Promise<void> {
+  const latestEntryText =
+    [...record.entries]
+      .toReversed()
+      .find((entry) => typeof entry.text === "string" && entry.text.trim().length > 0)?.text ??
+    null;
   await db.query(
     `
       INSERT INTO workbook_chat_thread (
@@ -470,13 +493,19 @@ export async function saveWorkbookAgentThreadState(
         actor_user_id,
         scope,
         context_json,
+        entry_count,
+        has_pending_bundle,
+        latest_entry_text,
         updated_at_unix_ms
       )
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
       ON CONFLICT (workbook_id, thread_id, actor_user_id)
       DO UPDATE SET
         scope = EXCLUDED.scope,
         context_json = EXCLUDED.context_json,
+        entry_count = EXCLUDED.entry_count,
+        has_pending_bundle = EXCLUDED.has_pending_bundle,
+        latest_entry_text = EXCLUDED.latest_entry_text,
         updated_at_unix_ms = EXCLUDED.updated_at_unix_ms
     `,
     [
@@ -485,6 +514,9 @@ export async function saveWorkbookAgentThreadState(
       record.actorUserId,
       record.scope,
       JSON.stringify(record.context),
+      record.entries.length,
+      record.pendingBundle !== null,
+      latestEntryText,
       record.updatedAtUnixMs,
     ],
   );

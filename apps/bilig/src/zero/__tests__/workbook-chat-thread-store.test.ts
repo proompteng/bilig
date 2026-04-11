@@ -78,8 +78,8 @@ function createThreadState() {
         phase: null,
         toolName: "bilig_read_workbook",
         toolStatus: "completed" as const,
-        argumentsText: "{\"sheetName\":\"Sheet1\"}",
-        outputText: "{\"summary\":\"Loaded workbook\"}",
+        argumentsText: '{"sheetName":"Sheet1"}',
+        outputText: '{"summary":"Loaded workbook"}',
         success: true,
         citations: [],
       },
@@ -161,6 +161,12 @@ describe("workbook-chat-thread-store", () => {
     expect(
       queryable.calls.some((call) => call.text.includes("INSERT INTO workbook_chat_thread")),
     ).toBe(true);
+    const threadInsert = queryable.calls.find((call) =>
+      call.text.includes("INSERT INTO workbook_chat_thread"),
+    );
+    expect(threadInsert?.values?.[5]).toBe(3);
+    expect(threadInsert?.values?.[6]).toBe(true);
+    expect(threadInsert?.values?.[7]).toBe("Preview bundle staged");
     expect(
       queryable.calls.some((call) => call.text.includes("DELETE FROM workbook_chat_item")),
     ).toBe(true);
@@ -199,8 +205,8 @@ describe("workbook-chat-thread-store", () => {
         call.values?.[3] === "tool-call-1",
     );
     expect(toolInsert?.values?.[6]).toBe("bilig_read_workbook");
-    expect(toolInsert?.values?.[8]).toBe("{\"sheetName\":\"Sheet1\"}");
-    expect(toolInsert?.values?.[9]).toBe("{\"summary\":\"Loaded workbook\"}");
+    expect(toolInsert?.values?.[8]).toBe('{"sheetName":"Sheet1"}');
+    expect(toolInsert?.values?.[9]).toBe('{"summary":"Loaded workbook"}');
   });
 
   it("loads a durable thread snapshot with entries and a pending bundle", async () => {

@@ -28,6 +28,7 @@ export {
 export {
   queries,
   workbookCellArgsSchema,
+  workbookThreadArgsSchema,
   workbookColumnTileArgsSchema,
   workbookQueryArgsSchema,
   workbookRowTileArgsSchema,

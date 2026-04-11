@@ -150,6 +150,38 @@ const workbookChange = table("workbook_change")
   })
   .primaryKey("workbookId", "revision");
 
+const workbookChatThread = table("workbook_chat_thread")
+  .columns({
+    workbookId: string().from("workbook_id"),
+    threadId: string().from("thread_id"),
+    ownerUserId: string().from("actor_user_id"),
+    scope: string<"private" | "shared">(),
+    updatedAtUnixMs: number().from("updated_at_unix_ms"),
+    entryCount: number().from("entry_count"),
+    hasPendingBundle: boolean().from("has_pending_bundle"),
+    latestEntryText: string().from("latest_entry_text").optional(),
+  })
+  .primaryKey("workbookId", "threadId", "ownerUserId");
+
+const workbookWorkflowRun = table("workbook_workflow_run")
+  .columns({
+    runId: string().from("run_id"),
+    workbookId: string().from("workbook_id"),
+    threadId: string().from("thread_id"),
+    startedByUserId: string().from("actor_user_id"),
+    workflowTemplate: string().from("workflow_template"),
+    title: string(),
+    summary: string(),
+    status: string(),
+    createdAtUnixMs: number().from("created_at_unix_ms"),
+    updatedAtUnixMs: number().from("updated_at_unix_ms"),
+    completedAtUnixMs: number().from("completed_at_unix_ms").optional(),
+    errorMessage: string().from("error_message").optional(),
+    steps: json().from("steps_json"),
+    artifact: json().from("artifact_json").optional(),
+  })
+  .primaryKey("runId");
+
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -163,6 +195,8 @@ export const schema = createSchema({
     definedNames,
     presenceCoarse,
     workbookChange,
+    workbookChatThread,
+    workbookWorkflowRun,
   ],
   relationships: [],
 });

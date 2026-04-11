@@ -14,6 +14,8 @@ export const ZERO_PUBLICATION_TABLES = [
   "defined_names",
   "presence_coarse",
   "workbook_change",
+  "workbook_chat_thread",
+  "workbook_workflow_run",
 ] as const;
 
 const POSTGRES_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;

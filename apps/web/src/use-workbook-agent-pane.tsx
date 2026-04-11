@@ -26,6 +26,11 @@ import { Schema } from "effect";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
 import {
+  useWorkbookAgentThreadSummaries,
+  useWorkbookAgentWorkflowRuns,
+  type ZeroWorkbookAgentSource,
+} from "./use-workbook-agent-durable-state.js";
+import {
   clearStoredDraft,
   clearStoredSession,
   draftKey,
@@ -203,8 +208,18 @@ export function useWorkbookAgentPane(input: {
   readonly previewBundle: (
     bundle: WorkbookAgentCommandBundle,
   ) => Promise<WorkbookAgentPreviewSummary>;
+  readonly zero?: ZeroWorkbookAgentSource;
+  readonly zeroEnabled?: boolean;
 }) {
-  const { currentUserId, documentId, enabled, getContext, previewBundle } = input;
+  const {
+    currentUserId,
+    documentId,
+    enabled,
+    getContext,
+    previewBundle,
+    zero,
+    zeroEnabled = false,
+  } = input;
   const [snapshot, setSnapshot] = useState<WorkbookAgentSessionSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +229,9 @@ export function useWorkbookAgentPane(input: {
   const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
-  const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([]);
+  const [fetchedThreadSummaries, setFetchedThreadSummaries] = useState<
+    readonly WorkbookAgentThreadSummary[]
+  >([]);
   const [threadScope, setThreadScope] = useState<WorkbookAgentThreadScope>("private");
   const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<WorkbookAgentLiveSession | null>(null);
@@ -232,6 +249,22 @@ export function useWorkbookAgentPane(input: {
         scope: `bilig:${documentId}:agent-perf`,
       }),
     [documentId],
+  );
+  const zeroSource = useMemo<ZeroWorkbookAgentSource>(
+    () =>
+      zero ??
+      ({
+        materialize() {
+          return {
+            data: [],
+            addListener() {
+              return () => undefined;
+            },
+            destroy() {},
+          };
+        },
+      } satisfies ZeroWorkbookAgentSource),
+    [zero],
   );
 
   useEffect(() => {
@@ -275,6 +308,19 @@ export function useWorkbookAgentPane(input: {
     return decodeUnknownSync(WorkbookAgentThreadSummaryListSchema, payload);
   }, [documentId]);
 
+  const activeThreadId = snapshot?.threadId ?? sessionRef.current?.threadId ?? null;
+  const zeroThreadSummaries = useWorkbookAgentThreadSummaries({
+    documentId,
+    zero: zeroSource,
+    enabled: enabled && zeroEnabled && Boolean(zero),
+  });
+  const zeroWorkflowRuns = useWorkbookAgentWorkflowRuns({
+    documentId,
+    threadId: activeThreadId,
+    zero: zeroSource,
+    enabled: enabled && zeroEnabled && Boolean(zero) && activeThreadId !== null,
+  });
+
   const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(() => {
     const candidate = snapshot?.pendingBundle;
     return candidate && isWorkbookAgentCommandBundle(candidate) ? candidate : null;
@@ -305,13 +351,30 @@ export function useWorkbookAgentPane(input: {
     const candidates = snapshot?.executionRecords ?? [];
     return candidates.flatMap((entry) => (isWorkbookAgentExecutionRecord(entry) ? [entry] : []));
   }, [snapshot?.executionRecords]);
-  const workflowRuns = useMemo<readonly WorkbookAgentWorkflowRun[]>(
-    () =>
-      [...(snapshot?.workflowRuns ?? [])].toSorted(
-        (left, right) => right.updatedAtUnixMs - left.updatedAtUnixMs,
-      ),
-    [snapshot?.workflowRuns],
-  );
+  const threadSummaries = useMemo<readonly WorkbookAgentThreadSummary[]>(() => {
+    const merged = new Map<string, WorkbookAgentThreadSummary>();
+    for (const summary of fetchedThreadSummaries) {
+      merged.set(summary.threadId, summary);
+    }
+    for (const summary of zeroThreadSummaries) {
+      merged.set(summary.threadId, summary);
+    }
+    return [...merged.values()].toSorted(
+      (left, right) => right.updatedAtUnixMs - left.updatedAtUnixMs,
+    );
+  }, [fetchedThreadSummaries, zeroThreadSummaries]);
+  const workflowRuns = useMemo<readonly WorkbookAgentWorkflowRun[]>(() => {
+    const merged = new Map<string, WorkbookAgentWorkflowRun>();
+    for (const run of snapshot?.workflowRuns ?? []) {
+      merged.set(run.runId, run);
+    }
+    for (const run of zeroWorkflowRuns) {
+      merged.set(run.runId, run);
+    }
+    return [...merged.values()].toSorted(
+      (left, right) => right.updatedAtUnixMs - left.updatedAtUnixMs,
+    );
+  }, [snapshot?.workflowRuns, zeroWorkflowRuns]);
   const activeThreadSummary = useMemo(
     () =>
       threadSummaries.find(
@@ -374,7 +437,7 @@ export function useWorkbookAgentPane(input: {
       };
       void loadThreadSummaries()
         .then((nextThreadSummaries) => {
-          setThreadSummaries(nextThreadSummaries);
+          setFetchedThreadSummaries(nextThreadSummaries);
           return nextThreadSummaries;
         })
         .catch(() => undefined);
@@ -679,7 +742,7 @@ export function useWorkbookAgentPane(input: {
       closeStream();
       sessionRef.current = null;
       recoveringStreamRef.current = false;
-      setThreadSummaries([]);
+      setFetchedThreadSummaries([]);
       setSnapshot(null);
       setIsLoading(false);
       return;
@@ -693,11 +756,11 @@ export function useWorkbookAgentPane(input: {
       try {
         const nextThreadSummaries = await loadThreadSummaries();
         if (!cancelled) {
-          setThreadSummaries(nextThreadSummaries);
+          setFetchedThreadSummaries(nextThreadSummaries);
         }
       } catch {
         if (!cancelled) {
-          setThreadSummaries([]);
+          setFetchedThreadSummaries([]);
         }
       }
     };

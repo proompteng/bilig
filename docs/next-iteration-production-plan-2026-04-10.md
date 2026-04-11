@@ -1,7 +1,32 @@
 # bilig Next Iteration Production Plan
 
 ## Status
-Proposed, repo-grounded plan for the next production iteration, tightened against the live `main` checkout on 2026-04-10.
+Active implementation plan, tightened against the live `main` checkout on 2026-04-10.
+
+### Implementation progress on `main`
+
+The repo is no longer at the purely proposed stage that this document started from.
+
+Already landed on `main`:
+
+- durable document-scoped chat threads
+- durable pending bundles
+- durable workflow runs, steps, and artifacts
+- thread-centric chat/workflow routes
+- private and shared thread scopes
+- shared owner review plus collaborator recommendations
+- queued and cancellable workflow execution
+- bounded Codex app-server pool with backpressure and turn quotas
+- server-side rollout flags for shared threads, workflow runner, auto-apply, and workflow families
+- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, outlier highlighting, header normalization, number-format normalization, current-sheet rollup, and a bounded set of structural previews
+
+Still required before this document is honestly complete end to end:
+
+- Zero-backed thread/run projections for durable fanout into the browser shell
+- broader Day-1 workflow families, especially fuller import cleanup, formula repair, reshape/rollup, and more general formatting cleanup
+- fuller collaborator review semantics beyond owner finalization plus recommendations
+- multi-tab writer/follower UX and lease-transfer behavior
+- broader observability, dashboards, alerts, canary controls, and launch playbooks
 
 ## Executive summary
 
@@ -42,26 +67,23 @@ The current repo already contains the core building blocks we should preserve an
 
 ### What is still missing for the next product-grade iteration
 
-- Chat/session state is still largely **in-memory and per-user**, which prevents true shared multiplayer chat and makes resilience weaker than the workbook runtime itself.
-  Today, `apps/web/src/use-workbook-agent-pane.tsx` persists only `{sessionId, threadId}` in `window.sessionStorage`, and `apps/bilig/src/codex-app/workbook-agent-service.ts` keeps `WorkbookAgentSessionState` in memory with `Map`-backed `sessions`, `threadToSessionId`, and `subscribers`.
-- Pending bundles and timeline items are not yet a fully durable collaboration surface.
-  Today, accepted runs are durable through `workbook_agent_run`, but pending bundles, timeline entries, and turn-progress state still disappear on monolith restart or session eviction.
-- The Codex runtime is currently a single monolith-owned client with in-process session eviction, which is acceptable for current scope but not for broader multiplayer adoption.
-- The supported agent tool surface is good, but it is not yet framed as a complete **workflow runtime**.
+- Zero-backed durable projections for chat thread and workflow run state in the browser shell are still missing.
+- The workflow runtime is real, but the Day-1 workflow set is still incomplete.
+- Multi-tab/browser-lock behavior still needs explicit product UX.
+- Typed binary agent payloads are not fully closed end to end.
 - Some correctness/performance seams remain high risk:
   - projected viewport authority still needs further narrowing
   - formula parity / WASM production routing is not fully closed on the full desired surface
-  - multi-tab/browser-lock edge cases still need explicit product behavior
-  - typed binary agent payloads are not fully closed end to end
 
 ### Current-state reality check
 
 This plan is intentionally anchored to the code that exists today.
 
-- The browser talks to session-scoped routes under `/v2/documents/:documentId/agent/sessions/*`, not durable thread routes.
-- The browser rebuilds a stale assistant stream by POSTing the previously stored `{sessionId, threadId}` back to `POST /v2/documents/:documentId/agent/sessions`.
+- The browser now talks primarily to durable thread routes under `/v2/documents/:documentId/chat/threads/*`.
+- The browser still rebuilds durable assistant state through direct fetch plus SSE in `apps/web/src/use-workbook-agent-pane.tsx`, instead of rebuilding thread/run state through Zero-backed projections first.
 - The monolith validates preview/apply authoritatively in `apps/bilig/src/zero/service.ts`, including base-revision checks and preview-summary parity checks before commit.
-- The monolith already persists accepted execution records, but it does **not** yet persist the full chat timeline, tool calls, or pending-bundle state that produced those records.
+- The monolith already persists accepted execution records, chat timeline state, tool calls, pending bundles, and workflow runs.
+- The Codex transport is no longer a singleton client. `apps/bilig/src/codex-app/workbook-agent-service.ts` now uses a bounded pool with per-client queueing and service-level turn quotas.
 - Any proposed architecture change in this document must preserve those already-correct paths instead of replacing them with a parallel correctness model.
 
 ---

@@ -179,9 +179,54 @@ function createThreadSummary(overrides: Record<string, unknown> = {}) {
   };
 }
 
+interface MockZeroAgentHarness {
+  readonly zero: {
+    materialize(query: unknown): {
+      readonly data: unknown;
+      addListener(listener: (value: unknown) => void): () => void;
+      destroy(): void;
+    };
+  };
+}
+
+function createMockZeroAgentHarness(input: {
+  readonly initialThreadSummaries: unknown;
+  readonly initialWorkflowRuns: unknown;
+}): MockZeroAgentHarness {
+  let threadSummaryValue = input.initialThreadSummaries;
+  let workflowRunValue = input.initialWorkflowRuns;
+  const threadSummaryListeners = new Set<(value: unknown) => void>();
+  const workflowRunListeners = new Set<(value: unknown) => void>();
+  let materializeCallCount = 0;
+
+  return {
+    zero: {
+      materialize(_query: unknown) {
+        const isThreadSummaryQuery = materializeCallCount === 0;
+        materializeCallCount += 1;
+        return {
+          get data() {
+            return isThreadSummaryQuery ? threadSummaryValue : workflowRunValue;
+          },
+          addListener(listener: (value: unknown) => void) {
+            const listeners = isThreadSummaryQuery ? threadSummaryListeners : workflowRunListeners;
+            listeners.add(listener);
+            return () => {
+              listeners.delete(listener);
+            };
+          },
+          destroy() {},
+        };
+      },
+    },
+  };
+}
+
 function AgentHarness(props: {
   readonly currentUserId?: string;
   readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
+  readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]["zero"];
+  readonly zeroEnabled?: boolean;
 }) {
   const { agentError, agentPanel, clearAgentError } = useWorkbookAgentPane({
     currentUserId: props.currentUserId ?? "alex@example.com",
@@ -200,6 +245,8 @@ function AgentHarness(props: {
       },
     }),
     previewBundle: props.previewBundle ?? vi.fn(async () => createPreviewSummary()),
+    ...(props.zero ? { zero: props.zero } : {}),
+    ...(props.zeroEnabled !== undefined ? { zeroEnabled: props.zeroEnabled } : {}),
   });
 
   return (
@@ -271,6 +318,91 @@ describe("workbook agent pane", () => {
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
       "Message",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders durable thread summaries and workflow runs from Zero projections", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const zero = createMockZeroAgentHarness({
+      initialThreadSummaries: [
+        createThreadSummary({
+          threadId: "thr-1",
+          scope: "shared",
+          ownerUserId: "casey@example.com",
+          latestEntryText: "Completed workflow: Summarize Workbook",
+        }),
+      ],
+      initialWorkflowRuns: [
+        {
+          runId: "wf-zero-1",
+          threadId: "thr-1",
+          startedByUserId: "casey@example.com",
+          workflowTemplate: "summarizeWorkbook",
+          title: "Summarize Workbook",
+          summary: "Summarized workbook structure across 2 sheets.",
+          status: "completed",
+          createdAtUnixMs: 1,
+          updatedAtUnixMs: 2,
+          completedAtUnixMs: 2,
+          errorMessage: null,
+          steps: [
+            {
+              stepId: "inspect-workbook",
+              label: "Inspect workbook structure",
+              status: "completed",
+              summary: "Read durable workbook structure across 2 sheets.",
+              updatedAtUnixMs: 1,
+            },
+          ],
+          artifact: {
+            kind: "markdown",
+            title: "Workbook Summary",
+            text: "## Workbook Summary",
+          },
+        },
+      ],
+    });
+    sessionStorage.setItem("bilig:workbook-agent:doc-1", JSON.stringify({ threadId: "thr-1" }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/chat/threads")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.endsWith("/chat/threads/thr-1")) {
+          return new Response(
+            JSON.stringify(createSnapshot({ threadId: "thr-1", workflowRuns: [] })),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        throw new Error(`Unexpected fetch to ${url}`);
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness zero={zero.zero} zeroEnabled />);
+    });
+
+    expect(host.textContent).toContain("Shared");
+    expect(host.textContent).toContain("Completed workflow: Summarize Workbook");
+    expect(host.textContent).toContain("Summarize Workbook");
+    expect(host.textContent).toContain("Workbook Summary");
 
     await act(async () => {
       root.unmount();
