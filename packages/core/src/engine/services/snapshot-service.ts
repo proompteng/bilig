@@ -8,6 +8,7 @@ import {
 import { CellFlags } from "../../cell-store.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
 import { exportSheetMetadata } from "../../engine-snapshot-utils.js";
+import { emptyValue } from "../../engine-value-utils.js";
 import {
   exportReplicaSnapshot as exportReplicaStateSnapshot,
   hydrateReplicaState,
@@ -391,6 +392,15 @@ export function createEngineSnapshotService(args: {
           args.executeRestoreTransaction(
             potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
           );
+          snapshot.sheets.forEach((sheet) => {
+            sheet.cells.forEach((cell) => {
+              if (cell.formula !== undefined || cell.value !== null) {
+                return;
+              }
+              const { cellIndex } = args.state.workbook.ensureCellRecord(sheet.name, cell.address);
+              args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
+            });
+          });
         },
         catch: (cause) =>
           new EngineSnapshotError({

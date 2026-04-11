@@ -1,14 +1,6 @@
 import { Effect } from "effect";
-import {
-  ValueTag,
-  type CellRangeRef,
-  type CellSnapshot,
-} from "@bilig/protocol";
-import {
-  formatAddress,
-  parseCellAddress,
-  translateFormulaReferences,
-} from "@bilig/formula";
+import { ValueTag, type CellRangeRef, type CellSnapshot } from "@bilig/protocol";
+import { formatAddress, parseCellAddress, translateFormulaReferences } from "@bilig/formula";
 import type { EngineOp } from "@bilig/workbook-domain";
 import { normalizeRange } from "../../engine-range-utils.js";
 import type { EngineRuntimeState } from "../runtime-state.js";
@@ -123,19 +115,21 @@ export function createEngineCellStateService(args: {
   const restoreCellOpsNow = (sheetName: string, address: string): EngineOp[] => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
-      return [
-        { kind: "clearCell", sheetName, address },
-        { kind: "setCellFormat", sheetName, address, format: null },
-      ];
+      return [{ kind: "clearCell", sheetName, address }];
     }
-    return toCellStateOpsNow(
-      sheetName,
-      address,
-      args.getCellByIndex(cellIndex),
-      undefined,
-      undefined,
-      args.state.workbook.getCellFormat(cellIndex) ?? null,
-    );
+    const snapshot = args.getCellByIndex(cellIndex);
+    if (snapshot.formula !== undefined) {
+      return [{ kind: "setCellFormula", sheetName, address, formula: snapshot.formula }];
+    }
+    switch (snapshot.value.tag) {
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        return [{ kind: "clearCell", sheetName, address }];
+      case ValueTag.Number:
+      case ValueTag.Boolean:
+      case ValueTag.String:
+        return [{ kind: "setCellValue", sheetName, address, value: snapshot.value.value }];
+    }
   };
 
   const readRangeCellsNow = (range: CellRangeRef): CellSnapshot[][] => {
@@ -155,13 +149,7 @@ export function createEngineCellStateService(args: {
     captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress) {
       return Effect.try({
         try: () =>
-          captureStoredCellOpsNow(
-            cellIndex,
-            sheetName,
-            address,
-            sourceSheetName,
-            sourceAddress,
-          ),
+          captureStoredCellOpsNow(cellIndex, sheetName, address, sourceSheetName, sourceAddress),
         catch: (cause) =>
           new EngineCellStateError({
             message: cellStateErrorMessage(
@@ -200,14 +188,7 @@ export function createEngineCellStateService(args: {
     },
     toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress) {
       return Effect.try({
-        try: () =>
-          toCellStateOpsNow(
-            sheetName,
-            address,
-            snapshot,
-            sourceSheetName,
-            sourceAddress,
-          ),
+        try: () => toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),
         catch: (cause) =>
           new EngineCellStateError({
             message: cellStateErrorMessage(
