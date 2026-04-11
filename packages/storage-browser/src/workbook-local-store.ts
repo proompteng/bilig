@@ -122,17 +122,26 @@ function sanitizeDocumentId(documentId: string): string {
   return encodeURIComponent(documentId).replaceAll("%", "_");
 }
 
+function getErrorName(error: unknown): string | null {
+  return isRecord(error) && typeof error["name"] === "string" ? error["name"] : null;
+}
+
+function getErrorMessage(error: unknown): string | null {
+  return isRecord(error) && typeof error["message"] === "string" ? error["message"] : null;
+}
+
 function isAccessHandleConflict(error: unknown): boolean {
-  if (!(error instanceof Error)) {
+  const message = getErrorMessage(error);
+  const name = getErrorName(error);
+  if (!message || !name) {
     return false;
   }
   return (
-    (error.message.includes("createSyncAccessHandle") &&
-      error.message.includes("Access Handles cannot be created")) ||
-    (error.name === "NoModificationAllowedError" &&
-      (error.message.includes("Access Handles cannot be created") ||
-        (error.message.includes("removeEntry") &&
-          error.message.includes("FileSystemDirectoryHandle"))))
+    (message.includes("createSyncAccessHandle") &&
+      message.includes("Access Handles cannot be created")) ||
+    (name === "NoModificationAllowedError" &&
+      (message.includes("Access Handles cannot be created") ||
+        (message.includes("removeEntry") && message.includes("FileSystemDirectoryHandle"))))
   );
 }
 
