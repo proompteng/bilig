@@ -280,7 +280,7 @@ export function WorkbookView({
         </div>
         {sideRail ? (
           <aside
-            className="relative flex h-full shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-app-bg)]"
+            className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)]"
             data-testid="workbook-side-rail"
             id={sideRailId}
             style={{
@@ -293,11 +293,11 @@ export function WorkbookView({
                 aria-label="Resize workbook side rail"
                 aria-orientation="vertical"
                 className={[
-                  "absolute inset-y-0 left-0 z-10 w-3 -translate-x-1.5 cursor-col-resize touch-none",
-                  "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--wb-border)]",
+                  "absolute inset-y-0 left-0 z-10 w-2 -translate-x-1 cursor-ew-resize touch-none",
+                  "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--color-mauve-200)] after:transition-colors",
                   isResizingSideRail
-                    ? "after:bg-[var(--wb-accent)]"
-                    : "hover:after:bg-[var(--wb-border-strong)]",
+                    ? "after:bg-[var(--color-mauve-500)]"
+                    : "hover:after:bg-[var(--color-mauve-300)]",
                 ].join(" ")}
                 data-testid="workbook-side-rail-resize-handle"
                 role="separator"

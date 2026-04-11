@@ -93,7 +93,11 @@ describe("workbook layout", () => {
     expect(sideRail?.getAttribute("id")).toBe("workbook-side-rail-doc-1");
     expect(sideRail?.textContent).toContain("Assistant rail");
     expect(sideRail instanceof HTMLElement ? sideRail.style.width : null).toBe("384px");
-    expect(host.querySelector("[data-testid='workbook-side-rail-resize-handle']")).not.toBeNull();
+    const resizeHandle = host.querySelector("[data-testid='workbook-side-rail-resize-handle']");
+    expect(resizeHandle).not.toBeNull();
+    expect(resizeHandle?.className).toContain("w-2");
+    expect(resizeHandle?.className).toContain("cursor-ew-resize");
+    expect(resizeHandle?.className).toContain("after:bg-[var(--color-mauve-200)]");
     expect(gridSurface instanceof Node).toBe(true);
     expect(sideRail instanceof Node).toBe(true);
     expect(
