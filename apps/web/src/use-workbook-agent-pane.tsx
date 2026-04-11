@@ -273,8 +273,11 @@ export function useWorkbookAgentPane(input: {
     sharedReviewOwnerUserId !== null
       ? (pendingBundle?.sharedReview?.decidedByUserId ?? null)
       : null;
-  const sharedReviewRecommendations =
-    sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.recommendations ?? []) : [];
+  const sharedReviewRecommendations = useMemo(
+    () =>
+      sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.recommendations ?? []) : [],
+    [pendingBundle?.sharedReview?.recommendations, sharedReviewOwnerUserId],
+  );
   const currentUserSharedRecommendation =
     sharedReviewRecommendations.find((recommendation) => recommendation.userId === currentUserId)
       ?.decision ?? null;
@@ -389,16 +392,13 @@ export function useWorkbookAgentPane(input: {
 
   const createSession = useCallback(
     async (context: WorkbookAgentUiContext, scope: WorkbookAgentThreadScope) => {
-      const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(createSessionResumeBody(null, context, scope)),
+      const response = await fetch(`/v2/documents/${encodeURIComponent(documentId)}/chat/threads`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
         },
-      );
+        body: JSON.stringify(createSessionResumeBody(null, context, scope)),
+      });
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
         throw new Error(
@@ -967,7 +967,9 @@ export function useWorkbookAgentPane(input: {
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
       } finally {
-        setCancellingWorkflowRunId((currentRunId) => (currentRunId === runId ? null : currentRunId));
+        setCancellingWorkflowRunId((currentRunId) =>
+          currentRunId === runId ? null : currentRunId,
+        );
       }
     },
     [documentId, persistSessionSnapshot],

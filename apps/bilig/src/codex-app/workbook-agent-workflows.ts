@@ -112,9 +112,7 @@ function getWorkflowTemplateMetadata(
         ],
       };
     case "findFormulaIssues": {
-      const scopeLabel = workflowInput?.sheetName
-        ? `${workflowInput.sheetName}`
-        : "the workbook";
+      const scopeLabel = workflowInput?.sheetName ?? "the workbook";
       return {
         title: "Find Formula Issues",
         runningSummary: `Running formula issue scan workflow for ${scopeLabel}.`,
@@ -122,14 +120,12 @@ function getWorkflowTemplateMetadata(
           {
             stepId: "scan-formula-cells",
             label: "Scan formula cells",
-            runningSummary:
-              workflowInput?.sheetName
-                ? `Scanning ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
-                : "Scanning workbook formulas for errors, cycles, and JS-only fallbacks.",
-            pendingSummary:
-              workflowInput?.sheetName
-                ? `Waiting to scan ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
-                : "Waiting to scan workbook formulas for errors, cycles, and JS-only fallbacks.",
+            runningSummary: workflowInput?.sheetName
+              ? `Scanning ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
+              : "Scanning workbook formulas for errors, cycles, and JS-only fallbacks.",
+            pendingSummary: workflowInput?.sheetName
+              ? `Waiting to scan ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
+              : "Waiting to scan workbook formulas for errors, cycles, and JS-only fallbacks.",
           },
           {
             stepId: "draft-issue-report",
@@ -187,8 +183,7 @@ function getWorkflowTemplateMetadata(
             stepId: "draft-explanation",
             label: "Draft explanation artifact",
             runningSummary: "Drafting the durable current-cell explanation artifact.",
-            pendingSummary:
-              "Waiting to assemble the durable current-cell explanation artifact.",
+            pendingSummary: "Waiting to assemble the durable current-cell explanation artifact.",
           },
         ],
       };
@@ -277,24 +272,29 @@ export function failWorkflowSteps(
   return getWorkflowTemplateMetadata(workflowTemplate, workflowInput).stepPlans.map(
     (step, index) => {
       const current = runningSteps.find((candidate) => candidate.stepId === step.stepId);
-      if (!markedFailure && (step.stepId === runningStepId || (runningStepId === undefined && index === 0))) {
+      if (
+        !markedFailure &&
+        (step.stepId === runningStepId || (runningStepId === undefined && index === 0))
+      ) {
         markedFailure = true;
+        return {
+          stepId: step.stepId,
+          label: step.label,
+          status: "failed",
+          summary: errorMessage,
+          updatedAtUnixMs: now,
+        };
+      }
       return {
         stepId: step.stepId,
         label: step.label,
-        status: "failed",
-        summary: errorMessage,
-        updatedAtUnixMs: now,
+        status: current?.status === "completed" ? "completed" : "pending",
+        summary: current?.summary ?? step.pendingSummary,
+        updatedAtUnixMs:
+          current?.status === "completed"
+            ? current.updatedAtUnixMs
+            : (current?.updatedAtUnixMs ?? now),
       };
-    }
-    return {
-      stepId: step.stepId,
-      label: step.label,
-      status: current?.status === "completed" ? "completed" : "pending",
-      summary: current?.summary ?? step.pendingSummary,
-      updatedAtUnixMs:
-        current?.status === "completed" ? current.updatedAtUnixMs : current?.updatedAtUnixMs ?? now,
-    };
     },
   );
 }
@@ -756,15 +756,15 @@ export async function executeWorkbookAgentWorkflow(input: {
       };
     }
     case "findFormulaIssues": {
-      const formulaIssues = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
-        findWorkbookFormulaIssues(runtime, {
-          ...(input.workflowInput?.sheetName
-            ? { sheetName: input.workflowInput.sheetName }
-            : {}),
-          ...(input.workflowInput?.limit !== undefined
-            ? { limit: input.workflowInput.limit }
-            : {}),
-        }),
+      const formulaIssues = await input.zeroSyncService.inspectWorkbook(
+        input.documentId,
+        (runtime) =>
+          findWorkbookFormulaIssues(runtime, {
+            ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
+            ...(input.workflowInput?.limit !== undefined
+              ? { limit: input.workflowInput.limit }
+              : {}),
+          }),
       );
       const scopeLabel = input.workflowInput?.sheetName
         ? ` on ${input.workflowInput.sheetName}`
@@ -868,22 +868,25 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!selection) {
         throw new Error("Selection context is required for current cell explanation workflows.");
       }
-      const explanation = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) => {
-        const cell = runtime.engine.explainCell(selection.sheetName, selection.address);
-        return {
-          sheetName: cell.sheetName,
-          address: cell.address,
-          valueText: serializeWorkflowCellValue(cell.value),
-          formula: cell.formula !== undefined ? `=${cell.formula}` : null,
-          format: cell.format ?? null,
-          version: cell.version,
-          inCycle: cell.inCycle,
-          mode: cell.mode ? String(cell.mode) : null,
-          topoRank: cell.topoRank ?? null,
-          directPrecedents: [...cell.directPrecedents],
-          directDependents: [...cell.directDependents],
-        };
-      });
+      const explanation = await input.zeroSyncService.inspectWorkbook(
+        input.documentId,
+        (runtime) => {
+          const cell = runtime.engine.explainCell(selection.sheetName, selection.address);
+          return {
+            sheetName: cell.sheetName,
+            address: cell.address,
+            valueText: serializeWorkflowCellValue(cell.value),
+            formula: cell.formula !== undefined ? `=${cell.formula}` : null,
+            format: cell.format ?? null,
+            version: cell.version,
+            inCycle: cell.inCycle,
+            mode: cell.mode ? String(cell.mode) : null,
+            topoRank: cell.topoRank ?? null,
+            directPrecedents: [...cell.directPrecedents],
+            directDependents: [...cell.directDependents],
+          };
+        },
+      );
       return {
         title: "Explain Current Cell",
         summary: `Explained ${selection.sheetName}!${selection.address}, including direct precedents and dependents.`,
@@ -942,16 +945,16 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!query) {
         throw new Error("A query is required for workbook search workflows.");
       }
-      const searchReport = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
-        searchWorkbook(runtime, {
-          query,
-          ...(input.workflowInput?.sheetName
-            ? { sheetName: input.workflowInput.sheetName }
-            : {}),
-          ...(input.workflowInput?.limit !== undefined
-            ? { limit: input.workflowInput.limit }
-            : {}),
-        }),
+      const searchReport = await input.zeroSyncService.inspectWorkbook(
+        input.documentId,
+        (runtime) =>
+          searchWorkbook(runtime, {
+            query,
+            ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
+            ...(input.workflowInput?.limit !== undefined
+              ? { limit: input.workflowInput.limit }
+              : {}),
+          }),
       );
       return {
         title: "Search Workbook",

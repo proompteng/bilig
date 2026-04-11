@@ -417,7 +417,7 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
@@ -510,8 +510,7 @@ describe("workbook agent pane", () => {
 
     const createThreadCall = fetchSpy.mock.calls.find(
       ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads") &&
-        requestMethod(requestInit) === "POST",
+        requestUrl(requestInput).endsWith("/chat/threads") && requestMethod(requestInit) === "POST",
     );
     expect(requestBody(createThreadCall?.[1])).toEqual({
       context: {
@@ -548,11 +547,8 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
-      JSON.stringify({ threadId: "thr-1" }),
-    );
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    sessionStorage.setItem("bilig:workbook-agent:doc-1", JSON.stringify({ threadId: "thr-1" }));
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/chat/threads/thr-1/workflows/wf-running-1/cancel")) {
         return new Response(
@@ -847,7 +843,8 @@ describe("workbook agent pane", () => {
                       stepId: "draft-sheet-summary",
                       label: "Draft current sheet summary",
                       status: "completed",
-                      summary: "Prepared the durable current-sheet summary artifact for the thread.",
+                      summary:
+                        "Prepared the durable current-sheet summary artifact for the thread.",
                       updatedAtUnixMs: 2,
                     },
                   ],
