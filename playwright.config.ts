@@ -38,7 +38,7 @@ const chromiumLaunchArgs = ciContainerMode
 
 export default defineConfig({
   testDir: "./e2e/tests",
-  testMatch: "**/web-shell.pw.ts",
+  testMatch: "**/web-shell*.pw.ts",
   fullyParallel: false,
   retries: 0,
   timeout: fuzzBrowserMode ? 600_000 : 30_000,
