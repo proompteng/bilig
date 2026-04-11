@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
 import type { EngineOperationService } from "../engine/services/operation-service.js";
@@ -24,6 +24,27 @@ function getOperationService(engine: SpreadsheetEngine): EngineOperationService 
     throw new TypeError("Expected engine operation service");
   }
   return operations;
+}
+
+function getRuntimeState(engine: SpreadsheetEngine): {
+  getLastMetrics(): unknown;
+  setLastMetrics(metrics: unknown): void;
+} {
+  const state = Reflect.get(engine, "state");
+  if (typeof state !== "object" || state === null) {
+    throw new TypeError("Expected engine runtime state");
+  }
+  const getLastMetrics = Reflect.get(state, "getLastMetrics");
+  const setLastMetrics = Reflect.get(state, "setLastMetrics");
+  if (typeof getLastMetrics !== "function" || typeof setLastMetrics !== "function") {
+    throw new TypeError("Expected runtime state metric accessors");
+  }
+  return {
+    getLastMetrics: () => getLastMetrics.call(state),
+    setLastMetrics: (metrics) => {
+      setLastMetrics.call(state, metrics);
+    },
+  };
 }
 
 function expectBatch<Batch>(batch: Batch | undefined): Batch {
@@ -85,5 +106,33 @@ describe("EngineOperationService", () => {
     Effect.runSync(getOperationService(restored).applyBatch(valueBatch, "remote"));
 
     expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("does not rewrite last metrics once per formula during snapshot restore", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-restore-metrics" });
+    await engine.ready();
+
+    const state = getRuntimeState(engine);
+    const setLastMetricsSpy = vi.spyOn(state, "setLastMetrics");
+    setLastMetricsSpy.mockClear();
+
+    engine.importSnapshot({
+      version: 1,
+      workbook: { name: "operation-restore-metrics" },
+      sheets: [
+        {
+          id: 1,
+          name: "Sheet1",
+          order: 0,
+          cells: [
+            { address: "A1", value: 1 },
+            { address: "B1", formula: "A1*2" },
+            { address: "C1", formula: "B1+1" },
+          ],
+        },
+      ],
+    });
+
+    expect(setLastMetricsSpy).toHaveBeenCalledTimes(3);
   });
 });

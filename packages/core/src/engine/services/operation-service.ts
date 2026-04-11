@@ -375,6 +375,7 @@ export function createEngineOperationService(args: {
     let topologyChanged = false;
     let sheetDeleted = false;
     let structuralInvalidation = false;
+    let compileMs = 0;
     const invalidatedRanges: CellRangeRef[] = [];
     const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = [];
     const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = [];
@@ -638,20 +639,18 @@ export function createEngineOperationService(args: {
                 changedInputCount,
               );
             }
-            const compileStarted = performance.now();
+            const compileStarted = isRestore ? 0 : performance.now();
             try {
               args.bindFormula(cellIndex, op.sheetName, op.formula);
-              args.state.setLastMetrics({
-                ...args.state.getLastMetrics(),
-                compileMs: performance.now() - compileStarted,
-              });
+              if (!isRestore) {
+                compileMs += performance.now() - compileStarted;
+              }
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
               topologyChanged = true;
             } catch {
-              args.state.setLastMetrics({
-                ...args.state.getLastMetrics(),
-                compileMs: performance.now() - compileStarted,
-              });
+              if (!isRestore) {
+                compileMs += performance.now() - compileStarted;
+              }
               topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
               args.setInvalidFormulaValue(cellIndex);
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
@@ -798,6 +797,7 @@ export function createEngineOperationService(args: {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
       changedInputCount: changedInputCount + formulaChangedCount,
+      compileMs,
     };
     args.state.setLastMetrics(lastMetrics);
     const event = {
