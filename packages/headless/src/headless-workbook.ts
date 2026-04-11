@@ -3374,42 +3374,60 @@ export class HeadlessWorkbook {
     content: HeadlessSheet,
     options: {
       captureUndo?: boolean;
+      deferLiteralAddresses?: ReadonlySet<string>;
       skipNulls?: boolean;
     } = {},
   ): void {
     this.flushPendingBatchOps();
-    if (matrixContainsFormulaContent(content)) {
-      content.forEach((row, rowOffset) => {
-        row.forEach((raw, columnOffset) => {
-          if (raw === null && options.skipNulls) {
-            return;
-          }
-          this.applyRawContent(
-            this.sheetName(address.sheet),
-            formatAddress(address.row + rowOffset, address.col + columnOffset),
-            raw,
-            address.sheet,
-          );
-        });
+    const sheetName = this.sheetName(address.sheet);
+    const { leadingOps, formulaOps, ops, potentialNewCells, trailingLiteralOps } =
+      buildMatrixMutationPlan({
+        target: address,
+        targetSheetName: sheetName,
+        content,
+        deferLiteralAddresses: options.deferLiteralAddresses,
+        skipNulls: options.skipNulls,
+        rewriteFormula: (formula, destination) =>
+          this.rewriteFormulaForStorage(stripLeadingEquals(formula), destination.sheet),
+      });
+    if (ops.length === 0) {
+      return;
+    }
+    const applyPlannedOps = (
+      phaseOps: readonly (typeof ops)[number][],
+      applyOptions: {
+        captureUndo?: boolean;
+        potentialNewCells?: number;
+        source?: "local" | "restore";
+      },
+    ): void => {
+      if (phaseOps.length === 0) {
+        return;
+      }
+      this.engine.applyOps(phaseOps, applyOptions);
+    };
+
+    if (formulaOps.length === 0) {
+      applyPlannedOps(ops, {
+        captureUndo: options.captureUndo,
+        potentialNewCells,
       });
       return;
     }
 
-    const sheetName = this.sheetName(address.sheet);
-    const { ops, potentialNewCells } = buildMatrixMutationPlan({
-      target: address,
-      targetSheetName: sheetName,
-      content,
-      skipNulls: options.skipNulls,
-      rewriteFormula: (formula, destination) =>
-        this.rewriteFormulaForStorage(stripLeadingEquals(formula), destination.sheet),
-    });
-    if (ops.length === 0) {
-      return;
-    }
-    this.engine.applyOps(ops, {
+    applyPlannedOps(leadingOps, {
       captureUndo: options.captureUndo,
       potentialNewCells,
+    });
+    applyPlannedOps(formulaOps, {
+      captureUndo: options.captureUndo,
+      potentialNewCells,
+      source: "local",
+    });
+    applyPlannedOps(trailingLiteralOps, {
+      captureUndo: options.captureUndo,
+      potentialNewCells,
+      source: "local",
     });
   }
 
@@ -3420,6 +3438,23 @@ export class HeadlessWorkbook {
   ): void {
     const sheetName = this.sheetName(sheetId);
     const undoStackStart = options.duringInitialization ? 0 : this.getUndoStack().length;
+    const deferredLiteralAddresses = new Set<string>();
+    this.engine.workbook
+      .listSpills()
+      .filter((spill) => spill.sheetName === sheetName)
+      .forEach((spill) => {
+        const owner = parseCellAddress(spill.address, spill.sheetName);
+        for (let rowOffset = 0; rowOffset < spill.rows; rowOffset += 1) {
+          for (let colOffset = 0; colOffset < spill.cols; colOffset += 1) {
+            if (rowOffset === 0 && colOffset === 0) {
+              continue;
+            }
+            deferredLiteralAddresses.add(
+              formatAddress(owner.row + rowOffset, owner.col + colOffset),
+            );
+          }
+        }
+      });
     const dimensions = this.getSheetDimensions(sheetId);
     if (dimensions.width > 0 && dimensions.height > 0) {
       this.engine.clearRange({
@@ -3430,6 +3465,7 @@ export class HeadlessWorkbook {
     }
     this.applyMatrixContents({ sheet: sheetId, row: 0, col: 0 }, content, {
       captureUndo: !options.duringInitialization,
+      deferLiteralAddresses: deferredLiteralAddresses,
       skipNulls: true,
     });
     if (options.duringInitialization) {

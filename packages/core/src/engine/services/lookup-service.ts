@@ -7,6 +7,10 @@ interface ExactVectorMatchRequest {
   sheetName: string;
   start: string;
   end: string;
+  startRow?: number;
+  endRow?: number;
+  startCol?: number;
+  endCol?: number;
   searchMode: 1 | -1;
 }
 
@@ -16,12 +20,33 @@ export type ExactVectorMatchResult =
 
 export interface EngineLookupService {
   readonly findExactVectorMatch: (request: ExactVectorMatchRequest) => ExactVectorMatchResult;
+  readonly primeExactColumnIndex: (request: {
+    sheetName: string;
+    rowStart: number;
+    rowEnd: number;
+    col: number;
+  }) => void;
 }
 
 interface ExactColumnIndexEntry {
   columnVersion: number;
   firstPositions: Map<string, number>;
   lastPositions: Map<string, number>;
+}
+
+interface ExactColumnBounds {
+  rowStart: number;
+  rowEnd: number;
+  col: number;
+}
+
+function getExactColumnCacheKey(
+  sheetName: string,
+  col: number,
+  rowStart: number,
+  rowEnd: number,
+): string {
+  return `${sheetName}\t${col}\t${rowStart}\t${rowEnd}`;
 }
 
 function normalizeExactLookupKey(
@@ -110,7 +135,56 @@ export function createEngineLookupService(args: {
     };
   };
 
+  const resolveExactColumnBounds = (
+    request: ExactVectorMatchRequest,
+  ): ExactColumnBounds | undefined => {
+    if (
+      request.startRow !== undefined &&
+      request.endRow !== undefined &&
+      request.startCol !== undefined &&
+      request.endCol !== undefined
+    ) {
+      if (request.startCol !== request.endCol) {
+        return undefined;
+      }
+      return {
+        rowStart: request.startRow,
+        rowEnd: request.endRow,
+        col: request.startCol,
+      };
+    }
+
+    const parsedRange = parseRangeAddress(`${request.start}:${request.end}`, request.sheetName);
+    if (parsedRange.kind !== "cells" || parsedRange.start.col !== parsedRange.end.col) {
+      return undefined;
+    }
+    return {
+      rowStart: parsedRange.start.row,
+      rowEnd: parsedRange.end.row,
+      col: parsedRange.start.col,
+    };
+  };
+
+  const ensureExactColumnIndex = (
+    sheetName: string,
+    col: number,
+    rowStart: number,
+    rowEnd: number,
+  ): ExactColumnIndexEntry => {
+    const cacheKey = getExactColumnCacheKey(sheetName, col, rowStart, rowEnd);
+    const columnVersion = args.state.workbook.getSheetColumnVersion(sheetName, col);
+    let entry = exactColumnIndices.get(cacheKey);
+    if (!entry || entry.columnVersion !== columnVersion) {
+      entry = buildExactColumnIndex(sheetName, col, rowStart, rowEnd);
+      exactColumnIndices.set(cacheKey, entry);
+    }
+    return entry;
+  };
+
   return {
+    primeExactColumnIndex(request) {
+      ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd);
+    },
     findExactVectorMatch(request) {
       const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) =>
         args.state.strings.get(id),
@@ -119,26 +193,17 @@ export function createEngineLookupService(args: {
         return { handled: false };
       }
 
-      const parsedRange = parseRangeAddress(`${request.start}:${request.end}`, request.sheetName);
-      if (parsedRange.kind !== "cells" || parsedRange.start.col !== parsedRange.end.col) {
+      const bounds = resolveExactColumnBounds(request);
+      if (!bounds) {
         return { handled: false };
       }
 
-      const cacheKey = `${request.sheetName}\t${parsedRange.start.col}\t${parsedRange.start.row}\t${parsedRange.end.row}`;
-      const columnVersion = args.state.workbook.getSheetColumnVersion(
+      const entry = ensureExactColumnIndex(
         request.sheetName,
-        parsedRange.start.col,
+        bounds.col,
+        bounds.rowStart,
+        bounds.rowEnd,
       );
-      let entry = exactColumnIndices.get(cacheKey);
-      if (!entry || entry.columnVersion !== columnVersion) {
-        entry = buildExactColumnIndex(
-          request.sheetName,
-          parsedRange.start.col,
-          parsedRange.start.row,
-          parsedRange.end.row,
-        );
-        exactColumnIndices.set(cacheKey, entry);
-      }
 
       const row =
         request.searchMode === -1
@@ -146,7 +211,7 @@ export function createEngineLookupService(args: {
           : entry.firstPositions.get(normalizedLookupKey);
       return {
         handled: true,
-        position: row === undefined ? undefined : row - parsedRange.start.row + 1,
+        position: row === undefined ? undefined : row - bounds.rowStart + 1,
       };
     },
   };

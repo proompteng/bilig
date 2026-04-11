@@ -8,8 +8,11 @@ export type MatrixMutationOp =
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string };
 
 export interface MatrixMutationPlan {
+  leadingOps: MatrixMutationOp[];
+  formulaOps: MatrixMutationOp[];
   ops: MatrixMutationOp[];
   potentialNewCells: number;
+  trailingLiteralOps: MatrixMutationOp[];
 }
 
 interface BuildMatrixMutationPlanArgs {
@@ -22,6 +25,7 @@ interface BuildMatrixMutationPlanArgs {
     rowOffset: number,
     columnOffset: number,
   ) => string;
+  deferLiteralAddresses?: ReadonlySet<string>;
   skipNulls?: boolean;
 }
 
@@ -30,8 +34,29 @@ function isFormulaContent(content: RawCellContent): content is string {
 }
 
 export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): MatrixMutationPlan {
-  const ops: MatrixMutationOp[] = [];
+  const leadingOps: MatrixMutationOp[] = [];
+  const formulaOps: MatrixMutationOp[] = [];
+  const trailingLiteralOps: MatrixMutationOp[] = [];
   let potentialNewCells = 0;
+  const formulaDestinations: Array<{ row: number; col: number }> = [];
+
+  args.content.forEach((row, rowOffset) => {
+    row.forEach((raw, columnOffset) => {
+      if (!isFormulaContent(raw)) {
+        return;
+      }
+      formulaDestinations.push({
+        row: args.target.row + rowOffset,
+        col: args.target.col + columnOffset,
+      });
+    });
+  });
+
+  const shouldDeferLiteral = (address: string, row: number, col: number): boolean =>
+    args.deferLiteralAddresses?.has(address) === true ||
+    formulaDestinations.some(
+      (formulaDestination) => row > formulaDestination.row && col === formulaDestination.col,
+    );
 
   args.content.forEach((row, rowOffset) => {
     row.forEach((raw, columnOffset) => {
@@ -44,7 +69,12 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
 
       if (raw === null) {
         if (!args.skipNulls) {
-          ops.push({ kind: "clearCell", sheetName: args.targetSheetName, address });
+          const op = { kind: "clearCell", sheetName: args.targetSheetName, address } as const;
+          if (shouldDeferLiteral(address, destination.row, destination.col)) {
+            trailingLiteralOps.push(op);
+          } else {
+            leadingOps.push(op);
+          }
         }
         return;
       }
@@ -52,7 +82,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
       potentialNewCells += 1;
 
       if (isFormulaContent(raw)) {
-        ops.push({
+        formulaOps.push({
           kind: "setCellFormula",
           sheetName: args.targetSheetName,
           address,
@@ -61,14 +91,25 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
         return;
       }
 
-      ops.push({
+      const op = {
         kind: "setCellValue",
         sheetName: args.targetSheetName,
         address,
         value: raw,
-      });
+      } as const;
+      if (shouldDeferLiteral(address, destination.row, destination.col)) {
+        trailingLiteralOps.push(op);
+      } else {
+        leadingOps.push(op);
+      }
     });
   });
 
-  return { ops, potentialNewCells };
+  return {
+    leadingOps,
+    formulaOps,
+    ops: [...leadingOps, ...formulaOps, ...trailingLiteralOps],
+    potentialNewCells,
+    trailingLiteralOps,
+  };
 }

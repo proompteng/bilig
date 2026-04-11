@@ -28,6 +28,7 @@ import {
 } from "../runtime-state.js";
 import { EngineFormulaBindingError } from "../errors.js";
 import type { Uint32Arena, Float64Arena } from "@bilig/formula/program-arena";
+import type { EngineLookupService } from "./lookup-service.js";
 
 export interface EngineFormulaBindingService {
   readonly bindFormula: (
@@ -126,39 +127,77 @@ function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
 }
 
 function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
+  return collectIndexedExactLookupCandidates(node).length > 0;
+}
+
+interface IndexedExactLookupCandidate {
+  sheetName?: string;
+  start: string;
+  end: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedExactLookupCandidate[] {
   switch (node.kind) {
     case "CallExpr": {
       const callee = node.callee.trim().toUpperCase();
-      const isIndexedLookupCall =
-        (callee === "MATCH" &&
-          node.args.length === 3 &&
-          node.args[1]?.kind === "RangeRef" &&
-          node.args[1].refKind === "cells" &&
-          node.args[1].start !== node.args[1].end &&
-          staticIntegerValue(node.args[2]) === 0) ||
-        (callee === "XMATCH" &&
-          node.args.length >= 2 &&
-          node.args.length <= 4 &&
-          node.args[1]?.kind === "RangeRef" &&
-          node.args[1].refKind === "cells" &&
-          node.args[1].start !== node.args[1].end &&
-          (node.args.length === 2 || staticIntegerValue(node.args[2]) === 0) &&
-          (node.args.length < 4 ||
-            staticIntegerValue(node.args[3]) === 1 ||
-            staticIntegerValue(node.args[3]) === -1));
-      return isIndexedLookupCall || node.args.some(hasIndexedExactLookupCandidate);
+      const lookupRange = node.args[1];
+      if (
+        lookupRange?.kind === "RangeRef" &&
+        lookupRange.refKind === "cells" &&
+        lookupRange.start !== lookupRange.end
+      ) {
+        const isIndexedLookupCall =
+          (callee === "MATCH" &&
+            node.args.length === 3 &&
+            staticIntegerValue(node.args[2]) === 0) ||
+          (callee === "XMATCH" &&
+            node.args.length >= 2 &&
+            node.args.length <= 4 &&
+            (node.args.length === 2 || staticIntegerValue(node.args[2]) === 0) &&
+            (node.args.length < 4 ||
+              staticIntegerValue(node.args[3]) === 1 ||
+              staticIntegerValue(node.args[3]) === -1));
+        if (isIndexedLookupCall) {
+          const parsedRange = parseRangeAddress(
+            `${lookupRange.start}:${lookupRange.end}`,
+            lookupRange.sheetName,
+          );
+          if (parsedRange.kind === "cells") {
+            return [
+              {
+                ...(lookupRange.sheetName === undefined
+                  ? {}
+                  : { sheetName: lookupRange.sheetName }),
+                start: lookupRange.start,
+                end: lookupRange.end,
+                startRow: parsedRange.start.row,
+                endRow: parsedRange.end.row,
+                startCol: parsedRange.start.col,
+                endCol: parsedRange.end.col,
+              },
+              ...node.args.flatMap(collectIndexedExactLookupCandidates),
+            ];
+          }
+        }
+      }
+      return node.args.flatMap(collectIndexedExactLookupCandidates);
     }
     case "UnaryExpr":
-      return hasIndexedExactLookupCandidate(node.argument);
+      return collectIndexedExactLookupCandidates(node.argument);
     case "BinaryExpr":
-      return (
-        hasIndexedExactLookupCandidate(node.left) || hasIndexedExactLookupCandidate(node.right)
-      );
+      return [
+        ...collectIndexedExactLookupCandidates(node.left),
+        ...collectIndexedExactLookupCandidates(node.right),
+      ];
     case "InvokeExpr":
-      return (
-        hasIndexedExactLookupCandidate(node.callee) ||
-        node.args.some(hasIndexedExactLookupCandidate)
-      );
+      return [
+        ...collectIndexedExactLookupCandidates(node.callee),
+        ...node.args.flatMap(collectIndexedExactLookupCandidates),
+      ];
     case "BooleanLiteral":
     case "CellRef":
     case "ColumnRef":
@@ -170,7 +209,7 @@ function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
     case "SpillRef":
     case "StringLiteral":
     case "StructuredRef":
-      return false;
+      return [];
   }
 }
 
@@ -183,6 +222,7 @@ export function createEngineFormulaBindingService(args: {
     EngineRuntimeState,
     "workbook" | "strings" | "formulas" | "ranges" | "useColumnIndex"
   >;
+  readonly lookup: Pick<EngineLookupService, "primeExactColumnIndex">;
   readonly edgeArena: EdgeArena;
   readonly programArena: Uint32Arena;
   readonly constantArena: Float64Arena;
@@ -527,6 +567,9 @@ export function createEngineFormulaBindingService(args: {
 
   const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
     const compiled = compileFormulaForSheet(ownerSheetName, source);
+    const indexedExactLookupCandidates = args.state.useColumnIndex
+      ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
+      : [];
     const dependencies = materializeDependencies(ownerSheetName, compiled);
     clearFormulaNow(cellIndex);
 
@@ -653,6 +696,18 @@ export function createEngineFormulaBindingService(args: {
       );
     });
     args.scheduleWasmProgramSync();
+
+    indexedExactLookupCandidates.forEach((candidate) => {
+      if (candidate.startCol !== candidate.endCol) {
+        return;
+      }
+      args.lookup.primeExactColumnIndex({
+        sheetName: candidate.sheetName ?? ownerSheetName,
+        rowStart: candidate.startRow,
+        rowEnd: candidate.endRow,
+        col: candidate.startCol,
+      });
+    });
   };
 
   const invalidateFormulaNow = (cellIndex: number): void => {

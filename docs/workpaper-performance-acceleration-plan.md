@@ -17,9 +17,13 @@ Current checkpoint on `main`:
   invalidations
 - visibility snapshot capture now reads directly from workbook storage instead of routing through
   `engine.getCellValue()` for every cached cell
+- mixed-sheet imports now stage literals before formulas and eagerly prime exact column indexes
+  during formula binding, so indexed lookup no longer pays first-build cache construction inside
+  the timed mutation path
 - the checked-in competitive artifact now shows:
-  - `lookup-no-column-index`: improved from `68.76x` slower to `4.20x` slower
-  - `lookup-with-column-index`: improved from `124.42x` slower to `8.83x` slower
+  - `lookup-no-column-index`: improved from `68.76x` slower to `3.02x` slower
+  - `lookup-with-column-index`: improved from `124.42x` slower to `5.74x` slower
+  - `range-read`: now a slight `WorkPaper` win at `1.02x`
 
 So the remaining performance gap is no longer “lookup is completely fake.” The remaining gap is
 that the indexed core path is still slower than HyperFormula’s purpose-built search subsystem, and
@@ -80,12 +84,12 @@ Current direct-comparison results from
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
 | --- | ---: | ---: | --- |
-| `build-from-sheets` | `25.273ms` | `3.721ms` | HyperFormula `6.79x` faster |
-| `single-edit-recalc` | `8.292ms` | `1.580ms` | HyperFormula `5.25x` faster |
-| `batch-edit-recalc` | `7.775ms` | `0.948ms` | HyperFormula `8.20x` faster |
-| `range-read` | `0.217ms` | `0.197ms` | near parity, HyperFormula `1.10x` faster |
-| `lookup-no-column-index` | `0.987ms` | `0.235ms` | HyperFormula `4.20x` faster |
-| `lookup-with-column-index` | `1.115ms` | `0.126ms` | HyperFormula `8.83x` faster |
+| `build-from-sheets` | `26.654ms` | `3.837ms` | HyperFormula `6.95x` faster |
+| `single-edit-recalc` | `7.558ms` | `1.350ms` | HyperFormula `5.60x` faster |
+| `batch-edit-recalc` | `6.071ms` | `0.831ms` | HyperFormula `7.30x` faster |
+| `range-read` | `0.211ms` | `0.216ms` | `WorkPaper` `1.02x` faster |
+| `lookup-no-column-index` | `0.807ms` | `0.267ms` | HyperFormula `3.02x` faster |
+| `lookup-with-column-index` | `0.759ms` | `0.132ms` | HyperFormula `5.74x` faster |
 
 This is the important reading:
 
@@ -409,8 +413,8 @@ Status:
 
 - completed on `main`
 - current checked-in result:
-  - `lookup-with-column-index` is now `8.83x` slower
-  - `lookup-no-column-index` is now `4.20x` slower
+  - `lookup-with-column-index` is now `5.74x` slower
+  - `lookup-no-column-index` is now `3.02x` slower
 - the remaining red work is now phase-2 quality work, not phase-1 plumbing
 
 ### Phase 2: Native Direct Lookup Ops
@@ -424,6 +428,15 @@ Acceptance:
 - benchmark target:
   - `lookup-with-column-index` under `3x` slower
   - `lookup-no-column-index` under `5x` slower
+
+Status:
+
+- partially satisfied on `main`
+- exact indexed lookup no longer rebuilds its column index on the first post-build mutation when
+  the formula was bound against a fully populated column
+- `lookup-no-column-index` is already under the `5x` target at `3.02x` slower
+- `lookup-with-column-index` still misses the `3x` target at `5.74x` slower, so the remaining
+  work is the dedicated native lookup opcode and deeper core-owned column storage path
 
 ### Phase 3: Batch/Recalc and Build Path Reduction
 

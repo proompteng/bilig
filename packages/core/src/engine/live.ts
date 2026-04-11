@@ -137,6 +137,7 @@ type EngineFormulaBindingRuntimeConfig = Omit<
   | "ensureCellTrackedByCoords"
   | "markFormulaChanged"
   | "forEachSheetCell"
+  | "lookup"
   | "resolveStructuredReference"
   | "resolveSpillReference"
   | "scheduleWasmProgramSync"
@@ -372,6 +373,7 @@ export function createEngineServiceRuntime(args: {
   });
   binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
+    lookup,
     ensureCellTracked: (sheetName, address) =>
       runEngineEffect(support.ensureCellTracked(sheetName, address)),
     ensureCellTrackedByCoords: (sheetId, row, col) =>

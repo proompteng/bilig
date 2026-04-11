@@ -46,11 +46,10 @@ export interface EngineMutationService {
     options?: {
       captureUndo?: boolean;
       potentialNewCells?: number;
+      source?: "local" | "restore";
     },
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>;
-  readonly captureUndoOps: <Result>(
-    mutate: () => Result,
-  ) => Effect.Effect<
+  readonly captureUndoOps: <Result>(mutate: () => Result) => Effect.Effect<
     {
       result: Result;
       undoOps: readonly EngineOp[] | null;
@@ -97,7 +96,11 @@ export function createEngineMutationService(args: {
     readonly workbook: WorkbookStore;
   };
   readonly captureSheetCellState: (sheetName: string) => EngineOp[];
-  readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => EngineOp[];
+  readonly captureRowRangeCellState: (
+    sheetName: string,
+    start: number,
+    count: number,
+  ) => EngineOp[];
   readonly captureColumnRangeCellState: (
     sheetName: string,
     start: number,
@@ -128,7 +131,10 @@ export function createEngineMutationService(args: {
       }
       case "setCalculationSettings":
         return [
-          { kind: "setCalculationSettings", settings: args.state.workbook.getCalculationSettings() },
+          {
+            kind: "setCalculationSettings",
+            settings: args.state.workbook.getCalculationSettings(),
+          },
         ];
       case "setVolatileContext":
         return [{ kind: "setVolatileContext", context: args.state.workbook.getVolatileContext() }];
@@ -206,7 +212,11 @@ export function createEngineMutationService(args: {
       case "insertRows":
         return [{ kind: "deleteRows", sheetName: op.sheetName, start: op.start, count: op.count }];
       case "deleteRows": {
-        const entries = args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count);
+        const entries = args.state.workbook.snapshotRowAxisEntries(
+          op.sheetName,
+          op.start,
+          op.count,
+        );
         return [
           {
             kind: "insertRows",
@@ -233,7 +243,11 @@ export function createEngineMutationService(args: {
           { kind: "deleteColumns", sheetName: op.sheetName, start: op.start, count: op.count },
         ];
       case "deleteColumns": {
-        const entries = args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count);
+        const entries = args.state.workbook.snapshotColumnAxisEntries(
+          op.sheetName,
+          op.start,
+          op.count,
+        );
         return [
           {
             kind: "insertColumns",
@@ -623,7 +637,7 @@ export function createEngineMutationService(args: {
             options.potentialNewCells === undefined
               ? { ops: nextOps }
               : { ops: nextOps, potentialNewCells: options.potentialNewCells },
-            "restore",
+            options.source ?? "restore",
           );
           return null;
         },
@@ -666,7 +680,10 @@ export function createEngineMutationService(args: {
           const bounds = normalizeRange(range);
           const expectedHeight = bounds.endRow - bounds.startRow + 1;
           const expectedWidth = bounds.endCol - bounds.startCol + 1;
-          if (values.length !== expectedHeight || values.some((row) => row.length !== expectedWidth)) {
+          if (
+            values.length !== expectedHeight ||
+            values.some((row) => row.length !== expectedWidth)
+          ) {
             throw new Error(
               "setRangeValues requires a value matrix that exactly matches the target range",
             );
@@ -1004,7 +1021,11 @@ export function createEngineMutationService(args: {
                   break;
                 case "deleteCell":
                   if (op.sheetName && op.addr) {
-                    engineOps.push({ kind: "clearCell", sheetName: op.sheetName, address: op.addr });
+                    engineOps.push({
+                      kind: "clearCell",
+                      sheetName: op.sheetName,
+                      address: op.addr,
+                    });
                     engineOps.push({
                       kind: "setCellFormat",
                       sheetName: op.sheetName,

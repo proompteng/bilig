@@ -800,6 +800,10 @@ function executePlan(
           sheetName,
           start: instruction.start,
           end: instruction.end,
+          startRow: instruction.startRow,
+          endRow: instruction.endRow,
+          startCol: instruction.startCol,
+          endCol: instruction.endCol,
           searchMode: instruction.searchMode,
         });
         if (directMatch?.handled) {
@@ -824,18 +828,8 @@ function executePlan(
         context.noteRangeMaterialization?.(values.length);
         let rows = values.length;
         let cols = 1;
-        try {
-          const range = parseRangeAddress(
-            `${instruction.sheetName ? `${instruction.sheetName}!` : ""}${instruction.start}:${instruction.end}`,
-          );
-          if (range.kind === "cells") {
-            rows = range.end.row - range.start.row + 1;
-            cols = range.end.col - range.start.col + 1;
-          }
-        } catch {
-          rows = values.length;
-          cols = 1;
-        }
+        rows = instruction.endRow - instruction.startRow + 1;
+        cols = instruction.endCol - instruction.startCol + 1;
 
         const rangeArg: RangeBuiltinArgument = {
           kind: "range",

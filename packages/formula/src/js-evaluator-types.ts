@@ -37,6 +37,10 @@ export interface EvaluationContext {
     sheetName: string;
     start: string;
     end: string;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
     searchMode: 1 | -1;
   }) => ExactVectorMatchResult;
   noteRangeMaterialization?: (cellCount: number) => void;
@@ -80,6 +84,10 @@ export type JsPlanInstruction =
       sheetName?: string;
       start: string;
       end: string;
+      startRow: number;
+      endRow: number;
+      startCol: number;
+      endCol: number;
       refKind: "cells";
       searchMode: 1 | -1;
     }

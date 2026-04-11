@@ -101,6 +101,10 @@ describe("js evaluator context special calls", () => {
       sheetName: "Sheet2",
       start: "A1",
       end: "A3",
+      startRow: 0,
+      endRow: 2,
+      startCol: 0,
+      endCol: 0,
       searchMode: -1,
     });
     expect(noteExactLookupDirect).toHaveBeenCalledTimes(1);

@@ -93,6 +93,13 @@ function lowerExactVectorLookup(
     isVectorCellRange(lookupRange) &&
     staticIntegerValue(node.args[2]) === 0
   ) {
+    const parsedRange = parseRangeAddress(
+      `${lookupRange.start}:${lookupRange.end}`,
+      lookupRange.sheetName,
+    );
+    if (parsedRange.kind !== "cells") {
+      return false;
+    }
     lowerNode(node.args[0]!, plan);
     plan.push({
       opcode: "lookup-exact-match",
@@ -100,6 +107,10 @@ function lowerExactVectorLookup(
       ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
       start: lookupRange.start,
       end: lookupRange.end,
+      startRow: parsedRange.start.row,
+      endRow: parsedRange.end.row,
+      startCol: parsedRange.start.col,
+      endCol: parsedRange.end.col,
       refKind: "cells",
       searchMode: 1,
     });
@@ -116,6 +127,13 @@ function lowerExactVectorLookup(
   ) {
     const searchMode = node.args.length >= 4 ? staticIntegerValue(node.args[3]) : 1;
     if (searchMode === 1 || searchMode === -1) {
+      const parsedRange = parseRangeAddress(
+        `${lookupRange.start}:${lookupRange.end}`,
+        lookupRange.sheetName,
+      );
+      if (parsedRange.kind !== "cells") {
+        return false;
+      }
       lowerNode(node.args[0]!, plan);
       plan.push({
         opcode: "lookup-exact-match",
@@ -123,6 +141,10 @@ function lowerExactVectorLookup(
         ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
         start: lookupRange.start,
         end: lookupRange.end,
+        startRow: parsedRange.start.row,
+        endRow: parsedRange.end.row,
+        startCol: parsedRange.start.col,
+        endCol: parsedRange.end.col,
         refKind: "cells",
         searchMode,
       });

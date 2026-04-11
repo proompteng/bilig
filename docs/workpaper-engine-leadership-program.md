@@ -111,7 +111,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula still leads overall, but every directly comparable gap is now single-digit and phase 1 of the lookup program is landed | convert the current red workloads into majority `bilig` wins from the new single-digit baseline |
+| Performance dominance | Directly comparable benchmark workloads | `1/6` wins in `workpaper-vs-hyperformula.json` | `5/6` wins on current host | HyperFormula still leads overall, but the lookup gaps are narrowing and `WorkPaper` now has a measured direct win on range reads | convert the current red workloads into majority `bilig` wins from the new lower-gap baseline |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -136,15 +136,15 @@ Current measured values from local repo artifacts and docs:
 - `bilig` canonical formula production closure:
   - `300/300` rows = `100%`
 - directly comparable benchmark record:
-  - `WorkPaper` wins: `0/6`
-  - HyperFormula wins: `6/6`
-  - current `WorkPaper` closest-to-parity workload on this host: range-read at `1.10x` slower
-  - HyperFormula current win range on this host: `1.10x` to `8.83x`
+  - `WorkPaper` wins: `1/6`
+  - HyperFormula wins: `5/6`
+  - current `WorkPaper` direct win on this host: range-read at `1.02x` faster
+  - HyperFormula current win range on this host: `3.02x` to `7.30x`
   - notable improvements from the latest tranches:
-    - batch-edit recalculation improved from `1000.39x` slower to `8.20x` slower
-    - single-edit recalculation improved to `5.25x` slower after the `WorkPaper` facade stopped cloning or rescanning the workbook on ordinary edits
-    - lookup without column indexing improved from `134.35x` slower to `4.20x` slower after the headless full-workbook diff path was removed from ordinary edits
-    - lookup with `useColumnIndex` improved from `134.35x` slower to `8.83x` slower after direct exact lookup and event-driven `WorkPaper` change tracking landed
+    - batch-edit recalculation improved from `1000.39x` slower to `7.30x` slower
+    - single-edit recalculation improved to `5.60x` slower after the `WorkPaper` facade stopped cloning or rescanning the workbook on ordinary edits and mixed-sheet imports stopped rebinding against half-built lookup columns
+    - lookup without column indexing improved from `134.35x` slower to `3.02x` slower after the headless full-workbook diff path was removed from ordinary edits
+    - lookup with `useColumnIndex` improved from `134.35x` slower to `5.74x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, and eager index priming landed
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -369,12 +369,12 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- lookup with column indexing: HyperFormula currently leads by `8.83x`
-- batch-edit recalculation: HyperFormula currently leads by `8.20x`
-- build from sheets: HyperFormula currently leads by `6.79x`
-- single-edit recalculation: HyperFormula currently leads by `5.25x`
-- lookup without column indexing: HyperFormula currently leads by `4.20x`
-- range-read: HyperFormula currently leads by `1.10x`
+- lookup with column indexing: HyperFormula currently leads by `5.74x`
+- batch-edit recalculation: HyperFormula currently leads by `7.30x`
+- build from sheets: HyperFormula currently leads by `6.95x`
+- single-edit recalculation: HyperFormula currently leads by `5.60x`
+- lookup without column indexing: HyperFormula currently leads by `3.02x`
+- range-read: `WorkPaper` currently leads by `1.02x`
 
 The important trend changes are:
 
