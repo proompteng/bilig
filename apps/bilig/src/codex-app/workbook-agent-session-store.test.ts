@@ -75,6 +75,84 @@ describe("WorkbookAgentSessionStore", () => {
     });
   });
 
+  it("serializes overlapping saves for the same durable thread", async () => {
+    let resolveFirstSave!: () => void;
+    const firstSaveBlocked = new Promise<void>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    const saveOrder: number[] = [];
+    const saveWorkbookAgentThreadState = vi.fn(async (record) => {
+      saveOrder.push(record.updatedAtUnixMs);
+      if (record.updatedAtUnixMs !== 100) {
+        return;
+      }
+      await firstSaveBlocked;
+    });
+    const store = new WorkbookAgentSessionStore(
+      createPersistenceSource({
+        saveWorkbookAgentThreadState,
+      }),
+    );
+
+    const firstSave = store.saveSessionSnapshot({
+      documentId: "doc-1",
+      threadId: "thr-1",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: null,
+      entries: [createSystemEntry("entry-1", null, "first")],
+      pendingBundle: null,
+      updatedAtUnixMs: 100,
+    });
+    const secondSave = store.saveSessionSnapshot({
+      documentId: "doc-1",
+      threadId: "thr-1",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: null,
+      entries: [createSystemEntry("entry-2", null, "second")],
+      pendingBundle: null,
+      updatedAtUnixMs: 200,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saveWorkbookAgentThreadState).toHaveBeenCalledTimes(1);
+
+    resolveFirstSave();
+    await Promise.all([firstSave, secondSave]);
+
+    expect(saveOrder).toEqual([100, 200]);
+  });
+
+  it("dedupes duplicate entry ids before persisting", async () => {
+    const saveWorkbookAgentThreadState = vi.fn(async () => {});
+    const store = new WorkbookAgentSessionStore(
+      createPersistenceSource({
+        saveWorkbookAgentThreadState,
+      }),
+    );
+
+    await store.saveSessionSnapshot({
+      documentId: "doc-1",
+      threadId: "thr-1",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: null,
+      entries: [
+        createSystemEntry("entry-1", null, "first"),
+        createSystemEntry("entry-1", null, "second"),
+      ],
+      pendingBundle: null,
+      updatedAtUnixMs: 123,
+    });
+
+    expect(saveWorkbookAgentThreadState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [createSystemEntry("entry-1", null, "second")],
+      }),
+    );
+  });
+
   it("loads durable thread state, execution records, and workflow runs together", async () => {
     const executionRecord: WorkbookAgentExecutionRecord = {
       id: "run-1",

@@ -94,6 +94,23 @@ interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly latestEntryText?: unknown;
 }
 
+function dedupeTimelineEntries(
+  entries: readonly WorkbookAgentTimelineEntry[],
+): WorkbookAgentTimelineEntry[] {
+  const deduped: WorkbookAgentTimelineEntry[] = [];
+  const indexById = new Map<string, number>();
+  for (const entry of entries) {
+    const existingIndex = indexById.get(entry.id);
+    if (existingIndex === undefined) {
+      indexById.set(entry.id, deduped.length);
+      deduped.push(entry);
+      continue;
+    }
+    deduped[existingIndex] = entry;
+  }
+  return deduped;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -480,8 +497,9 @@ export async function saveWorkbookAgentThreadState(
   db: Queryable,
   record: WorkbookAgentThreadStateRecord,
 ): Promise<void> {
+  const persistedEntries = dedupeTimelineEntries(record.entries);
   const latestEntryText =
-    [...record.entries]
+    [...persistedEntries]
       .toReversed()
       .find((entry) => typeof entry.text === "string" && entry.text.trim().length > 0)?.text ??
     null;
@@ -514,7 +532,7 @@ export async function saveWorkbookAgentThreadState(
       record.actorUserId,
       record.scope,
       JSON.stringify(record.context),
-      record.entries.length,
+      persistedEntries.length,
       record.pendingBundle !== null,
       latestEntryText,
       record.updatedAtUnixMs,
@@ -535,7 +553,7 @@ export async function saveWorkbookAgentThreadState(
     [record.documentId, record.threadId, record.actorUserId],
   );
   await Promise.all(
-    record.entries.map(async (entry, index) => {
+    persistedEntries.map(async (entry, index) => {
       await db.query(
         `
           INSERT INTO workbook_chat_item (
@@ -558,6 +576,19 @@ export async function saveWorkbookAgentThreadState(
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
           )
+          ON CONFLICT (workbook_id, thread_id, actor_user_id, entry_id)
+          DO UPDATE SET
+            sort_order = EXCLUDED.sort_order,
+            turn_id = EXCLUDED.turn_id,
+            kind = EXCLUDED.kind,
+            text = EXCLUDED.text,
+            phase = EXCLUDED.phase,
+            tool_name = EXCLUDED.tool_name,
+            tool_status = EXCLUDED.tool_status,
+            arguments_text = EXCLUDED.arguments_text,
+            output_text = EXCLUDED.output_text,
+            success = EXCLUDED.success,
+            citations_json = EXCLUDED.citations_json
         `,
         [
           record.documentId,
@@ -598,6 +629,15 @@ export async function saveWorkbookAgentThreadState(
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
           )
+          ON CONFLICT (workbook_id, thread_id, actor_user_id, entry_id)
+          DO UPDATE SET
+            sort_order = EXCLUDED.sort_order,
+            turn_id = EXCLUDED.turn_id,
+            tool_name = EXCLUDED.tool_name,
+            tool_status = EXCLUDED.tool_status,
+            arguments_text = EXCLUDED.arguments_text,
+            output_text = EXCLUDED.output_text,
+            success = EXCLUDED.success
         `,
         [
           record.documentId,

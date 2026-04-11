@@ -209,6 +209,31 @@ describe("workbook-chat-thread-store", () => {
     expect(toolInsert?.values?.[9]).toBe('{"summary":"Loaded workbook"}');
   });
 
+  it("dedupes duplicate entry ids before inserting durable chat items", async () => {
+    const queryable = new FakeQueryable();
+    const state = createThreadState();
+
+    await saveWorkbookAgentThreadState(queryable, {
+      ...state,
+      entries: [
+        state.entries[0]!,
+        {
+          ...state.entries[0]!,
+          text: "Updated prompt",
+        },
+        state.entries[1]!,
+      ],
+    });
+
+    const itemInserts = queryable.calls.filter((call) =>
+      call.text.includes("INSERT INTO workbook_chat_item"),
+    );
+    expect(itemInserts).toHaveLength(2);
+    expect(itemInserts[0]?.values?.[3]).toBe("entry-user-1");
+    expect(itemInserts[0]?.values?.[7]).toBe("Updated prompt");
+    expect(itemInserts.every((call) => call.text.includes("ON CONFLICT"))).toBe(true);
+  });
+
   it("loads a durable thread snapshot with entries and a pending bundle", async () => {
     const state = createThreadState();
     const queryable = new FakeQueryable([

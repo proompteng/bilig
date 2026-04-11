@@ -32,20 +32,61 @@ export interface WorkbookAgentLoadedThreadSession {
   readonly workflowRuns: WorkbookAgentWorkflowRun[];
 }
 
+function persistenceKey(input: {
+  documentId: string;
+  threadId: string;
+  actorUserId: string;
+}): string {
+  return `${input.documentId}\u0000${input.threadId}\u0000${input.actorUserId}`;
+}
+
+function dedupeTimelineEntries(
+  entries: readonly WorkbookAgentTimelineEntry[],
+): WorkbookAgentTimelineEntry[] {
+  const deduped: WorkbookAgentTimelineEntry[] = [];
+  const indexById = new Map<string, number>();
+  for (const entry of entries) {
+    const existingIndex = indexById.get(entry.id);
+    if (existingIndex === undefined) {
+      indexById.set(entry.id, deduped.length);
+      deduped.push(entry);
+      continue;
+    }
+    deduped[existingIndex] = entry;
+  }
+  return deduped;
+}
+
 export class WorkbookAgentSessionStore {
+  private readonly pendingSaves = new Map<string, Promise<void>>();
+
   constructor(private readonly source: WorkbookAgentThreadPersistenceSource) {}
 
   async saveSessionSnapshot(input: WorkbookAgentPersistedSessionInput): Promise<void> {
-    await this.source.saveWorkbookAgentThreadState({
-      documentId: input.documentId,
-      threadId: input.threadId,
-      actorUserId: input.actorUserId,
-      scope: input.scope,
-      context: input.context,
-      entries: [...input.entries],
-      pendingBundle: input.pendingBundle,
-      updatedAtUnixMs: input.updatedAtUnixMs,
+    const key = persistenceKey(input);
+    const entries = dedupeTimelineEntries(input.entries);
+    const previous = this.pendingSaves.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(async () => {
+      await this.source.saveWorkbookAgentThreadState({
+        documentId: input.documentId,
+        threadId: input.threadId,
+        actorUserId: input.actorUserId,
+        scope: input.scope,
+        context: input.context,
+        entries,
+        pendingBundle: input.pendingBundle,
+        updatedAtUnixMs: input.updatedAtUnixMs,
+      });
+      return undefined;
     });
+    this.pendingSaves.set(key, next);
+    try {
+      await next;
+    } finally {
+      if (this.pendingSaves.get(key) === next) {
+        this.pendingSaves.delete(key);
+      }
+    }
   }
 
   async loadThreadSession(input: {
