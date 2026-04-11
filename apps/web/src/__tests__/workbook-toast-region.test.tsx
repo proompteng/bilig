@@ -76,8 +76,7 @@ describe("WorkbookToastRegion", () => {
 
     const activeToast = findActiveToast("error-1");
     expect(activeToast?.title).toBe("Remote sync failed.");
-    expect(activeToast?.classNames?.toast).toContain("w-[min(28rem,calc(100vw-1.5rem))]");
-    expect(activeToast?.classNames?.toast).toContain("[--toast-close-button-end:0.625rem]");
+    expect(activeToast?.classNames).toBeUndefined();
     const retryAction = getToastAction(activeToast);
 
     await act(async () => {
@@ -137,7 +136,7 @@ describe("WorkbookToastRegion", () => {
     });
   });
 
-  it("pins the dismiss button inside the toast and reserves content width", async () => {
+  it("uses stock Sonner styling instead of workbook-specific class overrides", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -163,10 +162,8 @@ describe("WorkbookToastRegion", () => {
     await flushToasts();
 
     const activeToast = findActiveToast("error-3");
-    expect(activeToast?.classNames?.toast).toContain("pr-11");
-    expect(activeToast?.classNames?.content).toBe(
-      "min-w-0 flex flex-1 flex-col justify-center gap-0.5",
-    );
+    expect(activeToast?.classNames).toBeUndefined();
+    expect(activeToast?.unstyled).not.toBe(true);
 
     await act(async () => {
       root.unmount();
