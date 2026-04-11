@@ -1,7 +1,7 @@
 services:
   postgres:
     ports:
-      - "55432:5432"
+      - "${BILIG_DEV_POSTGRES_PORT:-55432}:5432"
 
   zero-cache-local:
     image: rocicorp/zero:1.1.1

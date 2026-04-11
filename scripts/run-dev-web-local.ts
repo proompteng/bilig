@@ -5,6 +5,13 @@ import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  canUsePort as canUsePortWithListeners,
+  resolvePreferredPort,
+  resolvePreferredZeroPort,
+  resolveRequestedOrAvailablePort,
+} from "./dev-web-local-ports.js";
+
 const composeFiles = ["compose.yaml", "compose.dev-local.yaml"] as const;
 const composeProject = process.env["BILIG_DEV_COMPOSE_PROJECT"] ?? "bilig-dev-local";
 const postgresService = "postgres";
@@ -15,22 +22,20 @@ const preferredAppPort = Number.parseInt(
   process.env["PORT"] ?? process.env["BILIG_SYNC_SERVER_PORT"] ?? "4321",
   10,
 );
-const postgresPort = process.env["BILIG_DEV_POSTGRES_PORT"] ?? "55432";
+const preferredPostgresPort = resolvePreferredPort(process.env["BILIG_DEV_POSTGRES_PORT"], 55432);
 const preferredWebPort = Number.parseInt(process.env["BILIG_WEB_DEV_PORT"] ?? "5173", 10);
 const configuredZeroProxyUpstream = process.env["BILIG_ZERO_PROXY_UPSTREAM"];
 const disableCompose = process.env["BILIG_DEV_DISABLE_COMPOSE"] === "1";
-const preferredZeroPort = Number.parseInt(
-  process.env["BILIG_DEV_ZERO_PORT"] ??
-    (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : "4848") ??
-    "4848",
-  10,
+const preferredZeroPort = resolvePreferredZeroPort(
+  process.env["BILIG_DEV_ZERO_PORT"],
+  configuredZeroProxyUpstream,
+  4848,
 );
 const composePublishedHost = resolveComposePublishedHost();
-const zeroProxyUpstream =
-  configuredZeroProxyUpstream ?? `http://${composePublishedHost}:${String(preferredZeroPort)}`;
-const zeroHealthUrl = `${zeroProxyUpstream}/keepalive`;
 const cleanupCompose = process.env["BILIG_DEV_CLEANUP_COMPOSE"] === "true";
 let resolvedAppPort = String(preferredAppPort);
+let resolvedPostgresPort = String(preferredPostgresPort);
+let resolvedZeroPort = String(preferredZeroPort);
 
 interface DevChildProcess {
   readonly exited: Promise<number | null>;
@@ -48,9 +53,10 @@ function commandExists(command: string): boolean {
 function composeEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    BILIG_E2E_POSTGRES_PORT: postgresPort,
+    BILIG_E2E_POSTGRES_PORT: resolvedPostgresPort,
+    BILIG_DEV_POSTGRES_PORT: resolvedPostgresPort,
     BILIG_DEV_APP_PORT: resolvedAppPort,
-    BILIG_DEV_ZERO_PORT: String(preferredZeroPort),
+    BILIG_DEV_ZERO_PORT: resolvedZeroPort,
   };
 }
 
@@ -414,53 +420,55 @@ async function reapStaleRepoListeners(ports: readonly number[]): Promise<void> {
 }
 
 async function resolveWebPort(preferredPort: number): Promise<number> {
-  const explicitPort = process.env["BILIG_WEB_DEV_PORT"];
-  if (explicitPort) {
-    if (!(await isPortAvailable(preferredPort))) {
-      throw new Error(`Web port ${preferredPort} is already in use.`);
-    }
-    return preferredPort;
-  }
-  return findAvailablePort(preferredPort, 10, `web port starting at ${preferredPort}`);
+  return resolveRequestedOrAvailablePort({
+    preferredPort,
+    explicitPort: process.env["BILIG_WEB_DEV_PORT"],
+    label: explicitPortLabel("Web port", preferredPort),
+    canUsePort: isPortAvailable,
+  });
 }
 
 async function resolveAppPort(preferredPort: number): Promise<number> {
-  const explicitPort = process.env["PORT"] ?? process.env["BILIG_SYNC_SERVER_PORT"];
-  if (explicitPort) {
-    if (!(await isPortAvailable(preferredPort))) {
-      throw new Error(`App port ${preferredPort} is already in use.`);
-    }
-    return preferredPort;
-  }
-  return findAvailablePort(preferredPort, 10, `app port starting at ${preferredPort}`);
+  return resolveRequestedOrAvailablePort({
+    preferredPort,
+    explicitPort: process.env["PORT"] ?? process.env["BILIG_SYNC_SERVER_PORT"],
+    label: explicitPortLabel("App port", preferredPort),
+    canUsePort: isPortAvailable,
+  });
 }
 
-async function findAvailablePort(
-  startPort: number,
-  remainingOffsets: number,
-  label: string,
-  offset = 0,
+async function resolveComposePort(
+  preferredPort: number,
+  explicitPort: string | undefined,
+  name: string,
 ): Promise<number> {
-  if (offset >= remainingOffsets) {
-    throw new Error(`Unable to find an available ${label}.`);
-  }
-  const candidate = startPort + offset;
-  if (await isPortAvailable(candidate)) {
-    return candidate;
-  }
-  return findAvailablePort(startPort, remainingOffsets, label, offset + 1);
+  return resolveRequestedOrAvailablePort({
+    preferredPort,
+    explicitPort,
+    label: explicitPortLabel(name, preferredPort),
+    canUsePort: isPortAvailable,
+  });
+}
+
+function explicitPortLabel(name: string, preferredPort: number): string {
+  return `${name} ${preferredPort}`;
 }
 
 async function isPortAvailable(port: number): Promise<boolean> {
-  return await new Promise((resolvePortAvailability) => {
-    const server = net.createServer();
+  return canUsePortWithListeners({
+    port,
+    listListeningPids,
+    bindProbe: (candidatePort) =>
+      new Promise((resolvePortAvailability) => {
+        const server = net.createServer();
 
-    server.once("error", () => resolvePortAvailability(false));
-    server.once("listening", () => {
-      server.close(() => resolvePortAvailability(true));
-    });
+        server.once("error", () => resolvePortAvailability(false));
+        server.once("listening", () => {
+          server.close(() => resolvePortAvailability(true));
+        });
 
-    server.listen(port, "127.0.0.1");
+        server.listen(candidatePort, "127.0.0.1");
+      }),
   });
 }
 
@@ -553,10 +561,28 @@ await reapStaleRepoListeners(
 );
 const appPort = await resolveAppPort(preferredAppPort);
 resolvedAppPort = String(appPort);
+if (!disableCompose) {
+  resolvedPostgresPort = String(
+    await resolveComposePort(
+      preferredPostgresPort,
+      process.env["BILIG_DEV_POSTGRES_PORT"],
+      "Postgres port",
+    ),
+  );
+  const explicitZeroPort =
+    process.env["BILIG_DEV_ZERO_PORT"] ??
+    (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : undefined);
+  resolvedZeroPort = String(
+    await resolveComposePort(preferredZeroPort, explicitZeroPort, "Zero port"),
+  );
+}
+const zeroProxyUpstream =
+  configuredZeroProxyUpstream ?? `http://${composePublishedHost}:${resolvedZeroPort}`;
+const zeroHealthUrl = `${zeroProxyUpstream}/keepalive`;
 const postgresUrl = disableCompose
   ? undefined
   : (process.env["DATABASE_URL"] ??
-    `postgresql://bilig:bilig@${composePublishedHost}:${postgresPort}/bilig`);
+    `postgresql://bilig:bilig@${composePublishedHost}:${resolvedPostgresPort}/bilig`);
 const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? `http://127.0.0.1:${appPort}`;
 const appHealthUrl = `${publicServerUrl}/healthz`;
 if (!disableCompose && composeSupportsWait()) {
@@ -565,7 +591,7 @@ if (!disableCompose && composeSupportsWait()) {
   runComposeSync(["up", "-d", postgresService, zeroCacheService]);
 }
 if (!disableCompose) {
-  await waitForTcp(composePublishedHost, Number(postgresPort));
+  await waitForTcp(composePublishedHost, Number(resolvedPostgresPort));
 }
 const webPort = await resolveWebPort(preferredWebPort);
 const webAppBaseUrl = process.env["BILIG_WEB_APP_BASE_URL"] ?? `http://localhost:${webPort}`;
