@@ -153,6 +153,8 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "renameCurrentSheet",
   "hideCurrentRow",
   "hideCurrentColumn",
+  "unhideCurrentRow",
+  "unhideCurrentColumn",
 );
 export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowTemplateSchema
@@ -186,9 +188,7 @@ export const WorkbookAgentWorkflowStepSchema = Schema.Struct({
   summary: Schema.String,
   updatedAtUnixMs: Schema.Number,
 });
-export type WorkbookAgentWorkflowStep = Schema.Schema.Type<
-  typeof WorkbookAgentWorkflowStepSchema
->;
+export type WorkbookAgentWorkflowStep = Schema.Schema.Type<typeof WorkbookAgentWorkflowStepSchema>;
 
 export const WorkbookAgentWorkflowArtifactSchema = Schema.Struct({
   kind: Schema.Literal("markdown"),

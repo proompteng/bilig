@@ -57,6 +57,7 @@ import {
   executeWorkbookAgentWorkflow,
   failWorkflowSteps,
 } from "./workbook-agent-workflows.js";
+import { isWorkflowAbortError, throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 import {
   appendRevisionCitation,
   attachSharedReviewState,
@@ -199,6 +200,22 @@ interface WorkbookAgentSessionState {
   lastAccessedAt: number;
 }
 
+interface QueuedWorkflowRun {
+  readonly sessionState: WorkbookAgentSessionState;
+  readonly documentId: string;
+  readonly runId: string;
+  readonly workflowTurnId: string;
+  readonly workflowTemplate: WorkbookAgentWorkflowRun["workflowTemplate"];
+  readonly workflowInput: {
+    readonly query?: string;
+    readonly sheetName?: string;
+    readonly limit?: number;
+    readonly name?: string;
+  };
+  readonly startedByUserId: string;
+  readonly runningRun: WorkbookAgentWorkflowRun;
+}
+
 function toContextRef(context: WorkbookAgentUiContext | null): WorkbookAgentContextRef | null {
   return context
     ? {
@@ -234,7 +251,9 @@ function isMutatingWorkflowTemplate(
     workflowTemplate === "createSheet" ||
     workflowTemplate === "renameCurrentSheet" ||
     workflowTemplate === "hideCurrentRow" ||
-    workflowTemplate === "hideCurrentColumn"
+    workflowTemplate === "hideCurrentColumn" ||
+    workflowTemplate === "unhideCurrentRow" ||
+    workflowTemplate === "unhideCurrentColumn"
   );
 }
 
@@ -391,6 +410,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   private readonly sessions = new Map<string, WorkbookAgentSessionState>();
   private readonly threadToSessionId = new Map<string, string>();
   private readonly subscribers = new Map<string, Set<(event: WorkbookAgentStreamEvent) => void>>();
+  private readonly workflowRunTasks = new Map<string, Promise<void>>();
+  private readonly workflowAbortControllers = new Map<string, AbortController>();
   private codexClient: CodexAppServerTransport | null = null;
   private unsubscribeCodex: (() => void) | null = null;
 
@@ -455,10 +476,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       return cloneSnapshot(sessionState.snapshot);
     }
 
-    let thread:
-      | Awaited<ReturnType<CodexAppServerTransport["threadStart"]>>
-       
-      | null = null;
+    let thread: Awaited<ReturnType<CodexAppServerTransport["threadStart"]>> | null = null;
     let sessionBootstrapError: unknown = null;
     try {
       const codexClient = await this.getCodexClient();
@@ -704,22 +722,68 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, runningRun);
     await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.threadId);
+    this.queueWorkflowRun({
+      sessionState,
+      documentId: input.documentId,
+      runId,
+      workflowTurnId,
+      workflowTemplate,
+      workflowInput,
+      startedByUserId: input.session.userID,
+      runningRun,
+    });
+    return cloneSnapshot(sessionState.snapshot);
+  }
+
+  private queueWorkflowRun(input: QueuedWorkflowRun): void {
+    const existingTask =
+      this.workflowRunTasks.get(input.sessionState.threadId) ?? Promise.resolve();
+    const nextTask = existingTask
+      .catch(() => undefined)
+      .then(() => this.executeQueuedWorkflowRun(input));
+    this.workflowRunTasks.set(input.sessionState.threadId, nextTask);
+    void nextTask
+      .catch((error: unknown) => {
+        console.error(error);
+      })
+      .finally(() => {
+        if (this.workflowRunTasks.get(input.sessionState.threadId) === nextTask) {
+          this.workflowRunTasks.delete(input.sessionState.threadId);
+        }
+      });
+  }
+
+  private async executeQueuedWorkflowRun(input: QueuedWorkflowRun): Promise<void> {
+    const currentRun = input.sessionState.snapshot.workflowRuns.find(
+      (run) => run.runId === input.runId,
+    );
+    if (!currentRun || currentRun.status !== "running") {
+      return;
+    }
+    const abortController = new AbortController();
+    this.workflowAbortControllers.set(input.runId, abortController);
 
     try {
       const result = await executeWorkbookAgentWorkflow({
         documentId: input.documentId,
         zeroSyncService: this.zeroSyncService,
-        workflowTemplate,
-        context: sessionState.snapshot.context,
-        workflowInput,
+        workflowTemplate: input.workflowTemplate,
+        context: input.sessionState.snapshot.context,
+        workflowInput: input.workflowInput,
+        signal: abortController.signal,
       });
-      const currentRun = sessionState.snapshot.workflowRuns.find((run) => run.runId === runId);
-      if (currentRun?.status === "cancelled") {
-        return cloneSnapshot(sessionState.snapshot);
+      throwIfWorkflowCancelled(abortController.signal);
+
+      const latestRun = input.sessionState.snapshot.workflowRuns.find(
+        (run) => run.runId === input.runId,
+      );
+      if (latestRun?.status === "cancelled") {
+        return;
       }
+
       const completedAtUnixMs = this.now();
       const completedRun: WorkbookAgentWorkflowRun = {
-        ...runningRun,
+        ...input.runningRun,
         title: result.title,
         summary: result.summary,
         status: "completed",
@@ -727,14 +791,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         completedAtUnixMs,
         artifact: result.artifact,
         steps: completeWorkflowSteps(
-          workflowTemplate,
+          input.workflowTemplate,
           result.steps,
           completedAtUnixMs,
-          workflowInput,
+          input.workflowInput,
         ),
       };
-      sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-        sessionState.snapshot.workflowRuns,
+      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+        input.sessionState.snapshot.workflowRuns,
         completedRun,
       );
       if (result.commands && result.commands.length > 0) {
@@ -742,81 +806,88 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         const workflowBundle = attachSharedReviewState(
           createWorkbookAgentCommandBundle({
             documentId: input.documentId,
-            threadId: sessionState.threadId,
-            turnId: workflowTurnId,
+            threadId: input.sessionState.threadId,
+            turnId: input.workflowTurnId,
             goalText: result.goalText ?? result.title,
             baseRevision,
-            context: toContextRef(sessionState.snapshot.context),
+            context: toContextRef(input.sessionState.snapshot.context),
             commands: result.commands,
             now: completedAtUnixMs,
           }),
-          sessionState,
+          input.sessionState,
         );
-        sessionState.snapshot.pendingBundle = workflowBundle;
-        sessionState.snapshot.entries = upsertEntry(
-          sessionState.snapshot.entries,
+        input.sessionState.snapshot.pendingBundle = workflowBundle;
+        input.sessionState.snapshot.entries = upsertEntry(
+          input.sessionState.snapshot.entries,
           createSystemEntry(
             `system-preview:${workflowBundle.id}`,
-            workflowTurnId,
+            input.workflowTurnId,
             describeWorkbookAgentBundle(workflowBundle),
             createBundleRangeCitations(workflowBundle),
           ),
         );
       }
-      sessionState.snapshot.entries = upsertEntry(
-        sessionState.snapshot.entries,
+      input.sessionState.snapshot.entries = upsertEntry(
+        input.sessionState.snapshot.entries,
         createSystemEntry(
-          `system-workflow-complete:${runId}`,
-          workflowTurnId,
+          `system-workflow-complete:${input.runId}`,
+          input.workflowTurnId,
           `Completed workflow: ${result.title}`,
           result.citations,
         ),
       );
-      this.touch(sessionState);
+      this.touch(input.sessionState);
       await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, completedRun);
-      await this.persistSessionState(sessionState);
-      this.emitSnapshot(sessionState.threadId);
-      return cloneSnapshot(sessionState.snapshot);
+      await this.persistSessionState(input.sessionState);
+      this.emitSnapshot(input.sessionState.threadId);
+      return;
     } catch (error) {
-      const currentRun = sessionState.snapshot.workflowRuns.find((run) => run.runId === runId);
-      if (currentRun?.status === "cancelled") {
-        return cloneSnapshot(sessionState.snapshot);
+      if (isWorkflowAbortError(error)) {
+        return;
+      }
+      const latestRun = input.sessionState.snapshot.workflowRuns.find(
+        (run) => run.runId === input.runId,
+      );
+      if (latestRun?.status === "cancelled") {
+        return;
       }
       const failedAtUnixMs = this.now();
       const errorMessage = error instanceof Error ? error.message : String(error);
       const failedRun: WorkbookAgentWorkflowRun = {
-        ...runningRun,
+        ...input.runningRun,
         status: "failed",
-        summary: `Workflow failed: ${runningRun.title}`,
+        summary: `Workflow failed: ${input.runningRun.title}`,
         updatedAtUnixMs: failedAtUnixMs,
         completedAtUnixMs: failedAtUnixMs,
         errorMessage,
         steps: failWorkflowSteps(
-          workflowTemplate,
-          runningRun.steps,
+          input.workflowTemplate,
+          input.runningRun.steps,
           errorMessage,
           failedAtUnixMs,
-          workflowInput,
+          input.workflowInput,
         ),
         artifact: null,
       };
-      sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-        sessionState.snapshot.workflowRuns,
+      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+        input.sessionState.snapshot.workflowRuns,
         failedRun,
       );
-      sessionState.snapshot.entries = upsertEntry(
-        sessionState.snapshot.entries,
+      input.sessionState.snapshot.entries = upsertEntry(
+        input.sessionState.snapshot.entries,
         createSystemEntry(
-          `system-workflow-failed:${runId}`,
-          workflowTurnId,
-          failedRun.errorMessage ?? `Workflow failed: ${runningRun.title}`,
+          `system-workflow-failed:${input.runId}`,
+          input.workflowTurnId,
+          failedRun.errorMessage ?? `Workflow failed: ${input.runningRun.title}`,
         ),
       );
-      this.touch(sessionState);
+      this.touch(input.sessionState);
       await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, failedRun);
-      await this.persistSessionState(sessionState);
-      this.emitSnapshot(sessionState.threadId);
-      return cloneSnapshot(sessionState.snapshot);
+      await this.persistSessionState(input.sessionState);
+      this.emitSnapshot(input.sessionState.threadId);
+      return;
+    } finally {
+      this.workflowAbortControllers.delete(input.runId);
     }
   }
 
@@ -873,6 +944,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         `Cancelled workflow: ${runningWorkflow.title}`,
       ),
     );
+    this.workflowAbortControllers.get(input.runId)?.abort();
     this.touch(sessionState);
     await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, cancelledRun);
     await this.persistSessionState(sessionState);
@@ -1245,6 +1317,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   async close(): Promise<void> {
     this.unsubscribeCodex?.();
     this.unsubscribeCodex = null;
+    this.workflowAbortControllers.forEach((controller) => {
+      controller.abort();
+    });
+    this.workflowAbortControllers.clear();
+    this.workflowRunTasks.clear();
     await this.codexClient?.close();
     this.codexClient = null;
     this.sessions.clear();

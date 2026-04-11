@@ -80,7 +80,9 @@ describe("WorkflowActionStrip", () => {
       );
     });
 
-    const button = host.querySelector("[data-testid='workbook-agent-workflow-start-hideCurrentRow']");
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-hideCurrentRow']",
+    );
     expect(button instanceof HTMLButtonElement).toBe(true);
 
     await act(async () => {
@@ -91,6 +93,44 @@ describe("WorkflowActionStrip", () => {
     });
 
     expect(onStartStructuralWorkflow).toHaveBeenCalledWith("hideCurrentRow");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("starts unhide-current-column workflows without extra input", async () => {
+    const onStartStructuralWorkflow = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkflowActionStrip
+          disabled={false}
+          isStartingWorkflow={false}
+          onStartNamedWorkflow={vi.fn()}
+          onStartSearchWorkflow={vi.fn()}
+          onStartStructuralWorkflow={onStartStructuralWorkflow}
+          onStartWorkflow={vi.fn()}
+        />,
+      );
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-unhideCurrentColumn']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Structural workflow button not found");
+      }
+      button.click();
+    });
+
+    expect(onStartStructuralWorkflow).toHaveBeenCalledWith("unhideCurrentColumn");
 
     await act(async () => {
       root.unmount();

@@ -119,6 +119,12 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
   z.object({
     workflowTemplate: z.literal("hideCurrentColumn"),
   }),
+  z.object({
+    workflowTemplate: z.literal("unhideCurrentRow"),
+  }),
+  z.object({
+    workflowTemplate: z.literal("unhideCurrentColumn"),
+  }),
 ]);
 export type WorkbookAgentStartWorkflowRequest = z.infer<typeof startWorkflowToolArgsSchema>;
 const searchWorkbookToolArgsSchema = z.object({
@@ -601,7 +607,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, import-cleanup tasks like header normalization, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and hide-current-row/column.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, import-cleanup tasks like header normalization, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -623,6 +629,8 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "renameCurrentSheet",
               "hideCurrentRow",
               "hideCurrentColumn",
+              "unhideCurrentRow",
+              "unhideCurrentColumn",
             ],
           },
           query: { type: "string" },

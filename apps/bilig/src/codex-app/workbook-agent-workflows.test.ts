@@ -146,6 +146,43 @@ describe("workbook agent workflows", () => {
     ]);
   });
 
+  it("executes unhide structural workflow templates without durable workbook inspection", async () => {
+    let inspectedWorkbook = false;
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        onInspectWorkbook: () => {
+          inspectedWorkbook = true;
+        },
+      }),
+      workflowTemplate: "unhideCurrentColumn",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "C3",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+    });
+
+    expect(inspectedWorkbook).toBe(false);
+    expect(result.title).toBe("Unhide Current Column");
+    expect(result.commands).toEqual([
+      {
+        kind: "updateColumnMetadata",
+        sheetName: "Sheet1",
+        startCol: 2,
+        count: 1,
+        hidden: false,
+      },
+    ]);
+  });
+
   it("executes summarize workbook through the durable inspection path", async () => {
     let inspectedWorkbook = false;
     const result = await executeWorkbookAgentWorkflow({

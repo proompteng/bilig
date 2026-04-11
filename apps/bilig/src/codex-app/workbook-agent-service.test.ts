@@ -14,7 +14,7 @@ import type {
   CodexAppServerClientOptions,
   CodexAppServerTransport,
 } from "./codex-app-server-client.js";
-import { createWorkbookAgentService } from "./workbook-agent-service.js";
+import { createWorkbookAgentService, type WorkbookAgentService } from "./workbook-agent-service.js";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 
 class FakeCodexTransport implements CodexAppServerTransport {
@@ -145,6 +145,34 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     },
     ...overrides,
   };
+}
+
+async function waitForWorkflowStatus(
+  service: WorkbookAgentService,
+  sessionId: string,
+  userId: string,
+  status: "running" | "completed" | "failed" | "cancelled",
+): Promise<ReturnType<WorkbookAgentService["getSnapshot"]>> {
+  await vi.waitFor(() => {
+    expect(
+      service.getSnapshot({
+        documentId: "doc-1",
+        sessionId,
+        session: {
+          userID: userId,
+          roles: ["editor"],
+        },
+      }).workflowRuns[0]?.status,
+    ).toBe(status);
+  });
+  return service.getSnapshot({
+    documentId: "doc-1",
+    sessionId,
+    session: {
+      userID: userId,
+      roles: ["editor"],
+    },
+  });
 }
 
 describe("workbook agent service", () => {
@@ -376,7 +404,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -388,6 +416,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(inspectWorkbookCallCount).toBe(1);
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
@@ -477,7 +512,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -490,6 +525,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
@@ -589,7 +631,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -602,6 +644,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(getWorkbookHeadRevision).toHaveBeenCalledWith("doc-1");
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
@@ -735,7 +784,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -748,6 +797,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(getWorkbookHeadRevision).toHaveBeenCalledWith("doc-1");
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
@@ -873,7 +929,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -885,6 +941,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
@@ -990,7 +1053,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -1002,6 +1065,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
           workflowTemplate: "traceSelectionDependencies",
@@ -1104,7 +1174,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -1116,6 +1186,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
           workflowTemplate: "explainSelectionCell",
@@ -1207,7 +1284,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -1221,6 +1298,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
           workflowTemplate: "searchWorkbookQuery",
@@ -1284,7 +1368,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -1297,6 +1381,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(getWorkbookHeadRevision).toHaveBeenCalledWith("doc-1");
       expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
       expect(snapshot.workflowRuns[0]).toEqual(
@@ -1363,7 +1454,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = await service.startWorkflow({
+      const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
         sessionId: "agent-session-1",
         session: {
@@ -1376,6 +1467,13 @@ describe("workbook agent service", () => {
         },
       });
 
+      expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({
           workflowTemplate: "renameCurrentSheet",
@@ -1466,16 +1564,13 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = service.getSnapshot({
-        documentId: "doc-1",
-        sessionId: "agent-session-1",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-      });
-
       expect(result?.success).toBe(true);
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1665,16 +1760,13 @@ describe("workbook agent service", () => {
         },
       });
 
-      const snapshot = service.getSnapshot({
-        documentId: "doc-1",
-        sessionId: caseySnapshot.sessionId,
-        session: {
-          userID: "casey@example.com",
-          roles: ["editor"],
-        },
-      });
-
       expect(result?.success).toBe(true);
+      const snapshot = await waitForWorkflowStatus(
+        service,
+        caseySnapshot.sessionId,
+        "casey@example.com",
+        "completed",
+      );
       expect(snapshot.workflowRuns).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1806,6 +1898,7 @@ describe("workbook agent service", () => {
 
       releaseInspection();
       await firstWorkflow;
+      await waitForWorkflowStatus(service, "agent-session-1", "alex@example.com", "completed");
     } finally {
       releaseInspection();
       await service.close();
@@ -1990,6 +2083,8 @@ describe("workbook agent service", () => {
       });
 
       await runningPersisted;
+      const queuedSnapshot = await workflowPromise;
+      expect(queuedSnapshot.workflowRuns[0]?.status).toBe("running");
       const runningSnapshot = service.getSnapshot({
         documentId: "doc-1",
         sessionId: "agent-session-1",
@@ -2029,7 +2124,12 @@ describe("workbook agent service", () => {
       );
 
       releaseInspection();
-      const finalSnapshot = await workflowPromise;
+      const finalSnapshot = await waitForWorkflowStatus(
+        service,
+        "agent-session-1",
+        "alex@example.com",
+        "cancelled",
+      );
 
       expect(finalSnapshot.workflowRuns[0]).toEqual(
         expect.objectContaining({

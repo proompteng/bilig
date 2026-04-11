@@ -6,6 +6,7 @@ import type {
 } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
 import { findWorkbookFormulaIssues } from "./workbook-agent-comprehension.js";
+import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
 export interface FormulaWorkflowExecutionInput {
   readonly sheetName?: string;
@@ -165,7 +166,8 @@ export function getFormulaWorkflowTemplateMetadata(
           stepId: "stage-issue-highlights",
           label: "Stage issue highlights",
           runningSummary: "Staging semantic highlight commands for the detected formula issues.",
-          pendingSummary: "Waiting to stage semantic highlight commands for the detected formula issues.",
+          pendingSummary:
+            "Waiting to stage semantic highlight commands for the detected formula issues.",
         },
         {
           stepId: "draft-highlight-report",
@@ -184,18 +186,22 @@ export async function executeFormulaWorkflow(input: {
   zeroSyncService: ZeroSyncService;
   workflowTemplate: WorkbookAgentWorkflowTemplate;
   workflowInput?: FormulaWorkflowExecutionInput | null;
+  signal?: AbortSignal;
 }): Promise<FormulaWorkflowExecutionResult | null> {
-  if (input.workflowTemplate !== "findFormulaIssues" && input.workflowTemplate !== "highlightFormulaIssues") {
+  if (
+    input.workflowTemplate !== "findFormulaIssues" &&
+    input.workflowTemplate !== "highlightFormulaIssues"
+  ) {
     return null;
   }
-  const formulaIssues = await input.zeroSyncService.inspectWorkbook(
-    input.documentId,
-    (runtime) =>
-      findWorkbookFormulaIssues(runtime, {
-        ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
-        ...(input.workflowInput?.limit !== undefined ? { limit: input.workflowInput.limit } : {}),
-      }),
+  throwIfWorkflowCancelled(input.signal);
+  const formulaIssues = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
+    findWorkbookFormulaIssues(runtime, {
+      ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
+      ...(input.workflowInput?.limit !== undefined ? { limit: input.workflowInput.limit } : {}),
+    }),
   );
+  throwIfWorkflowCancelled(input.signal);
   const scopeLabel = input.workflowInput?.sheetName ? ` on ${input.workflowInput.sheetName}` : "";
   if (input.workflowTemplate === "findFormulaIssues") {
     return {

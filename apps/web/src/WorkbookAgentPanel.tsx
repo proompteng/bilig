@@ -745,8 +745,7 @@ function PendingBundleCard(props: {
         <div
           className={cn(
             workbookAlertClass({
-              tone:
-                props.sharedReviewStatus === "rejected" ? "danger" : "warning",
+              tone: props.sharedReviewStatus === "rejected" ? "danger" : "warning",
             }),
             "mt-2 border-[var(--wb-border-strong)] text-[11px] leading-5",
           )}
@@ -900,12 +899,18 @@ export function WorkbookAgentPanel(props: {
     >,
   ) => void;
   readonly onStartNamedWorkflow: (
-    template: Extract<WorkbookAgentWorkflowRun["workflowTemplate"], "createSheet" | "renameCurrentSheet">,
+    template: Extract<
+      WorkbookAgentWorkflowRun["workflowTemplate"],
+      "createSheet" | "renameCurrentSheet"
+    >,
     name: string,
   ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
   readonly onStartStructuralWorkflow: (
-    template: Extract<WorkbookAgentWorkflowRun["workflowTemplate"], "hideCurrentRow" | "hideCurrentColumn">,
+    template: Extract<
+      WorkbookAgentWorkflowRun["workflowTemplate"],
+      "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn"
+    >,
   ) => void;
   readonly onSubmit: () => void;
 }) {

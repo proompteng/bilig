@@ -48,6 +48,8 @@ type WorkbookAgentWorkflowStartRequest =
         | "searchWorkbookQuery"
         | "createSheet"
         | "renameCurrentSheet"
+        | "unhideCurrentRow"
+        | "unhideCurrentColumn"
       >;
     }
   | {
@@ -77,6 +79,12 @@ type WorkbookAgentWorkflowStartRequest =
   | {
       readonly workflowTemplate: "renameCurrentSheet";
       readonly name: string;
+    }
+  | {
+      readonly workflowTemplate: "unhideCurrentRow";
+    }
+  | {
+      readonly workflowTemplate: "unhideCurrentColumn";
     };
 
 interface WorkbookAgentLiveSession {

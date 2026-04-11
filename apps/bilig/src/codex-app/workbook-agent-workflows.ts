@@ -9,6 +9,7 @@ import type {
 } from "@bilig/contracts";
 import { ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
+import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 import {
   searchWorkbook,
   type WorkbookSearchReport,
@@ -638,11 +639,14 @@ export async function executeWorkbookAgentWorkflow(input: {
   workflowTemplate: WorkbookAgentWorkflowTemplate;
   context?: WorkbookAgentUiContext | null;
   workflowInput?: WorkbookAgentWorkflowExecutionInput | null;
+  signal?: AbortSignal;
 }): Promise<WorkbookAgentWorkflowExecutionResult> {
+  throwIfWorkflowCancelled(input.signal);
   const structuralResult = executeStructuralWorkflow({
     workflowTemplate: input.workflowTemplate,
     ...(input.context !== undefined ? { context: input.context } : {}),
     ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
   });
   if (structuralResult) {
     return structuralResult;
@@ -657,6 +661,7 @@ export async function executeWorkbookAgentWorkflow(input: {
     zeroSyncService: input.zeroSyncService,
     workflowTemplate: input.workflowTemplate,
     ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
   });
   if (formulaResult) {
     return formulaResult;
@@ -667,6 +672,7 @@ export async function executeWorkbookAgentWorkflow(input: {
     workflowTemplate: input.workflowTemplate,
     ...(input.context !== undefined ? { context: input.context } : {}),
     ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
   });
   if (importResult) {
     return importResult;
@@ -677,9 +683,11 @@ export async function executeWorkbookAgentWorkflow(input: {
   const workflowTemplate = input.workflowTemplate;
   switch (workflowTemplate) {
     case "summarizeWorkbook": {
+      throwIfWorkflowCancelled(input.signal);
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
         summarizeWorkbookStructure(runtime),
       );
+      throwIfWorkflowCancelled(input.signal);
       return {
         title: "Summarize Workbook",
         summary: `Summarized workbook structure across ${String(structure.summary.sheetCount)} sheet${structure.summary.sheetCount === 1 ? "" : "s"}.`,
@@ -708,9 +716,11 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!selection) {
         throw new Error("Selection context is required for current sheet summary workflows.");
       }
+      throwIfWorkflowCancelled(input.signal);
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
         summarizeWorkbookStructure(runtime),
       );
+      throwIfWorkflowCancelled(input.signal);
       const sheet = structure.sheets.find((candidate) => candidate.name === selection.sheetName);
       if (!sheet) {
         throw new Error(`Active sheet ${selection.sheetName} was not found in the workbook.`);
@@ -772,7 +782,9 @@ export async function executeWorkbookAgentWorkflow(input: {
       };
     }
     case "describeRecentChanges": {
+      throwIfWorkflowCancelled(input.signal);
       const changes = await input.zeroSyncService.listWorkbookChanges(input.documentId, 10);
+      throwIfWorkflowCancelled(input.signal);
       return {
         title: "Describe Recent Changes",
         summary:
@@ -810,6 +822,7 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!selection) {
         throw new Error("Selection context is required for dependency trace workflows.");
       }
+      throwIfWorkflowCancelled(input.signal);
       const dependencyTrace = await input.zeroSyncService.inspectWorkbook(
         input.documentId,
         (runtime) =>
@@ -818,6 +831,7 @@ export async function executeWorkbookAgentWorkflow(input: {
             address: selection.address,
           }),
       );
+      throwIfWorkflowCancelled(input.signal);
       const citedNodes = [
         dependencyTrace.root,
         ...dependencyTrace.layers.flatMap((layer) => [...layer.precedents, ...layer.dependents]),
@@ -869,6 +883,7 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!selection) {
         throw new Error("Selection context is required for current cell explanation workflows.");
       }
+      throwIfWorkflowCancelled(input.signal);
       const explanation = await input.zeroSyncService.inspectWorkbook(
         input.documentId,
         (runtime) => {
@@ -888,6 +903,7 @@ export async function executeWorkbookAgentWorkflow(input: {
           };
         },
       );
+      throwIfWorkflowCancelled(input.signal);
       return {
         title: "Explain Current Cell",
         summary: `Explained ${selection.sheetName}!${selection.address}, including direct precedents and dependents.`,
@@ -946,6 +962,7 @@ export async function executeWorkbookAgentWorkflow(input: {
       if (!query) {
         throw new Error("A query is required for workbook search workflows.");
       }
+      throwIfWorkflowCancelled(input.signal);
       const searchReport = await input.zeroSyncService.inspectWorkbook(
         input.documentId,
         (runtime) =>
@@ -957,6 +974,7 @@ export async function executeWorkbookAgentWorkflow(input: {
               : {}),
           }),
       );
+      throwIfWorkflowCancelled(input.signal);
       return {
         title: "Search Workbook",
         summary:

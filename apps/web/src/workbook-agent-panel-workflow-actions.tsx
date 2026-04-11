@@ -76,7 +76,10 @@ export function WorkflowActionStrip(props: {
   ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
   readonly onStartStructuralWorkflow: (
-    template: Extract<WorkbookAgentWorkflowTemplate, "hideCurrentRow" | "hideCurrentColumn">,
+    template: Extract<
+      WorkbookAgentWorkflowTemplate,
+      "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn"
+    >,
   ) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -116,9 +119,7 @@ export function WorkflowActionStrip(props: {
           </button>
         ))}
         <div className="grid gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
-          <div className="text-[11px] font-semibold text-[var(--wb-text)]">
-            Structural previews
-          </div>
+          <div className="text-[11px] font-semibold text-[var(--wb-text)]">Structural previews</div>
           <div className="text-[11px] leading-4 text-[var(--wb-text-subtle)]">
             Stage durable sheet and axis changes through the same preview/apply path as direct
             edits.
@@ -193,6 +194,28 @@ export function WorkflowActionStrip(props: {
               }}
             >
               {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
+            </button>
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" })}
+              data-testid="workbook-agent-workflow-start-unhideCurrentRow"
+              disabled={props.disabled || props.isStartingWorkflow}
+              type="button"
+              onClick={() => {
+                props.onStartStructuralWorkflow("unhideCurrentRow");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Unhide current row"}
+            </button>
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" })}
+              data-testid="workbook-agent-workflow-start-unhideCurrentColumn"
+              disabled={props.disabled || props.isStartingWorkflow}
+              type="button"
+              onClick={() => {
+                props.onStartStructuralWorkflow("unhideCurrentColumn");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Unhide current column"}
             </button>
           </div>
         </div>

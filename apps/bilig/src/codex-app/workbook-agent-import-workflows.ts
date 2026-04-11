@@ -7,6 +7,7 @@ import type {
 } from "@bilig/contracts";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { ZeroSyncService } from "../zero/service.js";
+import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
 type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders";
 
@@ -156,7 +157,8 @@ export function getImportWorkflowTemplateMetadata(
       {
         stepId: "stage-header-normalization",
         label: "Stage header normalization",
-        runningSummary: "Staging the semantic preview that normalizes the current sheet header row.",
+        runningSummary:
+          "Staging the semantic preview that normalizes the current sheet header row.",
         pendingSummary:
           "Waiting to stage the semantic preview that normalizes the current sheet header row.",
       },
@@ -176,6 +178,7 @@ export async function executeImportWorkflow(input: {
   readonly workflowTemplate: WorkbookAgentWorkflowTemplate | ImportWorkflowTemplate;
   readonly context?: WorkbookAgentUiContext | null;
   readonly workflowInput?: ImportWorkflowExecutionInput | null;
+  readonly signal?: AbortSignal;
 }): Promise<ImportWorkflowExecutionResult | null> {
   if (input.workflowTemplate !== "normalizeCurrentSheetHeaders") {
     return null;
@@ -188,7 +191,9 @@ export async function executeImportWorkflow(input: {
     throw new Error("Selection context is required for header normalization workflows.");
   }
 
+  throwIfWorkflowCancelled(input.signal);
   return await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) => {
+    throwIfWorkflowCancelled(input.signal);
     const snapshot = runtime.engine.exportSnapshot();
     const sheet = snapshot.sheets.find((candidate) => candidate.name === sheetName);
     if (!sheet) {
@@ -309,7 +314,9 @@ export async function executeImportWorkflow(input: {
           ? `Checked ${sheetName} headers and found no normalization changes to stage.`
           : `Staged normalized headers for ${String(changes.length)} cell${changes.length === 1 ? "" : "s"} on ${sheetName}.`,
       artifact,
-      citations: [createHeaderCitation(sheetName, headerStartAddress, headerEndAddress, citationRole)],
+      citations: [
+        createHeaderCitation(sheetName, headerStartAddress, headerEndAddress, citationRole),
+      ],
       steps: [
         {
           stepId: "inspect-header-row",

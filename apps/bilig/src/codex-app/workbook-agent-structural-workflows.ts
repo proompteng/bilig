@@ -6,12 +6,15 @@ import type {
   WorkbookAgentWorkflowArtifact,
   WorkbookAgentWorkflowTemplate,
 } from "@bilig/contracts";
+import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
 export type StructuralWorkflowTemplate =
   | "createSheet"
   | "renameCurrentSheet"
   | "hideCurrentRow"
-  | "hideCurrentColumn";
+  | "hideCurrentColumn"
+  | "unhideCurrentRow"
+  | "unhideCurrentColumn";
 
 interface StructuralWorkflowExecutionInput {
   readonly name?: string;
@@ -90,7 +93,9 @@ export function isStructuralWorkflowTemplate(
     workflowTemplate === "createSheet" ||
     workflowTemplate === "renameCurrentSheet" ||
     workflowTemplate === "hideCurrentRow" ||
-    workflowTemplate === "hideCurrentColumn"
+    workflowTemplate === "hideCurrentColumn" ||
+    workflowTemplate === "unhideCurrentRow" ||
+    workflowTemplate === "unhideCurrentColumn"
   );
 }
 
@@ -185,6 +190,46 @@ export function getStructuralWorkflowTemplateMetadata(
           },
         ],
       };
+    case "unhideCurrentRow":
+      return {
+        title: "Unhide Current Row",
+        runningSummary: "Preparing a structural preview bundle to unhide the current row.",
+        stepPlans: [
+          {
+            stepId: "resolve-current-row",
+            label: "Resolve current row",
+            runningSummary: "Resolving the selected row from the current workbook context.",
+            pendingSummary:
+              "Waiting to resolve the selected row from the current workbook context.",
+          },
+          {
+            stepId: "stage-row-visibility-preview",
+            label: "Stage row visibility preview",
+            runningSummary: "Staging the semantic preview that unhides the current row.",
+            pendingSummary: "Waiting to stage the semantic row-visibility preview.",
+          },
+        ],
+      };
+    case "unhideCurrentColumn":
+      return {
+        title: "Unhide Current Column",
+        runningSummary: "Preparing a structural preview bundle to unhide the current column.",
+        stepPlans: [
+          {
+            stepId: "resolve-current-column",
+            label: "Resolve current column",
+            runningSummary: "Resolving the selected column from the current workbook context.",
+            pendingSummary:
+              "Waiting to resolve the selected column from the current workbook context.",
+          },
+          {
+            stepId: "stage-column-visibility-preview",
+            label: "Stage column visibility preview",
+            runningSummary: "Staging the semantic preview that unhides the current column.",
+            pendingSummary: "Waiting to stage the semantic column-visibility preview.",
+          },
+        ],
+      };
     default:
       return null;
   }
@@ -194,10 +239,12 @@ export function executeStructuralWorkflow(input: {
   workflowTemplate: WorkbookAgentWorkflowTemplate;
   context?: WorkbookAgentUiContext | null;
   workflowInput?: StructuralWorkflowExecutionInput | null;
+  signal?: AbortSignal;
 }): StructuralWorkflowExecutionResult | null {
   if (!isStructuralWorkflowTemplate(input.workflowTemplate)) {
     return null;
   }
+  throwIfWorkflowCancelled(input.signal);
   switch (input.workflowTemplate) {
     case "createSheet": {
       const sheetName = requireWorkflowName(input.workflowInput);
@@ -358,6 +405,99 @@ export function executeStructuralWorkflow(input: {
           },
         ],
         goalText: `Hide column ${columnLabel} on ${sheetName}`,
+      };
+    }
+    case "unhideCurrentRow": {
+      const sheetName = requireSheetName(input.context);
+      const address = requireSelectionAddress(input.context);
+      const { row } = parseCellAddress(address);
+      return {
+        title: "Unhide Current Row",
+        summary: `Staged a structural preview bundle to unhide row ${String(row)} on ${sheetName}.`,
+        artifact: createMarkdownArtifact("Unhide Current Row Preview", [
+          "## Unhide Current Row Preview",
+          "",
+          `- Unhide row ${String(row)} on \`${sheetName}\`.`,
+          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+        ]),
+        citations: [
+          {
+            kind: "range",
+            sheetName,
+            startAddress: formatAddress(row, 0),
+            endAddress: formatAddress(row, 0),
+            role: "target",
+          },
+        ],
+        steps: [
+          {
+            stepId: "resolve-current-row",
+            label: "Resolve current row",
+            summary: `Resolved the selected row as ${String(row)} on ${sheetName}.`,
+          },
+          {
+            stepId: "stage-row-visibility-preview",
+            label: "Stage row visibility preview",
+            summary: `Staged the semantic preview that unhides row ${String(row)} on ${sheetName}.`,
+          },
+        ],
+        commands: [
+          {
+            kind: "updateRowMetadata",
+            sheetName,
+            startRow: row,
+            count: 1,
+            hidden: false,
+          },
+        ],
+        goalText: `Unhide row ${String(row)} on ${sheetName}`,
+      };
+    }
+    case "unhideCurrentColumn": {
+      const sheetName = requireSheetName(input.context);
+      const address = requireSelectionAddress(input.context);
+      const { col } = parseCellAddress(address);
+      const columnLabel = formatAddress(0, col).replace(/\d+/gu, "");
+      return {
+        title: "Unhide Current Column",
+        summary: `Staged a structural preview bundle to unhide column ${columnLabel} on ${sheetName}.`,
+        artifact: createMarkdownArtifact("Unhide Current Column Preview", [
+          "## Unhide Current Column Preview",
+          "",
+          `- Unhide column ${columnLabel} on \`${sheetName}\`.`,
+          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+        ]),
+        citations: [
+          {
+            kind: "range",
+            sheetName,
+            startAddress: formatAddress(0, col),
+            endAddress: formatAddress(0, col),
+            role: "target",
+          },
+        ],
+        steps: [
+          {
+            stepId: "resolve-current-column",
+            label: "Resolve current column",
+            summary: `Resolved the selected column as ${columnLabel} on ${sheetName}.`,
+          },
+          {
+            stepId: "stage-column-visibility-preview",
+            label: "Stage column visibility preview",
+            summary: `Staged the semantic preview that unhides column ${columnLabel} on ${sheetName}.`,
+          },
+        ],
+        commands: [
+          {
+            kind: "updateColumnMetadata",
+            sheetName,
+            startCol: col,
+            count: 1,
+            hidden: false,
+          },
+        ],
+        goalText: `Unhide column ${columnLabel} on ${sheetName}`,
       };
     }
     default:
