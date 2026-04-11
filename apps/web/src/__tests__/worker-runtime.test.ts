@@ -506,6 +506,7 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(bootstrap.restoredFromPersistence).toBe(false);
     expect(bootstrap.requiresAuthoritativeHydrate).toBe(false);
+    expect(bootstrap.localPersistenceMode).toBe("follower");
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Empty });
   });
 

@@ -594,6 +594,7 @@ export function useWorkerWorkbookAppState(input: {
     [selection.address, selection.sheetName],
   );
   const failedPendingMutation = runtimeState?.pendingMutationSummary?.firstFailed ?? null;
+  const localPersistenceMode = runtimeState?.localPersistenceMode ?? "ephemeral";
 
   const {
     headerStatus: toolbarHeaderStatus,
@@ -603,6 +604,7 @@ export function useWorkerWorkbookAppState(input: {
   } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
+    localPersistenceMode,
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
@@ -794,6 +796,7 @@ export function useWorkerWorkbookAppState(input: {
     sideRail,
     sideRailWidth,
     statusModeLabel,
+    localPersistenceMode,
     subscribeViewport,
     toggleBooleanCell,
     visibleEditorValue,

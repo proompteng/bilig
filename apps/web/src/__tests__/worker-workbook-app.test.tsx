@@ -92,6 +92,7 @@ describe("WorkerWorkbookApp", () => {
       remoteSyncAvailable: true,
       runtimeError: null,
       runtimeReady: false,
+      localPersistenceMode: "ephemeral",
       statusModeLabel: "Live",
       workbookReady: false,
       workerHandle: null,
@@ -128,6 +129,54 @@ describe("WorkerWorkbookApp", () => {
     });
 
     expect(retryFailedPendingMutation).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders follower mode messaging when another tab owns persistent local storage", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      clearAgentError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      editorConflictBanner: null,
+      failedPendingMutation: null,
+      retryFailedPendingMutation: vi.fn(),
+      remoteSyncAvailable: true,
+      runtimeError: null,
+      runtimeReady: true,
+      localPersistenceMode: "follower",
+      statusModeLabel: "Live",
+      workbookReady: false,
+      workerHandle: null,
+      zeroConfigured: true,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: "guest:test",
+            defaultDocumentId: "doc-1",
+            persistState: true,
+            zeroCacheUrl: "http://127.0.0.1:4848",
+          }}
+          connectionState={{ name: "connected" }}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("Another tab owns this workbook's persistent local store.");
+    expect(host.textContent).toContain("following live document state");
 
     await act(async () => {
       root.unmount();

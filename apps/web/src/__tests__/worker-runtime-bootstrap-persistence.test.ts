@@ -47,6 +47,7 @@ describe("worker runtime bootstrap persistence", () => {
       mutationJournalEntries: [],
       pendingMutations: [],
       nextPendingMutationSeq: 1,
+      localPersistenceMode: "ephemeral",
     });
   });
 
@@ -126,6 +127,7 @@ describe("worker runtime bootstrap persistence", () => {
       mutationJournalEntries: [],
       pendingMutations: [],
       nextPendingMutationSeq: 1,
+      localPersistenceMode: "follower",
     });
   });
 });

@@ -108,6 +108,7 @@ export interface WorkbookWorkerStateSnapshot {
   metrics: RecalcMetrics;
   syncState: SyncState;
   pendingMutationSummary?: WorkbookPendingMutationSummarySnapshot;
+  localPersistenceMode?: "persistent" | "ephemeral" | "follower";
 }
 
 export interface WorkbookFailedPendingMutationSnapshot {
@@ -127,6 +128,7 @@ export interface WorkbookWorkerBootstrapResult {
   runtimeState: WorkbookWorkerStateSnapshot;
   restoredFromPersistence: boolean;
   requiresAuthoritativeHydrate: boolean;
+  localPersistenceMode?: "persistent" | "ephemeral" | "follower";
 }
 
 export interface InstallAuthoritativeSnapshotInput {
@@ -153,6 +155,7 @@ export class WorkbookWorkerRuntime {
   private authoritativeRevision = 0;
   private projectionMatchesLocalStore = false;
   private projectionOverlayScope: ProjectionOverlayScope | null = null;
+  private localPersistenceMode: "persistent" | "ephemeral" | "follower" = "ephemeral";
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches();
   private readonly viewportTileStore = new WorkerViewportTileStore();
   private readonly viewportPatchPublisher = new WorkerViewportPatchPublisher({
@@ -255,6 +258,7 @@ export class WorkbookWorkerRuntime {
       documentId: options.documentId,
       localStoreFactory: this.localStoreFactory,
     });
+    this.localPersistenceMode = restoredPersistence.localPersistenceMode;
     this.localStore = restoredPersistence.localStore;
     this.authoritativeRevision = restoredPersistence.authoritativeRevision;
     this.mutationJournal.restoreFromBootstrap({
@@ -283,7 +287,10 @@ export class WorkbookWorkerRuntime {
 
     if (shouldDeferProjectionEngineBootstrap && restoredBootstrapState !== null) {
       this.authoritativeStateSource = "localStore";
-      this.runtimeStateCache = buildWorkerRuntimeStateFromBootstrap(restoredBootstrapState);
+      this.runtimeStateCache = buildWorkerRuntimeStateFromBootstrap({
+        ...restoredBootstrapState,
+        localPersistenceMode: this.localPersistenceMode,
+      });
     } else {
       restoredState = this.localStore ? await this.localStore.loadState() : null;
       const parsedRestoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot)
@@ -313,6 +320,7 @@ export class WorkbookWorkerRuntime {
       runtimeState: this.getRuntimeState(),
       restoredFromPersistence,
       requiresAuthoritativeHydrate,
+      localPersistenceMode: this.localPersistenceMode,
     };
   }
 
@@ -327,6 +335,7 @@ export class WorkbookWorkerRuntime {
           metrics: cachedState.metrics,
           syncState: cachedState.syncState,
           pendingMutationSummary: this.buildPendingMutationSummary(),
+          localPersistenceMode: this.localPersistenceMode,
         },
         this.externalSyncState,
       );
@@ -334,6 +343,7 @@ export class WorkbookWorkerRuntime {
     const engine = this.requireEngine();
     return this.storeRuntimeState({
       ...buildWorkerRuntimeStateFromEngine(engine),
+      localPersistenceMode: this.localPersistenceMode,
     });
   }
 

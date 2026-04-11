@@ -35,6 +35,7 @@ const DEFAULT_BORDER_SIDE = {
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState["name"];
   runtimeReady: boolean;
+  localPersistenceMode?: "persistent" | "ephemeral" | "follower";
   remoteSyncAvailable: boolean;
   zeroConfigured: boolean;
   zeroHealthReady: boolean;
@@ -61,6 +62,7 @@ export function useWorkbookToolbar(input: {
   const {
     connectionStateName,
     runtimeReady,
+    localPersistenceMode,
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
@@ -111,19 +113,22 @@ export function useWorkbookToolbar(input: {
   );
   const statusModeLabel = formatConnectionStateLabel(connectionStateName);
   const statusModeValue = remoteSyncAvailable ? "Live" : statusModeLabel;
-  const statusSyncValue = !runtimeReady
-    ? "Loading"
-    : !zeroConfigured
-      ? "Local"
-      : connectionStateName === "connected"
-        ? zeroHealthReady
-          ? "Ready"
-          : "Syncing"
-        : connectionStateName === "connecting"
-          ? "Syncing"
-          : connectionStateName === "disconnected"
-            ? "Local"
-            : "Unavailable";
+  const statusSyncValue =
+    localPersistenceMode === "follower"
+      ? "Follower"
+      : !runtimeReady
+        ? "Loading"
+        : !zeroConfigured
+          ? "Local"
+          : connectionStateName === "connected"
+            ? zeroHealthReady
+              ? "Ready"
+              : "Syncing"
+            : connectionStateName === "connecting"
+              ? "Syncing"
+              : connectionStateName === "disconnected"
+                ? "Local"
+                : "Unavailable";
   const statusChipClass =
     "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
 

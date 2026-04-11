@@ -2,9 +2,10 @@ import { MessageChannel } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkerEngineHost } from "@bilig/worker-transport";
 import { formatAddress } from "@bilig/formula";
-import type {
-  WorkbookLocalMutationRecord,
-  WorkbookLocalStoreFactory,
+import {
+  WorkbookLocalStoreLockedError,
+  type WorkbookLocalMutationRecord,
+  type WorkbookLocalStoreFactory,
 } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ErrorCode, isWorkbookSnapshot, ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
@@ -541,6 +542,7 @@ describe("createWorkerRuntimeSessionController", () => {
         requiresAuthoritativeHydrate: false,
       }),
     );
+    expect(controller.runtimeState.localPersistenceMode).toBe("persistent");
     expect(perfSession.markFirstSelectionVisible).toHaveBeenCalledTimes(1);
     expect(perfSession.markFirstAuthoritativePatchVisible).not.toHaveBeenCalled();
 
@@ -589,6 +591,7 @@ describe("createWorkerRuntimeSessionController", () => {
         restoredFromPersistence: false,
       }),
     );
+    expect(controller.runtimeState.localPersistenceMode).toBe("persistent");
     expect(perfSession.markFirstAuthoritativePatchVisible).toHaveBeenCalledTimes(1);
     expect(controller.runtimeState.sheetNames).toEqual(["Sheet1"]);
 
@@ -660,6 +663,43 @@ describe("createWorkerRuntimeSessionController", () => {
       tag: ValueTag.Number,
       value: 17,
     });
+
+    controller.dispose();
+  });
+
+  it("surfaces follower persistence mode when the local store is locked by another tab", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          throw new WorkbookLocalStoreLockedError("locked");
+        },
+      },
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(
+          async () =>
+            new Response(null, {
+              status: 204,
+            }),
+        ),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    expect(controller.runtimeState.localPersistenceMode).toBe("follower");
 
     controller.dispose();
   });

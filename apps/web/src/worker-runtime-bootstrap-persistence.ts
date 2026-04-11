@@ -16,6 +16,7 @@ export interface WorkerRuntimeBootstrapPersistenceResult {
   mutationJournalEntries: PendingWorkbookMutation[];
   pendingMutations: PendingWorkbookMutation[];
   nextPendingMutationSeq: number;
+  localPersistenceMode: "persistent" | "ephemeral" | "follower";
 }
 
 export async function restoreBootstrapPersistence(args: {
@@ -33,6 +34,7 @@ export async function restoreBootstrapPersistence(args: {
       mutationJournalEntries: [],
       pendingMutations: [],
       nextPendingMutationSeq: 1,
+      localPersistenceMode: "ephemeral",
     };
   }
 
@@ -46,6 +48,17 @@ export async function restoreBootstrapPersistence(args: {
     if (!(error instanceof WorkbookLocalStoreLockedError)) {
       throw error;
     }
+    return {
+      localStore: null,
+      restoredFromPersistence: false,
+      restoredBootstrapState: null,
+      authoritativeRevision: 0,
+      appliedPendingLocalSeq: 0,
+      mutationJournalEntries: [],
+      pendingMutations: [],
+      nextPendingMutationSeq: 1,
+      localPersistenceMode: "follower",
+    };
   }
 
   const persistedPendingMutations = localStore ? await localStore.listMutationJournalEntries() : [];
@@ -68,5 +81,6 @@ export async function restoreBootstrapPersistence(args: {
         appliedPendingLocalSeq,
         persistedPendingMutations.reduce((max, mutation) => Math.max(max, mutation.localSeq), 0),
       ) + 1,
+    localPersistenceMode: localStore ? "persistent" : "ephemeral",
   };
 }

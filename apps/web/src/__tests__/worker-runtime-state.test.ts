@@ -32,12 +32,14 @@ describe("worker runtime state helpers", () => {
       ],
       metrics: EMPTY_RUNTIME_METRICS,
       syncState: "local",
+      localPersistenceMode: "persistent",
     });
 
     const publicState = withExternalSyncState(cachedState, "syncing");
 
     expect(publicState.syncState).toBe("syncing");
     expect(cachedState.syncState).toBe("local");
+    expect(publicState.localPersistenceMode).toBe("persistent");
     expect(publicState.metrics).not.toBe(cachedState.metrics);
     expect(publicState.definedNames).not.toBe(cachedState.definedNames);
     expect(publicState.definedNames).toEqual(cachedState.definedNames);
@@ -48,6 +50,7 @@ describe("worker runtime state helpers", () => {
       buildWorkerRuntimeStateFromBootstrap({
         workbookName: "Book",
         sheetNames: ["Sheet1"],
+        localPersistenceMode: "follower",
       }),
     ).toEqual({
       workbookName: "Book",
@@ -55,6 +58,7 @@ describe("worker runtime state helpers", () => {
       definedNames: [],
       metrics: EMPTY_RUNTIME_METRICS,
       syncState: "syncing",
+      localPersistenceMode: "follower",
     });
   });
 });

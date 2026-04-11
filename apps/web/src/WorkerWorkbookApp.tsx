@@ -124,6 +124,13 @@ function WorkerWorkbookAppInner({
           degraded.
         </div>
       ) : null}
+      {app.localPersistenceMode === "follower" ? (
+        <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
+          Another tab owns this workbook's persistent local store. This tab is following live
+          document state and edits here will not survive offline periods unless the writer tab is
+          transferred or closed.
+        </div>
+      ) : null}
       {app.editorConflictBanner}
       <div className="relative flex min-h-0 flex-1">
         <WorkbookToastRegion toasts={toasts} />

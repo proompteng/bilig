@@ -104,6 +104,7 @@ function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnaps
     definedNames: [],
     metrics: EMPTY_METRICS,
     syncState: "syncing",
+    localPersistenceMode: "ephemeral",
     pendingMutationSummary: {
       activeCount: 0,
       failedCount: 0,
@@ -127,7 +128,11 @@ function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerS
     Array.isArray(value["definedNames"]) &&
     typeof value["metrics"] === "object" &&
     value["metrics"] !== null &&
-    typeof value["syncState"] === "string"
+    typeof value["syncState"] === "string" &&
+    (value["localPersistenceMode"] === undefined ||
+      value["localPersistenceMode"] === "persistent" ||
+      value["localPersistenceMode"] === "ephemeral" ||
+      value["localPersistenceMode"] === "follower")
   );
 }
 
@@ -138,6 +143,10 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
   return (
     typeof value["restoredFromPersistence"] === "boolean" &&
     typeof value["requiresAuthoritativeHydrate"] === "boolean" &&
+    (value["localPersistenceMode"] === undefined ||
+      value["localPersistenceMode"] === "persistent" ||
+      value["localPersistenceMode"] === "ephemeral" ||
+      value["localPersistenceMode"] === "follower") &&
     isWorkbookWorkerStateSnapshot(value["runtimeState"])
   );
 }
