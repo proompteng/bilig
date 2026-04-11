@@ -7,7 +7,9 @@ import {
   errorValue,
   literalToValue,
   pivotItemMatches,
+  writeLiteralToCellStore,
 } from "../engine-value-utils.js";
+import { CellStore } from "../cell-store.js";
 import { StringPool } from "../string-pool.js";
 
 describe("engine value utils", () => {
@@ -22,6 +24,34 @@ describe("engine value utils", () => {
       value: "hello",
       stringId: strings.intern("hello"),
     });
+  });
+
+  it("writes literal inputs directly into the cell store", () => {
+    const strings = new StringPool();
+    const store = new CellStore();
+    const index = store.allocate(1, 0, 0);
+
+    writeLiteralToCellStore(store, index, 42, strings);
+    expect(store.getValue(index, (id) => strings.get(id))).toEqual({
+      tag: ValueTag.Number,
+      value: 42,
+    });
+
+    writeLiteralToCellStore(store, index, true, strings);
+    expect(store.getValue(index, (id) => strings.get(id))).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    });
+
+    writeLiteralToCellStore(store, index, "hello", strings);
+    expect(store.getValue(index, (id) => strings.get(id))).toEqual({
+      tag: ValueTag.String,
+      value: "hello",
+      stringId: strings.intern("hello"),
+    });
+
+    writeLiteralToCellStore(store, index, null, strings);
+    expect(store.getValue(index, (id) => strings.get(id))).toEqual(emptyValue());
   });
 
   it("compares cell values with numeric identity semantics", () => {

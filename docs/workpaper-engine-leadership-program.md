@@ -136,19 +136,20 @@ Current measured values from local repo artifacts and docs:
 - `bilig` canonical formula production closure:
   - `300/300` rows = `100%`
   - directly comparable benchmark record:
-  - `WorkPaper` wins: `3/6`
-  - HyperFormula wins: `3/6`
+  - `WorkPaper` wins: `4/6`
+  - HyperFormula wins: `2/6`
   - current `WorkPaper` direct wins on this host:
-    - build-from-sheets at `4.46x` faster
-    - range-read at `1.10x` faster
-    - lookup without column indexing at `1.53x` faster
-  - HyperFormula current win range on this host: `1.10x` to `2.40x`
+    - build-from-sheets at `4.11x` faster
+    - single-edit recalculation at `1.05x` faster
+    - range-read at `1.05x` faster
+    - lookup without column indexing at `1.40x` faster
+  - HyperFormula current win range on this host: `1.29x` to `1.54x`
   - notable improvements from the latest tranches:
-    - build-from-sheets improved from `6.95x` slower to a `WorkPaper` win at `4.46x` faster
-    - batch-edit recalculation improved from `1000.39x` slower to `2.40x` slower after hot-loop `Effect` crossings were removed from the internal engine runtime, simple-cell history capture was specialized, deferred literal batch undo stopped using the generic engine path, deferred local literal batches stopped emitting restore-style full invalidations, and coordinate-native simple-cell mutation landed in core
-    - single-edit recalculation improved to `1.42x` slower after large fresh-workbook formula sets started bootstrapping the WASM kernel synchronously on Node/Bun, public mutation entrypoints stopped routing through the generic `Effect` wrapper, and coordinate-native simple-cell mutation paths stopped reparsing `sheetName + A1` on the engine hot path
-    - lookup without column indexing improved from `134.35x` slower to a `WorkPaper` win at `1.53x` faster after the headless full-workbook diff path was removed from ordinary edits and the mutation pipeline stopped paying per-op internal `Effect` crossings
-    - lookup with `useColumnIndex` improved from `134.35x` slower to `1.10x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, eager index priming, literal-only direct initialization, trusted owned-op execution, synchronous internal engine wiring, thresholded fresh-workbook kernel bootstrap, cheaper public mutation dispatch, and coordinate-native simple-cell mutation landed
+    - build-from-sheets improved from `6.95x` slower to a `WorkPaper` win at `4.11x` faster
+    - batch-edit recalculation improved from `1000.39x` slower to `1.54x` slower after hot-loop `Effect` crossings were removed from the internal engine runtime, simple-cell history capture was specialized, deferred literal batch undo stopped using the generic engine path, coordinate-native simple-cell mutation landed in core, plain literal overwrites got a dedicated fast path, and column-version invalidation started batching across local mutation bursts
+    - single-edit recalculation improved from `1.42x` slower to a `WorkPaper` win at `1.05x` faster after large fresh-workbook formula sets started bootstrapping the WASM kernel synchronously on Node/Bun, public mutation entrypoints stopped routing through the generic `Effect` wrapper, coordinate-native simple-cell mutation paths stopped reparsing `sheetName + A1` on the engine hot path, and local-only headless engine instances stopped paying replica-version bookkeeping
+    - lookup without column indexing improved from `134.35x` slower to a `WorkPaper` win at `1.40x` faster after the headless full-workbook diff path was removed from ordinary edits and the mutation pipeline stopped paying per-op internal `Effect` crossings
+    - lookup with `useColumnIndex` improved from `134.35x` slower to `1.29x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, eager index priming, literal-only direct initialization, trusted owned-op execution, synchronous internal engine wiring, thresholded fresh-workbook kernel bootstrap, cheaper public mutation dispatch, and coordinate-native simple-cell mutation landed
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -373,12 +374,12 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- batch-edit recalculation: HyperFormula currently leads by `2.40x`
-- single-edit recalculation: HyperFormula currently leads by `1.42x`
-- lookup with column indexing: HyperFormula currently leads by `1.10x`
-- lookup without column indexing: `WorkPaper` currently leads by `1.53x`
-- range-read: `WorkPaper` currently leads by `1.10x`
-- build from sheets: `WorkPaper` currently leads by `4.46x`
+- batch-edit recalculation: HyperFormula currently leads by `1.54x`
+- lookup with column indexing: HyperFormula currently leads by `1.29x`
+- single-edit recalculation: `WorkPaper` currently leads by `1.05x`
+- lookup without column indexing: `WorkPaper` currently leads by `1.40x`
+- range-read: `WorkPaper` currently leads by `1.05x`
+- build from sheets: `WorkPaper` currently leads by `4.11x`
 
 The important trend changes are:
 

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { formatAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import { ValueTag, type CellRangeRef, type EngineEvent } from "@bilig/protocol";
+import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
 import { makeCellEntity } from "../../entity-ids.js";
 import {
@@ -12,7 +12,7 @@ import {
   type OpOrder,
 } from "../../replica-state.js";
 import { CellFlags } from "../../cell-store.js";
-import { emptyValue, literalToValue } from "../../engine-value-utils.js";
+import { emptyValue, writeLiteralToCellStore } from "../../engine-value-utils.js";
 import { spillDependencyKey, tableDependencyKey } from "../../engine-metadata-utils.js";
 import {
   makeCellKey,
@@ -57,6 +57,27 @@ export interface EngineOperationService {
   readonly applyDerivedOp: (op: DerivedOp) => Effect.Effect<number[], EngineMutationError>;
 }
 
+interface VersionStore {
+  get(key: string): OpOrder | undefined;
+  set(key: string, value: OpOrder): void;
+}
+
+const noopVersionStore: VersionStore = {
+  get() {
+    return undefined;
+  },
+  set() {
+    return;
+  },
+};
+
+const FAST_LITERAL_OVERWRITE_FLAGS =
+  CellFlags.HasFormula |
+  CellFlags.JsOnly |
+  CellFlags.InCycle |
+  CellFlags.SpillChild |
+  CellFlags.PivotOutput;
+
 function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
@@ -90,6 +111,7 @@ export function createEngineOperationService(args: {
     | "sheetDeleteVersions"
     | "batchListeners"
     | "redoStack"
+    | "trackReplicaVersions"
     | "getSyncClientConnection"
     | "getLastMetrics"
     | "setLastMetrics"
@@ -164,6 +186,30 @@ export function createEngineOperationService(args: {
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
     args.state.batchListeners.forEach((listener) => listener(batch));
+  };
+  const entityVersions: VersionStore = args.state.trackReplicaVersions
+    ? args.state.entityVersions
+    : noopVersionStore;
+  const sheetDeleteVersions: VersionStore = args.state.trackReplicaVersions
+    ? args.state.sheetDeleteVersions
+    : noopVersionStore;
+  const setEntityVersionForOp = (op: EngineOp, order: OpOrder): void => {
+    if (!args.state.trackReplicaVersions) {
+      return;
+    }
+    entityVersions.set(entityKeyForOp(op), order);
+  };
+  const setCellEntityVersion = (sheetName: string, address: string, order: OpOrder): void => {
+    if (!args.state.trackReplicaVersions) {
+      return;
+    }
+    entityVersions.set(`cell:${sheetName}!${address}`, order);
+  };
+  const setSheetDeleteVersion = (sheetName: string, order: OpOrder): void => {
+    if (!args.state.trackReplicaVersions) {
+      return;
+    }
+    sheetDeleteVersions.set(sheetName, order);
   };
 
   const pruneCellIfOrphaned = (cellIndex: number): void => {
@@ -240,6 +286,13 @@ export function createEngineOperationService(args: {
         return assertNever(op);
     }
   };
+  const canFastPathLiteralOverwrite = (cellIndex: number): boolean => {
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
+    return (
+      (flags & FAST_LITERAL_OVERWRITE_FLAGS) === 0 &&
+      args.state.formulas.get(cellIndex) === undefined
+    );
+  };
 
   const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => {
     switch (op.kind) {
@@ -274,21 +327,20 @@ export function createEngineOperationService(args: {
       case "upsertSpillRange":
       case "deleteSpillRange":
       case "deletePivotTable":
-        return args.state.sheetDeleteVersions.get(op.sheetName);
+        return sheetDeleteVersions.get(op.sheetName);
       case "setStyleRange":
       case "setFormatRange":
-        return args.state.sheetDeleteVersions.get(op.range.sheetName);
+        return sheetDeleteVersions.get(op.range.sheetName);
       case "upsertCellNumberFormat":
       case "upsertCellStyle":
         return undefined;
       case "upsertSheet":
-        return args.state.sheetDeleteVersions.get(op.name);
+        return sheetDeleteVersions.get(op.name);
       case "renameSheet":
-        return args.state.sheetDeleteVersions.get(op.oldName);
+        return sheetDeleteVersions.get(op.oldName);
       case "upsertPivotTable":
         return (
-          args.state.sheetDeleteVersions.get(op.sheetName) ??
-          args.state.sheetDeleteVersions.get(op.source.sheetName)
+          sheetDeleteVersions.get(op.sheetName) ?? sheetDeleteVersions.get(op.source.sheetName)
         );
       default:
         return assertNever(op);
@@ -300,7 +352,7 @@ export function createEngineOperationService(args: {
     if (sheetDeleteOrder && compareOpOrder(order, sheetDeleteOrder) <= 0) {
       return false;
     }
-    const existingOrder = args.state.entityVersions.get(entityKeyForOp(op));
+    const existingOrder = entityVersions.get(entityKeyForOp(op));
     if (existingOrder && compareOpOrder(order, existingOrder) <= 0) {
       return false;
     }
@@ -316,7 +368,7 @@ export function createEngineOperationService(args: {
     } else {
       args.state.workbook.deleteSpill(op.sheetName, op.address);
     }
-    args.state.entityVersions.set(entityKeyForOp(op), order);
+    setEntityVersionForOp(op, order);
     return collectTrackedDependents(args.reverseState.reverseSpillEdges, [
       spillDependencyKey(op.sheetName, op.address),
     ]);
@@ -336,7 +388,7 @@ export function createEngineOperationService(args: {
       rows: op.rows,
       cols: op.cols,
     });
-    args.state.entityVersions.set(entityKeyForOp(op), order);
+    setEntityVersionForOp(op, order);
   };
 
   const applyPivotDeleteOp = (
@@ -345,12 +397,12 @@ export function createEngineOperationService(args: {
   ): number[] => {
     const pivot = args.state.workbook.getPivot(op.sheetName, op.address);
     if (!pivot) {
-      args.state.entityVersions.set(entityKeyForOp(op), order);
+      setEntityVersionForOp(op, order);
       return [];
     }
     const changedPivotOutputs = args.clearOwnedPivot(pivot);
     args.state.workbook.deletePivot(op.sheetName, op.address);
-    args.state.entityVersions.set(entityKeyForOp(op), order);
+    setEntityVersionForOp(op, order);
     return changedPivotOutputs;
   };
 
@@ -412,24 +464,24 @@ export function createEngineOperationService(args: {
         switch (op.kind) {
           case "upsertWorkbook":
             args.state.workbook.workbookName = op.name;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setWorkbookMetadata":
             args.state.workbook.setWorkbookProperty(op.key, op.value);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setCalculationSettings":
             args.state.workbook.setCalculationSettings(op.settings);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setVolatileContext":
             args.state.workbook.setVolatileContext(op.context);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "upsertSheet": {
             args.state.workbook.createSheet(op.name, op.order, op.id);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
-            const tombstone = args.state.sheetDeleteVersions.get(op.name);
+            setEntityVersionForOp(op, order);
+            const tombstone = sheetDeleteVersions.get(op.name);
             if (!tombstone || compareOpOrder(order, tombstone) > 0) {
               args.state.sheetDeleteVersions.delete(op.name);
             }
@@ -441,10 +493,12 @@ export function createEngineOperationService(args: {
           }
           case "renameSheet": {
             const renamedSheet = args.state.workbook.renameSheet(op.oldName, op.newName);
-            args.state.entityVersions.set(`sheet:${op.oldName}`, order);
-            args.state.entityVersions.set(`sheet:${op.newName}`, order);
-            args.state.sheetDeleteVersions.set(op.oldName, order);
-            const renamedTombstone = args.state.sheetDeleteVersions.get(op.newName);
+            if (args.state.trackReplicaVersions) {
+              entityVersions.set(`sheet:${op.oldName}`, order);
+              entityVersions.set(`sheet:${op.newName}`, order);
+            }
+            setSheetDeleteVersion(op.oldName, order);
+            const renamedTombstone = sheetDeleteVersions.get(op.newName);
             if (!renamedTombstone || compareOpOrder(order, renamedTombstone) > 0) {
               args.state.sheetDeleteVersions.delete(op.newName);
             }
@@ -472,8 +526,8 @@ export function createEngineOperationService(args: {
             changedInputCount += removal.changedInputCount;
             formulaChangedCount += removal.formulaChangedCount;
             explicitChangedCount = removal.explicitChangedCount;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
-            args.state.sheetDeleteVersions.set(op.name, order);
+            setEntityVersionForOp(op, order);
+            setSheetDeleteVersion(op.name, order);
             topologyChanged = true;
             sheetDeleted = true;
             structuralInvalidation = true;
@@ -496,7 +550,7 @@ export function createEngineOperationService(args: {
             topologyChanged = true;
             structuralInvalidation = true;
             refreshAllPivots = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "updateRowMetadata":
@@ -512,7 +566,7 @@ export function createEngineOperationService(args: {
               startIndex: op.start,
               endIndex: op.start + op.count - 1,
             });
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "updateColumnMetadata":
             args.state.workbook.setColumnMetadata(
@@ -527,37 +581,37 @@ export function createEngineOperationService(args: {
               startIndex: op.start,
               endIndex: op.start + op.count - 1,
             });
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setFreezePane":
             args.state.workbook.setFreezePane(op.sheetName, op.rows, op.cols);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "clearFreezePane":
             args.state.workbook.clearFreezePane(op.sheetName);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setFilter":
             args.state.workbook.setFilter(op.sheetName, op.range);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "clearFilter":
             args.state.workbook.deleteFilter(op.sheetName, op.range);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setSort":
             args.state.workbook.setSort(op.sheetName, op.range, op.keys);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "clearSort":
             args.state.workbook.deleteSort(op.sheetName, op.range);
             structuralInvalidation = true;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "upsertTable": {
             args.state.workbook.setTable(op.table);
@@ -567,7 +621,7 @@ export function createEngineOperationService(args: {
               formulaChangedCount,
             );
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "deleteTable": {
@@ -578,7 +632,7 @@ export function createEngineOperationService(args: {
               formulaChangedCount,
             );
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "upsertSpillRange":
@@ -609,11 +663,11 @@ export function createEngineOperationService(args: {
               );
               topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
             }
-            const value = literalToValue(op.value, args.state.strings);
-            args.state.workbook.cellStore.setValue(
+            writeLiteralToCellStore(
+              args.state.workbook.cellStore,
               cellIndex,
-              value,
-              value.tag === ValueTag.String ? value.stringId : 0,
+              op.value,
+              args.state.strings,
             );
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
@@ -630,7 +684,7 @@ export function createEngineOperationService(args: {
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             if (!isRestore) {
               explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-              args.state.entityVersions.set(entityKeyForOp(op), order);
+              setEntityVersionForOp(op, order);
             }
             break;
           }
@@ -669,7 +723,7 @@ export function createEngineOperationService(args: {
             }
             if (!isRestore) {
               explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-              args.state.entityVersions.set(entityKeyForOp(op), order);
+              setEntityVersionForOp(op, order);
             }
             break;
           }
@@ -679,32 +733,32 @@ export function createEngineOperationService(args: {
             if (!isRestore) {
               pruneCellIfOrphaned(cellIndex);
               explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-              args.state.entityVersions.set(entityKeyForOp(op), order);
+              setEntityVersionForOp(op, order);
             }
             break;
           }
           case "upsertCellStyle":
             args.state.workbook.upsertCellStyle(op.style);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "upsertCellNumberFormat":
             args.state.workbook.upsertCellNumberFormat(op.format);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setStyleRange":
             args.state.workbook.setStyleRange(op.range, op.styleId);
             invalidatedRanges.push(op.range);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "setFormatRange":
             args.state.workbook.setFormatRange(op.range, op.formatId);
             invalidatedRanges.push(op.range);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           case "clearCell": {
             const cellIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
             if (cellIndex === undefined) {
-              args.state.entityVersions.set(entityKeyForOp(op), order);
+              setEntityVersionForOp(op, order);
               break;
             }
             changedInputCount = args.markPivotRootsChanged(
@@ -729,7 +783,7 @@ export function createEngineOperationService(args: {
             pruneCellIfOrphaned(cellIndex);
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "upsertDefinedName": {
@@ -741,7 +795,7 @@ export function createEngineOperationService(args: {
               formulaChangedCount,
             );
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "deleteDefinedName": {
@@ -753,7 +807,7 @@ export function createEngineOperationService(args: {
               formulaChangedCount,
             );
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
-            args.state.entityVersions.set(entityKeyForOp(op), order);
+            setEntityVersionForOp(op, order);
             break;
           }
           case "upsertPivotTable":
@@ -812,7 +866,7 @@ export function createEngineOperationService(args: {
       compileMs,
     };
     args.state.setLastMetrics(lastMetrics);
-    const event = {
+    const event: EngineEvent & { explicitChangedCount: number } = {
       kind: "batch",
       invalidation: isRestore || sheetDeleted || structuralInvalidation ? "full" : "cells",
       changedCellIndices: changed,
@@ -820,7 +874,8 @@ export function createEngineOperationService(args: {
       invalidatedRows,
       invalidatedColumns,
       metrics: lastMetrics,
-    } satisfies EngineEvent;
+      explicitChangedCount,
+    };
     if (event.invalidation === "full") {
       args.state.events.emitAllWatched(event);
     } else {
@@ -869,119 +924,177 @@ export function createEngineOperationService(args: {
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
     try {
-      refs.forEach((ref, refIndex) => {
-        const { sheetId, mutation } = ref;
-        const sheetName = resolveSheetName(sheetId);
-        const address = formatAddress(mutation.row, mutation.col);
-        const order = batchOpOrder(batch, refIndex);
-        const existingIndex = args.state.workbook.cellKeyToIndex.get(
-          makeCellKey(sheetId, mutation.row, mutation.col),
-        );
+      args.state.workbook.withBatchedColumnVersionUpdates(() => {
+        refs.forEach((ref, refIndex) => {
+          const { sheetId, mutation } = ref;
+          const order = batchOpOrder(batch, refIndex);
+          const existingIndex = args.state.workbook.cellKeyToIndex.get(
+            makeCellKey(sheetId, mutation.row, mutation.col),
+          );
 
-        switch (mutation.kind) {
-          case "setCellValue": {
-            if (existingIndex !== undefined) {
-              changedInputCount = args.markPivotRootsChanged(
-                args.clearPivotForCell(existingIndex),
+          switch (mutation.kind) {
+            case "setCellValue": {
+              if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
+                writeLiteralToCellStore(
+                  args.state.workbook.cellStore,
+                  existingIndex,
+                  mutation.value,
+                  args.state.strings,
+                );
+                changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
+                explicitChangedCount = args.markExplicitChanged(
+                  existingIndex,
+                  explicitChangedCount,
+                );
+                if (args.state.trackReplicaVersions) {
+                  setCellEntityVersion(
+                    resolveSheetName(sheetId),
+                    formatAddress(mutation.row, mutation.col),
+                    order,
+                  );
+                }
+                break;
+              }
+              if (existingIndex !== undefined) {
+                changedInputCount = args.markPivotRootsChanged(
+                  args.clearPivotForCell(existingIndex),
+                  changedInputCount,
+                );
+              }
+              const cellIndex = args.state.workbook.ensureCellAt(
+                sheetId,
+                mutation.row,
+                mutation.col,
+              ).cellIndex;
+              changedInputCount = args.markSpillRootsChanged(
+                args.clearOwnedSpill(cellIndex),
                 changedInputCount,
               );
-            }
-            const cellIndex = args.state.workbook.ensureCellAt(
-              sheetId,
-              mutation.row,
-              mutation.col,
-            ).cellIndex;
-            changedInputCount = args.markSpillRootsChanged(
-              args.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
-            const value = literalToValue(mutation.value, args.state.strings);
-            args.state.workbook.cellStore.setValue(
-              cellIndex,
-              value,
-              value.tag === ValueTag.String ? value.stringId : 0,
-            );
-            args.state.workbook.cellStore.flags[cellIndex] =
-              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput
-              );
-            pruneCellIfOrphaned(cellIndex);
-            changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
-            break;
-          }
-          case "setCellFormula": {
-            if (existingIndex !== undefined) {
-              changedInputCount = args.markPivotRootsChanged(
-                args.clearPivotForCell(existingIndex),
-                changedInputCount,
-              );
-            }
-            const cellIndex = args.state.workbook.ensureCellAt(
-              sheetId,
-              mutation.row,
-              mutation.col,
-            ).cellIndex;
-            changedInputCount = args.markSpillRootsChanged(
-              args.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            const compileStarted = performance.now();
-            try {
-              args.bindFormula(cellIndex, sheetName, mutation.formula);
-              compileMs += performance.now() - compileStarted;
-              formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
-              topologyChanged = true;
-            } catch {
-              compileMs += performance.now() - compileStarted;
               topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
-              args.setInvalidFormulaValue(cellIndex);
+              writeLiteralToCellStore(
+                args.state.workbook.cellStore,
+                cellIndex,
+                mutation.value,
+                args.state.strings,
+              );
+              args.state.workbook.cellStore.flags[cellIndex] =
+                (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
+                ~(
+                  CellFlags.HasFormula |
+                  CellFlags.JsOnly |
+                  CellFlags.InCycle |
+                  CellFlags.SpillChild |
+                  CellFlags.PivotOutput
+                );
+              pruneCellIfOrphaned(cellIndex);
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
-            }
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
-            break;
-          }
-          case "clearCell": {
-            if (existingIndex === undefined) {
-              args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+              if (args.state.trackReplicaVersions) {
+                setCellEntityVersion(
+                  resolveSheetName(sheetId),
+                  formatAddress(mutation.row, mutation.col),
+                  order,
+                );
+              }
               break;
             }
-            changedInputCount = args.markPivotRootsChanged(
-              args.clearPivotForCell(existingIndex),
-              changedInputCount,
-            );
-            changedInputCount = args.markSpillRootsChanged(
-              args.clearOwnedSpill(existingIndex),
-              changedInputCount,
-            );
-            topologyChanged = args.removeFormula(existingIndex) || topologyChanged;
-            args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
-            args.state.workbook.cellStore.flags[existingIndex] =
-              (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput
+            case "setCellFormula": {
+              const sheetName = resolveSheetName(sheetId);
+              if (existingIndex !== undefined) {
+                changedInputCount = args.markPivotRootsChanged(
+                  args.clearPivotForCell(existingIndex),
+                  changedInputCount,
+                );
+              }
+              const cellIndex = args.state.workbook.ensureCellAt(
+                sheetId,
+                mutation.row,
+                mutation.col,
+              ).cellIndex;
+              changedInputCount = args.markSpillRootsChanged(
+                args.clearOwnedSpill(cellIndex),
+                changedInputCount,
               );
-            pruneCellIfOrphaned(existingIndex);
-            changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
-            explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount);
-            args.state.entityVersions.set(`cell:${sheetName}!${address}`, order);
-            break;
+              const compileStarted = performance.now();
+              try {
+                args.bindFormula(cellIndex, sheetName, mutation.formula);
+                compileMs += performance.now() - compileStarted;
+                formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
+                topologyChanged = true;
+              } catch {
+                compileMs += performance.now() - compileStarted;
+                topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+                args.setInvalidFormulaValue(cellIndex);
+                changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
+              }
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+              if (args.state.trackReplicaVersions) {
+                setCellEntityVersion(sheetName, formatAddress(mutation.row, mutation.col), order);
+              }
+              break;
+            }
+            case "clearCell": {
+              if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
+                args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
+                changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
+                explicitChangedCount = args.markExplicitChanged(
+                  existingIndex,
+                  explicitChangedCount,
+                );
+                if (args.state.trackReplicaVersions) {
+                  setCellEntityVersion(
+                    resolveSheetName(sheetId),
+                    formatAddress(mutation.row, mutation.col),
+                    order,
+                  );
+                }
+                break;
+              }
+              if (existingIndex === undefined) {
+                if (args.state.trackReplicaVersions) {
+                  setCellEntityVersion(
+                    resolveSheetName(sheetId),
+                    formatAddress(mutation.row, mutation.col),
+                    order,
+                  );
+                }
+                break;
+              }
+              changedInputCount = args.markPivotRootsChanged(
+                args.clearPivotForCell(existingIndex),
+                changedInputCount,
+              );
+              changedInputCount = args.markSpillRootsChanged(
+                args.clearOwnedSpill(existingIndex),
+                changedInputCount,
+              );
+              topologyChanged = args.removeFormula(existingIndex) || topologyChanged;
+              args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
+              args.state.workbook.cellStore.flags[existingIndex] =
+                (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
+                ~(
+                  CellFlags.HasFormula |
+                  CellFlags.JsOnly |
+                  CellFlags.InCycle |
+                  CellFlags.SpillChild |
+                  CellFlags.PivotOutput
+                );
+              pruneCellIfOrphaned(existingIndex);
+              changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
+              explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount);
+              if (args.state.trackReplicaVersions) {
+                setCellEntityVersion(
+                  resolveSheetName(sheetId),
+                  formatAddress(mutation.row, mutation.col),
+                  order,
+                );
+              }
+              break;
+            }
+            default:
+              assertNever(mutation);
           }
-          default:
-            assertNever(mutation);
-        }
+        });
       });
 
       const reboundCount = formulaChangedCount;
@@ -1017,18 +1130,18 @@ export function createEngineOperationService(args: {
       compileMs,
     };
     args.state.setLastMetrics(lastMetrics);
-    args.state.events.emit(
-      {
-        kind: "batch",
-        invalidation: "cells",
-        changedCellIndices: changed,
-        invalidatedRanges: [],
-        invalidatedRows: [],
-        invalidatedColumns: [],
-        metrics: lastMetrics,
-      },
-      changed,
-      (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex),
+    const event: EngineEvent & { explicitChangedCount: number } = {
+      kind: "batch",
+      invalidation: "cells",
+      changedCellIndices: changed,
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [],
+      metrics: lastMetrics,
+      explicitChangedCount,
+    };
+    args.state.events.emit(event, changed, (cellIndex) =>
+      args.state.workbook.getQualifiedAddress(cellIndex),
     );
     void args.state.getSyncClientConnection()?.send(batch);
     emitBatch(batch);

@@ -488,18 +488,20 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1;
           lastMetrics.changedInputCount = formulaChangedCount;
           args.state.setLastMetrics(lastMetrics);
-          args.state.events.emit(
-            {
-              kind: "batch",
-              invalidation: "cells",
-              changedCellIndices: changed,
-              invalidatedRanges: [],
-              invalidatedRows: [],
-              invalidatedColumns: [],
-              metrics: lastMetrics,
-            },
-            changed,
-            (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex),
+          const event: import("@bilig/protocol").EngineEvent & {
+            explicitChangedCount: number;
+          } = {
+            kind: "batch",
+            invalidation: "cells",
+            changedCellIndices: changed,
+            invalidatedRanges: [],
+            invalidatedRows: [],
+            invalidatedColumns: [],
+            metrics: lastMetrics,
+            explicitChangedCount,
+          };
+          args.state.events.emit(event, changed, (cellIndex) =>
+            args.state.workbook.getQualifiedAddress(cellIndex),
           );
           return Array.from(changed);
         },
@@ -546,18 +548,20 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1;
           lastMetrics.changedInputCount = changedInputCount;
           args.state.setLastMetrics(lastMetrics);
-          args.state.events.emit(
-            {
-              kind: "batch",
-              invalidation: "cells",
-              changedCellIndices: changed,
-              invalidatedRanges: [],
-              invalidatedRows: [],
-              invalidatedColumns: [],
-              metrics: lastMetrics,
-            },
-            changed,
-            (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex),
+          const event: import("@bilig/protocol").EngineEvent & {
+            explicitChangedCount: number;
+          } = {
+            kind: "batch",
+            invalidation: "cells",
+            changedCellIndices: changed,
+            invalidatedRanges: [],
+            invalidatedRows: [],
+            invalidatedColumns: [],
+            metrics: lastMetrics,
+            explicitChangedCount,
+          };
+          args.state.events.emit(event, changed, (cellIndex) =>
+            args.state.workbook.getQualifiedAddress(cellIndex),
           );
           return Array.from(changed);
         },

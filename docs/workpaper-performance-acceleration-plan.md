@@ -25,12 +25,12 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.46x` faster
-  - `single-edit-recalc`: improved to `1.42x` slower
-  - `batch-edit-recalc`: improved to `2.40x` slower
-  - `lookup-no-column-index`: improved from `68.76x` slower to a `WorkPaper` win at `1.53x` faster
-  - `lookup-with-column-index`: improved from `124.42x` slower to `1.10x` slower
-  - `range-read`: a `WorkPaper` win at `1.10x` faster
+  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.11x` faster
+  - `single-edit-recalc`: improved from `1.42x` slower to a `WorkPaper` win at `1.05x` faster
+  - `batch-edit-recalc`: improved to `1.54x` slower
+  - `lookup-no-column-index`: improved from `68.76x` slower to a `WorkPaper` win at `1.40x` faster
+  - `lookup-with-column-index`: improved from `124.42x` slower to `1.29x` slower
+  - `range-read`: a `WorkPaper` win at `1.05x` faster
 
 So the remaining performance gap is no longer “lookup is completely fake.” The remaining gap is
 that recalculation overhead is still red. Lookup is now close enough that it no longer dominates
@@ -91,12 +91,12 @@ Current direct-comparison results from
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
 | --- | ---: | ---: | --- |
-| `build-from-sheets` | `0.846ms` | `3.776ms` | `WorkPaper` `4.46x` faster |
-| `single-edit-recalc` | `1.807ms` | `1.274ms` | HyperFormula `1.42x` faster |
-| `batch-edit-recalc` | `1.983ms` | `0.825ms` | HyperFormula `2.40x` faster |
-| `range-read` | `0.188ms` | `0.207ms` | `WorkPaper` `1.10x` faster |
-| `lookup-no-column-index` | `0.163ms` | `0.249ms` | `WorkPaper` `1.53x` faster |
-| `lookup-with-column-index` | `0.146ms` | `0.133ms` | HyperFormula `1.10x` faster |
+| `build-from-sheets` | `0.916ms` | `3.766ms` | `WorkPaper` `4.11x` faster |
+| `single-edit-recalc` | `1.295ms` | `1.365ms` | `WorkPaper` `1.05x` faster |
+| `batch-edit-recalc` | `1.265ms` | `0.823ms` | HyperFormula `1.54x` faster |
+| `range-read` | `0.201ms` | `0.210ms` | `WorkPaper` `1.05x` faster |
+| `lookup-no-column-index` | `0.196ms` | `0.276ms` | `WorkPaper` `1.40x` faster |
+| `lookup-with-column-index` | `0.175ms` | `0.136ms` | HyperFormula `1.29x` faster |
 
 This is the important reading:
 
@@ -425,8 +425,8 @@ Status:
 
 - completed on `main`
 - current checked-in result:
-- `lookup-with-column-index` is now `1.10x` slower
-- `lookup-no-column-index` is now a `WorkPaper` win at `1.53x` faster
+- `lookup-with-column-index` is now `1.29x` slower
+- `lookup-no-column-index` is now a `WorkPaper` win at `1.40x` faster
 - the remaining red work is now phase-2 quality work, not phase-1 plumbing
 
 ### Phase 2: Native Direct Lookup Ops
@@ -446,8 +446,8 @@ Status:
 - completed on `main`
 - exact indexed lookup no longer rebuilds its column index on the first post-build mutation when
   the formula was bound against a fully populated column
-- `lookup-no-column-index` has crossed into a `WorkPaper` win at `1.53x` faster
-- `lookup-with-column-index` is under the `3x` target at `1.10x` slower
+- `lookup-no-column-index` has crossed into a `WorkPaper` win at `1.40x` faster
+- `lookup-with-column-index` is under the `3x` target at `1.29x` slower
 - the remaining work is no longer to make lookup plausible; it is to turn the remaining lookup
   losses into actual wins while the program focus shifts to recalculation
 
@@ -457,26 +457,30 @@ Reduce mutation churn and rebinding overhead, and keep the new import lead intac
 
 Acceptance:
 
-- `batch-edit-recalc`, `single-edit-recalc`, and `build-from-sheets` all land under `2x` slower
+- `batch-edit-recalc` lands under `2x` slower, `single-edit-recalc` becomes a `WorkPaper` win,
+  and `build-from-sheets` remains a strong `WorkPaper` win
 - `range-read` remains within `1.1x`
 - no regressions in external consumer smoke
 
 Status:
 
 - partially satisfied on `main`
-- `build-from-sheets` has already crossed the finish line and is now a `WorkPaper` win at `4.46x`
+- `build-from-sheets` has already crossed the finish line and is now a `WorkPaper` win at `4.11x`
   faster
-- `range-read` is now a `WorkPaper` win at `1.10x` faster
-- `single-edit-recalc` improved to `1.42x` slower after large fresh-workbook formula sets began
-  synchronously initializing the kernel on Node/Bun instead of missing the compiled WASM path on
-  the first real edit
-- `batch-edit-recalc` improved to `2.40x` slower after internal hot mutation paths stopped
+- `range-read` is now a `WorkPaper` win at `1.05x` faster
+- `single-edit-recalc` is now a `WorkPaper` win at `1.05x` faster after large fresh-workbook
+  formula sets began synchronously initializing the kernel on Node/Bun instead of missing the
+  compiled WASM path on the first real edit, coordinate-native simple-cell mutation stopped
+  reparsing `sheetName + A1`, local-only headless engines stopped paying replica-version
+  bookkeeping, and existing plain literal inputs gained a dedicated overwrite fast path
+- `batch-edit-recalc` improved to `1.54x` slower after internal hot mutation paths stopped
   crossing the `Effect` boundary per operation, batch-literal undo stopped using the generic
-  engine history builder, and coordinate-native simple-cell mutation paths stopped reparsing
-  `sheetName + A1` addresses through the core engine
-- `lookup-no-column-index` is now a `WorkPaper` win at `1.53x` faster
-- the remaining work in this phase is now `single-edit-recalc`, `batch-edit-recalc`, and the
-  mixed-content import path
+  engine history builder, coordinate-native simple-cell mutation paths stopped reparsing
+  `sheetName + A1`, existing plain literal inputs gained a dedicated overwrite fast path, and
+  column-version invalidation started batching across local mutation bursts
+- `lookup-no-column-index` is now a `WorkPaper` win at `1.40x` faster
+- the remaining work in this phase is now `batch-edit-recalc`, `lookup-with-column-index`, and
+  the mixed-content import path
 
 ### Phase 4: Majority Wins
 
@@ -557,8 +561,8 @@ It is:
 1. push indexed lookup deeper into engine-owned column/index structures so `useColumnIndex`
    materially outperforms the current non-indexed direct exact path
 2. extend dedicated direct lookup lowering beyond the current exact `MATCH` / `XMATCH` slice
-3. reduce the remaining recalculation overhead that still keeps `single-edit-recalc` and
-   `batch-edit-recalc` red
+3. reduce the remaining recalculation overhead that still keeps `batch-edit-recalc` red and turn
+   `lookup-with-column-index` into a real `WorkPaper` win
 4. keep the direct literal initialization path fast while extending the same strategy to broader
    mixed-content imports and rebuilds
 5. rerun the competitive benchmark and keep updating the artifact after each structural win

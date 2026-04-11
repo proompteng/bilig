@@ -132,6 +132,7 @@ export class WorkbookStore {
   readonly metadata: WorkbookMetadataRecord = createWorkbookMetadataRecord();
   private readonly metadataService = createWorkbookMetadataService(this.metadata);
   workbookName: string;
+  private batchedColumnVersionUpdates: Map<number, Set<number>> | null = null;
   private nextSheetId = 1;
   private nextRowAxisId = 1;
   private nextColumnAxisId = 1;
@@ -276,12 +277,45 @@ export class WorkbookStore {
     return { cellIndex, created: true };
   }
 
+  withBatchedColumnVersionUpdates<T>(execute: () => T): T {
+    if (this.batchedColumnVersionUpdates) {
+      return execute();
+    }
+    const pending = new Map<number, Set<number>>();
+    this.batchedColumnVersionUpdates = pending;
+    try {
+      return execute();
+    } finally {
+      this.batchedColumnVersionUpdates = null;
+      pending.forEach((columns, sheetId) => {
+        columns.forEach((col) => {
+          this.bumpColumnVersion(sheetId, col);
+        });
+      });
+    }
+  }
+
   private bumpColumnVersionByCellIndex(cellIndex: number): void {
-    const sheet = this.getSheetById(this.cellStore.sheetIds[cellIndex]!);
+    const sheetId = this.cellStore.sheetIds[cellIndex]!;
+    const col = this.cellStore.cols[cellIndex]!;
+    const pending = this.batchedColumnVersionUpdates;
+    if (pending) {
+      let columns = pending.get(sheetId);
+      if (!columns) {
+        columns = new Set<number>();
+        pending.set(sheetId, columns);
+      }
+      columns.add(col);
+      return;
+    }
+    this.bumpColumnVersion(sheetId, col);
+  }
+
+  private bumpColumnVersion(sheetId: number, col: number): void {
+    const sheet = this.getSheetById(sheetId);
     if (!sheet) {
       return;
     }
-    const col = this.cellStore.cols[cellIndex]!;
     sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1;
   }
 

@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
+import type { CellStore } from "./cell-store.js";
 import { StringPool } from "./string-pool.js";
 
 export function normalizePivotLookupText(value: string): string {
@@ -18,6 +19,37 @@ export function literalToValue(input: LiteralInput, stringPool: StringPool): Cel
   if (typeof input === "number") return { tag: ValueTag.Number, value: input };
   if (typeof input === "boolean") return { tag: ValueTag.Boolean, value: input };
   return { tag: ValueTag.String, value: input, stringId: stringPool.intern(input) };
+}
+
+export function writeLiteralToCellStore(
+  cellStore: CellStore,
+  index: number,
+  input: LiteralInput,
+  stringPool: StringPool,
+): void {
+  if (input === null) {
+    cellStore.tags[index] = ValueTag.Empty;
+    cellStore.errors[index] = ErrorCode.None;
+    cellStore.stringIds[index] = 0;
+    cellStore.numbers[index] = 0;
+  } else if (typeof input === "number") {
+    cellStore.tags[index] = ValueTag.Number;
+    cellStore.errors[index] = ErrorCode.None;
+    cellStore.stringIds[index] = 0;
+    cellStore.numbers[index] = input;
+  } else if (typeof input === "boolean") {
+    cellStore.tags[index] = ValueTag.Boolean;
+    cellStore.errors[index] = ErrorCode.None;
+    cellStore.stringIds[index] = 0;
+    cellStore.numbers[index] = input ? 1 : 0;
+  } else {
+    cellStore.tags[index] = ValueTag.String;
+    cellStore.errors[index] = ErrorCode.None;
+    cellStore.stringIds[index] = stringPool.intern(input);
+    cellStore.numbers[index] = 0;
+  }
+  cellStore.versions[index] = (cellStore.versions[index] ?? 0) + 1;
+  cellStore.onSetValue?.(index);
 }
 
 export function areCellValuesEqual(left: CellValue, right: CellValue): boolean {
