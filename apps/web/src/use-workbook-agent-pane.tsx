@@ -1050,11 +1050,20 @@ export function useWorkbookAgentPane(input: {
           }
           void startWorkflow({ workflowTemplate });
         }}
+        onStartNamedWorkflow={(workflowTemplate, name) => {
+          void startWorkflow({
+            workflowTemplate,
+            name,
+          });
+        }}
         onStartSearchWorkflow={(query) => {
           void startWorkflow({
             workflowTemplate: "searchWorkbookQuery",
             query,
           });
+        }}
+        onStartStructuralWorkflow={(workflowTemplate) => {
+          void startWorkflow({ workflowTemplate });
         }}
         onSelectThread={(threadId) => {
           void selectThread(threadId);

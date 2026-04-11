@@ -58,9 +58,17 @@ export function WorkflowActionStrip(props: {
       "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
     >,
   ) => void;
+  readonly onStartNamedWorkflow: (
+    template: Extract<WorkbookAgentWorkflowTemplate, "createSheet" | "renameCurrentSheet">,
+    name: string,
+  ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
+  readonly onStartStructuralWorkflow: (
+    template: Extract<WorkbookAgentWorkflowTemplate, "hideCurrentRow" | "hideCurrentColumn">,
+  ) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [sheetName, setSheetName] = useState("");
 
   return (
     <div className={cn(workbookInsetClass(), "mt-2 px-2 py-2")}>
@@ -68,7 +76,7 @@ export function WorkflowActionStrip(props: {
         <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
           Quick workflows
         </div>
-        <span className={workbookPillClass({ tone: "neutral" })}>Read-only</span>
+        <span className={workbookPillClass({ tone: "neutral" })}>Saved reports + previews</span>
       </div>
       <div className="mt-2 grid gap-2">
         {WORKFLOW_ACTIONS.map((action) => (
@@ -95,6 +103,87 @@ export function WorkflowActionStrip(props: {
             </span>
           </button>
         ))}
+        <div className="grid gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
+          <div className="text-[11px] font-semibold text-[var(--wb-text)]">
+            Structural previews
+          </div>
+          <div className="text-[11px] leading-4 text-[var(--wb-text-subtle)]">
+            Stage durable sheet and axis changes through the same preview/apply path as direct
+            edits.
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="min-w-0 flex-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-2.5 py-1.5 text-[11px] text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-accent)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
+              data-testid="workbook-agent-structural-sheet-name-input"
+              disabled={props.disabled || props.isStartingWorkflow}
+              placeholder="Sheet name"
+              type="text"
+              value={sheetName}
+              onChange={(event) => {
+                setSheetName(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  sheetName.trim().length > 0 &&
+                  !(props.disabled || props.isStartingWorkflow)
+                ) {
+                  event.preventDefault();
+                  props.onStartNamedWorkflow("createSheet", sheetName.trim());
+                  setSheetName("");
+                }
+              }}
+            />
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "accent", weight: "strong" })}
+              data-testid="workbook-agent-workflow-start-createSheet"
+              disabled={props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0}
+              type="button"
+              onClick={() => {
+                props.onStartNamedWorkflow("createSheet", sheetName.trim());
+                setSheetName("");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Create sheet"}
+            </button>
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" })}
+              data-testid="workbook-agent-workflow-start-renameCurrentSheet"
+              disabled={props.disabled || props.isStartingWorkflow || sheetName.trim().length === 0}
+              type="button"
+              onClick={() => {
+                props.onStartNamedWorkflow("renameCurrentSheet", sheetName.trim());
+                setSheetName("");
+              }}
+            >
+              Rename current
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" })}
+              data-testid="workbook-agent-workflow-start-hideCurrentRow"
+              disabled={props.disabled || props.isStartingWorkflow}
+              type="button"
+              onClick={() => {
+                props.onStartStructuralWorkflow("hideCurrentRow");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Hide current row"}
+            </button>
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "regular" })}
+              data-testid="workbook-agent-workflow-start-hideCurrentColumn"
+              disabled={props.disabled || props.isStartingWorkflow}
+              type="button"
+              onClick={() => {
+                props.onStartStructuralWorkflow("hideCurrentColumn");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Hide current column"}
+            </button>
+          </div>
+        </div>
         <div className="grid gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
           <div className="text-[11px] font-semibold text-[var(--wb-text)]">Search workbook</div>
           <div className="text-[11px] leading-4 text-[var(--wb-text-subtle)]">

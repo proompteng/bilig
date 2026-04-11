@@ -111,7 +111,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "edit",
     description: "Reorganize sheet structure with semantic copy, move, fill, and sheet tools.",
     prompt:
-      "Restructure this sheet using semantic range and sheet tools, then stage one coherent preview bundle.",
+      "Restructure this sheet using semantic range and sheet tools. Prefer the built-in durable structural workflows for create-sheet, rename-current-sheet, and hide-current-row/column when they match, otherwise stage one coherent preview bundle.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
       WORKBOOK_AGENT_TOOL_NAMES.readRange,

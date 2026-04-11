@@ -899,7 +899,14 @@ export function WorkbookAgentPanel(props: {
       "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
     >,
   ) => void;
+  readonly onStartNamedWorkflow: (
+    template: Extract<WorkbookAgentWorkflowRun["workflowTemplate"], "createSheet" | "renameCurrentSheet">,
+    name: string,
+  ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
+  readonly onStartStructuralWorkflow: (
+    template: Extract<WorkbookAgentWorkflowRun["workflowTemplate"], "hideCurrentRow" | "hideCurrentColumn">,
+  ) => void;
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -938,7 +945,9 @@ export function WorkbookAgentPanel(props: {
           disabled={props.isLoading || isRunning}
           isStartingWorkflow={props.isStartingWorkflow}
           onStartWorkflow={props.onStartWorkflow}
+          onStartNamedWorkflow={props.onStartNamedWorkflow}
           onStartSearchWorkflow={props.onStartSearchWorkflow}
+          onStartStructuralWorkflow={props.onStartStructuralWorkflow}
         />
       </div>
       <div
