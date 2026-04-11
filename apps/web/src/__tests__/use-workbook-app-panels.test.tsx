@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkbookAppPanels } from "../use-workbook-app-panels.js";
 
 const { useWorkbookAgentPane } = vi.hoisted(() => ({
@@ -78,10 +78,39 @@ function mockAgentPane(pendingCommandCount: number) {
     clearAgentError: vi.fn(),
     pendingCommandCount,
     previewRanges: [],
+    startNewThread: vi.fn(),
   });
 }
 
 describe("useWorkbookAppPanels", () => {
+  beforeEach(() => {
+    const backingStore = new Map<string, string>();
+    const storage = {
+      clear() {
+        backingStore.clear();
+      },
+      getItem(key: string) {
+        return backingStore.get(key) ?? null;
+      },
+      key(index: number) {
+        return [...backingStore.keys()][index] ?? null;
+      },
+      removeItem(key: string) {
+        backingStore.delete(key);
+      },
+      setItem(key: string, value: string) {
+        backingStore.set(key, value);
+      },
+      get length() {
+        return backingStore.size;
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: storage,
+    });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
@@ -136,6 +165,45 @@ describe("useWorkbookAppPanels", () => {
 
     expect(host.querySelector("[data-testid='workbook-side-rail-panel-assistant']")).not.toBeNull();
     expect(host.textContent).toContain("Assistant panel");
+
+    await harness.unmount();
+  });
+
+  it("renders the new thread action in the rail tab row", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const startNewThread = vi.fn();
+    useWorkbookAgentPane.mockReturnValue({
+      agentPanel: <div data-testid="assistant-panel">Assistant panel</div>,
+      agentError: null,
+      clearAgentError: vi.fn(),
+      pendingCommandCount: 0,
+      previewRanges: [],
+      startNewThread,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const harness = renderHarness(host);
+
+    await harness.render();
+
+    await act(async () => {
+      host
+        .querySelector("[data-testid='workbook-side-rail-toggle-assistant']")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const newThreadButton = host.querySelector("[data-testid='workbook-agent-new-thread']");
+    expect(newThreadButton).not.toBeNull();
+
+    await act(async () => {
+      newThreadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(startNewThread).toHaveBeenCalledTimes(1);
 
     await harness.unmount();
   });

@@ -74,16 +74,22 @@ export function useWorkbookAppPanels(input: {
     enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   });
 
-  const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges } =
-    useWorkbookAgentPane({
-      currentUserId,
-      documentId,
-      enabled: runtimeReady,
-      getContext: getAgentContext,
-      previewBundle: previewAgentBundle,
-      zero,
-      zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
-    });
+  const {
+    agentPanel,
+    agentError,
+    clearAgentError,
+    pendingCommandCount,
+    previewRanges,
+    startNewThread,
+  } = useWorkbookAgentPane({
+    currentUserId,
+    documentId,
+    enabled: runtimeReady,
+    getContext: getAgentContext,
+    previewBundle: previewAgentBundle,
+    zero,
+    zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
+  });
 
   const sideRailTabs = useMemo<readonly WorkbookSideRailTabDefinition[]>(
     () => [
@@ -203,27 +209,40 @@ export function useWorkbookAppPanels(input: {
           }}
         >
           <Tabs.List aria-label="Workbook panels" className={railListClass()}>
-            {visibleSideRailTabs.map((tab) => (
-              <Tabs.Tab
-                className={(state) => railTabClass({ active: state.active })}
-                data-testid={`workbook-side-rail-tab-${tab.value}`}
-                key={tab.value}
-                value={tab.value}
-              >
-                <span>{tab.label}</span>
-                {typeof tab.count === "number" ? (
-                  <span
-                    className={cn(
-                      railCountClass({
-                        active: activeSideRailTab === tab.value,
-                      }),
-                    )}
-                  >
-                    {String(Math.min(tab.count, 99))}
-                  </span>
-                ) : null}
-              </Tabs.Tab>
-            ))}
+            <div className="flex min-w-0 flex-1 items-end gap-1">
+              {visibleSideRailTabs.map((tab) => (
+                <Tabs.Tab
+                  className={(state) => railTabClass({ active: state.active })}
+                  data-testid={`workbook-side-rail-tab-${tab.value}`}
+                  key={tab.value}
+                  value={tab.value}
+                >
+                  <span>{tab.label}</span>
+                  {typeof tab.count === "number" ? (
+                    <span
+                      className={cn(
+                        railCountClass({
+                          active: activeSideRailTab === tab.value,
+                        }),
+                      )}
+                    >
+                      {String(Math.min(tab.count, 99))}
+                    </span>
+                  ) : null}
+                </Tabs.Tab>
+              ))}
+            </div>
+            <Button
+              className={cn(
+                workbookHeaderActionButtonClass({ active: false }),
+                "mb-2 ml-auto shrink-0",
+              )}
+              data-testid="workbook-agent-new-thread"
+              type="button"
+              onClick={startNewThread}
+            >
+              New thread
+            </Button>
             <Tabs.Indicator className={railIndicatorClass()} renderBeforeHydration />
           </Tabs.List>
           {visibleSideRailTabs.map((tab) => (
@@ -239,7 +258,7 @@ export function useWorkbookAppPanels(input: {
           ))}
         </Tabs.Root>
       ) : null,
-    [activeSideRailTab, isSideRailOpen, setActiveSideRailTab, visibleSideRailTabs],
+    [activeSideRailTab, isSideRailOpen, setActiveSideRailTab, startNewThread, visibleSideRailTabs],
   );
 
   return {

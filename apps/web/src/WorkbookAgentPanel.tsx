@@ -37,8 +37,6 @@ import {
   agentPanelComposerSendButtonClass,
   agentPanelComposerTextareaClass,
   agentPanelFooterClass,
-  agentPanelHeaderClass,
-  agentPanelInlineButtonClass,
   agentPanelSegmentedButtonClass,
   agentPanelSegmentedGroupClass,
   agentPanelThreadButtonClass,
@@ -80,13 +78,6 @@ const agentPanelThemeStyle: CSSProperties & Record<`--${string}`, string> = {
   "--wb-hover": "var(--color-mauve-100)",
   "--wb-shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.04)",
 };
-
-function contextLabel(context: WorkbookAgentUiContext | null): string {
-  if (!context) {
-    return "";
-  }
-  return `${context.selection.sheetName}!${context.selection.address}`;
-}
 
 function formatThreadEntryCount(entryCount: number): string {
   return `${entryCount} ${entryCount === 1 ? "item" : "items"}`;
@@ -1083,8 +1074,6 @@ export function WorkbookAgentPanel(props: {
   }, [props.snapshot?.entries.length, props.snapshot?.status]);
 
   const isRunning = props.snapshot?.status === "inProgress";
-  const resolvedContextLabel = contextLabel(props.snapshot?.context ?? props.currentContext);
-  const resolvedScopeLabel = props.threadScope === "shared" ? "Shared thread" : "Private thread";
 
   return (
     <div
@@ -1093,30 +1082,38 @@ export function WorkbookAgentPanel(props: {
       id="workbook-agent-panel"
       style={agentPanelThemeStyle}
     >
-      <div className={agentPanelHeaderClass()}>
-        <div className={agentPanelToolbarRowClass()}>
-          <div className="min-w-0">
-            <div className="truncate text-[12px] font-semibold text-[var(--wb-text)]">
-              {resolvedContextLabel}
-            </div>
-            <div className="mt-0.5 text-[11px] text-[var(--wb-text-subtle)]">
-              {resolvedScopeLabel}
-            </div>
-          </div>
-          <Button
-            className={agentPanelInlineButtonClass()}
-            data-testid="workbook-agent-new-thread"
-            type="button"
-            onClick={props.onStartNewThread}
-          >
-            New thread
-          </Button>
-        </div>
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto bg-[var(--wb-app-bg)] px-2.5 py-2.5"
+      >
         <ThreadSummaryStrip
           activeThreadId={props.activeThreadId}
           threadSummaries={props.threadSummaries}
           onSelectThread={props.onSelectThread}
         />
+        {props.pendingBundle ? (
+          <div className="mb-3">
+            <PendingBundleCard
+              bundle={props.pendingBundle}
+              preview={props.preview}
+              sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
+              sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}
+              sharedReviewStatus={props.sharedReviewStatus}
+              sharedReviewDecidedByUserId={props.sharedReviewDecidedByUserId}
+              sharedReviewRecommendations={props.sharedReviewRecommendations}
+              currentUserSharedRecommendation={props.currentUserSharedRecommendation}
+              canFinalizeSharedBundle={props.canFinalizeSharedBundle}
+              canRecommendSharedBundle={props.canRecommendSharedBundle}
+              selectedCommandIndexes={props.selectedCommandIndexes}
+              isApplyingBundle={props.isApplyingBundle}
+              onApply={props.onApplyPendingBundle}
+              onDismiss={props.onDismissPendingBundle}
+              onReview={props.onReviewPendingBundle}
+              onSelectAll={props.onSelectAllPendingCommands}
+              onToggleCommand={props.onTogglePendingCommand}
+            />
+          </div>
+        ) : null}
         {props.isLoading ? null : props.snapshot && props.snapshot.entries.length > 0 ? (
           <div className="flex flex-col gap-1.5">
             {props.snapshot.entries.map((entry) => (

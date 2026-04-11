@@ -326,7 +326,7 @@ describe("workbook agent pane", () => {
     expect(host.textContent).not.toContain(
       "Ask the assistant to inspect, edit, or restructure this workbook.",
     );
-    expect(host.textContent).toContain("Sheet1!A1");
+    expect(host.textContent).not.toContain("Sheet1!A1");
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
       "Ask the workbook assistant",
     );

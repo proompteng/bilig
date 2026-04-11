@@ -1285,5 +1285,6 @@ export function useWorkbookAgentPane(input: {
     clearAgentError,
     pendingCommandCount,
     previewRanges: preview?.ranges ?? pendingBundle?.affectedRanges ?? [],
+    startNewThread,
   };
 }
