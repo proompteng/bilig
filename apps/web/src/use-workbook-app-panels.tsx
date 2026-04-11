@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@base-ui/react/button";
 import { Tabs } from "@base-ui/react/tabs";
 import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
@@ -109,6 +109,7 @@ export function useWorkbookAppPanels(input: {
   const {
     activeSideRailTab,
     isSideRailOpen,
+    openSideRail,
     setActiveSideRailTab,
     setSideRailWidth,
     sideRailWidth,
@@ -120,6 +121,20 @@ export function useWorkbookAppPanels(input: {
     defaultTab: null,
   });
   const sideRailId = `workbook-side-rail-${documentId}`;
+  const previousPendingCommandCountRef = useRef(pendingCommandCount);
+
+  useEffect(() => {
+    const hadPendingCommands = previousPendingCommandCountRef.current > 0;
+    const hasPendingCommands = pendingCommandCount > 0;
+    previousPendingCommandCountRef.current = pendingCommandCount;
+    if (!hasPendingCommands || hadPendingCommands) {
+      return;
+    }
+    if (!visibleSideRailTabs.some((tab) => tab.value === "assistant")) {
+      return;
+    }
+    openSideRail("assistant");
+  }, [openSideRail, pendingCommandCount, visibleSideRailTabs]);
 
   const sideRailToggleControls = useMemo(
     () => (
