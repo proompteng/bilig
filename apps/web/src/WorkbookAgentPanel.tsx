@@ -43,6 +43,7 @@ import {
   agentPanelThreadListClass,
   agentPanelToolbarRowClass,
 } from "./workbook-agent-panel-primitives.js";
+import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
 import {
@@ -462,7 +463,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     return (
       <div className="flex justify-end">
         <div className="max-w-[90%] rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
-          {entry.text}
+          <WorkbookAgentMarkdown markdown={entry.text ?? ""} />
           <TimelineCitationList citations={entry.citations} />
         </div>
       </div>
@@ -480,7 +481,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
           "px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]",
         )}
       >
-        {entry.text}
+        <WorkbookAgentMarkdown markdown={entry.text} />
         <TimelineCitationList citations={entry.citations} />
       </div>
     );

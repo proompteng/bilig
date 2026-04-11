@@ -1,6 +1,7 @@
 import type { WorkbookAgentExecutionRecord, WorkbookAgentPreviewRange } from "@bilig/agent-api";
 import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import { cn } from "./cn.js";
+import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
 import {
   workbookButtonClass,
   workbookInsetClass,
@@ -65,20 +66,6 @@ export function ExecutionRecordRow(props: {
   );
 }
 
-function summarizeWorkflowArtifact(run: WorkbookAgentWorkflowRun): string | null {
-  const text = run.artifact?.text;
-  if (!text) {
-    return null;
-  }
-  const normalized = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"))
-    .slice(0, 3)
-    .join(" ");
-  return normalized.length > 0 ? normalized : null;
-}
-
 function workflowStatusTone(
   status: WorkbookAgentWorkflowRun["status"],
 ): "accent" | "danger" | "neutral" {
@@ -141,7 +128,6 @@ export function WorkflowRunRow(props: {
   readonly isCancelling?: boolean;
   readonly onCancel?: () => void;
 }) {
-  const artifactSummary = summarizeWorkflowArtifact(props.run);
   return (
     <div
       className={cn(workbookSurfaceClass(), "px-3 py-2")}
@@ -183,11 +169,12 @@ export function WorkflowRunRow(props: {
           <div className="text-[11px] font-medium text-[var(--wb-text)]">
             {props.run.artifact.title}
           </div>
-          {artifactSummary ? (
-            <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-              {artifactSummary}
-            </div>
-          ) : null}
+          <WorkbookAgentMarkdown
+            className="mt-1"
+            markdown={props.run.artifact.text}
+            title={props.run.artifact.title}
+            tone="muted"
+          />
         </div>
       ) : null}
       {props.run.errorMessage ? (
