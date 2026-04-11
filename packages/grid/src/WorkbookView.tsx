@@ -293,7 +293,7 @@ export function WorkbookView({
                 aria-label="Resize workbook side rail"
                 aria-orientation="vertical"
                 className={[
-                  "absolute inset-y-0 left-0 z-10 w-2 -translate-x-1 cursor-ew-resize touch-none",
+                  "absolute inset-y-0 left-0 z-10 w-4 -translate-x-2 cursor-ew-resize touch-none",
                   "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--color-mauve-200)] after:transition-colors",
                   isResizingSideRail
                     ? "after:bg-[var(--color-mauve-500)]"
