@@ -216,6 +216,19 @@ function safeParseToolOutput(outputText: string | null): unknown {
   }
 }
 
+function renderToolDisplayName(toolName: string | null): string {
+  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null;
+  if (!normalizedToolName) {
+    return "Tool call";
+  }
+  return normalizedToolName
+    .split("_")
+    .map((segment) =>
+      segment.length === 0 ? segment : `${segment[0]!.toUpperCase()}${segment.slice(1)}`,
+    )
+    .join(" ");
+}
+
 function supportsStructuredToolOutput(toolName: string | null): boolean {
   const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null;
   return (
@@ -555,26 +568,78 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   if (entry.kind === "tool") {
+    const [open, setOpen] = useState(false);
+    const displayName = renderToolDisplayName(entry.toolName);
+    const hasStructuredOutput = supportsStructuredToolOutput(entry.toolName);
+    const parsedOutput = safeParseToolOutput(entry.outputText);
+    const hasDetails =
+      (entry.argumentsText?.trim().length ?? 0) > 0 || (entry.outputText?.trim().length ?? 0) > 0;
     return (
-      <div className="px-1 py-1.5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-medium text-[var(--wb-text-muted)]">
-              {entry.toolName}
+      <Collapsible.Root
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+        }}
+      >
+        <div className="px-1 py-1.5">
+          <Collapsible.Trigger
+            aria-label={open ? `Collapse ${displayName}` : `Expand ${displayName}`}
+            className="flex w-full items-center justify-between gap-3 rounded-[var(--wb-radius-control)] px-2 py-1.5 text-left outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+            data-testid={`workbook-agent-tool-toggle-${entry.id}`}
+            type="button"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <ChevronRight
+                className={cn(
+                  "h-4 w-4 shrink-0 text-[var(--wb-text-subtle)] transition-transform",
+                  open && "rotate-90",
+                )}
+              />
+              <div className="min-w-0 text-[11px] font-medium text-[var(--wb-text-muted)]">
+                {displayName}
+              </div>
             </div>
-          </div>
-          <ToolStatusPill status={entry.toolStatus} />
+            <ToolStatusPill status={entry.toolStatus} />
+          </Collapsible.Trigger>
+          {hasDetails ? (
+            <Collapsible.Panel
+              className="overflow-hidden pt-1"
+              data-testid={`workbook-agent-tool-panel-${entry.id}`}
+            >
+              <div className="pl-6 pr-1 pb-1">
+                {entry.argumentsText?.trim().length ? (
+                  <div className="mt-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                      Arguments
+                    </div>
+                    <pre className="mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
+                      {entry.argumentsText}
+                    </pre>
+                  </div>
+                ) : null}
+                {entry.outputText?.trim().length ? (
+                  <div className="mt-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                      Output
+                    </div>
+                    {hasStructuredOutput && parsedOutput !== null ? (
+                      <StructuredToolOutput
+                        toolName={entry.toolName}
+                        outputText={entry.outputText}
+                      />
+                    ) : (
+                      <pre className="mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
+                        {entry.outputText}
+                      </pre>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </Collapsible.Panel>
+          ) : null}
+          <TimelineCitationList citations={entry.citations} />
         </div>
-        <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
-        {entry.outputText &&
-        (!supportsStructuredToolOutput(entry.toolName) ||
-          safeParseToolOutput(entry.outputText) === null) ? (
-          <pre className="mt-2 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
-            {entry.outputText}
-          </pre>
-        ) : null}
-        <TimelineCitationList citations={entry.citations} />
-      </div>
+      </Collapsible.Root>
     );
   }
 

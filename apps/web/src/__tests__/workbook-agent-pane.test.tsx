@@ -3235,11 +3235,114 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
+    expect(host.textContent).toContain("Search Workbook");
+    expect(host.textContent).toContain("Find Formula Issues");
+    expect(host.textContent).not.toContain("Gross Margin");
+    expect(host.textContent).not.toContain("gross margin");
+    expect(host.textContent).not.toContain("C1");
+
+    const searchToggle = host.querySelector(
+      "[data-testid='workbook-agent-tool-toggle-tool-search']",
+    );
+    const issuesToggle = host.querySelector(
+      "[data-testid='workbook-agent-tool-toggle-tool-issues']",
+    );
+    expect(searchToggle instanceof HTMLButtonElement).toBe(true);
+    expect(issuesToggle instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (
+        !(searchToggle instanceof HTMLButtonElement) ||
+        !(issuesToggle instanceof HTMLButtonElement)
+      ) {
+        throw new Error("Tool toggles not found");
+      }
+      searchToggle.click();
+      issuesToggle.click();
+    });
+
     expect(host.textContent).toContain("Gross Margin");
     expect(host.textContent).toContain("gross margin");
     expect(host.textContent).toContain("C1");
-    expect(host.textContent).not.toContain("Search Matches");
-    expect(host.textContent).not.toContain("Formula Issues");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders raw workbook tool payloads behind a collapsed human-readable tool row", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              createSnapshot({
+                entries: [
+                  {
+                    id: "tool-read",
+                    kind: "tool",
+                    turnId: "turn-1",
+                    text: null,
+                    phase: null,
+                    toolName: "bilig_read_workbook",
+                    toolStatus: "completed",
+                    argumentsText: JSON.stringify({
+                      documentId: "bilig-demo",
+                    }),
+                    outputText: JSON.stringify({
+                      summary: {
+                        sheetCount: 2,
+                        totalCellCount: 0,
+                      },
+                    }),
+                    success: true,
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Read Workbook");
+    expect(host.textContent).not.toContain('"documentId":"bilig-demo"');
+    expect(host.textContent).not.toContain('"sheetCount":2');
+
+    const readToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-read']");
+    expect(readToggle instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(readToggle instanceof HTMLButtonElement)) {
+        throw new Error("Read tool toggle not found");
+      }
+      readToggle.click();
+    });
+
+    expect(host.textContent).toContain('"documentId":"bilig-demo"');
+    expect(host.textContent).toContain('"sheetCount":2');
 
     await act(async () => {
       root.unmount();
