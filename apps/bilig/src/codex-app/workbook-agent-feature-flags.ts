@@ -104,6 +104,7 @@ export function getWorkbookAgentWorkflowFamily(
       return "formatting";
     case "normalizeCurrentSheetHeaders":
     case "normalizeCurrentSheetNumberFormats":
+    case "normalizeCurrentSheetWhitespace":
       return "import";
     case "createCurrentSheetRollup":
       return "rollup";

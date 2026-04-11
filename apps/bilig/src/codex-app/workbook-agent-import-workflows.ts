@@ -14,7 +14,10 @@ import {
 import type { ZeroSyncService } from "../zero/service.js";
 import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
-type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders" | "normalizeCurrentSheetNumberFormats";
+type ImportWorkflowTemplate =
+  | "normalizeCurrentSheetHeaders"
+  | "normalizeCurrentSheetNumberFormats"
+  | "normalizeCurrentSheetWhitespace";
 type SnapshotSheet = WorkbookSnapshot["sheets"][number];
 type SnapshotCell = SnapshotSheet["cells"][number];
 
@@ -85,7 +88,8 @@ function isImportWorkflowTemplate(
 ): workflowTemplate is ImportWorkflowTemplate {
   return (
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
-    workflowTemplate === "normalizeCurrentSheetNumberFormats"
+    workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
+    workflowTemplate === "normalizeCurrentSheetWhitespace"
   );
 }
 
@@ -320,6 +324,45 @@ function summarizeHeaderNormalizationMarkdown(input: {
   return lines.join("\n");
 }
 
+function normalizeWhitespaceText(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+function summarizeWhitespaceNormalizationMarkdown(input: {
+  readonly sheetName: string;
+  readonly rangeStartAddress: string;
+  readonly rangeEndAddress: string;
+  readonly changes: readonly {
+    readonly address: string;
+    readonly before: string;
+    readonly after: string;
+  }[];
+}): string {
+  const lines = [
+    "## Whitespace Normalization Preview",
+    "",
+    `Sheet: ${input.sheetName}`,
+    `Inspected range: ${input.rangeStartAddress}:${input.rangeEndAddress}`,
+    `Text cells changed: ${String(input.changes.length)}`,
+    "",
+  ];
+  if (input.changes.length === 0) {
+    lines.push("No text whitespace changes were needed on the current sheet.");
+    return lines.join("\n");
+  }
+  lines.push("### Normalized cells");
+  for (const change of input.changes) {
+    lines.push(
+      `- ${change.address}: ${JSON.stringify(change.before)} -> ${JSON.stringify(change.after)}`,
+    );
+  }
+  lines.push(
+    "",
+    "The staged preview bundle writes the normalized text cells through the normal workbook mutation path.",
+  );
+  return lines.join("\n");
+}
+
 export function getImportWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate | ImportWorkflowTemplate,
   workflowInput?: ImportWorkflowExecutionInput | null,
@@ -383,6 +426,33 @@ export function getImportWorkflowTemplateMetadata(
           },
         ],
       };
+    case "normalizeCurrentSheetWhitespace":
+      return {
+        title: "Normalize Current Sheet Whitespace",
+        runningSummary: `Running whitespace normalization workflow for ${scopeLabel}.`,
+        stepPlans: [
+          {
+            stepId: "inspect-text-cells",
+            label: "Inspect text cells",
+            runningSummary: `Inspecting text cells and the used range on ${scopeLabel}.`,
+            pendingSummary: `Waiting to inspect text cells and the used range on ${scopeLabel}.`,
+          },
+          {
+            stepId: "stage-whitespace-normalization",
+            label: "Stage whitespace normalization",
+            runningSummary:
+              "Staging the semantic preview that trims and collapses whitespace across the current sheet.",
+            pendingSummary:
+              "Waiting to stage the semantic preview that trims and collapses whitespace across the current sheet.",
+          },
+          {
+            stepId: "draft-whitespace-report",
+            label: "Draft whitespace report",
+            runningSummary: "Drafting the durable whitespace normalization report.",
+            pendingSummary: "Waiting to assemble the durable whitespace normalization report.",
+          },
+        ],
+      };
     default:
       return null;
   }
@@ -398,7 +468,8 @@ export async function executeImportWorkflow(input: {
 }): Promise<ImportWorkflowExecutionResult | null> {
   if (
     input.workflowTemplate !== "normalizeCurrentSheetHeaders" &&
-    input.workflowTemplate !== "normalizeCurrentSheetNumberFormats"
+    input.workflowTemplate !== "normalizeCurrentSheetNumberFormats" &&
+    input.workflowTemplate !== "normalizeCurrentSheetWhitespace"
   ) {
     return null;
   }
@@ -450,6 +521,41 @@ export async function executeImportWorkflow(input: {
               stepId: "draft-header-report",
               label: "Draft header report",
               summary: "Prepared the durable empty-sheet header report for the thread.",
+            },
+          ],
+        } satisfies ImportWorkflowExecutionResult;
+      }
+      if (input.workflowTemplate === "normalizeCurrentSheetWhitespace") {
+        return {
+          title: "Normalize Current Sheet Whitespace",
+          summary: `${sheetName} is empty, so there were no text cells to normalize.`,
+          artifact: {
+            kind: "markdown",
+            title: "Whitespace Normalization Preview",
+            text: [
+              "## Whitespace Normalization Preview",
+              "",
+              `Sheet: ${sheetName}`,
+              "",
+              "No whitespace changes were needed because the sheet is empty.",
+            ].join("\n"),
+          },
+          citations: [],
+          steps: [
+            {
+              stepId: "inspect-text-cells",
+              label: "Inspect text cells",
+              summary: `Loaded ${sheetName} and found no populated cells.`,
+            },
+            {
+              stepId: "stage-whitespace-normalization",
+              label: "Stage whitespace normalization",
+              summary: "No whitespace normalization preview was staged because the sheet is empty.",
+            },
+            {
+              stepId: "draft-whitespace-report",
+              label: "Draft whitespace report",
+              summary: "Prepared the durable empty-sheet whitespace report for the thread.",
             },
           ],
         } satisfies ImportWorkflowExecutionResult;
@@ -595,6 +701,106 @@ export async function executeImportWorkflow(input: {
                   }) satisfies WorkbookAgentCommand,
               ),
               goalText: `Normalize number formats on ${sheetName}`,
+            }
+          : {}),
+      } satisfies ImportWorkflowExecutionResult;
+    }
+
+    if (input.workflowTemplate === "normalizeCurrentSheetWhitespace") {
+      const rowValues: WorkbookAgentWriteCellInput[][] = [];
+      const changes: Array<{
+        readonly address: string;
+        readonly before: string;
+        readonly after: string;
+      }> = [];
+
+      for (let row = headerRow; row <= maxRow; row += 1) {
+        const rowInputs: WorkbookAgentWriteCellInput[] = [];
+        for (let col = minCol; col <= maxCol; col += 1) {
+          const address = formatAddress(row, col);
+          const cell = cellByAddress.get(address);
+          if (!cell) {
+            rowInputs.push(null);
+            continue;
+          }
+          if (cell.formula) {
+            rowInputs.push({ formula: `=${cell.formula}` });
+            continue;
+          }
+          if (typeof cell.value === "string") {
+            const normalized = normalizeWhitespaceText(cell.value);
+            rowInputs.push(normalized);
+            if (normalized !== cell.value) {
+              changes.push({
+                address,
+                before: cell.value,
+                after: normalized,
+              });
+            }
+            continue;
+          }
+          rowInputs.push(cell.value ?? null);
+        }
+        rowValues.push(rowInputs);
+      }
+
+      const rangeStartAddress = formatAddress(headerRow, minCol);
+      const rangeEndAddress = formatAddress(maxRow, maxCol);
+      return {
+        title: "Normalize Current Sheet Whitespace",
+        summary:
+          changes.length === 0
+            ? `Checked ${sheetName} text cells and found no whitespace cleanup changes to stage.`
+            : `Staged normalized whitespace for ${String(changes.length)} text cell${changes.length === 1 ? "" : "s"} on ${sheetName}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Whitespace Normalization Preview",
+          text: summarizeWhitespaceNormalizationMarkdown({
+            sheetName,
+            rangeStartAddress,
+            rangeEndAddress,
+            changes,
+          }),
+        },
+        citations: [
+          createHeaderCitation(
+            sheetName,
+            rangeStartAddress,
+            rangeEndAddress,
+            changes.length > 0 ? "target" : "source",
+          ),
+        ],
+        steps: [
+          {
+            stepId: "inspect-text-cells",
+            label: "Inspect text cells",
+            summary: `Loaded the used range and string cells from ${sheetName}.`,
+          },
+          {
+            stepId: "stage-whitespace-normalization",
+            label: "Stage whitespace normalization",
+            summary:
+              changes.length === 0
+                ? "No whitespace normalization preview was staged because the sheet is already normalized."
+                : `Prepared the semantic write preview that normalizes whitespace across ${String(changes.length)} text cell${changes.length === 1 ? "" : "s"}.`,
+          },
+          {
+            stepId: "draft-whitespace-report",
+            label: "Draft whitespace report",
+            summary: "Prepared the durable whitespace normalization report for the thread.",
+          },
+        ],
+        ...(changes.length > 0
+          ? {
+              commands: [
+                {
+                  kind: "writeRange" as const,
+                  sheetName,
+                  startAddress: rangeStartAddress,
+                  values: rowValues,
+                },
+              ],
+              goalText: `Normalize whitespace on ${sheetName}`,
             }
           : {}),
       } satisfies ImportWorkflowExecutionResult;

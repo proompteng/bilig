@@ -1472,6 +1472,75 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts whitespace-normalization workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-whitespace-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "normalizeCurrentSheetWhitespace" as const,
+      title: "Normalize Current Sheet Whitespace",
+      summary: "Staged normalized whitespace for 3 text cells on Imports.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-text-cells",
+          label: "Inspect text cells",
+          status: "completed" as const,
+          summary: "Loaded the used range and string cells from Imports.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Whitespace Normalization Preview",
+        text: "## Whitespace Normalization Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-whitespace-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "normalizeCurrentSheetWhitespace",
+          sheetName: "Imports",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "normalizeCurrentSheetWhitespace",
+      sheetName: "Imports",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "normalizeCurrentSheetWhitespace"',
+    );
+  });
+
   it("starts current-sheet rollup workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

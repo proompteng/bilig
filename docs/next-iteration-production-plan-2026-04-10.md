@@ -1,6 +1,7 @@
 # bilig Next Iteration Production Plan
 
 ## Status
+
 Active implementation plan, tightened against the live `main` checkout on 2026-04-10.
 
 ### Implementation progress on `main`
@@ -21,7 +22,7 @@ Already landed on `main`:
 - Zero-backed durable thread summaries and workflow-run projections in the browser shell, with SSE kept for live deltas
 - follower-tab degradation messaging when another tab owns the persistent local store
 - internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
-- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, outlier highlighting, header normalization, number-format normalization, current-sheet rollup, and a bounded set of structural previews
+- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, outlier highlighting, header normalization, number-format normalization, whitespace normalization, current-sheet rollup, and a bounded set of structural previews
 
 Still required before this document is honestly complete end to end:
 
@@ -523,11 +524,11 @@ The first production workflow set should be deliberately narrow, highly reliable
 
 The agent should not have one global write mode. It needs policy tied to change shape.
 
-| Risk class | Typical scope | Default policy | Examples |
-| --- | --- | --- | --- |
-| Low | selection / small visible-range changes | auto or preview | format cells, write bounded formulas, normalize selected range |
-| Medium | sheet-scoped edits | preview required | repair formula region, build summary block, clean imported sheet |
-| High | workbook-wide or structural edits | explicit apply | create/rename sheets, large restructures, cross-sheet rewrites |
+| Risk class | Typical scope                           | Default policy   | Examples                                                         |
+| ---------- | --------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| Low        | selection / small visible-range changes | auto or preview  | format cells, write bounded formulas, normalize selected range   |
+| Medium     | sheet-scoped edits                      | preview required | repair formula region, build summary block, clean imported sheet |
+| High       | workbook-wide or structural edits       | explicit apply   | create/rename sheets, large restructures, cross-sheet rewrites   |
 
 ### Policy rules
 
@@ -807,23 +808,23 @@ These targets should become explicit release gates for the iteration.
 
 They should be re-baselined against the current perf harness during Tranche 1 before being treated as ship blockers.
 
-| Metric | Target |
-| --- | --- |
-| Local visible edit p95 | `<16ms` |
-| Selection paint p95 | `<8ms` |
-| 100-cell paste first local paint | `<40ms` |
-| 100-cell paste first authoritative diff p95 | `<100ms` |
-| Collaborator visible update p95 | `<150ms` |
-| Warm reopen last workbook p95 | `<500ms` |
-| Warm-start first useful paint, 100k workbook | `<250ms` |
-| Warm-start first useful paint, 250k workbook | `<700ms` |
-| Reconnect after offline period with 100 pending ops | `<2s` |
-| Pending-op loss | `0` |
-| First assistant delta p95 | `<700ms` |
-| First preview highlight p95 | `<1000ms` |
-| Accepted agent mutation visible locally p95 | `<1500ms` |
-| Preview/apply mismatch rate | `<0.5%` |
-| JS/WASM mismatch rate on promoted families | `<0.1%` |
+| Metric                                              | Target    |
+| --------------------------------------------------- | --------- |
+| Local visible edit p95                              | `<16ms`   |
+| Selection paint p95                                 | `<8ms`    |
+| 100-cell paste first local paint                    | `<40ms`   |
+| 100-cell paste first authoritative diff p95         | `<100ms`  |
+| Collaborator visible update p95                     | `<150ms`  |
+| Warm reopen last workbook p95                       | `<500ms`  |
+| Warm-start first useful paint, 100k workbook        | `<250ms`  |
+| Warm-start first useful paint, 250k workbook        | `<700ms`  |
+| Reconnect after offline period with 100 pending ops | `<2s`     |
+| Pending-op loss                                     | `0`       |
+| First assistant delta p95                           | `<700ms`  |
+| First preview highlight p95                         | `<1000ms` |
+| Accepted agent mutation visible locally p95         | `<1500ms` |
+| Preview/apply mismatch rate                         | `<0.5%`   |
+| JS/WASM mismatch rate on promoted families          | `<0.1%`   |
 
 ### Suggested initial scale target
 

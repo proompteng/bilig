@@ -902,6 +902,7 @@ export function WorkbookAgentPanel(props: {
       | "highlightCurrentSheetOutliers"
       | "normalizeCurrentSheetHeaders"
       | "normalizeCurrentSheetNumberFormats"
+      | "normalizeCurrentSheetWhitespace"
       | "traceSelectionDependencies"
       | "explainSelectionCell"
       | "createCurrentSheetRollup",

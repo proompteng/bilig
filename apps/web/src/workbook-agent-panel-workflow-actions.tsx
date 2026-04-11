@@ -15,6 +15,7 @@ type WorkflowActionTemplate =
   | "highlightCurrentSheetOutliers"
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
+  | "normalizeCurrentSheetWhitespace"
   | "traceSelectionDependencies"
   | "explainSelectionCell"
   | "createCurrentSheetRollup";
@@ -68,6 +69,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Normalize number formats",
     summary:
       "Stage a preview bundle that infers and applies semantic number formats across the active sheet.",
+  },
+  {
+    template: "normalizeCurrentSheetWhitespace",
+    label: "Normalize whitespace",
+    summary:
+      "Stage a preview bundle that trims and collapses repeated whitespace across text cells on the active sheet.",
   },
   {
     template: "createCurrentSheetRollup",

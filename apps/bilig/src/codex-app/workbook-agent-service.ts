@@ -288,6 +288,7 @@ function isMutatingWorkflowTemplate(workflowTemplate: string): boolean {
     workflowTemplate === "highlightCurrentSheetOutliers" ||
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
     workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
+    workflowTemplate === "normalizeCurrentSheetWhitespace" ||
     workflowTemplate === "createCurrentSheetRollup" ||
     workflowTemplate === "createSheet" ||
     workflowTemplate === "renameCurrentSheet" ||

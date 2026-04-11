@@ -392,6 +392,73 @@ describe("workbook agent workflows", () => {
     ]);
   });
 
+  it("executes whitespace-normalization workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Imports");
+          engine.setCellValue("Imports", "A1", " Customer   Name ");
+          engine.setCellValue("Imports", "B1", "Notes");
+          engine.setCellValue("Imports", "A2", "  Ada   Lovelace  ");
+          engine.setCellValue("Imports", "B2", "  First\tentry  ");
+          engine.setCellValue("Imports", "A3", "Grace Hopper");
+          engine.setCellValue("Imports", "B3", "Already clean");
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "normalizeCurrentSheetWhitespace",
+      context: {
+        selection: {
+          sheetName: "Imports",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Imports",
+      },
+    });
+
+    expect(result.title).toBe("Normalize Current Sheet Whitespace");
+    expect(result.summary).toContain("Staged normalized whitespace");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "writeRange",
+        sheetName: "Imports",
+        startAddress: "A1",
+        values: [
+          ["Customer Name", "Notes"],
+          ["Ada Lovelace", "First entry"],
+          ["Grace Hopper", "Already clean"],
+        ],
+      }),
+    ]);
+  });
+
   it("executes current-sheet outlier-highlighting workflows through the durable inspection path", async () => {
     const result = await executeWorkbookAgentWorkflow({
       documentId: "doc-1",

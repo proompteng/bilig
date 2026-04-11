@@ -76,7 +76,10 @@ interface WorkbookAgentWorkflowTemplateMetadata {
 
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
 type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers";
-type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders" | "normalizeCurrentSheetNumberFormats";
+type ImportWorkflowTemplate =
+  | "normalizeCurrentSheetHeaders"
+  | "normalizeCurrentSheetNumberFormats"
+  | "normalizeCurrentSheetWhitespace";
 type RollupWorkflowTemplate = "createCurrentSheetRollup";
 
 function isFormulaWorkflowTemplate(
@@ -96,7 +99,8 @@ function isImportWorkflowTemplate(
 ): workflowTemplate is ImportWorkflowTemplate {
   return (
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
-    workflowTemplate === "normalizeCurrentSheetNumberFormats"
+    workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
+    workflowTemplate === "normalizeCurrentSheetWhitespace"
   );
 }
 

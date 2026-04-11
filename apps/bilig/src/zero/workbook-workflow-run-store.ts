@@ -73,6 +73,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "highlightCurrentSheetOutliers" ||
     value === "normalizeCurrentSheetHeaders" ||
     value === "normalizeCurrentSheetNumberFormats" ||
+    value === "normalizeCurrentSheetWhitespace" ||
     value === "traceSelectionDependencies" ||
     value === "explainSelectionCell" ||
     value === "searchWorkbookQuery" ||

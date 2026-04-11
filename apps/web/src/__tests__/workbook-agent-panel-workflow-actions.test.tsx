@@ -289,6 +289,44 @@ describe("WorkflowActionStrip", () => {
     });
   });
 
+  it("starts whitespace-normalization workflows from the quick action list", async () => {
+    const onStartWorkflow = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkflowActionStrip
+          disabled={false}
+          isStartingWorkflow={false}
+          onStartNamedWorkflow={vi.fn()}
+          onStartSearchWorkflow={vi.fn()}
+          onStartStructuralWorkflow={vi.fn()}
+          onStartWorkflow={onStartWorkflow}
+        />,
+      );
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetWhitespace']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Whitespace workflow button not found");
+      }
+      button.click();
+    });
+
+    expect(onStartWorkflow).toHaveBeenCalledWith("normalizeCurrentSheetWhitespace");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("starts rollup workflows from the quick action list", async () => {
     const onStartWorkflow = vi.fn();
     const host = document.createElement("div");
