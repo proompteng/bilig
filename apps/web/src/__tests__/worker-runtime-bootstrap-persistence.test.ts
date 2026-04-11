@@ -116,6 +116,8 @@ describe("worker runtime bootstrap persistence", () => {
           throw new WorkbookLocalStoreLockedError();
         },
       },
+      lockRetryCount: 0,
+      sleep: async () => {},
     });
 
     expect(result).toEqual({
@@ -129,5 +131,50 @@ describe("worker runtime bootstrap persistence", () => {
       nextPendingMutationSeq: 1,
       localPersistenceMode: "follower",
     });
+  });
+
+  it("retries transient lock conflicts before falling back to follower mode", async () => {
+    let openCount = 0;
+    const result = await restoreBootstrapPersistence({
+      persistState: true,
+      documentId: "doc-1",
+      localStoreFactory: {
+        async open() {
+          openCount += 1;
+          if (openCount < 3) {
+            throw new WorkbookLocalStoreLockedError("locked");
+          }
+          return {
+            async loadBootstrapState() {
+              return null;
+            },
+            async loadState() {
+              return null;
+            },
+            async persistProjectionState() {},
+            async ingestAuthoritativeDelta() {},
+            async listPendingMutations() {
+              return [];
+            },
+            async listMutationJournalEntries() {
+              return [];
+            },
+            async appendPendingMutation() {},
+            async updatePendingMutation() {},
+            async removePendingMutation() {},
+            readViewportProjection() {
+              return null;
+            },
+            close() {},
+          };
+        },
+      },
+      lockRetryCount: 2,
+      sleep: async () => {},
+    });
+
+    expect(openCount).toBe(3);
+    expect(result.localPersistenceMode).toBe("persistent");
+    expect(result.localStore).not.toBeNull();
   });
 });

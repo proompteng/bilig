@@ -19,10 +19,44 @@ export interface WorkerRuntimeBootstrapPersistenceResult {
   localPersistenceMode: "persistent" | "ephemeral" | "follower";
 }
 
+const DEFAULT_LOCK_RETRY_COUNT = 6;
+const DEFAULT_LOCK_RETRY_DELAY_MS = 100;
+
+async function defaultSleep(delayMs: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+async function openLocalStoreWithRetry(args: {
+  documentId: string;
+  localStoreFactory: WorkbookLocalStoreFactory;
+  lockRetryCount: number;
+  lockRetryDelayMs: number;
+  sleep: (delayMs: number) => Promise<void>;
+}): Promise<WorkbookLocalStore> {
+  const attemptOpen = async (attempt: number): Promise<WorkbookLocalStore> => {
+    try {
+      return await args.localStoreFactory.open(args.documentId);
+    } catch (error) {
+      if (!(error instanceof WorkbookLocalStoreLockedError) || attempt >= args.lockRetryCount) {
+        throw error;
+      }
+      await args.sleep(args.lockRetryDelayMs);
+      return attemptOpen(attempt + 1);
+    }
+  };
+
+  return attemptOpen(0);
+}
+
 export async function restoreBootstrapPersistence(args: {
   persistState: boolean;
   documentId: string;
   localStoreFactory: WorkbookLocalStoreFactory;
+  lockRetryCount?: number;
+  lockRetryDelayMs?: number;
+  sleep?: (delayMs: number) => Promise<void>;
 }): Promise<WorkerRuntimeBootstrapPersistenceResult> {
   if (!args.persistState) {
     return {
@@ -42,7 +76,13 @@ export async function restoreBootstrapPersistence(args: {
   let restoredBootstrapState: WorkbookBootstrapState | null = null;
 
   try {
-    localStore = await args.localStoreFactory.open(args.documentId);
+    localStore = await openLocalStoreWithRetry({
+      documentId: args.documentId,
+      localStoreFactory: args.localStoreFactory,
+      lockRetryCount: args.lockRetryCount ?? DEFAULT_LOCK_RETRY_COUNT,
+      lockRetryDelayMs: args.lockRetryDelayMs ?? DEFAULT_LOCK_RETRY_DELAY_MS,
+      sleep: args.sleep ?? defaultSleep,
+    });
     restoredBootstrapState = await localStore.loadBootstrapState();
   } catch (error) {
     if (!(error instanceof WorkbookLocalStoreLockedError)) {

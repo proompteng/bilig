@@ -46,6 +46,7 @@ import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
 import { useWorkbookSelectionActions } from "./use-workbook-selection-actions.js";
 import { useWorkbookEditorConflict } from "./use-workbook-editor-conflict.js";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
+import { registerRuntimeDisposalHandlers } from "./runtime-disposal-handlers.js";
 import { useWorkbookLocalPersistenceHandoff } from "./use-workbook-local-persistence-handoff.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
@@ -134,6 +135,7 @@ export function useWorkerWorkbookAppState(input: {
   const [editorConflict, setEditorConflict] = useState<WorkbookEditorConflict | null>(null);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef(workerHandle);
+  const runtimeControllerRef = useRef(runtimeController);
   const editorValueRef = useRef(editorValue);
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
@@ -155,6 +157,10 @@ export function useWorkerWorkbookAppState(input: {
   }, [workerHandle]);
 
   useEffect(() => {
+    runtimeControllerRef.current = runtimeController;
+  }, [runtimeController]);
+
+  useEffect(() => {
     editorValueRef.current = editorValue;
   }, [editorValue]);
 
@@ -169,6 +175,12 @@ export function useWorkerWorkbookAppState(input: {
   useEffect(() => {
     connectionStateRef.current = connectionState.name;
   }, [connectionState.name]);
+
+  useEffect(() => {
+    return registerRuntimeDisposalHandlers({
+      getController: () => runtimeControllerRef.current,
+    });
+  }, []);
 
   useEffect(() => {
     runtimeActorRef.send({
