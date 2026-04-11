@@ -7,6 +7,12 @@ import type {
   WorkbookAgentWorkflowTemplate,
 } from "@bilig/contracts";
 
+export type StructuralWorkflowTemplate =
+  | "createSheet"
+  | "renameCurrentSheet"
+  | "hideCurrentRow"
+  | "hideCurrentColumn";
+
 interface StructuralWorkflowExecutionInput {
   readonly name?: string;
 }
@@ -56,7 +62,9 @@ function requireSelectionAddress(context: WorkbookAgentUiContext | null | undefi
   return address;
 }
 
-function requireWorkflowName(workflowInput: StructuralWorkflowExecutionInput | null | undefined): string {
+function requireWorkflowName(
+  workflowInput: StructuralWorkflowExecutionInput | null | undefined,
+): string {
   const name = workflowInput?.name?.trim();
   if (!name) {
     throw new Error("A non-empty name is required for this structural workflow.");
@@ -64,7 +72,10 @@ function requireWorkflowName(workflowInput: StructuralWorkflowExecutionInput | n
   return name;
 }
 
-function createMarkdownArtifact(title: string, lines: readonly string[]): WorkbookAgentWorkflowArtifact {
+function createMarkdownArtifact(
+  title: string,
+  lines: readonly string[],
+): WorkbookAgentWorkflowArtifact {
   return {
     kind: "markdown",
     title,
@@ -72,10 +83,24 @@ function createMarkdownArtifact(title: string, lines: readonly string[]): Workbo
   };
 }
 
+export function isStructuralWorkflowTemplate(
+  workflowTemplate: WorkbookAgentWorkflowTemplate,
+): workflowTemplate is StructuralWorkflowTemplate {
+  return (
+    workflowTemplate === "createSheet" ||
+    workflowTemplate === "renameCurrentSheet" ||
+    workflowTemplate === "hideCurrentRow" ||
+    workflowTemplate === "hideCurrentColumn"
+  );
+}
+
 export function getStructuralWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
   workflowInput?: StructuralWorkflowExecutionInput | null,
 ): StructuralWorkflowTemplateMetadata | null {
+  if (!isStructuralWorkflowTemplate(workflowTemplate)) {
+    return null;
+  }
   switch (workflowTemplate) {
     case "createSheet": {
       const sheetName = workflowInput?.name?.trim() || "new sheet";
@@ -108,7 +133,8 @@ export function getStructuralWorkflowTemplateMetadata(
             stepId: "inspect-current-sheet",
             label: "Resolve current sheet",
             runningSummary: "Resolving the active sheet from the current workbook context.",
-            pendingSummary: "Waiting to resolve the active sheet from the current workbook context.",
+            pendingSummary:
+              "Waiting to resolve the active sheet from the current workbook context.",
           },
           {
             stepId: "stage-sheet-rename-preview",
@@ -128,7 +154,8 @@ export function getStructuralWorkflowTemplateMetadata(
             stepId: "resolve-current-row",
             label: "Resolve current row",
             runningSummary: "Resolving the selected row from the current workbook context.",
-            pendingSummary: "Waiting to resolve the selected row from the current workbook context.",
+            pendingSummary:
+              "Waiting to resolve the selected row from the current workbook context.",
           },
           {
             stepId: "stage-row-visibility-preview",
@@ -147,7 +174,8 @@ export function getStructuralWorkflowTemplateMetadata(
             stepId: "resolve-current-column",
             label: "Resolve current column",
             runningSummary: "Resolving the selected column from the current workbook context.",
-            pendingSummary: "Waiting to resolve the selected column from the current workbook context.",
+            pendingSummary:
+              "Waiting to resolve the selected column from the current workbook context.",
           },
           {
             stepId: "stage-column-visibility-preview",
@@ -167,6 +195,9 @@ export function executeStructuralWorkflow(input: {
   context?: WorkbookAgentUiContext | null;
   workflowInput?: StructuralWorkflowExecutionInput | null;
 }): StructuralWorkflowExecutionResult | null {
+  if (!isStructuralWorkflowTemplate(input.workflowTemplate)) {
+    return null;
+  }
   switch (input.workflowTemplate) {
     case "createSheet": {
       const sheetName = requireWorkflowName(input.workflowInput);
