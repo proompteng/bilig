@@ -130,7 +130,7 @@ export function useWorkbookToolbar(input: {
                 ? "Local"
                 : "Unavailable";
   const statusChipClass =
-    "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
+    "inline-flex h-8 items-center rounded-md border border-[var(--color-mauve-200)] bg-white px-3 text-[12px] font-medium text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]";
 
   const selectionStatus = useMemo(
     () => (

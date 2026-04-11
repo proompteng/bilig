@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn.js";
-import { workbookStatusDotClass, workbookSurfaceClass } from "./workbook-shell-chrome.js";
+import { workbookStatusDotClass } from "./workbook-shell-chrome.js";
 
 const HEADER_ACTION_CLASS =
   "inline-flex h-full items-center gap-2 rounded-[calc(var(--wb-radius-control)-2px)] px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1";
@@ -57,15 +57,14 @@ export function WorkbookHeaderStatusChip(props: { modeLabel: string; syncLabel: 
       <span
         aria-label={`Workbook status: ${props.modeLabel}, ${props.syncLabel}`}
         className={cn(
-          workbookSurfaceClass({ emphasis: "raised" }),
-          "inline-flex h-8 items-center gap-2 px-2.5 text-[12px] font-medium text-[var(--wb-text-muted)]",
+          "inline-flex h-8 items-center gap-2 rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 text-[12px] font-medium text-[var(--color-mauve-700)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
         )}
         data-testid="status-mode"
         role="status"
         title={`${props.modeLabel} • ${props.syncLabel}`}
       >
         <span aria-hidden="true" className={toneClass} />
-        <span className="text-[var(--wb-text)]">{props.syncLabel}</span>
+        <span className="text-[var(--color-mauve-900)]">{props.syncLabel}</span>
       </span>
       <span className="sr-only" data-testid="status-sync">
         {props.syncLabel}
