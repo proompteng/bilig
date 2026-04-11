@@ -22,7 +22,7 @@ import type {
   WorkbookSortSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
-import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
+import { Float64Arena, Uint32Arena } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
 import { CycleDetector } from "./cycle-detection.js";

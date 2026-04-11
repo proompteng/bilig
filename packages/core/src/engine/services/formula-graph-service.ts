@@ -7,7 +7,7 @@ import { growUint32 } from "../../engine-buffer-utils.js";
 import { errorValue } from "../../engine-value-utils.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
 import { EngineFormulaGraphError } from "../errors.js";
-import type { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
+import type { Float64Arena, Uint32Arena } from "@bilig/formula";
 
 export interface EngineFormulaGraphService {
   readonly rebuildTopoRanks: () => Effect.Effect<void, EngineFormulaGraphError>;
@@ -162,8 +162,7 @@ export function createEngineFormulaGraphService(args: {
       const cellIndex = result.cycleMembers[index]!;
       args.state.workbook.cellStore.flags[cellIndex] =
         (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.InCycle;
-      args.state.workbook.cellStore.cycleGroupIds[cellIndex] =
-        result.cycleGroups[cellIndex] ?? -1;
+      args.state.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups[cellIndex] ?? -1;
       args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle));
     }
   };
@@ -235,8 +234,10 @@ export function createEngineFormulaGraphService(args: {
     }
     for (let rangeIndex = 0; rangeIndex < args.state.ranges.size; rangeIndex += 1) {
       const descriptor = args.state.ranges.getDescriptor(rangeIndex);
-      args.getWasmRangeOffsets()[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
-      args.getWasmRangeLengths()[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
+      args.getWasmRangeOffsets()[rangeIndex] =
+        descriptor.refCount > 0 ? descriptor.membersOffset : 0;
+      args.getWasmRangeLengths()[rangeIndex] =
+        descriptor.refCount > 0 ? descriptor.membersLength : 0;
       args.getWasmRangeRowCounts()[rangeIndex] =
         descriptor.refCount > 0 ? descriptor.row2 - descriptor.row1 + 1 : 0;
       args.getWasmRangeColCounts()[rangeIndex] =

@@ -27,7 +27,7 @@ import {
   type U32,
 } from "../runtime-state.js";
 import { EngineFormulaBindingError } from "../errors.js";
-import type { Uint32Arena, Float64Arena } from "@bilig/formula/program-arena";
+import type { Uint32Arena, Float64Arena } from "@bilig/formula";
 import type { EngineLookupService } from "./lookup-service.js";
 
 export interface EngineFormulaBindingService {

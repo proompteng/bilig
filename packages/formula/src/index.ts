@@ -9,6 +9,7 @@ export * from "./binder.js";
 export * from "./optimizer.js";
 export * from "./compiler.js";
 export * from "./js-evaluator.js";
+export * from "./program-arena.js";
 export * from "./runtime-values.js";
 export * from "./translation.js";
 export * from "./compatibility.js";
