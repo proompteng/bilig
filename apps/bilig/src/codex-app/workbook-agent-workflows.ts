@@ -28,7 +28,6 @@ import {
   executeStructuralWorkflow,
   getStructuralWorkflowTemplateMetadata,
   isStructuralWorkflowTemplate,
-  type StructuralWorkflowTemplate,
 } from "./workbook-agent-structural-workflows.js";
 
 export interface WorkbookAgentWorkflowExecutionInput {
@@ -67,17 +66,8 @@ interface WorkbookAgentWorkflowTemplateMetadata {
   readonly stepPlans: readonly WorkbookAgentWorkflowStepPlan[];
 }
 
-type NonStructuralWorkflowTemplate = Exclude<
-  WorkbookAgentWorkflowTemplate,
-  StructuralWorkflowTemplate
->;
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
 type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders";
-type NonFormulaWorkflowTemplate = Exclude<NonStructuralWorkflowTemplate, FormulaWorkflowTemplate>;
-type NonFormulaOrImportWorkflowTemplate = Exclude<
-  NonFormulaWorkflowTemplate,
-  ImportWorkflowTemplate
->;
 
 function isFormulaWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
@@ -89,20 +79,6 @@ function isImportWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is ImportWorkflowTemplate {
   return workflowTemplate === "normalizeCurrentSheetHeaders";
-}
-
-function isNonFormulaOrImportWorkflowTemplate(
-  workflowTemplate: WorkbookAgentWorkflowTemplate,
-): workflowTemplate is NonFormulaOrImportWorkflowTemplate {
-  return (
-    !isStructuralWorkflowTemplate(workflowTemplate) &&
-    !isFormulaWorkflowTemplate(workflowTemplate) &&
-    !isImportWorkflowTemplate(workflowTemplate)
-  );
-}
-
-function assertUnsupportedWorkflowTemplate(_workflowTemplate: never): never {
-  throw new Error("Unsupported workbook agent workflow template.");
 }
 
 function getWorkflowTemplateMetadata(
@@ -124,12 +100,12 @@ function getWorkflowTemplateMetadata(
   if (isStructuralWorkflowTemplate(workflowTemplate)) {
     throw new Error(`Structural workflow metadata resolution fell through: ${workflowTemplate}`);
   }
-  if (!isNonFormulaOrImportWorkflowTemplate(workflowTemplate)) {
+  if (isFormulaWorkflowTemplate(workflowTemplate) || isImportWorkflowTemplate(workflowTemplate)) {
     throw new Error(
       `Unexpected workflow template metadata resolution fell through: ${workflowTemplate}`,
     );
   }
-  switch (workflowTemplate) {
+  switch (workflowTemplate as string) {
     case "summarizeWorkbook":
       return {
         title: "Summarize Workbook",
@@ -262,8 +238,11 @@ function getWorkflowTemplateMetadata(
         ],
       };
     }
+    case "normalizeCurrentSheetNumberFormats":
+    case "createCurrentSheetRollup":
+      throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
   }
-  return assertUnsupportedWorkflowTemplate(workflowTemplate);
+  throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
 }
 
 export function describeWorkbookAgentWorkflowTemplate(
@@ -677,11 +656,15 @@ export async function executeWorkbookAgentWorkflow(input: {
   if (importResult) {
     return importResult;
   }
-  if (!isNonFormulaOrImportWorkflowTemplate(input.workflowTemplate)) {
+  if (
+    isStructuralWorkflowTemplate(input.workflowTemplate) ||
+    isFormulaWorkflowTemplate(input.workflowTemplate) ||
+    isImportWorkflowTemplate(input.workflowTemplate)
+  ) {
     throw new Error(`Unexpected workflow execution fell through: ${input.workflowTemplate}`);
   }
   const workflowTemplate = input.workflowTemplate;
-  switch (workflowTemplate) {
+  switch (workflowTemplate as string) {
     case "summarizeWorkbook": {
       throwIfWorkflowCancelled(input.signal);
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
@@ -1016,6 +999,9 @@ export async function executeWorkbookAgentWorkflow(input: {
         ],
       };
     }
+    case "normalizeCurrentSheetNumberFormats":
+    case "createCurrentSheetRollup":
+      throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
   }
-  return assertUnsupportedWorkflowTemplate(workflowTemplate);
+  throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
 }
