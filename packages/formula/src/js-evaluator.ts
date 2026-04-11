@@ -773,6 +773,7 @@ function executePlan(
               cols = 1;
             }
           }
+          context.noteRangeMaterialization?.(values.length);
           stack.push({
             kind: "range",
             values,
@@ -785,6 +786,87 @@ function executePlan(
           });
         }
         break;
+      case "lookup-exact-match": {
+        const lookupOperand = popArgument(stack);
+        const lookupValue = isSingleCellValue(lookupOperand);
+        if (!lookupValue) {
+          stack.push({ kind: "scalar", value: error(ErrorCode.Value) });
+          break;
+        }
+
+        const sheetName = instruction.sheetName ?? context.sheetName;
+        const directMatch = context.resolveExactVectorMatch?.({
+          lookupValue,
+          sheetName,
+          start: instruction.start,
+          end: instruction.end,
+          searchMode: instruction.searchMode,
+        });
+        if (directMatch?.handled) {
+          context.noteExactLookupDirect?.();
+          stack.push({
+            kind: "scalar",
+            value:
+              directMatch.position === undefined
+                ? error(ErrorCode.NA)
+                : { tag: ValueTag.Number, value: directMatch.position },
+          });
+          break;
+        }
+
+        context.noteExactLookupFallback?.();
+        const values = context.resolveRange(
+          sheetName,
+          instruction.start,
+          instruction.end,
+          instruction.refKind,
+        );
+        context.noteRangeMaterialization?.(values.length);
+        let rows = values.length;
+        let cols = 1;
+        try {
+          const range = parseRangeAddress(
+            `${instruction.sheetName ? `${instruction.sheetName}!` : ""}${instruction.start}:${instruction.end}`,
+          );
+          if (range.kind === "cells") {
+            rows = range.end.row - range.start.row + 1;
+            cols = range.end.col - range.start.col + 1;
+          }
+        } catch {
+          rows = values.length;
+          cols = 1;
+        }
+
+        const rangeArg: RangeBuiltinArgument = {
+          kind: "range",
+          values,
+          refKind: instruction.refKind,
+          rows,
+          cols,
+          sheetName,
+          start: instruction.start,
+          end: instruction.end,
+        };
+        const lookupBuiltin =
+          context.resolveLookupBuiltin?.(instruction.callee) ??
+          getLookupBuiltin(instruction.callee);
+        if (!lookupBuiltin) {
+          stack.push({ kind: "scalar", value: error(ErrorCode.Name) });
+          break;
+        }
+
+        const result =
+          instruction.callee === "MATCH"
+            ? lookupBuiltin(lookupValue, rangeArg, { tag: ValueTag.Number, value: 0 })
+            : lookupBuiltin(
+                lookupValue,
+                rangeArg,
+                { tag: ValueTag.Number, value: 0 },
+                { tag: ValueTag.Number, value: instruction.searchMode },
+              );
+        stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
+        break;
+      }
       case "push-lambda":
         stack.push({
           kind: "lambda",

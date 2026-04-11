@@ -32,10 +32,24 @@ export interface EvaluationContext {
     columnReplacementSheetName?: string;
     columnReplacementAddress?: string;
   }) => CellValue | undefined;
+  resolveExactVectorMatch?: (request: {
+    lookupValue: CellValue;
+    sheetName: string;
+    start: string;
+    end: string;
+    searchMode: 1 | -1;
+  }) => ExactVectorMatchResult;
+  noteRangeMaterialization?: (cellCount: number) => void;
+  noteExactLookupDirect?: () => void;
+  noteExactLookupFallback?: () => void;
   listSheetNames?: () => string[];
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
   resolveLookupBuiltin?: (name: string) => LookupBuiltin | undefined;
 }
+
+export type ExactVectorMatchResult =
+  | { handled: false }
+  | { handled: true; position: number | undefined };
 
 export interface ReferenceOperand {
   kind: "cell" | "range" | "row" | "col";
@@ -59,6 +73,15 @@ export type JsPlanInstruction =
       start: string;
       end: string;
       refKind: "cells" | "rows" | "cols";
+    }
+  | {
+      opcode: "lookup-exact-match";
+      callee: "MATCH" | "XMATCH";
+      sheetName?: string;
+      start: string;
+      end: string;
+      refKind: "cells";
+      searchMode: 1 | -1;
     }
   | { opcode: "push-lambda"; params: string[]; body: JsPlanInstruction[] }
   | { opcode: "unary"; operator: "+" | "-" }

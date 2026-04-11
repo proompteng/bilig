@@ -10,6 +10,7 @@ import {
   createEngineFormulaEvaluationService,
   type EngineFormulaEvaluationService,
 } from "./services/formula-evaluation-service.js";
+import { createEngineLookupService } from "./services/lookup-service.js";
 import {
   createEngineFormulaBindingService,
   type EngineFormulaBindingService,
@@ -256,6 +257,7 @@ export function createEngineServiceRuntime(args: {
 }): EngineServiceRuntime {
   const scratch = createEngineRuntimeScratchService();
   const traversal = createEngineTraversalService(args.traversal);
+  const lookup = createEngineLookupService({ state: args.state });
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
     forEachFormulaDependencyCell: (cellIndex, fn) =>
@@ -359,6 +361,7 @@ export function createEngineServiceRuntime(args: {
   });
   const evaluation = createEngineFormulaEvaluationService({
     state: args.state,
+    lookup,
     materializeSpill: (cellIndex, arrayValue) =>
       runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),
     clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),

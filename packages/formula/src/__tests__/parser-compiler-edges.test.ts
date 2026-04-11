@@ -106,6 +106,49 @@ describe("formula parser/compiler edges", () => {
     ]);
   });
 
+  it("lowers exact vector MATCH and XMATCH to the direct lookup opcode only for exact shapes", () => {
+    expect(lowerToPlan(parseFormula("MATCH(A1,A2:A4,0)"))).toEqual([
+      { opcode: "push-cell", address: "A1" },
+      {
+        opcode: "lookup-exact-match",
+        callee: "MATCH",
+        start: "A2",
+        end: "A4",
+        refKind: "cells",
+        searchMode: 1,
+      },
+      { opcode: "return" },
+    ]);
+
+    expect(lowerToPlan(parseFormula('XMATCH("pear",A1:A4,0,-1)'))).toEqual([
+      { opcode: "push-string", value: "pear" },
+      {
+        opcode: "lookup-exact-match",
+        callee: "XMATCH",
+        start: "A1",
+        end: "A4",
+        refKind: "cells",
+        searchMode: -1,
+      },
+      { opcode: "return" },
+    ]);
+
+    expect(lowerToPlan(parseFormula("MATCH(A1,A2:A4)"))).toEqual([
+      { opcode: "push-cell", address: "A1" },
+      { opcode: "push-range", start: "A2", end: "A4", refKind: "cells" },
+      {
+        opcode: "call",
+        callee: "MATCH",
+        argc: 2,
+        argRefs: [
+          { kind: "cell", address: "A1" },
+          { kind: "range", start: "A2", end: "A4", refKind: "cells" },
+        ],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
   it("parses structured references and spill refs as metadata-aware syntax", () => {
     const structured = parseFormula("SUM(Sales[Amount])");
     expect(structured).toEqual({

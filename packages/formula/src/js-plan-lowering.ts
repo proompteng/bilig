@@ -1,4 +1,5 @@
 import { ErrorCode } from "@bilig/protocol";
+import { parseRangeAddress } from "./addressing.js";
 import type { FormulaNode } from "./ast.js";
 import { hasBuiltin } from "./builtins.js";
 import type { JsPlanInstruction, ReferenceOperand } from "./js-evaluator-types.js";
@@ -47,6 +48,89 @@ function referenceOperandFromNode(node: FormulaNode): ReferenceOperand | undefin
     default:
       return undefined;
   }
+}
+
+function isVectorCellRange(node: FormulaNode): node is Extract<FormulaNode, { kind: "RangeRef" }> {
+  if (node.kind !== "RangeRef" || node.refKind !== "cells") {
+    return false;
+  }
+  const parsed = parseRangeAddress(`${node.start}:${node.end}`, node.sheetName);
+  return (
+    parsed.kind === "cells" &&
+    (parsed.start.col === parsed.end.col || parsed.start.row === parsed.end.row) &&
+    (parsed.start.col !== parsed.end.col || parsed.start.row !== parsed.end.row)
+  );
+}
+
+function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.kind === "NumberLiteral") {
+    return Number.isInteger(node.value) ? node.value : undefined;
+  }
+  if (
+    node.kind === "UnaryExpr" &&
+    node.operator === "-" &&
+    node.argument.kind === "NumberLiteral" &&
+    Number.isInteger(node.argument.value)
+  ) {
+    return -node.argument.value;
+  }
+  return undefined;
+}
+
+function lowerExactVectorLookup(
+  node: Extract<FormulaNode, { kind: "CallExpr" }>,
+  plan: JsPlanInstruction[],
+): boolean {
+  const callee = node.callee.toUpperCase();
+  const lookupRange = node.args[1];
+  if (
+    callee === "MATCH" &&
+    node.args.length === 3 &&
+    lookupRange !== undefined &&
+    isVectorCellRange(lookupRange) &&
+    staticIntegerValue(node.args[2]) === 0
+  ) {
+    lowerNode(node.args[0]!, plan);
+    plan.push({
+      opcode: "lookup-exact-match",
+      callee: "MATCH",
+      ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
+      start: lookupRange.start,
+      end: lookupRange.end,
+      refKind: "cells",
+      searchMode: 1,
+    });
+    return true;
+  }
+
+  if (
+    callee === "XMATCH" &&
+    node.args.length >= 2 &&
+    node.args.length <= 4 &&
+    lookupRange !== undefined &&
+    isVectorCellRange(lookupRange) &&
+    (node.args.length < 3 || staticIntegerValue(node.args[2]) === 0)
+  ) {
+    const searchMode = node.args.length >= 4 ? staticIntegerValue(node.args[3]) : 1;
+    if (searchMode === 1 || searchMode === -1) {
+      lowerNode(node.args[0]!, plan);
+      plan.push({
+        opcode: "lookup-exact-match",
+        callee: "XMATCH",
+        ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
+        start: lookupRange.start,
+        end: lookupRange.end,
+        refKind: "cells",
+        searchMode,
+      });
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
@@ -117,6 +201,9 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       const rewritten = rewriteSpecialCall(node);
       if (rewritten) {
         lowerNode(rewritten, plan);
+        return;
+      }
+      if (lowerExactVectorLookup(node, plan)) {
         return;
       }
       const callee = node.callee.toUpperCase();

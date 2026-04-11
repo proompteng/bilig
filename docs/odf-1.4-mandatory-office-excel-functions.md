@@ -19,8 +19,8 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **487**
-- Not yet registered in codebase: **38**
+- Registered in codebase: **475**
+- Not yet registered in codebase: **50**
 - Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
@@ -105,7 +105,7 @@
 | COMBINA | Implemented | Yes | Yes |
 | COMPLEX | Placeholder (blocked) | Yes | No |
 | CONCAT | Not in ODF 1.4 mandatory | Yes | Yes |
-| CONCATENATE | Placeholder (blocked) | Yes | Yes |
+| CONCATENATE | Placeholder (blocked) | Yes | No |
 | CONFIDENCE | Placeholder (blocked) | Yes | Yes |
 | CONFIDENCE.NORM | Not in ODF 1.4 mandatory | Yes | Yes |
 | CONFIDENCE.T | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -327,7 +327,7 @@
 | MAX | Not in ODF 1.4 mandatory | Yes | Yes |
 | MAXA | Placeholder (blocked) | Yes | Yes |
 | MAXIFS | Not in ODF 1.4 mandatory | Yes | Yes |
-| MDETERM | Implemented | Yes | Yes |
+| MDETERM | Implemented | Yes | No |
 | MDURATION | Placeholder (blocked) | Yes | Yes |
 | MEDIAN | Placeholder (blocked) | Yes | Yes |
 | MID | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -336,9 +336,9 @@
 | MINA | Placeholder (blocked) | Yes | Yes |
 | MINIFS | Not in ODF 1.4 mandatory | Yes | Yes |
 | MINUTE | Not in ODF 1.4 mandatory | Yes | Yes |
-| MINVERSE | Implemented | Yes | Yes |
+| MINVERSE | Implemented | Yes | No |
 | MIRR | Placeholder (blocked) | Yes | Yes |
-| MMULT | Implemented | Yes | Yes |
+| MMULT | Implemented | Yes | No |
 | MOD | Not in ODF 1.4 mandatory | Yes | Yes |
 | MODE | Placeholder (blocked) | Yes | Yes |
 | MODE.MULT | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -383,7 +383,7 @@
 | PERCENTILE | Placeholder (blocked) | Yes | Yes |
 | PERCENTILE.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
 | PERCENTILE.INC | Not in ODF 1.4 mandatory | Yes | Yes |
-| PERCENTOF | Not in ODF 1.4 mandatory | Yes | Yes |
+| PERCENTOF | Not in ODF 1.4 mandatory | Yes | No |
 | PERCENTRANK | Placeholder (blocked) | Yes | Yes |
 | PERCENTRANK.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
 | PERCENTRANK.INC | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -403,7 +403,7 @@
 | PRICEMAT | Placeholder (blocked) | Yes | Yes |
 | PROB | Placeholder (blocked) | Yes | Yes |
 | PRODUCT | Not in ODF 1.4 mandatory | Yes | Yes |
-| PROPER | Not in ODF 1.4 mandatory | Yes | Yes |
+| PROPER | Not in ODF 1.4 mandatory | Yes | No |
 | PV | Not in ODF 1.4 mandatory | Yes | Yes |
 | QUARTILE | Placeholder (blocked) | Yes | Yes |
 | QUARTILE.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -419,9 +419,9 @@
 | RATE | Not in ODF 1.4 mandatory | Yes | Yes |
 | RECEIVED | Placeholder (blocked) | Yes | Yes |
 | REDUCE | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXEXTRACT | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXREPLACE | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXTEST | Not in ODF 1.4 mandatory | Yes | Yes |
+| REGEXEXTRACT | Not in ODF 1.4 mandatory | Yes | No |
+| REGEXREPLACE | Not in ODF 1.4 mandatory | Yes | No |
+| REGEXTEST | Not in ODF 1.4 mandatory | Yes | No |
 | REGISTER.ID | Not in ODF 1.4 mandatory | Yes | Yes |
 | REPLACE | Not in ODF 1.4 mandatory | Yes | Yes |
 | REPLACEB | Missing | Yes | Yes |
@@ -476,9 +476,9 @@
 | SUMIFS | Implemented | Yes | Yes |
 | SUMPRODUCT | Implemented | Yes | Yes |
 | SUMSQ | Implemented | Yes | Yes |
-| SUMX2MY2 | Implemented | Yes | Yes |
-| SUMX2PY2 | Implemented | Yes | Yes |
-| SUMXMY2 | Implemented | Yes | Yes |
+| SUMX2MY2 | Implemented | Yes | No |
+| SUMX2PY2 | Implemented | Yes | No |
+| SUMXMY2 | Implemented | Yes | No |
 | SWITCH | Not in ODF 1.4 mandatory | Yes | Yes |
 | SYD | Not in ODF 1.4 mandatory | Yes | Yes |
 | T | Not in ODF 1.4 mandatory | Yes | Yes |

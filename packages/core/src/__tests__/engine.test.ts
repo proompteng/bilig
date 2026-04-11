@@ -2639,6 +2639,30 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
   });
 
+  it("uses the indexed js path for exact string MATCH and reverse XMATCH when column indexing is enabled", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "indexed-string-lookup",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "pear");
+    engine.setCellValue("Sheet1", "A2", "apple");
+    engine.setCellValue("Sheet1", "A3", "pear");
+
+    engine.setCellFormula("Sheet1", "B1", '=MATCH("APPLE",A1:A3,0)');
+    engine.setCellFormula("Sheet1", "B2", '=XMATCH("pear",A1:A3,0,-1)');
+
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "B2").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 3 });
+
+    engine.setCellValue("Sheet1", "A3", "banana");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 2, wasmFormulaCount: 0 });
+  });
+
   it("uses the wasm fast path for exact-parity info and date builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

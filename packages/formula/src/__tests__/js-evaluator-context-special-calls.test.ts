@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { evaluatePlan, lowerToPlan, parseFormula } from "../index.js";
 
@@ -46,9 +46,7 @@ describe("js evaluator context special calls", () => {
 
   it("evaluates sheet and cell info helpers", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("SHEET()")), context)).toEqual(number(2));
-    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Summary")')), context)).toEqual(
-      number(3),
-    );
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Summary")')), context)).toEqual(number(3));
     expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS()")), context)).toEqual(number(3));
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("address",B1)')), context)).toEqual(
       text("$B$1"),
@@ -70,7 +68,10 @@ describe("js evaluator context special calls", () => {
       err(ErrorCode.Value),
     );
     expect(
-      evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), { ...context, currentAddress: undefined }),
+      evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), {
+        ...context,
+        currentAddress: undefined,
+      }),
     ).toEqual(err(ErrorCode.Value));
     expect(evaluatePlan(lowerToPlan(parseFormula("CHOOSE(0,1,2)")), context)).toEqual(
       err(ErrorCode.Value),
@@ -78,6 +79,53 @@ describe("js evaluator context special calls", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("PHONETIC()")), context)).toEqual(
       err(ErrorCode.Value),
     );
+  });
+
+  it("uses direct exact lookup without materializing the range when a handler is present", () => {
+    const resolveExactVectorMatch = vi.fn(() => ({ handled: true, position: 2 }));
+    const noteExactLookupDirect = vi.fn();
+    const resolveRange = vi.fn(() => {
+      throw new Error("resolveRange should not be called for direct exact lookup");
+    });
+
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('XMATCH("pear",A1:A3,0,-1)')), {
+        ...context,
+        resolveRange,
+        resolveExactVectorMatch,
+        noteExactLookupDirect,
+      }),
+    ).toEqual(number(2));
+    expect(resolveExactVectorMatch).toHaveBeenCalledWith({
+      lookupValue: text("pear"),
+      sheetName: "Sheet2",
+      start: "A1",
+      end: "A3",
+      searchMode: -1,
+    });
+    expect(noteExactLookupDirect).toHaveBeenCalledTimes(1);
+    expect(resolveRange).not.toHaveBeenCalled();
+  });
+
+  it("falls back to normal range evaluation when direct exact lookup is unavailable", () => {
+    const resolveExactVectorMatch = vi.fn(() => ({ handled: false }));
+    const noteExactLookupFallback = vi.fn();
+    const noteRangeMaterialization = vi.fn();
+    const resolveRange = vi.fn(() => [number(1), number(2), number(3)]);
+
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MATCH(2,A1:A3,0)")), {
+        ...context,
+        resolveRange,
+        resolveExactVectorMatch,
+        noteExactLookupFallback,
+        noteRangeMaterialization,
+      }),
+    ).toEqual(number(2));
+    expect(resolveExactVectorMatch).toHaveBeenCalledTimes(1);
+    expect(noteExactLookupFallback).toHaveBeenCalledTimes(1);
+    expect(noteRangeMaterialization).toHaveBeenCalledWith(3);
+    expect(resolveRange).toHaveBeenCalledTimes(1);
   });
 });
 

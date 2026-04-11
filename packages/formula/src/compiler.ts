@@ -509,6 +509,8 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
       case "push-lambda":
         current += 1;
         break;
+      case "lookup-exact-match":
+        break;
       case "binary":
         current -= 1;
         break;

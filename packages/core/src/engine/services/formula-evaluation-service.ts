@@ -16,6 +16,7 @@ import { definedNameValueToCellValue } from "../../engine-metadata-utils.js";
 import { emptyValue, errorValue } from "../../engine-value-utils.js";
 import type { EngineRuntimeState } from "../runtime-state.js";
 import { EngineFormulaEvaluationError } from "../errors.js";
+import type { EngineLookupService } from "./lookup-service.js";
 
 export interface EngineFormulaEvaluationService {
   readonly evaluateUnsupportedFormula: (
@@ -44,11 +45,6 @@ export interface EngineFormulaEvaluationService {
   }) => Effect.Effect<CellValue, EngineFormulaEvaluationError>;
 }
 
-interface ExactColumnLookupIndexEntry {
-  columnVersion: number;
-  map: Map<number, number>;
-}
-
 function evaluationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
@@ -57,22 +53,9 @@ function referenceReplacementKey(sheetName: string, address: string): string {
   return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
 }
 
-function exactLookupNumericKey(value: CellValue): number | undefined {
-  switch (value.tag) {
-    case ValueTag.Number:
-      return value.value;
-    case ValueTag.Boolean:
-      return value.value ? 1 : 0;
-    case ValueTag.Empty:
-      return 0;
-    case ValueTag.String:
-    case ValueTag.Error:
-      return undefined;
-  }
-}
-
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "useColumnIndex">;
+  readonly lookup: EngineLookupService;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: { values: CellValue[]; rows: number; cols: number },
@@ -85,8 +68,6 @@ export function createEngineFormulaEvaluationService(args: {
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ) => CellValue;
 }): EngineFormulaEvaluationService {
-  const exactColumnLookupIndices = new Map<string, ExactColumnLookupIndexEntry>();
-
   const readCellValue = (sheetName: string, address: string): CellValue => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
@@ -135,33 +116,17 @@ export function createEngineFormulaEvaluationService(args: {
     if (!args.state.useColumnIndex || range.refKind !== "cells" || range.cols !== 1) {
       return undefined;
     }
-    const lookupKey = exactLookupNumericKey(lookupValue);
-    if (lookupKey === undefined || !range.sheetName || !range.start || !range.end) {
+    if (!range.sheetName || !range.start || !range.end) {
       return undefined;
     }
-    const parsedRange = parseRangeAddress(`${range.start}:${range.end}`, range.sheetName);
-    if (parsedRange.kind !== "cells" || parsedRange.start.col !== parsedRange.end.col) {
-      return undefined;
-    }
-    const columnVersion = args.state.workbook.getSheetColumnVersion(
-      range.sheetName,
-      parsedRange.start.col,
-    );
-    const cacheKey = `${range.sheetName}\t${parsedRange.start.col}\t${parsedRange.start.row}\t${parsedRange.end.row}`;
-    let entry = exactColumnLookupIndices.get(cacheKey);
-    if (!entry || entry.columnVersion !== columnVersion) {
-      const map = new Map<number, number>();
-      for (let index = 0; index < range.values.length; index += 1) {
-        const key = exactLookupNumericKey(range.values[index]!);
-        if (key === undefined || map.has(key)) {
-          continue;
-        }
-        map.set(key, index + 1);
-      }
-      entry = { columnVersion, map };
-      exactColumnLookupIndices.set(cacheKey, entry);
-    }
-    return entry.map.get(lookupKey);
+    const result = args.lookup.findExactVectorMatch({
+      lookupValue,
+      sheetName: range.sheetName,
+      start: range.start,
+      end: range.end,
+      searchMode: 1,
+    });
+    return result.handled ? result.position : undefined;
   };
 
   const lookupBuiltinResolver = args.state.useColumnIndex
@@ -306,7 +271,6 @@ export function createEngineFormulaEvaluationService(args: {
         [...args.state.workbook.sheetsByName.values()]
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
-      resolveLookupBuiltin: lookupBuiltinResolver,
     };
     const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
     visiting.delete(visitKey);
@@ -412,7 +376,12 @@ export function createEngineFormulaEvaluationService(args: {
         [...args.state.workbook.sheetsByName.values()]
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
-      resolveLookupBuiltin: lookupBuiltinResolver,
+      resolveExactVectorMatch: (request) => args.lookup.findExactVectorMatch(request),
+      ...(lookupBuiltinResolver
+        ? {
+            resolveLookupBuiltin: lookupBuiltinResolver,
+          }
+        : {}),
     };
     const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
 

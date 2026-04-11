@@ -107,27 +107,45 @@ function collectTrackedDependents(
   return [...candidates];
 }
 
+function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.kind === "NumberLiteral") {
+    return Number.isInteger(node.value) ? node.value : undefined;
+  }
+  if (
+    node.kind === "UnaryExpr" &&
+    node.operator === "-" &&
+    node.argument.kind === "NumberLiteral" &&
+    Number.isInteger(node.argument.value)
+  ) {
+    return -node.argument.value;
+  }
+  return undefined;
+}
+
 function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
   switch (node.kind) {
     case "CallExpr": {
       const callee = node.callee.trim().toUpperCase();
       const isIndexedLookupCall =
         (callee === "MATCH" &&
-          node.args.length >= 2 &&
-          node.args.length <= 3 &&
+          node.args.length === 3 &&
           node.args[1]?.kind === "RangeRef" &&
           node.args[1].refKind === "cells" &&
           node.args[1].start !== node.args[1].end &&
-          (node.args.length === 2 ||
-            (node.args[2]?.kind === "NumberLiteral" && node.args[2].value === 0))) ||
+          staticIntegerValue(node.args[2]) === 0) ||
         (callee === "XMATCH" &&
           node.args.length >= 2 &&
           node.args.length <= 4 &&
           node.args[1]?.kind === "RangeRef" &&
           node.args[1].refKind === "cells" &&
           node.args[1].start !== node.args[1].end &&
-          (node.args.length === 2 ||
-            (node.args[2]?.kind === "NumberLiteral" && node.args[2].value === 0)));
+          (node.args.length === 2 || staticIntegerValue(node.args[2]) === 0) &&
+          (node.args.length < 4 ||
+            staticIntegerValue(node.args[3]) === 1 ||
+            staticIntegerValue(node.args[3]) === -1));
       return isIndexedLookupCall || node.args.some(hasIndexedExactLookupCandidate);
     }
     case "UnaryExpr":
