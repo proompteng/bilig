@@ -586,9 +586,9 @@ const postgresUrl = disableCompose
 const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? `http://127.0.0.1:${appPort}`;
 const appHealthUrl = `${publicServerUrl}/healthz`;
 if (!disableCompose && composeSupportsWait()) {
-  runComposeSync(["up", "-d", postgresService, zeroCacheService]);
+  runComposeSync(["up", "-d", postgresService]);
 } else if (!disableCompose) {
-  runComposeSync(["up", "-d", postgresService, zeroCacheService]);
+  runComposeSync(["up", "-d", postgresService]);
 }
 if (!disableCompose) {
   await waitForTcp(composePublishedHost, Number(resolvedPostgresPort));
@@ -620,12 +620,13 @@ process.on("SIGTERM", () => forwardSignal("SIGTERM"));
 
 try {
   await waitForHttp(appHealthUrl);
+  if (!disableCompose) {
+    runComposeSync(["up", "-d", zeroCacheService]);
+    await waitForHttp(zeroHealthUrl);
+  }
   console.log(`Starting local web dev server (web=${webAppBaseUrl})...`);
   webChild = spawnWebDev(webPort, publicServerUrl);
   console.log("App is healthy.");
-  if (!disableCompose) {
-    await waitForHttp(zeroHealthUrl);
-  }
   await waitForHttp(webAppBaseUrl);
   console.log(
     disableCompose
