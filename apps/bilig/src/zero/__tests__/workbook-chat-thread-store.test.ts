@@ -216,12 +216,12 @@ describe("workbook-chat-thread-store", () => {
     await saveWorkbookAgentThreadState(queryable, {
       ...state,
       entries: [
-        state.entries[0]!,
+        state.entries[0],
         {
-          ...state.entries[0]!,
+          ...state.entries[0],
           text: "Updated prompt",
         },
-        state.entries[1]!,
+        state.entries[1],
       ],
     });
 
