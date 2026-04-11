@@ -131,6 +131,10 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     sheetName: z.string().min(1).optional(),
   }),
   z.object({
+    workflowTemplate: z.literal("createCurrentSheetReviewTab"),
+    sheetName: z.string().min(1).optional(),
+  }),
+  z.object({
     workflowTemplate: z.literal("createSheet"),
     name: z.string().trim().min(1),
   }),
@@ -632,7 +636,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting or consistent header styling, import-cleanup tasks like header, number-format, whitespace normalization, or formula fill-down cleanup, search/report tasks, rollup previews, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, formatting-cleanup tasks like numeric outlier highlighting or consistent header styling, import-cleanup tasks like header, number-format, whitespace normalization, or formula fill-down cleanup, search/report tasks, rollup previews, review-tab creation, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -656,6 +660,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "explainSelectionCell",
               "searchWorkbookQuery",
               "createCurrentSheetRollup",
+              "createCurrentSheetReviewTab",
               "createSheet",
               "renameCurrentSheet",
               "hideCurrentRow",

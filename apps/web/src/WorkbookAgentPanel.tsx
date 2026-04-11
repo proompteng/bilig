@@ -907,7 +907,8 @@ export function WorkbookAgentPanel(props: {
       | "fillCurrentSheetFormulasDown"
       | "traceSelectionDependencies"
       | "explainSelectionCell"
-      | "createCurrentSheetRollup",
+      | "createCurrentSheetRollup"
+      | "createCurrentSheetReviewTab",
   ) => void;
   readonly onStartNamedWorkflow: (
     template: Extract<

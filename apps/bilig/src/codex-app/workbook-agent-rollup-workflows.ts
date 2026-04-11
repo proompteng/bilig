@@ -10,7 +10,7 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
 import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
-type RollupWorkflowTemplate = "createCurrentSheetRollup";
+type RollupWorkflowTemplate = "createCurrentSheetRollup" | "createCurrentSheetReviewTab";
 type SnapshotSheet = WorkbookSnapshot["sheets"][number];
 type SnapshotCell = SnapshotSheet["cells"][number];
 
@@ -147,10 +147,40 @@ export function getRollupWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate | RollupWorkflowTemplate,
   workflowInput?: RollupWorkflowExecutionInput | null,
 ): RollupWorkflowTemplateMetadata | null {
-  if (workflowTemplate !== "createCurrentSheetRollup") {
+  if (
+    workflowTemplate !== "createCurrentSheetRollup" &&
+    workflowTemplate !== "createCurrentSheetReviewTab"
+  ) {
     return null;
   }
   const scopeLabel = workflowInput?.sheetName ?? "the active sheet";
+  if (workflowTemplate === "createCurrentSheetReviewTab") {
+    return {
+      title: "Create Current Sheet Review Tab",
+      runningSummary: `Running review-tab workflow for ${scopeLabel}.`,
+      stepPlans: [
+        {
+          stepId: "inspect-source-sheet",
+          label: "Inspect source sheet",
+          runningSummary: `Inspecting the used range on ${scopeLabel}.`,
+          pendingSummary: `Waiting to inspect the used range on ${scopeLabel}.`,
+        },
+        {
+          stepId: "stage-review-tab-preview",
+          label: "Stage review tab preview",
+          runningSummary: "Staging the semantic preview that creates and copies the review tab.",
+          pendingSummary:
+            "Waiting to stage the semantic preview that creates and copies the review tab.",
+        },
+        {
+          stepId: "draft-review-tab-report",
+          label: "Draft review tab report",
+          runningSummary: "Drafting the durable review-tab report.",
+          pendingSummary: "Waiting to assemble the durable review-tab report.",
+        },
+      ],
+    };
+  }
   return {
     title: "Create Current Sheet Rollup",
     runningSummary: `Running rollup workflow for ${scopeLabel}.`,
@@ -192,7 +222,10 @@ export async function executeRollupWorkflow(input: {
   readonly workflowInput?: RollupWorkflowExecutionInput | null;
   readonly signal?: AbortSignal;
 }): Promise<RollupWorkflowExecutionResult | null> {
-  if (input.workflowTemplate !== "createCurrentSheetRollup") {
+  if (
+    input.workflowTemplate !== "createCurrentSheetRollup" &&
+    input.workflowTemplate !== "createCurrentSheetReviewTab"
+  ) {
     return null;
   }
   const sheetName = resolveWorkflowSheetName({
@@ -212,6 +245,41 @@ export async function executeRollupWorkflow(input: {
       throw new Error(`Sheet ${sheetName} was not found in the workbook.`);
     }
     if (sourceSheet.cells.length === 0) {
+      if (input.workflowTemplate === "createCurrentSheetReviewTab") {
+        return {
+          title: "Create Current Sheet Review Tab",
+          summary: `${sheetName} is empty, so there was no review tab content to stage.`,
+          artifact: {
+            kind: "markdown",
+            title: "Current Sheet Review Tab Preview",
+            text: [
+              "## Current Sheet Review Tab Preview",
+              "",
+              `Source sheet: ${sheetName}`,
+              "",
+              "No review-tab preview was staged because the sheet is empty.",
+            ].join("\n"),
+          },
+          citations: [],
+          steps: [
+            {
+              stepId: "inspect-source-sheet",
+              label: "Inspect source sheet",
+              summary: `Loaded ${sheetName} and found no populated cells.`,
+            },
+            {
+              stepId: "stage-review-tab-preview",
+              label: "Stage review tab preview",
+              summary: "No review-tab preview was staged because the sheet is empty.",
+            },
+            {
+              stepId: "draft-review-tab-report",
+              label: "Draft review tab report",
+              summary: "Prepared the durable empty-sheet review-tab report for the thread.",
+            },
+          ],
+        } satisfies RollupWorkflowExecutionResult;
+      }
       return {
         title: "Create Current Sheet Rollup",
         summary: `${sheetName} is empty, so there were no numeric columns to roll up.`,
@@ -254,6 +322,85 @@ export async function executeRollupWorkflow(input: {
 
     const { headerRow, dataStartRow, minCol, maxCol, maxRow, cellByAddress } =
       inspectSheet(sourceSheet);
+    if (input.workflowTemplate === "createCurrentSheetReviewTab") {
+      const sourceStartAddress = formatAddress(headerRow, minCol);
+      const sourceEndAddress = formatAddress(maxRow, maxCol);
+      const targetSheetName = createUniqueSheetName(
+        snapshot.sheets.map((sheet) => sheet.name),
+        `${sheetName} Review`,
+      );
+      const targetEndAddress = formatAddress(maxRow - headerRow, maxCol - minCol);
+      return {
+        title: "Create Current Sheet Review Tab",
+        summary: `Staged a review-tab preview for ${sheetName} into ${targetSheetName}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Current Sheet Review Tab Preview",
+          text: [
+            "## Current Sheet Review Tab Preview",
+            "",
+            `Source sheet: ${sheetName}`,
+            `Source range: ${sourceStartAddress}:${sourceEndAddress}`,
+            `Target sheet: ${targetSheetName}`,
+            "",
+            "The staged preview bundle creates a new review tab and copies the current sheet's used range into it for review-oriented work.",
+          ].join("\n"),
+        },
+        citations: [
+          {
+            kind: "range",
+            sheetName,
+            startAddress: sourceStartAddress,
+            endAddress: sourceEndAddress,
+            role: "source",
+          },
+          {
+            kind: "range",
+            sheetName: targetSheetName,
+            startAddress: "A1",
+            endAddress: targetEndAddress,
+            role: "target",
+          },
+        ],
+        steps: [
+          {
+            stepId: "inspect-source-sheet",
+            label: "Inspect source sheet",
+            summary: `Loaded the used range from ${sheetName}.`,
+          },
+          {
+            stepId: "stage-review-tab-preview",
+            label: "Stage review tab preview",
+            summary: `Prepared the semantic preview that creates ${targetSheetName}.`,
+          },
+          {
+            stepId: "draft-review-tab-report",
+            label: "Draft review tab report",
+            summary: "Prepared the durable review-tab report for the thread.",
+          },
+        ],
+        commands: [
+          {
+            kind: "createSheet",
+            name: targetSheetName,
+          },
+          {
+            kind: "copyRange",
+            source: {
+              sheetName,
+              startAddress: sourceStartAddress,
+              endAddress: sourceEndAddress,
+            },
+            target: {
+              sheetName: targetSheetName,
+              startAddress: "A1",
+              endAddress: targetEndAddress,
+            },
+          },
+        ],
+        goalText: `Create a review tab for ${sheetName}`,
+      } satisfies RollupWorkflowExecutionResult;
+    }
     const columnSummaries: RollupColumnSummary[] = [];
     for (let col = minCol; col <= maxCol; col += 1) {
       const headerCell = cellByAddress.get(formatAddress(headerRow, col));

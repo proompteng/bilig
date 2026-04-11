@@ -20,7 +20,8 @@ type WorkflowActionTemplate =
   | "fillCurrentSheetFormulasDown"
   | "traceSelectionDependencies"
   | "explainSelectionCell"
-  | "createCurrentSheetRollup";
+  | "createCurrentSheetRollup"
+  | "createCurrentSheetReviewTab";
 
 interface WorkflowActionDefinition {
   readonly template: WorkflowActionTemplate;
@@ -95,6 +96,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Create sheet rollup",
     summary:
       "Stage a preview bundle that creates a new rollup sheet with numeric aggregates from the active sheet.",
+  },
+  {
+    template: "createCurrentSheetReviewTab",
+    label: "Create review tab",
+    summary:
+      "Stage a preview bundle that creates a new review sheet and copies the current sheet's used range into it.",
   },
   {
     template: "traceSelectionDependencies",

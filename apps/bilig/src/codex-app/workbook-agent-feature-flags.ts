@@ -109,6 +109,7 @@ export function getWorkbookAgentWorkflowFamily(
     case "fillCurrentSheetFormulasDown":
       return "import";
     case "createCurrentSheetRollup":
+    case "createCurrentSheetReviewTab":
       return "rollup";
     case "createSheet":
     case "renameCurrentSheet":

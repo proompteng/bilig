@@ -600,6 +600,80 @@ describe("workbook agent workflows", () => {
     ]);
   });
 
+  it("executes current-sheet review-tab workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Revenue");
+          engine.setCellValue("Revenue", "A1", "Region");
+          engine.setCellValue("Revenue", "B1", "January");
+          engine.setCellValue("Revenue", "A2", "West");
+          engine.setCellValue("Revenue", "B2", 100);
+          engine.setCellValue("Revenue", "A3", "East");
+          engine.setCellValue("Revenue", "B3", 200);
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "createCurrentSheetReviewTab",
+      context: {
+        selection: {
+          sheetName: "Revenue",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Revenue",
+      },
+    });
+
+    expect(result.title).toBe("Create Current Sheet Review Tab");
+    expect(result.summary).toContain("Staged a review-tab preview");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "createSheet",
+        name: "Revenue Review",
+      }),
+      expect.objectContaining({
+        kind: "copyRange",
+        source: {
+          sheetName: "Revenue",
+          startAddress: "A1",
+          endAddress: "B3",
+        },
+        target: {
+          sheetName: "Revenue Review",
+          startAddress: "A1",
+          endAddress: "B3",
+        },
+      }),
+    ]);
+  });
+
   it("executes current-sheet outlier-highlighting workflows through the durable inspection path", async () => {
     const result = await executeWorkbookAgentWorkflow({
       documentId: "doc-1",

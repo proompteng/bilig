@@ -58,6 +58,7 @@ type RailWorkflowTemplate =
   | "explainSelectionCell"
   | "searchWorkbookQuery"
   | "createCurrentSheetRollup"
+  | "createCurrentSheetReviewTab"
   | "createSheet"
   | "renameCurrentSheet"
   | "hideCurrentRow"
@@ -79,6 +80,7 @@ type WorkbookAgentWorkflowStartRequest =
         | "fillCurrentSheetFormulasDown"
         | "searchWorkbookQuery"
         | "createCurrentSheetRollup"
+        | "createCurrentSheetReviewTab"
         | "createSheet"
         | "renameCurrentSheet"
         | "unhideCurrentRow"
@@ -128,6 +130,10 @@ type WorkbookAgentWorkflowStartRequest =
     }
   | {
       readonly workflowTemplate: "createCurrentSheetRollup";
+      readonly sheetName?: string;
+    }
+  | {
+      readonly workflowTemplate: "createCurrentSheetReviewTab";
       readonly sheetName?: string;
     }
   | {
@@ -1189,7 +1195,8 @@ export function useWorkbookAgentPane(input: {
               workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
               workflowTemplate === "normalizeCurrentSheetWhitespace" ||
               workflowTemplate === "fillCurrentSheetFormulasDown" ||
-              workflowTemplate === "createCurrentSheetRollup") &&
+              workflowTemplate === "createCurrentSheetRollup" ||
+              workflowTemplate === "createCurrentSheetReviewTab") &&
             currentContext?.selection.sheetName
           ) {
             void startWorkflow({

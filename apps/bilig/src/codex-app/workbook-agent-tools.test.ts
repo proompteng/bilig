@@ -1679,6 +1679,75 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts current-sheet review-tab workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-review-tab-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "createCurrentSheetReviewTab" as const,
+      title: "Create Current Sheet Review Tab",
+      summary: "Staged a review-tab preview for Revenue into Revenue Review.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-source-sheet",
+          label: "Inspect source sheet",
+          status: "completed" as const,
+          summary: "Loaded the used range from Revenue.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Current Sheet Review Tab Preview",
+        text: "## Current Sheet Review Tab Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-review-tab-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "createCurrentSheetReviewTab",
+          sheetName: "Revenue",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "createCurrentSheetReviewTab",
+      sheetName: "Revenue",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "createCurrentSheetReviewTab"',
+    );
+  });
+
   it("starts current-sheet rollup workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

@@ -155,6 +155,7 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "explainSelectionCell",
   "searchWorkbookQuery",
   "createCurrentSheetRollup",
+  "createCurrentSheetReviewTab",
   "createSheet",
   "renameCurrentSheet",
   "hideCurrentRow",

@@ -81,7 +81,7 @@ type ImportWorkflowTemplate =
   | "normalizeCurrentSheetNumberFormats"
   | "normalizeCurrentSheetWhitespace"
   | "fillCurrentSheetFormulasDown";
-type RollupWorkflowTemplate = "createCurrentSheetRollup";
+type RollupWorkflowTemplate = "createCurrentSheetRollup" | "createCurrentSheetReviewTab";
 
 function isFormulaWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
@@ -112,7 +112,10 @@ function isImportWorkflowTemplate(
 function isRollupWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is RollupWorkflowTemplate {
-  return workflowTemplate === "createCurrentSheetRollup";
+  return (
+    workflowTemplate === "createCurrentSheetRollup" ||
+    workflowTemplate === "createCurrentSheetReviewTab"
+  );
 }
 
 function getWorkflowTemplateMetadata(
