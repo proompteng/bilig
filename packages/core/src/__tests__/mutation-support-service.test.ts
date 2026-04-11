@@ -29,6 +29,68 @@ function getMutationSupportService(engine: SpreadsheetEngine): EngineMutationSup
 }
 
 describe("EngineMutationSupportService", () => {
+  it("tracks changed roots and unions through the public wrapper methods", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "support-wrapper-roots" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 7);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+
+    const support = getMutationSupportService(engine);
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    expect(a1Index).toBeDefined();
+    expect(b1Index).toBeDefined();
+
+    Effect.runSync(support.beginMutationCollection());
+    const changedInputCount = Effect.runSync(support.markInputChanged(a1Index!, 0));
+    const changedFormulaCount = Effect.runSync(support.markFormulaChanged(b1Index!, 0));
+    const explicitChangedCount = Effect.runSync(support.markExplicitChanged(a1Index!, 0));
+
+    expect(changedInputCount).toBe(1);
+    expect(changedFormulaCount).toBe(1);
+    expect(explicitChangedCount).toBe(1);
+    expect(Effect.runSync(support.getChangedInputBuffer())[0]).toBe(a1Index);
+
+    const roots = Effect.runSync(
+      support.composeMutationRoots(changedInputCount, changedFormulaCount),
+    );
+    expect(Array.from(roots)).toEqual([a1Index, b1Index]);
+
+    const eventChanges = Effect.runSync(
+      support.composeEventChanges(Uint32Array.of(b1Index!), explicitChangedCount),
+    );
+    expect(Array.from(eventChanges)).toEqual([a1Index, b1Index]);
+
+    const union = Effect.runSync(
+      support.unionChangedSets(Uint32Array.of(a1Index!), Uint32Array.of(a1Index!, b1Index!)),
+    );
+    expect(Array.from(union)).toEqual([a1Index, b1Index]);
+
+    const ordered = Effect.runSync(
+      support.composeChangedRootsAndOrdered(
+        Uint32Array.of(a1Index!),
+        Uint32Array.of(a1Index!, b1Index!),
+        2,
+      ),
+    );
+    expect(Array.from(ordered)).toEqual([a1Index, b1Index]);
+
+    Effect.runSync(support.beginMutationCollection());
+    expect(Effect.runSync(support.markSpillRootsChanged([a1Index!], 0))).toBe(1);
+    Effect.runSync(support.beginMutationCollection());
+    expect(Effect.runSync(support.markPivotRootsChanged([a1Index!], 0))).toBe(1);
+
+    const ensuredByName = Effect.runSync(support.ensureCellTracked("Sheet1", "C1"));
+    const ensuredByCoords = Effect.runSync(
+      support.ensureCellTrackedByCoords(engine.workbook.getSheet("Sheet1")!.id, 0, 2),
+    );
+    expect(ensuredByCoords).toBe(ensuredByName);
+
+    Effect.runSync(support.resetMaterializedCellScratch(8));
+    expect(Effect.runSync(support.syncDynamicRanges(0))).toBe(0);
+  });
+
   it("materializes and clears spill children through the support service", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "support-spill" });
     await engine.ready();
@@ -65,6 +127,39 @@ describe("EngineMutationSupportService", () => {
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Empty });
     expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Empty });
     expect(engine.exportSnapshot().workbook.metadata?.spills).toBeUndefined();
+  });
+
+  it("reports blocked spills and missing sheet removals through the wrappers", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "support-spill-blocked" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "B1", 9);
+
+    const support = getMutationSupportService(engine);
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    expect(a1Index).toBeDefined();
+
+    const blocked = Effect.runSync(
+      support.materializeSpill(a1Index!, {
+        rows: 1,
+        cols: 2,
+        values: [
+          { tag: ValueTag.Number, value: 1 },
+          { tag: ValueTag.Number, value: 2 },
+        ],
+      }),
+    );
+    expect(blocked.ownerValue).toMatchObject({
+      tag: ValueTag.Error,
+    });
+    expect(blocked.changedCellIndices).toEqual([]);
+    expect(Effect.runSync(support.clearOwnedSpill(a1Index!))).toEqual([]);
+    expect(Effect.runSync(support.removeSheetRuntime("Missing", 0))).toEqual({
+      changedInputCount: 0,
+      formulaChangedCount: 0,
+      explicitChangedCount: 0,
+    });
   });
 
   it("removes sheet runtime through the service and moves selection to the next sheet", async () => {

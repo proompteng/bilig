@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { ValueTag } from "@bilig/protocol";
+import { createBatch } from "../replica-state.js";
 import { SpreadsheetEngine } from "../engine.js";
 import type { EngineOperationService } from "../engine/services/operation-service.js";
+import { cellMutationRefToEngineOp, type EngineCellMutationRef } from "../cell-mutations-at.js";
 
 function isEngineOperationService(value: unknown): value is EngineOperationService {
   if (typeof value !== "object" || value === null) {
@@ -54,6 +56,14 @@ function expectBatch<Batch>(batch: Batch | undefined): Batch {
   return batch;
 }
 
+function getReplicaState(engine: SpreadsheetEngine) {
+  const replicaState = Reflect.get(engine, "replicaState");
+  if (typeof replicaState !== "object" || replicaState === null) {
+    throw new TypeError("Expected engine replica state");
+  }
+  return replicaState;
+}
+
 describe("EngineOperationService", () => {
   it("applies remote rename batches through the service and keeps the selection on the renamed sheet", async () => {
     const primary = new SpreadsheetEngine({ workbookName: "operation-rename", replicaId: "a" });
@@ -64,8 +74,8 @@ describe("EngineOperationService", () => {
     primary.subscribeBatches((batch) => outbound.push(batch));
 
     primary.createSheet("Old");
-    const createBatch = expectBatch(outbound.at(-1));
-    replica.applyRemoteBatch(createBatch);
+    const createdSheetBatch = expectBatch(outbound.at(-1));
+    replica.applyRemoteBatch(createdSheetBatch);
     replica.setSelection("Old", "B2");
 
     primary.renameSheet("Old", "New");
@@ -89,7 +99,7 @@ describe("EngineOperationService", () => {
     primary.subscribeBatches((batch) => outbound.push(batch));
 
     primary.createSheet("Sheet1");
-    const createBatch = expectBatch(outbound.at(-1));
+    const createdSheetBatch = expectBatch(outbound.at(-1));
 
     primary.setCellValue("Sheet1", "A1", 7);
     const valueBatch = expectBatch(outbound.at(-1));
@@ -97,7 +107,7 @@ describe("EngineOperationService", () => {
     primary.deleteSheet("Sheet1");
     const deleteBatch = expectBatch(outbound.at(-1));
 
-    replica.applyRemoteBatch(createBatch);
+    replica.applyRemoteBatch(createdSheetBatch);
     replica.applyRemoteBatch(deleteBatch);
 
     const restored = new SpreadsheetEngine({ workbookName: "restored", replicaId: "b" });
@@ -136,5 +146,69 @@ describe("EngineOperationService", () => {
     });
 
     expect(setLastMetricsSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("applies local cell mutation refs through the service", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-local-refs", replicaId: "a" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId,
+        mutation: { kind: "setCellValue", row: 0, col: 0, value: 10 },
+      },
+      {
+        sheetId,
+        mutation: { kind: "setCellFormula", row: 0, col: 1, formula: "A1*2" },
+      },
+      {
+        sheetId,
+        mutation: { kind: "setCellFormula", row: 0, col: 2, formula: "SUM(" },
+      },
+      {
+        sheetId,
+        mutation: { kind: "clearCell", row: 3, col: 3 },
+      },
+      {
+        sheetId,
+        mutation: { kind: "clearCell", row: 0, col: 0 },
+      },
+    ];
+    const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
+    const batch = createBatch(getReplicaState(engine), forwardOps);
+
+    Effect.runSync(getOperationService(engine).applyLocalCellMutationsAt(refs, batch, 3));
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
+      tag: ValueTag.Error,
+      code: expect.any(Number),
+    });
+    expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("rejects local cell mutation refs for unknown sheets", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-local-refs-missing",
+      replicaId: "a",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId: 999,
+        mutation: { kind: "setCellValue", row: 0, col: 0, value: 1 },
+      },
+    ];
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 },
+    ]);
+
+    expect(() =>
+      Effect.runSync(getOperationService(engine).applyLocalCellMutationsAt(refs, batch, 1)),
+    ).toThrow("Unknown sheet id: 999");
   });
 });

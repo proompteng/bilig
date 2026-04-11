@@ -37,6 +37,9 @@ export default defineConfig({
         "packages/core/src/snapshot.ts",
         "packages/formula/src/index.ts",
         "packages/formula/src/ast.ts",
+        "packages/formula/src/js-evaluator-types.ts",
+        "**/packages/formula/src/js-evaluator-types.ts",
+        "**/js-evaluator-types.ts",
         "packages/renderer/src/index.ts",
       ],
       thresholds: {

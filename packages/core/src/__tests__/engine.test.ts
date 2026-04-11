@@ -263,6 +263,90 @@ describe("SpreadsheetEngine", () => {
     );
   });
 
+  it("applies cell mutations by sheet id and returns inverse ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "cell-mutation-refs" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    const undoOps = engine.applyCellMutationsAt([
+      {
+        sheetId,
+        mutation: {
+          kind: "setCellValue",
+          row: 0,
+          col: 0,
+          value: 10,
+        },
+      },
+      {
+        sheetId,
+        mutation: {
+          kind: "setCellFormula",
+          row: 0,
+          col: 1,
+          formula: "A1*2",
+        },
+      },
+      {
+        sheetId,
+        mutation: {
+          kind: "clearCell",
+          row: 3,
+          col: 3,
+        },
+      },
+      {
+        sheetId,
+        mutation: {
+          kind: "setCellFormula",
+          row: 0,
+          col: 2,
+          formula: "SUM(",
+        },
+      },
+    ]);
+
+    expect(undoOps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "clearCell", address: "A1" }),
+        expect.objectContaining({ kind: "clearCell", address: "B1" }),
+        expect.objectContaining({ kind: "clearCell", address: "D4" }),
+      ]),
+    );
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCell("Sheet1", "C1").formula).toBeUndefined();
+    expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
+      tag: ValueTag.Error,
+      code: expect.any(Number),
+    });
+    expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getLastMetrics().compileMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("supports direct cell mutations by coordinates", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "direct-cell-mutations" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    expect(engine.setCellValueAt(sheetId, 1, 1, 5)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+    expect(engine.setCellFormulaAt(sheetId, 1, 2, "B2*3")).toEqual({
+      tag: ValueTag.Number,
+      value: 15,
+    });
+
+    engine.clearCellAt(sheetId, 1, 1);
+
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(() => engine.setCellValueAt(999, 0, 0, 1)).toThrow("Unknown sheet id: 999");
+  });
+
   it("moves overlapping ranges without losing cells", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -5676,5 +5760,27 @@ describe("SpreadsheetEngine", () => {
     await engine.disconnectSyncClient();
     expect(disconnected).toBe(true);
     expect(engine.getSyncState()).toBe("local-only");
+  });
+
+  it("disables sync when replica version tracking is off", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "local-only",
+      trackReplicaVersions: false,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 5);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+
+    await expect(
+      engine.connectSyncClient({
+        connect() {
+          throw new Error("should not connect");
+        },
+      }),
+    ).rejects.toThrow(
+      "Sync is unavailable when trackReplicaVersions is disabled; construct the engine with trackReplicaVersions enabled.",
+    );
   });
 });

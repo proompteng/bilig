@@ -993,6 +993,7 @@ export class HeadlessWorkbook {
     this.engine = new SpreadsheetEngine({
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
+      trackReplicaVersions: false,
     });
     this.attachEngineEventTracking();
     this.captureFunctionRegistry();
@@ -3132,14 +3133,13 @@ export class HeadlessWorkbook {
         return null;
       }
       return {
-        changes:
-          event.changedInputCount <= 1 && direct.isSorted
-            ? direct.changes
-            : orderHeadlessCellChanges(
-                direct.changes,
-                this.listSheetRecords(),
-                event.changedInputCount,
-              ),
+        changes: direct.isSorted
+          ? direct.changes
+          : orderHeadlessCellChanges(
+              direct.changes,
+              this.listSheetRecords(),
+              event.explicitChangedCount,
+            ),
         nextVisibility,
       };
     }
