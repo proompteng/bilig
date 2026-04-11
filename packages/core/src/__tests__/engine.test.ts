@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { utcDateToExcelSerial } from "@bilig/formula";
 import { SpreadsheetEngine, type EngineSyncClient } from "../index.js";
-import { ErrorCode, FormulaMode, Opcode, ValueTag } from "@bilig/protocol";
+import { ErrorCode, FormulaMode, Opcode, ValueTag, type EngineEvent } from "@bilig/protocol";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 
 type RuntimeFormulaWithDependencies = {
@@ -5517,6 +5517,32 @@ describe("SpreadsheetEngine", () => {
       tag: ValueTag.String,
       value: "seed",
     });
+  });
+
+  it("emits cell invalidation for local applyOps batches without captured undo", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+
+    const events: EngineEvent[] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      events.push(event);
+    });
+
+    engine.applyOps([{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 }], {
+      source: "local",
+    });
+
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "batch",
+      invalidation: "cells",
+    });
+    expect(events[0]?.changedCellIndices.length).toBeGreaterThan(0);
   });
 
   it("reads rectangular range values as a dense matrix without per-cell callers", async () => {

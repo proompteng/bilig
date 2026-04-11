@@ -1,8 +1,7 @@
-import { SpreadsheetEngine } from "@bilig/core";
+import { SpreadsheetEngine, makeCellKey } from "@bilig/core";
 import type { EngineOp } from "@bilig/workbook-domain";
 import {
   ErrorCode,
-  type EngineEvent,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
@@ -99,10 +98,7 @@ import type {
   RawCellContent,
   SerializedHeadlessNamedExpression,
 } from "./types.js";
-import {
-  collectTrackedCellRefsFromEvents,
-  type TrackedCellRef,
-} from "./tracked-engine-event-refs.js";
+import { captureTrackedEngineEvent, type TrackedEngineEvent } from "./tracked-engine-event-refs.js";
 import { buildDeferredLiteralHistoryRecord } from "./deferred-literal-history.js";
 
 type ListenerMap = {
@@ -164,17 +160,6 @@ type QueuedEvent = Extract<
       | "namedExpressionRemoved";
   }
 >;
-
-function cloneTrackedEngineEvent(event: EngineEvent): EngineEvent {
-  return {
-    ...event,
-    changedCellIndices: Array.from(event.changedCellIndices),
-    invalidatedRanges: event.invalidatedRanges.map((range) => ({ ...range })),
-    invalidatedRows: event.invalidatedRows.map((range) => ({ ...range })),
-    invalidatedColumns: event.invalidatedColumns.map((range) => ({ ...range })),
-    metrics: { ...event.metrics },
-  };
-}
 
 interface HistoryRecord {
   forward: { ops: unknown[]; potentialNewCells?: number };
@@ -996,7 +981,7 @@ export class HeadlessWorkbook {
   private suspendedVisibility: VisibilitySnapshot | null = null;
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
   private queuedEvents: QueuedEvent[] = [];
-  private trackedEngineEvents: EngineEvent[] = [];
+  private trackedEngineEvents: TrackedEngineEvent[] = [];
   private unsubscribeEngineEvents: (() => void) | null = null;
   private disposed = false;
 
@@ -2807,11 +2792,11 @@ export class HeadlessWorkbook {
     this.unsubscribeEngineEvents?.();
     this.trackedEngineEvents = [];
     this.unsubscribeEngineEvents = this.engine.subscribe((event) => {
-      this.trackedEngineEvents.push(cloneTrackedEngineEvent(event));
+      this.trackedEngineEvents.push(captureTrackedEngineEvent(event));
     });
   }
 
-  private drainTrackedEngineEvents(): EngineEvent[] {
+  private drainTrackedEngineEvents(): TrackedEngineEvent[] {
     const events = this.trackedEngineEvents;
     this.trackedEngineEvents = [];
     return events;
@@ -2853,6 +2838,7 @@ export class HeadlessWorkbook {
     this.engine.applyOps(ops, {
       captureUndo: historyRecord === null,
       potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      source: "local",
       trusted: true,
     });
     if (historyRecord) {
@@ -3017,10 +3003,6 @@ export class HeadlessWorkbook {
     return snapshot;
   }
 
-  private collectTrackedCellRefs(events: readonly EngineEvent[]): TrackedCellRef[] | null {
-    return collectTrackedCellRefsFromEvents(this.engine, events);
-  }
-
   private computeCellChanges(
     beforeVisibility: VisibilitySnapshot,
     afterVisibility: VisibilitySnapshot,
@@ -3053,56 +3035,152 @@ export class HeadlessWorkbook {
 
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
-    events: readonly EngineEvent[],
+    events: readonly TrackedEngineEvent[],
   ): { changes: HeadlessChange[]; nextVisibility: VisibilitySnapshot } | null {
-    const refs = this.collectTrackedCellRefs(events);
-    if (refs === null) {
+    if (
+      events.some(
+        (event) =>
+          event.invalidation === "full" ||
+          event.hasInvalidatedRanges ||
+          event.hasInvalidatedRows ||
+          event.hasInvalidatedColumns,
+      )
+    ) {
       return null;
     }
 
+    const cellStore = this.engine.workbook.cellStore;
+    const strings = this.engine.strings;
     const nextVisibility = beforeVisibility;
-    const ensureMutableSheet = (ref: TrackedCellRef): SheetStateSnapshot => {
-      let existing = nextVisibility.get(ref.sheetId);
+    const sheetNames = new Map<number, string>();
+    const ensureSheetName = (sheetId: number): string | null => {
+      const cached = sheetNames.get(sheetId);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const sheet = this.engine.workbook.getSheetById(sheetId);
+      if (!sheet) {
+        return null;
+      }
+      sheetNames.set(sheetId, sheet.name);
+      return sheet.name;
+    };
+    const ensureMutableSheet = (sheetId: number, sheetName: string): SheetStateSnapshot => {
+      let existing = nextVisibility.get(sheetId);
       if (!existing) {
         existing = {
-          sheetId: ref.sheetId,
-          sheetName: ref.sheetName,
-          order: this.sheetRecord(ref.sheetId).order,
+          sheetId,
+          sheetName,
+          order: this.sheetRecord(sheetId).order,
           cells: new Map<string, CellValue>(),
         };
-        nextVisibility.set(ref.sheetId, existing);
+        nextVisibility.set(sheetId, existing);
       }
       return existing;
     };
 
-    const changes: HeadlessChange[] = [];
-    refs.forEach((ref) => {
-      const beforeValue = beforeVisibility.get(ref.sheetId)?.cells.get(ref.address) ?? emptyValue();
-      const afterValue = ref.value;
-      if (valuesEqual(beforeValue, afterValue)) {
-        return;
+    const collectDirectChanges = (
+      changedCellIndices: Uint32Array,
+      seen: Set<number> | null,
+    ): { changes: HeadlessChange[]; isSorted: boolean } | null => {
+      const changes: HeadlessChange[] = [];
+      let previousSheetId = -1;
+      let previousRow = -1;
+      let previousCol = -1;
+      let isSorted = true;
+      for (let index = 0; index < changedCellIndices.length; index += 1) {
+        const cellIndex = changedCellIndices[index]!;
+        const sheetId = cellStore.sheetIds[cellIndex];
+        const row = cellStore.rows[cellIndex];
+        const col = cellStore.cols[cellIndex];
+        if (sheetId === undefined || row === undefined || col === undefined) {
+          return null;
+        }
+        if (seen) {
+          const logicalCellKey = makeCellKey(sheetId, row, col);
+          if (seen.has(logicalCellKey)) {
+            continue;
+          }
+          seen.add(logicalCellKey);
+        }
+        const sheetName = ensureSheetName(sheetId);
+        if (!sheetName) {
+          return null;
+        }
+        const address = formatAddress(row, col);
+        const beforeValue = beforeVisibility.get(sheetId)?.cells.get(address) ?? emptyValue();
+        const afterValue = cellStore.getValue(cellIndex, (id) => strings.get(id));
+        if (valuesEqual(beforeValue, afterValue)) {
+          continue;
+        }
+        if (
+          previousSheetId > sheetId ||
+          (previousSheetId === sheetId &&
+            (previousRow > row || (previousRow === row && previousCol > col)))
+        ) {
+          isSorted = false;
+        }
+        previousSheetId = sheetId;
+        previousRow = row;
+        previousCol = col;
+        const sheet = ensureMutableSheet(sheetId, sheetName);
+        if (afterValue.tag === ValueTag.Empty) {
+          sheet.cells.delete(address);
+        } else {
+          sheet.cells.set(address, afterValue);
+        }
+        changes.push({
+          kind: "cell",
+          address: { sheet: sheetId, row, col },
+          sheetName,
+          a1: address,
+          newValue: cloneCellValue(afterValue),
+        });
       }
-      const sheet = ensureMutableSheet(ref);
-      if (afterValue.tag === ValueTag.Empty) {
-        sheet.cells.delete(ref.address);
-      } else {
-        sheet.cells.set(ref.address, afterValue);
+      return { changes, isSorted };
+    };
+
+    if (events.length === 1) {
+      const event = events[0]!;
+      const direct = collectDirectChanges(event.changedCellIndices, new Set<number>());
+      if (direct === null) {
+        return null;
       }
-      changes.push({
-        kind: "cell",
-        address: { sheet: ref.sheetId, row: ref.row, col: ref.col },
-        sheetName: ref.sheetName,
-        a1: ref.address,
-        newValue: cloneCellValue(afterValue),
-      });
-    });
+      return {
+        changes:
+          event.changedInputCount <= 1 && direct.isSorted
+            ? direct.changes
+            : orderHeadlessCellChanges(
+                direct.changes,
+                this.listSheetRecords(),
+                event.changedInputCount,
+              ),
+        nextVisibility,
+      };
+    }
+
+    const latestCellIndicesByKey = new Map<number, number>();
+    for (const event of events) {
+      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+        const cellIndex = event.changedCellIndices[index]!;
+        const sheetId = cellStore.sheetIds[cellIndex];
+        const row = cellStore.rows[cellIndex];
+        const col = cellStore.cols[cellIndex];
+        if (sheetId === undefined || row === undefined || col === undefined) {
+          return null;
+        }
+        latestCellIndicesByKey.set(makeCellKey(sheetId, row, col), cellIndex);
+      }
+    }
+    const direct = collectDirectChanges(Uint32Array.from(latestCellIndicesByKey.values()), null);
+    if (direct === null) {
+      return null;
+    }
 
     return {
-      changes: orderHeadlessCellChanges(
-        changes,
-        this.listSheetRecords(),
-        events.length === 1 ? events[0]!.metrics.changedInputCount : undefined,
-      ),
+      changes: direct.isSorted
+        ? direct.changes
+        : orderHeadlessCellChanges(direct.changes, this.listSheetRecords()),
       nextVisibility,
     };
   }
