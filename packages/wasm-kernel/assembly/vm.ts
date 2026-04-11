@@ -30,6 +30,9 @@ let outputStringOffsets = new Uint32Array(64);
 let outputStringData = new Uint16Array(64);
 let outputStringCount = 0;
 let outputStringDataLength = 0;
+const UNCACHED_AGGREGATE_TAG: u8 = 0xff;
+let sumRangeCacheTags = new Uint8Array(64);
+let sumRangeCacheValues = new Float64Array(64);
 let spillRows = new Uint32Array(64);
 let spillCols = new Uint32Array(64);
 let spillOffsets = new Uint32Array(64);
@@ -93,6 +96,10 @@ export function resetOutputStrings(): void {
 function resetSpillResults(): void {
   spillArrayCount = 0;
   spillValueCount = 0;
+}
+
+function resetAggregateCaches(): void {
+  sumRangeCacheTags.fill(UNCACHED_AGGREGATE_TAG);
 }
 
 function ensureSpillArrayCapacity(nextCapacity: i32): void {
@@ -604,10 +611,16 @@ export function ensureConstantCapacity(nextCapacity: i32): void {
 }
 
 export function ensureRangeCapacity(nextCapacity: i32): void {
+  const previousCacheLength = sumRangeCacheTags.length;
   rangeOffsets = ensureU32(rangeOffsets, nextCapacity);
   rangeLengths = ensureU32(rangeLengths, nextCapacity);
   rangeRowCounts = ensureU32(rangeRowCounts, nextCapacity);
   rangeColCounts = ensureU32(rangeColCounts, nextCapacity);
+  if (sumRangeCacheTags.length < nextCapacity) {
+    sumRangeCacheTags = ensureU8(sumRangeCacheTags, nextCapacity);
+    sumRangeCacheTags.fill(UNCACHED_AGGREGATE_TAG, previousCacheLength);
+  }
+  sumRangeCacheValues = ensureF64(sumRangeCacheValues, nextCapacity);
 }
 
 export function ensureMemberCapacity(nextCapacity: i32): void {
@@ -711,6 +724,24 @@ export function writeCells(
   numbers.set(nextNumbers);
   stringIds.set(nextStringIds);
   errors.set(nextErrors);
+}
+
+export function readCachedRangeSumTag(rangeIndex: u32): u8 {
+  return rangeIndex < <u32>sumRangeCacheTags.length
+    ? sumRangeCacheTags[rangeIndex]
+    : UNCACHED_AGGREGATE_TAG;
+}
+
+export function readCachedRangeSumValue(rangeIndex: u32): f64 {
+  return rangeIndex < <u32>sumRangeCacheValues.length ? sumRangeCacheValues[rangeIndex] : 0.0;
+}
+
+export function writeCachedRangeSum(rangeIndex: u32, tag: u8, value: f64): void {
+  if (rangeIndex >= <u32>sumRangeCacheTags.length) {
+    ensureRangeCapacity(<i32>rangeIndex + 1);
+  }
+  sumRangeCacheTags[rangeIndex] = tag;
+  sumRangeCacheValues[rangeIndex] = value;
 }
 
 function binaryNumeric(op: i32, left: f64, right: f64): f64 {
@@ -997,6 +1028,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
 export function evalBatch(cellIndices: Uint32Array): void {
   resetOutputStrings();
   resetSpillResults();
+  resetAggregateCaches();
   for (let index = 0; index < cellIndices.length; index++) {
     const cellIndex = cellIndices[index];
     spillRows[cellIndex] = 0;

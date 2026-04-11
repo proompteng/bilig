@@ -4,7 +4,14 @@ import { matchesCriteriaValue } from "./criteria";
 import { gcdPairCalc, lcmPairCalc, truncAbs } from "./numeric-core";
 import { toNumberOrNaN, toNumberOrZero } from "./operands";
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeResult } from "./result-io";
-import { readSpillArrayLength, readSpillArrayNumber, readSpillArrayTag } from "./vm";
+import {
+  readCachedRangeSumTag,
+  readCachedRangeSumValue,
+  readSpillArrayLength,
+  readSpillArrayNumber,
+  readSpillArrayTag,
+  writeCachedRangeSum,
+} from "./vm";
 
 function writeAggregateError(
   base: i32,
@@ -61,6 +68,61 @@ export function tryApplyAggregateCriteriaBuiltin(
   outputStringData: Uint16Array,
 ): i32 {
   if (builtinId == BuiltinId.Sum) {
+    if (argc == 1 && kindStack[base] == STACK_KIND_RANGE) {
+      const rangeIndex = rangeIndexStack[base];
+      const cachedTag = readCachedRangeSumTag(rangeIndex);
+      if (cachedTag != 0xff) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          cachedTag,
+          readCachedRangeSumValue(rangeIndex),
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+
+      const start = rangeOffsets[rangeIndex];
+      const length = <i32>rangeLengths[rangeIndex];
+      let sum = 0.0;
+      for (let cursor = 0; cursor < length; cursor += 1) {
+        const memberIndex = rangeMembers[start + cursor];
+        const memberTag = cellTags[memberIndex];
+        if (memberTag == ValueTag.Error) {
+          const errorCode = cellErrors[memberIndex];
+          writeCachedRangeSum(rangeIndex, <u8>ValueTag.Error, errorCode);
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            errorCode,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        const numeric = toNumberOrNaN(memberTag, cellNumbers[memberIndex]);
+        if (!isNaN(numeric)) {
+          sum += numeric;
+        }
+      }
+
+      writeCachedRangeSum(rangeIndex, <u8>ValueTag.Number, sum);
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Number,
+        sum,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
     const scalarError = <i32>scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
     if (scalarError >= 0) {
       return writeAggregateError(

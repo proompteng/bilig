@@ -95,6 +95,54 @@ function cellIndex(row: number, col: number, width: number): number {
 }
 
 describe("wasm kernel aggregate and criteria dispatch", () => {
+  it("reuses repeated SUM range aggregates within a batch and refreshes them across batches", async () => {
+    const kernel = await createKernel();
+    const width = 4;
+    kernel.init(16, 2, 1, 1, 3);
+
+    const cellTags = new Uint8Array(16);
+    const cellNumbers = new Float64Array(16);
+    const cellStringIds = new Uint32Array(16);
+    const cellErrors = new Uint16Array(16);
+
+    cellTags[0] = ValueTag.Number;
+    cellNumbers[0] = 1;
+    cellTags[1] = ValueTag.Number;
+    cellNumbers[1] = 2;
+    cellTags[2] = ValueTag.Number;
+    cellNumbers[2] = 3;
+    kernel.writeCells(cellTags, cellNumbers, cellStringIds, cellErrors);
+    kernel.uploadRangeMembers(
+      Uint32Array.from([0, 1, 2]),
+      Uint32Array.from([0]),
+      Uint32Array.from([3]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([3]), Uint32Array.from([1]));
+
+    const packed = packPrograms([
+      [encodePushRange(0), encodeCall(BuiltinId.Sum, 1), encodeRet()],
+      [encodePushRange(0), encodeCall(BuiltinId.Sum, 1), encodeRet()],
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width)]),
+    );
+    const constants = packConstants([[], []]);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+
+    kernel.evalBatch(Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width)]));
+    expect(kernel.readNumbers()[cellIndex(1, 0, width)]).toBe(6);
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(6);
+
+    cellNumbers[0] = 10;
+    kernel.writeCells(cellTags, cellNumbers, cellStringIds, cellErrors);
+    kernel.evalBatch(Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width)]));
+    expect(kernel.readNumbers()[cellIndex(1, 0, width)]).toBe(15);
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(15);
+  });
+
   it("keeps aggregate and criteria builtins stable across refactors", async () => {
     const kernel = await createKernel();
     const width = 32;
