@@ -1,16 +1,73 @@
 #!/usr/bin/env bun
 import { spawn } from "node:child_process";
-import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
-import { runLoadBenchmark } from "../packages/benchmarks/src/benchmark-load.ts";
-import { collectGarbage } from "../packages/benchmarks/src/metrics.ts";
-import { runRangeAggregateBenchmark } from "../packages/benchmarks/src/benchmark-range-heavy.ts";
-import { runTopologyEditBenchmark } from "../packages/benchmarks/src/benchmark-topology-edit.ts";
-import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
-import {
-  runWorkerReconnectCatchUpBenchmark,
-  runWorkerVisibleEditBenchmark,
-  runWorkerWarmStartBenchmark,
-} from "./bench-worker-runtime.ts";
+import { fileURLToPath } from "node:url";
+
+interface MemorySnapshot {
+  readonly rssBytes: number;
+  readonly heapUsedBytes: number;
+  readonly heapTotalBytes: number;
+  readonly externalBytes: number;
+  readonly arrayBuffersBytes: number;
+}
+
+interface MemoryMeasurement {
+  readonly before: MemorySnapshot;
+  readonly after: MemorySnapshot;
+  readonly delta: MemorySnapshot;
+}
+
+interface RecalcMetrics {
+  readonly recalcMs: number;
+  readonly wasmFormulaCount: number;
+  readonly jsFormulaCount: number;
+}
+
+interface LoadBenchmarkResult {
+  readonly materializedCells: number;
+  readonly elapsedMs: number;
+  readonly memory: MemoryMeasurement;
+}
+
+interface EditBenchmarkResult {
+  readonly elapsedMs: number;
+  readonly metrics: RecalcMetrics;
+  readonly memory: MemoryMeasurement;
+}
+
+interface RangeAggregateBenchmarkResult {
+  readonly elapsedMs: number;
+  readonly metrics: RecalcMetrics;
+  readonly memory: MemoryMeasurement;
+}
+
+interface TopologyEditBenchmarkResult {
+  readonly elapsedMs: number;
+  readonly metrics: RecalcMetrics;
+  readonly memory: MemoryMeasurement;
+}
+
+interface RenderCommitBenchmarkResult {
+  readonly elapsedMs: number;
+  readonly memory: MemoryMeasurement;
+}
+
+interface WorkerWarmStartBenchmarkResult {
+  readonly materializedCells: number;
+  readonly elapsedMs: number;
+  readonly memory: MemoryMeasurement;
+}
+
+interface WorkerVisibleEditBenchmarkResult {
+  readonly visiblePatchMs: number;
+  readonly commitMs: number;
+}
+
+interface WorkerReconnectCatchUpBenchmarkResult {
+  readonly catchUpMs: number;
+  readonly rebaseMs: number;
+  readonly submitDrainMs: number;
+  readonly ackMs: number;
+}
 
 const baseBudgets = {
   load100kP95Ms: 1500,
@@ -92,7 +149,27 @@ function quantile(sortedValues, percentile) {
   return sortedValues[Math.max(0, Math.min(sortedValues.length - 1, index))];
 }
 
-async function sampleBenchmark(runner, iterations, { warmupIterations = 0 } = {}) {
+function collectGarbage(): void {
+  const bunGc = Reflect.get(globalThis, "Bun");
+  if (
+    typeof bunGc === "object" &&
+    bunGc !== null &&
+    typeof Reflect.get(bunGc, "gc") === "function"
+  ) {
+    Reflect.get(bunGc, "gc").call(bunGc, true);
+    return;
+  }
+  const gc = Reflect.get(globalThis, "gc");
+  if (typeof gc === "function") {
+    gc();
+  }
+}
+
+async function sampleBenchmark<T>(
+  runner: () => Promise<T>,
+  iterations: number,
+  { warmupIterations = 0 }: { warmupIterations?: number } = {},
+): Promise<T[]> {
   const run = async () => {
     collectGarbage();
     const result = await runner();
@@ -115,9 +192,13 @@ async function sampleBenchmark(runner, iterations, { warmupIterations = 0 } = {}
   return runs;
 }
 
+function benchmarkScriptPath(relativePath: string): string {
+  return fileURLToPath(new URL(`../${relativePath}`, import.meta.url));
+}
+
 async function runIsolatedBenchmark<T>(scriptPath: string, args: readonly string[]): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath, ...args], {
+    const child = spawn("node", ["--import", "tsx", scriptPath, ...args], {
       cwd: process.cwd(),
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -150,281 +231,341 @@ async function runIsolatedBenchmark<T>(scriptPath: string, args: readonly string
   });
 }
 
-function runIsolatedLoadBenchmark(
-  input: Parameters<typeof runLoadBenchmark>[0],
-): Promise<Awaited<ReturnType<typeof runLoadBenchmark>>> {
-  return runIsolatedBenchmark("packages/benchmarks/src/benchmark-load.ts", [String(input)]);
+export function runIsolatedLoadBenchmark(input: number | string): Promise<LoadBenchmarkResult> {
+  return runIsolatedBenchmark<LoadBenchmarkResult>(
+    benchmarkScriptPath("packages/benchmarks/src/benchmark-load.ts"),
+    [String(input)],
+  );
 }
 
-function runIsolatedRangeAggregateBenchmark(
-  sourceCount: Parameters<typeof runRangeAggregateBenchmark>[0],
-  aggregateCount: Parameters<typeof runRangeAggregateBenchmark>[1],
-): Promise<Awaited<ReturnType<typeof runRangeAggregateBenchmark>>> {
-  return runIsolatedBenchmark("packages/benchmarks/src/benchmark-range-heavy.ts", [
-    String(sourceCount),
-    String(aggregateCount),
-  ]);
+export function runIsolatedEditBenchmark(downstreamCount = 10_000): Promise<EditBenchmarkResult> {
+  return runIsolatedBenchmark<EditBenchmarkResult>(
+    benchmarkScriptPath("packages/benchmarks/src/benchmark-edit.ts"),
+    [String(downstreamCount)],
+  );
 }
 
-function runIsolatedWorkerWarmStartBenchmark(
-  input: Parameters<typeof runWorkerWarmStartBenchmark>[0],
-): Promise<Awaited<ReturnType<typeof runWorkerWarmStartBenchmark>>> {
-  return runIsolatedBenchmark("scripts/bench-worker-runtime.ts", ["warm-start", String(input)]);
+export function runIsolatedRangeAggregateBenchmark(
+  sourceCount = 1_024,
+  aggregateCount = 10_000,
+): Promise<RangeAggregateBenchmarkResult> {
+  return runIsolatedBenchmark<RangeAggregateBenchmarkResult>(
+    benchmarkScriptPath("packages/benchmarks/src/benchmark-range-heavy.ts"),
+    [String(sourceCount), String(aggregateCount)],
+  );
 }
 
-const loadRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-100k"), 5, {
-  warmupIterations: 1,
-});
-const load250kRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-250k"), 3, {
-  warmupIterations: 1,
-});
-const editRuns = await sampleBenchmark(() => runEditBenchmark(10_000), 5, {
-  warmupIterations: 1,
-});
-const rangeRuns = await sampleBenchmark(
-  () => runIsolatedRangeAggregateBenchmark(1_024, 10_000),
-  3,
-  {
+export function runIsolatedTopologyEditBenchmark(
+  chainLength = 10_000,
+): Promise<TopologyEditBenchmarkResult> {
+  return runIsolatedBenchmark<TopologyEditBenchmarkResult>(
+    benchmarkScriptPath("packages/benchmarks/src/benchmark-topology-edit.ts"),
+    [String(chainLength)],
+  );
+}
+
+export function runIsolatedRenderCommitBenchmark(
+  declaredCells = 10_000,
+): Promise<RenderCommitBenchmarkResult> {
+  return runIsolatedBenchmark<RenderCommitBenchmarkResult>(
+    benchmarkScriptPath("packages/benchmarks/src/benchmark-renderer.ts"),
+    [String(declaredCells)],
+  );
+}
+
+export function runIsolatedWorkerWarmStartBenchmark(
+  input: number | string,
+): Promise<WorkerWarmStartBenchmarkResult> {
+  return runIsolatedBenchmark<WorkerWarmStartBenchmarkResult>(
+    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
+    ["warm-start", String(input)],
+  );
+}
+
+export function runIsolatedWorkerVisibleEditBenchmark(
+  materializedCells = 10_000,
+): Promise<WorkerVisibleEditBenchmarkResult> {
+  return runIsolatedBenchmark<WorkerVisibleEditBenchmarkResult>(
+    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
+    ["visible-edit", String(materializedCells)],
+  );
+}
+
+export function runIsolatedWorkerReconnectCatchUpBenchmark(
+  materializedCells = 10_000,
+  pendingMutationCount = 100,
+): Promise<WorkerReconnectCatchUpBenchmarkResult> {
+  return runIsolatedBenchmark<WorkerReconnectCatchUpBenchmarkResult>(
+    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
+    ["reconnect-catch-up", String(materializedCells), String(pendingMutationCount)],
+  );
+}
+
+export async function runBenchContracts(): Promise<void> {
+  const loadRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-100k"), 5, {
     warmupIterations: 1,
-  },
-);
-const topologyRuns = await sampleBenchmark(() => runTopologyEditBenchmark(10_000), 3, {
-  warmupIterations: 1,
-});
-const renderRuns = await sampleBenchmark(() => runRenderCommitBenchmark(10_000), 5, {
-  warmupIterations: 1,
-});
-const workerWarmStartRuns = await sampleBenchmark(
-  () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-100k"),
-  3,
-  {
-    warmupIterations: 1,
-  },
-);
-const workerWarmStart250kRuns = await sampleBenchmark(
-  () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-250k"),
-  3,
-  {
-    warmupIterations: 1,
-  },
-);
-const workerVisibleEditRuns = await sampleBenchmark(
-  () => runWorkerVisibleEditBenchmark(10_000),
-  5,
-  {
-    warmupIterations: 1,
-  },
-);
-const workerReconnectCatchUpRuns = await sampleBenchmark(
-  () => runWorkerReconnectCatchUpBenchmark(10_000, 100),
-  3,
-  {
-    warmupIterations: 1,
-  },
-);
-
-const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
-const load250kElapsed = summarizeNumbers(load250kRuns.map((run) => run.elapsedMs));
-const loadWorkingSetDelta = summarizeNumbers(
-  loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
-);
-const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.after.heapUsedBytes));
-
-const editElapsed = summarizeNumbers(editRuns.map((run) => run.elapsedMs));
-const editRecalc = summarizeNumbers(editRuns.map((run) => run.metrics.recalcMs));
-const editRssAfter = summarizeNumbers(editRuns.map((run) => run.memory.after.rssBytes));
-
-const rangeElapsed = summarizeNumbers(rangeRuns.map((run) => run.elapsedMs));
-const rangeRecalc = summarizeNumbers(rangeRuns.map((run) => run.metrics.recalcMs));
-const rangeRssAfter = summarizeNumbers(rangeRuns.map((run) => run.memory.after.rssBytes));
-
-const topologyElapsed = summarizeNumbers(topologyRuns.map((run) => run.elapsedMs));
-const topologyRecalc = summarizeNumbers(topologyRuns.map((run) => run.metrics.recalcMs));
-const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.after.rssBytes));
-
-const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
-const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
-const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs));
-const workerWarmStart250kElapsed = summarizeNumbers(
-  workerWarmStart250kRuns.map((run) => run.elapsedMs),
-);
-const workerWarmStartWorkingSetDelta = summarizeNumbers(
-  workerWarmStartRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
-);
-const workerWarmStart250kWorkingSetDelta = summarizeNumbers(
-  workerWarmStart250kRuns.map(
-    (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
-  ),
-);
-const workerVisibleEditElapsed = summarizeNumbers(
-  workerVisibleEditRuns.map((run) => run.visiblePatchMs),
-);
-const workerVisibleEditCommitElapsed = summarizeNumbers(
-  workerVisibleEditRuns.map((run) => run.commitMs),
-);
-const workerReconnectCatchUpElapsed = summarizeNumbers(
-  workerReconnectCatchUpRuns.map((run) => run.catchUpMs),
-);
-const workerReconnectRebaseElapsed = summarizeNumbers(
-  workerReconnectCatchUpRuns.map((run) => run.rebaseMs),
-);
-const workerReconnectSubmitDrainElapsed = summarizeNumbers(
-  workerReconnectCatchUpRuns.map((run) => run.submitDrainMs),
-);
-const workerReconnectAckElapsed = summarizeNumbers(
-  workerReconnectCatchUpRuns.map((run) => run.ackMs),
-);
-
-assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
-
-assertBudget("100k snapshot load p95", loadElapsed.p95, budgets.load100kP95Ms);
-assertBudget("250k snapshot load p95", load250kElapsed.p95, budgets.load250kP95Ms);
-assertBudget(
-  "100k snapshot load working-set delta",
-  loadWorkingSetDelta.max,
-  budgets.load100kWorkingSetDeltaBytes,
-  formatBytes,
-);
-assertBudget("10k downstream edit p95", editElapsed.p95, budgets.edit10kElapsedP95Ms);
-assertBudget("10k downstream recalc median", editRecalc.median, budgets.edit10kRecalcMedianMs);
-assertBudget("10k downstream recalc p95", editRecalc.p95, budgets.edit10kRecalcP95Ms);
-assertBudget(
-  "10k range aggregate edit p95",
-  rangeElapsed.p95,
-  budgets.rangeAggregates10kElapsedP95Ms,
-);
-assertBudget(
-  "10k range aggregate recalc p95",
-  rangeRecalc.p95,
-  budgets.rangeAggregates10kRecalcP95Ms,
-);
-assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
-assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
-assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
-assertBudget(
-  "100k worker warm-start p95",
-  workerWarmStartElapsed.p95,
-  budgets.workerWarmStart100kP95Ms,
-);
-assertBudget(
-  "250k worker warm-start p95",
-  workerWarmStart250kElapsed.p95,
-  budgets.workerWarmStart250kP95Ms,
-);
-assertBudget(
-  "10k worker local visible edit p95",
-  workerVisibleEditElapsed.p95,
-  budgets.workerVisibleEdit10kP95Ms,
-);
-assertBudget(
-  "100 pending worker reconnect catch-up p95",
-  workerReconnectCatchUpElapsed.p95,
-  budgets.workerReconnectCatchUp100PendingP95Ms,
-);
-
-console.log(
-  JSON.stringify(
+  });
+  const load250kRuns = await sampleBenchmark(
+    () => runIsolatedLoadBenchmark("dense-mixed-250k"),
+    3,
     {
-      baseBudgets,
-      budgets,
-      toleranceMultiplier,
-      sampleCounts: {
-        load100k: loadRuns.length,
-        load250k: load250kRuns.length,
-        edit10k: editRuns.length,
-        rangeAggregates10k: rangeRuns.length,
-        topologyEdit10k: topologyRuns.length,
-        renderCommit10k: renderRuns.length,
-        workerWarmStart100k: workerWarmStartRuns.length,
-        workerWarmStart250k: workerWarmStart250kRuns.length,
-        workerVisibleEdit10k: workerVisibleEditRuns.length,
-        workerReconnectCatchUp100Pending: workerReconnectCatchUpRuns.length,
-      },
-      results: {
-        load100k: {
-          scenario: "load",
-          corpusCaseId: "dense-mixed-100k",
-          materializedCells: loadRuns[0]?.materializedCells ?? 100_000,
-          elapsedMs: loadElapsed,
-          workingSetDeltaBytes: loadWorkingSetDelta,
-          heapUsedAfterBytes: loadHeapUsedAfter,
-          runs: loadRuns,
-        },
-        load250k: {
-          scenario: "load",
-          corpusCaseId: "dense-mixed-250k",
-          materializedCells: load250kRuns[0]?.materializedCells ?? 250_000,
-          elapsedMs: load250kElapsed,
-          runs: load250kRuns,
-        },
-        edit10k: {
-          scenario: "single-edit",
-          downstreamCount: 10_000,
-          elapsedMs: editElapsed,
-          recalcMs: editRecalc,
-          rssAfterBytes: editRssAfter,
-          runs: editRuns,
-        },
-        rangeAggregates10k: {
-          scenario: "range-aggregates",
-          sourceCount: 1_024,
-          aggregateCount: 10_000,
-          elapsedMs: rangeElapsed,
-          recalcMs: rangeRecalc,
-          rssAfterBytes: rangeRssAfter,
-          runs: rangeRuns,
-        },
-        topologyEdit10k: {
-          scenario: "topology-edit",
-          chainLength: 10_000,
-          elapsedMs: topologyElapsed,
-          recalcMs: topologyRecalc,
-          rssAfterBytes: topologyRssAfter,
-          runs: topologyRuns,
-        },
-        renderCommit10k: {
-          scenario: "render-commit",
-          declaredCells: 10_000,
-          elapsedMs: renderElapsed,
-          rssAfterBytes: renderRssAfter,
-          runs: renderRuns,
-        },
-        workerWarmStart100k: {
-          scenario: "worker-warm-start",
-          corpusCaseId: "dense-mixed-100k",
-          materializedCells: workerWarmStartRuns[0]?.materializedCells ?? 100_000,
-          elapsedMs: workerWarmStartElapsed,
-          workingSetDeltaBytes: workerWarmStartWorkingSetDelta,
-          runs: workerWarmStartRuns,
-        },
-        workerWarmStart250k: {
-          scenario: "worker-warm-start",
-          corpusCaseId: "dense-mixed-250k",
-          materializedCells: workerWarmStart250kRuns[0]?.materializedCells ?? 250_000,
-          elapsedMs: workerWarmStart250kElapsed,
-          workingSetDeltaBytes: workerWarmStart250kWorkingSetDelta,
-          runs: workerWarmStart250kRuns,
-        },
-        workerVisibleEdit10k: {
-          scenario: "worker-visible-edit",
-          materializedCells: 10_000,
-          visiblePatchMs: workerVisibleEditElapsed,
-          commitMs: workerVisibleEditCommitElapsed,
-          runs: workerVisibleEditRuns,
-        },
-        workerReconnectCatchUp100Pending: {
-          scenario: "worker-reconnect-catch-up",
-          materializedCells: 10_000,
-          pendingMutationCount: 100,
-          catchUpMs: workerReconnectCatchUpElapsed,
-          rebaseMs: workerReconnectRebaseElapsed,
-          submitDrainMs: workerReconnectSubmitDrainElapsed,
-          ackMs: workerReconnectAckElapsed,
-          runs: workerReconnectCatchUpRuns,
-        },
-      },
+      warmupIterations: 1,
     },
-    null,
-    2,
-  ),
-);
+  );
+  const editRuns = await sampleBenchmark(() => runIsolatedEditBenchmark(10_000), 5, {
+    warmupIterations: 1,
+  });
+  const rangeRuns = await sampleBenchmark(
+    () => runIsolatedRangeAggregateBenchmark(1_024, 10_000),
+    3,
+    {
+      warmupIterations: 1,
+    },
+  );
+  const topologyRuns = await sampleBenchmark(() => runIsolatedTopologyEditBenchmark(10_000), 3, {
+    warmupIterations: 1,
+  });
+  const renderRuns = await sampleBenchmark(() => runIsolatedRenderCommitBenchmark(10_000), 5, {
+    warmupIterations: 1,
+  });
+  const workerWarmStartRuns = await sampleBenchmark(
+    () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-100k"),
+    3,
+    {
+      warmupIterations: 1,
+    },
+  );
+  const workerWarmStart250kRuns = await sampleBenchmark(
+    () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-250k"),
+    3,
+    {
+      warmupIterations: 1,
+    },
+  );
+  const workerVisibleEditRuns = await sampleBenchmark(
+    () => runIsolatedWorkerVisibleEditBenchmark(10_000),
+    5,
+    {
+      warmupIterations: 1,
+    },
+  );
+  const workerReconnectCatchUpRuns = await sampleBenchmark(
+    () => runIsolatedWorkerReconnectCatchUpBenchmark(10_000, 100),
+    3,
+    {
+      warmupIterations: 1,
+    },
+  );
+
+  const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
+  const load250kElapsed = summarizeNumbers(load250kRuns.map((run) => run.elapsedMs));
+  const loadWorkingSetDelta = summarizeNumbers(
+    loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
+  );
+  const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.after.heapUsedBytes));
+
+  const editElapsed = summarizeNumbers(editRuns.map((run) => run.elapsedMs));
+  const editRecalc = summarizeNumbers(editRuns.map((run) => run.metrics.recalcMs));
+  const editRssAfter = summarizeNumbers(editRuns.map((run) => run.memory.after.rssBytes));
+
+  const rangeElapsed = summarizeNumbers(rangeRuns.map((run) => run.elapsedMs));
+  const rangeRecalc = summarizeNumbers(rangeRuns.map((run) => run.metrics.recalcMs));
+  const rangeRssAfter = summarizeNumbers(rangeRuns.map((run) => run.memory.after.rssBytes));
+
+  const topologyElapsed = summarizeNumbers(topologyRuns.map((run) => run.elapsedMs));
+  const topologyRecalc = summarizeNumbers(topologyRuns.map((run) => run.metrics.recalcMs));
+  const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.after.rssBytes));
+
+  const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
+  const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
+  const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs));
+  const workerWarmStart250kElapsed = summarizeNumbers(
+    workerWarmStart250kRuns.map((run) => run.elapsedMs),
+  );
+  const workerWarmStartWorkingSetDelta = summarizeNumbers(
+    workerWarmStartRuns.map(
+      (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
+    ),
+  );
+  const workerWarmStart250kWorkingSetDelta = summarizeNumbers(
+    workerWarmStart250kRuns.map(
+      (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
+    ),
+  );
+  const workerVisibleEditElapsed = summarizeNumbers(
+    workerVisibleEditRuns.map((run) => run.visiblePatchMs),
+  );
+  const workerVisibleEditCommitElapsed = summarizeNumbers(
+    workerVisibleEditRuns.map((run) => run.commitMs),
+  );
+  const workerReconnectCatchUpElapsed = summarizeNumbers(
+    workerReconnectCatchUpRuns.map((run) => run.catchUpMs),
+  );
+  const workerReconnectRebaseElapsed = summarizeNumbers(
+    workerReconnectCatchUpRuns.map((run) => run.rebaseMs),
+  );
+  const workerReconnectSubmitDrainElapsed = summarizeNumbers(
+    workerReconnectCatchUpRuns.map((run) => run.submitDrainMs),
+  );
+  const workerReconnectAckElapsed = summarizeNumbers(
+    workerReconnectCatchUpRuns.map((run) => run.ackMs),
+  );
+
+  assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
+
+  assertBudget("100k snapshot load p95", loadElapsed.p95, budgets.load100kP95Ms);
+  assertBudget("250k snapshot load p95", load250kElapsed.p95, budgets.load250kP95Ms);
+  assertBudget(
+    "100k snapshot load working-set delta",
+    loadWorkingSetDelta.max,
+    budgets.load100kWorkingSetDeltaBytes,
+    formatBytes,
+  );
+  assertBudget("10k downstream edit p95", editElapsed.p95, budgets.edit10kElapsedP95Ms);
+  assertBudget("10k downstream recalc median", editRecalc.median, budgets.edit10kRecalcMedianMs);
+  assertBudget("10k downstream recalc p95", editRecalc.p95, budgets.edit10kRecalcP95Ms);
+  assertBudget(
+    "10k range aggregate edit p95",
+    rangeElapsed.p95,
+    budgets.rangeAggregates10kElapsedP95Ms,
+  );
+  assertBudget(
+    "10k range aggregate recalc p95",
+    rangeRecalc.p95,
+    budgets.rangeAggregates10kRecalcP95Ms,
+  );
+  assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
+  assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
+  assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
+  assertBudget(
+    "100k worker warm-start p95",
+    workerWarmStartElapsed.p95,
+    budgets.workerWarmStart100kP95Ms,
+  );
+  assertBudget(
+    "250k worker warm-start p95",
+    workerWarmStart250kElapsed.p95,
+    budgets.workerWarmStart250kP95Ms,
+  );
+  assertBudget(
+    "10k worker local visible edit p95",
+    workerVisibleEditElapsed.p95,
+    budgets.workerVisibleEdit10kP95Ms,
+  );
+  assertBudget(
+    "100 pending worker reconnect catch-up p95",
+    workerReconnectCatchUpElapsed.p95,
+    budgets.workerReconnectCatchUp100PendingP95Ms,
+  );
+
+  console.log(
+    JSON.stringify(
+      {
+        baseBudgets,
+        budgets,
+        toleranceMultiplier,
+        sampleCounts: {
+          load100k: loadRuns.length,
+          load250k: load250kRuns.length,
+          edit10k: editRuns.length,
+          rangeAggregates10k: rangeRuns.length,
+          topologyEdit10k: topologyRuns.length,
+          renderCommit10k: renderRuns.length,
+          workerWarmStart100k: workerWarmStartRuns.length,
+          workerWarmStart250k: workerWarmStart250kRuns.length,
+          workerVisibleEdit10k: workerVisibleEditRuns.length,
+          workerReconnectCatchUp100Pending: workerReconnectCatchUpRuns.length,
+        },
+        results: {
+          load100k: {
+            scenario: "load",
+            corpusCaseId: "dense-mixed-100k",
+            materializedCells: loadRuns[0]?.materializedCells ?? 100_000,
+            elapsedMs: loadElapsed,
+            workingSetDeltaBytes: loadWorkingSetDelta,
+            heapUsedAfterBytes: loadHeapUsedAfter,
+            runs: loadRuns,
+          },
+          load250k: {
+            scenario: "load",
+            corpusCaseId: "dense-mixed-250k",
+            materializedCells: load250kRuns[0]?.materializedCells ?? 250_000,
+            elapsedMs: load250kElapsed,
+            runs: load250kRuns,
+          },
+          edit10k: {
+            scenario: "single-edit",
+            downstreamCount: 10_000,
+            elapsedMs: editElapsed,
+            recalcMs: editRecalc,
+            rssAfterBytes: editRssAfter,
+            runs: editRuns,
+          },
+          rangeAggregates10k: {
+            scenario: "range-aggregates",
+            sourceCount: 1_024,
+            aggregateCount: 10_000,
+            elapsedMs: rangeElapsed,
+            recalcMs: rangeRecalc,
+            rssAfterBytes: rangeRssAfter,
+            runs: rangeRuns,
+          },
+          topologyEdit10k: {
+            scenario: "topology-edit",
+            chainLength: 10_000,
+            elapsedMs: topologyElapsed,
+            recalcMs: topologyRecalc,
+            rssAfterBytes: topologyRssAfter,
+            runs: topologyRuns,
+          },
+          renderCommit10k: {
+            scenario: "render-commit",
+            declaredCells: 10_000,
+            elapsedMs: renderElapsed,
+            rssAfterBytes: renderRssAfter,
+            runs: renderRuns,
+          },
+          workerWarmStart100k: {
+            scenario: "worker-warm-start",
+            corpusCaseId: "dense-mixed-100k",
+            materializedCells: workerWarmStartRuns[0]?.materializedCells ?? 100_000,
+            elapsedMs: workerWarmStartElapsed,
+            workingSetDeltaBytes: workerWarmStartWorkingSetDelta,
+            runs: workerWarmStartRuns,
+          },
+          workerWarmStart250k: {
+            scenario: "worker-warm-start",
+            corpusCaseId: "dense-mixed-250k",
+            materializedCells: workerWarmStart250kRuns[0]?.materializedCells ?? 250_000,
+            elapsedMs: workerWarmStart250kElapsed,
+            workingSetDeltaBytes: workerWarmStart250kWorkingSetDelta,
+            runs: workerWarmStart250kRuns,
+          },
+          workerVisibleEdit10k: {
+            scenario: "worker-visible-edit",
+            materializedCells: 10_000,
+            visiblePatchMs: workerVisibleEditElapsed,
+            commitMs: workerVisibleEditCommitElapsed,
+            runs: workerVisibleEditRuns,
+          },
+          workerReconnectCatchUp100Pending: {
+            scenario: "worker-reconnect-catch-up",
+            materializedCells: 10_000,
+            pendingMutationCount: 100,
+            catchUpMs: workerReconnectCatchUpElapsed,
+            rebaseMs: workerReconnectRebaseElapsed,
+            submitDrainMs: workerReconnectSubmitDrainElapsed,
+            ackMs: workerReconnectAckElapsed,
+            runs: workerReconnectCatchUpRuns,
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await runBenchContracts();
+}

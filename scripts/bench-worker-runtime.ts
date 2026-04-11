@@ -404,18 +404,31 @@ export async function runWorkerReconnectCatchUpBenchmark(
 if (import.meta.url === `file://${process.argv[1]}`) {
   const benchmark = process.argv[2] ?? "warm-start";
 
-  if (benchmark !== "warm-start") {
+  if (benchmark === "warm-start") {
+    const rawInput = process.argv[3] ?? "100000";
+    const input: number | WorkbookBenchmarkCorpusId = /^\d+$/.test(rawInput)
+      ? Number.parseInt(rawInput, 10)
+      : isWorkbookBenchmarkCorpusId(rawInput)
+        ? rawInput
+        : (() => {
+            throw new Error(`Unknown workbook benchmark corpus: ${rawInput}`);
+          })();
+
+    console.log(JSON.stringify(await runWorkerWarmStartBenchmark(input), null, 2));
+  } else if (benchmark === "visible-edit") {
+    const materializedCells = Number.parseInt(process.argv[3] ?? "10000", 10);
+    console.log(JSON.stringify(await runWorkerVisibleEditBenchmark(materializedCells), null, 2));
+  } else if (benchmark === "reconnect-catch-up") {
+    const materializedCells = Number.parseInt(process.argv[3] ?? "10000", 10);
+    const pendingMutationCount = Number.parseInt(process.argv[4] ?? "100", 10);
+    console.log(
+      JSON.stringify(
+        await runWorkerReconnectCatchUpBenchmark(materializedCells, pendingMutationCount),
+        null,
+        2,
+      ),
+    );
+  } else {
     throw new Error(`Unknown worker benchmark: ${benchmark}`);
   }
-
-  const rawInput = process.argv[3] ?? "100000";
-  const input: number | WorkbookBenchmarkCorpusId = /^\d+$/.test(rawInput)
-    ? Number.parseInt(rawInput, 10)
-    : isWorkbookBenchmarkCorpusId(rawInput)
-      ? rawInput
-      : (() => {
-          throw new Error(`Unknown workbook benchmark corpus: ${rawInput}`);
-        })();
-
-  console.log(JSON.stringify(await runWorkerWarmStartBenchmark(input), null, 2));
 }
