@@ -140,7 +140,7 @@ describe("WorkerWorkbookApp", () => {
     });
   });
 
-  it("renders follower mode messaging when another tab owns persistent local storage", async () => {
+  it("keeps follower banner hidden while live multi-tab sync is available", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -186,8 +186,61 @@ describe("WorkerWorkbookApp", () => {
       );
     });
 
-    expect(host.textContent).toContain("Another tab is the writer for local storage.");
-    expect(host.textContent).toContain("Edits here stay live");
+    expect(host.textContent).not.toContain("Another tab is the local writer.");
+    expect(host.querySelector("button")?.textContent).not.toBe("Become writer");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders follower controls when local persistence is degraded", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const requestPersistenceTransfer = vi.fn();
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      clearAgentError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      editorConflictBanner: null,
+      failedPendingMutation: null,
+      approvePersistenceTransfer: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      pendingTransferRequest: null,
+      requestPersistenceTransfer,
+      retryFailedPendingMutation: vi.fn(),
+      remoteSyncAvailable: false,
+      runtimeError: null,
+      runtimeReady: true,
+      localPersistenceMode: "follower",
+      statusModeLabel: "Live",
+      transferRequested: false,
+      workbookReady: false,
+      workerHandle: null,
+      zeroConfigured: true,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: "guest:test",
+            defaultDocumentId: "doc-1",
+            persistState: true,
+            zeroCacheUrl: "http://127.0.0.1:4848",
+          }}
+          connectionState={{ name: "connected" }}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("Another tab is the local writer.");
     expect(host.textContent).toContain("Become writer");
 
     await act(async () => {

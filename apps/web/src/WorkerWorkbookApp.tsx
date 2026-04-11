@@ -65,6 +65,8 @@ function WorkerWorkbookAppInner({
     retryFailedPendingMutation,
     runtimeError,
   } = app;
+  const showFollowerPersistenceBanner =
+    app.localPersistenceMode === "follower" && (app.transferRequested || !app.remoteSyncAvailable);
   const toasts = useMemo(
     () =>
       [
@@ -127,12 +129,11 @@ function WorkerWorkbookAppInner({
           degraded.
         </div>
       ) : null}
-      {app.localPersistenceMode === "follower" ? (
+      {showFollowerPersistenceBanner ? (
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="max-w-[72ch]">
-              Another tab is the writer for local storage. Edits here stay live, but they will not
-              survive offline periods until this tab becomes the writer.
+              Another tab is the local writer.
               {app.transferRequested ? (
                 <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
                   Writer handoff requested. This tab will retry as soon as the writer releases the
