@@ -78,8 +78,6 @@ jobs:
     name: build-bilig-app-amd64
     runs-on: docker
     timeout-minutes: 45
-    needs:
-      - correctness-deep
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -117,8 +115,6 @@ jobs:
     name: build-bilig-app-arm64
     runs-on: docker-arm64
     timeout-minutes: 45
-    needs:
-      - correctness-deep
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
