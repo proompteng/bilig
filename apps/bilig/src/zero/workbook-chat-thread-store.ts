@@ -140,6 +140,10 @@ function isWorkbookAgentUiContext(value: unknown): value is WorkbookAgentUiConte
     isRecord(value["selection"]) &&
     typeof value["selection"]["sheetName"] === "string" &&
     typeof value["selection"]["address"] === "string" &&
+    (value["selection"]["range"] === undefined ||
+      (isRecord(value["selection"]["range"]) &&
+        typeof value["selection"]["range"]["startAddress"] === "string" &&
+        typeof value["selection"]["range"]["endAddress"] === "string")) &&
     isRecord(value["viewport"]) &&
     typeof value["viewport"]["rowStart"] === "number" &&
     typeof value["viewport"]["rowEnd"] === "number" &&

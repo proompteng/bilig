@@ -52,7 +52,14 @@ describe("WorkbookAgentSessionStore", () => {
       actorUserId: "alex@example.com",
       scope: "shared",
       context: {
-        selection: { sheetName: "Sheet1", address: "B2" },
+        selection: {
+          sheetName: "Sheet1",
+          address: "B2",
+          range: {
+            startAddress: "B2",
+            endAddress: "D5",
+          },
+        },
         viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
       },
       entries: [createSystemEntry("entry-1", null, "hello")],
@@ -66,7 +73,14 @@ describe("WorkbookAgentSessionStore", () => {
       actorUserId: "alex@example.com",
       scope: "shared",
       context: {
-        selection: { sheetName: "Sheet1", address: "B2" },
+        selection: {
+          sheetName: "Sheet1",
+          address: "B2",
+          range: {
+            startAddress: "B2",
+            endAddress: "D5",
+          },
+        },
         viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
       },
       entries: [createSystemEntry("entry-1", null, "hello")],

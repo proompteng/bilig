@@ -37,6 +37,13 @@ export type SnapshotMetadata = Schema.Schema.Type<typeof SnapshotMetadataSchema>
 export const WorkbookAgentUiSelectionSchema = Schema.Struct({
   sheetName: Schema.String,
   address: Schema.String,
+  range: Schema.optionalWith(
+    Schema.Struct({
+      startAddress: Schema.String,
+      endAddress: Schema.String,
+    }),
+    {},
+  ),
 });
 export type WorkbookAgentUiSelection = Schema.Schema.Type<typeof WorkbookAgentUiSelectionSchema>;
 

@@ -19,6 +19,23 @@ const selectionContext: WorkbookAgentContextRef = {
   },
 };
 
+const rangeSelectionContext: WorkbookAgentContextRef = {
+  selection: {
+    sheetName: "Sheet1",
+    address: "B2",
+    range: {
+      startAddress: "B2",
+      endAddress: "D4",
+    },
+  },
+  viewport: {
+    rowStart: 0,
+    rowEnd: 20,
+    colStart: 0,
+    colEnd: 10,
+  },
+};
+
 describe("workbook agent bundle semantics", () => {
   it("marks selection-only formatting bundles as auto-apply", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
@@ -46,6 +63,33 @@ describe("workbook agent bundle semantics", () => {
     });
 
     expect(bundle.riskClass).toBe("low");
+    expect(bundle.scope).toBe("selection");
+    expect(bundle.approvalMode).toBe("auto");
+  });
+
+  it("treats a multi-cell selected range as selection-scoped when the command matches it", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Format the selected range",
+      baseRevision: 3,
+      context: rangeSelectionContext,
+      command: {
+        kind: "formatRange",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "D4",
+        },
+        patch: {
+          fill: "#dbeafe",
+        },
+      },
+      now: 100,
+    });
+
     expect(bundle.scope).toBe("selection");
     expect(bundle.approvalMode).toBe("auto");
   });

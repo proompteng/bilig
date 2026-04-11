@@ -283,7 +283,11 @@ describe("workbook agent tools", () => {
         uiContext: {
           selection: {
             sheetName: "Sheet1",
-            address: "A1",
+            address: "B2",
+            range: {
+              startAddress: "B2",
+              endAddress: "D5",
+            },
           },
           viewport: {
             rowStart: 0,
@@ -307,8 +311,8 @@ describe("workbook agent tools", () => {
     expect(response.success).toBe(true);
     const textItem = response.contentItems[0];
     expect(textItem?.type).toBe("inputText");
-    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "A1"');
-    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "A1"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "B2"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "D5"');
   });
 
   it("reads the visible viewport through the attached browser context", async () => {

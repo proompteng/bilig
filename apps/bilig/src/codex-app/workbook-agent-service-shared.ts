@@ -115,6 +115,14 @@ export function toContextRef(
         selection: {
           sheetName: context.selection.sheetName,
           address: context.selection.address,
+          ...(context.selection.range
+            ? {
+                range: {
+                  startAddress: context.selection.range.startAddress,
+                  endAddress: context.selection.range.endAddress,
+                },
+              }
+            : {}),
         },
         viewport: { ...context.viewport },
       }
@@ -129,6 +137,14 @@ export function cloneUiContext(
         selection: {
           sheetName: context.selection.sheetName,
           address: context.selection.address,
+          ...(context.selection.range
+            ? {
+                range: {
+                  startAddress: context.selection.range.startAddress,
+                  endAddress: context.selection.range.endAddress,
+                },
+              }
+            : {}),
         },
         viewport: {
           ...context.viewport,

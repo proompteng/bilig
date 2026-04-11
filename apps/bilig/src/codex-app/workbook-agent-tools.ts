@@ -428,8 +428,8 @@ function resolveSelectionRange(context: WorkbookAgentUiContext | null): CellRang
   }
   return {
     sheetName: context.selection.sheetName,
-    startAddress: context.selection.address,
-    endAddress: context.selection.address,
+    startAddress: context.selection.range?.startAddress ?? context.selection.address,
+    endAddress: context.selection.range?.endAddress ?? context.selection.address,
   };
 }
 
@@ -617,7 +617,8 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readSelection,
-      description: "Read the currently selected cell from the attached browser workbook context.",
+      description:
+        "Read the currently selected range from the attached browser workbook context.",
       inputSchema: {
         type: "object",
         additionalProperties: false,

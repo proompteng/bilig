@@ -574,10 +574,13 @@ export function useWorkerWorkbookAppState(input: {
   const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState]);
   const getAgentContext = useCallback(
     () => ({
-      selection: selectionRef.current,
+      selection: {
+        ...selectionRef.current,
+        range: parseSelectionRangeLabel(selectionLabel, selectionRef.current.sheetName),
+      },
       viewport: visibleViewportRef.current,
     }),
-    [],
+    [selectionLabel],
   );
 
   const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =

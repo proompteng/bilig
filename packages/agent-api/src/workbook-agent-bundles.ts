@@ -11,6 +11,10 @@ import type {
 export interface WorkbookAgentUiSelectionRef {
   sheetName: string;
   address: string;
+  range?: {
+    startAddress: string;
+    endAddress: string;
+  };
 }
 
 export interface WorkbookAgentViewportRef {
@@ -275,6 +279,10 @@ export function isWorkbookAgentContextRef(value: unknown): value is WorkbookAgen
     isRecord(value["selection"]) &&
     typeof value["selection"]["sheetName"] === "string" &&
     typeof value["selection"]["address"] === "string" &&
+    (value["selection"]["range"] === undefined ||
+      (isRecord(value["selection"]["range"]) &&
+        typeof value["selection"]["range"]["startAddress"] === "string" &&
+        typeof value["selection"]["range"]["endAddress"] === "string")) &&
     isRecord(value["viewport"]) &&
     typeof value["viewport"]["rowStart"] === "number" &&
     typeof value["viewport"]["rowEnd"] === "number" &&
@@ -742,7 +750,10 @@ function isSelectionOnlyCommand(
     return false;
   }
   const selectionSheet = context.selection.sheetName;
-  const selectionAddress = context.selection.address;
+  const selectionRange = context.selection.range ?? {
+    startAddress: context.selection.address,
+    endAddress: context.selection.address,
+  };
   const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
   if (ranges.length !== 1) {
     return false;
@@ -754,8 +765,8 @@ function isSelectionOnlyCommand(
   return (
     range.role === "target" &&
     range.sheetName === selectionSheet &&
-    range.startAddress === selectionAddress &&
-    range.endAddress === selectionAddress
+    range.startAddress === selectionRange.startAddress &&
+    range.endAddress === selectionRange.endAddress
   );
 }
 
