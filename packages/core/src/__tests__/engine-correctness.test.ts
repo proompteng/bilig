@@ -281,10 +281,7 @@ describe("engine correctness", () => {
       { fill: { backgroundColor: "#dbeafe" } },
     );
     engine.deleteColumns(sheetName, 0, 1);
-    engine.setRangeNumberFormat(
-      { sheetName, startAddress: "A1", endAddress: "A1" },
-      "0.00",
-    );
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A1", endAddress: "A1" }, "0.00");
 
     expect(undoAll(engine, 16)).toBeGreaterThan(0);
     expect(engine.exportSnapshot()).toEqual(initialSnapshot);
@@ -299,15 +296,9 @@ describe("engine correctness", () => {
     await engine.ready();
     engine.importSnapshot(initialSnapshot);
 
-    engine.setRangeValues(
-      { sheetName, startAddress: "A1", endAddress: "A1" },
-      [[false]],
-    );
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "A1" }, [[false]]);
     engine.insertRows(sheetName, 0, 1);
-    engine.setRangeValues(
-      { sheetName, startAddress: "A1", endAddress: "A1" },
-      [[0]],
-    );
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "A1" }, [[0]]);
     engine.setRangeStyle(
       { sheetName, startAddress: "A1", endAddress: "A1" },
       { fill: { backgroundColor: "#dbeafe" } },
@@ -328,14 +319,8 @@ describe("engine correctness", () => {
 
     engine.setCellFormula(sheetName, "A1", "A1+A1");
     engine.insertColumns(sheetName, 0, 1);
-    engine.setRangeValues(
-      { sheetName, startAddress: "A1", endAddress: "A1" },
-      [[null]],
-    );
-    engine.setRangeNumberFormat(
-      { sheetName, startAddress: "A1", endAddress: "A1" },
-      "0.00",
-    );
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "A1" }, [[null]]);
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A1", endAddress: "A1" }, "0.00");
 
     const finalSnapshot = engine.exportSnapshot();
     expect(finalSnapshot.sheets[0]?.metadata?.columns).toEqual([{ id: "column-1", index: 0 }]);
@@ -398,14 +383,8 @@ describe("engine correctness", () => {
     await engine.ready();
     engine.importSnapshot(initialSnapshot);
 
-    engine.setRangeValues(
-      { sheetName, startAddress: "A3", endAddress: "A3" },
-      [[0]],
-    );
-    engine.setRangeNumberFormat(
-      { sheetName, startAddress: "A3", endAddress: "A3" },
-      "0.00",
-    );
+    engine.setRangeValues({ sheetName, startAddress: "A3", endAddress: "A3" }, [[0]]);
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A3", endAddress: "A3" }, "0.00");
     engine.clearRange({ sheetName, startAddress: "A1", endAddress: "A1" });
     engine.deleteRows(sheetName, 0, 1);
     engine.deleteColumns(sheetName, 0, 1);
@@ -424,10 +403,7 @@ describe("engine correctness", () => {
     engine.createSheet(sheetName);
 
     engine.setCellFormula(sheetName, "A1", "C4+C3");
-    engine.setRangeNumberFormat(
-      { sheetName, startAddress: "B4", endAddress: "C4" },
-      "0.00",
-    );
+    engine.setRangeNumberFormat({ sheetName, startAddress: "B4", endAddress: "C4" }, "0.00");
     engine.clearRange({ sheetName, startAddress: "B4", endAddress: "C4" });
 
     const snapshot = engine.exportSnapshot();
@@ -439,6 +415,33 @@ describe("engine correctness", () => {
     restored.importSnapshot(snapshot);
 
     expect(restored.exportSnapshot()).toEqual(snapshot);
+  });
+
+  it("drops orphaned formula dependents during structural undo replay", async () => {
+    const initialSnapshot = await createBaselineSnapshot("correctness-orphan-formula-undo");
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-orphan-formula-undo",
+      replicaId: "correctness-orphan-formula-undo",
+    });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.setCellFormula(sheetName, "A1", "A1+B2");
+    engine.setCellFormula(sheetName, "B3", "A1+A1");
+    engine.setRangeStyle(
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+      { fill: { backgroundColor: "#dbeafe" } },
+    );
+    engine.deleteRows(sheetName, 1, 1);
+    engine.insertRows(sheetName, 0, 1);
+    engine.clearRange({ sheetName, startAddress: "A1", endAddress: "A1" });
+
+    expect(undoAll(engine, 24)).toBeGreaterThan(0);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+    expect(engine.getDependents(sheetName, "A1")).toEqual({
+      directPrecedents: [],
+      directDependents: [],
+    });
   });
 
   it("reverses random local edit streams through undo and redo", async () => {

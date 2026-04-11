@@ -389,6 +389,17 @@ export function createEngineFormulaBindingService(args: {
     });
   };
 
+  const isCellIndexMappedNow = (cellIndex: number): boolean => {
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex];
+    const row = args.state.workbook.cellStore.rows[cellIndex];
+    const col = args.state.workbook.cellStore.cols[cellIndex];
+    if (sheetId === undefined || row === undefined || col === undefined) {
+      return false;
+    }
+    const sheet = args.state.workbook.getSheetById(sheetId);
+    return sheet?.grid.get(row, col) === cellIndex;
+  };
+
   const compileFormulaForSheet = (
     currentSheetName: string,
     source: string,
@@ -921,6 +932,10 @@ export function createEngineFormulaBindingService(args: {
 
           const activeCellIndices: number[] = [];
           pending.forEach(({ cellIndex, source }) => {
+            if (!isCellIndexMappedNow(cellIndex)) {
+              args.state.workbook.pruneCellIfEmpty(cellIndex);
+              return;
+            }
             const ownerSheetName = args.state.workbook.getSheetNameById(
               args.state.workbook.cellStore.sheetIds[cellIndex]!,
             );
