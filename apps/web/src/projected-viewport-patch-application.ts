@@ -45,6 +45,19 @@ function snapshotValueKey(snapshot: CellSnapshot): string {
   return "empty";
 }
 
+function isResetEmptySnapshot(snapshot: CellSnapshot): boolean {
+  return (
+    snapshot.value.tag === ValueTag.Empty &&
+    snapshot.version === 0 &&
+    snapshot.flags === 0 &&
+    snapshot.formula === undefined &&
+    snapshot.input === undefined &&
+    snapshot.format === undefined &&
+    snapshot.styleId === undefined &&
+    snapshot.numberFormatId === undefined
+  );
+}
+
 export function cellSnapshotSignature(snapshot: CellSnapshot): string {
   return [
     snapshot.version,
@@ -59,7 +72,9 @@ export function cellSnapshotSignature(snapshot: CellSnapshot): string {
 }
 
 export function shouldKeepCurrentSnapshot(current: CellSnapshot, incoming: CellSnapshot): boolean {
+  const incomingIsResetEmptySnapshot = isResetEmptySnapshot(incoming);
   if (
+    !incomingIsResetEmptySnapshot &&
     current.formula !== undefined &&
     incoming.formula === undefined &&
     incoming.input === undefined
@@ -67,12 +82,14 @@ export function shouldKeepCurrentSnapshot(current: CellSnapshot, incoming: CellS
     return true;
   }
   if (current.version > incoming.version) {
-    return true;
+    return !incomingIsResetEmptySnapshot;
   }
   if (current.version < incoming.version) {
     return false;
   }
-  return current.formula !== undefined && incoming.formula === undefined;
+  return (
+    !incomingIsResetEmptySnapshot && current.formula !== undefined && incoming.formula === undefined
+  );
 }
 
 function cellStyleSignature(style: CellStyleRecord): string {

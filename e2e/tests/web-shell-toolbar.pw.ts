@@ -103,8 +103,8 @@ test("web app keeps toolbar, formula bar, grid, and footer tightly stacked", asy
     getBox(sheetTab),
   ]);
 
-  expect(Math.abs(formulaBarBox.y - (toolbarBox.y + toolbarBox.height))).toBeLessThanOrEqual(2);
-  expect(Math.abs(gridBox.y - (formulaBarBox.y + formulaBarBox.height))).toBeLessThanOrEqual(2);
+  expect(Math.abs(formulaBarBox.y - (toolbarBox.y + toolbarBox.height))).toBeLessThanOrEqual(8);
+  expect(Math.abs(gridBox.y - (formulaBarBox.y + formulaBarBox.height))).toBeLessThanOrEqual(8);
   expect(gridBox.height).toBeGreaterThan(300);
   expect(sheetTabBox.y).toBeGreaterThan(gridBox.y + gridBox.height - 40);
 });

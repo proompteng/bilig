@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { runProperty, shouldRunFuzzSuite } from "../../packages/test-fuzz/src/index.ts";
 import {
   PRIMARY_MODIFIER,
+  PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
   clickProductCell,
@@ -11,6 +12,7 @@ import {
   dragProductColumnResize,
   getProductColumnLeft,
   getProductColumnWidth,
+  openZeroWorkbookPage,
   waitForWorkbookReady,
 } from "./web-shell-helpers.js";
 const fuzzBrowserEnabled = process.env["BILIG_FUZZ_BROWSER"] === "1";
