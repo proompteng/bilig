@@ -1,14 +1,42 @@
+import { SpreadsheetEngine } from "@bilig/core";
 import { describe, expect, it } from "vitest";
+import { buildWorkbookSourceProjectionFromEngine } from "../zero/projection.js";
 import type { ZeroSyncService } from "../zero/service.js";
-import type { WorkbookStructureSummary } from "./workbook-agent-comprehension.js";
+import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
 import {
   describeWorkbookAgentWorkflowTemplate,
   executeWorkbookAgentWorkflow,
 } from "./workbook-agent-workflows.js";
 
+async function createWorkbookRuntime(): Promise<WorkbookRuntime> {
+  const engine = new SpreadsheetEngine({
+    workbookName: "doc-1",
+    replicaId: "server:test",
+  });
+  await engine.ready();
+  engine.createSheet("Sheet1");
+  engine.setCellValue("Sheet1", "A1", 42);
+  engine.setCellValue("Sheet1", "A2", "Gross Margin");
+  engine.setCellFormula("Sheet1", "B2", "SUM(A1:A1)");
+  return {
+    documentId: "doc-1",
+    engine,
+    projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "alex@example.com",
+      updatedBy: "alex@example.com",
+      updatedAt: "2026-04-10T00:00:00.000Z",
+    }),
+    headRevision: 1,
+    calculatedRevision: 1,
+    ownerUserId: "alex@example.com",
+  };
+}
+
 function createZeroSyncStub(input?: {
   onInspectWorkbook?: () => void;
-  inspectWorkbookResult?: WorkbookStructureSummary;
+  createRuntime?: () => Promise<WorkbookRuntime>;
 }): ZeroSyncService {
   return {
     enabled: true,
@@ -20,10 +48,10 @@ function createZeroSyncStub(input?: {
     async handleMutate() {
       throw new Error("not used");
     },
-    async inspectWorkbook() {
+    async inspectWorkbook(_documentId, task) {
       input?.onInspectWorkbook?.();
-      if (input?.inspectWorkbookResult) {
-        return input.inspectWorkbookResult;
+      if (input?.createRuntime) {
+        return await task(await input.createRuntime());
       }
       throw new Error("inspectWorkbook should not be called");
     },
@@ -126,51 +154,7 @@ describe("workbook agent workflows", () => {
         onInspectWorkbook: () => {
           inspectedWorkbook = true;
         },
-        inspectWorkbookResult: {
-          summary: {
-            sheetCount: 1,
-            totalCellCount: 3,
-            totalFormulaCellCount: 1,
-            tableCount: 0,
-            pivotCount: 0,
-            spillCount: 0,
-            filterCount: 0,
-            sortCount: 0,
-            hiddenRowIndexCount: 0,
-            hiddenColumnIndexCount: 0,
-          },
-          sheets: [
-            {
-              name: "Sheet1",
-              order: 0,
-              cellCount: 3,
-              formulaCellCount: 1,
-              usedRange: {
-                startAddress: "A1",
-                endAddress: "B2",
-              },
-              freezePane: null,
-              filterCount: 0,
-              sortCount: 0,
-              tableCount: 0,
-              pivotCount: 0,
-              spillCount: 0,
-              rowMetadata: {
-                regionCount: 0,
-                hiddenIndexCount: 0,
-                explicitSizeIndexCount: 0,
-              },
-              columnMetadata: {
-                regionCount: 0,
-                hiddenIndexCount: 0,
-                explicitSizeIndexCount: 0,
-              },
-              tables: [],
-              pivots: [],
-              spills: [],
-            },
-          ],
-        },
+        createRuntime: createWorkbookRuntime,
       }),
       workflowTemplate: "summarizeWorkbook",
     });
