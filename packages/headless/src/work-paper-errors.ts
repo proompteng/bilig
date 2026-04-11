@@ -7,55 +7,58 @@ class BaseWorkPaperError extends Error {
   }
 }
 
-export class ConfigValueTooBigError extends BaseWorkPaperError {
+export class WorkPaperConfigValueTooBigError extends BaseWorkPaperError {
   constructor(paramName: string, maximum: number) {
-    super("ConfigValueTooBigError", `Config parameter ${paramName} should be at most ${maximum}`);
+    super(
+      "WorkPaperConfigValueTooBigError",
+      `Config parameter ${paramName} should be at most ${maximum}`,
+    );
   }
 }
 
-export class ConfigValueTooSmallError extends BaseWorkPaperError {
+export class WorkPaperConfigValueTooSmallError extends BaseWorkPaperError {
   constructor(paramName: string, minimum: number) {
     super(
-      "ConfigValueTooSmallError",
+      "WorkPaperConfigValueTooSmallError",
       `Config parameter ${paramName} should be at least ${minimum}`,
     );
   }
 }
 
-export class EvaluationSuspendedError extends BaseWorkPaperError {
+export class WorkPaperEvaluationSuspendedError extends BaseWorkPaperError {
   constructor(message = "Computations are suspended") {
-    super("EvaluationSuspendedError", message);
+    super("WorkPaperEvaluationSuspendedError", message);
   }
 }
 
-export class ExpectedOneOfValuesError extends BaseWorkPaperError {
+export class WorkPaperExpectedOneOfValuesError extends BaseWorkPaperError {
   constructor(values: string, paramName: string) {
     super(
-      "ExpectedOneOfValuesError",
+      "WorkPaperExpectedOneOfValuesError",
       `Expected one of ${values} for config parameter: ${paramName}`,
     );
   }
 }
 
-export class ExpectedValueOfTypeError extends BaseWorkPaperError {
+export class WorkPaperExpectedValueOfTypeError extends BaseWorkPaperError {
   constructor(expectedType: string, paramName: string) {
     super(
-      "ExpectedValueOfTypeError",
+      "WorkPaperExpectedValueOfTypeError",
       `Expected value of type: ${expectedType} for config parameter: ${paramName}`,
     );
   }
 }
 
-export class FunctionPluginValidationError extends BaseWorkPaperError {
+export class WorkPaperFunctionPluginValidationError extends BaseWorkPaperError {
   constructor(message: string) {
-    super("FunctionPluginValidationError", message);
+    super("WorkPaperFunctionPluginValidationError", message);
   }
 
   static functionNotDeclaredInPlugin(
     functionId: string,
     pluginName: string,
-  ): FunctionPluginValidationError {
-    return new FunctionPluginValidationError(
+  ): WorkPaperFunctionPluginValidationError {
+    return new WorkPaperFunctionPluginValidationError(
       `Function with id ${functionId} not declared in plugin ${pluginName}`,
     );
   }
@@ -63,29 +66,32 @@ export class FunctionPluginValidationError extends BaseWorkPaperError {
   static functionMethodNotFound(
     functionName: string,
     pluginName: string,
-  ): FunctionPluginValidationError {
-    return new FunctionPluginValidationError(
+  ): WorkPaperFunctionPluginValidationError {
+    return new WorkPaperFunctionPluginValidationError(
       `Function method ${functionName} not found in plugin ${pluginName}`,
     );
   }
 }
 
-export class InvalidAddressError extends BaseWorkPaperError {
+export class WorkPaperInvalidAddressError extends BaseWorkPaperError {
   constructor(address: WorkPaperCellAddress) {
-    super("InvalidAddressError", `Address (row = ${address.row}, col = ${address.col}) is invalid`);
+    super(
+      "WorkPaperInvalidAddressError",
+      `Address (row = ${address.row}, col = ${address.col}) is invalid`,
+    );
   }
 }
 
-export class InvalidArgumentsError extends BaseWorkPaperError {
+export class WorkPaperInvalidArgumentsError extends BaseWorkPaperError {
   constructor(expectedArguments: string) {
-    super("InvalidArgumentsError", `Invalid arguments, expected ${expectedArguments}`);
+    super("WorkPaperInvalidArgumentsError", `Invalid arguments, expected ${expectedArguments}`);
   }
 }
 
-export class LanguageAlreadyRegisteredError extends BaseWorkPaperError {
+export class WorkPaperLanguageAlreadyRegisteredError extends BaseWorkPaperError {
   constructor(languageCode?: string) {
     super(
-      "LanguageAlreadyRegisteredError",
+      "WorkPaperLanguageAlreadyRegisteredError",
       languageCode
         ? `Language '${languageCode}' is already registered`
         : "Language already registered.",
@@ -93,130 +99,130 @@ export class LanguageAlreadyRegisteredError extends BaseWorkPaperError {
   }
 }
 
-export class LanguageNotRegisteredError extends BaseWorkPaperError {
+export class WorkPaperLanguageNotRegisteredError extends BaseWorkPaperError {
   constructor(languageCode?: string) {
     super(
-      "LanguageNotRegisteredError",
+      "WorkPaperLanguageNotRegisteredError",
       languageCode ? `Language '${languageCode}' is not registered` : "Language not registered.",
     );
   }
 }
 
-export class MissingTranslationError extends BaseWorkPaperError {
+export class WorkPaperMissingTranslationError extends BaseWorkPaperError {
   constructor(key: string) {
     super(
-      "MissingTranslationError",
+      "WorkPaperMissingTranslationError",
       `Translation for ${key} is missing in the translation package you're using.`,
     );
   }
 }
 
-export class NamedExpressionDoesNotExistError extends BaseWorkPaperError {
+export class WorkPaperNamedExpressionDoesNotExistError extends BaseWorkPaperError {
   constructor(expressionName: string) {
     super(
-      "NamedExpressionDoesNotExistError",
+      "WorkPaperNamedExpressionDoesNotExistError",
       `Named Expression '${expressionName}' does not exist`,
     );
   }
 }
 
-export class NamedExpressionNameIsAlreadyTakenError extends BaseWorkPaperError {
+export class WorkPaperNamedExpressionNameIsAlreadyTakenError extends BaseWorkPaperError {
   constructor(expressionName: string) {
     super(
-      "NamedExpressionNameIsAlreadyTakenError",
+      "WorkPaperNamedExpressionNameIsAlreadyTakenError",
       `Name of Named Expression '${expressionName}' is already present`,
     );
   }
 }
 
-export class NamedExpressionNameIsInvalidError extends BaseWorkPaperError {
+export class WorkPaperNamedExpressionNameIsInvalidError extends BaseWorkPaperError {
   constructor(expressionName: string) {
     super(
-      "NamedExpressionNameIsInvalidError",
+      "WorkPaperNamedExpressionNameIsInvalidError",
       `Name of Named Expression '${expressionName}' is invalid`,
     );
   }
 }
 
-export class NoOperationToRedoError extends BaseWorkPaperError {
+export class WorkPaperNoOperationToRedoError extends BaseWorkPaperError {
   constructor() {
-    super("NoOperationToRedoError", "There is no operation to redo");
+    super("WorkPaperNoOperationToRedoError", "There is no operation to redo");
   }
 }
 
-export class NoOperationToUndoError extends BaseWorkPaperError {
+export class WorkPaperNoOperationToUndoError extends BaseWorkPaperError {
   constructor() {
-    super("NoOperationToUndoError", "There is no operation to undo");
+    super("WorkPaperNoOperationToUndoError", "There is no operation to undo");
   }
 }
 
-export class NoRelativeAddressesAllowedError extends BaseWorkPaperError {
+export class WorkPaperNoRelativeAddressesAllowedError extends BaseWorkPaperError {
   constructor() {
     super(
-      "NoRelativeAddressesAllowedError",
+      "WorkPaperNoRelativeAddressesAllowedError",
       "Relative addresses not allowed in named expressions.",
     );
   }
 }
 
-export class NoSheetWithIdError extends BaseWorkPaperError {
+export class WorkPaperNoSheetWithIdError extends BaseWorkPaperError {
   constructor(sheetId: number) {
-    super("NoSheetWithIdError", `There's no sheet with id = ${sheetId}`);
+    super("WorkPaperNoSheetWithIdError", `There's no sheet with id = ${sheetId}`);
   }
 }
 
-export class NoSheetWithNameError extends BaseWorkPaperError {
+export class WorkPaperNoSheetWithNameError extends BaseWorkPaperError {
   constructor(sheetName: string) {
-    super("NoSheetWithNameError", `There's no sheet with name '${sheetName}'`);
+    super("WorkPaperNoSheetWithNameError", `There's no sheet with name '${sheetName}'`);
   }
 }
 
-export class NotAFormulaError extends BaseWorkPaperError {
+export class WorkPaperNotAFormulaError extends BaseWorkPaperError {
   constructor() {
-    super("NotAFormulaError", "This is not a formula");
+    super("WorkPaperNotAFormulaError", "This is not a formula");
   }
 }
 
-export class NothingToPasteError extends BaseWorkPaperError {
+export class WorkPaperNothingToPasteError extends BaseWorkPaperError {
   constructor() {
-    super("NothingToPasteError", "There is nothing to paste");
+    super("WorkPaperNothingToPasteError", "There is nothing to paste");
   }
 }
 
-export class ProtectedFunctionTranslationError extends BaseWorkPaperError {
+export class WorkPaperProtectedFunctionTranslationError extends BaseWorkPaperError {
   constructor(functionId: string) {
     super(
-      "ProtectedFunctionTranslationError",
+      "WorkPaperProtectedFunctionTranslationError",
       `Cannot register translation for function with id: ${functionId}`,
     );
   }
 }
 
-export class SheetNameAlreadyTakenError extends BaseWorkPaperError {
+export class WorkPaperSheetNameAlreadyTakenError extends BaseWorkPaperError {
   constructor(sheetName: string) {
-    super("SheetNameAlreadyTakenError", `Sheet with name ${sheetName} already exists`);
+    super("WorkPaperSheetNameAlreadyTakenError", `Sheet with name ${sheetName} already exists`);
   }
 }
 
-export class SheetSizeLimitExceededError extends BaseWorkPaperError {
+export class WorkPaperSheetSizeLimitExceededError extends BaseWorkPaperError {
   constructor() {
-    super("SheetSizeLimitExceededError", "Sheet size limit exceeded");
+    super("WorkPaperSheetSizeLimitExceededError", "Sheet size limit exceeded");
   }
 }
 
-export class SourceLocationHasArrayError extends BaseWorkPaperError {
+export class WorkPaperSourceLocationHasArrayError extends BaseWorkPaperError {
   constructor() {
     super(
-      "SourceLocationHasArrayError",
+      "WorkPaperSourceLocationHasArrayError",
       "Cannot perform this operation, source location has an array inside.",
     );
   }
 }
 
-export class TargetLocationHasArrayError extends BaseWorkPaperError {
+export class WorkPaperTargetLocationHasArrayError extends BaseWorkPaperError {
   constructor() {
     super(
-      "TargetLocationHasArrayError",
+      "WorkPaperTargetLocationHasArrayError",
       "Cannot perform this operation, target location has an array inside.",
     );
   }
@@ -241,16 +247,9 @@ function serializeParseValue(value: unknown): string {
   );
 }
 
-export class UnableToParseError extends BaseWorkPaperError {
+export class WorkPaperUnableToParseError extends BaseWorkPaperError {
   constructor(value: unknown) {
-    super("UnableToParseError", `Unable to parse value: ${serializeParseValue(value)}`);
-  }
-}
-
-export class WorkPaperArgumentError extends InvalidArgumentsError {
-  constructor(expectedArguments: string) {
-    super(expectedArguments);
-    this.name = "WorkPaperArgumentError";
+    super("WorkPaperUnableToParseError", `Unable to parse value: ${serializeParseValue(value)}`);
   }
 }
 
@@ -275,13 +274,6 @@ export class WorkPaperNamedExpressionError extends BaseWorkPaperError {
 export class WorkPaperClipboardError extends BaseWorkPaperError {
   constructor(message: string) {
     super("WorkPaperClipboardError", message);
-  }
-}
-
-export class WorkPaperEvaluationSuspendedError extends EvaluationSuspendedError {
-  constructor(message = "Computations are suspended") {
-    super(message);
-    this.name = "WorkPaperEvaluationSuspendedError";
   }
 }
 

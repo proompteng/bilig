@@ -30,31 +30,31 @@ import {
 import { tryLoadInitialLiteralSheet } from "./initial-sheet-load.js";
 import { orderWorkPaperCellChanges } from "./change-order.js";
 import {
-  ConfigValueTooBigError,
-  ConfigValueTooSmallError,
-  WorkPaperArgumentError,
+  WorkPaperConfigValueTooBigError,
+  WorkPaperConfigValueTooSmallError,
   WorkPaperEvaluationSuspendedError,
+  WorkPaperExpectedValueOfTypeError,
   WorkPaperOperationError,
   WorkPaperParseError,
   WorkPaperSheetError,
-  ExpectedOneOfValuesError,
-  FunctionPluginValidationError,
-  InvalidArgumentsError,
-  LanguageAlreadyRegisteredError,
-  LanguageNotRegisteredError,
-  NamedExpressionDoesNotExistError,
-  NamedExpressionNameIsAlreadyTakenError,
-  NamedExpressionNameIsInvalidError,
-  NoOperationToRedoError,
-  NoOperationToUndoError,
-  NoRelativeAddressesAllowedError,
-  NoSheetWithIdError,
-  NoSheetWithNameError,
-  NotAFormulaError,
-  NothingToPasteError,
-  SheetNameAlreadyTakenError,
-  SheetSizeLimitExceededError,
-  UnableToParseError,
+  WorkPaperExpectedOneOfValuesError,
+  WorkPaperFunctionPluginValidationError,
+  WorkPaperInvalidArgumentsError,
+  WorkPaperLanguageAlreadyRegisteredError,
+  WorkPaperLanguageNotRegisteredError,
+  WorkPaperNamedExpressionDoesNotExistError,
+  WorkPaperNamedExpressionNameIsAlreadyTakenError,
+  WorkPaperNamedExpressionNameIsInvalidError,
+  WorkPaperNoOperationToRedoError,
+  WorkPaperNoOperationToUndoError,
+  WorkPaperNoRelativeAddressesAllowedError,
+  WorkPaperNoSheetWithIdError,
+  WorkPaperNoSheetWithNameError,
+  WorkPaperNotAFormulaError,
+  WorkPaperNothingToPasteError,
+  WorkPaperSheetNameAlreadyTakenError,
+  WorkPaperSheetSizeLimitExceededError,
+  WorkPaperUnableToParseError,
 } from "./work-paper-errors.js";
 import { buildMatrixMutationPlan } from "./matrix-mutation-plan.js";
 import type {
@@ -248,39 +248,37 @@ const WORKPAPER_CONFIG_KEYS = [
 ] as const satisfies readonly (keyof WorkPaperConfig)[];
 
 const WORKPAPER_PUBLIC_ERROR_NAMES = new Set([
-  "ConfigValueTooBigError",
-  "ConfigValueTooSmallError",
-  "EvaluationSuspendedError",
-  "ExpectedOneOfValuesError",
-  "ExpectedValueOfTypeError",
-  "FunctionPluginValidationError",
-  "InvalidAddressError",
-  "InvalidArgumentsError",
-  "LanguageAlreadyRegisteredError",
-  "LanguageNotRegisteredError",
-  "MissingTranslationError",
-  "NamedExpressionDoesNotExistError",
-  "NamedExpressionNameIsAlreadyTakenError",
-  "NamedExpressionNameIsInvalidError",
-  "NoOperationToRedoError",
-  "NoOperationToUndoError",
-  "NoRelativeAddressesAllowedError",
-  "NoSheetWithIdError",
-  "NoSheetWithNameError",
-  "NotAFormulaError",
-  "NothingToPasteError",
-  "ProtectedFunctionTranslationError",
-  "SheetNameAlreadyTakenError",
-  "SheetSizeLimitExceededError",
-  "SourceLocationHasArrayError",
-  "TargetLocationHasArrayError",
-  "UnableToParseError",
-  "WorkPaperArgumentError",
+  "WorkPaperConfigValueTooBigError",
+  "WorkPaperConfigValueTooSmallError",
+  "WorkPaperEvaluationSuspendedError",
+  "WorkPaperExpectedOneOfValuesError",
+  "WorkPaperExpectedValueOfTypeError",
+  "WorkPaperFunctionPluginValidationError",
+  "WorkPaperInvalidAddressError",
+  "WorkPaperInvalidArgumentsError",
+  "WorkPaperLanguageAlreadyRegisteredError",
+  "WorkPaperLanguageNotRegisteredError",
+  "WorkPaperMissingTranslationError",
+  "WorkPaperNamedExpressionDoesNotExistError",
+  "WorkPaperNamedExpressionNameIsAlreadyTakenError",
+  "WorkPaperNamedExpressionNameIsInvalidError",
+  "WorkPaperNoOperationToRedoError",
+  "WorkPaperNoOperationToUndoError",
+  "WorkPaperNoRelativeAddressesAllowedError",
+  "WorkPaperNoSheetWithIdError",
+  "WorkPaperNoSheetWithNameError",
+  "WorkPaperNotAFormulaError",
+  "WorkPaperNothingToPasteError",
+  "WorkPaperProtectedFunctionTranslationError",
+  "WorkPaperSheetNameAlreadyTakenError",
+  "WorkPaperSheetSizeLimitExceededError",
+  "WorkPaperSourceLocationHasArrayError",
+  "WorkPaperTargetLocationHasArrayError",
+  "WorkPaperUnableToParseError",
   "WorkPaperConfigError",
   "WorkPaperSheetError",
   "WorkPaperNamedExpressionError",
   "WorkPaperClipboardError",
-  "WorkPaperEvaluationSuspendedError",
   "WorkPaperParseError",
   "WorkPaperOperationError",
 ]);
@@ -342,6 +340,10 @@ function clonePluginDefinition(
 function cloneConfig(config: WorkPaperConfig): WorkPaperConfig {
   return {
     ...config,
+    chooseAddressMappingPolicy: config.chooseAddressMappingPolicy
+      ? { ...config.chooseAddressMappingPolicy }
+      : undefined,
+    context: config.context !== undefined ? structuredClone(config.context) : undefined,
     currencySymbol: config.currencySymbol ? [...config.currencySymbol] : undefined,
     dateFormats: config.dateFormats ? [...config.dateFormats] : undefined,
     functionPlugins: config.functionPlugins
@@ -482,7 +484,7 @@ function stripLeadingEquals(formula: string): string {
 
 function assertRowAndColumn(value: number, label: string): void {
   if (!Number.isInteger(value) || value < 0) {
-    throw new InvalidArgumentsError(`${label} to be a non-negative integer`);
+    throw new WorkPaperInvalidArgumentsError(`${label} to be a non-negative integer`);
   }
 }
 
@@ -494,7 +496,7 @@ function assertRange(range: WorkPaperCellRange): void {
   assertRowAndColumn(range.end.row, "end.row");
   assertRowAndColumn(range.end.col, "end.col");
   if (range.start.sheet !== range.end.sheet) {
-    throw new WorkPaperArgumentError("Ranges must stay on a single sheet");
+    throw new WorkPaperInvalidArgumentsError("Ranges must stay on a single sheet");
   }
 }
 
@@ -675,47 +677,47 @@ function checkWorkPaperLicenseKeyValidity(
 
 function validateWorkPaperConfig(config: WorkPaperConfig): void {
   if (config.maxRows !== undefined && (!Number.isInteger(config.maxRows) || config.maxRows < 1)) {
-    throw new ConfigValueTooSmallError("maxRows", 1);
+    throw new WorkPaperConfigValueTooSmallError("maxRows", 1);
   }
   if (
     config.maxColumns !== undefined &&
     (!Number.isInteger(config.maxColumns) || config.maxColumns < 1)
   ) {
-    throw new ConfigValueTooSmallError("maxColumns", 1);
+    throw new WorkPaperConfigValueTooSmallError("maxColumns", 1);
   }
   if ((config.maxRows ?? MAX_ROWS) > MAX_ROWS) {
-    throw new ConfigValueTooBigError("maxRows", MAX_ROWS);
+    throw new WorkPaperConfigValueTooBigError("maxRows", MAX_ROWS);
   }
   if ((config.maxColumns ?? MAX_COLS) > MAX_COLS) {
-    throw new ConfigValueTooBigError("maxColumns", MAX_COLS);
+    throw new WorkPaperConfigValueTooBigError("maxColumns", MAX_COLS);
   }
   if (
     config.decimalSeparator !== undefined &&
     config.decimalSeparator !== "." &&
     config.decimalSeparator !== ","
   ) {
-    throw new ExpectedOneOfValuesError('".", ","', "decimalSeparator");
+    throw new WorkPaperExpectedOneOfValuesError('".", ","', "decimalSeparator");
   }
   if (
     config.arrayColumnSeparator !== undefined &&
     config.arrayColumnSeparator !== "," &&
     config.arrayColumnSeparator !== ";"
   ) {
-    throw new ExpectedOneOfValuesError('",", ";"', "arrayColumnSeparator");
+    throw new WorkPaperExpectedOneOfValuesError('",", ";"', "arrayColumnSeparator");
   }
   if (
     config.arrayRowSeparator !== undefined &&
     config.arrayRowSeparator !== ";" &&
     config.arrayRowSeparator !== "|"
   ) {
-    throw new ExpectedOneOfValuesError('";", "|"', "arrayRowSeparator");
+    throw new WorkPaperExpectedOneOfValuesError('";", "|"', "arrayRowSeparator");
   }
   if (
     config.ignoreWhiteSpace !== undefined &&
     config.ignoreWhiteSpace !== "standard" &&
     config.ignoreWhiteSpace !== "any"
   ) {
-    throw new ExpectedOneOfValuesError('"standard", "any"', "ignoreWhiteSpace");
+    throw new WorkPaperExpectedOneOfValuesError('"standard", "any"', "ignoreWhiteSpace");
   }
   if (
     config.caseFirst !== undefined &&
@@ -723,7 +725,35 @@ function validateWorkPaperConfig(config: WorkPaperConfig): void {
     config.caseFirst !== "lower" &&
     config.caseFirst !== "false"
   ) {
-    throw new ExpectedOneOfValuesError('"upper", "lower", "false"', "caseFirst");
+    throw new WorkPaperExpectedOneOfValuesError('"upper", "lower", "false"', "caseFirst");
+  }
+  if (
+    config.chooseAddressMappingPolicy !== undefined &&
+    (typeof config.chooseAddressMappingPolicy !== "object" ||
+      config.chooseAddressMappingPolicy === null ||
+      (config.chooseAddressMappingPolicy.mode !== "dense" &&
+        config.chooseAddressMappingPolicy.mode !== "sparse"))
+  ) {
+    throw new WorkPaperExpectedOneOfValuesError(
+      '"dense", "sparse"',
+      "chooseAddressMappingPolicy.mode",
+    );
+  }
+  if (config.parseDateTime !== undefined && typeof config.parseDateTime !== "function") {
+    throw new WorkPaperExpectedValueOfTypeError("function", "parseDateTime");
+  }
+  if (config.stringifyDateTime !== undefined && typeof config.stringifyDateTime !== "function") {
+    throw new WorkPaperExpectedValueOfTypeError("function", "stringifyDateTime");
+  }
+  if (config.stringifyDuration !== undefined && typeof config.stringifyDuration !== "function") {
+    throw new WorkPaperExpectedValueOfTypeError("function", "stringifyDuration");
+  }
+  if (config.context !== undefined) {
+    try {
+      structuredClone(config.context);
+    } catch {
+      throw new WorkPaperExpectedValueOfTypeError("structured-cloneable value", "context");
+    }
   }
 }
 
@@ -735,11 +765,11 @@ function validateSheetWithinLimits(
   const height = sheet.length;
   const width = Math.max(0, ...sheet.map((row) => row.length));
   if (height > (config.maxRows ?? MAX_ROWS) || width > (config.maxColumns ?? MAX_COLS)) {
-    throw new SheetSizeLimitExceededError();
+    throw new WorkPaperSheetSizeLimitExceededError();
   }
   sheet.forEach((row) => {
     if (!Array.isArray(row)) {
-      throw new UnableToParseError({ sheetName, reason: "Rows must be arrays" });
+      throw new WorkPaperUnableToParseError({ sheetName, reason: "Rows must be arrays" });
     }
   });
 }
@@ -1111,14 +1141,14 @@ export class WorkPaper {
   static getLanguage(languageCode: string): WorkPaperLanguagePackage {
     const language = this.languageRegistry.get(languageCode);
     if (!language) {
-      throw new LanguageNotRegisteredError(languageCode);
+      throw new WorkPaperLanguageNotRegisteredError(languageCode);
     }
     return structuredClone(language);
   }
 
   static registerLanguage(languageCode: string, languagePackage: WorkPaperLanguagePackage): void {
     if (this.languageRegistry.has(languageCode)) {
-      throw new LanguageAlreadyRegisteredError(languageCode);
+      throw new WorkPaperLanguageAlreadyRegisteredError(languageCode);
     }
     this.languageRegistry.set(languageCode, structuredClone(languagePackage));
     this.languages[languageCode] = structuredClone(languagePackage);
@@ -1126,7 +1156,7 @@ export class WorkPaper {
 
   static unregisterLanguage(languageCode: string): void {
     if (!this.languageRegistry.delete(languageCode)) {
-      throw new LanguageNotRegisteredError(languageCode);
+      throw new WorkPaperLanguageNotRegisteredError(languageCode);
     }
     delete this.languages[languageCode];
   }
@@ -1158,7 +1188,10 @@ export class WorkPaper {
     const existing = this.functionPluginRegistry.get(plugin.id);
     const nextPlugin = clonePluginDefinition(existing ?? plugin);
     if (!nextPlugin.implementedFunctions[functionId]) {
-      throw FunctionPluginValidationError.functionNotDeclaredInPlugin(functionId, plugin.id);
+      throw WorkPaperFunctionPluginValidationError.functionNotDeclaredInPlugin(
+        functionId,
+        plugin.id,
+      );
     }
     this.functionPluginRegistry.set(nextPlugin.id, nextPlugin);
     if (translations) {
@@ -1227,7 +1260,7 @@ export class WorkPaper {
     Object.entries(translations).forEach(([languageCode, functionTranslations]) => {
       const existing = this.languageRegistry.get(languageCode);
       if (!existing) {
-        throw new LanguageNotRegisteredError(languageCode);
+        throw new WorkPaperLanguageNotRegisteredError(languageCode);
       }
       const nextLanguage: WorkPaperLanguagePackage = {
         ...structuredClone(existing),
@@ -1438,7 +1471,7 @@ export class WorkPaper {
     this.assertNotDisposed();
     return this.captureChanges(undefined, () => {
       if (!this.engine.undo()) {
-        throw new NoOperationToUndoError();
+        throw new WorkPaperNoOperationToUndoError();
       }
     });
   }
@@ -1447,7 +1480,7 @@ export class WorkPaper {
     this.assertNotDisposed();
     return this.captureChanges(undefined, () => {
       if (!this.engine.redo()) {
-        throw new NoOperationToRedoError();
+        throw new WorkPaperNoOperationToRedoError();
       }
     });
   }
@@ -1493,7 +1526,7 @@ export class WorkPaper {
   paste(targetLeftCorner: WorkPaperCellAddress): WorkPaperChange[] {
     this.assertNotDisposed();
     if (!this.clipboard) {
-      throw new NothingToPasteError();
+      throw new WorkPaperNothingToPasteError();
     }
     return this.captureChanges(undefined, () => {
       this.applySerializedMatrix(
@@ -1950,7 +1983,7 @@ export class WorkPaper {
     options?: Record<string, string | number | boolean>,
   ): WorkPaperChange[] {
     if (!this.isItPossibleToAddNamedExpression(expressionName, expression, scope)) {
-      throw new NamedExpressionNameIsAlreadyTakenError(expressionName);
+      throw new WorkPaperNamedExpressionNameIsAlreadyTakenError(expressionName);
     }
     return this.captureChanges(
       {
@@ -1977,7 +2010,7 @@ export class WorkPaper {
     options?: Record<string, string | number | boolean>,
   ): WorkPaperChange[] {
     if (!this.isItPossibleToChangeNamedExpression(expressionName, expression, scope)) {
-      throw new NamedExpressionDoesNotExistError(expressionName);
+      throw new WorkPaperNamedExpressionDoesNotExistError(expressionName);
     }
     return this.captureChanges(undefined, () => {
       this.upsertNamedExpressionInternal(
@@ -1989,7 +2022,7 @@ export class WorkPaper {
 
   removeNamedExpression(expressionName: string, scope?: number): WorkPaperChange[] {
     if (!this.isItPossibleToRemoveNamedExpression(expressionName, scope)) {
-      throw new NamedExpressionDoesNotExistError(expressionName);
+      throw new WorkPaperNamedExpressionDoesNotExistError(expressionName);
     }
     const existing = this.namedExpressionRecord(expressionName, scope);
     return this.captureChanges(
@@ -2031,7 +2064,7 @@ export class WorkPaper {
 
   normalizeFormula(formula: string): string {
     if (!formula.trim().startsWith("=")) {
-      throw new NotAFormulaError();
+      throw new WorkPaperNotAFormulaError();
     }
     try {
       return `=${serializeFormula(parseFormula(stripLeadingEquals(formula)))}`;
@@ -2042,7 +2075,7 @@ export class WorkPaper {
 
   calculateFormula(formula: string, scope?: number): CellValue | CellValue[][] {
     if (!formula.trim().startsWith("=")) {
-      throw new NotAFormulaError();
+      throw new WorkPaperNotAFormulaError();
     }
     try {
       const temporaryWorkbook = new WorkPaper(this.getConfig());
@@ -2089,7 +2122,7 @@ export class WorkPaper {
 
   getNamedExpressionsFromFormula(formula: string): string[] {
     if (!formula.trim().startsWith("=")) {
-      throw new NotAFormulaError();
+      throw new WorkPaperNotAFormulaError();
     }
     try {
       const parsed = parseFormula(stripLeadingEquals(formula));
@@ -2422,7 +2455,7 @@ export class WorkPaper {
     this.assertNotDisposed();
     const name = sheetName?.trim() || this.nextSheetName();
     if (!this.isItPossibleToAddSheet(name)) {
-      throw new SheetNameAlreadyTakenError(name);
+      throw new WorkPaperSheetNameAlreadyTakenError(name);
     }
     const beforeVisibility = this.ensureVisibilityCache();
     const beforeNames = this.ensureNamedExpressionValueCache();
@@ -2538,7 +2571,7 @@ export class WorkPaper {
     }
     if (Array.isArray(content)) {
       if (!content.every((row) => Array.isArray(row))) {
-        throw new WorkPaperArgumentError("Content matrix must be a two-dimensional array");
+        throw new WorkPaperInvalidArgumentsError("Content matrix must be a two-dimensional array");
       }
       const height = content.length;
       const width = Math.max(0, ...content.map((row) => row.length));
@@ -2720,7 +2753,7 @@ export class WorkPaper {
   isItPossibleToAddSheet(sheetName: string): boolean {
     const trimmed = sheetName.trim();
     if (trimmed.length === 0) {
-      throw new WorkPaperArgumentError("Sheet name must be non-empty");
+      throw new WorkPaperInvalidArgumentsError("Sheet name must be non-empty");
     }
     return !this.doesSheetExist(trimmed);
   }
@@ -2736,7 +2769,7 @@ export class WorkPaper {
   isItPossibleToReplaceSheetContent(sheetId: number, content: WorkPaperSheet): boolean {
     this.sheetRecord(sheetId);
     if (!content.every((row) => Array.isArray(row))) {
-      throw new WorkPaperArgumentError("Sheet content must be a two-dimensional array");
+      throw new WorkPaperInvalidArgumentsError("Sheet content must be a two-dimensional array");
     }
     const height = content.length;
     const width = Math.max(0, ...content.map((row) => row.length));
@@ -2749,7 +2782,7 @@ export class WorkPaper {
     this.sheetRecord(sheetId);
     const trimmed = nextName.trim();
     if (trimmed.length === 0) {
-      throw new WorkPaperArgumentError("Sheet name must be non-empty");
+      throw new WorkPaperInvalidArgumentsError("Sheet name must be non-empty");
     }
     const existing = this.engine.workbook.getSheet(trimmed);
     return !existing || existing.id === sheetId;
@@ -2904,7 +2937,7 @@ export class WorkPaper {
   private sheetRecord(sheetId: number) {
     const sheet = this.engine.workbook.getSheetById(sheetId);
     if (!sheet) {
-      throw new NoSheetWithIdError(sheetId);
+      throw new WorkPaperNoSheetWithIdError(sheetId);
     }
     return sheet;
   }
@@ -2916,7 +2949,7 @@ export class WorkPaper {
   private requireSheetId(name: string): number {
     const sheetId = this.getSheetId(name);
     if (sheetId === undefined) {
-      throw new NoSheetWithNameError(name);
+      throw new WorkPaperNoSheetWithNameError(name);
     }
     return sheetId;
   }
@@ -3654,13 +3687,15 @@ export class WorkPaper {
   ): Array<[number, number]> {
     if (typeof startOrInterval === "number") {
       if (Array.isArray(countOrInterval)) {
-        throw new WorkPaperArgumentError("Axis interval count must be a number");
+        throw new WorkPaperInvalidArgumentsError("Axis interval count must be a number");
       }
       const resolvedCount = typeof countOrInterval === "number" ? countOrInterval : 1;
       return [[startOrInterval, resolvedCount]];
     }
     if (typeof countOrInterval === "number") {
-      throw new WorkPaperArgumentError("Axis interval count is only valid with a numeric start");
+      throw new WorkPaperInvalidArgumentsError(
+        "Axis interval count is only valid with a numeric start",
+      );
     }
     return [startOrInterval, ...(countOrInterval ? [countOrInterval] : []), ...restIntervals].map(
       ([start, count]) => [start, count ?? 1] as [number, number],
@@ -3674,7 +3709,7 @@ export class WorkPaper {
   ): WorkPaperAxisSwapMapping[] {
     if (typeof startOrMappings === "number") {
       if (end === undefined) {
-        throw new WorkPaperArgumentError(`${label} swap requires two indexes`);
+        throw new WorkPaperInvalidArgumentsError(`${label} swap requires two indexes`);
       }
       return [[startOrMappings, end]];
     }
@@ -3792,7 +3827,7 @@ export class WorkPaper {
   ): void {
     const trimmed = expressionName.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(trimmed) || isCellReferenceText(trimmed)) {
-      throw new NamedExpressionNameIsInvalidError(expressionName);
+      throw new WorkPaperNamedExpressionNameIsInvalidError(expressionName);
     }
     if (scope !== undefined) {
       this.sheetRecord(scope);
@@ -3801,13 +3836,13 @@ export class WorkPaper {
       try {
         const parsed = parseFormula(stripLeadingEquals(expression));
         if (formulaHasRelativeReferences(parsed)) {
-          throw new NoRelativeAddressesAllowedError();
+          throw new WorkPaperNoRelativeAddressesAllowedError();
         }
       } catch (error) {
-        if (error instanceof NoRelativeAddressesAllowedError) {
+        if (error instanceof WorkPaperNoRelativeAddressesAllowedError) {
           throw error;
         }
-        throw new UnableToParseError({
+        throw new WorkPaperUnableToParseError({
           expressionName,
           reason: this.messageOf(error, `Invalid named expression formula for '${expressionName}'`),
         });
@@ -3862,7 +3897,7 @@ export class WorkPaper {
     if (direct) {
       return direct;
     }
-    throw new NamedExpressionDoesNotExistError(name);
+    throw new WorkPaperNamedExpressionDoesNotExistError(name);
   }
 
   private evaluateNamedExpression(expression: InternalNamedExpression): CellValue | CellValue[][] {

@@ -2,15 +2,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 
 import {
-  LanguageAlreadyRegisteredError,
-  LanguageNotRegisteredError,
-  NamedExpressionDoesNotExistError,
-  NamedExpressionNameIsAlreadyTakenError,
-  NoOperationToRedoError,
-  NoOperationToUndoError,
-  NoRelativeAddressesAllowedError,
-  NotAFormulaError,
-  NothingToPasteError,
+  WorkPaperExpectedOneOfValuesError,
+  WorkPaperExpectedValueOfTypeError,
+  WorkPaperLanguageAlreadyRegisteredError,
+  WorkPaperLanguageNotRegisteredError,
+  WorkPaperNamedExpressionDoesNotExistError,
+  WorkPaperNamedExpressionNameIsAlreadyTakenError,
+  WorkPaperNoOperationToRedoError,
+  WorkPaperNoOperationToUndoError,
+  WorkPaperNoRelativeAddressesAllowedError,
+  WorkPaperNotAFormulaError,
+  WorkPaperNothingToPasteError,
   WorkPaper,
   WorkPaperCellAddress,
   WorkPaperConfig,
@@ -60,7 +62,14 @@ function createConfigFixture(): WorkPaperConfig {
     maxColumns: 256,
     nullDate: { year: 1904, month: 1, day: 1 },
     nullYear: 50,
-    parseDateTime: (input) => ({ parsed: input }),
+    parseDateTime: () => ({
+      year: 2024,
+      month: 1,
+      day: 2,
+      hours: 3,
+      minutes: 4,
+      seconds: 5,
+    }),
     precisionEpsilon: 1e-8,
     precisionRounding: 10,
     stringifyDateTime: () => "date",
@@ -140,13 +149,15 @@ describe("WorkPaper parity surface", () => {
       }).getSheetNames(),
     ).toEqual(["Alpha", "Beta"]);
 
-    expect(() => WorkPaper.getLanguage(TEST_LANGUAGE_CODE)).toThrow(LanguageNotRegisteredError);
+    expect(() => WorkPaper.getLanguage(TEST_LANGUAGE_CODE)).toThrow(
+      WorkPaperLanguageNotRegisteredError,
+    );
 
     WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
     expect(WorkPaper.getRegisteredLanguagesCodes()).toContain(TEST_LANGUAGE_CODE);
     expect(WorkPaper.getLanguage(TEST_LANGUAGE_CODE)).toEqual({ functions: {} });
     expect(() => WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} })).toThrow(
-      LanguageAlreadyRegisteredError,
+      WorkPaperLanguageAlreadyRegisteredError,
     );
 
     WorkPaper.registerFunctionPlugin(CUSTOM_PLUGIN, {
@@ -205,9 +216,23 @@ describe("WorkPaper parity surface", () => {
     expect(snapshot.chooseAddressMappingPolicy).toEqual({ mode: "dense" });
     expect(snapshot.context).toEqual({ requestId: "ctx-1" });
     expect(snapshot.functionPlugins?.map((plugin) => plugin.id)).toEqual([CUSTOM_PLUGIN.id]);
-    expect(snapshot.parseDateTime?.("value")).toEqual({ parsed: "value" });
-    expect(snapshot.stringifyDateTime?.({})).toBe("date");
-    expect(snapshot.stringifyDuration?.({})).toBe("duration");
+    expect(snapshot.parseDateTime?.("value")).toEqual({
+      year: 2024,
+      month: 1,
+      day: 2,
+      hours: 3,
+      minutes: 4,
+      seconds: 5,
+    });
+    expect(
+      snapshot.stringifyDateTime?.(
+        { year: 2024, month: 1, day: 2, hours: 3, minutes: 4, seconds: 5 },
+        "YYYY-MM-DD HH:mm:ss",
+      ),
+    ).toBe("date");
+    expect(snapshot.stringifyDuration?.({ hours: 3, minutes: 4, seconds: 5 }, "HH:mm:ss")).toBe(
+      "duration",
+    );
     expect(workbook.licenseKeyValidityState).toBe("missing");
 
     snapshot.currencySymbol?.push("MUTATED");
@@ -217,6 +242,16 @@ describe("WorkPaper parity surface", () => {
       id: "mutated",
       implementedFunctions: {},
     });
+    if (snapshot.chooseAddressMappingPolicy) {
+      snapshot.chooseAddressMappingPolicy.mode = "sparse";
+    }
+    if (
+      snapshot.context &&
+      typeof snapshot.context === "object" &&
+      !Array.isArray(snapshot.context)
+    ) {
+      snapshot.context.requestId = "ctx-mutated";
+    }
 
     expect(workbook.getConfig().currencySymbol).toEqual(["$", "USD"]);
     expect(workbook.getConfig().dateFormats).toEqual(["YYYY-MM-DD"]);
@@ -224,6 +259,8 @@ describe("WorkPaper parity surface", () => {
     expect(workbook.getConfig().functionPlugins?.map((plugin) => plugin.id)).toEqual([
       CUSTOM_PLUGIN.id,
     ]);
+    expect(workbook.getConfig().chooseAddressMappingPolicy).toEqual({ mode: "dense" });
+    expect(workbook.getConfig().context).toEqual({ requestId: "ctx-1" });
 
     workbook.updateConfig({
       accentSensitive: false,
@@ -302,6 +339,27 @@ describe("WorkPaper parity surface", () => {
     expect(workbook.getConfig().chooseAddressMappingPolicy).toEqual({ mode: "sparse" });
     expect(workbook.getConfig().context).toEqual({ requestId: "ctx-2" });
     expect(workbook.licenseKeyValidityState).toBe("valid");
+  });
+
+  it("rejects invalid typed config hooks and policy values", () => {
+    expect(() =>
+      // @ts-expect-error intentional invalid runtime input
+      WorkPaper.buildEmpty({
+        chooseAddressMappingPolicy: { mode: "invalid" },
+      }),
+    ).toThrow(WorkPaperExpectedOneOfValuesError);
+    expect(() =>
+      // @ts-expect-error intentional invalid runtime input
+      WorkPaper.buildEmpty({
+        parseDateTime: 123,
+      }),
+    ).toThrow(WorkPaperExpectedValueOfTypeError);
+    expect(() =>
+      // @ts-expect-error intentional invalid runtime input
+      WorkPaper.buildEmpty({
+        context: { ok: "yes", bad: () => "nope" },
+      }),
+    ).toThrow(WorkPaperExpectedValueOfTypeError);
   });
 
   it("covers the read surface, formula helpers, and dependency helpers", () => {
@@ -398,7 +456,7 @@ describe("WorkPaper parity surface", () => {
     });
     expect(workbook.numberToDate(2.5)).toEqual({ year: 1900, month: 1, day: 2 });
     expect(workbook.numberToTime(2.5)).toEqual({ hours: 12, minutes: 0, seconds: 0 });
-    expect(() => workbook.normalizeFormula("SUM(1,2)")).toThrow(NotAFormulaError);
+    expect(() => workbook.normalizeFormula("SUM(1,2)")).toThrow(WorkPaperNotAFormulaError);
   });
 
   it("covers mutations, preflights, history controls, clipboard, and fill helpers", () => {
@@ -451,7 +509,7 @@ describe("WorkPaper parity surface", () => {
     });
     fillWorkbook.clearClipboard();
     expect(fillWorkbook.isClipboardEmpty()).toBe(true);
-    expect(() => fillWorkbook.paste(cell(fillSheetId, 4, 0))).toThrow(NothingToPasteError);
+    expect(() => fillWorkbook.paste(cell(fillSheetId, 4, 0))).toThrow(WorkPaperNothingToPasteError);
 
     workbook.copy({
       start: cell(sheetId, 0, 0),
@@ -465,9 +523,9 @@ describe("WorkPaper parity surface", () => {
     workbook.redo();
     workbook.clearUndoStack();
     expect(workbook.isThereSomethingToUndo()).toBe(false);
-    expect(() => workbook.undo()).toThrow(NoOperationToUndoError);
+    expect(() => workbook.undo()).toThrow(WorkPaperNoOperationToUndoError);
     workbook.clearRedoStack();
-    expect(() => workbook.redo()).toThrow(NoOperationToRedoError);
+    expect(() => workbook.redo()).toThrow(WorkPaperNoOperationToRedoError);
   });
 
   it("covers sheet lifecycle, named expressions, events, and internal adapters", () => {
@@ -516,13 +574,13 @@ describe("WorkPaper parity surface", () => {
       value: 2,
     });
     expect(() => workbook.addNamedExpression("Rate", "=3", dataId)).toThrow(
-      NamedExpressionNameIsAlreadyTakenError,
+      WorkPaperNamedExpressionNameIsAlreadyTakenError,
     );
     expect(() => workbook.changeNamedExpression("Missing", "=1", dataId)).toThrow(
-      NamedExpressionDoesNotExistError,
+      WorkPaperNamedExpressionDoesNotExistError,
     );
     expect(() => workbook.addNamedExpression("RelativeName", "=A1", dataId)).toThrow(
-      NoRelativeAddressesAllowedError,
+      WorkPaperNoRelativeAddressesAllowedError,
     );
     expect(workbook.isItPossibleToRemoveNamedExpression("Rate", dataId)).toBe(true);
     workbook.removeNamedExpression("Rate", dataId);

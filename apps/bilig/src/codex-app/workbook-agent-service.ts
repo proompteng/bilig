@@ -78,6 +78,7 @@ import {
   needsSharedOwnerReview,
   normalizeSharedReviewState,
 } from "./workbook-agent-bundle-state.js";
+import { WorkbookAgentSessionStore } from "./workbook-agent-session-store.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
 const CODEX_APP_SERVER_ARGS = ["app-server", "-c", "analytics.enabled=false"] as const;
@@ -569,6 +570,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   };
   private codexClient: CodexAppServerClientPool | null = null;
   private unsubscribeCodex: (() => void) | null = null;
+  private readonly sessionStore: WorkbookAgentSessionStore;
 
   constructor(options: EnabledWorkbookAgentServiceOptions) {
     this.zeroSyncService = options.zeroSyncService;
@@ -588,10 +590,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ...resolveWorkbookAgentFeatureFlags(),
       ...options.featureFlags,
     };
+    this.sessionStore = new WorkbookAgentSessionStore(this.zeroSyncService);
   }
 
   private async persistSessionState(sessionState: WorkbookAgentSessionState): Promise<void> {
-    await this.zeroSyncService.saveWorkbookAgentThreadState({
+    await this.sessionStore.saveSessionSnapshot({
       documentId: sessionState.documentId,
       threadId: sessionState.threadId,
       actorUserId: sessionState.storageActorUserId,
@@ -768,11 +771,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         ? sessionBootstrapError
         : new Error("Workbook agent thread bootstrap failed");
     }
-    const durableThreadState = await this.zeroSyncService.loadWorkbookAgentThreadState(
-      input.documentId,
-      input.session.userID,
+    const durableThreadSession = await this.sessionStore.loadThreadSession({
+      documentId: input.documentId,
+      actorUserId: input.session.userID,
       threadId,
-    );
+    });
+    const durableThreadState = durableThreadSession.threadState;
     if (durableThreadState?.scope === "shared" && !this.featureFlags.sharedThreadsEnabled) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_SHARED_THREADS_DISABLED",
@@ -795,16 +799,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         : new Error("Workbook agent thread bootstrap failed");
     }
     const resolvedScope = durableThreadState?.scope ?? parsed.scope ?? "private";
-    const executionRecords = await this.zeroSyncService.listWorkbookAgentThreadRuns(
-      input.documentId,
-      input.session.userID,
-      threadId,
-    );
-    const workflowRuns = await this.zeroSyncService.listWorkbookThreadWorkflowRuns(
-      input.documentId,
-      input.session.userID,
-      threadId,
-    );
+    const executionRecords = durableThreadSession.executionRecords;
+    const workflowRuns = durableThreadSession.workflowRuns;
     const codexEntries = thread ? buildEntriesFromThread(thread) : [];
     const bootstrapErrorMessage =
       thread || !sessionBootstrapError

@@ -1,12 +1,10 @@
-import { parseCellAddress } from "@bilig/formula";
 import type { GridEngineLike } from "@bilig/grid";
-import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport } from "@bilig/protocol";
+import type { CellSnapshot, CellStyleRecord, Viewport } from "@bilig/protocol";
 import {
   decodeViewportPatch,
   type ViewportPatch,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
-import { selectProjectedViewportKeysToEvict } from "./projected-viewport-cache-pruning.js";
 import {
   ackProjectedViewportLocalAxisSize,
   rollbackProjectedViewportLocalAxisHidden,
@@ -16,58 +14,24 @@ import {
   type ProjectedViewportLocalAxisResult,
   type ProjectedViewportLocalAxisState,
 } from "./projected-viewport-local-axis-state.js";
-import {
-  applyProjectedViewportPatch,
-  cellSnapshotSignature,
-  shouldKeepCurrentSnapshot,
-} from "./projected-viewport-patch-application.js";
+import { applyProjectedViewportPatch } from "./projected-viewport-patch-application.js";
+import { ProjectedViewportCellCache } from "./projected-viewport-cell-cache.js";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HIDDEN_AXES: Readonly<Record<number, true>> = Object.freeze({});
 const EMPTY_FREEZE = 0;
-const DEFAULT_STYLE_ID = "style-0";
 const MAX_CACHED_CELLS_PER_SHEET = 6000;
 type CellItem = readonly [number, number];
 
-interface CellSubscription {
-  sheetName: string;
-  addresses: Set<string>;
-  listener: () => void;
-}
-
 export class ProjectedViewportStore implements GridEngineLike {
-  readonly workbook = {
-    getSheet: (sheetName: string) => {
-      if (!this.knownSheets.has(sheetName)) {
-        return undefined;
-      }
-      const sheetCellKeys = this.cellKeysBySheet.get(sheetName);
-      return {
-        grid: {
-          forEachCellEntry: (listener: (cellIndex: number, row: number, col: number) => void) => {
-            let index = 0;
-            sheetCellKeys?.forEach((key) => {
-              const snapshot = this.cellSnapshots.get(key);
-              if (!snapshot) {
-                return;
-              }
-              const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
-              listener(index++, parsed.row, parsed.col);
-            });
-          },
-        },
-      };
-    },
-  };
+  private readonly cellCache = new ProjectedViewportCellCache({
+    maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
+  });
 
-  private readonly cellSnapshots = new Map<string, CellSnapshot>();
-  private readonly cellKeysBySheet = new Map<string, Set<string>>();
-  private readonly cellStyles = new Map<string, CellStyleRecord>([
-    [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
-  ]);
-  private readonly cellSubscriptions = new Set<CellSubscription>();
-  private readonly listeners = new Set<() => void>();
+  readonly workbook = {
+    getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
+  };
   private readonly columnSizesBySheet = new Map<string, Record<number, number>>();
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>();
@@ -78,28 +42,15 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly hiddenRowsBySheet = new Map<string, Record<number, true>>();
   private readonly freezeRowsBySheet = new Map<string, number>();
   private readonly freezeColsBySheet = new Map<string, number>();
-  private readonly knownSheets = new Set<string>();
-  private readonly activeViewportKeysBySheet = new Map<string, Set<string>>();
-  private readonly activeViewports = new Map<string, Viewport>();
-  private readonly cellAccessTicks = new Map<string, number>();
-  private nextCellAccessTick = 1;
 
   constructor(private readonly client?: WorkerEngineClient) {}
 
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.cellCache.subscribe(listener);
   }
 
   peekCell(sheetName: string, address: string): CellSnapshot | undefined {
-    const key = `${sheetName}!${address}`;
-    const snapshot = this.cellSnapshots.get(key);
-    if (snapshot) {
-      this.touchCellKey(key);
-    }
-    return snapshot;
+    return this.cellCache.peekCell(sheetName, address);
   }
 
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
@@ -135,33 +86,15 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    return this.peekCell(sheetName, address) ?? this.emptyCellSnapshot(sheetName, address);
+    return this.cellCache.getCell(sheetName, address);
   }
 
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
-    if (!styleId) {
-      return this.cellStyles.get(DEFAULT_STYLE_ID);
-    }
-    return this.cellStyles.get(styleId) ?? this.cellStyles.get(DEFAULT_STYLE_ID);
+    return this.cellCache.getCellStyle(styleId);
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
-    const key = `${snapshot.sheetName}!${snapshot.address}`;
-    const current = this.cellSnapshots.get(key);
-    if (current) {
-      if (shouldKeepCurrentSnapshot(current, snapshot)) {
-        return;
-      }
-      if (cellSnapshotSignature(current) === cellSnapshotSignature(snapshot)) {
-        return;
-      }
-    }
-    this.knownSheets.add(snapshot.sheetName);
-    this.cellSnapshots.set(key, snapshot);
-    this.touchCellKey(key);
-    this.sheetCellKeys(snapshot.sheetName).add(key);
-    this.notifyCellSubscriptions(new Set([key]));
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.setCellSnapshot(snapshot);
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
@@ -179,7 +112,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (!nextState.changed) {
       return;
     }
-    this.knownSheets.add(sheetName);
+    this.cellCache.markSheetKnown(sheetName);
     this.writeLocalAxisState({
       sheetName,
       sizesBySheet: this.columnSizesBySheet,
@@ -188,7 +121,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
@@ -239,7 +172,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
@@ -258,7 +191,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (!nextState.changed) {
       return;
     }
-    this.knownSheets.add(sheetName);
+    this.cellCache.markSheetKnown(sheetName);
     this.writeLocalAxisState({
       sheetName,
       sizesBySheet: this.columnSizesBySheet,
@@ -267,7 +200,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   rollbackColumnHidden(
@@ -297,7 +230,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
@@ -315,7 +248,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (!nextState.changed) {
       return;
     }
-    this.knownSheets.add(sheetName);
+    this.cellCache.markSheetKnown(sheetName);
     this.writeLocalAxisState({
       sheetName,
       sizesBySheet: this.rowSizesBySheet,
@@ -324,7 +257,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
@@ -375,7 +308,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
@@ -394,7 +327,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (!nextState.changed) {
       return;
     }
-    this.knownSheets.add(sheetName);
+    this.cellCache.markSheetKnown(sheetName);
     this.writeLocalAxisState({
       sheetName,
       sizesBySheet: this.rowSizesBySheet,
@@ -403,7 +336,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   rollbackRowHidden(
@@ -433,23 +366,12 @@ export class ProjectedViewportStore implements GridEngineLike {
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
     });
-    this.listeners.forEach((listener) => listener());
+    this.cellCache.notifyListeners();
   }
 
   setKnownSheets(sheetNames: readonly string[]): void {
-    if (
-      sheetNames.length === this.knownSheets.size &&
-      sheetNames.every((sheetName) => this.knownSheets.has(sheetName))
-    ) {
-      return;
-    }
-    const removedSheets = [...this.knownSheets].filter(
-      (sheetName) => !sheetNames.includes(sheetName),
-    );
-    this.knownSheets.clear();
-    sheetNames.forEach((sheetName) => this.knownSheets.add(sheetName));
-    removedSheets.forEach((sheetName) => this.dropSheetCache(sheetName));
-    this.listeners.forEach((listener) => listener());
+    const removedSheets = this.cellCache.setKnownSheets(sheetNames);
+    removedSheets.forEach((sheetName) => this.dropAxisState(sheetName));
   }
 
   subscribeCells(
@@ -457,15 +379,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     addresses: readonly string[],
     listener: () => void,
   ): () => void {
-    const subscription: CellSubscription = {
-      sheetName,
-      addresses: new Set(addresses),
-      listener,
-    };
-    this.cellSubscriptions.add(subscription);
-    return () => {
-      this.cellSubscriptions.delete(subscription);
-    };
+    return this.cellCache.subscribeCells(sheetName, addresses, listener);
   }
 
   subscribeViewport(
@@ -476,11 +390,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (!this.client) {
       throw new Error("Worker viewport subscriptions require a worker engine client");
     }
-    const viewportKey = `${sheetName}:${viewport.rowStart}:${viewport.rowEnd}:${viewport.colStart}:${viewport.colEnd}`;
-    this.activeViewports.set(viewportKey, viewport);
-    const sheetViewportKeys = this.activeViewportKeysBySheet.get(sheetName) ?? new Set<string>();
-    sheetViewportKeys.add(viewportKey);
-    this.activeViewportKeysBySheet.set(sheetName, sheetViewportKeys);
+    const stopTrackingViewport = this.cellCache.trackViewport(sheetName, viewport);
     const unsubscribe = this.client.subscribeViewportPatches(
       { sheetName, ...viewport },
       (bytes: Uint8Array) => {
@@ -490,13 +400,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     );
     return () => {
       unsubscribe();
-      this.activeViewports.delete(viewportKey);
-      const nextSheetViewportKeys = this.activeViewportKeysBySheet.get(sheetName);
-      nextSheetViewportKeys?.delete(viewportKey);
-      if (nextSheetViewportKeys && nextSheetViewportKeys.size === 0) {
-        this.activeViewportKeysBySheet.delete(sheetName);
-      }
-      this.pruneSheetCache(sheetName);
+      stopTrackingViewport();
     };
   }
 
@@ -507,9 +411,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
     const result = applyProjectedViewportPatch({
       state: {
-        cellSnapshots: this.cellSnapshots,
-        cellKeysBySheet: this.cellKeysBySheet,
-        cellStyles: this.cellStyles,
+        ...this.cellCache.getPatchState(),
         columnSizesBySheet: this.columnSizesBySheet,
         columnWidthsBySheet: this.columnWidthsBySheet,
         pendingColumnWidthsBySheet: this.pendingColumnWidthsBySheet,
@@ -520,17 +422,11 @@ export class ProjectedViewportStore implements GridEngineLike {
         hiddenRowsBySheet: this.hiddenRowsBySheet,
         freezeRowsBySheet: this.freezeRowsBySheet,
         freezeColsBySheet: this.freezeColsBySheet,
-        knownSheets: this.knownSheets,
       },
       patch,
-      touchCellKey: (key) => this.touchCellKey(key),
+      touchCellKey: (key) => this.cellCache.touchCellKey(key),
     });
-    this.pruneSheetCache(patch.viewport.sheetName);
-    this.notifyCellSubscriptions(result.changedKeys);
-    if (result.damage.length > 0 || result.axisChanged || result.freezeChanged) {
-      this.listeners.forEach((listener) => listener());
-    }
-    return result.damage;
+    return this.cellCache.applyPatchResult(patch.viewport.sheetName, result);
   }
 
   private readLocalAxisState(args: {
@@ -570,56 +466,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
   }
 
-  private sheetCellKeys(sheetName: string): Set<string> {
-    const existing = this.cellKeysBySheet.get(sheetName);
-    if (existing) {
-      return existing;
-    }
-    const created = new Set<string>();
-    this.cellKeysBySheet.set(sheetName, created);
-    return created;
-  }
-
-  private pruneSheetCache(sheetName: string): void {
-    const sheetCellKeys = this.cellKeysBySheet.get(sheetName);
-    if (!sheetCellKeys || sheetCellKeys.size <= MAX_CACHED_CELLS_PER_SHEET) {
-      return;
-    }
-    const activeViewportKeys = this.activeViewportKeysBySheet.get(sheetName);
-    const activeViewports =
-      activeViewportKeys && activeViewportKeys.size > 0
-        ? [...activeViewportKeys]
-            .map((key) => this.activeViewports.get(key))
-            .filter((viewport): viewport is Viewport => viewport !== undefined)
-        : [];
-    const pinnedKeys = new Set<string>();
-    this.cellSubscriptions.forEach((subscription) => {
-      if (subscription.sheetName !== sheetName) {
-        return;
-      }
-      subscription.addresses.forEach((address) => pinnedKeys.add(`${sheetName}!${address}`));
-    });
-    const keysToEvict = selectProjectedViewportKeysToEvict({
-      sheetCellKeys: Array.from(sheetCellKeys),
-      cellSnapshots: this.cellSnapshots,
-      cellAccessTicks: this.cellAccessTicks,
-      pinnedKeys,
-      activeViewports,
-      maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
-    });
-    keysToEvict.forEach((key) => {
-      this.cellSnapshots.delete(key);
-      this.cellAccessTicks.delete(key);
-      sheetCellKeys.delete(key);
-    });
-  }
-
-  private dropSheetCache(sheetName: string): void {
-    this.cellKeysBySheet.get(sheetName)?.forEach((key) => {
-      this.cellSnapshots.delete(key);
-      this.cellAccessTicks.delete(key);
-    });
-    this.cellKeysBySheet.delete(sheetName);
+  private dropAxisState(sheetName: string): void {
     this.columnSizesBySheet.delete(sheetName);
     this.columnWidthsBySheet.delete(sheetName);
     this.pendingColumnWidthsBySheet.delete(sheetName);
@@ -630,33 +477,5 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.hiddenRowsBySheet.delete(sheetName);
     this.freezeRowsBySheet.delete(sheetName);
     this.freezeColsBySheet.delete(sheetName);
-    const viewportKeys = this.activeViewportKeysBySheet.get(sheetName);
-    viewportKeys?.forEach((key) => this.activeViewports.delete(key));
-    this.activeViewportKeysBySheet.delete(sheetName);
-  }
-
-  private touchCellKey(key: string): void {
-    this.cellAccessTicks.set(key, this.nextCellAccessTick++);
-  }
-
-  private notifyCellSubscriptions(changedKeys: ReadonlySet<string>): void {
-    this.cellSubscriptions.forEach((subscription) => {
-      for (const address of subscription.addresses) {
-        if (changedKeys.has(`${subscription.sheetName}!${address}`)) {
-          subscription.listener();
-          return;
-        }
-      }
-    });
-  }
-
-  private emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
-    return {
-      sheetName,
-      address,
-      value: { tag: ValueTag.Empty },
-      flags: 0,
-      version: 0,
-    };
   }
 }

@@ -3,6 +3,22 @@ import type { EvaluationResult } from "@bilig/formula";
 
 export type RawCellContent = LiteralInput | string;
 
+export type WorkPaperContextValue =
+  | string
+  | number
+  | boolean
+  | null
+  | WorkPaperContextObject
+  | readonly WorkPaperContextValue[];
+
+export interface WorkPaperContextObject {
+  [key: string]: WorkPaperContextValue;
+}
+
+export interface WorkPaperChooseAddressMappingPolicy {
+  mode: "dense" | "sparse";
+}
+
 export type WorkPaperSheet = readonly (readonly RawCellContent[])[];
 export type WorkPaperSheets = Record<string, WorkPaperSheet>;
 
@@ -55,6 +71,38 @@ export interface WorkPaperNamedExpression {
 }
 
 export interface SerializedWorkPaperNamedExpression extends WorkPaperNamedExpression {}
+
+export interface WorkPaperSimpleDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export interface WorkPaperSimpleTime {
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+export interface WorkPaperDateTime extends WorkPaperSimpleDate, WorkPaperSimpleTime {}
+
+export type WorkPaperParsedDateTime = WorkPaperSimpleDate | WorkPaperSimpleTime | WorkPaperDateTime;
+
+export type WorkPaperParseDateTime = (
+  dateTimeString: string,
+  dateFormat?: string,
+  timeFormat?: string,
+) => WorkPaperParsedDateTime | undefined;
+
+export type WorkPaperStringifyDateTime = (
+  dateTime: WorkPaperDateTime,
+  dateTimeFormat: string,
+) => string | undefined;
+
+export type WorkPaperStringifyDuration = (
+  time: WorkPaperSimpleTime,
+  timeFormat: string,
+) => string | undefined;
 
 export type WorkPaperFunctionArgumentType =
   | "STRING"
@@ -117,8 +165,8 @@ export interface WorkPaperConfig {
   accentSensitive?: boolean;
   caseSensitive?: boolean;
   caseFirst?: "upper" | "lower" | "false";
-  chooseAddressMappingPolicy?: unknown;
-  context?: unknown;
+  chooseAddressMappingPolicy?: WorkPaperChooseAddressMappingPolicy;
+  context?: WorkPaperContextValue;
   currencySymbol?: string[];
   dateFormats?: string[];
   functionArgSeparator?: string;
@@ -138,11 +186,11 @@ export interface WorkPaperConfig {
   maxColumns?: number;
   nullDate?: { year: number; month: number; day: number };
   nullYear?: number;
-  parseDateTime?: (input: string) => unknown;
+  parseDateTime?: WorkPaperParseDateTime;
   precisionEpsilon?: number;
   precisionRounding?: number;
-  stringifyDateTime?: (value: unknown) => string | undefined;
-  stringifyDuration?: (value: unknown) => string | undefined;
+  stringifyDateTime?: WorkPaperStringifyDateTime;
+  stringifyDuration?: WorkPaperStringifyDuration;
   smartRounding?: boolean;
   thousandSeparator?: "" | "," | ".";
   timeFormats?: string[];
@@ -194,15 +242,6 @@ export type WorkPaperDependencyRef =
   | { kind: "cell"; address: WorkPaperCellAddress }
   | { kind: "range"; range: WorkPaperCellRange }
   | { kind: "name"; name: string };
-
-export interface WorkPaperDateTime {
-  year: number;
-  month: number;
-  day: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
 
 export interface WorkPaperStats {
   batchDepth: number;
