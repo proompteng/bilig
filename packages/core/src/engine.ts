@@ -167,6 +167,7 @@ export class SpreadsheetEngine {
       undoStack: this.undoStack,
       redoStack: this.redoStack,
       useColumnIndex: options.useColumnIndex ?? false,
+      trackReplicaVersions: options.trackReplicaVersions ?? true,
       getSelection: () => this.selection,
       setSelection: (selection) => {
         this.selection = selection;
@@ -426,6 +427,11 @@ export class SpreadsheetEngine {
   }
 
   async connectSyncClient(client: EngineSyncClient): Promise<void> {
+    if (!this.state.trackReplicaVersions) {
+      throw new Error(
+        "Sync is unavailable when trackReplicaVersions is disabled; construct the engine with trackReplicaVersions enabled.",
+      );
+    }
     await runEngineEffectPromise(this.runtime.sync.connectClient(client));
   }
 

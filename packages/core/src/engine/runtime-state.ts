@@ -45,6 +45,7 @@ export interface SpreadsheetEngineOptions {
   workbookName?: string;
   replicaId?: string;
   useColumnIndex?: boolean;
+  trackReplicaVersions?: boolean;
 }
 
 export interface EngineSyncClientConnection {
@@ -139,6 +140,7 @@ export interface EngineRuntimeState {
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
   readonly useColumnIndex: boolean;
+  readonly trackReplicaVersions: boolean;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;
@@ -167,6 +169,7 @@ export interface EngineRuntimeStateController {
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
   readonly useColumnIndex: boolean;
+  readonly trackReplicaVersions: boolean;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;
