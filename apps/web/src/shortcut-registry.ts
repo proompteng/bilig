@@ -197,6 +197,39 @@ export function getWorkbookShortcutLabel(
   return isMacPlatform(platform) ? entry.mac : entry.windows;
 }
 
+function splitMacShortcutLabel(label: string): readonly string[] {
+  const parts: string[] = [];
+  let trailing = "";
+  for (const char of label) {
+    if (char === "⌘" || char === "⇧" || char === "⌥" || char === "⌃") {
+      parts.push(char);
+      continue;
+    }
+    trailing += char;
+  }
+  if (trailing.length > 0) {
+    parts.push(trailing);
+  }
+  return parts;
+}
+
+export function getWorkbookShortcutParts(
+  id: string,
+  platform = globalThis.navigator?.platform,
+): readonly string[] {
+  const label = getWorkbookShortcutLabel(id, platform);
+  if (label.length === 0) {
+    return [];
+  }
+  if (label.includes("+")) {
+    return label.split("+").map((part) => part.trim());
+  }
+  if (/[⌘⇧⌥⌃]/.test(label)) {
+    return splitMacShortcutLabel(label);
+  }
+  return [label];
+}
+
 export function searchWorkbookShortcutEntries(query: string): readonly WorkbookShortcutEntry[] {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) {

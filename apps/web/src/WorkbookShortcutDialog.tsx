@@ -1,11 +1,66 @@
+import { cva } from "class-variance-authority";
 import { useMemo, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
 import {
   getWorkbookShortcutLabel,
+  getWorkbookShortcutParts,
   groupWorkbookShortcutEntries,
   searchWorkbookShortcutEntries,
 } from "./shortcut-registry.js";
+
+const shortcutChordClass = cva("flex items-center gap-1.5");
+
+const shortcutKeyClass = cva(
+  "inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-[var(--color-mauve-300)] bg-white px-2 text-[11px] font-semibold leading-none text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+  {
+    variants: {
+      tokenType: {
+        symbol: "font-sans",
+        text: "font-sans",
+      },
+    },
+    defaultVariants: {
+      tokenType: "text",
+    },
+  },
+);
+
+function ShortcutKeyChord(props: { readonly shortcutId: string }) {
+  const parts = getWorkbookShortcutParts(props.shortcutId);
+  const label = getWorkbookShortcutLabel(props.shortcutId);
+  if (parts.length === 0) {
+    return null;
+  }
+  const showPlusSeparators = label.includes("+");
+  return (
+    <div
+      aria-label={label}
+      className={shortcutChordClass()}
+      data-testid="workbook-shortcut-chord"
+      title={label}
+    >
+      {parts.map((part, index) => {
+        const isSymbol = part.length === 1 && /[⌘⇧⌥⌃]/.test(part);
+        const chordKey = `${props.shortcutId}:${parts.slice(0, index + 1).join("::")}`;
+        return (
+          <div className="flex items-center gap-1.5" key={chordKey}>
+            {index > 0 && showPlusSeparators ? (
+              <span className="text-[10px] font-medium text-[var(--color-mauve-500)]">+</span>
+            ) : null}
+            <kbd
+              className={shortcutKeyClass({
+                tokenType: isSymbol ? "symbol" : "text",
+              })}
+            >
+              {part}
+            </kbd>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function WorkbookShortcutDialog(props: {
   open: boolean;
@@ -96,9 +151,7 @@ export function WorkbookShortcutDialog(props: {
                               {entry.label}
                             </div>
                           </div>
-                          <kbd className="shrink-0 rounded-[calc(var(--wb-radius-control)-2px)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-2 py-1 font-mono text-[11px] font-semibold text-[var(--wb-text-muted)]">
-                            {getWorkbookShortcutLabel(entry.id)}
-                          </kbd>
+                          <ShortcutKeyChord shortcutId={entry.id} />
                         </div>
                       ))}
                     </div>

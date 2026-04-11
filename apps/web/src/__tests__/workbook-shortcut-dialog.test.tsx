@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { WorkbookShortcutDialog } from "../WorkbookShortcutDialog.js";
-import { getWorkbookShortcutLabel } from "../shortcut-registry.js";
+import { getWorkbookShortcutLabel, getWorkbookShortcutParts } from "../shortcut-registry.js";
 import { useWorkbookShortcutDialog } from "../use-workbook-shortcut-dialog.js";
 
 function ShortcutDialogHarness() {
@@ -149,5 +149,11 @@ describe("workbook shortcut dialog", () => {
   it("formats shortcut labels per platform", () => {
     expect(getWorkbookShortcutLabel("undo", "MacIntel")).toBe("⌘Z");
     expect(getWorkbookShortcutLabel("undo", "Win32")).toBe("Ctrl+Z");
+  });
+
+  it("splits shortcuts into readable keycap parts", () => {
+    expect(getWorkbookShortcutParts("undo", "MacIntel")).toEqual(["⌘", "Z"]);
+    expect(getWorkbookShortcutParts("format-currency", "MacIntel")).toEqual(["⇧", "⌘", "4"]);
+    expect(getWorkbookShortcutParts("undo", "Win32")).toEqual(["Ctrl", "Z"]);
   });
 });
