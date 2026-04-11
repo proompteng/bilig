@@ -255,7 +255,7 @@ export function executeStructuralWorkflow(input: {
           "## Create Sheet Preview",
           "",
           `- Create a new sheet named \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [],
         steps: [
@@ -287,7 +287,7 @@ export function executeStructuralWorkflow(input: {
           "## Rename Sheet Preview",
           "",
           `- Rename the active sheet from \`${currentName}\` to \`${nextName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [
           {
@@ -325,7 +325,7 @@ export function executeStructuralWorkflow(input: {
           "## Hide Current Row Preview",
           "",
           `- Hide row ${String(row)} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [
           {
@@ -372,7 +372,7 @@ export function executeStructuralWorkflow(input: {
           "## Hide Current Column Preview",
           "",
           `- Hide column ${columnLabel} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [
           {
@@ -418,7 +418,7 @@ export function executeStructuralWorkflow(input: {
           "## Unhide Current Row Preview",
           "",
           `- Unhide row ${String(row)} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [
           {
@@ -465,7 +465,7 @@ export function executeStructuralWorkflow(input: {
           "## Unhide Current Column Preview",
           "",
           `- Unhide column ${columnLabel} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the rail to commit it authoritatively.",
+          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
         ]),
         citations: [
           {
