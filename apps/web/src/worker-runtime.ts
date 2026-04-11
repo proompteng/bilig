@@ -33,27 +33,8 @@ import {
   formatCellDisplayValue,
 } from "@bilig/protocol";
 import type { ViewportPatch, ViewportPatchSubscription } from "@bilig/worker-transport";
-import {
-  isPendingWorkbookMutationInput,
-  type PendingWorkbookMutation,
-  type PendingWorkbookMutationInput,
-} from "./workbook-sync.js";
-import { clonePendingWorkbookMutation } from "./workbook-mutation-journal.js";
-import {
-  ackAbsorbedMutations,
-  ackMutationInJournal,
-  createRuntimePendingMutation,
-  failMutationInJournal,
-  markMutationSubmittedInJournal,
-  recordMutationAttemptInJournal,
-  retryMutationInJournal,
-} from "./worker-runtime-mutation-actions.js";
-import {
-  buildPendingMutationSummary,
-  markJournalMutationsRebased,
-  syncPendingMutationsFromJournal,
-} from "./worker-runtime-pending-mutations.js";
-import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
+import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from "./workbook-sync.js";
+import { WorkerRuntimeMutationJournal } from "./worker-runtime-mutation-journal.js";
 import {
   ensureAuthoritativeEngine,
   installAuthoritativeEngineState,
@@ -169,9 +150,6 @@ export class WorkbookWorkerRuntime {
   private engineSubscription: (() => void) | null = null;
   private externalSyncState: SyncState | null = null;
   private runtimeStateCache: WorkbookWorkerStateSnapshot | null = null;
-  private mutationJournalEntries: PendingWorkbookMutation[] = [];
-  private pendingMutations: PendingWorkbookMutation[] = [];
-  private nextPendingMutationSeq = 1;
   private authoritativeRevision = 0;
   private projectionMatchesLocalStore = false;
   private projectionOverlayScope: ProjectionOverlayScope | null = null;
@@ -196,7 +174,12 @@ export class WorkbookWorkerRuntime {
     },
     scheduleProjectionEngineMaterialization: () => this.scheduleProjectionEngineMaterialization(),
   });
-  private readonly persistCoordinator = new WorkerRuntimePersistCoordinator({
+  private readonly persistCoordinator: WorkerRuntimePersistCoordinator<
+    WorkbookLocalStore,
+    SpreadsheetEngine,
+    SpreadsheetEngine & WorkerEngine,
+    WorkbookStoredState
+  > = new WorkerRuntimePersistCoordinator({
     canPersistState: () => this.canPersistState(),
     getLocalStore: () => this.localStore,
     getAuthoritativeEngine: () => this.getAuthoritativeEngine(),
@@ -208,12 +191,12 @@ export class WorkbookWorkerRuntime {
         projectionEngine,
         hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
         authoritativeRevision: this.authoritativeRevision,
-        appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
+        appliedPendingLocalSeq: this.mutationJournal.getAppliedPendingLocalSeq(),
       }),
-    getProjectionOverlayScope: () =>
+    getProjectionOverlayScope: (): ProjectionOverlayScope | null =>
       resolveProjectionOverlayScopeForPersist({
         projectionOverlayScope: this.projectionOverlayScope,
-        pendingMutationCount: this.pendingMutations.length,
+        pendingMutationCount: this.mutationJournal.getPendingMutationCount(),
       }),
     saveState: (input) => persistProjectionStateToLocalStore(input),
     markProjectionMatchesLocalStore: () => {
@@ -230,6 +213,16 @@ export class WorkbookWorkerRuntime {
     autofitPadding: AUTOFIT_PADDING,
     formatCellDisplayValue,
   });
+  private readonly mutationJournal: WorkerRuntimeMutationJournal = new WorkerRuntimeMutationJournal(
+    {
+      getDocumentId: () => this.requireBootstrapOptions().documentId,
+      getAuthoritativeRevision: () => this.authoritativeRevision,
+      getLocalStore: () => this.localStore,
+      getProjectionEngine: () => this.getProjectionEngine(),
+      markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
+      queuePersist: (): Promise<void> => this.persistCoordinator.queuePersist(),
+    },
+  );
 
   constructor(
     options: {
@@ -253,9 +246,7 @@ export class WorkbookWorkerRuntime {
     this.externalSyncState = null;
     this.runtimeStateCache = null;
     this.snapshotCaches.reset();
-    this.mutationJournalEntries = [];
-    this.pendingMutations = [];
-    this.nextPendingMutationSeq = 1;
+    this.mutationJournal.reset();
     this.projectionMatchesLocalStore = false;
     this.projectionOverlayScope = null;
     let requiresAuthoritativeHydrate = false;
@@ -266,15 +257,16 @@ export class WorkbookWorkerRuntime {
     });
     this.localStore = restoredPersistence.localStore;
     this.authoritativeRevision = restoredPersistence.authoritativeRevision;
-    this.mutationJournalEntries = restoredPersistence.mutationJournalEntries;
-    this.pendingMutations = restoredPersistence.pendingMutations;
-    this.nextPendingMutationSeq = restoredPersistence.nextPendingMutationSeq;
+    this.mutationJournal.restoreFromBootstrap({
+      mutationJournalEntries: restoredPersistence.mutationJournalEntries,
+      nextPendingMutationSeq: restoredPersistence.nextPendingMutationSeq,
+    });
     const restoredFromPersistence = restoredPersistence.restoredFromPersistence;
     const restoredBootstrapState = restoredPersistence.restoredBootstrapState;
     let restoredState: WorkbookStoredState | null = null;
 
-    const highestPendingLocalSeq = this.pendingMutations.at(-1)?.localSeq ?? 0;
-    if (restoredBootstrapState === null && this.pendingMutations.length > 0) {
+    const highestPendingLocalSeq = this.mutationJournal.getAppliedPendingLocalSeq();
+    if (restoredBootstrapState === null && this.mutationJournal.getPendingMutationCount() > 0) {
       requiresAuthoritativeHydrate = true;
     }
 
@@ -308,7 +300,7 @@ export class WorkbookWorkerRuntime {
         replicaId: options.replicaId,
         snapshot: parsedRestoredSnapshot,
         replica: parsedRestoredReplica,
-        pendingMutations: this.pendingMutations,
+        pendingMutations: this.mutationJournal.listPendingMutations(),
       });
       this.projectionOverlayScope = overlayScope;
       this.installEngine(engine);
@@ -379,7 +371,7 @@ export class WorkbookWorkerRuntime {
         : authoritativeRevision;
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
     const { engine, overlayScope } = await this.rebuildProjectionEngine();
-    if (mode === "reconcile" && this.pendingMutations.length > 0) {
+    if (mode === "reconcile" && this.mutationJournal.getPendingMutationCount() > 0) {
       await this.markRemainingJournalMutationsRebased();
     }
     this.projectionOverlayScope = overlayScope;
@@ -422,19 +414,11 @@ export class WorkbookWorkerRuntime {
     } finally {
       unsubscribe();
     }
-    if (absorbedMutationIds.size > 0) {
-      const result = ackAbsorbedMutations({
-        mutationJournalEntries: this.mutationJournalEntries,
-        absorbedMutationIds,
-        ackedAtUnixMs: Date.now(),
-      });
-      this.mutationJournalEntries = result.mutationJournalEntries;
-      this.pendingMutations = result.pendingMutations;
-    }
+    this.mutationJournal.ackAbsorbedMutations(absorbedMutationIds);
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
     this.snapshotCaches.invalidateAuthoritativeState();
     const { engine, overlayScope } = await this.rebuildProjectionEngine();
-    if (events.length > 0 && this.pendingMutations.length > 0) {
+    if (events.length > 0 && this.mutationJournal.getPendingMutationCount() > 0) {
       await this.markRemainingJournalMutationsRebased();
     }
     this.projectionOverlayScope = overlayScope;
@@ -454,7 +438,7 @@ export class WorkbookWorkerRuntime {
         projectionEngine: engine,
         hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
         authoritativeRevision: this.authoritativeRevision,
-        appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
+        appliedPendingLocalSeq: this.mutationJournal.getAppliedPendingLocalSeq(),
       });
       await ingestAuthoritativeDeltaToLocalStore({
         localStore,
@@ -464,7 +448,7 @@ export class WorkbookWorkerRuntime {
         projectionEngine: engine,
         projectionOverlayScope: resolveProjectionOverlayScopeForPersist({
           projectionOverlayScope: this.projectionOverlayScope,
-          pendingMutationCount: this.pendingMutations.length,
+          pendingMutationCount: this.mutationJournal.getPendingMutationCount(),
         }),
         removePendingMutationIds: [...absorbedMutationIds],
       });
@@ -494,7 +478,7 @@ export class WorkbookWorkerRuntime {
       return this.snapshotCaches.getProjectionSnapshot(() => this.requireEngine().exportSnapshot());
     }
     const readyAuthoritativeSnapshot =
-      this.pendingMutations.length === 0
+      this.mutationJournal.getPendingMutationCount() === 0
         ? this.snapshotCaches.getReadyAuthoritativeSnapshot()
         : null;
     if (readyAuthoritativeSnapshot) {
@@ -519,129 +503,37 @@ export class WorkbookWorkerRuntime {
   }
 
   listPendingMutations(): PendingWorkbookMutation[] {
-    return this.pendingMutations.map(clonePendingWorkbookMutation);
+    return this.mutationJournal.listPendingMutations();
   }
 
   listMutationJournalEntries(): PendingWorkbookMutation[] {
-    return this.mutationJournalEntries.map(clonePendingWorkbookMutation);
+    return this.mutationJournal.listMutationJournalEntries();
   }
 
   async enqueuePendingMutation(
     input: PendingWorkbookMutationInput,
   ): Promise<PendingWorkbookMutation> {
-    if (!isPendingWorkbookMutationInput(input)) {
-      throw new Error("Invalid pending workbook mutation");
-    }
-    const documentId = this.requireBootstrapOptions().documentId;
-    const localSeq = this.nextPendingMutationSeq++;
-    const nextMutation = createRuntimePendingMutation({
-      documentId,
-      localSeq,
-      authoritativeRevision: this.authoritativeRevision,
-      input,
-      enqueuedAtUnixMs: Date.now(),
-    });
-    this.mutationJournalEntries.push(nextMutation);
-    this.syncPendingMutationsFromJournal();
-    this.projectionMatchesLocalStore = false;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.appendPendingMutation({
-        ...nextMutation,
-        args: [...nextMutation.args],
-      });
-    }
-    applyPendingWorkbookMutationToEngine(await this.getProjectionEngine(), nextMutation);
-    await this.persistCoordinator.queuePersist();
-    return {
-      ...nextMutation,
-      args: [...nextMutation.args],
-    };
+    return await this.mutationJournal.enqueuePendingMutation(input);
   }
 
   async markPendingMutationSubmitted(id: string): Promise<void> {
-    const result = markMutationSubmittedInJournal({
-      mutationJournalEntries: this.mutationJournalEntries,
-      id,
-      submittedAtUnixMs: Date.now(),
-    });
-    if (!result) {
-      return;
-    }
-    this.mutationJournalEntries = result.mutationJournalEntries;
-    this.pendingMutations = result.pendingMutations;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.updatePendingMutation(result.updatedMutation);
-    }
+    await this.mutationJournal.markPendingMutationSubmitted(id);
   }
 
   async ackPendingMutation(id: string): Promise<void> {
-    const result = ackMutationInJournal({
-      mutationJournalEntries: this.mutationJournalEntries,
-      id,
-      ackedAtUnixMs: Date.now(),
-    });
-    if (!result) {
-      return;
-    }
-    this.mutationJournalEntries = result.mutationJournalEntries;
-    this.pendingMutations = result.pendingMutations;
-    this.projectionMatchesLocalStore = false;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistCoordinator.queuePersist();
-    }
+    await this.mutationJournal.ackPendingMutation(id);
   }
 
   async recordPendingMutationAttempt(id: string): Promise<void> {
-    const result = recordMutationAttemptInJournal({
-      mutationJournalEntries: this.mutationJournalEntries,
-      id,
-      attemptedAtUnixMs: Date.now(),
-    });
-    if (!result) {
-      return;
-    }
-    this.mutationJournalEntries = result.mutationJournalEntries;
-    this.pendingMutations = result.pendingMutations;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.updatePendingMutation(result.updatedMutation);
-    }
+    await this.mutationJournal.recordPendingMutationAttempt(id);
   }
 
   async markPendingMutationFailed(id: string, failureMessage: string): Promise<void> {
-    const result = failMutationInJournal({
-      mutationJournalEntries: this.mutationJournalEntries,
-      id,
-      failureMessage,
-      failedAtUnixMs: Date.now(),
-    });
-    if (!result) {
-      return;
-    }
-    this.mutationJournalEntries = result.mutationJournalEntries;
-    this.pendingMutations = result.pendingMutations;
-    this.projectionMatchesLocalStore = false;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistCoordinator.queuePersist();
-    }
+    await this.mutationJournal.markPendingMutationFailed(id, failureMessage);
   }
 
   async retryPendingMutation(id: string): Promise<void> {
-    const result = retryMutationInJournal({
-      mutationJournalEntries: this.mutationJournalEntries,
-      id,
-    });
-    if (!result) {
-      return;
-    }
-    this.mutationJournalEntries = result.mutationJournalEntries;
-    this.pendingMutations = result.pendingMutations;
-    this.projectionMatchesLocalStore = false;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistCoordinator.queuePersist();
-    }
+    await this.mutationJournal.retryPendingMutation(id);
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -771,13 +663,11 @@ export class WorkbookWorkerRuntime {
     this.engineSubscription = null;
     this.projectionEnginePromise = null;
     this.persistCoordinator.reset();
+    this.mutationJournal.reset();
     this.viewportPatchPublisher.reset();
     this.runtimeStateCache = null;
     this.snapshotCaches.reset();
     this.authoritativeStateSource = "none";
-    this.mutationJournalEntries = [];
-    this.pendingMutations = [];
-    this.nextPendingMutationSeq = 1;
     this.authoritativeRevision = 0;
     this.projectionMatchesLocalStore = false;
     this.projectionOverlayScope = null;
@@ -817,21 +707,8 @@ export class WorkbookWorkerRuntime {
     this.viewportTileStore.reset();
   }
 
-  private syncPendingMutationsFromJournal(): void {
-    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries);
-  }
-
   private async markRemainingJournalMutationsRebased(rebasedAtUnixMs = Date.now()): Promise<void> {
-    const nextState = markJournalMutationsRebased(this.mutationJournalEntries, rebasedAtUnixMs);
-    this.mutationJournalEntries = nextState.mutationJournalEntries;
-    this.pendingMutations = nextState.pendingMutations;
-    if (this.bootstrapOptions?.persistState && this.localStore) {
-      await Promise.all(
-        nextState.updatedMutations.map((mutation) =>
-          this.localStore!.updatePendingMutation(mutation),
-        ),
-      );
-    }
+    await this.mutationJournal.markRemainingJournalMutationsRebased(rebasedAtUnixMs);
   }
 
   private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
@@ -857,7 +734,7 @@ export class WorkbookWorkerRuntime {
   }
 
   private buildPendingMutationSummary(): WorkbookPendingMutationSummarySnapshot {
-    return buildPendingMutationSummary(this.mutationJournalEntries, this.pendingMutations);
+    return this.mutationJournal.buildPendingMutationSummary();
   }
 
   private async getAuthoritativeStateInput(): Promise<{
@@ -925,7 +802,7 @@ export class WorkbookWorkerRuntime {
     return await rebuildProjectionEngine({
       documentId: options.documentId,
       replicaId: options.replicaId,
-      pendingMutations: this.pendingMutations,
+      pendingMutations: this.mutationJournal.listPendingMutations(),
       resolveAuthoritativeStateInput: () => this.getAuthoritativeStateInput(),
     });
   }
@@ -970,7 +847,7 @@ export class WorkbookWorkerRuntime {
     this.updateRuntimeStateFromEngine(engine);
     this.engineSubscription = engine.subscribe((event) => {
       this.snapshotCaches.invalidateProjectionSnapshot();
-      if (this.pendingMutations.length > 0) {
+      if (this.mutationJournal.getPendingMutationCount() > 0) {
         this.projectionOverlayScope = mergeProjectionOverlayScopes(
           this.projectionOverlayScope,
           collectProjectionOverlayScopeFromEngineEvents(engine, [event]),
