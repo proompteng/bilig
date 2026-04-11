@@ -7,6 +7,12 @@ import {
   resolveFormulaAssistState,
   type FormulaSuggestion,
 } from "./formulaAssist.js";
+import {
+  formulaBarRootClass,
+  formulaFieldAddonClass,
+  formulaFieldShellClass,
+  formulaInputClass,
+} from "./formula-bar-theme.js";
 import { NameBox } from "./NameBox.js";
 
 interface FormulaBarProps {
@@ -37,6 +43,7 @@ export function FormulaBar({
   onCancel,
 }: FormulaBarProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isFormulaFocused, setIsFormulaFocused] = useState(false);
   const [formulaCaret, setFormulaCaret] = useState(value.length);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
   const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null);
@@ -105,10 +112,7 @@ export function FormulaBar({
   };
 
   return (
-    <div
-      className="formula-bar flex items-start gap-2 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 font-sans"
-      data-testid="formula-bar"
-    >
+    <div className={formulaBarRootClass()} data-testid="formula-bar">
       <NameBox
         address={address}
         onCommit={onAddressCommit}
@@ -121,13 +125,10 @@ export function FormulaBar({
         </label>
         <div className="relative">
           <div
-            className="box-border flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]"
+            className={formulaFieldShellClass({ focused: isFormulaFocused })}
             data-testid="formula-input-frame"
           >
-            <span
-              aria-hidden="true"
-              className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.1em] leading-none text-[var(--wb-text-subtle)]"
-            >
+            <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-10`}>
               fx
             </span>
             <input
@@ -139,7 +140,7 @@ export function FormulaBar({
               aria-controls={showAutocomplete ? "formula-autocomplete" : undefined}
               aria-expanded={showAutocomplete ? "true" : "false"}
               aria-label="Formula"
-              className="h-full min-w-0 flex-1 border-0 bg-[var(--wb-surface)] px-3 text-[12px] leading-none text-[var(--wb-text)] outline-none"
+              className={formulaInputClass()}
               data-testid="formula-input"
               id="formula-input"
               placeholder="Type a literal or =formula"
@@ -147,6 +148,7 @@ export function FormulaBar({
               role="combobox"
               value={value}
               onBlur={(event) => {
+                setIsFormulaFocused(false);
                 const nextTarget = event.relatedTarget;
                 if (
                   nextTarget instanceof Node &&
@@ -172,6 +174,7 @@ export function FormulaBar({
                 );
               }}
               onFocus={(event) => {
+                setIsFormulaFocused(true);
                 setFormulaCaret(
                   event.currentTarget.selectionStart ?? event.currentTarget.value.length,
                 );

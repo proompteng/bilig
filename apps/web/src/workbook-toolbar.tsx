@@ -27,12 +27,12 @@ import {
 import {
   FONT_SIZE_OPTIONS,
   NUMBER_FORMAT_OPTIONS,
-  TOOLBAR_GROUP_CLASS,
-  TOOLBAR_ICON_CLASS,
-  TOOLBAR_ROOT_CLASS,
-  TOOLBAR_ROW_CLASS,
-  TOOLBAR_SEGMENTED_CLASS,
-  TOOLBAR_SEPARATOR_CLASS,
+  toolbarGroupClass,
+  toolbarIconClass,
+  toolbarRootClass,
+  toolbarRowClass,
+  toolbarSegmentedClass,
+  toolbarSeparatorClass,
 } from "./workbook-toolbar-theme.js";
 import { getWorkbookShortcutLabel } from "./shortcut-registry.js";
 
@@ -118,17 +118,17 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onRedo,
 }: WorkbookToolbarProps) {
   return (
-    <div className={TOOLBAR_ROOT_CLASS}>
-      <Toolbar.Root aria-label="Formatting toolbar" className={TOOLBAR_ROW_CLASS}>
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-          <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="History">
+    <div className={toolbarRootClass()}>
+      <Toolbar.Root aria-label="Formatting toolbar" className={toolbarRowClass()}>
+        <Toolbar.Group className={toolbarGroupClass()}>
+          <div className={toolbarSegmentedClass()} role="group" aria-label="History">
             <RibbonIconButton
               ariaLabel="Undo"
               disabled={!writesAllowed || !canUndo}
               shortcut={getWorkbookShortcutLabel("undo")}
               onClick={onUndo}
             >
-              <Undo2 className={TOOLBAR_ICON_CLASS} />
+              <Undo2 className={toolbarIconClass()} />
             </RibbonIconButton>
             <RibbonIconButton
               ariaLabel="Redo"
@@ -136,14 +136,14 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("redo")}
               onClick={onRedo}
             >
-              <Redo2 className={TOOLBAR_ICON_CLASS} />
+              <Redo2 className={toolbarIconClass()} />
             </RibbonIconButton>
           </div>
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <Toolbar.Group className={toolbarGroupClass()}>
           <ToolbarSelect
             ariaLabel="Number format"
             options={NUMBER_FORMAT_OPTIONS}
@@ -153,9 +153,9 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
           />
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <Toolbar.Group className={toolbarGroupClass()}>
           <ToolbarSelect
             ariaLabel="Font size"
             options={FONT_SIZE_OPTIONS}
@@ -164,7 +164,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             widthClass="w-[5rem]"
             onChange={onFontSizeChange}
           />
-          <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Font emphasis">
+          <div className={toolbarSegmentedClass()} role="group" aria-label="Font emphasis">
             <RibbonIconButton
               active={isBoldActive}
               ariaLabel="Bold"
@@ -172,7 +172,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("bold")}
               onClick={onToggleBold}
             >
-              <Bold className={TOOLBAR_ICON_CLASS} />
+              <Bold className={toolbarIconClass()} />
             </RibbonIconButton>
             <RibbonIconButton
               active={isItalicActive}
@@ -181,7 +181,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("italic")}
               onClick={onToggleItalic}
             >
-              <Italic className={TOOLBAR_ICON_CLASS} />
+              <Italic className={toolbarIconClass()} />
             </RibbonIconButton>
             <RibbonIconButton
               active={isUnderlineActive}
@@ -190,14 +190,14 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("underline")}
               onClick={onToggleUnderline}
             >
-              <Underline className={TOOLBAR_ICON_CLASS} />
+              <Underline className={toolbarIconClass()} />
             </RibbonIconButton>
           </div>
           <ColorPaletteButton
             ariaLabel="Fill color"
             currentColor={currentFillColor}
             customInputLabel="Custom fill color"
-            icon={<PaintBucket className={TOOLBAR_ICON_CLASS} />}
+            icon={<PaintBucket className={toolbarIconClass()} />}
             onReset={onFillColorReset}
             onSelectColor={onFillColorSelect}
             recentColors={recentFillColors}
@@ -207,7 +207,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             ariaLabel="Text color"
             currentColor={currentTextColor}
             customInputLabel="Custom text color"
-            icon={<Baseline className={TOOLBAR_ICON_CLASS} />}
+            icon={<Baseline className={toolbarIconClass()} />}
             onReset={onTextColorReset}
             onSelectColor={onTextColorSelect}
             recentColors={recentTextColors}
@@ -215,10 +215,10 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
           />
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-          <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Horizontal alignment">
+        <Toolbar.Group className={toolbarGroupClass()}>
+          <div className={toolbarSegmentedClass()} role="group" aria-label="Horizontal alignment">
             <RibbonIconButton
               active={horizontalAlignment === "left"}
               ariaLabel="Align left"
@@ -226,7 +226,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("align-left")}
               onClick={() => onHorizontalAlignmentChange("left")}
             >
-              <AlignLeft className={TOOLBAR_ICON_CLASS} />
+              <AlignLeft className={toolbarIconClass()} />
             </RibbonIconButton>
             <RibbonIconButton
               active={horizontalAlignment === "center"}
@@ -235,7 +235,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("align-center")}
               onClick={() => onHorizontalAlignmentChange("center")}
             >
-              <AlignCenter className={TOOLBAR_ICON_CLASS} />
+              <AlignCenter className={toolbarIconClass()} />
             </RibbonIconButton>
             <RibbonIconButton
               active={horizontalAlignment === "right"}
@@ -244,20 +244,20 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               shortcut={getWorkbookShortcutLabel("align-right")}
               onClick={() => onHorizontalAlignmentChange("right")}
             >
-              <AlignRight className={TOOLBAR_ICON_CLASS} />
+              <AlignRight className={toolbarIconClass()} />
             </RibbonIconButton>
           </div>
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <Toolbar.Group className={toolbarGroupClass()}>
           <BorderPresetMenu disabled={!writesAllowed} onApplyPreset={onApplyBorderPreset} />
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <Toolbar.Group className={toolbarGroupClass()}>
           <StructureActionsMenu
             canHideCurrentColumn={canHideCurrentColumn}
             canHideCurrentRow={canHideCurrentRow}
@@ -271,20 +271,20 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
           />
         </Toolbar.Group>
 
-        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+        <Toolbar.Separator className={toolbarSeparatorClass()} />
 
-        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <Toolbar.Group className={toolbarGroupClass()}>
           <RibbonIconButton
             active={isWrapActive}
             ariaLabel="Wrap"
             pressed={isWrapActive}
             onClick={onToggleWrap}
           >
-            <WrapText className={TOOLBAR_ICON_CLASS} />
+            <WrapText className={toolbarIconClass()} />
             <span className="sr-only">Wrap</span>
           </RibbonIconButton>
           <RibbonIconButton ariaLabel="Clear style" onClick={onClearStyle}>
-            <RemoveFormatting className={TOOLBAR_ICON_CLASS} />
+            <RemoveFormatting className={toolbarIconClass()} />
             <span className="sr-only">Clear style</span>
           </RibbonIconButton>
         </Toolbar.Group>

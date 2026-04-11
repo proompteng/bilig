@@ -15,12 +15,11 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
   classNames,
-  TOOLBAR_BORDER_ICON_CLASS,
-  TOOLBAR_BORDER_POPUP_CLASS,
-  TOOLBAR_BUTTON_ACTIVE_CLASS,
-  TOOLBAR_BUTTON_CLASS,
-  TOOLBAR_POPUP_CLASS,
-  TOOLBAR_SELECT_TRIGGER_CLASS,
+  toolbarBorderIconClass,
+  toolbarBorderPopupClass,
+  toolbarButtonClass,
+  toolbarPopupClass,
+  toolbarSelectTriggerClass,
   type ToolbarSelectOption,
 } from "./workbook-toolbar-theme.js";
 
@@ -76,13 +75,13 @@ export const BorderPresetMenu = memo(function BorderPresetMenu({
         aria-label="Borders"
         aria-expanded={open}
         aria-haspopup="menu"
-        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-1.5")}
+        className={classNames(toolbarButtonClass(), "gap-1 px-1.5")}
         disabled={disabled}
         title="Borders"
         type="button"
       >
         <HugeiconsIcon
-          className={TOOLBAR_BORDER_ICON_CLASS}
+          className={toolbarBorderIconClass()}
           color="currentColor"
           icon={BorderAllIcon}
           size={20}
@@ -94,20 +93,20 @@ export const BorderPresetMenu = memo(function BorderPresetMenu({
         <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
           <Popover.Popup
             aria-label="Border presets"
-            className={classNames(TOOLBAR_BORDER_POPUP_CLASS, "w-[188px]")}
+            className={classNames(toolbarBorderPopupClass(), "w-[188px]")}
           >
             <div className="grid grid-cols-2 gap-1">
               {BORDER_PRESET_OPTIONS.map(({ key, label, shortLabel, icon }) => (
                 <button
                   key={key}
                   aria-label={label}
-                  className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-transparent px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:border-[var(--wb-accent)] focus-visible:bg-[var(--wb-hover)]"
+                  className="inline-flex h-8 items-center gap-2 rounded-md border border-transparent px-2 text-left text-[11px] font-medium text-[var(--color-mauve-900)] outline-none transition-colors hover:bg-[var(--color-mauve-100)] focus-visible:border-[var(--color-mauve-400)] focus-visible:bg-[var(--color-mauve-100)]"
                   onClick={() => applyPreset(key)}
                   title={label}
                   type="button"
                 >
                   <HugeiconsIcon
-                    className="shrink-0 text-[var(--wb-text-muted)]"
+                    className="shrink-0 text-[var(--color-mauve-700)]"
                     color="currentColor"
                     icon={icon}
                     size={18}
@@ -185,7 +184,7 @@ export const StructureActionsMenu = memo(function StructureActionsMenu({
         aria-label="Structure"
         aria-expanded={open}
         aria-haspopup="menu"
-        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
+        className={classNames(toolbarButtonClass(), "gap-1 px-2")}
         disabled={triggerDisabled}
         title="Structure"
         type="button"
@@ -197,13 +196,13 @@ export const StructureActionsMenu = memo(function StructureActionsMenu({
         <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
           <Popover.Popup
             aria-label="Structure actions"
-            className={classNames(TOOLBAR_POPUP_CLASS, "w-[176px] p-1")}
+            className={classNames(toolbarPopupClass(), "w-[176px] p-1")}
           >
             <div className="grid gap-1">
               {actions.map((action) => (
                 <button
                   aria-label={action.label}
-                  className="inline-flex h-8 items-center rounded-[4px] border border-transparent px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:border-[var(--wb-accent)] focus-visible:bg-[var(--wb-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex h-8 items-center rounded-md border border-transparent px-2 text-left text-[11px] font-medium text-[var(--color-mauve-900)] outline-none transition-colors hover:bg-[var(--color-mauve-100)] focus-visible:border-[var(--color-mauve-400)] focus-visible:bg-[var(--color-mauve-100)] disabled:cursor-not-allowed disabled:opacity-45"
                   disabled={action.disabled}
                   key={action.key}
                   onClick={() => runAction(action.onSelect)}
@@ -252,7 +251,7 @@ export const ToolbarSelect = memo(function ToolbarSelect({
     >
       <Select.Trigger
         aria-label={ariaLabel}
-        className={classNames(TOOLBAR_SELECT_TRIGGER_CLASS, widthClass)}
+        className={classNames(toolbarSelectTriggerClass(), widthClass)}
         data-current-label={selectedOption?.label ?? ""}
         data-current-value={value}
       >
@@ -264,23 +263,23 @@ export const ToolbarSelect = memo(function ToolbarSelect({
         >
           {selectedOption?.label ?? ""}
         </span>
-        <Select.Icon className="ml-2 text-[var(--wb-text-muted)]">
+        <Select.Icon className="ml-2 text-[var(--color-mauve-700)]">
           <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={6}>
-          <Select.Popup className={TOOLBAR_POPUP_CLASS}>
+          <Select.Popup className={toolbarPopupClass()}>
             <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
               {options.map((option) => (
                 <Select.Item
-                  className="flex cursor-default items-center justify-between gap-3 rounded-[4px] px-2 py-1.5 text-[12px] text-[var(--wb-text)] outline-none data-[highlighted]:bg-[var(--wb-hover)] data-[selected]:font-semibold"
+                  className="flex cursor-default items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[12px] text-[var(--color-mauve-900)] outline-none data-[highlighted]:bg-[var(--color-mauve-100)] data-[selected]:font-semibold"
                   key={`${ariaLabel}-${option.value || "default"}`}
                   label={option.label}
                   value={option.value}
                 >
                   <Select.ItemText>{option.label}</Select.ItemText>
-                  <Select.ItemIndicator className="text-[var(--wb-accent)]">
+                  <Select.ItemIndicator className="text-[var(--color-mauve-700)]">
                     <Check className="h-3.5 w-3.5 stroke-[2]" />
                   </Select.ItemIndicator>
                 </Select.Item>
@@ -306,7 +305,7 @@ export const RibbonIconButton = memo(function RibbonIconButton({
     <Toolbar.Button
       aria-label={ariaLabel}
       aria-pressed={pressed}
-      className={classNames(TOOLBAR_BUTTON_CLASS, active && TOOLBAR_BUTTON_ACTIVE_CLASS)}
+      className={toolbarButtonClass({ active })}
       disabled={disabled}
       onClick={onClick}
       title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}

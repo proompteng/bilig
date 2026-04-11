@@ -1,5 +1,6 @@
 import { cn } from "./cn.js";
 import type { FormulaHelpEntry } from "./formulaAssist.js";
+import { formulaHintClass } from "./formula-bar-theme.js";
 
 interface FormulaArgumentHintProps {
   readonly entry: FormulaHelpEntry;
@@ -8,22 +9,20 @@ interface FormulaArgumentHintProps {
 
 export function FormulaArgumentHint({ entry, activeArgumentIndex }: FormulaArgumentHintProps) {
   return (
-    <div
-      aria-live="polite"
-      className="flex min-h-7 items-center gap-2 overflow-x-auto rounded-[var(--wb-radius-control)] border border-[var(--wb-border-subtle)] bg-[var(--wb-surface-muted)] px-2.5 text-[11px] text-[var(--wb-text-subtle)]"
-      data-testid="formula-arg-hint"
-    >
-      <span className="shrink-0 font-semibold text-[var(--wb-text)]">{entry.name}</span>
+    <div aria-live="polite" className={formulaHintClass()} data-testid="formula-arg-hint">
+      <span className="shrink-0 font-semibold text-[var(--color-mauve-950)]">{entry.name}</span>
       <span className="shrink-0">(</span>
       <span className="flex min-w-0 items-center gap-1.5">
         {entry.args.length === 0 ? (
-          <span className="text-[var(--wb-text-muted)]">no arguments</span>
+          <span className="text-[var(--color-mauve-600)]">no arguments</span>
         ) : (
           entry.args.map((arg, index) => (
             <span
               className={cn(
                 "shrink-0",
-                index === activeArgumentIndex ? "font-semibold text-[var(--wb-text)]" : undefined,
+                index === activeArgumentIndex
+                  ? "font-semibold text-[var(--color-mauve-950)]"
+                  : undefined,
               )}
               key={`${entry.name}:${arg.label}`}
             >
@@ -32,7 +31,9 @@ export function FormulaArgumentHint({ entry, activeArgumentIndex }: FormulaArgum
             </span>
           ))
         )}
-        {entry.variadic ? <span className="shrink-0 text-[var(--wb-text-muted)]">, …</span> : null}
+        {entry.variadic ? (
+          <span className="shrink-0 text-[var(--color-mauve-600)]">, …</span>
+        ) : null}
       </span>
       <span className="shrink-0">)</span>
     </div>
