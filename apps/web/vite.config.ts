@@ -101,6 +101,10 @@ export default defineConfig({
     exclude: ["@sqlite.org/sqlite-wasm"],
   },
   build: {
+    // Keep the startup shell bounded to the entry module and shell CSS. The
+    // heavy workbook and sync chunks still load through the module graph, but
+    // they should not all count as eager shell bytes in the release contract.
+    modulePreload: false,
     rolldownOptions: {
       output: {
         codeSplitting: {
