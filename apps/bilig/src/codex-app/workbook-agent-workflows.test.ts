@@ -459,6 +459,76 @@ describe("workbook agent workflows", () => {
     ]);
   });
 
+  it("executes formula fill-down workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Imports");
+          engine.setCellValue("Imports", "A1", "Revenue");
+          engine.setCellValue("Imports", "B1", "Tax");
+          engine.setCellValue("Imports", "A2", 100);
+          engine.setCellValue("Imports", "A3", 120);
+          engine.setCellValue("Imports", "A4", 140);
+          engine.setCellFormula("Imports", "B2", "A2*0.1");
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "fillCurrentSheetFormulasDown",
+      context: {
+        selection: {
+          sheetName: "Imports",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Imports",
+      },
+    });
+
+    expect(result.title).toBe("Fill Current Sheet Formulas Down");
+    expect(result.summary).toContain("Staged formula fill-down");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "fillRange",
+        source: {
+          sheetName: "Imports",
+          startAddress: "B2",
+          endAddress: "B2",
+        },
+        target: {
+          sheetName: "Imports",
+          startAddress: "B3",
+          endAddress: "B4",
+        },
+      }),
+    ]);
+  });
+
   it("executes current-sheet outlier-highlighting workflows through the durable inspection path", async () => {
     const result = await executeWorkbookAgentWorkflow({
       documentId: "doc-1",

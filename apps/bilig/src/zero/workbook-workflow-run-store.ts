@@ -74,6 +74,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "normalizeCurrentSheetHeaders" ||
     value === "normalizeCurrentSheetNumberFormats" ||
     value === "normalizeCurrentSheetWhitespace" ||
+    value === "fillCurrentSheetFormulasDown" ||
     value === "traceSelectionDependencies" ||
     value === "explainSelectionCell" ||
     value === "searchWorkbookQuery" ||

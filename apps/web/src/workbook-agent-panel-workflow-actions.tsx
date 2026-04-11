@@ -16,6 +16,7 @@ type WorkflowActionTemplate =
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "normalizeCurrentSheetWhitespace"
+  | "fillCurrentSheetFormulasDown"
   | "traceSelectionDependencies"
   | "explainSelectionCell"
   | "createCurrentSheetRollup";
@@ -75,6 +76,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Normalize whitespace",
     summary:
       "Stage a preview bundle that trims and collapses repeated whitespace across text cells on the active sheet.",
+  },
+  {
+    template: "fillCurrentSheetFormulasDown",
+    label: "Fill formulas down",
+    summary:
+      "Stage a preview bundle that fills active-sheet formulas down contiguous blank rows below each source formula.",
   },
   {
     template: "createCurrentSheetRollup",

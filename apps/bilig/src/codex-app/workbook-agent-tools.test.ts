@@ -1541,6 +1541,75 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts formula fill-down workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-fill-formulas-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "fillCurrentSheetFormulasDown" as const,
+      title: "Fill Current Sheet Formulas Down",
+      summary: "Staged formula fill-down for 1 column on Imports.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-formula-columns",
+          label: "Inspect formula columns",
+          status: "completed" as const,
+          summary: "Loaded formula cells and blank fill gaps from Imports.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Formula Fill-Down Preview",
+        text: "## Formula Fill-Down Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-fill-formulas-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "fillCurrentSheetFormulasDown",
+          sheetName: "Imports",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "fillCurrentSheetFormulasDown",
+      sheetName: "Imports",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "fillCurrentSheetFormulasDown"',
+    );
+  });
+
   it("starts current-sheet rollup workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

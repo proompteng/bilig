@@ -79,7 +79,8 @@ type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers";
 type ImportWorkflowTemplate =
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
-  | "normalizeCurrentSheetWhitespace";
+  | "normalizeCurrentSheetWhitespace"
+  | "fillCurrentSheetFormulasDown";
 type RollupWorkflowTemplate = "createCurrentSheetRollup";
 
 function isFormulaWorkflowTemplate(
@@ -100,7 +101,8 @@ function isImportWorkflowTemplate(
   return (
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
     workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
-    workflowTemplate === "normalizeCurrentSheetWhitespace"
+    workflowTemplate === "normalizeCurrentSheetWhitespace" ||
+    workflowTemplate === "fillCurrentSheetFormulasDown"
   );
 }
 

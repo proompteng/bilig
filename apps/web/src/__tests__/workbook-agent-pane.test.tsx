@@ -1158,6 +1158,122 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts formula fill-down workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2")) {
+        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-fill-formulas-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "fillCurrentSheetFormulasDown",
+                  title: "Fill Current Sheet Formulas Down",
+                  summary: "Staged formula fill-down for 1 column on Sheet1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-formula-columns",
+                      label: "Inspect formula columns",
+                      status: "completed",
+                      summary: "Loaded formula cells and blank fill gaps from Sheet1.",
+                      updatedAtUnixMs: 1,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Formula Fill-Down Preview",
+                    text: "## Formula Fill-Down Preview",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-fillCurrentSheetFormulasDown']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Formula fill-down workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
+    );
+    expectWorkflowStartBody(workflowCall?.[1], {
+      workflowTemplate: "fillCurrentSheetFormulasDown",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Fill Current Sheet Formulas Down");
+    expect(host.textContent).toContain("Formula Fill-Down Preview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("starts current-sheet rollup workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

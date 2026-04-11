@@ -17,7 +17,8 @@ import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 type ImportWorkflowTemplate =
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
-  | "normalizeCurrentSheetWhitespace";
+  | "normalizeCurrentSheetWhitespace"
+  | "fillCurrentSheetFormulasDown";
 type SnapshotSheet = WorkbookSnapshot["sheets"][number];
 type SnapshotCell = SnapshotSheet["cells"][number];
 
@@ -70,6 +71,14 @@ interface NumberFormatRecommendation {
   readonly endAddress: string;
   readonly preset: CellNumberFormatPreset;
   readonly numericCount: number;
+}
+
+interface FormulaFillRecommendation {
+  readonly columnLabel: string;
+  readonly sourceAddress: string;
+  readonly targetStartAddress: string;
+  readonly targetEndAddress: string;
+  readonly filledRowCount: number;
 }
 
 function resolveWorkflowSheetName(input: {
@@ -363,6 +372,47 @@ function summarizeWhitespaceNormalizationMarkdown(input: {
   return lines.join("\n");
 }
 
+function isBlankTextCandidate(cell: SnapshotCell | undefined): boolean {
+  if (!cell) {
+    return true;
+  }
+  if (cell.formula) {
+    return false;
+  }
+  if (cell.value === null || cell.value === undefined) {
+    return true;
+  }
+  return typeof cell.value === "string" && cell.value.trim().length === 0;
+}
+
+function summarizeFormulaFillMarkdown(input: {
+  readonly sheetName: string;
+  readonly recommendations: readonly FormulaFillRecommendation[];
+}): string {
+  const lines = [
+    "## Formula Fill-Down Preview",
+    "",
+    `Sheet: ${input.sheetName}`,
+    `Formula regions staged: ${String(input.recommendations.length)}`,
+    "",
+  ];
+  if (input.recommendations.length === 0) {
+    lines.push("No fill-down changes were needed on the current sheet.");
+    return lines.join("\n");
+  }
+  lines.push("### Filled ranges");
+  for (const recommendation of input.recommendations) {
+    lines.push(
+      `- ${recommendation.columnLabel}: fill ${recommendation.sourceAddress} down through ${recommendation.targetStartAddress}:${recommendation.targetEndAddress} (${String(recommendation.filledRowCount)} row${recommendation.filledRowCount === 1 ? "" : "s"})`,
+    );
+  }
+  lines.push(
+    "",
+    "The staged preview bundle applies semantic fill commands through the normal workbook mutation path.",
+  );
+  return lines.join("\n");
+}
+
 export function getImportWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate | ImportWorkflowTemplate,
   workflowInput?: ImportWorkflowExecutionInput | null,
@@ -453,6 +503,32 @@ export function getImportWorkflowTemplateMetadata(
           },
         ],
       };
+    case "fillCurrentSheetFormulasDown":
+      return {
+        title: "Fill Current Sheet Formulas Down",
+        runningSummary: `Running formula fill-down workflow for ${scopeLabel}.`,
+        stepPlans: [
+          {
+            stepId: "inspect-formula-columns",
+            label: "Inspect formula columns",
+            runningSummary: `Inspecting formula cells and blank gaps on ${scopeLabel}.`,
+            pendingSummary: `Waiting to inspect formula cells and blank gaps on ${scopeLabel}.`,
+          },
+          {
+            stepId: "stage-formula-fill",
+            label: "Stage formula fill-down",
+            runningSummary: "Staging semantic fill-down previews for the detected formula gaps.",
+            pendingSummary:
+              "Waiting to stage semantic fill-down previews for the detected formula gaps.",
+          },
+          {
+            stepId: "draft-formula-fill-report",
+            label: "Draft formula fill-down report",
+            runningSummary: "Drafting the durable formula fill-down report.",
+            pendingSummary: "Waiting to assemble the durable formula fill-down report.",
+          },
+        ],
+      };
     default:
       return null;
   }
@@ -469,7 +545,8 @@ export async function executeImportWorkflow(input: {
   if (
     input.workflowTemplate !== "normalizeCurrentSheetHeaders" &&
     input.workflowTemplate !== "normalizeCurrentSheetNumberFormats" &&
-    input.workflowTemplate !== "normalizeCurrentSheetWhitespace"
+    input.workflowTemplate !== "normalizeCurrentSheetWhitespace" &&
+    input.workflowTemplate !== "fillCurrentSheetFormulasDown"
   ) {
     return null;
   }
@@ -556,6 +633,41 @@ export async function executeImportWorkflow(input: {
               stepId: "draft-whitespace-report",
               label: "Draft whitespace report",
               summary: "Prepared the durable empty-sheet whitespace report for the thread.",
+            },
+          ],
+        } satisfies ImportWorkflowExecutionResult;
+      }
+      if (input.workflowTemplate === "fillCurrentSheetFormulasDown") {
+        return {
+          title: "Fill Current Sheet Formulas Down",
+          summary: `${sheetName} is empty, so there were no formula gaps to fill.`,
+          artifact: {
+            kind: "markdown",
+            title: "Formula Fill-Down Preview",
+            text: [
+              "## Formula Fill-Down Preview",
+              "",
+              `Sheet: ${sheetName}`,
+              "",
+              "No fill-down changes were needed because the sheet is empty.",
+            ].join("\n"),
+          },
+          citations: [],
+          steps: [
+            {
+              stepId: "inspect-formula-columns",
+              label: "Inspect formula columns",
+              summary: `Loaded ${sheetName} and found no populated cells.`,
+            },
+            {
+              stepId: "stage-formula-fill",
+              label: "Stage formula fill-down",
+              summary: "No formula fill-down preview was staged because the sheet is empty.",
+            },
+            {
+              stepId: "draft-formula-fill-report",
+              label: "Draft formula fill-down report",
+              summary: "Prepared the durable empty-sheet formula fill-down report for the thread.",
             },
           ],
         } satisfies ImportWorkflowExecutionResult;
@@ -801,6 +913,109 @@ export async function executeImportWorkflow(input: {
                 },
               ],
               goalText: `Normalize whitespace on ${sheetName}`,
+            }
+          : {}),
+      } satisfies ImportWorkflowExecutionResult;
+    }
+
+    if (input.workflowTemplate === "fillCurrentSheetFormulasDown") {
+      const recommendations: FormulaFillRecommendation[] = [];
+      for (let col = minCol; col <= maxCol; col += 1) {
+        const headerCell = cellByAddress.get(formatAddress(headerRow, col));
+        const columnLabel =
+          headerCell && typeof headerCell.value === "string"
+            ? normalizeHeaderLabel(headerCell.value)
+            : formatAddress(0, col).replace(/\d+/gu, "");
+        let row = dataStartRow;
+        while (row <= maxRow) {
+          const sourceAddress = formatAddress(row, col);
+          const sourceCell = cellByAddress.get(sourceAddress);
+          if (!sourceCell?.formula) {
+            row += 1;
+            continue;
+          }
+          let fillEndRow = row;
+          for (let probe = row + 1; probe <= maxRow; probe += 1) {
+            const candidate = cellByAddress.get(formatAddress(probe, col));
+            if (!isBlankTextCandidate(candidate)) {
+              break;
+            }
+            fillEndRow = probe;
+          }
+          if (fillEndRow > row) {
+            recommendations.push({
+              columnLabel: columnLabel || formatAddress(0, col).replace(/\d+/gu, ""),
+              sourceAddress,
+              targetStartAddress: formatAddress(row + 1, col),
+              targetEndAddress: formatAddress(fillEndRow, col),
+              filledRowCount: fillEndRow - row,
+            });
+          }
+          row = Math.max(row + 1, fillEndRow + 1);
+        }
+      }
+
+      return {
+        title: "Fill Current Sheet Formulas Down",
+        summary:
+          recommendations.length === 0
+            ? `Checked ${sheetName} formulas and found no blank ranges to fill down.`
+            : `Staged formula fill-down for ${String(recommendations.length)} column${recommendations.length === 1 ? "" : "s"} on ${sheetName}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Formula Fill-Down Preview",
+          text: summarizeFormulaFillMarkdown({
+            sheetName,
+            recommendations,
+          }),
+        },
+        citations: recommendations.map((recommendation) =>
+          createHeaderCitation(
+            sheetName,
+            recommendation.targetStartAddress,
+            recommendation.targetEndAddress,
+            "target",
+          ),
+        ),
+        steps: [
+          {
+            stepId: "inspect-formula-columns",
+            label: "Inspect formula columns",
+            summary: `Loaded formula cells and blank fill gaps from ${sheetName}.`,
+          },
+          {
+            stepId: "stage-formula-fill",
+            label: "Stage formula fill-down",
+            summary:
+              recommendations.length === 0
+                ? "No formula fill-down preview was staged because the sheet already has no blank gaps below formula cells."
+                : `Prepared semantic fill-down previews for ${String(recommendations.length)} formula region${recommendations.length === 1 ? "" : "s"}.`,
+          },
+          {
+            stepId: "draft-formula-fill-report",
+            label: "Draft formula fill-down report",
+            summary: "Prepared the durable formula fill-down report for the thread.",
+          },
+        ],
+        ...(recommendations.length > 0
+          ? {
+              commands: recommendations.map(
+                (recommendation) =>
+                  ({
+                    kind: "fillRange" as const,
+                    source: {
+                      sheetName,
+                      startAddress: recommendation.sourceAddress,
+                      endAddress: recommendation.sourceAddress,
+                    },
+                    target: {
+                      sheetName,
+                      startAddress: recommendation.targetStartAddress,
+                      endAddress: recommendation.targetEndAddress,
+                    },
+                  }) satisfies WorkbookAgentCommand,
+              ),
+              goalText: `Fill formulas down on ${sheetName}`,
             }
           : {}),
       } satisfies ImportWorkflowExecutionResult;

@@ -903,6 +903,7 @@ export function WorkbookAgentPanel(props: {
       | "normalizeCurrentSheetHeaders"
       | "normalizeCurrentSheetNumberFormats"
       | "normalizeCurrentSheetWhitespace"
+      | "fillCurrentSheetFormulasDown"
       | "traceSelectionDependencies"
       | "explainSelectionCell"
       | "createCurrentSheetRollup",

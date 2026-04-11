@@ -22,7 +22,7 @@ Already landed on `main`:
 - Zero-backed durable thread summaries and workflow-run projections in the browser shell, with SSE kept for live deltas
 - follower-tab degradation messaging when another tab owns the persistent local store
 - internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
-- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, outlier highlighting, header normalization, number-format normalization, whitespace normalization, current-sheet rollup, and a bounded set of structural previews
+- current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, header normalization, number-format normalization, whitespace normalization, formula fill-down cleanup, outlier highlighting, current-sheet rollup, and a bounded set of structural previews
 
 Still required before this document is honestly complete end to end:
 

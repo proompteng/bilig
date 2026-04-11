@@ -149,6 +149,7 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "normalizeCurrentSheetHeaders",
   "normalizeCurrentSheetNumberFormats",
   "normalizeCurrentSheetWhitespace",
+  "fillCurrentSheetFormulasDown",
   "traceSelectionDependencies",
   "explainSelectionCell",
   "searchWorkbookQuery",

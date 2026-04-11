@@ -52,6 +52,7 @@ type RailWorkflowTemplate =
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "normalizeCurrentSheetWhitespace"
+  | "fillCurrentSheetFormulasDown"
   | "traceSelectionDependencies"
   | "explainSelectionCell"
   | "searchWorkbookQuery"
@@ -73,6 +74,7 @@ type WorkbookAgentWorkflowStartRequest =
         | "normalizeCurrentSheetHeaders"
         | "normalizeCurrentSheetNumberFormats"
         | "normalizeCurrentSheetWhitespace"
+        | "fillCurrentSheetFormulasDown"
         | "searchWorkbookQuery"
         | "createCurrentSheetRollup"
         | "createSheet"
@@ -106,6 +108,10 @@ type WorkbookAgentWorkflowStartRequest =
     }
   | {
       readonly workflowTemplate: "normalizeCurrentSheetWhitespace";
+      readonly sheetName?: string;
+    }
+  | {
+      readonly workflowTemplate: "fillCurrentSheetFormulasDown";
       readonly sheetName?: string;
     }
   | {
@@ -1175,6 +1181,7 @@ export function useWorkbookAgentPane(input: {
               workflowTemplate === "normalizeCurrentSheetHeaders" ||
               workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
               workflowTemplate === "normalizeCurrentSheetWhitespace" ||
+              workflowTemplate === "fillCurrentSheetFormulasDown" ||
               workflowTemplate === "createCurrentSheetRollup") &&
             currentContext?.selection.sheetName
           ) {
