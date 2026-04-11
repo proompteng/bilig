@@ -20,6 +20,11 @@ interface CompilerState {
   strings: string[];
 }
 
+const SIMPLE_CELL_REF_RE = /^\$?[A-Z]+\$?[1-9][0-9]*$/;
+const SIMPLE_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const SIMPLE_BINARY_RE =
+  /^\s*(\$?[A-Z]+\$?[1-9][0-9]*|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([+*])\s*(\$?[A-Z]+\$?[1-9][0-9]*|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)\s*$/;
+
 const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND", "RANDBETWEEN", "RANDARRAY"]);
 
 interface VolatileMetadata {
@@ -473,6 +478,7 @@ export interface CompiledFormula extends FormulaRecord {
   ast: FormulaNode;
   optimizedAst: FormulaNode;
   deps: string[];
+  parsedDeps?: Array<{ address: string; kind: "cell"; sheetName?: string }>;
   symbolicNames: string[];
   symbolicTables: string[];
   symbolicSpills: string[];
@@ -483,6 +489,7 @@ export interface CompiledFormula extends FormulaRecord {
   program: Uint32Array;
   constants: Float64Array;
   symbolicRefs: string[];
+  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string }>;
   symbolicRanges: string[];
   symbolicStrings: string[];
 }
@@ -541,6 +548,157 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
   return max;
 }
 
+function parseSimpleOperand(source: string): FormulaNode | null {
+  const trimmed = source.trim();
+  if (SIMPLE_CELL_REF_RE.test(trimmed)) {
+    return {
+      kind: "CellRef",
+      ref: trimmed,
+    };
+  }
+  if (SIMPLE_NUMBER_RE.test(trimmed)) {
+    return {
+      kind: "NumberLiteral",
+      value: Number(trimmed),
+    };
+  }
+  return null;
+}
+
+function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
+  const trimmed = source.trim();
+  const singleOperand = parseSimpleOperand(trimmed);
+  const refs: string[] = [];
+  const parsedRefs: Array<{ address: string; sheetName?: string }> = [];
+  const deps: string[] = [];
+  const parsedDeps: Array<{ address: string; kind: "cell"; sheetName?: string }> = [];
+  const constants: number[] = [];
+  const program: number[] = [];
+
+  const registerCellRef = (ref: string): number => {
+    const existing = refs.indexOf(ref);
+    if (existing !== -1) {
+      return existing;
+    }
+    const index = refs.push(ref) - 1;
+    parsedRefs.push({ address: ref });
+    deps.push(ref);
+    parsedDeps.push({ kind: "cell", address: ref });
+    return index;
+  };
+
+  const emitOperand = (operand: FormulaNode, plan: JsPlanInstruction[]): void => {
+    if (operand.kind === "CellRef") {
+      const index = registerCellRef(operand.ref);
+      program.push(encodeInstruction(Opcode.PushCell, index));
+      plan.push({ opcode: "push-cell", address: operand.ref });
+      return;
+    }
+    if (operand.kind === "NumberLiteral") {
+      const index = constants.push(operand.value) - 1;
+      program.push(encodeInstruction(Opcode.PushNumber, index));
+      plan.push({ opcode: "push-number", value: operand.value });
+      return;
+    }
+    throw new Error(`Unsupported simple operand '${operand.kind}'`);
+  };
+
+  if (singleOperand?.kind === "CellRef") {
+    const jsPlan: JsPlanInstruction[] = [];
+    emitOperand(singleOperand, jsPlan);
+    jsPlan.push({ opcode: "return" });
+    program.push(encodeInstruction(Opcode.Ret));
+    return {
+      id: 0,
+      source,
+      mode: FormulaMode.WasmFastPath,
+      depsPtr: 0,
+      depsLen: 0,
+      programOffset: 0,
+      programLength: program.length,
+      constNumberOffset: 0,
+      constNumberLength: 0,
+      rangeListOffset: 0,
+      rangeListLength: 0,
+      program: Uint32Array.from(program),
+      constants: Float64Array.from(constants),
+      symbolicRefs: refs,
+      parsedSymbolicRefs: parsedRefs,
+      symbolicRanges: [],
+      symbolicStrings: [],
+      ast: singleOperand,
+      optimizedAst: singleOperand,
+      deps,
+      parsedDeps,
+      symbolicNames: [],
+      symbolicTables: [],
+      symbolicSpills: [],
+      volatile: false,
+      randCallCount: 0,
+      producesSpill: false,
+      jsPlan,
+      maxStackDepth: computeMaxStackDepth(jsPlan),
+    };
+  }
+
+  const binaryMatch = trimmed.match(SIMPLE_BINARY_RE);
+  if (!binaryMatch) {
+    return null;
+  }
+  const left = parseSimpleOperand(binaryMatch[1] ?? "");
+  const operatorCandidate = binaryMatch[2];
+  const operator =
+    operatorCandidate === "+" || operatorCandidate === "*" ? operatorCandidate : undefined;
+  const right = parseSimpleOperand(binaryMatch[3] ?? "");
+  if (!left || !right || !operator) {
+    return null;
+  }
+  const ast: FormulaNode = {
+    kind: "BinaryExpr",
+    operator,
+    left,
+    right,
+  };
+  const jsPlan: JsPlanInstruction[] = [];
+  emitOperand(left, jsPlan);
+  emitOperand(right, jsPlan);
+  jsPlan.push({ opcode: "binary", operator });
+  jsPlan.push({ opcode: "return" });
+  program.push(encodeInstruction(operator === "+" ? Opcode.Add : Opcode.Mul));
+  program.push(encodeInstruction(Opcode.Ret));
+  return {
+    id: 0,
+    source,
+    mode: FormulaMode.WasmFastPath,
+    depsPtr: 0,
+    depsLen: 0,
+    programOffset: 0,
+    programLength: program.length,
+    constNumberOffset: 0,
+    constNumberLength: constants.length,
+    rangeListOffset: 0,
+    rangeListLength: 0,
+    program: Uint32Array.from(program),
+    constants: Float64Array.from(constants),
+    symbolicRefs: refs,
+    parsedSymbolicRefs: parsedRefs,
+    symbolicRanges: [],
+    symbolicStrings: [],
+    ast,
+    optimizedAst: ast,
+    deps,
+    parsedDeps,
+    symbolicNames: [],
+    symbolicTables: [],
+    symbolicSpills: [],
+    volatile: false,
+    randCallCount: 0,
+    producesSpill: false,
+    jsPlan,
+    maxStackDepth: computeMaxStackDepth(jsPlan),
+  };
+}
+
 export function compileFormulaAst(
   source: string,
   ast: FormulaNode,
@@ -590,5 +748,5 @@ export function compileFormulaAst(
 }
 
 export function compileFormula(source: string): CompiledFormula {
-  return compileFormulaAst(source, parseFormula(source));
+  return buildSimpleCompiledFormula(source) ?? compileFormulaAst(source, parseFormula(source));
 }

@@ -1,12 +1,23 @@
 import { useMemo, type ReactNode } from "react";
+import { Button } from "@base-ui/react/button";
+import { Tabs } from "@base-ui/react/tabs";
 import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import {
-  WorkbookHeaderActionButton,
+  workbookHeaderActionButtonClass,
   workbookHeaderCountClass,
 } from "./workbook-header-controls.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
-import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
+import {
+  railCountClass,
+  railIndicatorClass,
+  railListClass,
+  railPanelClass,
+  railRootClass,
+  railTabClass,
+  type WorkbookSideRailTabDefinition,
+} from "./WorkbookSideRailTabs.js";
+import { cn } from "./cn.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { useWorkbookShellLayout } from "./use-workbook-shell-layout.js";
@@ -73,7 +84,7 @@ export function useWorkbookAppPanels(input: {
       zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
     });
 
-  const sideRailTabs = useMemo(
+  const sideRailTabs = useMemo<readonly WorkbookSideRailTabDefinition[]>(
     () => [
       {
         value: "assistant",
@@ -90,6 +101,10 @@ export function useWorkbookAppPanels(input: {
     ],
     [agentPanel, changeCount, changesPanel, pendingCommandCount],
   );
+  const visibleSideRailTabs = useMemo(
+    () => sideRailTabs.filter((tab) => tab.panel != null),
+    [sideRailTabs],
+  );
   const {
     activeSideRailTab,
     isSideRailOpen,
@@ -100,7 +115,7 @@ export function useWorkbookAppPanels(input: {
   } = useWorkbookShellLayout({
     documentId,
     persistenceKey: `${documentId}:${currentUserId}`,
-    availableTabs: sideRailTabs.map((tab) => tab.value),
+    availableTabs: visibleSideRailTabs.map((tab) => tab.value),
     defaultTab: null,
   });
   const sideRailId = `workbook-side-rail-${documentId}`;
@@ -111,17 +126,20 @@ export function useWorkbookAppPanels(input: {
         className="inline-flex items-center gap-1 rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         data-testid="workbook-side-rail-toggle-group"
       >
-        {sideRailTabs.map((tab) => {
+        {visibleSideRailTabs.map((tab) => {
           const active = isSideRailOpen && activeSideRailTab === tab.value;
           return (
-            <WorkbookHeaderActionButton
+            <Button
               aria-controls={sideRailId}
               aria-expanded={active}
               aria-pressed={active}
+              className={workbookHeaderActionButtonClass({
+                active,
+                grouped: true,
+              })}
               data-testid={`workbook-side-rail-toggle-${tab.value}`}
-              isActive={active}
-              isGrouped
               key={tab.value}
+              type="button"
               onClick={() => {
                 toggleSideRail(tab.value);
               }}
@@ -130,12 +148,12 @@ export function useWorkbookAppPanels(input: {
               {typeof tab.count === "number" ? (
                 <span className={workbookHeaderCountClass}>{String(Math.min(tab.count, 99))}</span>
               ) : null}
-            </WorkbookHeaderActionButton>
+            </Button>
           );
         })}
       </div>
     ),
-    [activeSideRailTab, isSideRailOpen, sideRailId, sideRailTabs, toggleSideRail],
+    [activeSideRailTab, isSideRailOpen, sideRailId, toggleSideRail, visibleSideRailTabs],
   );
 
   const headerStatus = useMemo(
@@ -158,14 +176,54 @@ export function useWorkbookAppPanels(input: {
 
   const sideRail = useMemo(
     () =>
-      isSideRailOpen && activeSideRailTab ? (
-        <WorkbookSideRailTabs
-          tabs={sideRailTabs}
+      isSideRailOpen &&
+      activeSideRailTab &&
+      visibleSideRailTabs.some((tab) => tab.value === activeSideRailTab) ? (
+        <Tabs.Root
+          className={railRootClass()}
           value={activeSideRailTab}
-          onValueChange={setActiveSideRailTab}
-        />
+          onValueChange={(nextValue) => {
+            setActiveSideRailTab(String(nextValue));
+          }}
+        >
+          <Tabs.List aria-label="Workbook panels" className={railListClass()}>
+            {visibleSideRailTabs.map((tab) => (
+              <Tabs.Tab
+                className={(state) => railTabClass({ active: state.active })}
+                data-testid={`workbook-side-rail-tab-${tab.value}`}
+                key={tab.value}
+                value={tab.value}
+              >
+                <span>{tab.label}</span>
+                {typeof tab.count === "number" ? (
+                  <span
+                    className={cn(
+                      railCountClass({
+                        active: activeSideRailTab === tab.value,
+                      }),
+                    )}
+                  >
+                    {String(Math.min(tab.count, 99))}
+                  </span>
+                ) : null}
+              </Tabs.Tab>
+            ))}
+            <Tabs.Indicator className={railIndicatorClass()} renderBeforeHydration />
+          </Tabs.List>
+          {visibleSideRailTabs.map((tab) => (
+            <Tabs.Panel
+              className={railPanelClass()}
+              data-testid={`workbook-side-rail-panel-${tab.value}`}
+              keepMounted
+              key={tab.value}
+              value={tab.value}
+            >
+              {tab.panel}
+            </Tabs.Panel>
+          ))}
+        </Tabs.Root>
       ) : null,
-    [activeSideRailTab, isSideRailOpen, setActiveSideRailTab, sideRailTabs],
+    [activeSideRailTab, isSideRailOpen, setActiveSideRailTab, visibleSideRailTabs],
   );
 
   return {
