@@ -217,15 +217,15 @@ describe("workbook agent service", () => {
       ]);
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
-          "bilig_read_selection",
-          "bilig_read_visible_range",
-          "bilig_start_workflow",
-          "bilig_inspect_cell",
-          "bilig_find_formula_issues",
-          "bilig_search_workbook",
-          "bilig_trace_dependencies",
-          "bilig_read_range",
-          "bilig_write_range",
+          "read_selection",
+          "read_visible_range",
+          "start_workflow",
+          "inspect_cell",
+          "find_formula_issues",
+          "search_workbook",
+          "trace_dependencies",
+          "read_range",
+          "write_range",
         ]),
       );
       expect(

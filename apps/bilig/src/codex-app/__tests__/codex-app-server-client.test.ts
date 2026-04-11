@@ -36,7 +36,7 @@ describe("Codex app-server client", () => {
       developerInstructions: "developer",
       dynamicTools: [
         {
-          name: "bilig_test_tool",
+          name: "test_tool",
           description: "Test dynamic tool",
           inputSchema: {
             type: "object",
@@ -73,7 +73,7 @@ describe("Codex app-server client", () => {
       developerInstructions: "developer",
       dynamicTools: [
         {
-          name: "bilig_test_tool",
+          name: "test_tool",
           description: "Test dynamic tool",
           inputSchema: {
             type: "object",
