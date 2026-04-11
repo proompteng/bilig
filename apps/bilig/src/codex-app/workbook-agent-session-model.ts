@@ -231,6 +231,30 @@ function isPlanItem(item: CodexThreadItem): item is Extract<CodexThreadItem, { t
   return item.type === "plan" && typeof item.text === "string";
 }
 
+function extractReasoningText(item: CodexThreadItem): string | null {
+  if (!isRecord(item) || item.type !== "reasoning") {
+    return null;
+  }
+  if (typeof item["text"] === "string" && item["text"].trim().length > 0) {
+    return item["text"];
+  }
+  if (typeof item["summary"] === "string" && item["summary"].trim().length > 0) {
+    return item["summary"];
+  }
+  if (Array.isArray(item["content"])) {
+    const text = item["content"]
+      .flatMap((entry) =>
+        isRecord(entry) && typeof entry["text"] === "string" ? [entry["text"]] : [],
+      )
+      .join("\n")
+      .trim();
+    if (text.length > 0) {
+      return text;
+    }
+  }
+  return null;
+}
+
 function isToolContentItem(item: unknown): item is
   | {
       type: "inputText";
@@ -332,6 +356,23 @@ export function mapThreadItemToEntry(
       turnId,
       text: item.text,
       phase: null,
+      toolName: null,
+      toolStatus: null,
+      argumentsText: null,
+      outputText: null,
+      success: null,
+      citations: [],
+    };
+  }
+
+  const reasoningText = extractReasoningText(item);
+  if (reasoningText !== null) {
+    return {
+      id: item.id,
+      kind: "plan",
+      turnId,
+      text: reasoningText,
+      phase: "reasoning",
       toolName: null,
       toolStatus: null,
       argumentsText: null,

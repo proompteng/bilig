@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@base-ui/react/button";
+import { Collapsible } from "@base-ui/react/collapsible";
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   describeWorkbookAgentCommand,
   normalizeWorkbookAgentToolName,
 } from "@bilig/agent-api";
+import { ChevronRight } from "lucide-react";
 import { cva } from "class-variance-authority";
 import type {
   WorkbookAgentCommandBundle,
@@ -253,6 +255,75 @@ function renderPreviewChangeKind(kind: WorkbookAgentPreviewChangeKind): string {
   }
 }
 
+function isReasoningPlaceholderEntry(entry: WorkbookAgentTimelineEntry): boolean {
+  return entry.kind === "system" && entry.text?.trim() === "Codex emitted reasoning.";
+}
+
+function summarizeReasoningText(text: string | null): string | null {
+  if (!text) {
+    return null;
+  }
+  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  if (normalized.length === 0) {
+    return null;
+  }
+  return normalized.length <= 88 ? normalized : `${normalized.slice(0, 85)}...`;
+}
+
+function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
+  const [open, setOpen] = useState(false);
+  const bodyText = props.entry.kind === "plan" ? props.entry.text : null;
+  const summary = summarizeReasoningText(bodyText);
+
+  return (
+    <Collapsible.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+      }}
+    >
+      <div className={cn(workbookInsetClass(), "px-3 py-1.5")}>
+        <Collapsible.Trigger
+          aria-label={open ? "Collapse reasoning" : "Expand reasoning"}
+          className="flex w-full items-center gap-2 rounded-[var(--wb-radius-control)] px-0.5 py-1 text-left outline-none transition-colors hover:bg-[var(--wb-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          data-testid={`workbook-agent-reasoning-toggle-${props.entry.id}`}
+          type="button"
+        >
+          <ChevronRight
+            className={cn(
+              "h-4 w-4 shrink-0 text-[var(--wb-text-subtle)] transition-transform",
+              open && "rotate-90",
+            )}
+          />
+          <span className="shrink-0 text-[11px] font-semibold text-[var(--wb-text-muted)]">
+            Thought
+          </span>
+          <span className="min-w-0 truncate text-[11px] text-[var(--wb-text-subtle)]">
+            {summary ?? "No reasoning details available."}
+          </span>
+        </Collapsible.Trigger>
+        <Collapsible.Panel
+          className="overflow-hidden pt-1"
+          data-testid={`workbook-agent-reasoning-panel-${props.entry.id}`}
+        >
+          <div className="rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-3 py-2">
+            {bodyText ? (
+              <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
+                {bodyText}
+              </div>
+            ) : (
+              <div className="text-[12px] leading-5 text-[var(--wb-text-subtle)]">
+                No reasoning details were included in the Codex event payload.
+              </div>
+            )}
+            <TimelineCitationList citations={props.entry.citations} />
+          </div>
+        </Collapsible.Panel>
+      </div>
+    </Collapsible.Root>
+  );
+}
+
 function StructuredToolOutput(props: {
   readonly toolName: string | null;
   readonly outputText: string | null;
@@ -487,18 +558,8 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     );
   }
 
-  if (entry.kind === "plan") {
-    if (!entry.text?.trim().length) {
-      return null;
-    }
-    return (
-      <div className={cn(workbookInsetClass(), "px-3 py-2")}>
-        <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
-          {entry.text}
-        </div>
-        <TimelineCitationList citations={entry.citations} />
-      </div>
-    );
+  if (entry.kind === "plan" || isReasoningPlaceholderEntry(entry)) {
+    return <ReasoningEntryRow entry={entry} />;
   }
 
   if (entry.kind === "tool") {
