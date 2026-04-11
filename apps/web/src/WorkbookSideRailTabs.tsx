@@ -15,35 +15,35 @@ const railRootClass = cva(
 );
 
 const railListClass = cva(
-  "relative z-0 flex gap-1 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 py-1.5",
+  "relative flex items-end gap-1 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-3 pt-2",
 );
 
 const railTabClass = cva(
-  "group relative flex h-8 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-medium break-keep whitespace-nowrap outline-none select-none transition-[background-color,border-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
+  "group relative inline-flex h-9 items-center justify-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 pb-2 text-[13px] font-medium break-keep whitespace-nowrap outline-none select-none transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
   {
     variants: {
       active: {
-        true: "border-[var(--color-mauve-300)] bg-white font-semibold text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        true: "bg-[var(--color-mauve-50)] font-semibold text-[var(--color-mauve-950)]",
         false:
-          "border-transparent bg-transparent text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]",
+          "bg-transparent text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-100)]/70 hover:text-[var(--color-mauve-900)]",
       },
     },
   },
 );
 
 const railIndicatorClass = cva(
-  "absolute top-1/2 left-0 z-[-1] h-8 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-md border border-[var(--color-mauve-300)] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[translate,width] duration-200 ease-out",
+  "absolute bottom-0 left-0 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--color-mauve-700)] transition-[translate,width] duration-200 ease-out",
 );
 
 const railPanelClass = cva("min-h-0 flex-1 overflow-hidden bg-[var(--color-mauve-50)]");
 
-const railCountBadgeClass = cva(
-  "inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-none transition-colors",
+const railCountClass = cva(
+  "inline-flex items-center justify-center text-[11px] font-semibold tabular-nums leading-none transition-colors",
   {
     variants: {
       active: {
-        true: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)]",
-        false: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-700)]",
+        true: "text-[var(--color-mauve-700)]",
+        false: "text-[var(--color-mauve-500)] group-hover:text-[var(--color-mauve-700)]",
       },
     },
   },
@@ -109,7 +109,7 @@ export function WorkbookSideRailTabs(props: {
             {typeof tab.count === "number" ? (
               <span
                 className={cn(
-                  railCountBadgeClass({
+                  railCountClass({
                     active: value === tab.value,
                   }),
                 )}
