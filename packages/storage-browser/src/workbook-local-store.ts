@@ -130,6 +130,57 @@ function getErrorMessage(error: unknown): string | null {
   return isRecord(error) && typeof error["message"] === "string" ? error["message"] : null;
 }
 
+function stringifyConsoleArg(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  const errorName = getErrorName(value);
+  const errorMessage = getErrorMessage(value);
+  if (errorName && errorMessage) {
+    return `${errorName}: ${errorMessage}`;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function isOpfsLockDiagnostic(args: readonly unknown[], vfsName: string): boolean {
+  const message = args.map((value) => stringifyConsoleArg(value)).join(" ");
+  if (!message.includes(vfsName)) {
+    return false;
+  }
+  return (
+    message.includes("removeVfs() failed with no recovery strategy") ||
+    message.includes("Access Handles cannot be created")
+  );
+}
+
+async function withSuppressedOpfsLockDiagnostics<T>(
+  vfsName: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  console.error = ((...args: unknown[]) => {
+    if (!isOpfsLockDiagnostic(args, vfsName)) {
+      originalError(...args);
+    }
+  }) as typeof console.error;
+  console.warn = ((...args: unknown[]) => {
+    if (!isOpfsLockDiagnostic(args, vfsName)) {
+      originalWarn(...args);
+    }
+  }) as typeof console.warn;
+  try {
+    return await task();
+  } finally {
+    console.error = originalError;
+    console.warn = originalWarn;
+  }
+}
+
 function isAccessHandleConflict(error: unknown): boolean {
   const message = getErrorMessage(error);
   const name = getErrorName(error);
@@ -275,14 +326,18 @@ async function getSqliteRuntime(
     sqliteRuntimePromise = (async () => {
       const sqlite3 = await sqlite3InitModule();
       try {
-        const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
-          name: options.vfsName,
-          directory: options.directory,
-          initialCapacity: options.initialCapacity,
-          // The app translates lock conflicts into its own persistence-state path.
-          // Keep sqlite-wasm from spamming expected pool diagnostics into the console.
-          verbosity: WORKBOOK_VFS_VERBOSITY,
-        } as Parameters<Sqlite3Static["installOpfsSAHPoolVfs"]>[0] & { verbosity: number });
+        const poolUtil = await withSuppressedOpfsLockDiagnostics(
+          options.vfsName,
+          async () =>
+            await sqlite3.installOpfsSAHPoolVfs({
+              name: options.vfsName,
+              directory: options.directory,
+              initialCapacity: options.initialCapacity,
+              // The app translates lock conflicts into its own persistence-state path.
+              // Keep sqlite-wasm from spamming expected pool diagnostics into the console.
+              verbosity: WORKBOOK_VFS_VERBOSITY,
+            } as Parameters<Sqlite3Static["installOpfsSAHPoolVfs"]>[0] & { verbosity: number }),
+        );
         return { sqlite3, poolUtil };
       } catch (error) {
         if (isAccessHandleConflict(error)) {

@@ -1,4 +1,5 @@
 import { createWorkbookAgentCommandBundle, describeWorkbookAgentBundle } from "@bilig/agent-api";
+import type { WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
 import {
@@ -36,6 +37,15 @@ export class WorkbookAgentWorkflowRuntime {
       touch: (sessionState: WorkbookAgentSessionState) => void;
       persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
       emitSnapshot: (threadId: string) => void;
+      shouldApplyCommandImmediately: (
+        sessionState: WorkbookAgentSessionState,
+        command: ReturnType<typeof createWorkbookAgentCommandBundle>["commands"][number],
+      ) => boolean;
+      applyCommandBundleImmediately: (input: {
+        sessionState: WorkbookAgentSessionState;
+        actorUserId: string;
+        bundle: ReturnType<typeof createWorkbookAgentCommandBundle>;
+      }) => Promise<WorkbookAgentExecutionRecord | null>;
       incrementCounter: (
         counter:
           | "workflowStartedCount"
@@ -193,10 +203,11 @@ export class WorkbookAgentWorkflowRuntime {
       }
 
       const completedAtUnixMs = this.options.now();
-      const completedRun: WorkbookAgentWorkflowRun = {
+      let completedSummary = result.summary;
+      const completedRunBase: WorkbookAgentWorkflowRun = {
         ...input.runningRun,
         title: result.title,
-        summary: result.summary,
+        summary: completedSummary,
         status: "completed",
         updatedAtUnixMs: completedAtUnixMs,
         completedAtUnixMs,
@@ -208,10 +219,6 @@ export class WorkbookAgentWorkflowRuntime {
           input.workflowInput,
         ),
       };
-      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-        input.sessionState.snapshot.workflowRuns,
-        completedRun,
-      );
       if (result.commands && result.commands.length > 0) {
         const baseRevision = await this.options.zeroSyncService.getWorkbookHeadRevision(
           input.documentId,
@@ -229,17 +236,65 @@ export class WorkbookAgentWorkflowRuntime {
           }),
           input.sessionState,
         );
-        input.sessionState.snapshot.pendingBundle = workflowBundle;
-        input.sessionState.snapshot.entries = upsertEntry(
-          input.sessionState.snapshot.entries,
-          createSystemEntry(
-            `system-preview:${workflowBundle.id}`,
-            input.workflowTurnId,
-            describeWorkbookAgentBundle(workflowBundle),
-            createBundleRangeCitations(workflowBundle),
-          ),
-        );
+        const shouldApplyImmediately =
+          input.sessionState.scope !== "shared" &&
+          workflowBundle.commands.every((command) =>
+            this.options.shouldApplyCommandImmediately(input.sessionState, command),
+          );
+        if (shouldApplyImmediately) {
+          try {
+            const executionRecord = await this.options.applyCommandBundleImmediately({
+              sessionState: input.sessionState,
+              actorUserId: input.startedByUserId,
+              bundle: workflowBundle,
+            });
+            if (executionRecord) {
+              completedSummary = `Applied workflow: ${executionRecord.summary}`;
+            } else {
+              input.sessionState.snapshot.pendingBundle = workflowBundle;
+              input.sessionState.snapshot.entries = upsertEntry(
+                input.sessionState.snapshot.entries,
+                createSystemEntry(
+                  `system-preview:${workflowBundle.id}`,
+                  input.workflowTurnId,
+                  describeWorkbookAgentBundle(workflowBundle),
+                  createBundleRangeCitations(workflowBundle),
+                ),
+              );
+            }
+          } catch {
+            input.sessionState.snapshot.pendingBundle = workflowBundle;
+            input.sessionState.snapshot.entries = upsertEntry(
+              input.sessionState.snapshot.entries,
+              createSystemEntry(
+                `system-preview:${workflowBundle.id}`,
+                input.workflowTurnId,
+                describeWorkbookAgentBundle(workflowBundle),
+                createBundleRangeCitations(workflowBundle),
+              ),
+            );
+          }
+        } else {
+          input.sessionState.snapshot.pendingBundle = workflowBundle;
+          input.sessionState.snapshot.entries = upsertEntry(
+            input.sessionState.snapshot.entries,
+            createSystemEntry(
+              `system-preview:${workflowBundle.id}`,
+              input.workflowTurnId,
+              describeWorkbookAgentBundle(workflowBundle),
+              createBundleRangeCitations(workflowBundle),
+            ),
+          );
+        }
       }
+      const completedRun: WorkbookAgentWorkflowRun = {
+        ...completedRunBase,
+        summary: completedSummary,
+      };
+      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+        input.sessionState.snapshot.workflowRuns,
+        completedRun,
+      );
       input.sessionState.snapshot.entries = upsertEntry(
         input.sessionState.snapshot.entries,
         createSystemEntry(

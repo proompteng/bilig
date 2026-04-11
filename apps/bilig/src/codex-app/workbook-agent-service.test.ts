@@ -1972,12 +1972,45 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages create-sheet preview bundles from durable workflows", async () => {
+  it("applies create-sheet workflows immediately in private threads", async () => {
     const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
     const getWorkbookHeadRevision = vi.fn(async () => 7);
     const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const applyAgentCommandBundle = vi.fn(async (_documentId, _bundle, preview) => ({
+      revision: 8,
+      preview,
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
     const service = createWorkbookAgentService(
       createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
         getWorkbookHeadRevision,
         upsertWorkbookWorkflowRun,
       }),
@@ -2025,23 +2058,36 @@ describe("workbook agent service", () => {
         expect.objectContaining({
           workflowTemplate: "createSheet",
           status: "completed",
+          summary: "Applied workflow: Create sheet Forecast",
           artifact: expect.objectContaining({
             title: "Create Sheet Preview",
           }),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        "doc-1",
         expect.objectContaining({
-          baseRevision: 7,
-          turnId: expect.stringContaining("workflow:"),
           commands: [expect.objectContaining({ kind: "createSheet", name: "Forecast" })],
         }),
+        expect.anything(),
+        expect.objectContaining({
+          userID: "alex@example.com",
+        }),
       );
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
+      expect(snapshot.executionRecords).toEqual([
+        expect.objectContaining({
+          summary: "Create sheet Forecast",
+          appliedRevision: 8,
+          appliedBy: "user",
+        }),
+      ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("Staged preview bundle"),
+            text: "Applied preview bundle at revision r8: Create sheet Forecast",
           }),
           expect.objectContaining({
             kind: "system",
@@ -2054,12 +2100,49 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages rename-sheet preview bundles from durable workflows", async () => {
+  it("applies rename-sheet workflows immediately in private threads", async () => {
     const fakeCodex = new FakeCodexTransport();
-    const service = createWorkbookAgentService(createZeroSyncStub(), {
-      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
-        fakeCodex,
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
     });
+    await engine.ready();
+    engine.createSheet("Revenue");
+    const applyAgentCommandBundle = vi.fn(async (_documentId, _bundle, preview) => ({
+      revision: 9,
+      preview,
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
 
     try {
       await service.createSession({
@@ -2109,12 +2192,15 @@ describe("workbook agent service", () => {
         expect.objectContaining({
           workflowTemplate: "renameCurrentSheet",
           status: "completed",
+          summary: "Applied workflow: Rename sheet Revenue to Forecast",
           artifact: expect.objectContaining({
             title: "Rename Sheet Preview",
           }),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        "doc-1",
         expect.objectContaining({
           commands: [
             expect.objectContaining({
@@ -2124,7 +2210,19 @@ describe("workbook agent service", () => {
             }),
           ],
         }),
+        expect.anything(),
+        expect.objectContaining({
+          userID: "alex@example.com",
+        }),
       );
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
+      expect(snapshot.executionRecords).toEqual([
+        expect.objectContaining({
+          summary: "Rename sheet Revenue to Forecast",
+          appliedRevision: 9,
+          appliedBy: "user",
+        }),
+      ]);
     } finally {
       await service.close();
     }

@@ -400,6 +400,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       touch: (sessionState) => this.touch(sessionState),
       persistSessionState: (sessionState) => this.persistSessionState(sessionState),
       emitSnapshot: (threadId) => this.emitSnapshot(threadId),
+      shouldApplyCommandImmediately: (sessionState, command) =>
+        this.shouldApplyToolCommandImmediately(sessionState, command),
+      applyCommandBundleImmediately: (args) => this.applyToolCommandImmediately(args),
       incrementCounter: (counter) => {
         this.counters[counter] += 1;
       },

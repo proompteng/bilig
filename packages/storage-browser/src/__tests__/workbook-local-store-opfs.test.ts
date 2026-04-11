@@ -97,4 +97,35 @@ describe("opfs workbook local store", () => {
       message: "Workbook local store is locked by another tab for doc-remove-vfs-like",
     });
   });
+
+  it("suppresses sqlite-wasm removeVfs diagnostics for known lock conflicts", async () => {
+    const removeVfsError = Object.assign(
+      new Error(
+        "Failed to execute 'removeEntry' on 'FileSystemDirectoryHandle': An attempt was made to modify an object where modifications are not allowed.",
+      ),
+      { name: "NoModificationAllowedError" },
+    );
+    installOpfsSAHPoolVfs.mockImplementation(async () => {
+      console.error(
+        "bilig-opfs-sahpool removeVfs() failed with no recovery strategy:",
+        removeVfsError,
+      );
+      throw removeVfsError;
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const { WorkbookLocalStoreLockedError, createOpfsWorkbookLocalStoreFactory } =
+        await import("../index.js");
+      const factory = createOpfsWorkbookLocalStoreFactory();
+
+      await expect(factory.open("doc-suppressed-remove-vfs")).rejects.toMatchObject({
+        name: WorkbookLocalStoreLockedError.name,
+        message: "Workbook local store is locked by another tab for doc-suppressed-remove-vfs",
+      });
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
 });
