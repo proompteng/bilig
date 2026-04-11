@@ -544,6 +544,39 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("limits shared threads to the rollout allowlist", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+      featureFlags: {
+        allowlistedUserIds: ["pat@example.com"],
+      },
+    });
+
+    try {
+      await expect(
+        service.createSession({
+          documentId: "doc-1",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            sessionId: "agent-session-shared",
+            scope: "shared",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED",
+        statusCode: 409,
+        retryable: false,
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
   it("disables workflow families behind feature flags", async () => {
     const fakeCodex = new FakeCodexTransport();
     const service = createWorkbookAgentService(createZeroSyncStub(), {
@@ -668,6 +701,142 @@ describe("workbook agent service", () => {
         statusCode: 409,
         retryable: false,
       });
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("limits workflow runner and auto-apply to the rollout allowlist", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-test",
+            actorUserId: "alex@example.com",
+            scope: "private",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-auto-1",
+              documentId: "doc-1",
+              threadId: "thr-test",
+              turnId: "turn-1",
+              goalText: "Apply low-risk cleanup",
+              summary: "Write cells in Sheet1!B2",
+              scope: "selection",
+              riskClass: "low",
+              approvalMode: "auto",
+              baseRevision: 1,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "writeRange",
+                  sheetName: "Sheet1",
+                  startAddress: "B2",
+                  values: [[42]],
+                },
+              ],
+              affectedRanges: [],
+              estimatedAffectedCells: 1,
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+        featureFlags: {
+          allowlistedUserIds: ["pat@example.com"],
+        },
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          threadId: "thr-test",
+        },
+      });
+
+      await expect(
+        service.startWorkflow({
+          documentId: "doc-1",
+          sessionId: snapshot.sessionId,
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          body: {
+            workflowTemplate: "summarizeWorkbook",
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_WORKFLOW_RUNNER_ROLLOUT_BLOCKED",
+        statusCode: 409,
+        retryable: false,
+      });
+
+      await expect(
+        service.applyPendingBundle({
+          documentId: "doc-1",
+          sessionId: snapshot.sessionId,
+          bundleId: "bundle-auto-1",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          appliedBy: "auto",
+          preview: createPreviewSummary(),
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
+        statusCode: 409,
+        retryable: false,
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("reports observability snapshot counts for rollout and runtime state", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+      featureFlags: {
+        allowlistedUserIds: ["alex@example.com", "pat@example.com"],
+        allowlistedDocumentIds: ["doc-1"],
+      },
+    });
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const snapshot = service.getObservabilitySnapshot();
+      expect(snapshot.enabled).toBe(true);
+      expect(snapshot.featureFlags.allowlistedUserCount).toBe(2);
+      expect(snapshot.featureFlags.allowlistedDocumentCount).toBe(1);
+      expect(snapshot.sessions.sessionCount).toBe(1);
+      expect(snapshot.pool.maxClients).toBeGreaterThan(0);
     } finally {
       await service.close();
     }

@@ -9,6 +9,8 @@ export interface WorkbookAgentFeatureFlags {
   readonly importWorkflowFamilyEnabled: boolean;
   readonly rollupWorkflowFamilyEnabled: boolean;
   readonly structuralWorkflowFamilyEnabled: boolean;
+  readonly allowlistedUserIds: readonly string[];
+  readonly allowlistedDocumentIds: readonly string[];
 }
 
 function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
@@ -23,6 +25,16 @@ function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean 
     return false;
   }
   return fallback;
+}
+
+function parseCsvEnv(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 export function resolveWorkbookAgentFeatureFlags(
@@ -46,7 +58,24 @@ export function resolveWorkbookAgentFeatureFlags(
       env["BILIG_AGENT_STRUCTURAL_WORKFLOWS_ENABLED"],
       true,
     ),
+    allowlistedUserIds: parseCsvEnv(env["BILIG_AGENT_ALLOWLIST_USERS"]),
+    allowlistedDocumentIds: parseCsvEnv(env["BILIG_AGENT_ALLOWLIST_DOCUMENTS"]),
   };
+}
+
+export function isWorkbookAgentRolloutAllowed(
+  featureFlags: Pick<WorkbookAgentFeatureFlags, "allowlistedUserIds" | "allowlistedDocumentIds">,
+  input: { documentId: string; userId: string },
+): boolean {
+  const hasUserAllowlist = featureFlags.allowlistedUserIds.length > 0;
+  const hasDocumentAllowlist = featureFlags.allowlistedDocumentIds.length > 0;
+  if (!hasUserAllowlist && !hasDocumentAllowlist) {
+    return true;
+  }
+  return (
+    featureFlags.allowlistedUserIds.includes(input.userId) ||
+    featureFlags.allowlistedDocumentIds.includes(input.documentId)
+  );
 }
 
 export type WorkbookAgentWorkflowFamily =

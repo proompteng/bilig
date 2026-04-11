@@ -210,7 +210,14 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     service: "bilig-app",
     zeroSync: zeroSyncService?.enabled ?? false,
     web: webDistRoot !== null,
+    workbookAgent: workbookAgentService?.getObservabilitySnapshot() ?? { enabled: false },
   }));
+
+  app.get("/v2/agent/observability", async (request, reply) => {
+    return await handleWorkbookAgentRequest(request, reply, async (service) =>
+      service.getObservabilitySnapshot(),
+    );
+  });
 
   app.get("/runtime-config.json", async (_request, reply) => {
     const session = resolveSessionIdentity(_request, reply);

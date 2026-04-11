@@ -273,4 +273,55 @@ describe("codex-app-server-pool", () => {
       await pool.close();
     }
   });
+
+  it("reports pool stats for observability", async () => {
+    let resolveFirstTurn: ((value: CodexTurn) => void) | null = null;
+    const firstTurnPromise = new Promise<CodexTurn>((resolve) => {
+      resolveFirstTurn = resolve;
+    });
+    const fake = new FakePoolTransport("A");
+    fake.nextTurn = firstTurnPromise;
+    const { pool } = createPool({
+      maxClients: 2,
+      maxConcurrentTurnsPerClient: 1,
+      maxQueuedTurnsPerClient: 2,
+      transports: [fake],
+    });
+
+    try {
+      const thread = await pool.threadStart({
+        model: "gpt-5.4",
+        approvalPolicy: "never",
+        sandbox: "read-only",
+        baseInstructions: "base",
+        developerInstructions: "dev",
+        dynamicTools: [],
+      });
+      const firstTurn = pool.turnStart({ threadId: thread.id, prompt: "first" });
+      const secondTurn = pool.turnStart({ threadId: thread.id, prompt: "second" });
+
+      await Promise.resolve();
+      expect(pool.getStats()).toEqual({
+        slotCount: 1,
+        boundThreadCount: 1,
+        activeTurnCount: 1,
+        queuedTurnCount: 1,
+        maxClients: 2,
+        maxConcurrentTurnsPerClient: 1,
+        maxQueuedTurnsPerClient: 2,
+      });
+
+      resolvePendingTurn(resolveFirstTurn, {
+        id: "turn-1",
+        status: "inProgress",
+        items: [],
+        error: null,
+      });
+      fake.nextTurn = null;
+      await firstTurn;
+      await secondTurn;
+    } finally {
+      await pool.close();
+    }
+  });
 });

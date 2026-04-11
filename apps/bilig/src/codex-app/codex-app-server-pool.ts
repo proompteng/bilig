@@ -38,6 +38,16 @@ export interface CodexAppServerClientPoolOptions {
   readonly maxQueuedTurnsPerClient?: number;
 }
 
+export interface CodexAppServerClientPoolStats {
+  readonly slotCount: number;
+  readonly boundThreadCount: number;
+  readonly activeTurnCount: number;
+  readonly queuedTurnCount: number;
+  readonly maxClients: number;
+  readonly maxConcurrentTurnsPerClient: number;
+  readonly maxQueuedTurnsPerClient: number;
+}
+
 export class CodexAppServerClientPool implements CodexAppServerTransport {
   private readonly codexClientFactory: CodexAppServerClientPoolOptions["codexClientFactory"];
   private readonly clientOptions: CodexAppServerClientPoolOptions["clientOptions"];
@@ -126,6 +136,19 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
     this.threadToSlotId.clear();
     this.listeners.clear();
     await Promise.all(slots.map(async (slot) => await this.closeSlot(slot)));
+  }
+
+  getStats(): CodexAppServerClientPoolStats {
+    const slots = [...this.slots.values()];
+    return {
+      slotCount: slots.length,
+      boundThreadCount: [...this.threadToSlotId.keys()].length,
+      activeTurnCount: slots.reduce((sum, slot) => sum + slot.activeTurnCount, 0),
+      queuedTurnCount: slots.reduce((sum, slot) => sum + slot.waiters.length, 0),
+      maxClients: this.maxClients,
+      maxConcurrentTurnsPerClient: this.maxConcurrentTurnsPerClient,
+      maxQueuedTurnsPerClient: this.maxQueuedTurnsPerClient,
+    };
   }
 
   private bindThread(slot: CodexAppServerPoolSlot, threadId: string): void {

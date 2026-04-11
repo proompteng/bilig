@@ -17,16 +17,18 @@ Already landed on `main`:
 - shared owner review plus collaborator recommendations
 - queued and cancellable workflow execution
 - bounded Codex app-server pool with backpressure and turn quotas
-- server-side rollout flags for shared threads, workflow runner, auto-apply, and workflow families
+- server-side rollout flags plus allowlist-based canary controls for shared threads, workflow runner, auto-apply, and workflow families
+- Zero-backed durable thread summaries and workflow-run projections in the browser shell, with SSE kept for live deltas
+- follower-tab degradation messaging when another tab owns the persistent local store
+- internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
 - current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/highlighting, outlier highlighting, header normalization, number-format normalization, current-sheet rollup, and a bounded set of structural previews
 
 Still required before this document is honestly complete end to end:
 
-- Zero-backed thread/run projections for durable fanout into the browser shell
 - broader Day-1 workflow families, especially fuller import cleanup, formula repair, reshape/rollup, and more general formatting cleanup
 - fuller collaborator review semantics beyond owner finalization plus recommendations
-- multi-tab writer/follower UX and lease-transfer behavior
-- broader observability, dashboards, alerts, canary controls, and launch playbooks
+- full multi-tab writer/follower UX, especially deliberate lease-transfer behavior instead of follower-only degradation messaging
+- broader observability, dashboards, alerts, and launch playbooks beyond the current internal snapshot/flag surfaces
 
 ## Executive summary
 

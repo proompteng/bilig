@@ -32,10 +32,12 @@ import {
 } from "./codex-app-server-client.js";
 import {
   CodexAppServerClientPool,
+  type CodexAppServerClientPoolStats,
   isCodexAppServerPoolBackpressureError,
 } from "./codex-app-server-pool.js";
 import {
   getWorkbookAgentWorkflowFamily,
+  isWorkbookAgentRolloutAllowed,
   resolveWorkbookAgentFeatureFlags,
   type WorkbookAgentFeatureFlags,
 } from "./workbook-agent-feature-flags.js";
@@ -364,6 +366,7 @@ export interface WorkbookAgentService {
     documentId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentThreadSummary[]>;
+  getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot;
   getSnapshot(input: {
     documentId: string;
     sessionId: string;
@@ -420,6 +423,54 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
     throw new Error("Workbook agent service is not configured");
   }
 
+  getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot {
+    return {
+      enabled: false,
+      generatedAtUnixMs: Date.now(),
+      featureFlags: {
+        sharedThreadsEnabled: false,
+        workflowRunnerEnabled: false,
+        autoApplyLowRiskEnabled: false,
+        formulaWorkflowFamilyEnabled: false,
+        formattingWorkflowFamilyEnabled: false,
+        importWorkflowFamilyEnabled: false,
+        rollupWorkflowFamilyEnabled: false,
+        structuralWorkflowFamilyEnabled: false,
+        allowlistedUserCount: 0,
+        allowlistedDocumentCount: 0,
+      },
+      sessions: {
+        sessionCount: 0,
+        subscriberThreadCount: 0,
+        subscriberCount: 0,
+        activeTurnCount: 0,
+        runningWorkflowCount: 0,
+        pendingBundleCount: 0,
+        sharedPendingReviewCount: 0,
+      },
+      pool: {
+        slotCount: 0,
+        boundThreadCount: 0,
+        activeTurnCount: 0,
+        queuedTurnCount: 0,
+        maxClients: 0,
+        maxConcurrentTurnsPerClient: 0,
+        maxQueuedTurnsPerClient: 0,
+      },
+      counters: {
+        turnBackpressureCount: 0,
+        workflowStartedCount: 0,
+        workflowCompletedCount: 0,
+        workflowFailedCount: 0,
+        workflowCancelledCount: 0,
+        sharedReviewApprovedCount: 0,
+        sharedReviewRejectedCount: 0,
+        sharedRecommendationApprovedCount: 0,
+        sharedRecommendationRejectedCount: 0,
+      },
+    };
+  }
+
   getSnapshot(): never {
     throw new Error("Workbook agent service is not configured");
   }
@@ -444,6 +495,44 @@ export interface EnabledWorkbookAgentServiceOptions {
   featureFlags?: Partial<WorkbookAgentFeatureFlags>;
 }
 
+export interface WorkbookAgentObservabilitySnapshot {
+  readonly enabled: boolean;
+  readonly generatedAtUnixMs: number;
+  readonly featureFlags: {
+    readonly sharedThreadsEnabled: boolean;
+    readonly workflowRunnerEnabled: boolean;
+    readonly autoApplyLowRiskEnabled: boolean;
+    readonly formulaWorkflowFamilyEnabled: boolean;
+    readonly formattingWorkflowFamilyEnabled: boolean;
+    readonly importWorkflowFamilyEnabled: boolean;
+    readonly rollupWorkflowFamilyEnabled: boolean;
+    readonly structuralWorkflowFamilyEnabled: boolean;
+    readonly allowlistedUserCount: number;
+    readonly allowlistedDocumentCount: number;
+  };
+  readonly sessions: {
+    readonly sessionCount: number;
+    readonly subscriberThreadCount: number;
+    readonly subscriberCount: number;
+    readonly activeTurnCount: number;
+    readonly runningWorkflowCount: number;
+    readonly pendingBundleCount: number;
+    readonly sharedPendingReviewCount: number;
+  };
+  readonly pool: CodexAppServerClientPoolStats;
+  readonly counters: {
+    readonly turnBackpressureCount: number;
+    readonly workflowStartedCount: number;
+    readonly workflowCompletedCount: number;
+    readonly workflowFailedCount: number;
+    readonly workflowCancelledCount: number;
+    readonly sharedReviewApprovedCount: number;
+    readonly sharedReviewRejectedCount: number;
+    readonly sharedRecommendationApprovedCount: number;
+    readonly sharedRecommendationRejectedCount: number;
+  };
+}
+
 class EnabledWorkbookAgentService implements WorkbookAgentService {
   readonly enabled = true;
   private readonly zeroSyncService: ZeroSyncService;
@@ -463,6 +552,17 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   private readonly subscribers = new Map<string, Set<(event: WorkbookAgentStreamEvent) => void>>();
   private readonly workflowRunTasks = new Map<string, Promise<void>>();
   private readonly workflowAbortControllers = new Map<string, AbortController>();
+  private readonly counters = {
+    turnBackpressureCount: 0,
+    workflowStartedCount: 0,
+    workflowCompletedCount: 0,
+    workflowFailedCount: 0,
+    workflowCancelledCount: 0,
+    sharedReviewApprovedCount: 0,
+    sharedReviewRejectedCount: 0,
+    sharedRecommendationApprovedCount: 0,
+    sharedRecommendationRejectedCount: 0,
+  };
   private codexClient: CodexAppServerClientPool | null = null;
   private unsubscribeCodex: (() => void) | null = null;
 
@@ -499,6 +599,84 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     });
   }
 
+  getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot {
+    const sessions = [...this.sessions.values()];
+    const subscriberSets = [...this.subscribers.values()];
+    const poolStats = this.codexClient?.getStats() ?? {
+      slotCount: 0,
+      boundThreadCount: 0,
+      activeTurnCount: 0,
+      queuedTurnCount: 0,
+      maxClients: this.maxCodexClients,
+      maxConcurrentTurnsPerClient: this.maxConcurrentTurnsPerCodexClient,
+      maxQueuedTurnsPerClient: this.maxQueuedTurnsPerCodexClient,
+    };
+    return {
+      enabled: true,
+      generatedAtUnixMs: this.now(),
+      featureFlags: {
+        sharedThreadsEnabled: this.featureFlags.sharedThreadsEnabled,
+        workflowRunnerEnabled: this.featureFlags.workflowRunnerEnabled,
+        autoApplyLowRiskEnabled: this.featureFlags.autoApplyLowRiskEnabled,
+        formulaWorkflowFamilyEnabled: this.featureFlags.formulaWorkflowFamilyEnabled,
+        formattingWorkflowFamilyEnabled: this.featureFlags.formattingWorkflowFamilyEnabled,
+        importWorkflowFamilyEnabled: this.featureFlags.importWorkflowFamilyEnabled,
+        rollupWorkflowFamilyEnabled: this.featureFlags.rollupWorkflowFamilyEnabled,
+        structuralWorkflowFamilyEnabled: this.featureFlags.structuralWorkflowFamilyEnabled,
+        allowlistedUserCount: this.featureFlags.allowlistedUserIds.length,
+        allowlistedDocumentCount: this.featureFlags.allowlistedDocumentIds.length,
+      },
+      sessions: {
+        sessionCount: sessions.length,
+        subscriberThreadCount: this.subscribers.size,
+        subscriberCount: subscriberSets.reduce((sum, listeners) => sum + listeners.size, 0),
+        activeTurnCount: sessions.filter(
+          (sessionState) => sessionState.snapshot.activeTurnId !== null,
+        ).length,
+        runningWorkflowCount: sessions.reduce(
+          (sum, sessionState) =>
+            sum +
+            sessionState.snapshot.workflowRuns.filter((run) => run.status === "running").length,
+          0,
+        ),
+        pendingBundleCount: sessions.filter(
+          (sessionState) => sessionState.snapshot.pendingBundle !== null,
+        ).length,
+        sharedPendingReviewCount: sessions.filter((sessionState) => {
+          const pendingBundle = sessionState.snapshot.pendingBundle;
+          return (
+            pendingBundle !== null &&
+            sessionState.scope === "shared" &&
+            normalizeSharedReviewState(pendingBundle, sessionState)?.status === "pending"
+          );
+        }).length,
+      },
+      pool: poolStats,
+      counters: { ...this.counters },
+    };
+  }
+
+  private isRolloutAllowed(documentId: string, userId: string): boolean {
+    return isWorkbookAgentRolloutAllowed(this.featureFlags, { documentId, userId });
+  }
+
+  private assertRolloutAllowed(input: {
+    documentId: string;
+    userId: string;
+    code: string;
+    message: string;
+  }): void {
+    if (this.isRolloutAllowed(input.documentId, input.userId)) {
+      return;
+    }
+    throw createWorkbookAgentServiceError({
+      code: input.code,
+      message: input.message,
+      statusCode: 409,
+      retryable: false,
+    });
+  }
+
   async createSession(input: {
     documentId: string;
     session: SessionIdentity;
@@ -511,6 +689,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         message: "Shared workbook assistant threads are currently disabled.",
         statusCode: 409,
         retryable: false,
+      });
+    }
+    if (parsed.scope === "shared") {
+      this.assertRolloutAllowed({
+        documentId: input.documentId,
+        userId: input.session.userID,
+        code: "WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED",
+        message: "Shared workbook assistant threads are still limited to the rollout allowlist.",
       });
     }
     const sessionId = parsed.sessionId ?? crypto.randomUUID();
@@ -589,6 +775,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         message: "Shared workbook assistant threads are currently disabled.",
         statusCode: 409,
         retryable: false,
+      });
+    }
+    if (durableThreadState?.scope === "shared") {
+      this.assertRolloutAllowed({
+        documentId: input.documentId,
+        userId: input.session.userID,
+        code: "WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED",
+        message: "Shared workbook assistant threads are still limited to the rollout allowlist.",
       });
     }
     if (!thread && !durableThreadState) {
@@ -711,6 +905,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       });
     } catch (error) {
       if (isCodexAppServerPoolBackpressureError(error)) {
+        this.counters.turnBackpressureCount += 1;
         throw createWorkbookAgentServiceError({
           code: "WORKBOOK_AGENT_TURN_BACKPRESSURE",
           message: error.message,
@@ -767,6 +962,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
+    this.assertRolloutAllowed({
+      documentId: input.documentId,
+      userId: input.session.userID,
+      code: "WORKBOOK_AGENT_WORKFLOW_RUNNER_ROLLOUT_BLOCKED",
+      message: "Workbook assistant workflows are still limited to the rollout allowlist.",
+    });
     if (parsed.context) {
       sessionState.snapshot.context = parsed.context;
     }
@@ -829,6 +1030,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ),
     );
     this.touch(sessionState);
+    this.counters.workflowStartedCount += 1;
     await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, runningRun);
     await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.threadId);
@@ -947,6 +1149,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         ),
       );
       this.touch(input.sessionState);
+      this.counters.workflowCompletedCount += 1;
       await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, completedRun);
       await this.persistSessionState(input.sessionState);
       this.emitSnapshot(input.sessionState.threadId);
@@ -992,6 +1195,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         ),
       );
       this.touch(input.sessionState);
+      this.counters.workflowFailedCount += 1;
       await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, failedRun);
       await this.persistSessionState(input.sessionState);
       this.emitSnapshot(input.sessionState.threadId);
@@ -1056,6 +1260,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     this.workflowAbortControllers.get(input.runId)?.abort();
     this.touch(sessionState);
+    this.counters.workflowCancelledCount += 1;
     await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, cancelledRun);
     await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.threadId);
@@ -1123,6 +1328,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         message: "Workbook agent auto-apply is currently disabled.",
         statusCode: 409,
         retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto") {
+      this.assertRolloutAllowed({
+        documentId: input.documentId,
+        userId: input.session.userID,
+        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
+        message: "Workbook agent auto-apply is still limited to the rollout allowlist.",
       });
     }
     const selection = splitWorkbookAgentCommandBundle({
@@ -1289,6 +1502,17 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ...pendingBundle,
       sharedReview: nextSharedReview,
     };
+    if (isOwnerReviewer) {
+      if (parsed.decision === "approved") {
+        this.counters.sharedReviewApprovedCount += 1;
+      } else {
+        this.counters.sharedReviewRejectedCount += 1;
+      }
+    } else if (parsed.decision === "approved") {
+      this.counters.sharedRecommendationApprovedCount += 1;
+    } else {
+      this.counters.sharedRecommendationRejectedCount += 1;
+    }
     sessionState.snapshot.pendingBundle = reviewedBundle;
     sessionState.snapshot.entries = upsertEntry(
       sessionState.snapshot.entries,

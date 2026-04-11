@@ -141,6 +141,53 @@ function createWorkbookAgentServiceStub(
     async listThreads() {
       return [];
     },
+    getObservabilitySnapshot() {
+      return {
+        enabled: true,
+        generatedAtUnixMs: 1,
+        featureFlags: {
+          sharedThreadsEnabled: true,
+          workflowRunnerEnabled: true,
+          autoApplyLowRiskEnabled: true,
+          formulaWorkflowFamilyEnabled: true,
+          formattingWorkflowFamilyEnabled: true,
+          importWorkflowFamilyEnabled: true,
+          rollupWorkflowFamilyEnabled: true,
+          structuralWorkflowFamilyEnabled: true,
+          allowlistedUserCount: 0,
+          allowlistedDocumentCount: 0,
+        },
+        sessions: {
+          sessionCount: 0,
+          subscriberThreadCount: 0,
+          subscriberCount: 0,
+          activeTurnCount: 0,
+          runningWorkflowCount: 0,
+          pendingBundleCount: 0,
+          sharedPendingReviewCount: 0,
+        },
+        pool: {
+          slotCount: 0,
+          boundThreadCount: 0,
+          activeTurnCount: 0,
+          queuedTurnCount: 0,
+          maxClients: 0,
+          maxConcurrentTurnsPerClient: 0,
+          maxQueuedTurnsPerClient: 0,
+        },
+        counters: {
+          turnBackpressureCount: 0,
+          workflowStartedCount: 0,
+          workflowCompletedCount: 0,
+          workflowFailedCount: 0,
+          workflowCancelledCount: 0,
+          sharedReviewApprovedCount: 0,
+          sharedReviewRejectedCount: 0,
+          sharedRecommendationApprovedCount: 0,
+          sharedRecommendationRejectedCount: 0,
+        },
+      };
+    },
     getSnapshot() {
       throw new Error("not used");
     },
@@ -2041,6 +2088,168 @@ describe("sync-server workbook agent", () => {
           error: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
           message: "Workbook agent session not found",
           retryable: true,
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("includes workbook agent observability in healthz when the service is enabled", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        getObservabilitySnapshot() {
+          return {
+            enabled: true,
+            generatedAtUnixMs: 42,
+            featureFlags: {
+              sharedThreadsEnabled: true,
+              workflowRunnerEnabled: true,
+              autoApplyLowRiskEnabled: false,
+              formulaWorkflowFamilyEnabled: true,
+              formattingWorkflowFamilyEnabled: true,
+              importWorkflowFamilyEnabled: true,
+              rollupWorkflowFamilyEnabled: true,
+              structuralWorkflowFamilyEnabled: true,
+              allowlistedUserCount: 2,
+              allowlistedDocumentCount: 1,
+            },
+            sessions: {
+              sessionCount: 3,
+              subscriberThreadCount: 2,
+              subscriberCount: 4,
+              activeTurnCount: 1,
+              runningWorkflowCount: 1,
+              pendingBundleCount: 1,
+              sharedPendingReviewCount: 1,
+            },
+            pool: {
+              slotCount: 1,
+              boundThreadCount: 2,
+              activeTurnCount: 1,
+              queuedTurnCount: 0,
+              maxClients: 4,
+              maxConcurrentTurnsPerClient: 1,
+              maxQueuedTurnsPerClient: 8,
+            },
+            counters: {
+              turnBackpressureCount: 1,
+              workflowStartedCount: 2,
+              workflowCompletedCount: 1,
+              workflowFailedCount: 0,
+              workflowCancelledCount: 0,
+              sharedReviewApprovedCount: 0,
+              sharedReviewRejectedCount: 0,
+              sharedRecommendationApprovedCount: 1,
+              sharedRecommendationRejectedCount: 0,
+            },
+          };
+        },
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/healthz",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          workbookAgent: expect.objectContaining({
+            enabled: true,
+            generatedAtUnixMs: 42,
+            featureFlags: expect.objectContaining({
+              allowlistedUserCount: 2,
+              allowlistedDocumentCount: 1,
+            }),
+            sessions: expect.objectContaining({
+              sessionCount: 3,
+              sharedPendingReviewCount: 1,
+            }),
+          }),
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("exposes the workbook agent observability snapshot route", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        getObservabilitySnapshot() {
+          return {
+            enabled: true,
+            generatedAtUnixMs: 99,
+            featureFlags: {
+              sharedThreadsEnabled: true,
+              workflowRunnerEnabled: true,
+              autoApplyLowRiskEnabled: true,
+              formulaWorkflowFamilyEnabled: true,
+              formattingWorkflowFamilyEnabled: true,
+              importWorkflowFamilyEnabled: true,
+              rollupWorkflowFamilyEnabled: true,
+              structuralWorkflowFamilyEnabled: true,
+              allowlistedUserCount: 0,
+              allowlistedDocumentCount: 0,
+            },
+            sessions: {
+              sessionCount: 0,
+              subscriberThreadCount: 0,
+              subscriberCount: 0,
+              activeTurnCount: 0,
+              runningWorkflowCount: 0,
+              pendingBundleCount: 0,
+              sharedPendingReviewCount: 0,
+            },
+            pool: {
+              slotCount: 0,
+              boundThreadCount: 0,
+              activeTurnCount: 0,
+              queuedTurnCount: 0,
+              maxClients: 4,
+              maxConcurrentTurnsPerClient: 1,
+              maxQueuedTurnsPerClient: 8,
+            },
+            counters: {
+              turnBackpressureCount: 0,
+              workflowStartedCount: 0,
+              workflowCompletedCount: 0,
+              workflowFailedCount: 0,
+              workflowCancelledCount: 0,
+              sharedReviewApprovedCount: 0,
+              sharedReviewRejectedCount: 0,
+              sharedRecommendationApprovedCount: 0,
+              sharedRecommendationRejectedCount: 0,
+            },
+          };
+        },
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/agent/observability",
+        headers: {
+          cookie: "bilig_session=test",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          enabled: true,
+          generatedAtUnixMs: 99,
+          pool: expect.objectContaining({
+            maxClients: 4,
+          }),
         }),
       );
     } finally {
