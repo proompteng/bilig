@@ -993,7 +993,6 @@ export class HeadlessWorkbook {
     this.engine = new SpreadsheetEngine({
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
-      trackReplicaVersions: false,
     });
     this.attachEngineEventTracking();
     this.captureFunctionRegistry();
