@@ -131,13 +131,12 @@ function WorkerWorkbookAppInner({
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="max-w-[72ch]">
-              Another tab owns this workbook's persistent local store. This tab is following live
-              document state and edits here will not survive offline periods unless the writer tab
-              is transferred or closed.
+              Another tab is the writer for local storage. Edits here stay live, but they will not
+              survive offline periods until this tab becomes the writer.
               {app.transferRequested ? (
                 <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-                  Writer transfer requested. This tab will retry persistent ownership as soon as the
-                  writer releases the local store.
+                  Writer handoff requested. This tab will retry as soon as the writer releases the
+                  local store.
                 </div>
               ) : null}
             </div>
@@ -148,7 +147,7 @@ function WorkerWorkbookAppInner({
               }}
               type="button"
             >
-              {app.transferRequested ? "Retry writer role" : "Take writer role"}
+              {app.transferRequested ? "Retry writer" : "Become writer"}
             </button>
           </div>
         </div>
@@ -157,9 +156,8 @@ function WorkerWorkbookAppInner({
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="max-w-[72ch]">
-              Another tab asked to take over this workbook's persistent local store. Transferring
-              writer ownership will keep this tab live, but its new edits will no longer survive
-              offline periods until it reclaims the writer role.
+              Another tab wants writer ownership for local storage. If you transfer it, this tab
+              stays live but loses offline persistence until it becomes the writer again.
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -169,7 +167,7 @@ function WorkerWorkbookAppInner({
                 }}
                 type="button"
               >
-                Transfer writer role
+                Transfer writer
               </button>
               <button
                 className={persistenceBannerButtonClass}
@@ -178,7 +176,7 @@ function WorkerWorkbookAppInner({
                 }}
                 type="button"
               >
-                Keep this tab writer
+                Stay writer
               </button>
             </div>
           </div>

@@ -186,9 +186,9 @@ describe("WorkerWorkbookApp", () => {
       );
     });
 
-    expect(host.textContent).toContain("Another tab owns this workbook's persistent local store.");
-    expect(host.textContent).toContain("following live document state");
-    expect(host.textContent).toContain("Take writer role");
+    expect(host.textContent).toContain("Another tab is the writer for local storage.");
+    expect(host.textContent).toContain("Edits here stay live");
+    expect(host.textContent).toContain("Become writer");
 
     await act(async () => {
       host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -252,14 +252,9 @@ describe("WorkerWorkbookApp", () => {
       );
     });
 
-    expect(host.textContent).toContain(
-      "Another tab asked to take over this workbook's persistent local store.",
-    );
+    expect(host.textContent).toContain("Another tab wants writer ownership for local storage.");
     const buttons = [...host.querySelectorAll("button")];
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      "Transfer writer role",
-      "Keep this tab writer",
-    ]);
+    expect(buttons.map((button) => button.textContent)).toEqual(["Transfer writer", "Stay writer"]);
 
     await act(async () => {
       buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
