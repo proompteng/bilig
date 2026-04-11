@@ -380,28 +380,20 @@ describe("workbook agent pane", () => {
       ],
     });
     sessionStorage.setItem("bilig:workbook-agent:doc-1", JSON.stringify({ threadId: "thr-1" }));
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads")) {
-          return new Response(JSON.stringify([]), {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads/thr-1")) {
+        return new Response(
+          JSON.stringify(createSnapshot({ threadId: "thr-1", workflowRuns: [] })),
+          {
             status: 200,
             headers: { "content-type": "application/json" },
-          });
-        }
-        if (url.endsWith("/chat/threads/thr-1")) {
-          return new Response(
-            JSON.stringify(createSnapshot({ threadId: "thr-1", workflowRuns: [] })),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          );
-        }
-        throw new Error(`Unexpected fetch to ${url}`);
-      }),
-    );
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
 
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -415,6 +407,12 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Workflows");
     expect(host.textContent).toContain("Summarize Workbook");
     expect(host.textContent).toContain("Workbook Summary");
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([input, init]) =>
+          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
+      ),
+    ).toHaveLength(0);
 
     await act(async () => {
       root.unmount();
@@ -3531,6 +3529,72 @@ describe("workbook agent pane", () => {
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
       "Updated Sheet1",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not refetch thread summaries when stream snapshots arrive", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        threadId: "thr-1",
+      }),
+    );
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
+        return new Response(JSON.stringify([createThreadSummary({ threadId: "thr-1" })]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-1" })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([input, init]) =>
+          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
+      ),
+    ).toHaveLength(1);
+
+    await act(async () => {
+      MockEventSource.latest?.emit({
+        type: "snapshot",
+        snapshot: createSnapshot({
+          threadId: "thr-1",
+          status: "inProgress",
+          activeTurnId: "turn-2",
+        }),
+      });
+    });
+
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([input, init]) =>
+          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
+      ),
+    ).toHaveLength(1);
 
     await act(async () => {
       root.unmount();

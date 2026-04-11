@@ -297,6 +297,7 @@ export function useWorkbookAgentPane(input: {
       } satisfies ZeroWorkbookAgentSource),
     [zero],
   );
+  const usesLiveThreadSummaries = zeroEnabled && Boolean(zero);
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -466,14 +467,8 @@ export function useWorkbookAgentPane(input: {
       sessionRef.current = {
         threadId: nextSnapshot.threadId,
       };
-      void loadThreadSummaries()
-        .then((nextThreadSummaries) => {
-          setFetchedThreadSummaries(nextThreadSummaries);
-          return nextThreadSummaries;
-        })
-        .catch(() => undefined);
     },
-    [documentId, loadThreadSummaries],
+    [documentId],
   );
 
   const connectStream = useCallback(
@@ -795,7 +790,11 @@ export function useWorkbookAgentPane(input: {
         }
       }
     };
-    void bootstrapThreadSummaries();
+    if (usesLiveThreadSummaries) {
+      setFetchedThreadSummaries([]);
+    } else {
+      void bootstrapThreadSummaries();
+    }
 
     if (!storedSession) {
       setIsLoading(false);
@@ -838,6 +837,7 @@ export function useWorkbookAgentPane(input: {
     loadThreadSnapshot,
     loadThreadSummaries,
     persistSessionSnapshot,
+    usesLiveThreadSummaries,
   ]);
 
   const selectThread = useCallback(
