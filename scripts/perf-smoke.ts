@@ -12,6 +12,11 @@ export interface PerfSmokeBenchmarkResult {
   };
 }
 
+export interface PerfSmokeDependencies {
+  readonly runBenchmark: (downstreamCount?: number) => Promise<PerfSmokeBenchmarkResult>;
+  readonly buildWasm: () => Promise<void>;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -34,19 +39,13 @@ function benchmarkEditScriptPath(): string {
   return fileURLToPath(new URL("../packages/benchmarks/src/benchmark-edit.ts", import.meta.url));
 }
 
-export async function runPerfSmokeBenchmark(
-  downstreamCount = 1_000,
-): Promise<PerfSmokeBenchmarkResult> {
+async function spawnCommand(command: string, args: readonly string[]): Promise<string> {
   return await new Promise((resolve, reject) => {
-    const child = spawn(
-      "node",
-      ["--import", "tsx", benchmarkEditScriptPath(), String(downstreamCount)],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+    const child = spawn(command, args, {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
     let stdout = "";
     let stderr = "";
@@ -60,31 +59,61 @@ export async function runPerfSmokeBenchmark(
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(
-          new Error(stderr || stdout || `perf smoke benchmark exited with code ${String(code)}`),
-        );
+        reject(new Error(stderr || stdout || `${command} exited with code ${String(code)}`));
         return;
       }
-      try {
-        const parsed = JSON.parse(stdout) as unknown;
-        if (!isPerfSmokeBenchmarkResult(parsed)) {
-          reject(new Error("Perf smoke benchmark output did not match the expected shape"));
-          return;
-        }
-        resolve(parsed);
-      } catch (error) {
-        reject(
-          new Error(
-            `Failed to parse perf smoke benchmark output: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
-      }
+      resolve(stdout);
     });
   });
 }
 
+export async function buildWasmKernelForPerfSmoke(): Promise<void> {
+  await spawnCommand("pnpm", ["wasm:build"]);
+}
+
+export async function runPerfSmokeBenchmark(
+  downstreamCount = 1_000,
+): Promise<PerfSmokeBenchmarkResult> {
+  const stdout = await spawnCommand("node", [
+    "--import",
+    "tsx",
+    benchmarkEditScriptPath(),
+    String(downstreamCount),
+  ]);
+
+  try {
+    const parsed = JSON.parse(stdout) as unknown;
+    if (!isPerfSmokeBenchmarkResult(parsed)) {
+      throw new Error("Perf smoke benchmark output did not match the expected shape");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(
+      `Failed to parse perf smoke benchmark output: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        cause: error,
+      },
+    );
+  }
+}
+
+export async function runPerfSmokeGate(
+  downstreamCount = 1_000,
+  dependencies: PerfSmokeDependencies = {
+    runBenchmark: runPerfSmokeBenchmark,
+    buildWasm: buildWasmKernelForPerfSmoke,
+  },
+): Promise<PerfSmokeBenchmarkResult> {
+  const firstPass = await dependencies.runBenchmark(downstreamCount);
+  if (firstPass.metrics.wasmFormulaCount > 0) {
+    return firstPass;
+  }
+  await dependencies.buildWasm();
+  return await dependencies.runBenchmark(downstreamCount);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { elapsedMs: elapsed, metrics, downstreamCount } = await runPerfSmokeBenchmark();
+  const { elapsedMs: elapsed, metrics, downstreamCount } = await runPerfSmokeGate();
 
   if (elapsed > 250) {
     console.error(`perf smoke exceeded threshold: ${elapsed.toFixed(2)}ms`);
