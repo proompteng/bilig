@@ -377,6 +377,7 @@ export function createEngineFormulaEvaluationService(args: {
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
       resolveExactVectorMatch: (request) => args.lookup.findExactVectorMatch(request),
+      resolveApproximateVectorMatch: (request) => args.lookup.findApproximateVectorMatch(request),
       ...(lookupBuiltinResolver
         ? {
             resolveLookupBuiltin: lookupBuiltinResolver,

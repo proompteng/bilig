@@ -861,6 +861,73 @@ function executePlan(
         stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
         break;
       }
+      case "lookup-approximate-match": {
+        const lookupOperand = popArgument(stack);
+        const lookupValue = isSingleCellValue(lookupOperand);
+        if (!lookupValue) {
+          stack.push({ kind: "scalar", value: error(ErrorCode.Value) });
+          break;
+        }
+
+        const sheetName = instruction.sheetName ?? context.sheetName;
+        const directMatch = context.resolveApproximateVectorMatch?.({
+          lookupValue,
+          sheetName,
+          start: instruction.start,
+          end: instruction.end,
+          startRow: instruction.startRow,
+          endRow: instruction.endRow,
+          startCol: instruction.startCol,
+          endCol: instruction.endCol,
+          matchMode: instruction.matchMode,
+        });
+        if (directMatch?.handled) {
+          stack.push({
+            kind: "scalar",
+            value:
+              directMatch.position === undefined
+                ? error(ErrorCode.NA)
+                : { tag: ValueTag.Number, value: directMatch.position },
+          });
+          break;
+        }
+
+        const values = context.resolveRange(
+          sheetName,
+          instruction.start,
+          instruction.end,
+          instruction.refKind,
+        );
+        context.noteRangeMaterialization?.(values.length);
+        const rows = instruction.endRow - instruction.startRow + 1;
+        const cols = instruction.endCol - instruction.startCol + 1;
+
+        const rangeArg: RangeBuiltinArgument = {
+          kind: "range",
+          values,
+          refKind: instruction.refKind,
+          rows,
+          cols,
+          sheetName,
+          start: instruction.start,
+          end: instruction.end,
+        };
+        const lookupBuiltin =
+          context.resolveLookupBuiltin?.(instruction.callee) ??
+          getLookupBuiltin(instruction.callee);
+        if (!lookupBuiltin) {
+          stack.push({ kind: "scalar", value: error(ErrorCode.Name) });
+          break;
+        }
+
+        const matchModeValue = { tag: ValueTag.Number, value: instruction.matchMode } as const;
+        const result =
+          instruction.callee === "MATCH"
+            ? lookupBuiltin(lookupValue, rangeArg, matchModeValue)
+            : lookupBuiltin(lookupValue, rangeArg, matchModeValue);
+        stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
+        break;
+      }
       case "push-lambda":
         stack.push({
           kind: "lambda",

@@ -2652,7 +2652,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
   });
 
-  it("uses the wasm fast path for vector lookup builtins", async () => {
+  it("uses the wasm fast path for exact vector lookup builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -2670,10 +2670,6 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellFormula("Sheet1", "D1", 'MATCH("pear",A1:A4,0)');
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
-
-    engine.setCellFormula("Sheet1", "D2", "MATCH(4,C1:C3,1)");
-    expect(engine.getCellValue("Sheet1", "D2")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.setCellFormula("Sheet1", "D3", 'XMATCH("pear",A1:A4,0,-1)');
@@ -2696,6 +2692,24 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Number, value: 10 });
     expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
+  });
+
+  it("uses the direct js path for approximate sorted MATCH", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "approx-lookup" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "C1", 1);
+    engine.setCellValue("Sheet1", "C2", 3);
+    engine.setCellValue("Sheet1", "C3", 5);
+
+    engine.setCellFormula("Sheet1", "D1", "MATCH(4,C1:C3,1)");
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.explainCell("Sheet1", "D1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "C2", 4);
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
   });
 
   it("uses the indexed js path for exact MATCH when column indexing is enabled", async () => {

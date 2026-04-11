@@ -155,6 +155,83 @@ function lowerExactVectorLookup(
   return false;
 }
 
+function lowerApproximateVectorLookup(
+  node: Extract<FormulaNode, { kind: "CallExpr" }>,
+  plan: JsPlanInstruction[],
+): boolean {
+  const callee = node.callee.toUpperCase();
+  const lookupRange = node.args[1];
+  if (
+    callee === "MATCH" &&
+    node.args.length === 3 &&
+    lookupRange !== undefined &&
+    isVectorCellRange(lookupRange)
+  ) {
+    const matchMode = staticIntegerValue(node.args[2]);
+    if (matchMode === 1 || matchMode === -1) {
+      const parsedRange = parseRangeAddress(
+        `${lookupRange.start}:${lookupRange.end}`,
+        lookupRange.sheetName,
+      );
+      if (parsedRange.kind !== "cells") {
+        return false;
+      }
+      lowerNode(node.args[0]!, plan);
+      plan.push({
+        opcode: "lookup-approximate-match",
+        callee: "MATCH",
+        ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
+        start: lookupRange.start,
+        end: lookupRange.end,
+        startRow: parsedRange.start.row,
+        endRow: parsedRange.end.row,
+        startCol: parsedRange.start.col,
+        endCol: parsedRange.end.col,
+        refKind: "cells",
+        matchMode,
+      });
+      return true;
+    }
+  }
+
+  if (
+    callee === "XMATCH" &&
+    node.args.length >= 3 &&
+    node.args.length <= 4 &&
+    lookupRange !== undefined &&
+    isVectorCellRange(lookupRange)
+  ) {
+    const matchMode = staticIntegerValue(node.args[2]);
+    const searchMode = node.args.length === 4 ? staticIntegerValue(node.args[3]) : 1;
+    if ((matchMode === 1 || matchMode === -1) && searchMode === 1) {
+      const parsedRange = parseRangeAddress(
+        `${lookupRange.start}:${lookupRange.end}`,
+        lookupRange.sheetName,
+      );
+      if (parsedRange.kind !== "cells") {
+        return false;
+      }
+      lowerNode(node.args[0]!, plan);
+      plan.push({
+        opcode: "lookup-approximate-match",
+        callee: "XMATCH",
+        ...(lookupRange.sheetName === undefined ? {} : { sheetName: lookupRange.sheetName }),
+        start: lookupRange.start,
+        end: lookupRange.end,
+        startRow: parsedRange.start.row,
+        endRow: parsedRange.end.row,
+        startCol: parsedRange.start.col,
+        endCol: parsedRange.end.col,
+        refKind: "cells",
+        matchMode,
+      });
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
   switch (node.kind) {
     case "NumberLiteral":
@@ -226,6 +303,9 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
         return;
       }
       if (lowerExactVectorLookup(node, plan)) {
+        return;
+      }
+      if (lowerApproximateVectorLookup(node, plan)) {
         return;
       }
       const callee = node.callee.toUpperCase();

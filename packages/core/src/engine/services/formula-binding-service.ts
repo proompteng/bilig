@@ -150,6 +150,10 @@ function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
   return collectIndexedExactLookupCandidates(node).length > 0;
 }
 
+function hasDirectApproximateLookupCandidate(node: FormulaNode): boolean {
+  return collectDirectApproximateLookupCandidates(node).length > 0;
+}
+
 interface IndexedExactLookupCandidate {
   sheetName?: string;
   start: string;
@@ -233,6 +237,89 @@ function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedExactLoo
   }
 }
 
+interface DirectApproximateLookupCandidate {
+  sheetName?: string;
+  start: string;
+  end: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+function collectDirectApproximateLookupCandidates(
+  node: FormulaNode,
+): DirectApproximateLookupCandidate[] {
+  switch (node.kind) {
+    case "CallExpr": {
+      const callee = node.callee.trim().toUpperCase();
+      const lookupRange = node.args[1];
+      if (
+        lookupRange?.kind === "RangeRef" &&
+        lookupRange.refKind === "cells" &&
+        lookupRange.start !== lookupRange.end
+      ) {
+        const matchMode = staticIntegerValue(node.args[2]);
+        const searchMode = node.args.length >= 4 ? staticIntegerValue(node.args[3]) : 1;
+        const isDirectApproximateLookupCall =
+          (callee === "MATCH" && node.args.length === 3 && (matchMode === 1 || matchMode === -1)) ||
+          (callee === "XMATCH" &&
+            node.args.length >= 3 &&
+            node.args.length <= 4 &&
+            (matchMode === 1 || matchMode === -1) &&
+            searchMode === 1);
+        if (isDirectApproximateLookupCall) {
+          const parsedRange = parseRangeAddress(
+            `${lookupRange.start}:${lookupRange.end}`,
+            lookupRange.sheetName,
+          );
+          if (parsedRange.kind === "cells") {
+            return [
+              {
+                ...(lookupRange.sheetName === undefined
+                  ? {}
+                  : { sheetName: lookupRange.sheetName }),
+                start: lookupRange.start,
+                end: lookupRange.end,
+                startRow: parsedRange.start.row,
+                endRow: parsedRange.end.row,
+                startCol: parsedRange.start.col,
+                endCol: parsedRange.end.col,
+              },
+              ...node.args.flatMap(collectDirectApproximateLookupCandidates),
+            ];
+          }
+        }
+      }
+      return node.args.flatMap(collectDirectApproximateLookupCandidates);
+    }
+    case "UnaryExpr":
+      return collectDirectApproximateLookupCandidates(node.argument);
+    case "BinaryExpr":
+      return [
+        ...collectDirectApproximateLookupCandidates(node.left),
+        ...collectDirectApproximateLookupCandidates(node.right),
+      ];
+    case "InvokeExpr":
+      return [
+        ...collectDirectApproximateLookupCandidates(node.callee),
+        ...node.args.flatMap(collectDirectApproximateLookupCandidates),
+      ];
+    case "BooleanLiteral":
+    case "CellRef":
+    case "ColumnRef":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "NumberLiteral":
+    case "RangeRef":
+    case "RowRef":
+    case "SpillRef":
+    case "StringLiteral":
+    case "StructuredRef":
+      return [];
+  }
+}
+
 const PUSH_CELL_OPCODE = Number(Opcode.PushCell);
 const PUSH_RANGE_OPCODE = Number(Opcode.PushRange);
 const PUSH_STRING_OPCODE = Number(Opcode.PushString);
@@ -242,7 +329,10 @@ export function createEngineFormulaBindingService(args: {
     EngineRuntimeState,
     "workbook" | "strings" | "formulas" | "ranges" | "useColumnIndex"
   >;
-  readonly lookup: Pick<EngineLookupService, "primeExactColumnIndex">;
+  readonly lookup: Pick<
+    EngineLookupService,
+    "primeExactColumnIndex" | "primeApproximateColumnIndex"
+  >;
   readonly edgeArena: EdgeArena;
   readonly programArena: Uint32Arena;
   readonly constantArena: Float64Arena;
@@ -405,8 +495,11 @@ export function createEngineFormulaBindingService(args: {
     source: string,
   ): ReturnType<typeof compileFormula> => {
     const compiled = compileFormula(source);
-    if (args.state.useColumnIndex && compiled.mode === FormulaMode.WasmFastPath) {
-      if (hasIndexedExactLookupCandidate(compiled.optimizedAst)) {
+    if (compiled.mode === FormulaMode.WasmFastPath) {
+      if (
+        (args.state.useColumnIndex && hasIndexedExactLookupCandidate(compiled.optimizedAst)) ||
+        hasDirectApproximateLookupCandidate(compiled.optimizedAst)
+      ) {
         compiled.mode = FormulaMode.JsOnly;
       }
     }
@@ -435,8 +528,12 @@ export function createEngineFormulaBindingService(args: {
       symbolicTables: compiled.symbolicTables,
       symbolicSpills: compiled.symbolicSpills,
     });
-    if (args.state.useColumnIndex && resolvedCompiled.mode === FormulaMode.WasmFastPath) {
-      if (hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst)) {
+    if (resolvedCompiled.mode === FormulaMode.WasmFastPath) {
+      if (
+        (args.state.useColumnIndex &&
+          hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst)) ||
+        hasDirectApproximateLookupCandidate(resolvedCompiled.optimizedAst)
+      ) {
         resolvedCompiled.mode = FormulaMode.JsOnly;
       }
     }
@@ -601,6 +698,9 @@ export function createEngineFormulaBindingService(args: {
     const indexedExactLookupCandidates = args.state.useColumnIndex
       ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
       : [];
+    const directApproximateLookupCandidates = collectDirectApproximateLookupCandidates(
+      compiled.optimizedAst,
+    );
     const dependencies = materializeDependencies(ownerSheetName, compiled);
     clearFormulaNow(cellIndex);
 
@@ -733,6 +833,17 @@ export function createEngineFormulaBindingService(args: {
         return;
       }
       args.lookup.primeExactColumnIndex({
+        sheetName: candidate.sheetName ?? ownerSheetName,
+        rowStart: candidate.startRow,
+        rowEnd: candidate.endRow,
+        col: candidate.startCol,
+      });
+    });
+    directApproximateLookupCandidates.forEach((candidate) => {
+      if (candidate.startCol !== candidate.endCol) {
+        return;
+      }
+      args.lookup.primeApproximateColumnIndex({
         sheetName: candidate.sheetName ?? ownerSheetName,
         rowStart: candidate.startRow,
         rowEnd: candidate.endRow,

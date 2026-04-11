@@ -111,7 +111,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | control suite `4/6` wins and expanded matrix `4/13` wins | HyperFormula still leads the expanded matrix on current host | `WorkPaper` now leads the narrow control suite, but the broader matrix still exposes real deficits in mixed-content build, formula edits, chain edits, batch edits, indexed lookup, approximate lookup, and even dense range reads on the wider fixture set | convert the remaining red workloads into majority `bilig` wins across both the control suite and the expanded matrix |
+| Performance dominance | Directly comparable benchmark workloads | control suite `4/6` wins and expanded matrix `6/13` wins | HyperFormula still leads the expanded matrix on current host | `WorkPaper` still leads the narrow control suite, and the broader matrix is now near-even after approximate sorted lookup collapsed from a major loss to near parity, but mixed-content build, formula edits, chain edits, batch edits, and indexed lookup remain red | convert the remaining red workloads into majority `bilig` wins across both the control suite and the expanded matrix |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -139,26 +139,29 @@ Current measured values from local repo artifacts and docs:
   - `WorkPaper` wins: `4/6`
   - HyperFormula wins: `2/6`
   - current `WorkPaper` control-suite wins on this host:
-    - build-from-sheets at `4.11x` faster
-    - single-edit recalculation at `1.05x` faster
-    - range-read at `1.05x` faster
-    - lookup without column indexing at `1.40x` faster
-  - HyperFormula current control-suite win range on this host: `1.29x` to `1.54x`
+    - build-from-sheets at `4.37x` faster
+    - single-edit recalculation at `1.06x` faster
+    - range-read at `1.03x` faster
+    - lookup without column indexing at `1.49x` faster
+  - HyperFormula current control-suite win range on this host: `1.39x` to `1.61x`
   - directly comparable expanded-matrix benchmark record:
-  - `WorkPaper` wins: `4/13`
-  - HyperFormula wins: `9/13`
+  - `WorkPaper` wins: `6/13`
+  - HyperFormula wins: `7/13`
   - current `WorkPaper` expanded-matrix wins on this host:
-    - build-dense-literals at `5.31x` faster
-    - build-many-sheets at `3.19x` faster
-    - lookup without column indexing at `1.44x` faster
-    - lookup-text-exact at `3.70x` faster
-  - HyperFormula current expanded-matrix win range on this host: `1.19x` to `6.67x`
+    - build-dense-literals at `4.39x` faster
+    - build-many-sheets at `2.82x` faster
+    - single-edit-fanout at `1.06x` faster
+    - range-read-dense at `1.21x` faster
+    - lookup without column indexing at `1.57x` faster
+    - lookup-text-exact at `3.56x` faster
+  - HyperFormula current expanded-matrix win range on this host: `1.05x` to `4.38x`
   - notable improvements from the latest tranches:
     - build-from-sheets improved from `6.95x` slower to a `WorkPaper` win at `4.11x` faster
     - batch-edit recalculation improved from `1000.39x` slower to `1.54x` slower after hot-loop `Effect` crossings were removed from the internal engine runtime, simple-cell history capture was specialized, deferred literal batch undo stopped using the generic engine path, coordinate-native simple-cell mutation landed in core, plain literal overwrites got a dedicated fast path, and column-version invalidation started batching across local mutation bursts
     - single-edit recalculation improved from `1.42x` slower to a `WorkPaper` win at `1.05x` faster after large fresh-workbook formula sets started bootstrapping the WASM kernel synchronously on Node/Bun, public mutation entrypoints stopped routing through the generic `Effect` wrapper, coordinate-native simple-cell mutation paths stopped reparsing `sheetName + A1` on the engine hot path, and local-only headless engine instances stopped paying replica-version bookkeeping
     - lookup without column indexing improved from `134.35x` slower to a `WorkPaper` win at `1.40x` faster after the headless full-workbook diff path was removed from ordinary edits and the mutation pipeline stopped paying per-op internal `Effect` crossings
-    - lookup with `useColumnIndex` improved from `134.35x` slower to `1.29x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, eager index priming, literal-only direct initialization, trusted owned-op execution, synchronous internal engine wiring, thresholded fresh-workbook kernel bootstrap, cheaper public mutation dispatch, and coordinate-native simple-cell mutation landed
+    - lookup with `useColumnIndex` improved from `134.35x` slower to near parity at `1.22x` slower after direct exact lookup, event-driven `WorkPaper` change tracking, eager index priming, literal-only direct initialization, trusted owned-op execution, synchronous internal engine wiring, thresholded fresh-workbook kernel bootstrap, cheaper public mutation dispatch, and coordinate-native simple-cell mutation landed
+    - lookup-approximate-sorted improved from `6.67x` slower to near parity at `1.05x` slower after approximate `MATCH` / `XMATCH` vector shapes started routing through a direct binary-search lookup service instead of the generic evaluator range-materialization path
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
@@ -386,25 +389,26 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- batch-edit recalculation: HyperFormula currently leads by `1.54x`
-- lookup with column indexing: HyperFormula currently leads by `1.29x`
-- single-edit recalculation: `WorkPaper` currently leads by `1.05x`
-- lookup without column indexing: `WorkPaper` currently leads by `1.40x`
-- range-read: `WorkPaper` currently leads by `1.05x`
-- build from sheets: `WorkPaper` currently leads by `4.11x`
-- mixed-content build: HyperFormula currently leads by `2.79x`
-- approximate sorted lookup: HyperFormula currently leads by `6.67x`
+- batch-edit recalculation: HyperFormula currently leads by `1.61x`
+- lookup with column indexing: HyperFormula currently leads by `1.39x`
+- single-edit recalculation: `WorkPaper` currently leads by `1.06x`
+- lookup without column indexing: `WorkPaper` currently leads by `1.49x`
+- range-read: `WorkPaper` currently leads by `1.03x`
+- build from sheets: `WorkPaper` currently leads by `4.37x`
+- mixed-content build: HyperFormula currently leads by `4.38x`
+- approximate sorted lookup: HyperFormula currently leads by `1.05x`
 - single formula edit recalc: HyperFormula currently leads by `2.53x`
-- single edit chain recalc: HyperFormula currently leads by `1.41x`
-- batch single-column edit recalc: HyperFormula currently leads by `1.69x`
+- single edit chain recalc: HyperFormula currently leads by `1.30x`
+- batch single-column edit recalc: HyperFormula currently leads by `1.75x`
 - batch multi-column edit recalc: HyperFormula currently leads by `1.54x`
-- range-read-dense: HyperFormula currently leads by `1.50x`
-- lookup with column indexing on the expanded matrix: HyperFormula currently leads by `1.19x`
+- range-read-dense: `WorkPaper` currently leads by `1.21x`
+- lookup with column indexing on the expanded matrix: HyperFormula currently leads by `1.22x`
 
 The important trend changes are:
 
 - the triple-digit lookup deficits are gone
 - the last tranches proved that `WorkPaper` facade overhead was masking engine progress; removing whole-workbook before/after diffs from ordinary edits cut the lookup workloads down to single-digit territory
+- approximate sorted lookup is no longer the dominant performance gap; the remaining primary red lanes are now mixed-content build plus formula-edit and batch-edit recalculation
 - direct reads from workbook storage improved the build and edit workloads again after the event-driven diff path landed
 - `useColumnIndex` is now a real direct lookup path and meets the phase-1 threshold, but HyperFormula still has a faster core search subsystem
 

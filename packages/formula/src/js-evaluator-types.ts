@@ -43,6 +43,17 @@ export interface EvaluationContext {
     endCol: number;
     searchMode: 1 | -1;
   }) => ExactVectorMatchResult;
+  resolveApproximateVectorMatch?: (request: {
+    lookupValue: CellValue;
+    sheetName: string;
+    start: string;
+    end: string;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+    matchMode: 1 | -1;
+  }) => ApproximateVectorMatchResult;
   noteRangeMaterialization?: (cellCount: number) => void;
   noteExactLookupDirect?: () => void;
   noteExactLookupFallback?: () => void;
@@ -54,6 +65,8 @@ export interface EvaluationContext {
 export type ExactVectorMatchResult =
   | { handled: false }
   | { handled: true; position: number | undefined };
+
+export type ApproximateVectorMatchResult = ExactVectorMatchResult;
 
 export interface ReferenceOperand {
   kind: "cell" | "range" | "row" | "col";
@@ -90,6 +103,19 @@ export type JsPlanInstruction =
       endCol: number;
       refKind: "cells";
       searchMode: 1 | -1;
+    }
+  | {
+      opcode: "lookup-approximate-match";
+      callee: "MATCH" | "XMATCH";
+      sheetName?: string;
+      start: string;
+      end: string;
+      startRow: number;
+      endRow: number;
+      startCol: number;
+      endCol: number;
+      refKind: "cells";
+      matchMode: 1 | -1;
     }
   | { opcode: "push-lambda"; params: string[]; body: JsPlanInstruction[] }
   | { opcode: "unary"; operator: "+" | "-" }

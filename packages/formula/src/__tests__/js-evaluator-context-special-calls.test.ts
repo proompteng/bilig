@@ -131,6 +131,84 @@ describe("js evaluator context special calls", () => {
     expect(noteRangeMaterialization).toHaveBeenCalledWith(3);
     expect(resolveRange).toHaveBeenCalledTimes(1);
   });
+
+  it("evaluates approximate lookup opcodes through the normal builtin path", () => {
+    const noteRangeMaterialization = vi.fn();
+    const resolveRange = vi.fn(() => [number(1), number(3), number(5)]);
+
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-number", value: 4 },
+          {
+            opcode: "lookup-approximate-match",
+            callee: "MATCH",
+            start: "A1",
+            end: "A3",
+            startRow: 0,
+            endRow: 2,
+            startCol: 0,
+            endCol: 0,
+            refKind: "cells",
+            matchMode: 1,
+          },
+          { opcode: "return" },
+        ],
+        {
+          ...context,
+          resolveRange,
+          noteRangeMaterialization,
+        },
+      ),
+    ).toEqual(number(2));
+    expect(noteRangeMaterialization).toHaveBeenCalledWith(3);
+    expect(resolveRange).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses direct approximate lookup without materializing the range when a handler is present", () => {
+    const resolveApproximateVectorMatch = vi.fn(() => ({ handled: true, position: 2 }));
+    const resolveRange = vi.fn(() => {
+      throw new Error("resolveRange should not be called for direct approximate lookup");
+    });
+
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MATCH(4,A1:A3,1)")), {
+        ...context,
+        resolveRange,
+        resolveApproximateVectorMatch,
+      }),
+    ).toEqual(number(2));
+    expect(resolveApproximateVectorMatch).toHaveBeenCalledWith({
+      lookupValue: number(4),
+      sheetName: "Sheet2",
+      start: "A1",
+      end: "A3",
+      startRow: 0,
+      endRow: 2,
+      startCol: 0,
+      endCol: 0,
+      matchMode: 1,
+    });
+    expect(resolveRange).not.toHaveBeenCalled();
+  });
+
+  it("falls back to XMATCH approximate evaluation when the direct handler declines", () => {
+    const resolveApproximateVectorMatch = vi.fn(() => ({ handled: false }));
+    const noteRangeMaterialization = vi.fn();
+    const resolveRange = vi.fn(() => [number(9), number(7), number(5)]);
+
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("XMATCH(6,A1:A3,-1)")), {
+        ...context,
+        resolveRange,
+        resolveApproximateVectorMatch,
+        noteRangeMaterialization,
+      }),
+    ).toEqual(number(2));
+    expect(resolveApproximateVectorMatch).toHaveBeenCalledTimes(1);
+    expect(noteRangeMaterialization).toHaveBeenCalledWith(3);
+    expect(resolveRange).toHaveBeenCalledTimes(1);
+  });
 });
 
 function number(value: number): CellValue {

@@ -141,6 +141,40 @@ describe("formula parser/compiler edges", () => {
       { opcode: "return" },
     ]);
 
+    expect(lowerToPlan(parseFormula("MATCH(A1,A2:A4,1)"))).toEqual([
+      { opcode: "push-cell", address: "A1" },
+      {
+        opcode: "lookup-approximate-match",
+        callee: "MATCH",
+        start: "A2",
+        end: "A4",
+        startRow: 1,
+        endRow: 3,
+        startCol: 0,
+        endCol: 0,
+        refKind: "cells",
+        matchMode: 1,
+      },
+      { opcode: "return" },
+    ]);
+
+    expect(lowerToPlan(parseFormula('XMATCH("pear",A1:A4,-1)'))).toEqual([
+      { opcode: "push-string", value: "pear" },
+      {
+        opcode: "lookup-approximate-match",
+        callee: "XMATCH",
+        start: "A1",
+        end: "A4",
+        startRow: 0,
+        endRow: 3,
+        startCol: 0,
+        endCol: 0,
+        refKind: "cells",
+        matchMode: -1,
+      },
+      { opcode: "return" },
+    ]);
+
     expect(lowerToPlan(parseFormula("MATCH(A1,A2:A4)"))).toEqual([
       { opcode: "push-cell", address: "A1" },
       { opcode: "push-range", start: "A2", end: "A4", refKind: "cells" },
