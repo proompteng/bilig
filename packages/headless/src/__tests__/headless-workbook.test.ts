@@ -272,6 +272,40 @@ describe("HeadlessWorkbook", () => {
     ]);
   });
 
+  it("keeps deferred literal batch updates correct across multiple sheets", () => {
+    const workbook = HeadlessWorkbook.buildFromSheets({
+      First: [[1], ["=A1*2"]],
+      Second: [[3]],
+    });
+    const firstId = workbook.getSheetId("First")!;
+    const secondId = workbook.getSheetId("Second")!;
+
+    const changes = workbook.batch(() => {
+      workbook.setCellContents(cell(firstId, 0, 0), 10);
+      workbook.setCellContents(cell(secondId, 0, 0), 7);
+    });
+
+    expect(
+      changes.map((change) => (change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "")),
+    ).toEqual(["First!A1", "First!A2", "Second!A1"]);
+    expect(workbook.getCellValue(cell(firstId, 1, 0))).toEqual({
+      tag: ValueTag.Number,
+      value: 20,
+    });
+
+    const undoChanges = workbook.undo();
+
+    expect(
+      undoChanges.map((change) =>
+        change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "",
+      ),
+    ).toEqual(["First!A1", "First!A2", "Second!A1"]);
+    expect(workbook.getCellValue(cell(firstId, 1, 0))).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+  });
+
   it("suppresses readable value getters while evaluation is suspended and flushes on resume", () => {
     const workbook = HeadlessWorkbook.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;

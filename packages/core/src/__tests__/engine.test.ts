@@ -5545,6 +5545,35 @@ describe("SpreadsheetEngine", () => {
     expect(events[0]?.changedCellIndices.length).toBeGreaterThan(0);
   });
 
+  it("applies coordinate-native cell mutations with formula recomputation and undo compatibility", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    engine.setCellValueAt(sheetId, 0, 0, 2);
+    engine.setCellFormulaAt(sheetId, 0, 1, "A1*3");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    const undoOps = engine.applyCellMutationsAt(
+      [
+        { sheetId, mutation: { kind: "setCellValue", row: 0, col: 0, value: 5 } },
+        { sheetId, mutation: { kind: "clearCell", row: 1, col: 0 } },
+      ],
+      1,
+    );
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(undoOps).not.toBeNull();
+
+    engine.applyOps(undoOps ?? [], { captureUndo: true });
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+  });
+
   it("reads rectangular range values as a dense matrix without per-cell callers", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
