@@ -574,6 +574,26 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     if (!entry.text?.trim().length) {
       return null;
     }
+    if (entry.phase === "progress") {
+      return (
+        <div className="px-1 py-1.5">
+          <div
+            aria-live="polite"
+            className={cn(
+              workbookInsetClass(),
+              "flex items-center gap-2 px-2.5 py-2 text-[12px] leading-5 text-[var(--wb-text-muted)]",
+            )}
+            data-testid="workbook-agent-progress-row"
+            role="status"
+          >
+            <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
+              Responding
+            </span>
+            <span className="min-w-0 truncate">{entry.text}</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="px-1 py-1 text-[13px] leading-5 text-[var(--wb-text)]">
         <WorkbookAgentMarkdown markdown={entry.text} />
@@ -995,6 +1015,7 @@ function PendingBundleCard(props: {
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
   readonly currentContext: WorkbookAgentUiContext | null;
+  readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
@@ -1064,6 +1085,7 @@ export function WorkbookAgentPanel(props: {
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const visibleEntries = [...(props.optimisticEntries ?? []), ...(props.snapshot?.entries ?? [])];
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -1071,7 +1093,7 @@ export function WorkbookAgentPanel(props: {
       return;
     }
     node.scrollTop = node.scrollHeight;
-  }, [props.snapshot?.entries.length, props.snapshot?.status]);
+  }, [props.snapshot?.status, visibleEntries.length]);
 
   const isRunning = props.snapshot?.status === "inProgress";
 
@@ -1114,9 +1136,9 @@ export function WorkbookAgentPanel(props: {
             />
           </div>
         ) : null}
-        {props.isLoading ? null : props.snapshot && props.snapshot.entries.length > 0 ? (
+        {props.isLoading ? null : visibleEntries.length > 0 ? (
           <div className="flex flex-col gap-1.5">
-            {props.snapshot.entries.map((entry) => (
+            {visibleEntries.map((entry) => (
               <WorkbookAgentEntryRow key={entry.id} entry={entry} />
             ))}
             {props.workflowRuns.length > 0 ? (

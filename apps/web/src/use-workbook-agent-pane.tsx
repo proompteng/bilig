@@ -12,6 +12,7 @@ import {
 import {
   WorkbookAgentSessionSnapshotSchema,
   WorkbookAgentStreamEventSchema,
+  type WorkbookAgentTimelineEntry,
   WorkbookAgentThreadScopeSchema,
   WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
@@ -231,6 +232,24 @@ function normalizeWorkbookAgentErrorMessage(error: string): string {
   return error;
 }
 
+function hasVisibleAssistantActivity(snapshot: WorkbookAgentSessionSnapshot | null): boolean {
+  if (!snapshot) {
+    return false;
+  }
+  return snapshot.entries.some((entry) => {
+    if (entry.kind === "assistant" && entry.text?.trim().length) {
+      return true;
+    }
+    if (entry.kind === "plan" && entry.text?.trim().length) {
+      return true;
+    }
+    if (entry.kind === "tool" && entry.toolStatus !== null) {
+      return true;
+    }
+    return false;
+  });
+}
+
 export function useWorkbookAgentPane(input: {
   readonly currentUserId: string;
   readonly documentId: string;
@@ -258,6 +277,7 @@ export function useWorkbookAgentPane(input: {
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
+  const [pendingUserPrompt, setPendingUserPrompt] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const [fetchedThreadSummaries, setFetchedThreadSummaries] = useState<
@@ -298,6 +318,43 @@ export function useWorkbookAgentPane(input: {
     [zero],
   );
   const usesLiveThreadSummaries = zeroEnabled && Boolean(zero);
+  const optimisticEntries = useMemo<readonly WorkbookAgentTimelineEntry[]>(() => {
+    const entries: WorkbookAgentTimelineEntry[] = [];
+    if (pendingUserPrompt?.trim().length) {
+      entries.push({
+        id: "optimistic-user:pending",
+        kind: "user",
+        turnId: null,
+        text: pendingUserPrompt,
+        phase: null,
+        toolName: null,
+        toolStatus: null,
+        argumentsText: null,
+        outputText: null,
+        success: null,
+        citations: [],
+      });
+    }
+    if (
+      (pendingUserPrompt?.trim().length || snapshot?.status === "inProgress") &&
+      !hasVisibleAssistantActivity(snapshot)
+    ) {
+      entries.push({
+        id: "assistant-progress:pending",
+        kind: "assistant",
+        turnId: snapshot?.activeTurnId ?? null,
+        text: "Reviewing workbook context and drafting a response.",
+        phase: "progress",
+        toolName: null,
+        toolStatus: null,
+        argumentsText: null,
+        outputText: null,
+        success: null,
+        citations: [],
+      });
+    }
+    return entries;
+  }, [pendingUserPrompt, snapshot]);
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -865,6 +922,7 @@ export function useWorkbookAgentPane(input: {
     clearStoredSession(documentId);
     recoveringStreamRef.current = false;
     sessionRef.current = null;
+    setPendingUserPrompt(null);
     setSnapshot(null);
     setPreview(null);
     setSelectedCommandIndexes([]);
@@ -910,6 +968,9 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       setError(null);
+      setPendingUserPrompt(prompt);
+      clearStoredDraft(documentId, activeDraftKey);
+      setDraft("");
       const activeSession = await ensureSession();
       const response = await fetch(
         `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/turns`,
@@ -933,10 +994,11 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
+      setPendingUserPrompt(null);
       persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
-      clearStoredDraft(documentId, activeDraftKey);
-      setDraft("");
     } catch (nextError) {
+      setPendingUserPrompt(null);
+      setDraft(prompt);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
   }, [activeDraftKey, documentId, draft, ensureSession, persistSessionSnapshot]);
@@ -1153,6 +1215,7 @@ export function useWorkbookAgentPane(input: {
         isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
         isStartingWorkflow={isStartingWorkflow}
+        optimisticEntries={optimisticEntries}
         pendingBundle={pendingBundle}
         preview={preview}
         sharedApprovalOwnerUserId={
@@ -1252,6 +1315,7 @@ export function useWorkbookAgentPane(input: {
       isLoading,
       isStartingWorkflow,
       normalizedCommandIndexes,
+      optimisticEntries,
       pendingBundle,
       preview,
       activeThreadSummary?.ownerUserId,

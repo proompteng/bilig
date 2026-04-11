@@ -2997,6 +2997,107 @@ describe("workbook agent pane", () => {
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
+    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows immediate non-spinner progress before the turn request resolves", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    let resolveTurnResponse: ((response: Response) => void) | null = null;
+    const turnResponse = new Promise<Response>((resolve) => {
+      resolveTurnResponse = resolve;
+    });
+    const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(createSnapshot({ entries: [] })), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (url.endsWith("/chat/threads/thr-1/turns")) {
+        return turnResponse;
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["yo"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("yo");
+    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
+
+    await act(async () => {
+      resolveTurnResponse?.(
+        new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "inProgress",
+              activeTurnId: "turn-1",
+              entries: [
+                {
+                  id: "optimistic-user:turn-1",
+                  kind: "user",
+                  turnId: "turn-1",
+                  text: "yo",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+      await turnResponse;
+    });
 
     await act(async () => {
       root.unmount();
@@ -3091,6 +3192,7 @@ describe("workbook agent pane", () => {
       requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
+    expect(host.textContent).toContain("Reviewing workbook context and drafting a response.");
 
     await act(async () => {
       root.unmount();
