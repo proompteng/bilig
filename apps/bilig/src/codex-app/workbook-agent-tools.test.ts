@@ -966,7 +966,8 @@ describe("workbook agent tools", () => {
           stepId: "search-workbook",
           label: "Search workbook",
           status: "completed" as const,
-          summary: 'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
+          summary:
+            'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
           updatedAtUnixMs: 1,
         },
         {
@@ -1203,7 +1204,8 @@ describe("workbook agent tools", () => {
           stepId: "stage-issue-highlights",
           label: "Stage issue highlights",
           status: "completed" as const,
-          summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+          summary:
+            "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
           updatedAtUnixMs: 2,
         },
       ],
@@ -1327,6 +1329,144 @@ describe("workbook agent tools", () => {
     expect(output?.type).toBe("inputText");
     expect(output && "text" in output ? output.text : "").toContain(
       '"workflowTemplate": "normalizeCurrentSheetHeaders"',
+    );
+  });
+
+  it("starts number-format-normalization workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-number-format-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "normalizeCurrentSheetNumberFormats" as const,
+      title: "Normalize Current Sheet Number Formats",
+      summary: "Staged normalized number formats for 3 columns on Imports.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-number-columns",
+          label: "Inspect numeric columns",
+          status: "completed" as const,
+          summary: "Loaded numeric cells and header labels from Imports.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Number Format Normalization Preview",
+        text: "## Number Format Normalization Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-number-format-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "normalizeCurrentSheetNumberFormats",
+          sheetName: "Imports",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "normalizeCurrentSheetNumberFormats",
+      sheetName: "Imports",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "normalizeCurrentSheetNumberFormats"',
+    );
+  });
+
+  it("starts current-sheet rollup workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-rollup-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "createCurrentSheetRollup" as const,
+      title: "Create Current Sheet Rollup",
+      summary: "Staged a rollup preview for Revenue into Revenue Rollup.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-source-sheet",
+          label: "Inspect source sheet",
+          status: "completed" as const,
+          summary: "Loaded the used range and numeric columns from Revenue.",
+          updatedAtUnixMs: 1,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Current Sheet Rollup Preview",
+        text: "## Current Sheet Rollup Preview",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-rollup-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "createCurrentSheetRollup",
+          sheetName: "Revenue",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "createCurrentSheetRollup",
+      sheetName: "Revenue",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "createCurrentSheetRollup"',
     );
   });
 

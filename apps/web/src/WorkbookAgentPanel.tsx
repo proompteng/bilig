@@ -893,10 +893,17 @@ export function WorkbookAgentPanel(props: {
   readonly onCancelWorkflowRun: (runId: string) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onStartWorkflow: (
-    template: Exclude<
-      WorkbookAgentWorkflowRun["workflowTemplate"],
-      "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
-    >,
+    template:
+      | "summarizeWorkbook"
+      | "summarizeCurrentSheet"
+      | "describeRecentChanges"
+      | "findFormulaIssues"
+      | "highlightFormulaIssues"
+      | "normalizeCurrentSheetHeaders"
+      | "normalizeCurrentSheetNumberFormats"
+      | "traceSelectionDependencies"
+      | "explainSelectionCell"
+      | "createCurrentSheetRollup",
   ) => void;
   readonly onStartNamedWorkflow: (
     template: Extract<

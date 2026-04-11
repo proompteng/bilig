@@ -25,6 +25,10 @@ import {
   getImportWorkflowTemplateMetadata,
 } from "./workbook-agent-import-workflows.js";
 import {
+  executeRollupWorkflow,
+  getRollupWorkflowTemplateMetadata,
+} from "./workbook-agent-rollup-workflows.js";
+import {
   executeStructuralWorkflow,
   getStructuralWorkflowTemplateMetadata,
   isStructuralWorkflowTemplate,
@@ -67,7 +71,8 @@ interface WorkbookAgentWorkflowTemplateMetadata {
 }
 
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
-type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders";
+type ImportWorkflowTemplate = "normalizeCurrentSheetHeaders" | "normalizeCurrentSheetNumberFormats";
+type RollupWorkflowTemplate = "createCurrentSheetRollup";
 
 function isFormulaWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
@@ -78,7 +83,16 @@ function isFormulaWorkflowTemplate(
 function isImportWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is ImportWorkflowTemplate {
-  return workflowTemplate === "normalizeCurrentSheetHeaders";
+  return (
+    workflowTemplate === "normalizeCurrentSheetHeaders" ||
+    workflowTemplate === "normalizeCurrentSheetNumberFormats"
+  );
+}
+
+function isRollupWorkflowTemplate(
+  workflowTemplate: WorkbookAgentWorkflowTemplate,
+): workflowTemplate is RollupWorkflowTemplate {
+  return workflowTemplate === "createCurrentSheetRollup";
 }
 
 function getWorkflowTemplateMetadata(
@@ -97,10 +111,18 @@ function getWorkflowTemplateMetadata(
   if (importMetadata) {
     return importMetadata;
   }
+  const rollupMetadata = getRollupWorkflowTemplateMetadata(workflowTemplate, workflowInput);
+  if (rollupMetadata) {
+    return rollupMetadata;
+  }
   if (isStructuralWorkflowTemplate(workflowTemplate)) {
     throw new Error(`Structural workflow metadata resolution fell through: ${workflowTemplate}`);
   }
-  if (isFormulaWorkflowTemplate(workflowTemplate) || isImportWorkflowTemplate(workflowTemplate)) {
+  if (
+    isFormulaWorkflowTemplate(workflowTemplate) ||
+    isImportWorkflowTemplate(workflowTemplate) ||
+    isRollupWorkflowTemplate(workflowTemplate)
+  ) {
     throw new Error(
       `Unexpected workflow template metadata resolution fell through: ${workflowTemplate}`,
     );
@@ -238,9 +260,6 @@ function getWorkflowTemplateMetadata(
         ],
       };
     }
-    case "normalizeCurrentSheetNumberFormats":
-    case "createCurrentSheetRollup":
-      throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
   }
   throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
 }
@@ -656,10 +675,22 @@ export async function executeWorkbookAgentWorkflow(input: {
   if (importResult) {
     return importResult;
   }
+  const rollupResult = await executeRollupWorkflow({
+    documentId: input.documentId,
+    zeroSyncService: input.zeroSyncService,
+    workflowTemplate: input.workflowTemplate,
+    ...(input.context !== undefined ? { context: input.context } : {}),
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
+  });
+  if (rollupResult) {
+    return rollupResult;
+  }
   if (
     isStructuralWorkflowTemplate(input.workflowTemplate) ||
     isFormulaWorkflowTemplate(input.workflowTemplate) ||
-    isImportWorkflowTemplate(input.workflowTemplate)
+    isImportWorkflowTemplate(input.workflowTemplate) ||
+    isRollupWorkflowTemplate(input.workflowTemplate)
   ) {
     throw new Error(`Unexpected workflow execution fell through: ${input.workflowTemplate}`);
   }
@@ -999,9 +1030,6 @@ export async function executeWorkbookAgentWorkflow(input: {
         ],
       };
     }
-    case "normalizeCurrentSheetNumberFormats":
-    case "createCurrentSheetRollup":
-      throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
   }
   throw new Error(`Unsupported workbook agent workflow template: ${workflowTemplate}`);
 }

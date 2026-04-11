@@ -231,7 +231,8 @@ describe("@bilig/contracts", () => {
           stepId: "search-workbook",
           label: "Search workbook",
           status: "completed",
-          summary: 'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
+          summary:
+            'Searched workbook sheets, formulas, values, and addresses for "revenue" and found 2 matches.',
           updatedAtUnixMs: 110,
         },
       ],
@@ -271,7 +272,8 @@ describe("@bilig/contracts", () => {
           stepId: "stage-issue-highlights",
           label: "Stage issue highlights",
           status: "completed",
-          summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+          summary:
+            "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
           updatedAtUnixMs: 115,
         },
       ],
@@ -324,6 +326,86 @@ describe("@bilig/contracts", () => {
 
     expect(decoded.workflowTemplate).toBe("normalizeCurrentSheetHeaders");
     expect(decoded.artifact?.title).toBe("Header Normalization Preview");
+  });
+
+  it("accepts number-format-normalization workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-number-format-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "normalizeCurrentSheetNumberFormats",
+      title: "Normalize Current Sheet Number Formats",
+      summary: "Staged normalized number formats for 3 columns on Imports.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-number-columns",
+          label: "Inspect numeric columns",
+          status: "completed",
+          summary: "Loaded numeric cells and header labels from Imports.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-number-formats",
+          label: "Stage number formats",
+          status: "completed",
+          summary: "Prepared semantic number-format previews for 3 numeric columns.",
+          updatedAtUnixMs: 115,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Number Format Normalization Preview",
+        text: "## Number Format Normalization Preview",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("normalizeCurrentSheetNumberFormats");
+    expect(decoded.artifact?.title).toBe("Number Format Normalization Preview");
+  });
+
+  it("accepts rollup workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-rollup-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "createCurrentSheetRollup",
+      title: "Create Current Sheet Rollup",
+      summary: "Staged a rollup preview for Revenue into Revenue Rollup.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-source-sheet",
+          label: "Inspect source sheet",
+          status: "completed",
+          summary: "Loaded the used range and numeric columns from Revenue.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-rollup-preview",
+          label: "Stage rollup preview",
+          status: "completed",
+          summary: "Prepared the semantic preview that creates Revenue Rollup.",
+          updatedAtUnixMs: 115,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Current Sheet Rollup Preview",
+        text: "## Current Sheet Rollup Preview",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("createCurrentSheetRollup");
+    expect(decoded.artifact?.title).toBe("Current Sheet Rollup Preview");
   });
 
   it("accepts structural workflow templates in durable runs", () => {

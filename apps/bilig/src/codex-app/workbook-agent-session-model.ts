@@ -62,6 +62,10 @@ export const startWorkflowBodySchema = z
       sheetName: z.string().min(1).optional(),
     }),
     z.object({
+      workflowTemplate: z.literal("normalizeCurrentSheetNumberFormats"),
+      sheetName: z.string().min(1).optional(),
+    }),
+    z.object({
       workflowTemplate: z.literal("traceSelectionDependencies"),
     }),
     z.object({
@@ -72,6 +76,10 @@ export const startWorkflowBodySchema = z
       query: z.string().trim().min(1),
       sheetName: z.string().min(1).optional(),
       limit: z.number().int().positive().max(50).optional(),
+    }),
+    z.object({
+      workflowTemplate: z.literal("createCurrentSheetRollup"),
+      sheetName: z.string().min(1).optional(),
     }),
     z.object({
       workflowTemplate: z.literal("createSheet"),
@@ -117,7 +125,7 @@ export function createWorkbookAgentBaseInstructions(): string {
 export function createWorkbookAgentDeveloperInstructions(): string {
   return [
     "Before changing cells you have not inspected, read the relevant workbook range first.",
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.startWorkflow} with summarizeWorkbook, summarizeCurrentSheet, describeRecentChanges, findFormulaIssues, highlightFormulaIssues, normalizeCurrentSheetHeaders, traceSelectionDependencies, explainSelectionCell, searchWorkbookQuery, createSheet, renameCurrentSheet, hideCurrentRow, hideCurrentColumn, unhideCurrentRow, or unhideCurrentColumn when the request matches those built-in durable workflows and you want the result saved in the thread.`,
+    `Use ${WORKBOOK_AGENT_TOOL_NAMES.startWorkflow} with summarizeWorkbook, summarizeCurrentSheet, describeRecentChanges, findFormulaIssues, highlightFormulaIssues, normalizeCurrentSheetHeaders, normalizeCurrentSheetNumberFormats, traceSelectionDependencies, explainSelectionCell, searchWorkbookQuery, createCurrentSheetRollup, createSheet, renameCurrentSheet, hideCurrentRow, hideCurrentColumn, unhideCurrentRow, or unhideCurrentColumn when the request matches those built-in durable workflows and you want the result saved in the thread.`,
     `Use ${WORKBOOK_AGENT_TOOL_NAMES.readWorkbook} first when the user asks for workbook-wide structure, important sheets, or a starting summary and the built-in workflow is not the best fit.`,
     `When the user refers to the current cell, selection, or visible area, call ${WORKBOOK_AGENT_TOOL_NAMES.getContext}.`,
     `Prefer ${WORKBOOK_AGENT_TOOL_NAMES.readSelection}, ${WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange}, and ${WORKBOOK_AGENT_TOOL_NAMES.inspectCell} for context-native workbook analysis.`,

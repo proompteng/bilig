@@ -20,7 +20,6 @@ import {
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
   type WorkbookAgentUiContext,
-  type WorkbookAgentWorkflowTemplate,
   type WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import { Schema } from "effect";
@@ -38,14 +37,35 @@ import {
 } from "./workbook-agent-pane-storage.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
+type RailWorkflowTemplate =
+  | "summarizeWorkbook"
+  | "summarizeCurrentSheet"
+  | "describeRecentChanges"
+  | "findFormulaIssues"
+  | "highlightFormulaIssues"
+  | "normalizeCurrentSheetHeaders"
+  | "normalizeCurrentSheetNumberFormats"
+  | "traceSelectionDependencies"
+  | "explainSelectionCell"
+  | "searchWorkbookQuery"
+  | "createCurrentSheetRollup"
+  | "createSheet"
+  | "renameCurrentSheet"
+  | "hideCurrentRow"
+  | "hideCurrentColumn"
+  | "unhideCurrentRow"
+  | "unhideCurrentColumn";
+
 type WorkbookAgentWorkflowStartRequest =
   | {
       readonly workflowTemplate: Exclude<
-        WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
+        RailWorkflowTemplate,
         | "findFormulaIssues"
         | "highlightFormulaIssues"
         | "normalizeCurrentSheetHeaders"
+        | "normalizeCurrentSheetNumberFormats"
         | "searchWorkbookQuery"
+        | "createCurrentSheetRollup"
         | "createSheet"
         | "renameCurrentSheet"
         | "unhideCurrentRow"
@@ -67,10 +87,18 @@ type WorkbookAgentWorkflowStartRequest =
       readonly sheetName?: string;
     }
   | {
+      readonly workflowTemplate: "normalizeCurrentSheetNumberFormats";
+      readonly sheetName?: string;
+    }
+  | {
       readonly workflowTemplate: "searchWorkbookQuery";
       readonly query: string;
       readonly sheetName?: string;
       readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "createCurrentSheetRollup";
+      readonly sheetName?: string;
     }
   | {
       readonly workflowTemplate: "createSheet";
@@ -1067,7 +1095,9 @@ export function useWorkbookAgentPane(input: {
           if (
             (workflowTemplate === "findFormulaIssues" ||
               workflowTemplate === "highlightFormulaIssues" ||
-              workflowTemplate === "normalizeCurrentSheetHeaders") &&
+              workflowTemplate === "normalizeCurrentSheetHeaders" ||
+              workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
+              workflowTemplate === "createCurrentSheetRollup") &&
             currentContext?.selection.sheetName
           ) {
             void startWorkflow({

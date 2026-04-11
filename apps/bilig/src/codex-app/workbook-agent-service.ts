@@ -242,12 +242,12 @@ function cloneUiContext(context: WorkbookAgentUiContext | null): WorkbookAgentUi
     : null;
 }
 
-function isMutatingWorkflowTemplate(
-  workflowTemplate: WorkbookAgentWorkflowRun["workflowTemplate"],
-): boolean {
+function isMutatingWorkflowTemplate(workflowTemplate: string): boolean {
   return (
     workflowTemplate === "highlightFormulaIssues" ||
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
+    workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
+    workflowTemplate === "createCurrentSheetRollup" ||
     workflowTemplate === "createSheet" ||
     workflowTemplate === "renameCurrentSheet" ||
     workflowTemplate === "hideCurrentRow" ||

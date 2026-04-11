@@ -94,6 +94,10 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     sheetName: z.string().min(1).optional(),
   }),
   z.object({
+    workflowTemplate: z.literal("normalizeCurrentSheetNumberFormats"),
+    sheetName: z.string().min(1).optional(),
+  }),
+  z.object({
     workflowTemplate: z.literal("traceSelectionDependencies"),
   }),
   z.object({
@@ -104,6 +108,10 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     query: z.string().trim().min(1),
     sheetName: z.string().min(1).optional(),
     limit: z.number().int().positive().max(50).optional(),
+  }),
+  z.object({
+    workflowTemplate: z.literal("createCurrentSheetRollup"),
+    sheetName: z.string().min(1).optional(),
   }),
   z.object({
     workflowTemplate: z.literal("createSheet"),
@@ -607,7 +615,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, import-cleanup tasks like header normalization, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, import-cleanup tasks like header or number-format normalization, search/report tasks, rollup previews, or safe structural preview workflows like create-sheet, rename-sheet, and row/column visibility changes.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -622,9 +630,11 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "findFormulaIssues",
               "highlightFormulaIssues",
               "normalizeCurrentSheetHeaders",
+              "normalizeCurrentSheetNumberFormats",
               "traceSelectionDependencies",
               "explainSelectionCell",
               "searchWorkbookQuery",
+              "createCurrentSheetRollup",
               "createSheet",
               "renameCurrentSheet",
               "hideCurrentRow",

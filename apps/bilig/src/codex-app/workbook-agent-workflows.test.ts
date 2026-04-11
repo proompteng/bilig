@@ -109,6 +109,17 @@ describe("workbook agent workflows", () => {
     });
   });
 
+  it("describes number-format normalization through the import metadata path", () => {
+    expect(
+      describeWorkbookAgentWorkflowTemplate("normalizeCurrentSheetNumberFormats", {
+        sheetName: "Imports",
+      }),
+    ).toEqual({
+      title: "Normalize Current Sheet Number Formats",
+      runningSummary: "Running number-format normalization workflow for Imports.",
+    });
+  });
+
   it("executes structural workflow templates without durable workbook inspection", async () => {
     let inspectedWorkbook = false;
     const result = await executeWorkbookAgentWorkflow({
@@ -199,5 +210,174 @@ describe("workbook agent workflows", () => {
     expect(inspectedWorkbook).toBe(true);
     expect(result.title).toBe("Summarize Workbook");
     expect(result.summary).toContain("Summarized workbook structure across 1 sheet");
+  });
+
+  it("executes current-sheet number-format normalization through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Imports");
+          engine.setCellValue("Imports", "A1", "order_date");
+          engine.setCellValue("Imports", "B1", "gross_margin_pct");
+          engine.setCellValue("Imports", "C1", "revenue_usd");
+          engine.setCellValue("Imports", "A2", 45292);
+          engine.setCellValue("Imports", "A3", 45293);
+          engine.setCellValue("Imports", "B2", 0.42);
+          engine.setCellValue("Imports", "B3", 0.31);
+          engine.setCellValue("Imports", "C2", 1200);
+          engine.setCellValue("Imports", "C3", 950.5);
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "normalizeCurrentSheetNumberFormats",
+      context: {
+        selection: {
+          sheetName: "Imports",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Imports",
+      },
+    });
+
+    expect(result.title).toBe("Normalize Current Sheet Number Formats");
+    expect(result.summary).toContain("Staged normalized number formats");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "formatRange",
+        range: {
+          sheetName: "Imports",
+          startAddress: "A2",
+          endAddress: "A3",
+        },
+        numberFormat: expect.objectContaining({
+          kind: "date",
+        }),
+      }),
+      expect.objectContaining({
+        kind: "formatRange",
+        range: {
+          sheetName: "Imports",
+          startAddress: "B2",
+          endAddress: "B3",
+        },
+        numberFormat: expect.objectContaining({
+          kind: "percent",
+        }),
+      }),
+      expect.objectContaining({
+        kind: "formatRange",
+        range: {
+          sheetName: "Imports",
+          startAddress: "C2",
+          endAddress: "C3",
+        },
+        numberFormat: expect.objectContaining({
+          kind: "currency",
+        }),
+      }),
+    ]);
+  });
+
+  it("executes current-sheet rollup workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Revenue");
+          engine.setCellValue("Revenue", "A1", "Region");
+          engine.setCellValue("Revenue", "B1", "January");
+          engine.setCellValue("Revenue", "C1", "February");
+          engine.setCellValue("Revenue", "D1", "Gross Margin");
+          engine.setCellValue("Revenue", "A2", "West");
+          engine.setCellValue("Revenue", "B2", 100);
+          engine.setCellValue("Revenue", "C2", 120);
+          engine.setCellValue("Revenue", "D2", 0.4);
+          engine.setCellValue("Revenue", "A3", "East");
+          engine.setCellValue("Revenue", "B3", 200);
+          engine.setCellValue("Revenue", "C3", 240);
+          engine.setCellValue("Revenue", "D3", 0.35);
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "createCurrentSheetRollup",
+      context: {
+        selection: {
+          sheetName: "Revenue",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Revenue",
+      },
+    });
+
+    expect(result.title).toBe("Create Current Sheet Rollup");
+    expect(result.summary).toContain("Revenue Rollup");
+    expect(result.commands).toEqual([
+      {
+        kind: "createSheet",
+        name: "Revenue Rollup",
+      },
+      expect.objectContaining({
+        kind: "writeRange",
+        sheetName: "Revenue Rollup",
+        startAddress: "A1",
+        values: expect.arrayContaining([
+          expect.arrayContaining(["Metric", "Value"]),
+          expect.arrayContaining(["Source Sheet", "Revenue"]),
+        ]),
+      }),
+    ]);
   });
 });

@@ -71,13 +71,17 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "findFormulaIssues" ||
     value === "highlightFormulaIssues" ||
     value === "normalizeCurrentSheetHeaders" ||
+    value === "normalizeCurrentSheetNumberFormats" ||
     value === "traceSelectionDependencies" ||
     value === "explainSelectionCell" ||
     value === "searchWorkbookQuery" ||
+    value === "createCurrentSheetRollup" ||
     value === "createSheet" ||
     value === "renameCurrentSheet" ||
     value === "hideCurrentRow" ||
-    value === "hideCurrentColumn"
+    value === "hideCurrentColumn" ||
+    value === "unhideCurrentRow" ||
+    value === "unhideCurrentColumn"
   );
 }
 

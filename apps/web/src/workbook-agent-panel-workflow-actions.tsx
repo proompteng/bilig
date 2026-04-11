@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { WorkbookAgentWorkflowTemplate } from "@bilig/contracts";
 import { cn } from "./cn.js";
 import {
   workbookButtonClass,
@@ -7,11 +6,20 @@ import {
   workbookPillClass,
 } from "./workbook-shell-chrome.js";
 
+type WorkflowActionTemplate =
+  | "summarizeWorkbook"
+  | "summarizeCurrentSheet"
+  | "describeRecentChanges"
+  | "findFormulaIssues"
+  | "highlightFormulaIssues"
+  | "normalizeCurrentSheetHeaders"
+  | "normalizeCurrentSheetNumberFormats"
+  | "traceSelectionDependencies"
+  | "explainSelectionCell"
+  | "createCurrentSheetRollup";
+
 interface WorkflowActionDefinition {
-  readonly template: Exclude<
-    WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
-    "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
-  >;
+  readonly template: WorkflowActionTemplate;
   readonly label: string;
   readonly summary: string;
 }
@@ -50,6 +58,18 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
       "Stage a preview bundle that trims, titles, and de-duplicates the active sheet header row.",
   },
   {
+    template: "normalizeCurrentSheetNumberFormats",
+    label: "Normalize number formats",
+    summary:
+      "Stage a preview bundle that infers and applies semantic number formats across the active sheet.",
+  },
+  {
+    template: "createCurrentSheetRollup",
+    label: "Create sheet rollup",
+    summary:
+      "Stage a preview bundle that creates a new rollup sheet with numeric aggregates from the active sheet.",
+  },
+  {
     template: "traceSelectionDependencies",
     label: "Trace selection links",
     summary: "Trace precedents and dependents from the current selection context.",
@@ -64,22 +84,14 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
 export function WorkflowActionStrip(props: {
   readonly disabled: boolean;
   readonly isStartingWorkflow: boolean;
-  readonly onStartWorkflow: (
-    template: Exclude<
-      WorkbookAgentWorkflowTemplate | "normalizeCurrentSheetHeaders",
-      "searchWorkbookQuery" | "createSheet" | "renameCurrentSheet"
-    >,
-  ) => void;
+  readonly onStartWorkflow: (template: WorkflowActionTemplate) => void;
   readonly onStartNamedWorkflow: (
-    template: Extract<WorkbookAgentWorkflowTemplate, "createSheet" | "renameCurrentSheet">,
+    template: "createSheet" | "renameCurrentSheet",
     name: string,
   ) => void;
   readonly onStartSearchWorkflow: (query: string) => void;
   readonly onStartStructuralWorkflow: (
-    template: Extract<
-      WorkbookAgentWorkflowTemplate,
-      "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn"
-    >,
+    template: "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn",
   ) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");

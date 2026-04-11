@@ -2,7 +2,6 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ToastT, ToastToDismiss } from "sonner";
 import { toast } from "sonner";
 import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
@@ -12,17 +11,6 @@ async function flushToasts(): Promise<void> {
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function findActiveToast(id: string): ToastT | null {
-  return (
-    toast
-      .getToasts()
-      .find(
-        (entry: ToastT | ToastToDismiss): entry is ToastT =>
-          !("dismiss" in entry) && entry.id === id,
-      ) ?? null
-  );
 }
 
 class MockEventSource {
@@ -562,8 +550,10 @@ describe("workbook agent pane", () => {
       },
       scope: "private",
     });
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
     );
     expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-2/workflows");
     expectWorkflowStartBody(workflowCall?.[1], {
@@ -674,8 +664,10 @@ describe("workbook agent pane", () => {
       button.click();
     });
 
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
     );
     expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "highlightFormulaIssues",
@@ -785,8 +777,10 @@ describe("workbook agent pane", () => {
       button.click();
     });
 
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
     );
     expectWorkflowStartBody(workflowCall?.[1], {
       workflowTemplate: "normalizeCurrentSheetHeaders",
@@ -794,6 +788,236 @@ describe("workbook agent pane", () => {
     });
     expect(host.textContent).toContain("Normalize Current Sheet Headers");
     expect(host.textContent).toContain("Header Normalization Preview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("starts number-format-normalization workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2")) {
+        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-number-format-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "normalizeCurrentSheetNumberFormats",
+                  title: "Normalize Current Sheet Number Formats",
+                  summary: "Staged normalized number formats for 3 columns on Sheet1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-number-columns",
+                      label: "Inspect numeric columns",
+                      status: "completed",
+                      summary: "Loaded numeric cells and header labels from Sheet1.",
+                      updatedAtUnixMs: 1,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Number Format Normalization Preview",
+                    text: "## Number Format Normalization Preview",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetNumberFormats']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Number format workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
+        requestMethod(requestInit) === "POST",
+    );
+    expectWorkflowStartBody(workflowCall?.[1], {
+      workflowTemplate: "normalizeCurrentSheetNumberFormats",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Normalize Current Sheet Number Formats");
+    expect(host.textContent).toContain("Number Format Normalization Preview");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("starts current-sheet rollup workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2")) {
+        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-rollup-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "createCurrentSheetRollup",
+                  title: "Create Current Sheet Rollup",
+                  summary: "Staged a rollup preview for Sheet1 into Sheet1 Rollup.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-source-sheet",
+                      label: "Inspect source sheet",
+                      status: "completed",
+                      summary: "Loaded the used range and numeric columns from Sheet1.",
+                      updatedAtUnixMs: 1,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Current Sheet Rollup Preview",
+                    text: "## Current Sheet Rollup Preview",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-createCurrentSheetRollup']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Rollup workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    );
+    expectWorkflowStartBody(workflowCall?.[1], {
+      workflowTemplate: "createCurrentSheetRollup",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Create Current Sheet Rollup");
+    expect(host.textContent).toContain("Current Sheet Rollup Preview");
 
     await act(async () => {
       root.unmount();
@@ -2300,7 +2524,7 @@ describe("workbook agent pane", () => {
     });
     await flushToasts();
 
-    expect(findActiveToast("agent-error")?.title).toBe("Retry in a moment.");
+    expect(host.textContent).toContain("Retry in a moment.");
     expect(host.textContent).not.toContain(
       "thread/start.dynamicTools requires experimentalApi capability",
     );
