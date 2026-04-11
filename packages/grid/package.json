@@ -41,7 +41,6 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@base-ui/react": "1.3.0",
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
