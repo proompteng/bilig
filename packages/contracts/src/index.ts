@@ -144,6 +144,7 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "summarizeCurrentSheet",
   "describeRecentChanges",
   "findFormulaIssues",
+  "highlightFormulaIssues",
   "traceSelectionDependencies",
   "explainSelectionCell",
   "searchWorkbookQuery",

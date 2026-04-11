@@ -40,7 +40,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "analyze",
     description: "Scan the workbook for broken formulas, cycles, and JS-only fallback formulas.",
     prompt:
-      "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first. Prefer the built-in durable workflow when the user wants a saved report in the thread.",
+      "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first. Prefer the built-in durable workflows when the user wants either a saved report or a staged highlight preview in the thread.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,

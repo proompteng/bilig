@@ -10,12 +10,15 @@ import type {
 import { ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
 import {
-  findWorkbookFormulaIssues,
   searchWorkbook,
   type WorkbookSearchReport,
   summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
+import {
+  executeFormulaWorkflow,
+  getFormulaWorkflowTemplateMetadata,
+} from "./workbook-agent-formula-workflows.js";
 import {
   executeStructuralWorkflow,
   getStructuralWorkflowTemplateMetadata,
@@ -63,6 +66,11 @@ type NonStructuralWorkflowTemplate = Exclude<
   WorkbookAgentWorkflowTemplate,
   StructuralWorkflowTemplate
 >;
+type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
+type NonFormulaWorkflowTemplate = Exclude<
+  NonStructuralWorkflowTemplate,
+  FormulaWorkflowTemplate
+>;
 
 function assertUnsupportedWorkflowTemplate(_workflowTemplate: never): never {
   throw new Error("Unsupported workbook agent workflow template.");
@@ -76,10 +84,15 @@ function getWorkflowTemplateMetadata(
   if (structuralMetadata) {
     return structuralMetadata;
   }
+  const formulaMetadata = getFormulaWorkflowTemplateMetadata(workflowTemplate, workflowInput);
+  if (formulaMetadata) {
+    return formulaMetadata;
+  }
   if (isStructuralWorkflowTemplate(workflowTemplate)) {
     throw new Error(`Structural workflow metadata resolution fell through: ${workflowTemplate}`);
   }
-  switch (workflowTemplate) {
+  const nonFormulaWorkflowTemplate = workflowTemplate as NonFormulaWorkflowTemplate;
+  switch (nonFormulaWorkflowTemplate) {
     case "summarizeWorkbook":
       return {
         title: "Summarize Workbook",
@@ -137,31 +150,6 @@ function getWorkflowTemplateMetadata(
           },
         ],
       };
-    case "findFormulaIssues": {
-      const scopeLabel = workflowInput?.sheetName ?? "the workbook";
-      return {
-        title: "Find Formula Issues",
-        runningSummary: `Running formula issue scan workflow for ${scopeLabel}.`,
-        stepPlans: [
-          {
-            stepId: "scan-formula-cells",
-            label: "Scan formula cells",
-            runningSummary: workflowInput?.sheetName
-              ? `Scanning ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
-              : "Scanning workbook formulas for errors, cycles, and JS-only fallbacks.",
-            pendingSummary: workflowInput?.sheetName
-              ? `Waiting to scan ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
-              : "Waiting to scan workbook formulas for errors, cycles, and JS-only fallbacks.",
-          },
-          {
-            stepId: "draft-issue-report",
-            label: "Draft issue report",
-            runningSummary: "Drafting the durable formula issue report.",
-            pendingSummary: "Waiting to assemble the durable formula issue report.",
-          },
-        ],
-      };
-    }
     case "traceSelectionDependencies":
       return {
         title: "Trace Selection Dependencies",
@@ -238,7 +226,7 @@ function getWorkflowTemplateMetadata(
       };
     }
   }
-  return assertUnsupportedWorkflowTemplate(workflowTemplate);
+  return assertUnsupportedWorkflowTemplate(nonFormulaWorkflowTemplate);
 }
 
 export function describeWorkbookAgentWorkflowTemplate(
@@ -440,43 +428,6 @@ function summarizeRecentChangesMarkdown(
   return lines.join("\n");
 }
 
-function summarizeFormulaIssueKinds(
-  issueKinds: readonly ("error" | "cycle" | "unsupported")[],
-): string {
-  return issueKinds.join(", ");
-}
-
-function summarizeFormulaIssuesMarkdown(
-  report: ReturnType<typeof findWorkbookFormulaIssues>,
-): string {
-  const lines = [
-    "## Formula Issues",
-    "",
-    `Scanned formula cells: ${String(report.summary.scannedFormulaCells)}`,
-    `Issues found: ${String(report.summary.issueCount)}`,
-    `Errors: ${String(report.summary.errorCount)}`,
-    `Cycles: ${String(report.summary.cycleCount)}`,
-    `JS-only fallbacks: ${String(report.summary.unsupportedCount)}`,
-  ];
-  if (report.summary.truncated) {
-    lines.push("Showing the highest-risk issues from the requested limit.");
-  }
-  lines.push("");
-  if (report.issues.length === 0) {
-    lines.push("No formula issues were detected in the current workbook.");
-    return lines.join("\n");
-  }
-  lines.push("### Highest-Risk Issues");
-  report.issues.forEach((issue) => {
-    const valueSuffix = issue.valueText.length > 0 ? ` -> ${issue.valueText}` : "";
-    const errorSuffix = issue.errorText ? ` (${issue.errorText})` : "";
-    lines.push(
-      `- ${issue.sheetName}!${issue.address}: =${issue.formula}${valueSuffix} [${summarizeFormulaIssueKinds(issue.issueKinds)}]${errorSuffix}`,
-    );
-  });
-  return lines.join("\n");
-}
-
 function summarizeDependencyTraceMarkdown(
   report: ReturnType<typeof traceWorkbookDependencies>,
 ): string {
@@ -665,7 +616,16 @@ export async function executeWorkbookAgentWorkflow(input: {
       `Structural workflow execution unexpectedly fell through: ${input.workflowTemplate}`,
     );
   }
-  const workflowTemplate: NonStructuralWorkflowTemplate = input.workflowTemplate;
+  const formulaResult = await executeFormulaWorkflow({
+    documentId: input.documentId,
+    zeroSyncService: input.zeroSyncService,
+    workflowTemplate: input.workflowTemplate,
+    ...(input.workflowInput !== undefined ? { workflowInput: input.workflowInput } : {}),
+  });
+  if (formulaResult) {
+    return formulaResult;
+  }
+  const workflowTemplate = input.workflowTemplate as NonFormulaWorkflowTemplate;
   switch (workflowTemplate) {
     case "summarizeWorkbook": {
       const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
@@ -792,55 +752,6 @@ export async function executeWorkbookAgentWorkflow(input: {
             stepId: "draft-change-report",
             label: "Draft change report",
             summary: "Prepared the durable recent change report for the thread.",
-          },
-        ],
-      };
-    }
-    case "findFormulaIssues": {
-      const formulaIssues = await input.zeroSyncService.inspectWorkbook(
-        input.documentId,
-        (runtime) =>
-          findWorkbookFormulaIssues(runtime, {
-            ...(input.workflowInput?.sheetName ? { sheetName: input.workflowInput.sheetName } : {}),
-            ...(input.workflowInput?.limit !== undefined
-              ? { limit: input.workflowInput.limit }
-              : {}),
-          }),
-      );
-      const scopeLabel = input.workflowInput?.sheetName
-        ? ` on ${input.workflowInput.sheetName}`
-        : "";
-      return {
-        title: "Find Formula Issues",
-        summary:
-          formulaIssues.summary.issueCount === 0
-            ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues.`
-            : `Found ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}${scopeLabel} across ${String(formulaIssues.summary.scannedFormulaCells)} scanned formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}.`,
-        artifact: {
-          kind: "markdown",
-          title: "Formula Issues",
-          text: summarizeFormulaIssuesMarkdown(formulaIssues),
-        },
-        citations: formulaIssues.issues.map((issue) => ({
-          kind: "range",
-          sheetName: issue.sheetName,
-          startAddress: issue.address,
-          endAddress: issue.address,
-          role: "source",
-        })),
-        steps: [
-          {
-            stepId: "scan-formula-cells",
-            label: "Scan formula cells",
-            summary:
-              formulaIssues.summary.issueCount === 0
-                ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues.`
-                : `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found ${String(formulaIssues.summary.issueCount)} issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}.`,
-          },
-          {
-            stepId: "draft-issue-report",
-            label: "Draft issue report",
-            summary: "Prepared the durable formula issue report for the thread.",
           },
         ],
       };

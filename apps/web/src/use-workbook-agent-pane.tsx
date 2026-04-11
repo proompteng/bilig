@@ -43,6 +43,7 @@ type WorkbookAgentWorkflowStartRequest =
       readonly workflowTemplate: Exclude<
         WorkbookAgentWorkflowTemplate,
         | "findFormulaIssues"
+        | "highlightFormulaIssues"
         | "searchWorkbookQuery"
         | "createSheet"
         | "renameCurrentSheet"
@@ -50,6 +51,11 @@ type WorkbookAgentWorkflowStartRequest =
     }
   | {
       readonly workflowTemplate: "findFormulaIssues";
+      readonly sheetName?: string;
+      readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "highlightFormulaIssues";
       readonly sheetName?: string;
       readonly limit?: number;
     }
@@ -1041,7 +1047,11 @@ export function useWorkbookAgentPane(input: {
           void cancelWorkflowRun(runId);
         }}
         onStartWorkflow={(workflowTemplate) => {
-          if (workflowTemplate === "findFormulaIssues" && currentContext?.selection.sheetName) {
+          if (
+            (workflowTemplate === "findFormulaIssues" ||
+              workflowTemplate === "highlightFormulaIssues") &&
+            currentContext?.selection.sheetName
+          ) {
             void startWorkflow({
               workflowTemplate,
               sheetName: currentContext.selection.sheetName,

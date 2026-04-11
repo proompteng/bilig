@@ -38,6 +38,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     summary: "Scan formulas on the active sheet for errors, cycles, and JS-only fallback formulas.",
   },
   {
+    template: "highlightFormulaIssues",
+    label: "Highlight formula issues",
+    summary:
+      "Stage a preview bundle that highlights active-sheet formula errors, cycles, and JS-only fallback formulas.",
+  },
+  {
     template: "traceSelectionDependencies",
     label: "Trace selection links",
     summary: "Trace precedents and dependents from the current selection context.",

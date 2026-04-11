@@ -85,6 +85,11 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     limit: z.number().int().positive().max(200).optional(),
   }),
   z.object({
+    workflowTemplate: z.literal("highlightFormulaIssues"),
+    sheetName: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(200).optional(),
+  }),
+  z.object({
     workflowTemplate: z.literal("traceSelectionDependencies"),
   }),
   z.object({
@@ -592,7 +597,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       description:
-        "Start a built-in durable workbook workflow for saved workbook summaries, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and hide-current-row/column.",
+        "Start a built-in durable workbook workflow for saved workbook summaries, formula review/highlight tasks, search/report tasks, or safe structural preview workflows like create-sheet, rename-sheet, and hide-current-row/column.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -605,6 +610,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
               "summarizeCurrentSheet",
               "describeRecentChanges",
               "findFormulaIssues",
+              "highlightFormulaIssues",
               "traceSelectionDependencies",
               "explainSelectionCell",
               "searchWorkbookQuery",

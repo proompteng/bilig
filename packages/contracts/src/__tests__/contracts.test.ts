@@ -246,6 +246,46 @@ describe("@bilig/contracts", () => {
     expect(decoded.artifact?.title).toBe("Workbook Search");
   });
 
+  it("accepts highlight-formula workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-highlight-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "highlightFormulaIssues",
+      title: "Highlight Formula Issues",
+      summary: "Staged highlight formatting for 2 formula issues on Sheet1.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          status: "completed",
+          summary: "Scanned 3 formula cells on Sheet1 and found 2 issues.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "stage-issue-highlights",
+          label: "Stage issue highlights",
+          status: "completed",
+          summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+          updatedAtUnixMs: 115,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Formula Issue Highlights",
+        text: "## Highlighted Formula Issues",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("highlightFormulaIssues");
+    expect(decoded.artifact?.title).toBe("Formula Issue Highlights");
+  });
+
   it("accepts structural workflow templates in durable runs", () => {
     const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
       runId: "workflow-structural-1",

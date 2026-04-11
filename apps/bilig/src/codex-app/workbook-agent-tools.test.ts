@@ -1176,6 +1176,84 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts highlight-formula workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-formula-highlight-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "highlightFormulaIssues" as const,
+      title: "Highlight Formula Issues",
+      summary: "Staged highlight formatting for 2 formula issues on Sheet1.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          status: "completed" as const,
+          summary: "Scanned 3 formula cells on Sheet1 and found 2 issues.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "stage-issue-highlights",
+          label: "Stage issue highlights",
+          status: "completed" as const,
+          summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Formula Issue Highlights",
+        text: "## Highlighted Formula Issues",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-highlight-formula-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "highlightFormulaIssues",
+          sheetName: "Sheet1",
+          limit: 25,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "highlightFormulaIssues",
+      sheetName: "Sheet1",
+      limit: 25,
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"workflowTemplate": "highlightFormulaIssues"',
+    );
+  });
+
   it("stages column metadata commands for resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

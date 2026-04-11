@@ -417,7 +417,7 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
         return new Response(
@@ -537,6 +537,116 @@ describe("workbook agent pane", () => {
     });
     expect(host.textContent).toContain("Find Formula Issues");
     expect(host.textContent).toContain("Formula Issues");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("starts highlight-formula workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/chat/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-highlight-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "highlightFormulaIssues",
+                  title: "Highlight Formula Issues",
+                  summary: "Staged highlight formatting for 2 formula issues on Sheet1.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "scan-formula-cells",
+                      label: "Scan formula cells",
+                      status: "completed",
+                      summary: "Scanned 3 formula cells on Sheet1 and found 2 issues.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "stage-issue-highlights",
+                      label: "Stage issue highlights",
+                      status: "completed",
+                      summary: "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Formula Issue Highlights",
+                    text: "## Highlighted Formula Issues",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-highlightFormulaIssues']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Highlight workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
+    );
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "highlightFormulaIssues",
+      sheetName: "Sheet1",
+    });
+    expect(host.textContent).toContain("Highlight Formula Issues");
+    expect(host.textContent).toContain("Formula Issue Highlights");
 
     await act(async () => {
       root.unmount();

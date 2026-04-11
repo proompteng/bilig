@@ -527,6 +527,139 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("stages formula-highlight preview bundles from durable workflows", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    engine.setCellFormula("Sheet1", "B1", "1/0");
+    engine.setCellFormula("Sheet1", "C1", "LEN(A1:A2)");
+    const getWorkbookHeadRevision = vi.fn(async () => 7);
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        getWorkbookHeadRevision,
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "highlightFormulaIssues",
+          sheetName: "Sheet1",
+        },
+      });
+
+      expect(getWorkbookHeadRevision).toHaveBeenCalledWith("doc-1");
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "highlightFormulaIssues",
+          title: "Highlight Formula Issues",
+          status: "completed",
+          artifact: expect.objectContaining({
+            title: "Formula Issue Highlights",
+            text: expect.stringContaining("## Highlighted Formula Issues"),
+          }),
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              stepId: "stage-issue-highlights",
+              status: "completed",
+            }),
+          ]),
+        }),
+      );
+      expect(snapshot.pendingBundle).toEqual(
+        expect.objectContaining({
+          baseRevision: 7,
+          commands: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "formatRange",
+              range: expect.objectContaining({
+                sheetName: "Sheet1",
+                startAddress: "B1",
+                endAddress: "B1",
+              }),
+              patch: expect.objectContaining({
+                fill: expect.objectContaining({
+                  backgroundColor: "#FEE2E2",
+                }),
+              }),
+            }),
+          ]),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: expect.stringContaining("Staged preview bundle"),
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Highlight Formula Issues",
+            citations: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "range",
+                sheetName: "Sheet1",
+                startAddress: "B1",
+                endAddress: "B1",
+              }),
+            ]),
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("runs durable current-sheet summary workflows from the active selection context", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
