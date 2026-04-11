@@ -35,13 +35,13 @@ export const toolbarGroupClass = cva("flex flex-none items-center gap-1");
 export const toolbarSeparatorClass = cva("mx-1.5 h-5 w-px shrink-0 bg-[var(--color-mauve-200)]");
 
 export const toolbarSegmentedClass = cva(
-  "inline-flex items-center gap-1 rounded-lg border border-[var(--color-mauve-200)] bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+  "inline-flex h-8 items-center gap-0.5 rounded-md border border-[var(--color-mauve-200)] bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
 );
 
 export const toolbarIconClass = cva("h-3.5 w-3.5 shrink-0 stroke-[1.75]");
 
 export const toolbarButtonClass = cva(
-  "inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-1.5 text-[var(--color-mauve-700)] transition-[background-color,border-color,color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-default disabled:opacity-60",
+  "inline-flex items-center justify-center rounded-md border text-[var(--color-mauve-700)] transition-[background-color,border-color,color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-default disabled:opacity-60",
   {
     variants: {
       active: {
@@ -49,9 +49,14 @@ export const toolbarButtonClass = cva(
         false:
           "border-transparent bg-transparent hover:border-[var(--color-mauve-200)] hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]",
       },
+      embedded: {
+        true: "h-7 min-w-7 px-1",
+        false: "h-8 min-w-8 px-1.5",
+      },
     },
     defaultVariants: {
       active: false,
+      embedded: false,
     },
   },
 );

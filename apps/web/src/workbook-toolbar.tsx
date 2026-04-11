@@ -125,6 +125,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               ariaLabel="Undo"
               disabled={!writesAllowed || !canUndo}
+              embedded
               shortcut={getWorkbookShortcutLabel("undo")}
               onClick={onUndo}
             >
@@ -133,6 +134,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               ariaLabel="Redo"
               disabled={!writesAllowed || !canRedo}
+              embedded
               shortcut={getWorkbookShortcutLabel("redo")}
               onClick={onRedo}
             >
@@ -168,6 +170,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={isBoldActive}
               ariaLabel="Bold"
+              embedded
               pressed={isBoldActive}
               shortcut={getWorkbookShortcutLabel("bold")}
               onClick={onToggleBold}
@@ -177,6 +180,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={isItalicActive}
               ariaLabel="Italic"
+              embedded
               pressed={isItalicActive}
               shortcut={getWorkbookShortcutLabel("italic")}
               onClick={onToggleItalic}
@@ -186,6 +190,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={isUnderlineActive}
               ariaLabel="Underline"
+              embedded
               pressed={isUnderlineActive}
               shortcut={getWorkbookShortcutLabel("underline")}
               onClick={onToggleUnderline}
@@ -222,6 +227,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={horizontalAlignment === "left"}
               ariaLabel="Align left"
+              embedded
               pressed={horizontalAlignment === "left"}
               shortcut={getWorkbookShortcutLabel("align-left")}
               onClick={() => onHorizontalAlignmentChange("left")}
@@ -231,6 +237,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={horizontalAlignment === "center"}
               ariaLabel="Align center"
+              embedded
               pressed={horizontalAlignment === "center"}
               shortcut={getWorkbookShortcutLabel("align-center")}
               onClick={() => onHorizontalAlignmentChange("center")}
@@ -240,6 +247,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               active={horizontalAlignment === "right"}
               ariaLabel="Align right"
+              embedded
               pressed={horizontalAlignment === "right"}
               shortcut={getWorkbookShortcutLabel("align-right")}
               onClick={() => onHorizontalAlignmentChange("right")}

@@ -36,6 +36,7 @@ interface RibbonButtonProps {
   active?: boolean;
   ariaLabel: string;
   disabled?: boolean;
+  embedded?: boolean;
   pressed?: boolean;
   shortcut?: string;
   onClick(this: void): void;
@@ -296,6 +297,7 @@ export const RibbonIconButton = memo(function RibbonIconButton({
   active = false,
   ariaLabel,
   disabled = false,
+  embedded = false,
   pressed,
   shortcut,
   onClick,
@@ -305,7 +307,7 @@ export const RibbonIconButton = memo(function RibbonIconButton({
     <Toolbar.Button
       aria-label={ariaLabel}
       aria-pressed={pressed}
-      className={toolbarButtonClass({ active })}
+      className={toolbarButtonClass({ active, embedded })}
       disabled={disabled}
       onClick={onClick}
       title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}

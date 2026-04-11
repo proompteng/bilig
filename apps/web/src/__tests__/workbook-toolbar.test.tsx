@@ -157,4 +157,74 @@ describe("WorkbookToolbar", () => {
       root.unmount();
     });
   });
+
+  it("keeps toolbar controls on one shared height system", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkbookToolbar
+          canHideCurrentColumn={false}
+          canHideCurrentRow
+          canRedo
+          canUndo
+          canUnhideCurrentColumn={false}
+          canUnhideCurrentRow={false}
+          currentFillColor="#ffffff"
+          currentNumberFormatKind="general"
+          currentTextColor="#111827"
+          horizontalAlignment="left"
+          isBoldActive={false}
+          isItalicActive={false}
+          isUnderlineActive={false}
+          isWrapActive={false}
+          onApplyBorderPreset={() => {}}
+          onClearStyle={() => {}}
+          onFillColorReset={() => {}}
+          onFillColorSelect={() => {}}
+          onFontSizeChange={() => {}}
+          onHideCurrentColumn={() => {}}
+          onHideCurrentRow={() => {}}
+          onHorizontalAlignmentChange={() => {}}
+          onNumberFormatChange={() => {}}
+          onRedo={() => {}}
+          onTextColorReset={() => {}}
+          onTextColorSelect={() => {}}
+          onToggleBold={() => {}}
+          onToggleItalic={() => {}}
+          onToggleUnderline={() => {}}
+          onToggleWrap={() => {}}
+          onUndo={() => {}}
+          onUnhideCurrentColumn={() => {}}
+          onUnhideCurrentRow={() => {}}
+          recentFillColors={[]}
+          recentTextColors={[]}
+          selectedFontSize="11"
+          writesAllowed
+        />,
+      );
+    });
+
+    const historyGroup = host.querySelector("[aria-label='History']");
+    const undoButton = host.querySelector("[aria-label='Undo']");
+    const numberFormatTrigger = host.querySelector("[aria-label='Number format']");
+    const fontSizeTrigger = host.querySelector("[aria-label='Font size']");
+    const structureTrigger = host.querySelector("[aria-label='Structure']");
+
+    expect(historyGroup?.className).toContain("h-8");
+    expect(undoButton?.className).toContain("h-7");
+    expect(numberFormatTrigger?.className).toContain("h-8");
+    expect(fontSizeTrigger?.className).toContain("h-8");
+    expect(structureTrigger?.className).toContain("h-8");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
