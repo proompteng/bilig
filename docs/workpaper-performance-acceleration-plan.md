@@ -59,6 +59,15 @@ The target claim is narrower and stricter than “faster in general”:
    publishable OSS packaging
 4. every claimed win is backed by a checked-in artifact, not by anecdotal profiling
 
+The repo now tracks two benchmark artifacts on purpose:
+
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+  This is the narrow control suite. It stays small and stable so regression signals are easy to
+  trust.
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
+  This is the broader comparison matrix. It expands the proof surface across more build,
+  mutation, and lookup shapes without replacing the control suite.
+
 ## Source Corpus
 
 This design is grounded in the local HyperFormula checkout and the current `bilig` implementation.
@@ -83,6 +92,7 @@ Reviewed current `bilig` implementation:
 - `/Users/gregkonush/github.com/bilig/packages/formula/src/js-evaluator.ts`
 - `/Users/gregkonush/github.com/bilig/packages/formula/src/builtins/lookup.ts`
 - `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
 
 ## Current Measured Gap
 
@@ -108,6 +118,16 @@ This is the important reading:
 - the remaining lookup gap is now a narrower engine-quality problem:
   - persistent indexed search is still slower than HyperFormula’s core search subsystem
   - non-indexed exact lookup still needs a dedicated fast path
+
+The broader matrix now makes the remaining risk clearer:
+
+- `WorkPaper` leads `4/13` directly comparable expanded workloads
+- HyperFormula still leads `9/13`
+- the worst broader deficits are now:
+  - `lookup-approximate-sorted`: HyperFormula `6.67x` faster
+  - `build-mixed-content`: HyperFormula `2.79x` faster
+  - `single-formula-edit-recalc`: HyperFormula `2.53x` faster
+  - `batch-edit-single-column`: HyperFormula `1.69x` faster
 
 ## Root Cause
 

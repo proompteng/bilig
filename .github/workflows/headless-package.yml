@@ -33,6 +33,7 @@ on:
       - "scripts/publish-runtime-package-set.ts"
       - "scripts/gen-workpaper-benchmark-baseline.ts"
       - "scripts/gen-workpaper-vs-hyperformula-benchmark.ts"
+      - "scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts"
       - "scripts/workpaper-external-smoke.ts"
       - "tsconfig.base.json"
       - "tsconfig.json"
@@ -139,6 +140,11 @@ jobs:
         run: |
           set -euo pipefail
           pnpm workpaper:bench:competitive:check
+
+      - name: Check expanded WorkPaper competitive benchmark artifact shape
+        run: |
+          set -euo pipefail
+          pnpm workpaper:bench:competitive:expanded:check
 
       - name: Run WorkPaper external-consumer smoke test
         run: |

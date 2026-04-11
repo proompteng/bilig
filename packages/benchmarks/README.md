@@ -41,6 +41,17 @@ pnpm workpaper:bench:competitive:generate
 pnpm workpaper:bench:competitive:check
 ```
 
+The current control suite is intentionally small and stable. The repo also tracks a broader
+comparison matrix at
+`packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`.
+
+Refresh or validate it with:
+
+```bash
+pnpm workpaper:bench:competitive:expanded:generate
+pnpm workpaper:bench:competitive:expanded:check
+```
+
 ## Named giant-workbook corpus
 
 The package now ships deterministic named workbook cases for giant-data restore and warm-start
