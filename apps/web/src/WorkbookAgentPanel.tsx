@@ -900,6 +900,7 @@ export function WorkbookAgentPanel(props: {
       | "findFormulaIssues"
       | "highlightFormulaIssues"
       | "highlightCurrentSheetOutliers"
+      | "styleCurrentSheetHeaders"
       | "normalizeCurrentSheetHeaders"
       | "normalizeCurrentSheetNumberFormats"
       | "normalizeCurrentSheetWhitespace"

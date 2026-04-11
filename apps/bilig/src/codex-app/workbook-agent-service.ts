@@ -286,6 +286,7 @@ function isMutatingWorkflowTemplate(workflowTemplate: string): boolean {
   return (
     workflowTemplate === "highlightFormulaIssues" ||
     workflowTemplate === "highlightCurrentSheetOutliers" ||
+    workflowTemplate === "styleCurrentSheetHeaders" ||
     workflowTemplate === "normalizeCurrentSheetHeaders" ||
     workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
     workflowTemplate === "normalizeCurrentSheetWhitespace" ||

@@ -75,7 +75,7 @@ interface WorkbookAgentWorkflowTemplateMetadata {
 }
 
 type FormulaWorkflowTemplate = "findFormulaIssues" | "highlightFormulaIssues";
-type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers";
+type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers" | "styleCurrentSheetHeaders";
 type ImportWorkflowTemplate =
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
@@ -92,7 +92,10 @@ function isFormulaWorkflowTemplate(
 function isFormattingWorkflowTemplate(
   workflowTemplate: WorkbookAgentWorkflowTemplate,
 ): workflowTemplate is FormattingWorkflowTemplate {
-  return workflowTemplate === "highlightCurrentSheetOutliers";
+  return (
+    workflowTemplate === "highlightCurrentSheetOutliers" ||
+    workflowTemplate === "styleCurrentSheetHeaders"
+  );
 }
 
 function isImportWorkflowTemplate(

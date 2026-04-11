@@ -71,6 +71,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
     value === "findFormulaIssues" ||
     value === "highlightFormulaIssues" ||
     value === "highlightCurrentSheetOutliers" ||
+    value === "styleCurrentSheetHeaders" ||
     value === "normalizeCurrentSheetHeaders" ||
     value === "normalizeCurrentSheetNumberFormats" ||
     value === "normalizeCurrentSheetWhitespace" ||

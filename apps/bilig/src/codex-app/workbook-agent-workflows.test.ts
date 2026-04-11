@@ -529,6 +529,77 @@ describe("workbook agent workflows", () => {
     ]);
   });
 
+  it("executes header-style workflows through the durable inspection path", async () => {
+    const result = await executeWorkbookAgentWorkflow({
+      documentId: "doc-1",
+      zeroSyncService: createZeroSyncStub({
+        createRuntime: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName: "doc-1",
+            replicaId: "server:test",
+          });
+          await engine.ready();
+          engine.createSheet("Imports");
+          engine.setCellValue("Imports", "A1", "Customer");
+          engine.setCellValue("Imports", "B1", "Revenue");
+          engine.setCellValue("Imports", "A2", "Ada");
+          engine.setCellValue("Imports", "B2", 100);
+          return {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+        },
+      }),
+      workflowTemplate: "styleCurrentSheetHeaders",
+      context: {
+        selection: {
+          sheetName: "Imports",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      workflowInput: {
+        sheetName: "Imports",
+      },
+    });
+
+    expect(result.title).toBe("Style Current Sheet Headers");
+    expect(result.summary).toContain("Staged a consistent header style preview");
+    expect(result.commands).toEqual([
+      expect.objectContaining({
+        kind: "formatRange",
+        range: {
+          sheetName: "Imports",
+          startAddress: "A1",
+          endAddress: "B1",
+        },
+        patch: expect.objectContaining({
+          fill: expect.objectContaining({
+            backgroundColor: "#E2E8F0",
+          }),
+          font: expect.objectContaining({
+            bold: true,
+          }),
+        }),
+      }),
+    ]);
+  });
+
   it("executes current-sheet outlier-highlighting workflows through the durable inspection path", async () => {
     const result = await executeWorkbookAgentWorkflow({
       documentId: "doc-1",

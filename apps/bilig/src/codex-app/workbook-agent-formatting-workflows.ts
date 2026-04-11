@@ -10,7 +10,7 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 import type { ZeroSyncService } from "../zero/service.js";
 import { throwIfWorkflowCancelled } from "./workbook-agent-workflow-abort.js";
 
-type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers";
+type FormattingWorkflowTemplate = "highlightCurrentSheetOutliers" | "styleCurrentSheetHeaders";
 type SnapshotSheet = WorkbookSnapshot["sheets"][number];
 type SnapshotCell = SnapshotSheet["cells"][number];
 
@@ -217,42 +217,68 @@ export function getFormattingWorkflowTemplateMetadata(
   workflowTemplate: WorkbookAgentWorkflowTemplate | FormattingWorkflowTemplate,
   workflowInput?: FormattingWorkflowExecutionInput | null,
 ): FormattingWorkflowTemplateMetadata | null {
-  if (workflowTemplate !== "highlightCurrentSheetOutliers") {
-    return null;
-  }
   const scopeLabel = workflowInput?.sheetName ?? "the active sheet";
-  return {
-    title: "Highlight Current Sheet Outliers",
-    runningSummary: `Running outlier highlight workflow for ${scopeLabel}.`,
-    stepPlans: [
-      {
-        stepId: "inspect-numeric-columns",
-        label: "Inspect numeric columns",
-        runningSummary: `Inspecting numeric columns and header labels on ${scopeLabel}.`,
-        pendingSummary: `Waiting to inspect numeric columns and header labels on ${scopeLabel}.`,
-      },
-      {
-        stepId: "compute-outlier-thresholds",
-        label: "Compute outlier thresholds",
-        runningSummary: "Computing numeric outlier thresholds across the inspected columns.",
-        pendingSummary:
-          "Waiting to compute numeric outlier thresholds across the inspected columns.",
-      },
-      {
-        stepId: "stage-outlier-highlights",
-        label: "Stage outlier highlights",
-        runningSummary: "Staging semantic highlight commands for the detected outlier cells.",
-        pendingSummary:
-          "Waiting to stage semantic highlight commands for the detected outlier cells.",
-      },
-      {
-        stepId: "draft-outlier-report",
-        label: "Draft outlier report",
-        runningSummary: "Drafting the durable outlier highlight report.",
-        pendingSummary: "Waiting to assemble the durable outlier highlight report.",
-      },
-    ],
-  };
+  if (workflowTemplate === "highlightCurrentSheetOutliers") {
+    return {
+      title: "Highlight Current Sheet Outliers",
+      runningSummary: `Running outlier highlight workflow for ${scopeLabel}.`,
+      stepPlans: [
+        {
+          stepId: "inspect-numeric-columns",
+          label: "Inspect numeric columns",
+          runningSummary: `Inspecting numeric columns and header labels on ${scopeLabel}.`,
+          pendingSummary: `Waiting to inspect numeric columns and header labels on ${scopeLabel}.`,
+        },
+        {
+          stepId: "compute-outlier-thresholds",
+          label: "Compute outlier thresholds",
+          runningSummary: "Computing numeric outlier thresholds across the inspected columns.",
+          pendingSummary:
+            "Waiting to compute numeric outlier thresholds across the inspected columns.",
+        },
+        {
+          stepId: "stage-outlier-highlights",
+          label: "Stage outlier highlights",
+          runningSummary: "Staging semantic highlight commands for the detected outlier cells.",
+          pendingSummary:
+            "Waiting to stage semantic highlight commands for the detected outlier cells.",
+        },
+        {
+          stepId: "draft-outlier-report",
+          label: "Draft outlier report",
+          runningSummary: "Drafting the durable outlier highlight report.",
+          pendingSummary: "Waiting to assemble the durable outlier highlight report.",
+        },
+      ],
+    };
+  }
+  if (workflowTemplate === "styleCurrentSheetHeaders") {
+    return {
+      title: "Style Current Sheet Headers",
+      runningSummary: `Running header-style workflow for ${scopeLabel}.`,
+      stepPlans: [
+        {
+          stepId: "inspect-header-row",
+          label: "Inspect header row",
+          runningSummary: `Inspecting the used range and header row on ${scopeLabel}.`,
+          pendingSummary: `Waiting to inspect the used range and header row on ${scopeLabel}.`,
+        },
+        {
+          stepId: "stage-header-style",
+          label: "Stage header style",
+          runningSummary: "Staging a semantic header-style preview for the current sheet.",
+          pendingSummary: "Waiting to stage a semantic header-style preview for the current sheet.",
+        },
+        {
+          stepId: "draft-header-style-report",
+          label: "Draft header style report",
+          runningSummary: "Drafting the durable header-style report.",
+          pendingSummary: "Waiting to assemble the durable header-style report.",
+        },
+      ],
+    };
+  }
+  return null;
 }
 
 export async function executeFormattingWorkflow(input: {
@@ -263,7 +289,10 @@ export async function executeFormattingWorkflow(input: {
   readonly workflowInput?: FormattingWorkflowExecutionInput | null;
   readonly signal?: AbortSignal;
 }): Promise<FormattingWorkflowExecutionResult | null> {
-  if (input.workflowTemplate !== "highlightCurrentSheetOutliers") {
+  if (
+    input.workflowTemplate !== "highlightCurrentSheetOutliers" &&
+    input.workflowTemplate !== "styleCurrentSheetHeaders"
+  ) {
     return null;
   }
   const sheetName = resolveWorkflowSheetName({
@@ -283,6 +312,41 @@ export async function executeFormattingWorkflow(input: {
       throw new Error(`Sheet ${sheetName} was not found in the workbook.`);
     }
     if (sheet.cells.length === 0) {
+      if (input.workflowTemplate === "styleCurrentSheetHeaders") {
+        return {
+          title: "Style Current Sheet Headers",
+          summary: `${sheetName} is empty, so there were no headers to style.`,
+          artifact: {
+            kind: "markdown",
+            title: "Header Style Preview",
+            text: [
+              "## Header Style Preview",
+              "",
+              `Sheet: ${sheetName}`,
+              "",
+              "No header-style preview was staged because the sheet is empty.",
+            ].join("\n"),
+          },
+          citations: [],
+          steps: [
+            {
+              stepId: "inspect-header-row",
+              label: "Inspect header row",
+              summary: `Loaded ${sheetName} and found no populated cells.`,
+            },
+            {
+              stepId: "stage-header-style",
+              label: "Stage header style",
+              summary: "No header-style preview was staged because the sheet is empty.",
+            },
+            {
+              stepId: "draft-header-style-report",
+              label: "Draft header style report",
+              summary: "Prepared the durable empty-sheet header-style report for the thread.",
+            },
+          ],
+        } satisfies FormattingWorkflowExecutionResult;
+      }
       return {
         title: "Highlight Current Sheet Outliers",
         summary: `${sheetName} is empty, so there were no numeric outliers to highlight.`,
@@ -324,6 +388,84 @@ export async function executeFormattingWorkflow(input: {
     }
 
     const { headerRow, dataStartRow, minCol, maxCol, maxRow, cellByAddress } = inspectSheet(sheet);
+    if (input.workflowTemplate === "styleCurrentSheetHeaders") {
+      const headerStartAddress = formatAddress(headerRow, minCol);
+      const headerEndAddress = formatAddress(headerRow, maxCol);
+      return {
+        title: "Style Current Sheet Headers",
+        summary: `Staged a consistent header style preview for ${sheetName}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Header Style Preview",
+          text: [
+            "## Header Style Preview",
+            "",
+            `Sheet: ${sheetName}`,
+            `Header row: ${headerStartAddress}:${headerEndAddress}`,
+            "",
+            "The staged preview bundle applies a bold header style with stronger contrast and bottom borders so the sheet is easier to review.",
+          ].join("\n"),
+        },
+        citations: [
+          {
+            kind: "range",
+            sheetName,
+            startAddress: headerStartAddress,
+            endAddress: headerEndAddress,
+            role: "target",
+          },
+        ],
+        steps: [
+          {
+            stepId: "inspect-header-row",
+            label: "Inspect header row",
+            summary: `Loaded the used range and header row from ${sheetName}.`,
+          },
+          {
+            stepId: "stage-header-style",
+            label: "Stage header style",
+            summary: "Prepared a semantic format preview for the current sheet header row.",
+          },
+          {
+            stepId: "draft-header-style-report",
+            label: "Draft header style report",
+            summary: "Prepared the durable header-style report for the thread.",
+          },
+        ],
+        commands: [
+          {
+            kind: "formatRange" as const,
+            range: {
+              sheetName,
+              startAddress: headerStartAddress,
+              endAddress: headerEndAddress,
+            },
+            patch: {
+              fill: {
+                backgroundColor: "#E2E8F0",
+              },
+              font: {
+                bold: true,
+                color: "#0F172A",
+              },
+              alignment: {
+                horizontal: "center",
+                vertical: "middle",
+                wrap: true,
+              },
+              borders: {
+                bottom: {
+                  style: "solid",
+                  weight: "medium",
+                  color: "#94A3B8",
+                },
+              },
+            },
+          },
+        ],
+        goalText: `Apply consistent header styling on ${sheetName}`,
+      } satisfies FormattingWorkflowExecutionResult;
+    }
     const reports: ColumnOutlierReport[] = [];
     let numericSampleCount = 0;
     for (let col = minCol; col <= maxCol; col += 1) {

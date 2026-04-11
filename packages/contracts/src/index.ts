@@ -146,6 +146,7 @@ export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "findFormulaIssues",
   "highlightFormulaIssues",
   "highlightCurrentSheetOutliers",
+  "styleCurrentSheetHeaders",
   "normalizeCurrentSheetHeaders",
   "normalizeCurrentSheetNumberFormats",
   "normalizeCurrentSheetWhitespace",

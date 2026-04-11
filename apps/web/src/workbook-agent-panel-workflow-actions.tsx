@@ -13,6 +13,7 @@ type WorkflowActionTemplate =
   | "findFormulaIssues"
   | "highlightFormulaIssues"
   | "highlightCurrentSheetOutliers"
+  | "styleCurrentSheetHeaders"
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "normalizeCurrentSheetWhitespace"
@@ -58,6 +59,12 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     template: "highlightCurrentSheetOutliers",
     label: "Highlight outliers",
     summary: "Stage a preview bundle that highlights numeric outlier cells on the active sheet.",
+  },
+  {
+    template: "styleCurrentSheetHeaders",
+    label: "Style headers",
+    summary:
+      "Stage a preview bundle that applies a consistent review-ready style to the active sheet header row.",
   },
   {
     template: "normalizeCurrentSheetHeaders",

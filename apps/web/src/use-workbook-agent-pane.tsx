@@ -49,6 +49,7 @@ type RailWorkflowTemplate =
   | "findFormulaIssues"
   | "highlightFormulaIssues"
   | "highlightCurrentSheetOutliers"
+  | "styleCurrentSheetHeaders"
   | "normalizeCurrentSheetHeaders"
   | "normalizeCurrentSheetNumberFormats"
   | "normalizeCurrentSheetWhitespace"
@@ -71,6 +72,7 @@ type WorkbookAgentWorkflowStartRequest =
         | "findFormulaIssues"
         | "highlightFormulaIssues"
         | "highlightCurrentSheetOutliers"
+        | "styleCurrentSheetHeaders"
         | "normalizeCurrentSheetHeaders"
         | "normalizeCurrentSheetNumberFormats"
         | "normalizeCurrentSheetWhitespace"
@@ -97,6 +99,10 @@ type WorkbookAgentWorkflowStartRequest =
       readonly workflowTemplate: "highlightCurrentSheetOutliers";
       readonly sheetName?: string;
       readonly limit?: number;
+    }
+  | {
+      readonly workflowTemplate: "styleCurrentSheetHeaders";
+      readonly sheetName?: string;
     }
   | {
       readonly workflowTemplate: "normalizeCurrentSheetHeaders";
@@ -1178,6 +1184,7 @@ export function useWorkbookAgentPane(input: {
             (workflowTemplate === "findFormulaIssues" ||
               workflowTemplate === "highlightFormulaIssues" ||
               workflowTemplate === "highlightCurrentSheetOutliers" ||
+              workflowTemplate === "styleCurrentSheetHeaders" ||
               workflowTemplate === "normalizeCurrentSheetHeaders" ||
               workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
               workflowTemplate === "normalizeCurrentSheetWhitespace" ||

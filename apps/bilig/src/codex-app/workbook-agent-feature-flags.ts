@@ -101,6 +101,7 @@ export function getWorkbookAgentWorkflowFamily(
     case "highlightFormulaIssues":
       return "formula";
     case "highlightCurrentSheetOutliers":
+    case "styleCurrentSheetHeaders":
       return "formatting";
     case "normalizeCurrentSheetHeaders":
     case "normalizeCurrentSheetNumberFormats":
