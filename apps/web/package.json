@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node ../../node_modules/vite/bin/vite.js",
+    "prebuild": "bun ../../scripts/gen-workspace-resolution.ts",
     "build": "tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
     "preview": "node ../../node_modules/vite/bin/vite.js preview",
     "preview:ci": "pnpm -w build && bun ../../scripts/run-vite-preview.ts 4180"
