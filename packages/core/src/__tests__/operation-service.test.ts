@@ -179,7 +179,7 @@ describe("EngineOperationService", () => {
     const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
     const batch = createBatch(getReplicaState(engine), forwardOps);
 
-    Effect.runSync(getOperationService(engine).applyLocalCellMutationsAt(refs, batch, 3));
+    Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 3));
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 0 });
@@ -208,7 +208,7 @@ describe("EngineOperationService", () => {
     ]);
 
     expect(() =>
-      Effect.runSync(getOperationService(engine).applyLocalCellMutationsAt(refs, batch, 1)),
+      Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1)),
     ).toThrow("Unknown sheet id: 999");
   });
 });

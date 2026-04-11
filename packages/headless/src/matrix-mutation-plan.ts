@@ -1,23 +1,19 @@
+import type { EngineCellMutationRef } from "@bilig/core";
 import { formatAddress } from "@bilig/formula";
-import type { LiteralInput } from "@bilig/protocol";
 import type { WorkPaperCellAddress, WorkPaperSheet, RawCellContent } from "./work-paper-types.js";
 
-export type MatrixMutationOp =
-  | { kind: "clearCell"; sheetName: string; address: string }
-  | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
-  | { kind: "setCellFormula"; sheetName: string; address: string; formula: string };
+export type MatrixMutationRef = EngineCellMutationRef;
 
 export interface MatrixMutationPlan {
-  leadingOps: MatrixMutationOp[];
-  formulaOps: MatrixMutationOp[];
-  ops: MatrixMutationOp[];
+  leadingRefs: MatrixMutationRef[];
+  formulaRefs: MatrixMutationRef[];
+  refs: MatrixMutationRef[];
   potentialNewCells: number;
-  trailingLiteralOps: MatrixMutationOp[];
+  trailingLiteralRefs: MatrixMutationRef[];
 }
 
 interface BuildMatrixMutationPlanArgs {
   target: WorkPaperCellAddress;
-  targetSheetName: string;
   content: WorkPaperSheet;
   rewriteFormula: (
     formula: string,
@@ -34,29 +30,29 @@ function isFormulaContent(content: RawCellContent): content is string {
 }
 
 export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): MatrixMutationPlan {
-  const leadingOps: MatrixMutationOp[] = [];
-  const formulaOps: MatrixMutationOp[] = [];
-  const trailingLiteralOps: MatrixMutationOp[] = [];
+  const leadingRefs: MatrixMutationRef[] = [];
+  const formulaRefs: MatrixMutationRef[] = [];
+  const trailingLiteralRefs: MatrixMutationRef[] = [];
   let potentialNewCells = 0;
-  const formulaDestinations: Array<{ row: number; col: number }> = [];
+  const earliestFormulaRowByColumn = new Map<number, number>();
 
   args.content.forEach((row, rowOffset) => {
     row.forEach((raw, columnOffset) => {
       if (!isFormulaContent(raw)) {
         return;
       }
-      formulaDestinations.push({
-        row: args.target.row + rowOffset,
-        col: args.target.col + columnOffset,
-      });
+      const destinationRow = args.target.row + rowOffset;
+      const destinationCol = args.target.col + columnOffset;
+      const earliestFormulaRow = earliestFormulaRowByColumn.get(destinationCol);
+      if (earliestFormulaRow === undefined || destinationRow < earliestFormulaRow) {
+        earliestFormulaRowByColumn.set(destinationCol, destinationRow);
+      }
     });
   });
 
   const shouldDeferLiteral = (address: string, row: number, col: number): boolean =>
     args.deferLiteralAddresses?.has(address) === true ||
-    formulaDestinations.some(
-      (formulaDestination) => row > formulaDestination.row && col === formulaDestination.col,
-    );
+    row > (earliestFormulaRowByColumn.get(col) ?? Number.POSITIVE_INFINITY);
 
   args.content.forEach((row, rowOffset) => {
     row.forEach((raw, columnOffset) => {
@@ -69,11 +65,14 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
 
       if (raw === null) {
         if (!args.skipNulls) {
-          const op = { kind: "clearCell", sheetName: args.targetSheetName, address } as const;
+          const ref = {
+            sheetId: args.target.sheet,
+            mutation: { kind: "clearCell", row: destination.row, col: destination.col },
+          } satisfies MatrixMutationRef;
           if (shouldDeferLiteral(address, destination.row, destination.col)) {
-            trailingLiteralOps.push(op);
+            trailingLiteralRefs.push(ref);
           } else {
-            leadingOps.push(op);
+            leadingRefs.push(ref);
           }
         }
         return;
@@ -82,34 +81,40 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
       potentialNewCells += 1;
 
       if (isFormulaContent(raw)) {
-        formulaOps.push({
-          kind: "setCellFormula",
-          sheetName: args.targetSheetName,
-          address,
-          formula: args.rewriteFormula(raw, destination, rowOffset, columnOffset),
+        formulaRefs.push({
+          sheetId: args.target.sheet,
+          mutation: {
+            kind: "setCellFormula",
+            row: destination.row,
+            col: destination.col,
+            formula: args.rewriteFormula(raw, destination, rowOffset, columnOffset),
+          },
         });
         return;
       }
 
-      const op = {
-        kind: "setCellValue",
-        sheetName: args.targetSheetName,
-        address,
-        value: raw,
-      } as const;
+      const ref = {
+        sheetId: args.target.sheet,
+        mutation: {
+          kind: "setCellValue",
+          row: destination.row,
+          col: destination.col,
+          value: raw,
+        },
+      } satisfies MatrixMutationRef;
       if (shouldDeferLiteral(address, destination.row, destination.col)) {
-        trailingLiteralOps.push(op);
+        trailingLiteralRefs.push(ref);
       } else {
-        leadingOps.push(op);
+        leadingRefs.push(ref);
       }
     });
   });
 
   return {
-    leadingOps,
-    formulaOps,
-    ops: [...leadingOps, ...formulaOps, ...trailingLiteralOps],
+    leadingRefs,
+    formulaRefs,
+    refs: [...leadingRefs, ...formulaRefs, ...trailingLiteralRefs],
     potentialNewCells,
-    trailingLiteralOps,
+    trailingLiteralRefs,
   };
 }

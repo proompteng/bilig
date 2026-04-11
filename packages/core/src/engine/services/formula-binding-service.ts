@@ -247,6 +247,11 @@ interface DirectApproximateLookupCandidate {
   endCol: number;
 }
 
+type ParsedCompiledFormula = ReturnType<typeof compileFormula> & {
+  parsedDeps?: Array<{ address: string; kind: "cell"; sheetName?: string }>;
+  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string }>;
+};
+
 function collectDirectApproximateLookupCandidates(
   node: FormulaNode,
 ): DirectApproximateLookupCandidate[] {
@@ -542,9 +547,54 @@ export function createEngineFormulaBindingService(args: {
 
   const materializeDependencies = (
     currentSheetName: string,
-    compiled: ReturnType<typeof compileFormula>,
+    compiled: ParsedCompiledFormula,
   ): MaterializedDependencies => {
     const deps = compiled.deps;
+    const parsedCellDeps = compiled.parsedDeps;
+    if (
+      compiled.symbolicRanges.length === 0 &&
+      parsedCellDeps !== undefined &&
+      parsedCellDeps.length === deps.length &&
+      parsedCellDeps.length > 0 &&
+      parsedCellDeps.length <= 2
+    ) {
+      ensureDependencyBuildCapacity(
+        args.state.workbook.cellStore.size + 1,
+        parsedCellDeps.length + 1,
+        compiled.symbolicRefs.length + 1,
+        1,
+      );
+      let dependencyIndexCount = 0;
+      let dependencyEntityCount = 0;
+      for (let depIndex = 0; depIndex < parsedCellDeps.length; depIndex += 1) {
+        const parsedDep = parsedCellDeps[depIndex]!;
+        const sheetName = parsedDep.sheetName ?? currentSheetName;
+        const cellIndex = args.ensureCellTracked(sheetName, parsedDep.address);
+        let seen = false;
+        for (let existingIndex = 0; existingIndex < dependencyIndexCount; existingIndex += 1) {
+          if (args.getDependencyBuildCells()[existingIndex] === cellIndex) {
+            seen = true;
+            break;
+          }
+        }
+        if (!seen) {
+          args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex;
+          dependencyIndexCount += 1;
+        }
+        args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex);
+        dependencyEntityCount += 1;
+      }
+      return {
+        dependencyIndices: args.getDependencyBuildCells().slice(0, dependencyIndexCount),
+        dependencyEntities: args.getDependencyBuildEntities().slice(0, dependencyEntityCount),
+        rangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
+        symbolicRangeIndices: args.getSymbolicRangeBindings(),
+        symbolicRangeCount: 0,
+        newRangeIndices: args.getDependencyBuildNewRanges(),
+        newRangeCount: 0,
+      };
+    }
+
     ensureDependencyBuildCapacity(
       args.state.workbook.cellStore.size + 1,
       deps.length + 1,
@@ -566,7 +616,21 @@ export function createEngineFormulaBindingService(args: {
       .getSymbolicRangeBindings()
       .fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length);
 
-    for (const dep of deps) {
+    for (let depIndex = 0; depIndex < deps.length; depIndex += 1) {
+      const dep = deps[depIndex]!;
+      const parsedDep = compiled.parsedDeps?.[depIndex];
+      if (parsedDep?.kind === "cell") {
+        const sheetName = parsedDep.sheetName ?? currentSheetName;
+        const cellIndex = args.ensureCellTracked(sheetName, parsedDep.address);
+        if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
+          args.getDependencyBuildSeen()[cellIndex] = epoch;
+          args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex;
+          dependencyIndexCount += 1;
+        }
+        args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex);
+        dependencyEntityCount += 1;
+        continue;
+      }
       if (dep.includes(":")) {
         const range = parseRangeAddress(dep, currentSheetName);
         const sheetName = range.sheetName ?? currentSheetName;
@@ -694,7 +758,7 @@ export function createEngineFormulaBindingService(args: {
   };
 
   const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
-    const compiled = compileFormulaForSheet(ownerSheetName, source);
+    const compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
     const indexedExactLookupCandidates = args.state.useColumnIndex
       ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
       : [];
@@ -711,19 +775,34 @@ export function createEngineFormulaBindingService(args: {
       compiled.symbolicRanges.length + 1,
     );
     for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
+      const parsedRef = compiled.parsedSymbolicRefs?.[index];
+      if (parsedRef && parsedRef.sheetName === undefined) {
+        args.getSymbolicRefBindings()[index] = args.ensureCellTracked(
+          ownerSheetName,
+          parsedRef.address,
+        );
+        continue;
+      }
       const ref = compiled.symbolicRefs[index]!;
       const [qualifiedSheetName, qualifiedAddress] = ref.includes("!")
         ? ref.split("!")
         : [undefined, ref];
-      const parsed = parseCellAddress(qualifiedAddress, qualifiedSheetName);
+      const fallbackAddress = parseCellAddress(qualifiedAddress, qualifiedSheetName).text;
       const sheetName =
+        parsedRef?.sheetName ??
         qualifiedSheetName ??
         args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!);
-      if (qualifiedSheetName && !args.state.workbook.getSheet(sheetName)) {
+      if (
+        (parsedRef?.sheetName ?? qualifiedSheetName) &&
+        !args.state.workbook.getSheet(sheetName)
+      ) {
         args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND;
         continue;
       }
-      args.getSymbolicRefBindings()[index] = args.ensureCellTracked(sheetName, parsed.text);
+      args.getSymbolicRefBindings()[index] = args.ensureCellTracked(
+        sheetName,
+        parsedRef?.address ?? fallbackAddress,
+      );
     }
 
     const literalStringIds = compiled.symbolicStrings.map((value) =>

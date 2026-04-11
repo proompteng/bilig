@@ -63,4 +63,25 @@ describe("EngineFormulaBindingService", () => {
     expect(engine.getCell("Summary", "A1").formula).toBe("'Q2''s Data'!A1*2");
     expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 14 });
   });
+
+  it("binds repeated row-translated formulas through the service without changing results", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-row-template" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "B2", 20);
+
+    engine.setCellFormula("Sheet1", "E1", "A1+B1");
+    engine.setCellFormula("Sheet1", "F1", "E1*2");
+    engine.setCellFormula("Sheet1", "E2", "A2+B2");
+    engine.setCellFormula("Sheet1", "F2", "E2*2");
+
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 11 });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 22 });
+    expect(engine.getCellValue("Sheet1", "E2")).toEqual({ tag: ValueTag.Number, value: 22 });
+    expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 44 });
+  });
 });

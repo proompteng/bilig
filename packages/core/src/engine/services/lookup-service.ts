@@ -226,12 +226,13 @@ export function createEngineLookupService(args: {
     rowStart: number,
     rowEnd: number,
   ): ApproximateColumnIndexEntry => {
+    const sheet = args.state.workbook.getSheet(sheetName);
+    const cellStore = args.state.workbook.cellStore;
     const rawValues: ApproximateComparableValue[] = [];
     let hasNumeric = false;
     let hasText = false;
     let hasInvalid = false;
     for (let row = rowStart; row <= rowEnd; row += 1) {
-      const sheet = args.state.workbook.getSheet(sheetName);
       if (!sheet) {
         rawValues.push({ kind: "empty" });
         continue;
@@ -241,14 +242,37 @@ export function createEngineLookupService(args: {
         rawValues.push({ kind: "empty" });
         continue;
       }
-      const tag = args.state.workbook.cellStore.tags[cellIndex];
-      const comparable = normalizeApproximateComparableValue(
-        tag === undefined
-          ? { tag: ValueTag.Empty }
-          : args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id)),
-        (id) => args.state.strings.get(id),
-        tag === ValueTag.String ? (args.state.workbook.cellStore.stringIds[cellIndex] ?? 0) : 0,
-      );
+      const tag = cellStore.tags[cellIndex];
+      let comparable: ApproximateComparableValue;
+      switch (tag) {
+        case undefined:
+        case ValueTag.Empty:
+          comparable = { kind: "empty" };
+          break;
+        case ValueTag.Number:
+          comparable = {
+            kind: "numeric",
+            value: Object.is(cellStore.numbers[cellIndex]!, -0) ? 0 : cellStore.numbers[cellIndex]!,
+          };
+          break;
+        case ValueTag.Boolean:
+          comparable = { kind: "numeric", value: cellStore.numbers[cellIndex]! !== 0 ? 1 : 0 };
+          break;
+        case ValueTag.String: {
+          const stringId = cellStore.stringIds[cellIndex]!;
+          let normalized = normalizedStrings.get(stringId);
+          if (normalized === undefined) {
+            normalized = args.state.strings.get(stringId).toUpperCase();
+            normalizedStrings.set(stringId, normalized);
+          }
+          comparable = { kind: "text", value: normalized };
+          break;
+        }
+        case ValueTag.Error:
+        default:
+          comparable = { kind: "invalid" };
+          break;
+      }
       rawValues.push(comparable);
       hasNumeric ||= comparable.kind === "numeric";
       hasText ||= comparable.kind === "text";

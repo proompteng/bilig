@@ -2225,16 +2225,20 @@ export class WorkPaper {
     address: WorkPaperCellAddress,
     content: RawCellContent | WorkPaperSheet,
   ): WorkPaperChange[] {
+    this.assertNotDisposed();
     if (!this.isItPossibleToSetCellContents(address, content)) {
       throw new WorkPaperOperationError("Cell contents cannot be set");
+    }
+    if (
+      !isWorkPaperSheetMatrix(content) &&
+      this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content)
+    ) {
+      return [];
     }
     return this.captureChanges(undefined, () => {
       if (isWorkPaperSheetMatrix(content)) {
         this.flushPendingBatchOps();
         this.applyMatrixContents(address, content);
-        return;
-      }
-      if (this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content)) {
         return;
       }
       this.flushPendingBatchOps();
@@ -3434,10 +3438,8 @@ export class WorkPaper {
       return;
     }
 
-    const sheetName = this.sheetName(targetLeftCorner.sheet);
-    const { ops, potentialNewCells } = buildMatrixMutationPlan({
+    const { refs, potentialNewCells } = buildMatrixMutationPlan({
       target: targetLeftCorner,
-      targetSheetName: sheetName,
       content: serialized,
       rewriteFormula: (formula, destination, rowOffset, columnOffset) =>
         this.rewriteFormulaForStorage(
@@ -3449,10 +3451,14 @@ export class WorkPaper {
           destination.sheet,
         ),
     });
-    if (ops.length === 0) {
+    if (refs.length === 0) {
       return;
     }
-    this.engine.applyOps(ops, { potentialNewCells, trusted: true });
+    this.engine.applyCellMutationsAtWithOptions(refs, {
+      captureUndo: true,
+      potentialNewCells,
+      source: "local",
+    });
   }
 
   private applyMatrixContents(
@@ -3465,37 +3471,35 @@ export class WorkPaper {
     } = {},
   ): void {
     this.flushPendingBatchOps();
-    const sheetName = this.sheetName(address.sheet);
-    const { leadingOps, formulaOps, ops, potentialNewCells, trailingLiteralOps } =
+    const { leadingRefs, formulaRefs, refs, potentialNewCells, trailingLiteralRefs } =
       buildMatrixMutationPlan({
         target: address,
-        targetSheetName: sheetName,
         content,
         deferLiteralAddresses: options.deferLiteralAddresses,
         skipNulls: options.skipNulls,
         rewriteFormula: (formula, destination) =>
           this.rewriteFormulaForStorage(stripLeadingEquals(formula), destination.sheet),
       });
-    if (ops.length === 0) {
+    if (refs.length === 0) {
       return;
     }
-    const applyPlannedOps = (
-      phaseOps: readonly (typeof ops)[number][],
+    const applyPlannedRefs = (
+      phaseRefs: readonly (typeof refs)[number][],
       applyOptions: {
         captureUndo?: boolean;
         potentialNewCells?: number;
         source?: "local" | "restore";
       },
     ): void => {
-      if (phaseOps.length === 0) {
+      if (phaseRefs.length === 0) {
         return;
       }
-      this.engine.applyOps(phaseOps, { ...applyOptions, trusted: true });
+      this.engine.applyCellMutationsAtWithOptions(phaseRefs, applyOptions);
     };
     const phaseSource = options.captureUndo === false ? "restore" : "local";
 
-    if (formulaOps.length === 0) {
-      applyPlannedOps(ops, {
+    if (formulaRefs.length === 0) {
+      applyPlannedRefs(refs, {
         captureUndo: options.captureUndo,
         potentialNewCells,
         source: phaseSource,
@@ -3503,17 +3507,17 @@ export class WorkPaper {
       return;
     }
 
-    applyPlannedOps(leadingOps, {
+    applyPlannedRefs(leadingRefs, {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,
     });
-    applyPlannedOps(formulaOps, {
+    applyPlannedRefs(formulaRefs, {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,
     });
-    applyPlannedOps(trailingLiteralOps, {
+    applyPlannedRefs(trailingLiteralRefs, {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,

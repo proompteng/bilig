@@ -514,6 +514,17 @@ export class SpreadsheetEngine {
     return this.runtime.mutation.executeLocalCellMutationsAtNow(refs, potentialNewCells);
   }
 
+  applyCellMutationsAtWithOptions(
+    refs: readonly EngineCellMutationRef[],
+    options: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+    } = {},
+  ): readonly EngineOp[] | null {
+    return this.runtime.mutation.applyCellMutationsAtNow(refs, options);
+  }
+
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
     const ops = buildFormatPatchOps(this.workbook, range, format);
     this.executeLocalTransaction(ops);

@@ -11,7 +11,7 @@ type FastSimpleCellOp = Extract<
   | { kind: "setCellFormat" }
 >;
 
-interface FastMutationHistoryResult {
+export interface FastMutationHistoryResult {
   forward: TransactionRecord;
   inverse: TransactionRecord;
   undoOps: EngineOp[];

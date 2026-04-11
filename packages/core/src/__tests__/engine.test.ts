@@ -5672,6 +5672,31 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
   });
 
+  it("applies coordinate-native restore mutations without recording undo history", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "restore-cell-mutation-refs" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    const undoOps = engine.applyCellMutationsAtWithOptions(
+      [
+        { sheetId, mutation: { kind: "setCellValue", row: 0, col: 0, value: 5 } },
+        { sheetId, mutation: { kind: "setCellFormula", row: 0, col: 1, formula: "A1*2" } },
+      ],
+      {
+        captureUndo: false,
+        potentialNewCells: 2,
+        source: "restore",
+      },
+    );
+
+    expect(undoOps).toBeNull();
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.undo()).toBe(true);
+    expect(engine.workbook.getSheet("Sheet1")).toBeUndefined();
+  });
+
   it("reads rectangular range values as a dense matrix without per-cell callers", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

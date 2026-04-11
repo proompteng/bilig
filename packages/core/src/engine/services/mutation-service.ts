@@ -1,14 +1,14 @@
 import { Effect } from "effect";
 import { formatAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import type { CellRangeRef, CellSnapshot, LiteralInput } from "@bilig/protocol";
+import { ValueTag, type CellRangeRef, type CellSnapshot, type LiteralInput } from "@bilig/protocol";
 import { normalizeRange } from "../../engine-range-utils.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
 import { restoreFormatRangeOps, restoreStyleRangeOps } from "../../engine-range-format-ops.js";
 import { sheetMetadataToOps } from "../../engine-snapshot-utils.js";
 import { parseCsv, parseCsvCellInput } from "../../csv.js";
 import { createBatch } from "../../replica-state.js";
-import type { WorkbookStore } from "../../workbook-store.js";
+import { makeCellKey, type WorkbookStore } from "../../workbook-store.js";
 import {
   cellMutationRefToEngineOp,
   cloneCellMutationRef,
@@ -17,7 +17,10 @@ import {
 } from "../../cell-mutations-at.js";
 import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
-import { tryBuildFastMutationHistory } from "./mutation-history-fast-path.js";
+import {
+  tryBuildFastMutationHistory,
+  type FastMutationHistoryResult,
+} from "./mutation-history-fast-path.js";
 
 function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
@@ -56,6 +59,22 @@ export interface EngineMutationService {
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
   ) => readonly EngineOp[] | null;
+  readonly applyCellMutationsAtNow: (
+    refs: readonly EngineCellMutationRef[],
+    options?: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+    },
+  ) => readonly EngineOp[] | null;
+  readonly applyCellMutationsAt: (
+    refs: readonly EngineCellMutationRef[],
+    options?: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+    },
+  ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>;
   readonly executeLocal: (
     ops: EngineOp[],
     potentialNewCells?: number,
@@ -150,12 +169,72 @@ export function createEngineMutationService(args: {
     source: "local" | "restore" | "history",
     potentialNewCells?: number,
   ) => void;
-  readonly applyLocalCellMutationsAtNow: (
+  readonly applyCellMutationsAtBatchNow: (
     refs: readonly EngineCellMutationRef[],
     batch: EngineOpBatch,
+    source: "local" | "restore",
     potentialNewCells?: number,
   ) => void;
 }): EngineMutationService {
+  const restoreCellOpFromRef = (ref: EngineCellMutationRef): EngineOp => {
+    const sheet = args.state.workbook.getSheetById(ref.sheetId);
+    if (!sheet) {
+      throw new Error(`Unknown sheet id: ${ref.sheetId}`);
+    }
+    const address = formatAddress(ref.mutation.row, ref.mutation.col);
+    const cellIndex = args.state.workbook.cellKeyToIndex.get(
+      makeCellKey(ref.sheetId, ref.mutation.row, ref.mutation.col),
+    );
+    if (cellIndex === undefined) {
+      return { kind: "clearCell", sheetName: sheet.name, address };
+    }
+    const snapshot = args.getCellByIndex(cellIndex);
+    if (snapshot.formula !== undefined) {
+      return {
+        kind: "setCellFormula",
+        sheetName: sheet.name,
+        address,
+        formula: snapshot.formula,
+      };
+    }
+    switch (snapshot.value.tag) {
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        return { kind: "clearCell", sheetName: sheet.name, address };
+      case ValueTag.Number:
+      case ValueTag.Boolean:
+      case ValueTag.String:
+        return {
+          kind: "setCellValue",
+          sheetName: sheet.name,
+          address,
+          value: snapshot.value.value,
+        };
+    }
+  };
+
+  const buildFastMutationHistoryFromRefs = (
+    refs: readonly EngineCellMutationRef[],
+    potentialNewCells: number,
+  ): FastMutationHistoryResult => {
+    const forwardOps: EngineOp[] = Array.from({ length: refs.length });
+    for (let index = 0; index < refs.length; index += 1) {
+      const ref = refs[index]!;
+      forwardOps[index] = cellMutationRefToEngineOp(args.state.workbook, ref);
+    }
+
+    const inverseOps: EngineOp[] = [];
+    for (let index = refs.length - 1; index >= 0; index -= 1) {
+      inverseOps.push(restoreCellOpFromRef(refs[index]!));
+    }
+
+    return {
+      forward: { ops: forwardOps, potentialNewCells },
+      inverse: { ops: inverseOps, potentialNewCells: refs.length },
+      undoOps: structuredClone(inverseOps),
+    };
+  };
+
   const inverseOpsFor = (op: EngineOp): EngineOp[] => {
     switch (op.kind) {
       case "upsertWorkbook":
@@ -624,26 +703,21 @@ export function createEngineMutationService(args: {
     const nextRefs = refs.map((ref) => cloneCellMutationRef(ref));
     const nextPotentialNewCells =
       potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs);
-    const forwardOps = nextRefs.map((ref) => cellMutationRefToEngineOp(args.state.workbook, ref));
-    const fastHistory = tryBuildFastMutationHistory({
-      workbook: args.state.workbook,
-      getCellByIndex: args.getCellByIndex,
-      ops: forwardOps,
-      potentialNewCells: nextPotentialNewCells,
-    });
+    const fastHistory = buildFastMutationHistoryFromRefs(nextRefs, nextPotentialNewCells);
     const inverse: TransactionRecord = fastHistory?.inverse ?? {
-      ops: buildInverseOps(forwardOps),
-      potentialNewCells: forwardOps.length,
+      ops: buildInverseOps(fastHistory.forward.ops),
+      potentialNewCells: fastHistory.forward.ops.length,
     };
-    args.applyLocalCellMutationsAtNow(
+    args.applyCellMutationsAtBatchNow(
       nextRefs,
-      createBatch(args.state.replicaState, forwardOps),
+      createBatch(args.state.replicaState, fastHistory.forward.ops),
+      "local",
       nextPotentialNewCells,
     );
     if (args.state.getTransactionReplayDepth() === 0) {
       args.state.undoStack.push({
         forward: fastHistory?.forward ?? {
-          ops: canonicalizeForwardOps(forwardOps),
+          ops: canonicalizeForwardOps(fastHistory.forward.ops),
           potentialNewCells: nextPotentialNewCells,
         },
         inverse,
@@ -651,6 +725,35 @@ export function createEngineMutationService(args: {
       args.state.redoStack.length = 0;
     }
     return fastHistory?.undoOps ?? structuredClone(inverse.ops);
+  };
+
+  const applyCellMutationsAtNow = (
+    refs: readonly EngineCellMutationRef[],
+    options: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+    } = {},
+  ): readonly EngineOp[] | null => {
+    const source = options.source ?? "restore";
+    const captureUndo = options.captureUndo ?? source === "local";
+    if (captureUndo) {
+      return executeLocalCellMutationsAtNow(refs, options.potentialNewCells);
+    }
+    if (refs.length === 0) {
+      return null;
+    }
+    const nextRefs = refs.map((ref) => cloneCellMutationRef(ref));
+    const nextPotentialNewCells =
+      options.potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs);
+    const forwardOps = nextRefs.map((ref) => cellMutationRefToEngineOp(args.state.workbook, ref));
+    args.applyCellMutationsAtBatchNow(
+      nextRefs,
+      createBatch(args.state.replicaState, forwardOps),
+      source,
+      nextPotentialNewCells,
+    );
+    return null;
   };
 
   return {
@@ -707,6 +810,19 @@ export function createEngineMutationService(args: {
     },
     executeLocalCellMutationsAtNow(refs, potentialNewCells) {
       return executeLocalCellMutationsAtNow(refs, potentialNewCells);
+    },
+    applyCellMutationsAtNow(refs, options = {}) {
+      return applyCellMutationsAtNow(refs, options);
+    },
+    applyCellMutationsAt(refs, options = {}) {
+      return Effect.try({
+        try: () => applyCellMutationsAtNow(refs, options),
+        catch: (cause) =>
+          new EngineMutationError({
+            message: "Failed to apply cell mutations",
+            cause,
+          }),
+      });
     },
     executeLocal(ops, potentialNewCells) {
       return Effect.try({
