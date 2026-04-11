@@ -145,7 +145,7 @@ export function useWorkbookAppPanels(input: {
     () => (
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         {toolbarHeaderStatus}
-        {sideRailToggleControls}
+        {!isSideRailOpen ? sideRailToggleControls : null}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -156,7 +156,7 @@ export function useWorkbookAppPanels(input: {
         ) : null}
       </div>
     ),
-    [collaborators, selectAddress, sideRailToggleControls, toolbarHeaderStatus],
+    [collaborators, isSideRailOpen, selectAddress, sideRailToggleControls, toolbarHeaderStatus],
   );
 
   const sideRail = useMemo(

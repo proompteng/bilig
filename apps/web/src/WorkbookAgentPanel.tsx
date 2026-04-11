@@ -33,9 +33,14 @@ import {
   agentPanelComposerFrameClass,
   agentPanelComposerSendButtonClass,
   agentPanelComposerTextareaClass,
+  agentPanelFooterClass,
+  agentPanelHeaderClass,
   agentPanelInlineButtonClass,
   agentPanelSegmentedButtonClass,
   agentPanelSegmentedGroupClass,
+  agentPanelThreadButtonClass,
+  agentPanelThreadListClass,
+  agentPanelToolbarRowClass,
 } from "./workbook-agent-panel-primitives.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
@@ -90,7 +95,7 @@ function ThreadSummaryStrip(props: {
   }
 
   return (
-    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+    <div className={agentPanelThreadListClass()}>
       {props.threadSummaries.map((threadSummary) => {
         const isActive = threadSummary.threadId === props.activeThreadId;
         const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText);
@@ -99,39 +104,37 @@ function ThreadSummaryStrip(props: {
             key={threadSummary.threadId}
             aria-label={`Open ${threadSummary.scope} thread ${threadSummary.threadId}`}
             aria-pressed={isActive}
-            className={cn(
-              workbookButtonClass({
-                size: "sm",
-                tone: isActive ? "accent" : "neutral",
-                weight: isActive ? "strong" : "regular",
-              }),
-              "h-auto min-w-[8.5rem] shrink-0 flex-col items-start gap-1 px-3 py-2 text-left",
-            )}
+            className={agentPanelThreadButtonClass({ active: isActive })}
             data-testid={`workbook-agent-thread-${threadSummary.threadId}`}
             type="button"
             onClick={() => {
               props.onSelectThread(threadSummary.threadId);
             }}
           >
-            <div className="flex w-full items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-[var(--wb-text)]">
-                {threadSummary.scope === "shared" ? "Shared" : "Private"}
-              </span>
-              {threadSummary.hasPendingBundle ? (
-                <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
-                  Pending
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-[var(--wb-text)]">
+                  {threadSummary.scope === "shared" ? "Shared" : "Private"}
                 </span>
+                <span className="text-[11px] text-[var(--wb-text-subtle)]">
+                  {threadSummary.scope === "shared"
+                    ? formatWorkbookCollaboratorLabel(threadSummary.ownerUserId)
+                    : "Just you"}
+                </span>
+                <span className="text-[11px] text-[var(--wb-text-muted)]">
+                  {formatThreadEntryCount(threadSummary.entryCount)}
+                </span>
+              </div>
+              {latestActivity ? (
+                <div className="mt-0.5 truncate text-[11px] text-[var(--wb-text-muted)]">
+                  {latestActivity}
+                </div>
               ) : null}
             </div>
-            <div className="text-[11px] text-[var(--wb-text-subtle)]">
-              {threadSummary.scope === "shared"
-                ? `${formatWorkbookCollaboratorLabel(threadSummary.ownerUserId)} · ${formatThreadEntryCount(threadSummary.entryCount)}`
-                : formatThreadEntryCount(threadSummary.entryCount)}
-            </div>
-            {latestActivity ? (
-              <div className="line-clamp-2 text-[11px] leading-4 text-[var(--wb-text-muted)]">
-                {latestActivity}
-              </div>
+            {threadSummary.hasPendingBundle ? (
+              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
+                Pending
+              </span>
             ) : null}
           </button>
         );
@@ -140,40 +143,29 @@ function ThreadSummaryStrip(props: {
   );
 }
 
-function ThreadComposerControls(props: {
+function ThreadScopeControls(props: {
   readonly threadScope: WorkbookAgentThreadScope;
   readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
-  readonly onStartNewThread: () => void;
 }) {
   return (
-    <div className="mt-2 flex items-center justify-between gap-2">
-      <div className={agentPanelSegmentedGroupClass()}>
-        {(["private", "shared"] as const).map((scope) => {
-          const isActive = props.threadScope === scope;
-          return (
-            <button
-              key={scope}
-              aria-pressed={isActive}
-              className={agentPanelSegmentedButtonClass({ active: isActive })}
-              data-testid={`workbook-agent-scope-${scope}`}
-              type="button"
-              onClick={() => {
-                props.onSelectThreadScope(scope);
-              }}
-            >
-              {scope === "shared" ? "Shared" : "Private"}
-            </button>
-          );
-        })}
-      </div>
-      <button
-        className={agentPanelInlineButtonClass()}
-        data-testid="workbook-agent-new-thread"
-        type="button"
-        onClick={props.onStartNewThread}
-      >
-        New thread
-      </button>
+    <div className={agentPanelSegmentedGroupClass()}>
+      {(["private", "shared"] as const).map((scope) => {
+        const isActive = props.threadScope === scope;
+        return (
+          <button
+            key={scope}
+            aria-pressed={isActive}
+            className={agentPanelSegmentedButtonClass({ active: isActive })}
+            data-testid={`workbook-agent-scope-${scope}`}
+            type="button"
+            onClick={() => {
+              props.onSelectThreadScope(scope);
+            }}
+          >
+            {scope === "shared" ? "Shared" : "Private"}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -939,6 +931,8 @@ export function WorkbookAgentPanel(props: {
   }, [props.snapshot?.entries.length, props.snapshot?.status]);
 
   const isRunning = props.snapshot?.status === "inProgress";
+  const resolvedContextLabel = contextLabel(props.snapshot?.context ?? props.currentContext);
+  const resolvedScopeLabel = props.threadScope === "shared" ? "Shared thread" : "Private thread";
 
   return (
     <div
@@ -946,76 +940,29 @@ export function WorkbookAgentPanel(props: {
       data-testid="workbook-agent-panel"
       id="workbook-agent-panel"
     >
-      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2.5">
-        <div className="min-w-0 text-[12px] font-medium text-[var(--wb-text)]">
-          {contextLabel(props.snapshot?.context ?? props.currentContext)}
-        </div>
-        <ThreadComposerControls
-          threadScope={props.threadScope}
-          onSelectThreadScope={props.onSelectThreadScope}
-          onStartNewThread={props.onStartNewThread}
-        />
-        <form
-          className="mt-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            props.onSubmit();
-          }}
-        >
-          <label className="sr-only" htmlFor="workbook-agent-input">
-            Ask the workbook assistant
-          </label>
-          <div className={agentPanelComposerFrameClass()}>
-            <textarea
-              id="workbook-agent-input"
-              className={agentPanelComposerTextareaClass()}
-              data-testid="workbook-agent-input"
-              placeholder="Ask the workbook assistant"
-              value={props.draft}
-              onChange={(event) => {
-                props.onDraftChange(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (isRunning) {
-                  return;
-                }
-                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
-                  return;
-                }
-                event.preventDefault();
-                props.onSubmit();
-              }}
-            />
-            <button
-              aria-label={isRunning ? "Stop" : "Send message"}
-              className={agentPanelComposerSendButtonClass()}
-              data-testid="workbook-agent-send"
-              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
-              type="button"
-              onClick={() => {
-                if (isRunning) {
-                  props.onInterrupt();
-                  return;
-                }
-                props.onSubmit();
-              }}
-            >
-              {isRunning ? <StopIcon /> : <SendArrowIcon />}
-            </button>
+      <div className={agentPanelHeaderClass()}>
+        <div className={agentPanelToolbarRowClass()}>
+          <div className="min-w-0">
+            <div className="truncate text-[12px] font-semibold text-[var(--wb-text)]">
+              {resolvedContextLabel}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--wb-text-subtle)]">
+              {resolvedScopeLabel}
+            </div>
           </div>
-        </form>
+          <button
+            className={agentPanelInlineButtonClass()}
+            data-testid="workbook-agent-new-thread"
+            type="button"
+            onClick={props.onStartNewThread}
+          >
+            New thread
+          </button>
+        </div>
         <ThreadSummaryStrip
           activeThreadId={props.activeThreadId}
           threadSummaries={props.threadSummaries}
           onSelectThread={props.onSelectThread}
-        />
-        <WorkflowActionStrip
-          disabled={props.isLoading || isRunning}
-          isStartingWorkflow={props.isStartingWorkflow}
-          onStartWorkflow={props.onStartWorkflow}
-          onStartNamedWorkflow={props.onStartNamedWorkflow}
-          onStartSearchWorkflow={props.onStartSearchWorkflow}
-          onStartStructuralWorkflow={props.onStartStructuralWorkflow}
         />
       </div>
       <div
@@ -1089,6 +1036,71 @@ export function WorkbookAgentPanel(props: {
             ) : null}
           </div>
         ) : null}
+      </div>
+      <div className={agentPanelFooterClass()}>
+        <div className={agentPanelToolbarRowClass()}>
+          <ThreadScopeControls
+            threadScope={props.threadScope}
+            onSelectThreadScope={props.onSelectThreadScope}
+          />
+          <WorkflowActionStrip
+            disabled={props.isLoading || isRunning}
+            isStartingWorkflow={props.isStartingWorkflow}
+            onStartWorkflow={props.onStartWorkflow}
+            onStartNamedWorkflow={props.onStartNamedWorkflow}
+            onStartSearchWorkflow={props.onStartSearchWorkflow}
+            onStartStructuralWorkflow={props.onStartStructuralWorkflow}
+          />
+        </div>
+        <form
+          className="mt-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            props.onSubmit();
+          }}
+        >
+          <label className="sr-only" htmlFor="workbook-agent-input">
+            Ask the workbook assistant
+          </label>
+          <div className={agentPanelComposerFrameClass()}>
+            <textarea
+              id="workbook-agent-input"
+              className={agentPanelComposerTextareaClass()}
+              data-testid="workbook-agent-input"
+              placeholder="Ask the workbook assistant"
+              value={props.draft}
+              onChange={(event) => {
+                props.onDraftChange(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (isRunning) {
+                  return;
+                }
+                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+                  return;
+                }
+                event.preventDefault();
+                props.onSubmit();
+              }}
+            />
+            <button
+              aria-label={isRunning ? "Stop" : "Send message"}
+              className={agentPanelComposerSendButtonClass()}
+              data-testid="workbook-agent-send"
+              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+              type="button"
+              onClick={() => {
+                if (isRunning) {
+                  props.onInterrupt();
+                  return;
+                }
+                props.onSubmit();
+              }}
+            >
+              {isRunning ? <StopIcon /> : <SendArrowIcon />}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
