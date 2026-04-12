@@ -1,5 +1,6 @@
 import { Cause, Effect, Exit } from "effect";
 import type {
+  WorkbookChartSnapshot,
   CellRangeRef,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
@@ -16,6 +17,7 @@ import type {
 } from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  cloneChartRecord,
   cloneCommentThreadRecord,
   cloneConditionalFormatRecord,
   cloneDataValidationRecord,
@@ -45,6 +47,8 @@ import {
 } from "./workbook-metadata-records.js";
 import {
   createWorkbookMetadataRecord,
+  chartKey,
+  type WorkbookChartRecord,
   type WorkbookCommentThreadRecord,
   type WorkbookConditionalFormatRecord,
   normalizeDefinedName,
@@ -298,6 +302,14 @@ export interface WorkbookMetadataService {
     address: string,
   ) => Effect.Effect<boolean, WorkbookMetadataError>;
   readonly listPivots: () => Effect.Effect<WorkbookPivotRecord[], WorkbookMetadataError>;
+  readonly setChart: (
+    record: WorkbookChartSnapshot,
+  ) => Effect.Effect<WorkbookChartRecord, WorkbookMetadataError>;
+  readonly getChart: (
+    id: string,
+  ) => Effect.Effect<WorkbookChartRecord | undefined, WorkbookMetadataError>;
+  readonly deleteChart: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listCharts: () => Effect.Effect<WorkbookChartRecord[], WorkbookMetadataError>;
 }
 
 export function createWorkbookMetadataService(
@@ -405,12 +417,30 @@ export function createWorkbookMetadataService(
           }
         : clonePivotRecord(record),
     );
+    rekeyRecords(metadata.charts, (record) =>
+      record.sheetName === oldSheetName || record.source.sheetName === oldSheetName
+        ? {
+            ...cloneChartRecord(record),
+            sheetName: record.sheetName === oldSheetName ? newSheetName : record.sheetName,
+            source: {
+              ...record.source,
+              sheetName:
+                record.source.sheetName === oldSheetName ? newSheetName : record.source.sheetName,
+            },
+          }
+        : cloneChartRecord(record),
+    );
   };
 
   const deleteSheetRecordsNow = (sheetName: string): void => {
     deleteRecordsBySheet(metadata.tables, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.spills, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.pivots, sheetName, (record) => record.sheetName);
+    for (const [key, record] of metadata.charts.entries()) {
+      if (record.sheetName === sheetName || record.source.sheetName === sheetName) {
+        metadata.charts.delete(key);
+      }
+    }
     deleteRecordsBySheet(metadata.rowMetadata, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.columnMetadata, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
@@ -435,6 +465,7 @@ export function createWorkbookMetadataService(
     metadata.tables.clear();
     metadata.spills.clear();
     metadata.pivots.clear();
+    metadata.charts.clear();
     metadata.rowMetadata.clear();
     metadata.columnMetadata.clear();
     metadata.freezePanes.clear();
@@ -1354,6 +1385,77 @@ export function createWorkbookMetadataService(
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list pivot metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setChart(record) {
+      return Effect.try({
+        try: () => {
+          const stored: WorkbookChartRecord = {
+            id: record.id.trim(),
+            sheetName: record.sheetName,
+            address: canonicalWorkbookAddress(record.sheetName, record.address),
+            source: canonicalWorkbookRangeRef(record.source),
+            chartType: record.chartType,
+            rows: record.rows,
+            cols: record.cols,
+            ...(record.seriesOrientation !== undefined
+              ? { seriesOrientation: record.seriesOrientation }
+              : {}),
+            ...(record.firstRowAsHeaders !== undefined
+              ? { firstRowAsHeaders: record.firstRowAsHeaders }
+              : {}),
+            ...(record.firstColumnAsLabels !== undefined
+              ? { firstColumnAsLabels: record.firstColumnAsLabels }
+              : {}),
+            ...(record.title !== undefined ? { title: record.title } : {}),
+            ...(record.legendPosition !== undefined
+              ? { legendPosition: record.legendPosition }
+              : {}),
+          };
+          metadata.charts.set(chartKey(stored.id), stored);
+          return cloneChartRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set chart metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getChart(id) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.charts.get(chartKey(id));
+          return record ? cloneChartRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get chart metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteChart(id) {
+      return Effect.try({
+        try: () => metadata.charts.delete(chartKey(id)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete chart metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listCharts() {
+      return Effect.try({
+        try: () =>
+          [...metadata.charts.values()]
+            .toSorted((left, right) => left.id.localeCompare(right.id))
+            .map(cloneChartRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list chart metadata", cause),
             cause,
           }),
       });

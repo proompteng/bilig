@@ -96,12 +96,14 @@ export function createEngineSnapshotService(args: {
             rows: pivot.rows,
             cols: pivot.cols,
           }));
+          const charts = args.state.workbook.listCharts().map((chart) => structuredClone(chart));
           if (
             properties.length > 0 ||
             definedNames.length > 0 ||
             tables.length > 0 ||
             spills.length > 0 ||
             pivots.length > 0 ||
+            charts.length > 0 ||
             styles.length > 0 ||
             formats.length > 0 ||
             calculationSettings.mode !== "automatic" ||
@@ -123,6 +125,9 @@ export function createEngineSnapshotService(args: {
             }
             if (pivots.length > 0) {
               workbook.metadata.pivots = pivots;
+            }
+            if (charts.length > 0) {
+              workbook.metadata.charts = charts;
             }
             if (styles.length > 0) {
               workbook.metadata.styles = styles;
@@ -418,6 +423,12 @@ export function createEngineSnapshotService(args: {
               values: pivot.values.map((value) => Object.assign({}, value)),
               rows: pivot.rows,
               cols: pivot.cols,
+            });
+          });
+          snapshot.workbook.metadata?.charts?.forEach((chart) => {
+            ops.push({
+              kind: "upsertChart",
+              chart: structuredClone(chart),
             });
           });
           const potentialNewCells = snapshot.sheets.reduce(

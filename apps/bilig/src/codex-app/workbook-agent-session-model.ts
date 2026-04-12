@@ -160,6 +160,7 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Use list_tables and list_named_ranges when the workbook likely has meaningful named structures and the user refers to them conceptually.",
     "Use list_sheets, get_sheet_view, get_used_range, and get_current_region when the request is really about sheet layout or navigation state rather than raw cell contents.",
     "Use list_pivots when workbook summaries or edits might depend on pivot outputs.",
+    "Use list_charts when workbook summaries or edits may depend on existing chart objects, and use the chart tools when the user asks to create, update, move, or delete charts.",
     "Use the audit tools when the request is about workbook health, including broken references, hidden-row dependencies, inconsistent formulas, used-range bloat, or performance hotspots.",
     "Use list_data_validation_rules before editing controlled-input ranges, dropdowns, or checkbox cells, and use the data validation tools when the user asks for dropdown-style constraints.",
     "Use get_conditional_formats before reformatting regions that may already carry rule-based emphasis, and use the conditional format tools when the user asks for threshold, text-match, or formula-driven highlighting.",

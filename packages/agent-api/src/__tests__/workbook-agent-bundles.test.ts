@@ -245,6 +245,57 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("marks chart creation as sheet-scoped medium-risk workbook object work", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Add a revenue chart",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "upsertChart",
+        chart: {
+          id: "RevenueChart",
+          sheetName: "Dashboard",
+          address: "B2",
+          source: {
+            sheetName: "Data",
+            startAddress: "A1",
+            endAddress: "B4",
+          },
+          chartType: "column",
+          rows: 12,
+          cols: 8,
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set chart RevenueChart at Dashboard!B2",
+        riskClass: "medium",
+        scope: "workbook",
+      }),
+    );
+    expect(bundle.affectedRanges).toEqual([
+      {
+        sheetName: "Data",
+        startAddress: "A1",
+        endAddress: "B4",
+        role: "source",
+      },
+      {
+        sheetName: "Dashboard",
+        startAddress: "B2",
+        endAddress: "I13",
+        role: "target",
+      },
+    ]);
+  });
+
   it("normalizes sort ranges and counts affected cells", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,

@@ -16,6 +16,7 @@ import type {
   SyncState,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookChartSnapshot,
   WorkbookCommentThreadSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
@@ -1111,6 +1112,45 @@ export class SpreadsheetEngine {
 
   getPivotTables(): WorkbookPivotSnapshot[] {
     return this.workbook.listPivots();
+  }
+
+  setChart(chart: WorkbookChartSnapshot): void {
+    const existing = this.workbook.getChart(chart.id);
+    if (
+      existing &&
+      existing.sheetName === chart.sheetName &&
+      existing.address === chart.address &&
+      existing.chartType === chart.chartType &&
+      existing.source.sheetName === chart.source.sheetName &&
+      existing.source.startAddress === chart.source.startAddress &&
+      existing.source.endAddress === chart.source.endAddress &&
+      existing.rows === chart.rows &&
+      existing.cols === chart.cols &&
+      existing.seriesOrientation === chart.seriesOrientation &&
+      existing.firstRowAsHeaders === chart.firstRowAsHeaders &&
+      existing.firstColumnAsLabels === chart.firstColumnAsLabels &&
+      existing.title === chart.title &&
+      existing.legendPosition === chart.legendPosition
+    ) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertChart", chart: structuredClone(chart) }]);
+  }
+
+  deleteChart(id: string): boolean {
+    if (!this.workbook.getChart(id)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteChart", id }]);
+    return true;
+  }
+
+  getChart(id: string): WorkbookChartSnapshot | undefined {
+    return this.workbook.getChart(id);
+  }
+
+  getCharts(): WorkbookChartSnapshot[] {
+    return this.workbook.listCharts();
   }
 
   clearCell(sheetName: string, address: string): void {

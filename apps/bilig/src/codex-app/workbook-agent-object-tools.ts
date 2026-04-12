@@ -11,6 +11,7 @@ import {
 } from "@bilig/agent-api";
 import {
   ValueTag,
+  type WorkbookChartSnapshot,
   type WorkbookDefinedNameValueSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookTableSnapshot,
@@ -99,6 +100,9 @@ const pivotValueSchema = z.object({
   outputLabel: z.string().trim().min(1).optional(),
 });
 const pivotValuesSchema = z.array(pivotValueSchema).min(1);
+const chartTypeSchema = z.enum(["column", "bar", "line", "area", "pie", "scatter"]);
+const chartLegendPositionSchema = z.enum(["top", "right", "bottom", "left", "hidden"]);
+const chartSeriesOrientationSchema = z.enum(["rows", "columns"]);
 
 const pivotMutationArgsSchema = z
   .object({
@@ -124,10 +128,47 @@ const deletePivotArgsSchema = z.union([
   }),
 ]);
 
+const chartMutationArgsSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    sheetName: z.string().trim().min(1),
+    address: z.string().trim().min(1),
+    range: rangeOrSelectorSchema.shape.range.optional(),
+    selector: workbookSemanticSelectorSchema.optional(),
+    chartType: chartTypeSchema,
+    rows: z.number().int().positive().max(200).optional(),
+    cols: z.number().int().positive().max(200).optional(),
+    title: z.string().trim().min(1).optional(),
+    seriesOrientation: chartSeriesOrientationSchema.optional(),
+    firstRowAsHeaders: z.boolean().optional(),
+    firstColumnAsLabels: z.boolean().optional(),
+    legendPosition: chartLegendPositionSchema.optional(),
+  })
+  .refine((value) => (value.range ? 1 : 0) + (value.selector ? 1 : 0) === 1, {
+    message: "Provide exactly one of range or selector",
+  });
+
+const deleteChartArgsSchema = z.object({
+  id: z.string().trim().min(1),
+});
+
+const DEFAULT_CHART_ROWS = 12;
+const DEFAULT_CHART_COLS = 8;
+
 export const workbookAgentObjectToolSpecs = [
   {
     name: WORKBOOK_AGENT_TOOL_NAMES.listPivots,
     description: "List workbook pivot tables with source ranges, grouping fields, and output size.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    },
+  },
+  {
+    name: WORKBOOK_AGENT_TOOL_NAMES.listCharts,
+    description:
+      "List workbook charts with source ranges, chart types, anchor positions, and footprint size.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -308,6 +349,68 @@ export const workbookAgentObjectToolSpecs = [
         name: { type: "string" },
         sheetName: { type: "string" },
         address: { type: "string" },
+      },
+    },
+  },
+  {
+    name: WORKBOOK_AGENT_TOOL_NAMES.createChart,
+    description:
+      "Create a chart from an explicit source range or semantic selector, with chart type, anchor position, and optional presentation settings.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "sheetName", "address", "chartType"],
+      properties: {
+        id: { type: "string" },
+        sheetName: { type: "string" },
+        address: { type: "string" },
+        range: rangeOrSelectorJsonSchema.properties.range,
+        selector: workbookSemanticSelectorJsonSchema,
+        chartType: { type: "string", enum: chartTypeSchema.options },
+        rows: { type: "number" },
+        cols: { type: "number" },
+        title: { type: "string" },
+        seriesOrientation: { type: "string", enum: chartSeriesOrientationSchema.options },
+        firstRowAsHeaders: { type: "boolean" },
+        firstColumnAsLabels: { type: "boolean" },
+        legendPosition: { type: "string", enum: chartLegendPositionSchema.options },
+      },
+    },
+  },
+  {
+    name: WORKBOOK_AGENT_TOOL_NAMES.updateChart,
+    description:
+      "Update a chart from an explicit source range or semantic selector, including type, anchor position, and presentation settings.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "sheetName", "address", "chartType"],
+      properties: {
+        id: { type: "string" },
+        sheetName: { type: "string" },
+        address: { type: "string" },
+        range: rangeOrSelectorJsonSchema.properties.range,
+        selector: workbookSemanticSelectorJsonSchema,
+        chartType: { type: "string", enum: chartTypeSchema.options },
+        rows: { type: "number" },
+        cols: { type: "number" },
+        title: { type: "string" },
+        seriesOrientation: { type: "string", enum: chartSeriesOrientationSchema.options },
+        firstRowAsHeaders: { type: "boolean" },
+        firstColumnAsLabels: { type: "boolean" },
+        legendPosition: { type: "string", enum: chartLegendPositionSchema.options },
+      },
+    },
+  },
+  {
+    name: WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
+    description: "Delete a chart by id.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
       },
     },
   },
@@ -562,6 +665,10 @@ function listWorkbookPivots(runtime: WorkbookRuntime): readonly WorkbookPivotSna
   return runtime.engine.getPivotTables().map((pivot) => structuredClone(pivot));
 }
 
+function listWorkbookCharts(runtime: WorkbookRuntime): readonly WorkbookChartSnapshot[] {
+  return runtime.engine.getCharts().map((chart) => structuredClone(chart));
+}
+
 export async function handleWorkbookAgentObjectToolCall(
   context: WorkbookAgentObjectToolContext,
   request: CodexDynamicToolCallRequest,
@@ -575,6 +682,17 @@ export async function handleWorkbookAgentObjectToolCall(
           documentId: context.documentId,
           pivotCount: runtime.engine.getPivotTables().length,
           pivots: listWorkbookPivots(runtime),
+        }),
+      );
+      return textToolResult(stringifyJson(payload));
+    }
+    case WORKBOOK_AGENT_TOOL_NAMES.listCharts: {
+      const payload = await context.zeroSyncService.inspectWorkbook(
+        context.documentId,
+        (runtime) => ({
+          documentId: context.documentId,
+          chartCount: runtime.engine.getCharts().length,
+          charts: listWorkbookCharts(runtime),
         }),
       );
       return textToolResult(stringifyJson(payload));
@@ -689,6 +807,49 @@ export async function handleWorkbookAgentObjectToolCall(
         kind: "deletePivotTable",
         sheetName: target.sheetName,
         address: target.address,
+      });
+    }
+    case WORKBOOK_AGENT_TOOL_NAMES.createChart:
+    case WORKBOOK_AGENT_TOOL_NAMES.updateChart: {
+      const args = chartMutationArgsSchema.parse(request.arguments);
+      const chart = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+        const resolved = resolveRangeOrSelectorRequest({
+          runtime,
+          args: {
+            ...(args.range ? { range: args.range } : {}),
+            ...(args.selector ? { selector: args.selector } : {}),
+          },
+          uiContext: context.uiContext,
+        });
+        return {
+          id: args.id,
+          sheetName: args.sheetName,
+          address: args.address,
+          source: resolved.range,
+          chartType: args.chartType,
+          rows: args.rows ?? DEFAULT_CHART_ROWS,
+          cols: args.cols ?? DEFAULT_CHART_COLS,
+          ...(args.title ? { title: args.title } : {}),
+          ...(args.seriesOrientation ? { seriesOrientation: args.seriesOrientation } : {}),
+          ...(args.firstRowAsHeaders !== undefined
+            ? { firstRowAsHeaders: args.firstRowAsHeaders }
+            : {}),
+          ...(args.firstColumnAsLabels !== undefined
+            ? { firstColumnAsLabels: args.firstColumnAsLabels }
+            : {}),
+          ...(args.legendPosition ? { legendPosition: args.legendPosition } : {}),
+        } satisfies WorkbookChartSnapshot;
+      });
+      return await stageCommandResult(context, {
+        kind: "upsertChart",
+        chart,
+      });
+    }
+    case WORKBOOK_AGENT_TOOL_NAMES.deleteChart: {
+      const args = deleteChartArgsSchema.parse(request.arguments);
+      return await stageCommandResult(context, {
+        kind: "deleteChart",
+        id: args.id,
       });
     }
     default:

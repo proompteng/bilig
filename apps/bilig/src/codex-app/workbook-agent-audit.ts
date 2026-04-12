@@ -50,6 +50,7 @@ interface MetadataBoundsDriver {
     | "note"
     | "table"
     | "pivot"
+    | "chart"
     | "spill"
     | "definedName"
     | "rowMetadata"
@@ -544,6 +545,22 @@ function collectSheetBloatDrivers(
         start.col + Math.max(0, pivot.cols - 1),
       ),
     );
+  }
+  for (const chart of snapshot.workbook.metadata?.charts ?? []) {
+    if (chart.sheetName === sheetName) {
+      const start = parseCellAddress(chart.address, sheetName);
+      addAddressDriver(
+        "chart",
+        chart.address,
+        formatAddress(
+          start.row + Math.max(0, chart.rows - 1),
+          start.col + Math.max(0, chart.cols - 1),
+        ),
+      );
+    }
+    if (chart.source.sheetName === sheetName) {
+      addRangeDriver("chart", chart.source);
+    }
   }
   for (const spill of snapshot.workbook.metadata?.spills ?? []) {
     if (spill.sheetName !== sheetName) {
@@ -1251,6 +1268,33 @@ function collectInvariantProblems(snapshot: WorkbookSnapshot): InvariantProblem[
         problems,
         "invalidPivotExtent",
         `Pivot ${pivot.name} has invalid output extent ${String(pivot.rows)}x${String(pivot.cols)}`,
+      );
+    }
+  }
+  for (const chart of snapshot.workbook.metadata?.charts ?? []) {
+    const hasChartSheet = ensureSheetExists(
+      sheetNames,
+      problems,
+      chart.sheetName,
+      `Chart ${chart.id}`,
+    );
+    const hasSourceSheet = ensureSheetExists(
+      sheetNames,
+      problems,
+      chart.source.sheetName,
+      `Chart ${chart.id} source`,
+    );
+    if (hasChartSheet) {
+      validateAddressRef(problems, chart.sheetName, chart.address, `Chart ${chart.id}`);
+    }
+    if (hasSourceSheet) {
+      validateRangeRef(problems, chart.source.sheetName, chart.source, `Chart ${chart.id} source`);
+    }
+    if (chart.rows <= 0 || chart.cols <= 0) {
+      addProblem(
+        problems,
+        "invalidChartExtent",
+        `Chart ${chart.id} has invalid footprint ${String(chart.rows)}x${String(chart.cols)}`,
       );
     }
   }

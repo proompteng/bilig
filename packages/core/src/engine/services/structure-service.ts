@@ -437,6 +437,33 @@ export function createEngineStructureService(args: {
         },
       });
     });
+    args.state.workbook.listCharts().forEach((chart) => {
+      const nextAddress =
+        chart.sheetName === sheetName
+          ? rewriteAddressForStructuralTransform(chart.address, transform)
+          : chart.address;
+      const nextSource =
+        chart.source.sheetName === sheetName
+          ? rewriteRangeForStructuralTransform(
+              chart.source.startAddress,
+              chart.source.endAddress,
+              transform,
+            )
+          : { startAddress: chart.source.startAddress, endAddress: chart.source.endAddress };
+      if (!nextAddress || !nextSource) {
+        args.state.workbook.deleteChart(chart.id);
+        return;
+      }
+      args.state.workbook.setChart({
+        ...chart,
+        address: nextAddress,
+        source: {
+          ...chart.source,
+          startAddress: nextSource.startAddress,
+          endAddress: nextSource.endAddress,
+        },
+      });
+    });
   };
 
   return {

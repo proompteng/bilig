@@ -1,6 +1,7 @@
 import type { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type {
+  WorkbookChartSnapshot,
   CellRangeRef,
   WorkbookDefinedNameValueSnapshot,
   WorkbookPivotSnapshot,
@@ -17,6 +18,8 @@ export type WorkbookAgentObjectCommand = Extract<
   | { kind: "deleteTable" }
   | { kind: "upsertPivotTable" }
   | { kind: "deletePivotTable" }
+  | { kind: "upsertChart" }
+  | { kind: "deleteChart" }
 >;
 
 const HIGH_RISK_OBJECT_COMMAND_KINDS = new Set<WorkbookAgentObjectCommand["kind"]>([
@@ -130,6 +133,37 @@ function isWorkbookPivotSnapshot(value: unknown): value is WorkbookPivotSnapshot
   );
 }
 
+function isWorkbookChartSnapshot(value: unknown): value is WorkbookChartSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value["id"] === "string" &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["address"] === "string" &&
+    isCellRangeRef(value["source"]) &&
+    (value["chartType"] === "column" ||
+      value["chartType"] === "bar" ||
+      value["chartType"] === "line" ||
+      value["chartType"] === "area" ||
+      value["chartType"] === "pie" ||
+      value["chartType"] === "scatter") &&
+    typeof value["rows"] === "number" &&
+    typeof value["cols"] === "number" &&
+    (value["seriesOrientation"] === undefined ||
+      value["seriesOrientation"] === "rows" ||
+      value["seriesOrientation"] === "columns") &&
+    (value["firstRowAsHeaders"] === undefined || typeof value["firstRowAsHeaders"] === "boolean") &&
+    (value["firstColumnAsLabels"] === undefined ||
+      typeof value["firstColumnAsLabels"] === "boolean") &&
+    (value["title"] === undefined || typeof value["title"] === "string") &&
+    (value["legendPosition"] === undefined ||
+      value["legendPosition"] === "top" ||
+      value["legendPosition"] === "right" ||
+      value["legendPosition"] === "bottom" ||
+      value["legendPosition"] === "left" ||
+      value["legendPosition"] === "hidden")
+  );
+}
+
 function normalizeRangeBounds(range: CellRangeRef): CellRangeRef {
   const start = parseCellAddress(range.startAddress, range.sheetName);
   const end = parseCellAddress(range.endAddress, range.sheetName);
@@ -171,6 +205,18 @@ function pivotTargetRange(pivot: WorkbookPivotSnapshot): CellRangeRef {
   };
 }
 
+function chartTargetRange(chart: WorkbookChartSnapshot): CellRangeRef {
+  const anchor = parseCellAddress(chart.address, chart.sheetName);
+  return {
+    sheetName: chart.sheetName,
+    startAddress: chart.address,
+    endAddress: formatAddress(
+      anchor.row + Math.max(chart.rows, 1) - 1,
+      anchor.col + Math.max(chart.cols, 1) - 1,
+    ),
+  };
+}
+
 function describeDefinedNameValue(value: WorkbookDefinedNameValueSnapshot): string {
   if (typeof value === "string" && value.startsWith("=")) {
     return "formula";
@@ -202,6 +248,8 @@ export function isWorkbookAgentObjectCommandKind(
     case "deleteTable":
     case "upsertPivotTable":
     case "deletePivotTable":
+    case "upsertChart":
+    case "deleteChart":
       return true;
     default:
       return false;
@@ -240,6 +288,10 @@ export function isWorkbookAgentObjectCommandValue(
       return isWorkbookPivotSnapshot(value["pivot"]);
     case "deletePivotTable":
       return typeof value["sheetName"] === "string" && typeof value["address"] === "string";
+    case "upsertChart":
+      return isWorkbookChartSnapshot(value["chart"]);
+    case "deleteChart":
+      return typeof value["id"] === "string" && value["id"].trim().length > 0;
   }
 }
 
@@ -265,6 +317,10 @@ export function describeWorkbookAgentObjectCommand(command: WorkbookAgentObjectC
       return `Set pivot ${command.pivot.name} at ${command.pivot.sheetName}!${command.pivot.address}`;
     case "deletePivotTable":
       return `Delete pivot at ${command.sheetName}!${command.address}`;
+    case "upsertChart":
+      return `Set chart ${command.chart.id} at ${command.chart.sheetName}!${command.chart.address}`;
+    case "deleteChart":
+      return `Delete chart ${command.id}`;
   }
 }
 
@@ -281,6 +337,10 @@ export function estimateWorkbookAgentObjectCommandAffectedCells(
     case "upsertPivotTable":
       return Math.max(command.pivot.rows, 1) * Math.max(command.pivot.cols, 1);
     case "deletePivotTable":
+      return null;
+    case "upsertChart":
+      return null;
+    case "deleteChart":
       return null;
   }
 }
@@ -354,6 +414,19 @@ export function deriveWorkbookAgentObjectCommandPreviewRanges(
           role: "target",
         },
       ];
+    case "upsertChart":
+      return [
+        {
+          ...normalizeRangeBounds(command.chart.source),
+          role: "source",
+        },
+        {
+          ...normalizeRangeBounds(chartTargetRange(command.chart)),
+          role: "target",
+        },
+      ];
+    case "deleteChart":
+      return [];
   }
 }
 
@@ -384,6 +457,12 @@ export function applyWorkbookAgentObjectCommand(
       return;
     case "deletePivotTable":
       engine.deletePivotTable(command.sheetName, command.address);
+      return;
+    case "upsertChart":
+      engine.setChart(command.chart);
+      return;
+    case "deleteChart":
+      engine.deleteChart(command.id);
       return;
   }
 }

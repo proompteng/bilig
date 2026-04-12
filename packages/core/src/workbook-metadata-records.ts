@@ -7,6 +7,8 @@ import type {
 } from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  chartKey,
+  type WorkbookChartRecord,
   type WorkbookCommentEntryRecord,
   type WorkbookCommentThreadRecord,
   type WorkbookConditionalFormatRecord,
@@ -344,6 +346,29 @@ export function clonePivotRecord(record: WorkbookPivotRecord): WorkbookPivotReco
   };
 }
 
+export function cloneChartRecord(record: WorkbookChartRecord): WorkbookChartRecord {
+  const cloned: WorkbookChartRecord = {
+    ...record,
+    source: { ...record.source },
+  };
+  if (record.seriesOrientation !== undefined) {
+    cloned.seriesOrientation = record.seriesOrientation;
+  }
+  if (record.firstRowAsHeaders !== undefined) {
+    cloned.firstRowAsHeaders = record.firstRowAsHeaders;
+  }
+  if (record.firstColumnAsLabels !== undefined) {
+    cloned.firstColumnAsLabels = record.firstColumnAsLabels;
+  }
+  if (record.title !== undefined) {
+    cloned.title = record.title;
+  }
+  if (record.legendPosition !== undefined) {
+    cloned.legendPosition = record.legendPosition;
+  }
+  return cloned;
+}
+
 export function cloneSpillRecord(record: WorkbookSpillRecord): WorkbookSpillRecord {
   return {
     sheetName: record.sheetName,
@@ -447,6 +472,9 @@ function recordKey(record: unknown): string {
   }
   if (isPivotRecord(record)) {
     return pivotKey(record.sheetName, record.address);
+  }
+  if (isChartRecord(record)) {
+    return chartKey(record.id);
   }
   throw new Error("Unsupported workbook metadata record");
 }
@@ -578,5 +606,17 @@ function isSpillRecord(record: unknown): record is WorkbookSpillRecord {
 function isPivotRecord(record: unknown): record is WorkbookPivotRecord {
   return (
     typeof record === "object" && record !== null && "sheetName" in record && "source" in record
+  );
+}
+
+function isChartRecord(record: unknown): record is WorkbookChartRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    "chartType" in record &&
+    "sheetName" in record &&
+    "address" in record &&
+    "source" in record
   );
 }

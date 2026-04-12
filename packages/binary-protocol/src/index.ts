@@ -1,6 +1,10 @@
 import type {
   CellBorderStyle,
   CellBorderWeight,
+  WorkbookChartLegendPosition,
+  WorkbookChartSeriesOrientation,
+  WorkbookChartSnapshot,
+  WorkbookChartType,
   CellHorizontalAlignment,
   CellNumberFormatKind,
   CellNumberFormatRecord,
@@ -204,6 +208,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   deleteConditionalFormat: 45,
   upsertRangeProtection: 48,
   deleteRangeProtection: 49,
+  upsertChart: 50,
+  deleteChart: 51,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -1072,6 +1078,171 @@ function decodePivotAggregation(reader: BinaryReader): PivotAggregation {
   }
 }
 
+function encodeChartType(writer: BinaryWriter, chartType: WorkbookChartType): void {
+  switch (chartType) {
+    case "column":
+      writer.u8(1);
+      return;
+    case "bar":
+      writer.u8(2);
+      return;
+    case "line":
+      writer.u8(3);
+      return;
+    case "area":
+      writer.u8(4);
+      return;
+    case "pie":
+      writer.u8(5);
+      return;
+    case "scatter":
+      writer.u8(6);
+      return;
+  }
+}
+
+function decodeChartType(reader: BinaryReader): WorkbookChartType {
+  switch (reader.u8()) {
+    case 1:
+      return "column";
+    case 2:
+      return "bar";
+    case 3:
+      return "line";
+    case 4:
+      return "area";
+    case 5:
+      return "pie";
+    case 6:
+      return "scatter";
+    default:
+      throw new BinaryProtocolError("Unknown chart type tag");
+  }
+}
+
+function encodeChartSeriesOrientation(
+  writer: BinaryWriter,
+  orientation: WorkbookChartSeriesOrientation,
+): void {
+  writer.u8(orientation === "rows" ? 1 : 2);
+}
+
+function decodeChartSeriesOrientation(reader: BinaryReader): WorkbookChartSeriesOrientation {
+  switch (reader.u8()) {
+    case 1:
+      return "rows";
+    case 2:
+      return "columns";
+    default:
+      throw new BinaryProtocolError("Unknown chart orientation tag");
+  }
+}
+
+function encodeChartLegendPosition(
+  writer: BinaryWriter,
+  position: WorkbookChartLegendPosition,
+): void {
+  switch (position) {
+    case "top":
+      writer.u8(1);
+      return;
+    case "right":
+      writer.u8(2);
+      return;
+    case "bottom":
+      writer.u8(3);
+      return;
+    case "left":
+      writer.u8(4);
+      return;
+    case "hidden":
+      writer.u8(5);
+      return;
+  }
+}
+
+function decodeChartLegendPosition(reader: BinaryReader): WorkbookChartLegendPosition {
+  switch (reader.u8()) {
+    case 1:
+      return "top";
+    case 2:
+      return "right";
+    case 3:
+      return "bottom";
+    case 4:
+      return "left";
+    case 5:
+      return "hidden";
+    default:
+      throw new BinaryProtocolError("Unknown chart legend position tag");
+  }
+}
+
+function encodeChart(writer: BinaryWriter, chart: WorkbookChartSnapshot): void {
+  writer.string(chart.id);
+  writer.string(chart.sheetName);
+  writer.string(chart.address);
+  encodeCellRangeRef(writer, chart.source);
+  encodeChartType(writer, chart.chartType);
+  writer.bool(chart.seriesOrientation !== undefined);
+  if (chart.seriesOrientation !== undefined) {
+    encodeChartSeriesOrientation(writer, chart.seriesOrientation);
+  }
+  writer.bool(chart.firstRowAsHeaders !== undefined);
+  if (chart.firstRowAsHeaders !== undefined) {
+    writer.bool(chart.firstRowAsHeaders);
+  }
+  writer.bool(chart.firstColumnAsLabels !== undefined);
+  if (chart.firstColumnAsLabels !== undefined) {
+    writer.bool(chart.firstColumnAsLabels);
+  }
+  writer.bool(chart.title !== undefined);
+  if (chart.title !== undefined) {
+    writer.string(chart.title);
+  }
+  writer.bool(chart.legendPosition !== undefined);
+  if (chart.legendPosition !== undefined) {
+    encodeChartLegendPosition(writer, chart.legendPosition);
+  }
+  writer.u32(chart.rows);
+  writer.u32(chart.cols);
+}
+
+function decodeChart(reader: BinaryReader): WorkbookChartSnapshot {
+  const chart: WorkbookChartSnapshot = {
+    id: reader.string(),
+    sheetName: reader.string(),
+    address: reader.string(),
+    source: decodeCellRangeRef(reader),
+    chartType: decodeChartType(reader),
+    rows: 0,
+    cols: 0,
+  };
+  const hasSeriesOrientation = reader.bool();
+  if (hasSeriesOrientation) {
+    chart.seriesOrientation = decodeChartSeriesOrientation(reader);
+  }
+  const hasFirstRowAsHeaders = reader.bool();
+  if (hasFirstRowAsHeaders) {
+    chart.firstRowAsHeaders = reader.bool();
+  }
+  const hasFirstColumnAsLabels = reader.bool();
+  if (hasFirstColumnAsLabels) {
+    chart.firstColumnAsLabels = reader.bool();
+  }
+  const hasTitle = reader.bool();
+  if (hasTitle) {
+    chart.title = reader.string();
+  }
+  const hasLegendPosition = reader.bool();
+  if (hasLegendPosition) {
+    chart.legendPosition = decodeChartLegendPosition(reader);
+  }
+  chart.rows = reader.u32();
+  chart.cols = reader.u32();
+  return chart;
+}
+
 function encodePivotValue(writer: BinaryWriter, value: WorkbookPivotValueSnapshot): void {
   writer.string(value.sourceColumn);
   encodePivotAggregation(writer, value.summarizeBy);
@@ -1805,6 +1976,12 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       writer.string(op.sheetName);
       writer.string(op.address);
       return;
+    case "upsertChart":
+      encodeChart(writer, op.chart);
+      return;
+    case "deleteChart":
+      writer.string(op.id);
+      return;
     default:
       assertNever(op);
   }
@@ -2090,6 +2267,16 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         kind: "deletePivotTable",
         sheetName: reader.string(),
         address: reader.string(),
+      };
+    case 50:
+      return {
+        kind: "upsertChart",
+        chart: decodeChart(reader),
+      };
+    case 51:
+      return {
+        kind: "deleteChart",
+        id: reader.string(),
       };
     default:
       throw new BinaryProtocolError("Unknown engine op tag");

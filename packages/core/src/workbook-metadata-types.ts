@@ -1,4 +1,5 @@
 import type {
+  WorkbookChartSnapshot,
   CellNumberFormatRecord,
   CellRangeRef,
   CellStylePatch,
@@ -40,6 +41,8 @@ export interface WorkbookSpillRecord {
 export interface WorkbookPivotRecord extends WorkbookPivotSnapshot {
   values: WorkbookPivotValueSnapshot[];
 }
+
+export interface WorkbookChartRecord extends WorkbookChartSnapshot {}
 
 export interface WorkbookTableRecord extends WorkbookTableSnapshot {}
 
@@ -115,6 +118,7 @@ export interface WorkbookMetadataRecord {
   tables: Map<string, WorkbookTableRecord>;
   spills: Map<string, WorkbookSpillRecord>;
   pivots: Map<string, WorkbookPivotRecord>;
+  charts: Map<string, WorkbookChartRecord>;
   rowMetadata: Map<string, WorkbookAxisMetadataRecord>;
   columnMetadata: Map<string, WorkbookAxisMetadataRecord>;
   calculationSettings: WorkbookCalculationSettingsRecord;
@@ -137,6 +141,7 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     tables: new Map(),
     spills: new Map(),
     pivots: new Map(),
+    charts: new Map(),
     rowMetadata: new Map(),
     columnMetadata: new Map(),
     calculationSettings: { mode: "automatic", compatibilityMode: "excel-modern" },
@@ -167,4 +172,8 @@ export function normalizeWorkbookObjectName(name: string, label = "Workbook obje
 
 export function pivotKey(sheetName: string, address: string): string {
   return `${sheetName}!${canonicalWorkbookAddress(sheetName, address)}`;
+}
+
+export function chartKey(id: string): string {
+  return normalizeWorkbookObjectName(id, "Charts");
 }

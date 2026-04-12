@@ -11,6 +11,7 @@ import {
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookCommentThreadSnapshot,
+  type WorkbookChartSnapshot,
   type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
@@ -34,6 +35,7 @@ import {
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
   type WorkbookCommentThreadRecord,
+  type WorkbookChartRecord,
   type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
   type WorkbookCellNumberFormatRecord,
@@ -96,6 +98,7 @@ export type {
   WorkbookAxisMetadataRecord,
   WorkbookCalculationSettingsRecord,
   WorkbookCommentThreadRecord,
+  WorkbookChartRecord,
   WorkbookConditionalFormatRecord,
   WorkbookDataValidationRecord,
   WorkbookCellNumberFormatRecord,
@@ -871,6 +874,22 @@ export class WorkbookStore {
 
   listPivots(): WorkbookPivotRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listPivots());
+  }
+
+  setChart(record: WorkbookChartSnapshot): WorkbookChartRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setChart(record));
+  }
+
+  getChart(id: string): WorkbookChartRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getChart(id));
+  }
+
+  deleteChart(id: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteChart(id));
+  }
+
+  listCharts(): WorkbookChartRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listCharts());
   }
 
   remapSheetCells(

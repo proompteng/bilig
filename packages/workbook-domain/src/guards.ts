@@ -488,6 +488,33 @@ function isWorkbookPivotValue(value: unknown): boolean {
   );
 }
 
+const CHART_TYPE_VALUES = new Set(["column", "bar", "line", "area", "pie", "scatter"]);
+const CHART_SERIES_ORIENTATION_VALUES = new Set(["rows", "columns"]);
+const CHART_LEGEND_POSITION_VALUES = new Set(["top", "right", "bottom", "left", "hidden"]);
+
+function isWorkbookChart(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "id") &&
+    hasString(value, "sheetName") &&
+    hasString(value, "address") &&
+    isCellRangeRef(value["source"]) &&
+    typeof value["chartType"] === "string" &&
+    CHART_TYPE_VALUES.has(value["chartType"]) &&
+    (value["seriesOrientation"] === undefined ||
+      (typeof value["seriesOrientation"] === "string" &&
+        CHART_SERIES_ORIENTATION_VALUES.has(value["seriesOrientation"]))) &&
+    isOptionalBoolean(value["firstRowAsHeaders"]) &&
+    isOptionalBoolean(value["firstColumnAsLabels"]) &&
+    isOptionalString(value["title"]) &&
+    (value["legendPosition"] === undefined ||
+      (typeof value["legendPosition"] === "string" &&
+        CHART_LEGEND_POSITION_VALUES.has(value["legendPosition"]))) &&
+    hasFiniteNumber(value, "rows") &&
+    hasFiniteNumber(value, "cols")
+  );
+}
+
 export function isWorkbookOp(value: unknown): value is import("./index.js").WorkbookOp {
   if (!isRecord(value) || typeof value["kind"] !== "string") {
     return false;
@@ -641,6 +668,10 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
         hasFiniteNumber(value, "rows") &&
         hasFiniteNumber(value, "cols")
       );
+    case "upsertChart":
+      return isWorkbookChart(value["chart"]);
+    case "deleteChart":
+      return hasString(value, "id");
     default:
       return false;
   }

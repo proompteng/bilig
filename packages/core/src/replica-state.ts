@@ -40,6 +40,10 @@ function pivotEntityKey(sheetName: string, address: string): string {
   return `pivot:${sheetName}!${address}`;
 }
 
+function chartEntityKey(id: string): string {
+  return `chart:${id.trim().toUpperCase()}`;
+}
+
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
   return {
     replicaId,
@@ -213,6 +217,10 @@ function entityKeyForOp(op: EngineOp): string {
     case "upsertPivotTable":
     case "deletePivotTable":
       return pivotEntityKey(op.sheetName, op.address);
+    case "upsertChart":
+      return chartEntityKey(op.chart.id);
+    case "deleteChart":
+      return chartEntityKey(op.id);
   }
   return assertNever(op);
 }
@@ -285,6 +293,13 @@ function sheetDeleteBarrierForOp(
       return latestSheetDeletes.get(op.note.sheetName);
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
+    case "upsertChart":
+      return (
+        latestSheetDeletes.get(op.chart.sheetName) ??
+        latestSheetDeletes.get(op.chart.source.sheetName)
+      );
+    case "deleteChart":
+      return undefined;
   }
   return assertNever(op);
 }

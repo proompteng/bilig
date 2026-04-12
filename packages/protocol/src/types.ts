@@ -204,6 +204,25 @@ export interface WorkbookPivotSnapshot {
   cols: number;
 }
 
+export type WorkbookChartType = "column" | "bar" | "line" | "area" | "pie" | "scatter";
+export type WorkbookChartSeriesOrientation = "rows" | "columns";
+export type WorkbookChartLegendPosition = "top" | "right" | "bottom" | "left" | "hidden";
+
+export interface WorkbookChartSnapshot {
+  id: string;
+  sheetName: string;
+  address: string;
+  source: CellRangeRef;
+  chartType: WorkbookChartType;
+  seriesOrientation?: WorkbookChartSeriesOrientation;
+  firstRowAsHeaders?: boolean;
+  firstColumnAsLabels?: boolean;
+  title?: string;
+  legendPosition?: WorkbookChartLegendPosition;
+  rows: number;
+  cols: number;
+}
+
 export interface WorkbookTableSnapshot {
   name: string;
   sheetName: string;
@@ -559,6 +578,7 @@ export interface WorkbookMetadataSnapshot {
   tables?: WorkbookTableSnapshot[];
   spills?: WorkbookSpillSnapshot[];
   pivots?: WorkbookPivotSnapshot[];
+  charts?: WorkbookChartSnapshot[];
   styles?: CellStyleRecord[];
   formats?: CellNumberFormatRecord[];
   calculationSettings?: WorkbookCalculationSettingsSnapshot;

@@ -435,6 +435,27 @@ export function createEngineOperationService(args: {
         }
         return;
       }
+      case "upsertChart":
+        if (
+          sheetHasProtection(op.chart.sheetName) ||
+          rangeIsProtected(op.chart.source) ||
+          rangeIsProtected(cellRange(op.chart.sheetName, op.chart.address))
+        ) {
+          throwProtectionBlocked(`chart ${op.chart.id} touches protected workbook state`);
+        }
+        return;
+      case "deleteChart": {
+        const existing = args.state.workbook.getChart(op.id);
+        if (
+          existing &&
+          (sheetHasProtection(existing.sheetName) ||
+            rangeIsProtected(existing.source) ||
+            rangeIsProtected(cellRange(existing.sheetName, existing.address)))
+        ) {
+          throwProtectionBlocked(`chart ${op.id} touches protected workbook state`);
+        }
+        return;
+      }
       default:
         return assertNever(op);
     }
@@ -533,6 +554,10 @@ export function createEngineOperationService(args: {
       case "upsertPivotTable":
       case "deletePivotTable":
         return `pivot:${pivotKey(op.sheetName, op.address)}`;
+      case "upsertChart":
+        return `chart:${op.chart.id.trim().toUpperCase()}`;
+      case "deleteChart":
+        return `chart:${op.id.trim().toUpperCase()}`;
       default:
         return assertNever(op);
     }
@@ -644,6 +669,13 @@ export function createEngineOperationService(args: {
         return (
           sheetDeleteVersions.get(op.sheetName) ?? sheetDeleteVersions.get(op.source.sheetName)
         );
+      case "upsertChart":
+        return (
+          sheetDeleteVersions.get(op.chart.sheetName) ??
+          sheetDeleteVersions.get(op.chart.source.sheetName)
+        );
+      case "deleteChart":
+        return undefined;
       default:
         return assertNever(op);
     }
@@ -1216,6 +1248,16 @@ export function createEngineOperationService(args: {
             refreshAllPivots = true;
             break;
           }
+          case "upsertChart":
+            args.state.workbook.setChart(op.chart);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteChart":
+            args.state.workbook.deleteChart(op.id);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
           default:
             assertNever(op);
         }

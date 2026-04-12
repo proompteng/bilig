@@ -364,6 +364,17 @@ export function createEngineMutationService(args: {
               cols: pivot.cols,
             });
           });
+        args.state.workbook
+          .listCharts()
+          .filter(
+            (chart) => chart.sheetName === sheet.name || chart.source.sheetName === sheet.name,
+          )
+          .forEach((chart) => {
+            restoredOps.push({
+              kind: "upsertChart",
+              chart: structuredClone(chart),
+            });
+          });
         restoredOps.push(...args.captureSheetCellState(sheet.name));
         return restoredOps;
       }
@@ -800,6 +811,20 @@ export function createEngineMutationService(args: {
             cols: existing.cols,
           },
         ];
+      }
+      case "upsertChart": {
+        const existing = args.state.workbook.getChart(op.chart.id);
+        if (!existing) {
+          return [{ kind: "deleteChart", id: op.chart.id }];
+        }
+        return [{ kind: "upsertChart", chart: structuredClone(existing) }];
+      }
+      case "deleteChart": {
+        const existing = args.state.workbook.getChart(op.id);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertChart", chart: structuredClone(existing) }];
       }
       default: {
         const exhaustive: never = op;

@@ -95,6 +95,23 @@ describe("workbook domain guards", () => {
             rows: 10,
             cols: 3,
           },
+          {
+            kind: "upsertChart",
+            chart: {
+              id: "chart-1",
+              sheetName: "Sheet1",
+              address: "J2",
+              source: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "C10",
+              },
+              chartType: "line",
+              rows: 12,
+              cols: 8,
+              title: "Sales trend",
+            },
+          },
         ],
       }),
     ).toBe(true);
@@ -170,6 +187,22 @@ describe("workbook domain guards", () => {
                 endAddress: "B2",
               },
               hideFormulas: "yes",
+            },
+          },
+          {
+            kind: "upsertChart",
+            chart: {
+              id: "chart-1",
+              sheetName: "Sheet1",
+              address: "J2",
+              source: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "C10",
+              },
+              chartType: "donut",
+              rows: 12,
+              cols: 8,
             },
           },
         ],

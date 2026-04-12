@@ -8,6 +8,7 @@ export const WORKBOOK_AGENT_TOOL_NAMES = {
   listNamedRanges: "list_named_ranges",
   listTables: "list_tables",
   listPivots: "list_pivots",
+  listCharts: "list_charts",
   listDataValidationRules: "list_data_validation_rules",
   getConditionalFormats: "get_conditional_formats",
   getComments: "get_comments",
@@ -79,6 +80,9 @@ export const WORKBOOK_AGENT_TOOL_NAMES = {
   createPivotTable: "create_pivot_table",
   updatePivotTable: "update_pivot_table",
   deletePivotTable: "delete_pivot_table",
+  createChart: "create_chart",
+  updateChart: "update_chart",
+  deleteChart: "delete_chart",
 } as const;
 
 export type WorkbookAgentToolName =
@@ -103,6 +107,8 @@ const LEGACY_WORKBOOK_AGENT_TOOL_NAME_MAP: Record<string, WorkbookAgentToolName>
   "bilig.list_tables": WORKBOOK_AGENT_TOOL_NAMES.listTables,
   bilig_list_pivots: WORKBOOK_AGENT_TOOL_NAMES.listPivots,
   "bilig.list_pivots": WORKBOOK_AGENT_TOOL_NAMES.listPivots,
+  bilig_list_charts: WORKBOOK_AGENT_TOOL_NAMES.listCharts,
+  "bilig.list_charts": WORKBOOK_AGENT_TOOL_NAMES.listCharts,
   bilig_list_data_validation_rules: WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
   "bilig.list_data_validation_rules": WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
   bilig_get_conditional_formats: WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats,
@@ -247,6 +253,12 @@ const LEGACY_WORKBOOK_AGENT_TOOL_NAME_MAP: Record<string, WorkbookAgentToolName>
   "bilig.update_pivot_table": WORKBOOK_AGENT_TOOL_NAMES.updatePivotTable,
   bilig_delete_pivot_table: WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
   "bilig.delete_pivot_table": WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
+  bilig_create_chart: WORKBOOK_AGENT_TOOL_NAMES.createChart,
+  "bilig.create_chart": WORKBOOK_AGENT_TOOL_NAMES.createChart,
+  bilig_update_chart: WORKBOOK_AGENT_TOOL_NAMES.updateChart,
+  "bilig.update_chart": WORKBOOK_AGENT_TOOL_NAMES.updateChart,
+  bilig_delete_chart: WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
+  "bilig.delete_chart": WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
 };
 
 const workbookAgentToolNameSet = new Set<string>(Object.values(WORKBOOK_AGENT_TOOL_NAMES));

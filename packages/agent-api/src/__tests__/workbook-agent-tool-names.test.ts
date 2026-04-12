@@ -16,6 +16,7 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges).toBe("list_named_ranges");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listCharts).toBe("list_charts");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules).toBe("list_data_validation_rules");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats).toBe("get_conditional_formats");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
@@ -34,6 +35,9 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.createNamedRange).toBe("create_named_range");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createTable).toBe("create_table");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createPivotTable).toBe("create_pivot_table");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.createChart).toBe("create_chart");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.updateChart).toBe("update_chart");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.deleteChart).toBe("delete_chart");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createDataValidation).toBe("create_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateDataValidation).toBe("update_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation).toBe("remove_data_validation");
@@ -88,6 +92,9 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig_list_pivots")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listPivots,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.list_charts")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listCharts,
     );
     expect(normalizeWorkbookAgentToolName("bilig.list_data_validation_rules")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
@@ -188,6 +195,15 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig.delete_pivot_table")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_create_chart")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.createChart,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.update_chart")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.updateChart,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_delete_chart")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
+    );
     expect(normalizeWorkbookAgentToolName("bilig_get_row_metadata")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata,
     );
@@ -213,6 +229,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("list_named_ranges")).toBe(true);
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
     expect(isWorkbookAgentToolName("list_pivots")).toBe(true);
+    expect(isWorkbookAgentToolName("list_charts")).toBe(true);
     expect(isWorkbookAgentToolName("list_data_validation_rules")).toBe(true);
     expect(isWorkbookAgentToolName("get_conditional_formats")).toBe(true);
     expect(isWorkbookAgentToolName("get_comments")).toBe(true);
@@ -248,5 +265,8 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("update_note")).toBe(true);
     expect(isWorkbookAgentToolName("delete_note")).toBe(true);
     expect(isWorkbookAgentToolName("delete_pivot_table")).toBe(true);
+    expect(isWorkbookAgentToolName("create_chart")).toBe(true);
+    expect(isWorkbookAgentToolName("update_chart")).toBe(true);
+    expect(isWorkbookAgentToolName("delete_chart")).toBe(true);
   });
 });

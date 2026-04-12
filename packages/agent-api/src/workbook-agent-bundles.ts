@@ -4,6 +4,7 @@ import type {
   CellNumberFormatInput,
   CellRangeRef,
   CellStylePatch,
+  WorkbookChartSnapshot,
   WorkbookCommentThreadSnapshot,
   WorkbookConditionalFormatSnapshot,
   LiteralInput,
@@ -168,6 +169,14 @@ export type WorkbookAgentCommand =
       kind: "deletePivotTable";
       sheetName: string;
       address: string;
+    }
+  | {
+      kind: "upsertChart";
+      chart: WorkbookChartSnapshot;
+    }
+  | {
+      kind: "deleteChart";
+      id: string;
     }
   | {
       kind: "createSheet";

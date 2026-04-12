@@ -7,6 +7,7 @@ import type {
   CellStylePatch,
   LiteralInput,
   WorkbookCommentThreadSnapshot,
+  WorkbookChartSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookNoteSnapshot,
@@ -55,6 +56,7 @@ export interface WorkbookSheetProtectionOp extends WorkbookSheetProtectionSnapsh
 export interface WorkbookRangeProtectionOp extends WorkbookRangeProtectionSnapshot {}
 export interface WorkbookCommentThreadOp extends WorkbookCommentThreadSnapshot {}
 export interface WorkbookNoteOp extends WorkbookNoteSnapshot {}
+export interface WorkbookChartOp extends WorkbookChartSnapshot {}
 
 export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
@@ -141,7 +143,9 @@ export type WorkbookOp =
       rows: number;
       cols: number;
     }
-  | { kind: "deletePivotTable"; sheetName: string; address: string };
+  | { kind: "deletePivotTable"; sheetName: string; address: string }
+  | { kind: "upsertChart"; chart: WorkbookChartOp }
+  | { kind: "deleteChart"; id: string };
 
 export type EngineOp = WorkbookOp;
 
