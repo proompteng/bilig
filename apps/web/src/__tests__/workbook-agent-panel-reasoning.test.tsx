@@ -201,7 +201,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     });
   });
 
-  it("renders execution history rows with direct rerun actions", async () => {
+  it("does not render execution history cards above the composer", async () => {
     const panel = renderPanel({
       id: "system-1",
       kind: "system",
@@ -241,10 +241,10 @@ describe("WorkbookAgentPanel reasoning", () => {
 
     await panel.render();
 
-    expect(panel.host.textContent).toContain("Recent changes");
-    expect(panel.host.textContent).toContain("Applied automatically");
-    expect(panel.host.textContent).toContain("Revision r7");
-    expect(panel.host.textContent).toContain("Run again");
+    expect(panel.host.textContent).not.toContain("Recent changes");
+    expect(panel.host.textContent).not.toContain("Applied automatically");
+    expect(panel.host.textContent).not.toContain("Revision r7");
+    expect(panel.host.textContent).not.toContain("Run again");
 
     await act(async () => {
       panel.root.unmount();

@@ -3128,9 +3128,9 @@ describe("workbook agent pane", () => {
       }),
     );
     expect(host.textContent).toContain("Write cells in Sheet1!B2");
-    expect(host.textContent).toContain("Recent changes");
-    expect(host.textContent).toContain("Write cells in Sheet1!C3");
-    expect(host.textContent).toContain("Run again");
+    expect(host.textContent).toContain("Sheet1!C3");
+    expect(host.textContent).not.toContain("Recent changes");
+    expect(host.textContent).not.toContain("Run again");
 
     await act(async () => {
       root.unmount();

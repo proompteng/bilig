@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  isWorkbookAgentExecutionRecord,
   normalizeWorkbookAgentCommandIndexes,
   projectWorkbookAgentBundle,
   toWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
-  type WorkbookAgentExecutionRecord,
   type WorkbookAgentPreviewSummary,
   type WorkbookAgentReviewQueueItem,
 } from "@bilig/agent-api";
@@ -320,10 +318,6 @@ export function useWorkbookAgentPane(input: {
     });
   }, [normalizedCommandIndexes, activeReviewBundle, selectedReviewBundle]);
 
-  const executionRecords = useMemo<WorkbookAgentExecutionRecord[]>(() => {
-    const candidates = snapshot?.executionRecords ?? [];
-    return candidates.flatMap((entry) => (isWorkbookAgentExecutionRecord(entry) ? [entry] : []));
-  }, [snapshot?.executionRecords]);
   const threadSummaries = useMemo<readonly WorkbookAgentThreadSummary[]>(() => {
     const merged = new Map<string, WorkbookAgentThreadSummary>();
     for (const summary of fetchedThreadSummaries) {
@@ -982,34 +976,6 @@ export function useWorkbookAgentPane(input: {
     [documentId, activeReviewBundle, persistSessionSnapshot],
   );
 
-  const replayExecutionRecord = useCallback(
-    async (recordId: string) => {
-      const activeSession = await ensureSession();
-      try {
-        const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/runs/${encodeURIComponent(recordId)}/replay`,
-          {
-            method: "POST",
-          },
-        );
-        const payload = (await response.json()) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            resolvePayloadMessage(
-              payload,
-              `Workbook agent request failed with status ${response.status}`,
-            ),
-          );
-        }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
-        setError(null);
-      } catch (nextError) {
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
-      }
-    },
-    [documentId, ensureSession, persistSessionSnapshot],
-  );
-
   const cancelWorkflowRun = useCallback(
     async (runId: string) => {
       const activeSession = sessionRef.current;
@@ -1056,7 +1022,6 @@ export function useWorkbookAgentPane(input: {
         activeThreadId={snapshot?.threadId ?? sessionRef.current?.threadId ?? null}
         activeResponseTurnId={activeResponseTurnId}
         draft={draft}
-        executionRecords={executionRecords}
         cancellingWorkflowRunId={cancellingWorkflowRunId}
         isApplyingReviewItem={isApplyingReviewItem}
         isLoading={isLoading}
@@ -1093,9 +1058,6 @@ export function useWorkbookAgentPane(input: {
         }}
         onSelectAllReviewCommands={selectAllReviewCommands}
         onToggleReviewCommand={toggleReviewCommand}
-        onReplayExecutionRecord={(recordId) => {
-          void replayExecutionRecord(recordId);
-        }}
         onCancelWorkflowRun={(runId) => {
           void cancelWorkflowRun(runId);
         }}
@@ -1113,7 +1075,6 @@ export function useWorkbookAgentPane(input: {
       cancellingWorkflowRunId,
       dismissReviewItem,
       draft,
-      executionRecords,
       interrupt,
       isApplyingReviewItem,
       isLoading,
@@ -1126,7 +1087,6 @@ export function useWorkbookAgentPane(input: {
       canFinalizeSharedBundle,
       canRecommendSharedBundle,
       currentUserSharedRecommendation,
-      replayExecutionRecord,
       reviewReviewItem,
       sendPrompt,
       selectThread,
