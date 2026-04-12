@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe("workbook layout", () => {
-  it("renders the side rail beside the spreadsheet using the controlled rail width", async () => {
+  it("renders the side panel beside the spreadsheet using the controlled panel width", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,34 +79,34 @@ describe("workbook layout", () => {
           onCopyRange={() => {}}
           onMoveRange={() => {}}
           onPaste={() => {}}
-          onSideRailWidthChange={() => {}}
-          sideRailId="workbook-side-rail-doc-1"
-          sideRail={<div data-testid="assistant-rail">Assistant rail</div>}
-          sideRailWidth={384}
+          onSidePanelWidthChange={() => {}}
+          sidePanelId="workbook-side-panel-doc-1"
+          sidePanel={<div data-testid="assistant-panel">Assistant panel</div>}
+          sidePanelWidth={384}
         />,
       );
     });
 
-    const sideRail = host.querySelector("[data-testid='workbook-side-rail']");
+    const sidePanel = host.querySelector("[data-testid='workbook-side-panel']");
     const gridSurface = host.querySelector("[data-testid='grid-surface']");
     const shell = host.querySelector("[data-testid='workbook-shell']");
-    expect(sideRail).not.toBeNull();
+    expect(sidePanel).not.toBeNull();
     expect(shell?.className).toContain("h-full");
     expect(shell?.className).not.toContain("h-screen");
-    expect(sideRail?.getAttribute("id")).toBe("workbook-side-rail-doc-1");
-    expect(sideRail?.textContent).toContain("Assistant rail");
-    expect(sideRail instanceof HTMLElement ? sideRail.style.width : null).toBe("384px");
-    const resizeHandle = host.querySelector("[data-testid='workbook-side-rail-resize-handle']");
+    expect(sidePanel?.getAttribute("id")).toBe("workbook-side-panel-doc-1");
+    expect(sidePanel?.textContent).toContain("Assistant panel");
+    expect(sidePanel instanceof HTMLElement ? sidePanel.style.width : null).toBe("384px");
+    const resizeHandle = host.querySelector("[data-testid='workbook-side-panel-resize-handle']");
     expect(resizeHandle).not.toBeNull();
     expect(resizeHandle?.className).toContain("w-4");
     expect(resizeHandle?.className).toContain("cursor-ew-resize");
     expect(resizeHandle?.className).toContain("-translate-x-2");
     expect(resizeHandle?.className).toContain("after:bg-[var(--color-mauve-200)]");
     expect(gridSurface instanceof Node).toBe(true);
-    expect(sideRail instanceof Node).toBe(true);
+    expect(sidePanel instanceof Node).toBe(true);
     expect(
-      gridSurface instanceof Node && sideRail instanceof Node
-        ? gridSurface.compareDocumentPosition(sideRail)
+      gridSurface instanceof Node && sidePanel instanceof Node
+        ? gridSurface.compareDocumentPosition(sidePanel)
         : 0,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 

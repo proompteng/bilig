@@ -299,7 +299,7 @@ afterEach(() => {
 });
 
 describe("workbook agent pane", () => {
-  it("renders the assistant rail without the skill-card strip", async () => {
+  it("renders the assistant panel without the skill-card strip", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -424,7 +424,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("hides applied preview system timeline entries from the assistant rail", async () => {
+  it("hides applied preview system timeline entries from the assistant panel", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -502,7 +502,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("renders durable workflow runs in the assistant rail", async () => {
+  it("renders durable workflow runs in the assistant panel", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -583,7 +583,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("loads durable thread summaries into the assistant rail", async () => {
+  it("loads durable thread summaries into the assistant panel", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;

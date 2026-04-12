@@ -5,22 +5,22 @@ import { Tabs } from "@base-ui/react/tabs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cn } from "../cn.js";
 import {
-  railCountClass,
-  railIndicatorClass,
-  railListClass,
-  railPanelClass,
-  railRootClass,
-  railTabClass,
-  type WorkbookSideRailTabDefinition,
-} from "../WorkbookSideRailTabs.js";
+  panelCountClass,
+  panelIndicatorClass,
+  panelListClass,
+  panelContentClass,
+  panelRootClass,
+  panelTabClass,
+  type WorkbookSidePanelTabDefinition,
+} from "../WorkbookSidePanelTabs.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function SideRailHarness(props: {
+function SidePanelHarness(props: {
   readonly defaultValue?: string;
-  readonly tabs: readonly WorkbookSideRailTabDefinition[];
+  readonly tabs: readonly WorkbookSidePanelTabDefinition[];
   readonly value?: string;
   readonly onValueChange?: (nextValue: string) => void;
 }) {
@@ -36,7 +36,7 @@ function SideRailHarness(props: {
 
   return (
     <Tabs.Root
-      className={railRootClass()}
+      className={panelRootClass()}
       value={value}
       onValueChange={(nextValue) => {
         const resolvedNextValue = String(nextValue);
@@ -46,11 +46,11 @@ function SideRailHarness(props: {
         props.onValueChange?.(resolvedNextValue);
       }}
     >
-      <Tabs.List aria-label="Workbook panels" className={railListClass()}>
+      <Tabs.List aria-label="Workbook panels" className={panelListClass()}>
         {visibleTabs.map((tab) => (
           <Tabs.Tab
-            className={(state) => railTabClass({ active: state.active })}
-            data-testid={`workbook-side-rail-tab-${tab.value}`}
+            className={(state) => panelTabClass({ active: state.active })}
+            data-testid={`workbook-side-panel-tab-${tab.value}`}
             key={tab.value}
             value={tab.value}
           >
@@ -58,7 +58,7 @@ function SideRailHarness(props: {
             {typeof tab.count === "number" ? (
               <span
                 className={cn(
-                  railCountClass({
+                  panelCountClass({
                     active: value === tab.value,
                   }),
                 )}
@@ -68,12 +68,12 @@ function SideRailHarness(props: {
             ) : null}
           </Tabs.Tab>
         ))}
-        <Tabs.Indicator className={railIndicatorClass()} renderBeforeHydration />
+        <Tabs.Indicator className={panelIndicatorClass()} renderBeforeHydration />
       </Tabs.List>
       {visibleTabs.map((tab) => (
         <Tabs.Panel
-          className={railPanelClass()}
-          data-testid={`workbook-side-rail-panel-${tab.value}`}
+          className={panelContentClass()}
+          data-testid={`workbook-side-panel-panel-${tab.value}`}
           keepMounted
           key={tab.value}
           value={tab.value}
@@ -85,7 +85,7 @@ function SideRailHarness(props: {
   );
 }
 
-describe("workbook side rail tabs", () => {
+describe("workbook side panel tabs", () => {
   it("renders Base UI tabs with count text and switches the active tab", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -97,7 +97,7 @@ describe("workbook side rail tabs", () => {
 
     await act(async () => {
       root.render(
-        <SideRailHarness
+        <SidePanelHarness
           defaultValue="assistant"
           tabs={[
             {
@@ -116,8 +116,8 @@ describe("workbook side rail tabs", () => {
       );
     });
 
-    const assistantTab = host.querySelector("[data-testid='workbook-side-rail-tab-assistant']");
-    const changesTab = host.querySelector("[data-testid='workbook-side-rail-tab-changes']");
+    const assistantTab = host.querySelector("[data-testid='workbook-side-panel-tab-assistant']");
+    const changesTab = host.querySelector("[data-testid='workbook-side-panel-tab-changes']");
     const tabList = host.querySelector("[role='tablist']");
 
     expect(assistantTab?.getAttribute("aria-selected")).toBe("true");
@@ -131,7 +131,7 @@ describe("workbook side rail tabs", () => {
 
     expect(changesTab?.getAttribute("aria-selected")).toBe("true");
     expect(changesTab?.className).toContain("font-semibold");
-    expect(host.querySelector("[data-testid='workbook-side-rail-panel-changes']")).not.toBeNull();
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-changes']")).not.toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -150,7 +150,7 @@ describe("workbook side rail tabs", () => {
 
     await act(async () => {
       root.render(
-        <SideRailHarness
+        <SidePanelHarness
           tabs={[
             {
               value: "assistant",
@@ -169,8 +169,8 @@ describe("workbook side rail tabs", () => {
       );
     });
 
-    const assistantTab = host.querySelector("[data-testid='workbook-side-rail-tab-assistant']");
-    const changesTab = host.querySelector("[data-testid='workbook-side-rail-tab-changes']");
+    const assistantTab = host.querySelector("[data-testid='workbook-side-panel-tab-assistant']");
+    const changesTab = host.querySelector("[data-testid='workbook-side-panel-tab-changes']");
 
     expect(changesTab?.getAttribute("aria-selected")).toBe("true");
 

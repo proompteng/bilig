@@ -142,10 +142,6 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
   `);
   await db.query(`
     ALTER TABLE workbook_agent_run
-      DROP COLUMN IF EXISTS approval_mode;
-  `);
-  await db.query(`
-    ALTER TABLE workbook_agent_run
       ADD COLUMN IF NOT EXISTS applied_by TEXT NOT NULL DEFAULT 'user';
   `);
   await db.query(`

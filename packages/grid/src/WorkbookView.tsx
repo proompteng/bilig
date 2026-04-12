@@ -70,10 +70,10 @@ interface WorkbookViewProps {
     | ((range: { startAddress: string; endAddress: string }) => void)
     | undefined;
   ribbon?: React.ReactNode;
-  sideRail?: React.ReactNode;
-  sideRailId?: string | undefined;
-  sideRailWidth?: number | undefined;
-  onSideRailWidthChange?: ((width: number) => void) | undefined;
+  sidePanel?: React.ReactNode;
+  sidePanelId?: string | undefined;
+  sidePanelWidth?: number | undefined;
+  onSidePanelWidthChange?: ((width: number) => void) | undefined;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   hiddenColumns?: Readonly<Record<number, true>> | undefined;
@@ -103,20 +103,20 @@ interface WorkbookViewProps {
     | undefined;
 }
 
-const MIN_SIDE_RAIL_WIDTH = 280;
-const MAX_SIDE_RAIL_WIDTH = 420;
-const SIDE_RAIL_VIEWPORT_FRACTION = 0.42;
+const MIN_SIDE_PANEL_WIDTH = 280;
+const MAX_SIDE_PANEL_WIDTH = 420;
+const SIDE_PANEL_VIEWPORT_FRACTION = 0.42;
 
-function clampSideRailWidth(width: number): number {
+function clampSidePanelWidth(width: number): number {
   const viewportWidth = typeof window === "undefined" ? null : window.innerWidth;
   const viewportAwareMax =
     viewportWidth && Number.isFinite(viewportWidth)
       ? Math.min(
-          MAX_SIDE_RAIL_WIDTH,
-          Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(viewportWidth * SIDE_RAIL_VIEWPORT_FRACTION)),
+          MAX_SIDE_PANEL_WIDTH,
+          Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(viewportWidth * SIDE_PANEL_VIEWPORT_FRACTION)),
         )
-      : MAX_SIDE_RAIL_WIDTH;
-  return Math.min(viewportAwareMax, Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(width)));
+      : MAX_SIDE_PANEL_WIDTH;
+  return Math.min(viewportAwareMax, Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(width)));
 }
 
 export function WorkbookView({
@@ -151,10 +151,10 @@ export function WorkbookView({
   onSelectionLabelChange,
   onSelectionRangeChange,
   ribbon,
-  sideRail,
-  sideRailId,
-  sideRailWidth,
-  onSideRailWidthChange,
+  sidePanel,
+  sidePanelId,
+  sidePanelWidth,
+  onSidePanelWidthChange,
   subscribeViewport,
   columnWidths,
   hiddenColumns,
@@ -182,9 +182,9 @@ export function WorkbookView({
     startWidth: number;
   } | null>(null);
   const previousSheetNameRef = useRef(sheetName);
-  const [isResizingSideRail, setIsResizingSideRail] = useState(false);
+  const [isResizingSidePanel, setIsResizingSidePanel] = useState(false);
   const [selectionLabel, setSelectionLabel] = useState(selectedAddr);
-  const resolvedSideRailWidth = clampSideRailWidth(sideRailWidth ?? 344);
+  const resolvedSidePanelWidth = clampSidePanelWidth(sidePanelWidth ?? 344);
 
   useEffect(() => {
     if (previousSheetNameRef.current === sheetName) {
@@ -202,25 +202,25 @@ export function WorkbookView({
     [onSelectionLabelChange],
   );
 
-  const handleSideRailPointerMove = useCallback(
+  const handleSidePanelPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const resizeState = resizeStateRef.current;
-      if (!resizeState || event.pointerId !== resizeState.pointerId || !onSideRailWidthChange) {
+      if (!resizeState || event.pointerId !== resizeState.pointerId || !onSidePanelWidthChange) {
         return;
       }
       const nextWidth = resizeState.startWidth + (resizeState.startX - event.clientX);
-      onSideRailWidthChange(clampSideRailWidth(nextWidth));
+      onSidePanelWidthChange(clampSidePanelWidth(nextWidth));
     },
-    [onSideRailWidthChange],
+    [onSidePanelWidthChange],
   );
 
-  const finishSideRailResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+  const finishSidePanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const resizeState = resizeStateRef.current;
     if (!resizeState || event.pointerId !== resizeState.pointerId) {
       return;
     }
     resizeStateRef.current = null;
-    setIsResizingSideRail(false);
+    setIsResizingSidePanel(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -300,44 +300,44 @@ export function WorkbookView({
             sheetNames={sheetNames}
           />
         </div>
-        {sideRail ? (
+        {sidePanel ? (
           <aside
             className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)]"
-            data-testid="workbook-side-rail"
-            id={sideRailId}
+            data-testid="workbook-side-panel"
+            id={sidePanelId}
             style={{
-              flexBasis: `${resolvedSideRailWidth}px`,
-              width: `${resolvedSideRailWidth}px`,
+              flexBasis: `${resolvedSidePanelWidth}px`,
+              width: `${resolvedSidePanelWidth}px`,
             }}
           >
-            {onSideRailWidthChange ? (
+            {onSidePanelWidthChange ? (
               <div
-                aria-label="Resize workbook side rail"
+                aria-label="Resize workbook side panel"
                 aria-orientation="vertical"
                 className={[
                   "absolute inset-y-0 left-0 z-10 w-4 -translate-x-2 cursor-ew-resize touch-none",
                   "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--color-mauve-200)] after:transition-colors",
-                  isResizingSideRail
+                  isResizingSidePanel
                     ? "after:bg-[var(--color-mauve-500)]"
                     : "hover:after:bg-[var(--color-mauve-300)]",
                 ].join(" ")}
-                data-testid="workbook-side-rail-resize-handle"
+                data-testid="workbook-side-panel-resize-handle"
                 role="separator"
-                onPointerCancel={finishSideRailResize}
+                onPointerCancel={finishSidePanelResize}
                 onPointerDown={(event) => {
                   resizeStateRef.current = {
                     pointerId: event.pointerId,
                     startX: event.clientX,
-                    startWidth: resolvedSideRailWidth,
+                    startWidth: resolvedSidePanelWidth,
                   };
-                  setIsResizingSideRail(true);
+                  setIsResizingSidePanel(true);
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
-                onPointerMove={handleSideRailPointerMove}
-                onPointerUp={finishSideRailResize}
+                onPointerMove={handleSidePanelPointerMove}
+                onPointerUp={finishSidePanelResize}
               />
             ) : null}
-            {sideRail}
+            {sidePanel}
           </aside>
         ) : null}
       </div>

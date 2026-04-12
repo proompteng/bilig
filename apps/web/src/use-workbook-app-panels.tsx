@@ -9,14 +9,14 @@ import {
 } from "./workbook-header-controls.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import {
-  railCountClass,
-  railIndicatorClass,
-  railListClass,
-  railPanelClass,
-  railRootClass,
-  railTabClass,
-  type WorkbookSideRailTabDefinition,
-} from "./WorkbookSideRailTabs.js";
+  panelCountClass,
+  panelIndicatorClass,
+  panelListClass,
+  panelContentClass,
+  panelRootClass,
+  panelTabClass,
+  type WorkbookSidePanelTabDefinition,
+} from "./WorkbookSidePanelTabs.js";
 import { cn } from "./cn.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
@@ -92,7 +92,7 @@ export function useWorkbookAppPanels(input: {
     zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   });
 
-  const sideRailTabs = useMemo<readonly WorkbookSideRailTabDefinition[]>(
+  const sidePanelTabs = useMemo<readonly WorkbookSidePanelTabDefinition[]>(
     () => [
       {
         value: "assistant",
@@ -109,25 +109,25 @@ export function useWorkbookAppPanels(input: {
     ],
     [agentPanel, changeCount, changesPanel, pendingCommandCount],
   );
-  const visibleSideRailTabs = useMemo(
-    () => sideRailTabs.filter((tab) => tab.panel != null),
-    [sideRailTabs],
+  const visibleSidePanelTabs = useMemo(
+    () => sidePanelTabs.filter((tab) => tab.panel != null),
+    [sidePanelTabs],
   );
   const {
-    activeSideRailTab,
-    isSideRailOpen,
-    openSideRail,
-    setActiveSideRailTab,
-    setSideRailWidth,
-    sideRailWidth,
-    toggleSideRail,
+    activeSidePanelTab,
+    isSidePanelOpen,
+    openSidePanel,
+    setActiveSidePanelTab,
+    setSidePanelWidth,
+    sidePanelWidth,
+    toggleSidePanel,
   } = useWorkbookShellLayout({
     documentId,
     persistenceKey: `${documentId}:${currentUserId}`,
-    availableTabs: visibleSideRailTabs.map((tab) => tab.value),
+    availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
     defaultTab: null,
   });
-  const sideRailId = `workbook-side-rail-${documentId}`;
+  const sidePanelId = `workbook-side-panel-${documentId}`;
   const previousPendingCommandCountRef = useRef(pendingCommandCount);
 
   useEffect(() => {
@@ -137,34 +137,34 @@ export function useWorkbookAppPanels(input: {
     if (!hasPendingCommands || hadPendingCommands) {
       return;
     }
-    if (!visibleSideRailTabs.some((tab) => tab.value === "assistant")) {
+    if (!visibleSidePanelTabs.some((tab) => tab.value === "assistant")) {
       return;
     }
-    openSideRail("assistant");
-  }, [openSideRail, pendingCommandCount, visibleSideRailTabs]);
+    openSidePanel("assistant");
+  }, [openSidePanel, pendingCommandCount, visibleSidePanelTabs]);
 
-  const sideRailToggleControls = useMemo(
+  const sidePanelToggleControls = useMemo(
     () => (
       <div
         className="inline-flex items-center gap-1 rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-        data-testid="workbook-side-rail-toggle-group"
+        data-testid="workbook-side-panel-toggle-group"
       >
-        {visibleSideRailTabs.map((tab) => {
-          const active = isSideRailOpen && activeSideRailTab === tab.value;
+        {visibleSidePanelTabs.map((tab) => {
+          const active = isSidePanelOpen && activeSidePanelTab === tab.value;
           return (
             <Button
-              aria-controls={sideRailId}
+              aria-controls={sidePanelId}
               aria-expanded={active}
               aria-pressed={active}
               className={workbookHeaderActionButtonClass({
                 active,
                 grouped: true,
               })}
-              data-testid={`workbook-side-rail-toggle-${tab.value}`}
+              data-testid={`workbook-side-panel-toggle-${tab.value}`}
               key={tab.value}
               type="button"
               onClick={() => {
-                toggleSideRail(tab.value);
+                toggleSidePanel(tab.value);
               }}
             >
               <span>{tab.label}</span>
@@ -176,16 +176,16 @@ export function useWorkbookAppPanels(input: {
         })}
       </div>
     ),
-    [activeSideRailTab, isSideRailOpen, sideRailId, toggleSideRail, visibleSideRailTabs],
+    [activeSidePanelTab, isSidePanelOpen, sidePanelId, toggleSidePanel, visibleSidePanelTabs],
   );
 
   const toolbarTrailingContent = useMemo(() => {
-    if (visibleSideRailTabs.length === 0 && collaborators.length === 0) {
+    if (visibleSidePanelTabs.length === 0 && collaborators.length === 0) {
       return null;
     }
     return (
       <>
-        {visibleSideRailTabs.length > 0 ? sideRailToggleControls : null}
+        {visibleSidePanelTabs.length > 0 ? sidePanelToggleControls : null}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -196,26 +196,26 @@ export function useWorkbookAppPanels(input: {
         ) : null}
       </>
     );
-  }, [collaborators, selectAddress, sideRailToggleControls, visibleSideRailTabs.length]);
+  }, [collaborators, selectAddress, sidePanelToggleControls, visibleSidePanelTabs.length]);
 
-  const sideRail = useMemo(
+  const sidePanel = useMemo(
     () =>
-      isSideRailOpen &&
-      activeSideRailTab &&
-      visibleSideRailTabs.some((tab) => tab.value === activeSideRailTab) ? (
+      isSidePanelOpen &&
+      activeSidePanelTab &&
+      visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
         <Tabs.Root
-          className={railRootClass()}
-          value={activeSideRailTab}
+          className={panelRootClass()}
+          value={activeSidePanelTab}
           onValueChange={(nextValue) => {
-            setActiveSideRailTab(String(nextValue));
+            setActiveSidePanelTab(String(nextValue));
           }}
         >
-          <Tabs.List aria-label="Workbook panels" className={railListClass()}>
+          <Tabs.List aria-label="Workbook panels" className={panelListClass()}>
             <div className="flex min-w-0 flex-1 items-end gap-1">
-              {visibleSideRailTabs.map((tab) => (
+              {visibleSidePanelTabs.map((tab) => (
                 <Tabs.Tab
-                  className={(state) => railTabClass({ active: state.active })}
-                  data-testid={`workbook-side-rail-tab-${tab.value}`}
+                  className={(state) => panelTabClass({ active: state.active })}
+                  data-testid={`workbook-side-panel-tab-${tab.value}`}
                   key={tab.value}
                   value={tab.value}
                 >
@@ -223,8 +223,8 @@ export function useWorkbookAppPanels(input: {
                   {typeof tab.count === "number" ? (
                     <span
                       className={cn(
-                        railCountClass({
-                          active: activeSideRailTab === tab.value,
+                        panelCountClass({
+                          active: activeSidePanelTab === tab.value,
                         }),
                       )}
                     >
@@ -245,12 +245,12 @@ export function useWorkbookAppPanels(input: {
             >
               New thread
             </Button>
-            <Tabs.Indicator className={railIndicatorClass()} renderBeforeHydration />
+            <Tabs.Indicator className={panelIndicatorClass()} renderBeforeHydration />
           </Tabs.List>
-          {visibleSideRailTabs.map((tab) => (
+          {visibleSidePanelTabs.map((tab) => (
             <Tabs.Panel
-              className={railPanelClass()}
-              data-testid={`workbook-side-rail-panel-${tab.value}`}
+              className={panelContentClass()}
+              data-testid={`workbook-side-panel-panel-${tab.value}`}
               keepMounted
               key={tab.value}
               value={tab.value}
@@ -260,7 +260,13 @@ export function useWorkbookAppPanels(input: {
           ))}
         </Tabs.Root>
       ) : null,
-    [activeSideRailTab, isSideRailOpen, setActiveSideRailTab, startNewThread, visibleSideRailTabs],
+    [
+      activeSidePanelTab,
+      isSidePanelOpen,
+      setActiveSidePanelTab,
+      startNewThread,
+      visibleSidePanelTabs,
+    ],
   );
 
   return {
@@ -269,10 +275,10 @@ export function useWorkbookAppPanels(input: {
     clearAgentError,
     pendingCommandCount,
     previewRanges,
-    sideRailId,
-    sideRail,
-    setSideRailWidth,
-    sideRailWidth,
+    sidePanelId,
+    sidePanel,
+    setSidePanelWidth,
+    sidePanelWidth,
     toolbarTrailingContent,
   };
 }

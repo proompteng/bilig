@@ -50,7 +50,7 @@ function renderHarness(host: HTMLElement) {
     return (
       <>
         <div data-testid="toolbar-trailing-content">{panels.toolbarTrailingContent}</div>
-        <div data-testid="side-rail">{panels.sideRail}</div>
+        <div data-testid="side-rail">{panels.sidePanel}</div>
       </>
     );
   }
@@ -117,7 +117,7 @@ describe("useWorkbookAppPanels", () => {
     document.body.innerHTML = "";
   });
 
-  it("opens the assistant rail when a review item appears", async () => {
+  it("opens the assistant panel when a review item appears", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -128,19 +128,21 @@ describe("useWorkbookAppPanels", () => {
     const harness = renderHarness(host);
 
     await harness.render();
-    expect(host.querySelector("[data-testid='workbook-side-rail-panel-assistant']")).toBeNull();
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).toBeNull();
 
     mockAgentPane(2);
     await harness.render();
 
     expect(host.querySelector("[data-testid='toolbar-trailing-content']")).not.toBeNull();
-    expect(host.querySelector("[data-testid='workbook-side-rail-panel-assistant']")).not.toBeNull();
+    expect(
+      host.querySelector("[data-testid='workbook-side-panel-panel-assistant']"),
+    ).not.toBeNull();
     expect(host.textContent).toContain("Assistant panel");
 
     await harness.unmount();
   });
 
-  it("switches from the changes rail to the assistant rail when a review item is staged", async () => {
+  it("switches from the changes panel to the assistant panel when a review item is staged", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -154,17 +156,19 @@ describe("useWorkbookAppPanels", () => {
 
     await act(async () => {
       host
-        .querySelector("[data-testid='workbook-side-rail-toggle-changes']")
+        .querySelector("[data-testid='workbook-side-panel-toggle-changes']")
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(host.querySelector("[data-testid='workbook-side-rail-panel-changes']")).not.toBeNull();
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-changes']")).not.toBeNull();
     expect(host.textContent).toContain("Changes panel");
 
     mockAgentPane(1);
     await harness.render();
 
-    expect(host.querySelector("[data-testid='workbook-side-rail-panel-assistant']")).not.toBeNull();
+    expect(
+      host.querySelector("[data-testid='workbook-side-panel-panel-assistant']"),
+    ).not.toBeNull();
     expect(host.textContent).toContain("Assistant panel");
 
     await harness.unmount();
@@ -193,7 +197,7 @@ describe("useWorkbookAppPanels", () => {
 
     await act(async () => {
       host
-        .querySelector("[data-testid='workbook-side-rail-toggle-assistant']")
+        .querySelector("[data-testid='workbook-side-panel-toggle-assistant']")
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 

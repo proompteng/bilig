@@ -108,7 +108,7 @@ describe("workbook agent markdown rendering", () => {
           id: "assistant-1",
           kind: "assistant",
           turnId: "turn-1",
-          text: "I mean the **staged changes / preview side rail** in the workbook UI, with **Apply** or **Dismiss**.",
+          text: "I mean the **staged changes / review panel** in the workbook UI, with **Apply** or **Dismiss**.",
           phase: null,
           toolName: null,
           toolStatus: null,
@@ -123,8 +123,8 @@ describe("workbook agent markdown rendering", () => {
 
     await panel.render();
 
-    expect(panel.host.textContent).toContain("staged changes / preview side rail");
-    expect(panel.host.textContent).not.toContain("**staged changes / preview side rail**");
+    expect(panel.host.textContent).toContain("staged changes / review panel");
+    expect(panel.host.textContent).not.toContain("**staged changes / review panel**");
     const strongNodes = panel.host.querySelectorAll("strong");
     expect(strongNodes.length).toBeGreaterThanOrEqual(2);
     expect([...strongNodes].some((node) => node.textContent === "Apply")).toBe(true);

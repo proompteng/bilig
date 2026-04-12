@@ -298,10 +298,10 @@ function WorkerWorkbookAppInner({
               rowHeights={app.rowHeights}
               freezeRows={app.freezeRows}
               freezeCols={app.freezeCols}
-              onSideRailWidthChange={app.setSideRailWidth}
-              sideRailId={app.sideRailId}
-              sideRail={app.sideRail}
-              sideRailWidth={app.sideRailWidth}
+              onSidePanelWidthChange={app.setSidePanelWidth}
+              sidePanelId={app.sidePanelId}
+              sidePanel={app.sidePanel}
+              sidePanelWidth={app.sidePanelWidth}
             />
           ) : null}
         </div>

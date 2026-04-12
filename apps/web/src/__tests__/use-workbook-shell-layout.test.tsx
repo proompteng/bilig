@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH,
+  DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH,
   useWorkbookShellLayout,
 } from "../use-workbook-shell-layout.js";
 
@@ -15,22 +15,22 @@ function ShellLayoutHarness(props: { documentId: string }) {
 
   return (
     <div
-      data-open={String(layout.isSideRailOpen)}
-      data-tab={layout.activeSideRailTab ?? ""}
+      data-open={String(layout.isSidePanelOpen)}
+      data-tab={layout.activeSidePanelTab ?? ""}
       data-testid="shell-layout-state"
-      data-width={String(layout.sideRailWidth)}
+      data-width={String(layout.sidePanelWidth)}
     >
       <button
         data-testid="toggle-assistant"
         type="button"
-        onClick={() => layout.toggleSideRail("assistant")}
+        onClick={() => layout.toggleSidePanel("assistant")}
       />
       <button
         data-testid="toggle-changes"
         type="button"
-        onClick={() => layout.toggleSideRail("changes")}
+        onClick={() => layout.toggleSidePanel("changes")}
       />
-      <button data-testid="set-width" type="button" onClick={() => layout.setSideRailWidth(416)} />
+      <button data-testid="set-width" type="button" onClick={() => layout.setSidePanelWidth(416)} />
     </div>
   );
 }
@@ -68,7 +68,7 @@ describe("workbook shell layout", () => {
     document.body.innerHTML = "";
   });
 
-  it("defaults to a collapsed side rail with no implicit active tab", async () => {
+  it("defaults to a collapsed side panel with no implicit active tab", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -84,14 +84,14 @@ describe("workbook shell layout", () => {
     const state = host.querySelector("[data-testid='shell-layout-state']");
     expect(state?.getAttribute("data-open")).toBe("false");
     expect(state?.getAttribute("data-tab")).toBe("");
-    expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH));
+    expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH));
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it("persists the active tab, open state, and side rail width across remounts", async () => {
+  it("persists the active tab, open state, and side panel width across remounts", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -132,7 +132,7 @@ describe("workbook shell layout", () => {
     });
   });
 
-  it("clamps oversized persisted rail widths back into the supported range", async () => {
+  it("clamps oversized persisted panel widths back into the supported range", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -140,9 +140,9 @@ describe("workbook shell layout", () => {
     window.localStorage.setItem(
       "bilig:workbook-shell-layout:doc-oversized",
       JSON.stringify({
-        sideRailOpen: true,
-        sideRailTab: "assistant",
-        sideRailWidth: 640,
+        sidePanelOpen: true,
+        sidePanelTab: "assistant",
+        sidePanelWidth: 640,
       }),
     );
 
@@ -178,9 +178,9 @@ describe("workbook shell layout", () => {
     window.localStorage.setItem(
       "bilig:workbook-shell-layout:doc-narrow",
       JSON.stringify({
-        sideRailOpen: true,
-        sideRailTab: "assistant",
-        sideRailWidth: 420,
+        sidePanelOpen: true,
+        sidePanelTab: "assistant",
+        sidePanelWidth: 420,
       }),
     );
 
@@ -252,20 +252,20 @@ describe("workbook shell layout", () => {
 
       return (
         <div
-          data-open={String(layout.isSideRailOpen)}
-          data-tab={layout.activeSideRailTab ?? ""}
+          data-open={String(layout.isSidePanelOpen)}
+          data-tab={layout.activeSidePanelTab ?? ""}
           data-testid="scoped-shell-layout-state"
-          data-width={String(layout.sideRailWidth)}
+          data-width={String(layout.sidePanelWidth)}
         >
           <button
             data-testid="scoped-toggle-assistant"
             type="button"
-            onClick={() => layout.toggleSideRail("assistant")}
+            onClick={() => layout.toggleSidePanel("assistant")}
           />
           <button
             data-testid="scoped-set-width"
             type="button"
-            onClick={() => layout.setSideRailWidth(432)}
+            onClick={() => layout.setSidePanelWidth(432)}
           />
         </div>
       );
@@ -304,7 +304,7 @@ describe("workbook shell layout", () => {
     const state = host.querySelector("[data-testid='scoped-shell-layout-state']");
     expect(state?.getAttribute("data-open")).toBe("false");
     expect(state?.getAttribute("data-tab")).toBe("");
-    expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH));
+    expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH));
 
     await act(async () => {
       secondRoot.unmount();

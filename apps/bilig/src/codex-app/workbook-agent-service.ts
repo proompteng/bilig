@@ -51,7 +51,7 @@ import {
   createSystemEntry,
   createWorkbookAgentBaseInstructions,
   createWorkbookAgentDeveloperInstructions,
-  reviewPendingBundleBodySchema,
+  reviewReviewItemBodySchema,
   startWorkflowBodySchema,
   startTurnBodySchema,
   updateContextBodySchema,
@@ -1269,7 +1269,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const reviewItem = this.getCurrentReviewItem(sessionState);
     if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
+        code: "WORKBOOK_AGENT_REVIEW_ITEM_NOT_FOUND",
         message: "Workbook agent change set was not found.",
         statusCode: 404,
         retryable: false,
@@ -1304,7 +1304,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     session: SessionIdentity;
     body: unknown;
   }): Promise<WorkbookAgentThreadSnapshot> {
-    const parsed = reviewPendingBundleBodySchema.parse(input.body);
+    const parsed = reviewReviewItemBodySchema.parse(input.body);
     const sessionState = this.getOwnedSession(
       input.documentId,
       input.threadId,
@@ -1313,7 +1313,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const reviewItem = this.getCurrentReviewItem(sessionState);
     if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
+        code: "WORKBOOK_AGENT_REVIEW_ITEM_NOT_FOUND",
         message: "Workbook review item was not found.",
         statusCode: 404,
         retryable: false,
@@ -1406,7 +1406,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const reviewItem = this.getCurrentReviewItem(sessionState);
     if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
+        code: "WORKBOOK_AGENT_REVIEW_ITEM_NOT_FOUND",
         message: "Workbook review item was not found.",
         statusCode: 404,
         retryable: false,

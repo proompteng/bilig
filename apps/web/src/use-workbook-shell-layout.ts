@@ -2,21 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-shell-layout:";
 
-export const DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH = 320;
-const MIN_WORKBOOK_SIDE_RAIL_WIDTH = 280;
-const MAX_WORKBOOK_SIDE_RAIL_WIDTH = 420;
-const WORKBOOK_SIDE_RAIL_VIEWPORT_FRACTION = 0.42;
+export const DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH = 320;
+const MIN_WORKBOOK_SIDE_PANEL_WIDTH = 280;
+const MAX_WORKBOOK_SIDE_PANEL_WIDTH = 420;
+const WORKBOOK_SIDE_PANEL_VIEWPORT_FRACTION = 0.42;
 
 interface StoredWorkbookShellLayout {
-  sideRailOpen?: boolean;
-  sideRailTab?: string;
-  sideRailWidth?: number;
+  sidePanelOpen?: boolean;
+  sidePanelTab?: string;
+  sidePanelWidth?: number;
 }
 
 interface WorkbookShellLayoutState {
-  isSideRailOpen: boolean;
-  activeSideRailTab: string | null;
-  sideRailWidth: number;
+  isSidePanelOpen: boolean;
+  activeSidePanelTab: string | null;
+  sidePanelWidth: number;
 }
 
 function storageKey(scope: string): string {
@@ -27,19 +27,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function clampWorkbookSideRailWidth(width: number): number {
+function clampWorkbookSidePanelWidth(width: number): number {
   const viewportWidth = typeof window === "undefined" ? null : window.innerWidth;
   const viewportAwareMax =
     viewportWidth && Number.isFinite(viewportWidth)
       ? Math.min(
-          MAX_WORKBOOK_SIDE_RAIL_WIDTH,
+          MAX_WORKBOOK_SIDE_PANEL_WIDTH,
           Math.max(
-            MIN_WORKBOOK_SIDE_RAIL_WIDTH,
-            Math.round(viewportWidth * WORKBOOK_SIDE_RAIL_VIEWPORT_FRACTION),
+            MIN_WORKBOOK_SIDE_PANEL_WIDTH,
+            Math.round(viewportWidth * WORKBOOK_SIDE_PANEL_VIEWPORT_FRACTION),
           ),
         )
-      : MAX_WORKBOOK_SIDE_RAIL_WIDTH;
-  return Math.min(viewportAwareMax, Math.max(MIN_WORKBOOK_SIDE_RAIL_WIDTH, Math.round(width)));
+      : MAX_WORKBOOK_SIDE_PANEL_WIDTH;
+  return Math.min(viewportAwareMax, Math.max(MIN_WORKBOOK_SIDE_PANEL_WIDTH, Math.round(width)));
 }
 
 function normalizeStoredWorkbookShellLayout(
@@ -47,20 +47,24 @@ function normalizeStoredWorkbookShellLayout(
   availableTabs: readonly string[],
   defaultTab: string | null,
 ): WorkbookShellLayoutState {
-  const activeSideRailTab =
-    isRecord(value) && typeof value["sideRailTab"] === "string" ? value["sideRailTab"] : defaultTab;
-  const sideRailWidth =
-    isRecord(value) && typeof value["sideRailWidth"] === "number"
-      ? clampWorkbookSideRailWidth(value["sideRailWidth"])
-      : DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH;
-  const isSideRailOpen =
-    isRecord(value) && value["sideRailOpen"] === true && activeSideRailTab !== null;
+  const activeSidePanelTab =
+    isRecord(value) && typeof value["sidePanelTab"] === "string"
+      ? value["sidePanelTab"]
+      : defaultTab;
+  const sidePanelWidth =
+    isRecord(value) && typeof value["sidePanelWidth"] === "number"
+      ? clampWorkbookSidePanelWidth(value["sidePanelWidth"])
+      : DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH;
+  const isSidePanelOpen =
+    isRecord(value) && value["sidePanelOpen"] === true && activeSidePanelTab !== null;
   const resolvedActiveTab =
-    activeSideRailTab && availableTabs.includes(activeSideRailTab) ? activeSideRailTab : defaultTab;
+    activeSidePanelTab && availableTabs.includes(activeSidePanelTab)
+      ? activeSidePanelTab
+      : defaultTab;
   return {
-    isSideRailOpen: isSideRailOpen && resolvedActiveTab !== null,
-    activeSideRailTab: resolvedActiveTab,
-    sideRailWidth,
+    isSidePanelOpen: isSidePanelOpen && resolvedActiveTab !== null,
+    activeSidePanelTab: resolvedActiveTab,
+    sidePanelWidth,
   };
 }
 
@@ -84,11 +88,11 @@ function loadPersistedWorkbookShellLayout(
 function persistWorkbookShellLayout(scope: string, layout: WorkbookShellLayoutState): void {
   try {
     const stored: StoredWorkbookShellLayout = {
-      sideRailOpen: layout.isSideRailOpen,
-      sideRailWidth: clampWorkbookSideRailWidth(layout.sideRailWidth),
+      sidePanelOpen: layout.isSidePanelOpen,
+      sidePanelWidth: clampWorkbookSidePanelWidth(layout.sidePanelWidth),
     };
-    if (layout.activeSideRailTab !== null) {
-      stored.sideRailTab = layout.activeSideRailTab;
+    if (layout.activeSidePanelTab !== null) {
+      stored.sidePanelTab = layout.activeSidePanelTab;
     }
     window.localStorage.setItem(storageKey(scope), JSON.stringify(stored));
   } catch {
@@ -116,28 +120,28 @@ export function useWorkbookShellLayout(input: {
   const [layout, setLayout] = useState<WorkbookShellLayoutState>(() =>
     typeof window === "undefined"
       ? {
-          isSideRailOpen: false,
-          activeSideRailTab: resolvedDefaultTab,
-          sideRailWidth: DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH,
+          isSidePanelOpen: false,
+          activeSidePanelTab: resolvedDefaultTab,
+          sidePanelWidth: DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH,
         }
       : loadPersistedWorkbookShellLayout(resolvedPersistenceKey, availableTabs, resolvedDefaultTab),
   );
 
   useEffect(() => {
     setLayout((current) => {
-      const activeSideRailTab =
-        current.activeSideRailTab && availableTabs.includes(current.activeSideRailTab)
-          ? current.activeSideRailTab
+      const activeSidePanelTab =
+        current.activeSidePanelTab && availableTabs.includes(current.activeSidePanelTab)
+          ? current.activeSidePanelTab
           : resolvedDefaultTab;
       const nextLayout = {
-        isSideRailOpen: current.isSideRailOpen && activeSideRailTab !== null,
-        activeSideRailTab,
-        sideRailWidth: clampWorkbookSideRailWidth(current.sideRailWidth),
+        isSidePanelOpen: current.isSidePanelOpen && activeSidePanelTab !== null,
+        activeSidePanelTab,
+        sidePanelWidth: clampWorkbookSidePanelWidth(current.sidePanelWidth),
       };
       if (
-        current.isSideRailOpen === nextLayout.isSideRailOpen &&
-        current.activeSideRailTab === nextLayout.activeSideRailTab &&
-        current.sideRailWidth === nextLayout.sideRailWidth
+        current.isSidePanelOpen === nextLayout.isSidePanelOpen &&
+        current.activeSidePanelTab === nextLayout.activeSidePanelTab &&
+        current.sidePanelWidth === nextLayout.sidePanelWidth
       ) {
         return current;
       }
@@ -152,86 +156,86 @@ export function useWorkbookShellLayout(input: {
     persistWorkbookShellLayout(resolvedPersistenceKey, layout);
   }, [layout, resolvedPersistenceKey]);
 
-  const setActiveSideRailTab = useCallback(
+  const setActiveSidePanelTab = useCallback(
     (nextTab: string) => {
       setLayout((current) => ({
         ...current,
-        activeSideRailTab: availableTabs.includes(nextTab) ? nextTab : current.activeSideRailTab,
+        activeSidePanelTab: availableTabs.includes(nextTab) ? nextTab : current.activeSidePanelTab,
       }));
     },
     [availableTabs],
   );
 
-  const openSideRail = useCallback(
+  const openSidePanel = useCallback(
     (nextTab?: string) => {
       setLayout((current) => {
-        const activeSideRailTab =
+        const activeSidePanelTab =
           nextTab && availableTabs.includes(nextTab)
             ? nextTab
-            : (current.activeSideRailTab ?? resolvedDefaultTab);
+            : (current.activeSidePanelTab ?? resolvedDefaultTab);
         return {
           ...current,
-          isSideRailOpen: activeSideRailTab !== null,
-          activeSideRailTab,
+          isSidePanelOpen: activeSidePanelTab !== null,
+          activeSidePanelTab,
         };
       });
     },
     [availableTabs, resolvedDefaultTab],
   );
 
-  const closeSideRail = useCallback(() => {
+  const closeSidePanel = useCallback(() => {
     setLayout((current) => ({
       ...current,
-      isSideRailOpen: false,
+      isSidePanelOpen: false,
     }));
   }, []);
 
-  const toggleSideRail = useCallback(
+  const toggleSidePanel = useCallback(
     (nextTab?: string) => {
       setLayout((current) => {
         const desiredTab =
           nextTab && availableTabs.includes(nextTab)
             ? nextTab
-            : (current.activeSideRailTab ?? resolvedDefaultTab);
+            : (current.activeSidePanelTab ?? resolvedDefaultTab);
         if (desiredTab === null) {
           return {
             ...current,
-            isSideRailOpen: false,
-            activeSideRailTab: null,
+            isSidePanelOpen: false,
+            activeSidePanelTab: null,
           };
         }
-        if (current.isSideRailOpen && current.activeSideRailTab === desiredTab) {
+        if (current.isSidePanelOpen && current.activeSidePanelTab === desiredTab) {
           return {
             ...current,
-            isSideRailOpen: false,
-            activeSideRailTab: desiredTab,
+            isSidePanelOpen: false,
+            activeSidePanelTab: desiredTab,
           };
         }
         return {
           ...current,
-          isSideRailOpen: true,
-          activeSideRailTab: desiredTab,
+          isSidePanelOpen: true,
+          activeSidePanelTab: desiredTab,
         };
       });
     },
     [availableTabs, resolvedDefaultTab],
   );
 
-  const setSideRailWidth = useCallback((nextWidth: number) => {
+  const setSidePanelWidth = useCallback((nextWidth: number) => {
     setLayout((current) => ({
       ...current,
-      sideRailWidth: clampWorkbookSideRailWidth(nextWidth),
+      sidePanelWidth: clampWorkbookSidePanelWidth(nextWidth),
     }));
   }, []);
 
   return {
-    activeSideRailTab: layout.activeSideRailTab,
-    closeSideRail,
-    isSideRailOpen: layout.isSideRailOpen,
-    openSideRail,
-    setActiveSideRailTab,
-    setSideRailWidth,
-    sideRailWidth: layout.sideRailWidth,
-    toggleSideRail,
+    activeSidePanelTab: layout.activeSidePanelTab,
+    closeSidePanel,
+    isSidePanelOpen: layout.isSidePanelOpen,
+    openSidePanel,
+    setActiveSidePanelTab,
+    setSidePanelWidth,
+    sidePanelWidth: layout.sidePanelWidth,
+    toggleSidePanel,
   };
 }

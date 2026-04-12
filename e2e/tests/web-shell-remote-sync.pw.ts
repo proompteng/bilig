@@ -227,8 +227,8 @@ test("web app reverts an authoritative change from the changes pane", async ({ p
   await openZeroWorkbookPage(page, documentId);
 
   const formulaInput = page.getByTestId("formula-input");
-  const changesToggle = page.getByTestId("workbook-side-rail-toggle-changes");
-  const changesTab = page.getByTestId("workbook-side-rail-tab-changes");
+  const changesToggle = page.getByTestId("workbook-side-panel-toggle-changes");
+  const changesTab = page.getByTestId("workbook-side-panel-tab-changes");
 
   await clickProductCell(page, 0, 0);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");

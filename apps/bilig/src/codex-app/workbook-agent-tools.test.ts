@@ -2802,7 +2802,7 @@ describe("workbook agent tools", () => {
           stepId: "stage-structural-preview",
           label: "Stage structural preview",
           status: "completed" as const,
-          summary: "Staged the structural change set in the thread rail.",
+          summary: "Staged the structural change set in the thread panel.",
           updatedAtUnixMs: 2,
         },
       ],

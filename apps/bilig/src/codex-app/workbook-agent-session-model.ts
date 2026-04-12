@@ -137,7 +137,7 @@ export const startWorkflowBodySchema = z
     }),
   );
 
-export const reviewPendingBundleBodySchema = z.object({
+export const reviewReviewItemBodySchema = z.object({
   decision: z.enum(["approved", "rejected"]),
 });
 

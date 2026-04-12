@@ -294,7 +294,7 @@ describe("workbook agent service", () => {
         "Apply workbook changes directly when the session policy allows it.",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
-        "review and apply it from the rail",
+        "review and apply it from the panel",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
         "stage one coherent change set per turn",

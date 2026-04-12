@@ -187,7 +187,7 @@ function createReviewQueueItemRow(state: ReturnType<typeof createThreadState>) {
 }
 
 describe("workbook-chat-thread-store", () => {
-  it("hard-migrates legacy pending-bundle storage and drops the legacy schema", async () => {
+  it("creates the review-queue schema without legacy pending-bundle compatibility paths", async () => {
     const queryable = new FakeQueryable();
 
     await ensureWorkbookChatThreadSchema(queryable);
@@ -198,23 +198,11 @@ describe("workbook-chat-thread-store", () => {
       ),
     ).toBe(true);
     expect(
-      queryable.calls.some((call) =>
-        call.text.includes("DROP COLUMN IF EXISTS has_pending_bundle"),
-      ),
-    ).toBe(true);
-    expect(
-      queryable.calls.some((call) => call.text.includes("DROP TABLE workbook_pending_bundle")),
-    ).toBe(true);
-    expect(
       queryable.calls.some(
         (call) =>
-          call.text.includes("FROM information_schema.tables") &&
-          call.text.includes("table_name = 'workbook_pending_bundle'"),
-      ),
-    ).toBe(true);
-    expect(
-      queryable.calls.some((call) =>
-        call.text.includes("CREATE TABLE IF NOT EXISTS workbook_pending_bundle"),
+          call.text.includes("information_schema.tables") ||
+          call.text.includes("DROP TABLE") ||
+          call.text.includes("DROP COLUMN IF EXISTS"),
       ),
     ).toBe(false);
   });
@@ -255,9 +243,6 @@ describe("workbook-chat-thread-store", () => {
     expect(reviewInsert?.values?.[3]).toBe("review-1");
     expect(reviewInsert?.values?.[9]).toBe("manual");
     expect(reviewInsert?.values?.[20]).toBe(JSON.stringify([]));
-    expect(
-      queryable.calls.some((call) => call.text.includes("INSERT INTO workbook_pending_bundle")),
-    ).toBe(false);
     const itemInsert = queryable.calls.find(
       (call) =>
         call.text.includes("INSERT INTO workbook_chat_item") &&
