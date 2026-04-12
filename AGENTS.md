@@ -27,7 +27,6 @@ Required rules:
 - Keep the UI quiet by default. Enterprise polish comes from density, rhythm, contrast hierarchy, and consistency, not blur, glow, oversized rounding, or decorative chrome.
 - Use one density system per surface. Toolbar controls, formula bar controls, tabs, chips, and popovers should align on a deliberate shared height and radius system unless there is a documented product reason not to.
 - Treat accessibility as behavior, not cleanup. Menus, popovers, tabs, color pickers, and toolbar controls must have explicit labeling, focus visibility, keyboard semantics, and predictable close/focus behavior.
-- Keep public component APIs boring and stable. Use `is...`, `allows...`, `on...`, and `on...Change` naming consistently, and prefer extensible string unions over booleans when the API may grow.
 
 Avoid:
 
@@ -44,6 +43,8 @@ Add colocated unit tests as `*.test.ts` or `*.test.tsx`; keep browser flows in `
 
 ## Infra & Cluster Operations
 Cluster infrastructure for `bilig` does not live in this repo. The GitOps source of truth is the sibling repo at `~/github.com/lab`, especially `argocd/applications/bilig`, with supporting infra automation under `ansible/`. Make infra changes there and let Argo CD reconcile; use direct cluster mutation only for debugging or emergencies.
+
+When working in `~/github.com/lab`, read and follow that repo's `AGENTS.md` in addition to these instructions.
 
 From `~/github.com/lab`, validate with `bun run lint:argocd`, `bun run tf:plan`, and `bun run ansible` as needed. Use `kubectl config current-context`, then inspect with `kubectl -n bilig get deploy,svc,pods`, `kubectl -n bilig logs -f deploy/bilig-app`, and `kubectl -n bilig rollout status deployment/bilig-app`. For Argo CD, use `argocd context`, `argocd app get bilig`, `argocd app diff bilig`, and, when intentionally rolling out GitOps changes, `argocd app sync bilig && argocd app wait bilig --sync --health`.
 
