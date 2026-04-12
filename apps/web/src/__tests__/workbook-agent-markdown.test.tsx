@@ -40,7 +40,7 @@ function renderPanel(overrides: Record<string, unknown> = {}) {
   const root = createRoot(host);
   const props = {
     activeThreadId: "thr-1",
-    currentContext: null,
+    optimisticEntries: [],
     snapshot: createSnapshot(),
     pendingBundle: null,
     preview: null,
@@ -70,7 +70,6 @@ function renderPanel(overrides: Record<string, unknown> = {}) {
     onSelectAllPendingCommands: vi.fn(),
     onSelectThreadScope: vi.fn(),
     onSelectThread: vi.fn(),
-    onStartNewThread: vi.fn(),
     onTogglePendingCommand: vi.fn(),
     onCancelWorkflowRun: vi.fn(),
     onReplayExecutionRecord: vi.fn(),

@@ -44,16 +44,13 @@ function renderPanel(entry: {
             canFinalizeSharedBundle={false}
             canRecommendSharedBundle={false}
             cancellingWorkflowRunId={null}
-            currentContext={{
-              selection: { sheetName: "Sheet1", address: "A1" },
-              viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
-            }}
             currentUserSharedRecommendation={null}
             draft=""
             executionRecords={[]}
             isApplyingBundle={false}
             isLoading={false}
             isStartingWorkflow={false}
+            optimisticEntries={[]}
             onApplyPendingBundle={() => {}}
             onCancelWorkflowRun={() => {}}
             onDismissPendingBundle={() => {}}
@@ -65,7 +62,6 @@ function renderPanel(entry: {
             onSelectThread={() => {}}
             onSelectThreadScope={() => {}}
             onStartNamedWorkflow={() => {}}
-            onStartNewThread={() => {}}
             onStartSearchWorkflow={() => {}}
             onStartStructuralWorkflow={() => {}}
             onStartWorkflow={() => {}}

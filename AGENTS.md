@@ -54,6 +54,12 @@ Open and merge PRs in Forgejo with `tea`.
 Merge changes into `origin/main`.
 After the Forgejo merge, confirm `github/main` matches `origin/main`.
 
+## Checkout Discipline
+Work only inside the user's current checkout at `~/github.com/bilig`.
+Stay on `main` unless the user explicitly asks for a different branch.
+Do not create or use detached worktrees, temporary clones, or outside folders for implementation, testing, commits, or pushes.
+Treat the current checkout as the only valid workspace for repo changes.
+
 ## Tea CLI
 Use `tea` for Forgejo PR workflow in this repo.
 
