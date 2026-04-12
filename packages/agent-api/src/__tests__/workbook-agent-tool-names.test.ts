@@ -16,6 +16,7 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges).toBe("list_named_ranges");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.setFormula).toBe("set_formula");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getColumnMetadata).toBe("get_column_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createNamedRange).toBe("create_named_range");
@@ -43,6 +44,9 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.get_used_range")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getUsedRange,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_set_formula")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.setFormula,
     );
     expect(normalizeWorkbookAgentToolName("bilig_list_named_ranges")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
@@ -83,6 +87,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("search_workbook")).toBe(true);
     expect(isWorkbookAgentToolName("list_sheets")).toBe(true);
     expect(isWorkbookAgentToolName("get_current_region")).toBe(true);
+    expect(isWorkbookAgentToolName("set_formula")).toBe(true);
     expect(isWorkbookAgentToolName("list_named_ranges")).toBe(true);
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
     expect(isWorkbookAgentToolName("list_pivots")).toBe(true);

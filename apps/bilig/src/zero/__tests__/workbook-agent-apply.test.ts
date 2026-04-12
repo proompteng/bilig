@@ -111,6 +111,50 @@ describe("workbook agent apply", () => {
     );
   });
 
+  it("captures one undo bundle for setRangeFormulas commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 20);
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "setRangeFormulas",
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B1",
+            endAddress: "B2",
+          },
+          formulas: [["=A1*2"], ["=A2*2"]],
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getCell("Sheet1", "B1").formula).toBe("A1*2");
+    expect(engine.getCell("Sheet1", "B2").formula).toBe("A2*2");
+    expect(undoBundle).toEqual(
+      expect.objectContaining({
+        kind: "engineOps",
+      }),
+    );
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getCell("Sheet1", "B1").value).toEqual({
+      tag: ValueTag.Empty,
+    });
+    expect(engine.getCell("Sheet1", "B2").value).toEqual({
+      tag: ValueTag.Empty,
+    });
+  });
+
   it("captures undo for structural and cell commands in the same bundle", async () => {
     const engine = new SpreadsheetEngine();
     await engine.ready();

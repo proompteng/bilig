@@ -10,6 +10,7 @@ import type { WorkbookAgentCommand, WorkbookAgentPreviewRange } from "./workbook
 export type WorkbookAgentStructuralCommand = Exclude<
   WorkbookAgentCommand,
   | Extract<WorkbookAgentCommand, { kind: "writeRange" }>
+  | Extract<WorkbookAgentCommand, { kind: "setRangeFormulas" }>
   | Extract<WorkbookAgentCommand, { kind: "clearRange" }>
   | Extract<WorkbookAgentCommand, { kind: "formatRange" }>
   | Extract<WorkbookAgentCommand, { kind: "fillRange" }>

@@ -1504,6 +1504,62 @@ describe("workbook agent tools", () => {
     ).toContain('"bundleId": "bundle-1"');
   });
 
+  it("stages selector-aware formula writes through set_formula", async () => {
+    const engine = await createEngine();
+    engine.setTable({
+      name: "RevenueTable",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Revenue", "Margin"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-set-formula",
+        tool: "set_formula",
+        arguments: {
+          selector: {
+            kind: "tableColumn",
+            table: "RevenueTable",
+            column: "Margin",
+            sheet: "Sheet1",
+          },
+          formulas: [["=A2*0.2"], ["=A3*0.25"]],
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "setRangeFormulas",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B3",
+      },
+      formulas: [["=A2*0.2"], ["=A3*0.25"]],
+    });
+  });
+
   it("stages format commands with normalized number format presets", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

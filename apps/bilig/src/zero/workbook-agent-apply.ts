@@ -94,6 +94,13 @@ function applyWorkbookAgentCommandWithUndoCapture(
         potentialNewCells: transaction.potentialNewCells,
       });
     }
+    case "setRangeFormulas":
+      return engine.captureUndoOps(() => {
+        engine.setRangeFormulas(
+          command.range,
+          command.formulas.map((row) => row.map((formula) => normalizeFormula(formula))),
+        );
+      }).undoOps;
     case "formatRange": {
       const aggregatedUndoOps: EngineOp[] = [];
       if (command.patch !== undefined) {

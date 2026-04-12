@@ -49,10 +49,12 @@ import {
   rangeOrSelectorJsonSchema,
   rangeOrSelectorSchema,
   readRangeToolArgsSchema,
+  resolveFormulaRangeRequest,
   resolveRangeOrSelectorRequest,
   resolveReadRangeRequest,
   resolveTransferRangeRequest,
   resolveWriteRangeRequest,
+  setFormulaToolArgsSchema,
   transferRangeToolArgsSchema,
   workbookSemanticSelectorJsonSchema,
   writeRangeToolArgsSchema,
@@ -732,6 +734,27 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
+      name: WORKBOOK_AGENT_TOOL_NAMES.setFormula,
+      description:
+        "Write one or more formulas into a target range or selector-resolved anchor. Use this when the request is explicitly about formulas rather than generic cell input.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["formulas"],
+        properties: {
+          range: cellRangeRefJsonSchema,
+          selector: workbookSemanticSelectorJsonSchema,
+          formulas: {
+            type: "array",
+            items: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    {
       name: WORKBOOK_AGENT_TOOL_NAMES.clearRange,
       description: "Clear a rectangular range of cells or a selector-resolved workbook region.",
       inputSchema: rangeOrSelectorJsonSchema,
@@ -1102,6 +1125,24 @@ export async function handleWorkbookAgentToolCall(
               };
             }),
           ),
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.setFormula: {
+        const args = setFormulaToolArgsSchema.parse(request.arguments);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveFormulaRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
+        return await stageCommandResult(context, {
+          kind: "setRangeFormulas",
+          range: resolved.range,
+          formulas: args.formulas,
         });
       }
       case WORKBOOK_AGENT_TOOL_NAMES.clearRange: {

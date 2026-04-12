@@ -57,6 +57,17 @@ export const writeRangeToolArgsSchema = z.union([
   }),
 ]);
 
+export const setFormulaToolArgsSchema = z.union([
+  z.object({
+    range: cellRangeRefSchema,
+    formulas: z.array(z.array(z.string().trim().min(1)).min(1)).min(1),
+  }),
+  z.object({
+    selector: workbookSemanticSelectorSchema,
+    formulas: z.array(z.array(z.string().trim().min(1)).min(1)).min(1),
+  }),
+]);
+
 const transferRangeTargetSchema = z.union([cellRangeRefSchema, workbookSemanticSelectorSchema]);
 
 export const transferRangeToolArgsSchema = z.object({
@@ -66,6 +77,7 @@ export const transferRangeToolArgsSchema = z.object({
 
 export type ReadRangeToolArgs = z.infer<typeof readRangeToolArgsSchema>;
 export type WriteRangeToolArgs = z.infer<typeof writeRangeToolArgsSchema>;
+export type SetFormulaToolArgs = z.infer<typeof setFormulaToolArgsSchema>;
 export type RangeOrSelectorArgs = z.infer<typeof rangeOrSelectorSchema>;
 export type TransferRangeToolArgs = z.infer<typeof transferRangeToolArgsSchema>;
 
@@ -381,6 +393,76 @@ export function resolveWriteRangeRequest(input: {
   return {
     sheetName: resolved.range.sheetName,
     startAddress: resolved.range.startAddress,
+    resolution: resolved.resolution,
+  };
+}
+
+export function resolveFormulaRangeRequest(input: {
+  runtime: WorkbookRuntime;
+  args: SetFormulaToolArgs;
+  uiContext: WorkbookAgentUiContext | null;
+}): {
+  readonly range: CellRangeRef;
+  readonly resolution: ResolvedWorkbookSelector | null;
+} {
+  const formulas = input.args.formulas;
+  const rowCount = formulas.length;
+  const columnCount = formulas.reduce((max, row) => Math.max(max, row.length), 0);
+  if ("range" in input.args) {
+    const range = normalizeRange(input.args.range);
+    const start = parseCellAddress(range.startAddress, range.sheetName);
+    const end = parseCellAddress(range.endAddress, range.sheetName);
+    const rangeRows = end.row - start.row + 1;
+    const rangeColumns = end.col - start.col + 1;
+    if (
+      !(rangeRows === 1 && rangeColumns === 1) &&
+      (rangeRows !== rowCount || rangeColumns !== columnCount)
+    ) {
+      throw new Error(
+        `Range ${range.sheetName}!${range.startAddress}:${range.endAddress} is ${String(rangeRows)}x${String(rangeColumns)}, but set_formula received ${String(rowCount)}x${String(columnCount)} formulas`,
+      );
+    }
+    if (rangeRows === 1 && rangeColumns === 1) {
+      return {
+        range: {
+          sheetName: range.sheetName,
+          startAddress: range.startAddress,
+          endAddress: formatAddress(start.row + rowCount - 1, start.col + columnCount - 1),
+        },
+        resolution: null,
+      };
+    }
+    return { range, resolution: null };
+  }
+  const resolved = resolveSelectorRange({
+    runtime: input.runtime,
+    selector: input.args.selector,
+    uiContext: input.uiContext,
+  });
+  const start = parseCellAddress(resolved.range.startAddress, resolved.range.sheetName);
+  const end = parseCellAddress(resolved.range.endAddress, resolved.range.sheetName);
+  const rangeRows = end.row - start.row + 1;
+  const rangeColumns = end.col - start.col + 1;
+  if (
+    !(rangeRows === 1 && rangeColumns === 1) &&
+    (rangeRows !== rowCount || rangeColumns !== columnCount)
+  ) {
+    throw new Error(
+      `Selector ${resolved.resolution.displayLabel} resolves to ${String(rangeRows)}x${String(rangeColumns)}, but set_formula received ${String(rowCount)}x${String(columnCount)} formulas`,
+    );
+  }
+  if (rangeRows === 1 && rangeColumns === 1) {
+    return {
+      range: {
+        sheetName: resolved.range.sheetName,
+        startAddress: resolved.range.startAddress,
+        endAddress: formatAddress(start.row + rowCount - 1, start.col + columnCount - 1),
+      },
+      resolution: resolved.resolution,
+    };
+  }
+  return {
+    range: resolved.range,
     resolution: resolved.resolution,
   };
 }

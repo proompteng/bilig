@@ -68,6 +68,11 @@ export type WorkbookAgentCommand =
       values: WorkbookAgentWriteCellInput[][];
     }
   | {
+      kind: "setRangeFormulas";
+      range: CellRangeRef;
+      formulas: string[][];
+    }
+  | {
       kind: "clearRange";
       range: CellRangeRef;
     }
@@ -613,6 +618,8 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
       const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
       return ranges[0] ? `Write cells in ${rangeLabel(ranges[0])}` : "Write cells";
     }
+    case "setRangeFormulas":
+      return `Set formulas in ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
     case "clearRange":
       return `Clear ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
     case "formatRange":
@@ -988,17 +995,25 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   }
   switch (value["kind"]) {
     case "writeRange":
-      return (
-        typeof value["sheetName"] === "string" &&
-        typeof value["startAddress"] === "string" &&
-        Array.isArray(value["values"]) &&
-        value["values"].every(
-          (row) =>
-            Array.isArray(row) &&
-            row.length > 0 &&
-            row.every((cellValue) => isWriteCellInput(cellValue)),
-        )
-      );
+    case "setRangeFormulas":
+      return value["kind"] === "writeRange"
+        ? typeof value["sheetName"] === "string" &&
+            typeof value["startAddress"] === "string" &&
+            Array.isArray(value["values"]) &&
+            value["values"].every(
+              (row) =>
+                Array.isArray(row) &&
+                row.length > 0 &&
+                row.every((cellValue) => isWriteCellInput(cellValue)),
+            )
+        : isCellRangeRef(value["range"]) &&
+            Array.isArray(value["formulas"]) &&
+            value["formulas"].every(
+              (row) =>
+                Array.isArray(row) &&
+                row.length > 0 &&
+                row.every((formula) => typeof formula === "string" && formula.trim().length > 0),
+            );
     case "clearRange":
       return isCellRangeRef(value["range"]);
     case "formatRange":
@@ -1138,6 +1153,8 @@ export function estimateWorkbookAgentCommandAffectedCells(
   switch (command.kind) {
     case "writeRange":
       return command.values.reduce((sum, row) => sum + row.length, 0);
+    case "setRangeFormulas":
+      return command.formulas.reduce((sum, row) => sum + row.length, 0);
     case "clearRange":
     case "formatRange":
       return countRangeCells(command.range);
@@ -1166,6 +1183,13 @@ export function deriveWorkbookAgentCommandPreviewRanges(
       return [
         {
           ...writeRangeToRange(command),
+          role: "target",
+        },
+      ];
+    case "setRangeFormulas":
+      return [
+        {
+          ...normalizeRangeBounds(command.range),
           role: "target",
         },
       ];
@@ -1236,6 +1260,12 @@ export function applyWorkbookAgentCommand(
       });
       return;
     }
+    case "setRangeFormulas":
+      engine.setRangeFormulas(
+        command.range,
+        command.formulas.map((row) => row.map((formula) => normalizeFormula(formula))),
+      );
+      return;
     case "clearRange":
       engine.clearRange(command.range);
       return;
