@@ -148,26 +148,26 @@ export interface WorkbookAgentService {
     threadId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentThreadSnapshot>;
-  applyPendingBundle(input: {
+  applyReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
     appliedBy: WorkbookAgentAppliedBy;
     commandIndexes?: readonly number[] | null;
     preview: unknown;
   }): Promise<WorkbookAgentThreadSnapshot>;
-  reviewPendingBundle(input: {
+  reviewReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
     body: unknown;
   }): Promise<WorkbookAgentThreadSnapshot>;
-  dismissPendingBundle(input: {
+  dismissReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentThreadSnapshot>;
   replayExecutionRecord(input: {
@@ -217,15 +217,15 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
     throw new Error("Workbook agent service is not configured");
   }
 
-  async applyPendingBundle(): Promise<never> {
+  async applyReviewItem(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
-  async reviewPendingBundle(): Promise<never> {
+  async reviewReviewItem(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
-  async dismissPendingBundle(): Promise<never> {
+  async dismissReviewItem(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
@@ -1251,10 +1251,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return buildSnapshot(sessionState);
   }
 
-  async applyPendingBundle(input: {
+  async applyReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
     appliedBy: WorkbookAgentAppliedBy;
     commandIndexes?: readonly number[] | null;
@@ -1266,7 +1266,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
     );
     const reviewItem = this.getCurrentReviewItem(sessionState);
-    if (!reviewItem || reviewItem.id !== input.bundleId) {
+    if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook agent change set was not found.",
@@ -1296,10 +1296,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return buildSnapshot(sessionState);
   }
 
-  async reviewPendingBundle(input: {
+  async reviewReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
     body: unknown;
   }): Promise<WorkbookAgentThreadSnapshot> {
@@ -1310,7 +1310,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
     );
     const reviewItem = this.getCurrentReviewItem(sessionState);
-    if (!reviewItem || reviewItem.id !== input.bundleId) {
+    if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook review item was not found.",
@@ -1391,10 +1391,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return buildSnapshot(sessionState);
   }
 
-  async dismissPendingBundle(input: {
+  async dismissReviewItem(input: {
     documentId: string;
     threadId: string;
-    bundleId: string;
+    reviewItemId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentThreadSnapshot> {
     const sessionState = this.getOwnedSession(
@@ -1403,7 +1403,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
     );
     const reviewItem = this.getCurrentReviewItem(sessionState);
-    if (!reviewItem || reviewItem.id !== input.bundleId) {
+    if (!reviewItem || reviewItem.id !== input.reviewItemId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook review item was not found.",

@@ -127,13 +127,13 @@ function createWorkbookAgentServiceStub(
     async interruptTurn() {
       throw new Error("not used");
     },
-    async applyPendingBundle() {
+    async applyReviewItem() {
       throw new Error("not used");
     },
-    async reviewPendingBundle() {
+    async reviewReviewItem() {
       throw new Error("not used");
     },
-    async dismissPendingBundle() {
+    async dismissReviewItem() {
       throw new Error("not used");
     },
     async replayExecutionRecord() {
@@ -992,7 +992,7 @@ describe("sync-server workbook agent", () => {
         threadId: "thr-2",
       }),
     );
-    const reviewPendingBundle = vi.fn(async () =>
+    const reviewReviewItem = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
         reviewQueueItems: [
@@ -1028,25 +1028,25 @@ describe("sync-server workbook agent", () => {
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        reviewPendingBundle,
+        reviewReviewItem,
       }),
     });
 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/review",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/review-items/bundle-1/review",
         payload: {
           decision: "approved",
         },
       });
 
       expect(response.statusCode).toBe(200);
-      expect(reviewPendingBundle).toHaveBeenCalledWith(
+      expect(reviewReviewItem).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
           threadId: "thr-2",
-          bundleId: "bundle-1",
+          reviewItemId: "bundle-1",
           body: {
             decision: "approved",
           },
@@ -1196,7 +1196,7 @@ describe("sync-server workbook agent", () => {
         threadId: "thr-2",
       }),
     );
-    const applyPendingBundle = vi.fn(async () =>
+    const applyReviewItem = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
         reviewQueueItems: [],
@@ -1207,14 +1207,14 @@ describe("sync-server workbook agent", () => {
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        applyPendingBundle,
+        applyReviewItem,
       }),
     });
 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/apply",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/review-items/bundle-1/apply",
         payload: {
           commandIndexes: [1],
           preview: createPreviewSummary(),
@@ -1230,11 +1230,11 @@ describe("sync-server workbook agent", () => {
           },
         }),
       );
-      expect(applyPendingBundle).toHaveBeenCalledWith(
+      expect(applyReviewItem).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
           threadId: "thr-2",
-          bundleId: "bundle-1",
+          reviewItemId: "bundle-1",
           appliedBy: "user",
           commandIndexes: [1],
           preview: createPreviewSummary(),
@@ -1251,7 +1251,7 @@ describe("sync-server workbook agent", () => {
         threadId: "thr-stale",
       }),
     );
-    const applyPendingBundle = vi.fn(async () => {
+    const applyReviewItem = vi.fn(async () => {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PREVIEW_STALE",
         message: "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
@@ -1264,14 +1264,14 @@ describe("sync-server workbook agent", () => {
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        applyPendingBundle,
+        applyReviewItem,
       }),
     });
 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/chat/threads/thr-stale/bundles/bundle-1/apply",
+        url: "/v2/documents/doc-1/chat/threads/thr-stale/review-items/bundle-1/apply",
         payload: {
           preview: createPreviewSummary(),
         },
@@ -1305,7 +1305,7 @@ describe("sync-server workbook agent", () => {
         threadId: "thr-2",
       }),
     );
-    const dismissPendingBundle = vi.fn(async () =>
+    const dismissReviewItem = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
       }),
@@ -1315,14 +1315,14 @@ describe("sync-server workbook agent", () => {
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        dismissPendingBundle,
+        dismissReviewItem,
       }),
     });
 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/dismiss",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/review-items/bundle-1/dismiss",
       });
 
       expect(response.statusCode).toBe(200);
@@ -1334,11 +1334,11 @@ describe("sync-server workbook agent", () => {
           },
         }),
       );
-      expect(dismissPendingBundle).toHaveBeenCalledWith(
+      expect(dismissReviewItem).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
           threadId: "thr-2",
-          bundleId: "bundle-1",
+          reviewItemId: "bundle-1",
         }),
       );
     } finally {

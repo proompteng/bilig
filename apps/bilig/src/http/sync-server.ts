@@ -538,10 +538,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/apply",
+    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/apply",
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string };
         Body: {
           appliedBy?: "user" | "auto";
           commandIndexes?: number[];
@@ -560,10 +560,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
             Array.isArray(request.body.commandIndexes)
               ? request.body.commandIndexes
               : undefined;
-          return await service.applyPendingBundle({
+          return await service.applyReviewItem({
             documentId: request.params.documentId,
             threadId: sessionSnapshot.threadId,
-            bundleId: request.params.bundleId,
+            reviewItemId: request.params.reviewItemId,
             session,
             appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
             ...(commandIndexes ? { commandIndexes } : {}),
@@ -578,10 +578,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/review",
+    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/review",
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string };
         Body: {
           decision?: "approved" | "rejected";
         };
@@ -592,10 +592,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         request,
         reply,
         async (service, session, sessionSnapshot) => {
-          return await service.reviewPendingBundle({
+          return await service.reviewReviewItem({
             documentId: request.params.documentId,
             threadId: sessionSnapshot.threadId,
-            bundleId: request.params.bundleId,
+            reviewItemId: request.params.reviewItemId,
             session,
             body: request.body ?? {},
           });
@@ -605,10 +605,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/bundles/:bundleId/dismiss",
+    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/dismiss",
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string };
       }>,
       reply: FastifyReply,
     ) => {
@@ -616,10 +616,10 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         request,
         reply,
         async (service, session, sessionSnapshot) => {
-          return await service.dismissPendingBundle({
+          return await service.dismissReviewItem({
             documentId: request.params.documentId,
             threadId: sessionSnapshot.threadId,
-            bundleId: request.params.bundleId,
+            reviewItemId: request.params.reviewItemId,
             session,
           });
         },

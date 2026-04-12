@@ -2142,7 +2142,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/bundles/bundle-1/apply")) {
+      if (url.endsWith("/review-items/bundle-1/apply")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2223,7 +2223,7 @@ describe("workbook agent pane", () => {
 
     expect(previewBundle).toHaveBeenCalledTimes(1);
     const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/bundles/bundle-1/apply"),
+      requestUrl(input).endsWith("/review-items/bundle-1/apply"),
     );
     expect(applyCall).toBeUndefined();
     expect(host.textContent).toContain("Apply");
@@ -2339,7 +2339,7 @@ describe("workbook agent pane", () => {
       id: "bundle-shared-1",
     });
     const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/bundles/bundle-shared-1/apply"),
+      requestUrl(input).endsWith("/review-items/bundle-shared-1/apply"),
     );
     expect(applyCall).toBeUndefined();
 
@@ -2462,7 +2462,7 @@ describe("workbook agent pane", () => {
       await Promise.resolve();
     });
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
     if (!(applyButton instanceof HTMLButtonElement)) {
       throw new Error("Expected apply button to render");
     }
@@ -2574,7 +2574,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/bundles/bundle-shared-owner/review")) {
+      if (url.endsWith("/review-items/bundle-shared-owner/review")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2644,8 +2644,8 @@ describe("workbook agent pane", () => {
       await Promise.resolve();
     });
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
-    const approveButton = host.querySelector("[data-testid='workbook-agent-review-approve']");
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
+    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']");
     if (!(applyButton instanceof HTMLButtonElement)) {
       throw new Error("Expected apply button");
     }
@@ -2659,13 +2659,15 @@ describe("workbook agent pane", () => {
     });
 
     const reviewCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/bundles/bundle-shared-owner/review"),
+      requestUrl(input).endsWith("/review-items/bundle-shared-owner/review"),
     );
     expect(requestBody(reviewCall?.[1])).toEqual({
       decision: "approved",
     });
     expect(host.textContent).toContain("Approved by Alex.");
-    const refreshedApplyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
+    const refreshedApplyButton = host.querySelector(
+      "[data-testid='workbook-agent-apply-review-item']",
+    );
     if (!(refreshedApplyButton instanceof HTMLButtonElement)) {
       throw new Error("Expected refreshed apply button");
     }
@@ -2755,7 +2757,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/bundles/bundle-shared-collab/review")) {
+      if (url.endsWith("/review-items/bundle-shared-collab/review")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -2824,7 +2826,7 @@ describe("workbook agent pane", () => {
       );
     });
 
-    const approveButton = host.querySelector("[data-testid='workbook-agent-review-approve']");
+    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']");
     expect(approveButton instanceof HTMLButtonElement).toBe(true);
     expect(host.textContent).toContain("Owner review is in progress with Alex.");
 
@@ -2836,7 +2838,7 @@ describe("workbook agent pane", () => {
     });
 
     const reviewCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/bundles/bundle-shared-collab/review"),
+      requestUrl(input).endsWith("/review-items/bundle-shared-collab/review"),
     );
     expect(requestBody(reviewCall?.[1])).toEqual({
       decision: "approved",
@@ -2976,7 +2978,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/bundles/bundle-1/apply")) {
+      if (url.endsWith("/review-items/bundle-1/apply")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -3088,7 +3090,9 @@ describe("workbook agent pane", () => {
     expect(previewBundle).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain("2/2");
 
-    const firstToggle = host.querySelector("[data-testid='workbook-agent-command-toggle-0']");
+    const firstToggle = host.querySelector(
+      "[data-testid='workbook-agent-review-command-toggle-0']",
+    );
     expect(firstToggle instanceof HTMLInputElement).toBe(true);
 
     await act(async () => {
@@ -3114,7 +3118,7 @@ describe("workbook agent pane", () => {
     );
     expect(host.textContent).toContain("1/2");
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
     expect(applyButton).toBeTruthy();
 
     await act(async () => {
@@ -3122,7 +3126,7 @@ describe("workbook agent pane", () => {
     });
 
     const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/bundles/bundle-1/apply"),
+      requestUrl(input).endsWith("/review-items/bundle-1/apply"),
     );
     expect(applyCall?.[1]?.body).toBe(
       JSON.stringify({

@@ -48,22 +48,22 @@ function renderPanel(entry: {
             currentUserSharedRecommendation={null}
             draft=""
             executionRecords={entry.executionRecords ?? []}
-            isApplyingBundle={false}
+            isApplyingReviewItem={false}
             isLoading={false}
             optimisticEntries={[]}
             activeResponseTurnId={null}
-            onApplyPendingBundle={() => {}}
+            onApplyReviewItem={() => {}}
             onCancelWorkflowRun={() => {}}
-            onDismissPendingBundle={() => {}}
+            onDismissReviewItem={() => {}}
             onDraftChange={() => {}}
             onInterrupt={() => {}}
             onReplayExecutionRecord={() => {}}
-            onReviewPendingBundle={() => {}}
-            onSelectAllPendingCommands={() => {}}
+            onReviewReviewItem={() => {}}
+            onSelectAllReviewCommands={() => {}}
             onSelectThread={() => {}}
             onSubmit={() => {}}
-            onTogglePendingCommand={() => {}}
-            pendingBundle={null}
+            onToggleReviewCommand={() => {}}
+            reviewBundle={null}
             preview={null}
             selectedCommandIndexes={[]}
             showAssistantProgress={false}

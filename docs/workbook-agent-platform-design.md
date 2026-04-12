@@ -53,6 +53,139 @@ That architecture produces the wrong product shape:
 - the model describes review mechanics instead of workbook outcomes
 - tool capability gaps prevent complete end-to-end spreadsheet work
 
+## Current Audit
+
+As of `main` on April 12, 2026, the platform has improved storage and routing foundations but still exposes the wrong product surface in critical places.
+
+What is already true:
+
+- durable thread snapshots use `reviewQueueItems`
+- private-thread tool turns can auto-apply at turn completion
+- shared-thread owner review is modeled explicitly in stored review items
+- execution records are persisted
+
+What is still structurally wrong:
+
+- the public HTTP API is still bundle-named
+- the web pane still reconstructs a local `pendingBundle`
+- the panel still renders a pending-bundle review surface
+- `approvalMode` still exists in live bundle and execution-record types
+- the database still creates and migrates through `workbook_pending_bundle`
+- the product still lacks the selector-first tool model from this document
+
+That means the system still tells a preview-era story even though the stored state is already moving toward a review-queue/execution-history model.
+
+## Hard Migration Program
+
+This program is intentionally destructive toward legacy architecture. Each phase deletes obsolete code in the same change that introduces the replacement.
+
+### Phase 1: Public API and Web Cutover
+
+Goal:
+
+- remove bundle-era route and method names from the live product path
+
+Required changes:
+
+- replace `/bundles/:bundleId/apply` with `/review-items/:reviewItemId/apply`
+- replace `/bundles/:bundleId/review` with `/review-items/:reviewItemId/review`
+- replace `/bundles/:bundleId/dismiss` with `/review-items/:reviewItemId/dismiss`
+- rename service methods to:
+  - `applyReviewItem`
+  - `reviewReviewItem`
+  - `dismissReviewItem`
+- rename pane/panel variables and props away from `pendingBundle`
+
+Required deletions:
+
+- delete bundle-named routes in the server
+- delete bundle-named service methods
+- delete bundle-named pane and panel props
+
+Exit criteria:
+
+- no live route path contains `/bundles/`
+- no live web code refers to `pendingBundle`
+- no service interface exposes `applyPendingBundle`, `reviewPendingBundle`, or `dismissPendingBundle`
+
+### Phase 2: Persistence Hard Migration
+
+Goal:
+
+- remove the legacy persistence lane completely
+
+Required changes:
+
+- migrate all legacy rows into `workbook_review_queue_item`
+- stop writing `has_pending_bundle`
+- stop creating `workbook_pending_bundle`
+
+Required deletions:
+
+- drop `workbook_pending_bundle`
+- drop `has_pending_bundle`
+- delete legacy migration-copy code after the one-time migration lands
+
+Exit criteria:
+
+- review queue items are the only durable review-state model
+- thread summary state is derived from review-item counts only
+
+### Phase 3: Delete `approvalMode`
+
+Goal:
+
+- make runtime routing depend only on `executionPolicy`, `scope`, `riskClass`, and `reviewMode`
+
+Required deletions:
+
+- `approvalMode` from bundle types
+- `approvalMode` from review-item conversion helpers
+- `approval_mode` from execution-record persistence
+
+Exit criteria:
+
+- no runtime behavior branches on `approvalMode`
+- no durable runtime record stores `approvalMode`
+
+### Phase 4: Private-Thread UI Cutover
+
+Goal:
+
+- private threads become execution-history-first
+
+Required changes:
+
+- private-thread normal edits render applied execution history and undo affordance
+- shared threads render review queue only when policy requires review
+
+Required deletions:
+
+- private-thread apply/dismiss/review controls
+- private-thread review-card-first layout assumptions
+
+Exit criteria:
+
+- private-thread UI is execution-first
+- shared-thread UI is review-queue-first only when policy requires it
+
+### Phase 5: Selector and Object Model
+
+Goal:
+
+- make the tool platform selector-first and workbook-object-first before adding more capability
+
+Required changes:
+
+- implement `WorkbookSelectorResolver`
+- implement typed workbook object snapshots
+- convert read/write tool contracts to selector-first input
+
+Exit criteria:
+
+- reads and writes share one selector/object graph
+- tools no longer require A1-first targeting for common semantic tasks
+
 ## Design Principles
 
 ### 1. One behavioral authority

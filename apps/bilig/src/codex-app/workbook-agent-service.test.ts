@@ -874,10 +874,10 @@ describe("workbook agent service", () => {
       });
 
       await expect(
-        service.applyPendingBundle({
+        service.applyReviewItem({
           documentId: "doc-1",
           threadId: snapshot.threadId,
-          bundleId: "bundle-auto-1",
+          reviewItemId: "bundle-auto-1",
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -979,10 +979,10 @@ describe("workbook agent service", () => {
       });
 
       await expect(
-        service.applyPendingBundle({
+        service.applyReviewItem({
           documentId: "doc-1",
           threadId: snapshot.threadId,
-          bundleId: "bundle-auto-1",
+          reviewItemId: "bundle-auto-1",
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -3588,10 +3588,10 @@ describe("workbook agent service", () => {
         throw new Error("Expected a staged pending bundle");
       }
 
-      const applied = await service.applyPendingBundle({
+      const applied = await service.applyReviewItem({
         documentId: "doc-1",
         threadId: "thr-test",
-        bundleId: pending.id,
+        reviewItemId: pending.id,
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3723,10 +3723,10 @@ describe("workbook agent service", () => {
       }
 
       await expect(
-        service.applyPendingBundle({
+        service.applyReviewItem({
           documentId: "doc-1",
           threadId: "thr-test",
-          bundleId: pending.id,
+          reviewItemId: pending.id,
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -3860,10 +3860,10 @@ describe("workbook agent service", () => {
         throw new Error("Expected a staged pending bundle");
       }
 
-      const applied = await service.applyPendingBundle({
+      const applied = await service.applyReviewItem({
         documentId: "doc-1",
         threadId: "thr-test",
-        bundleId: pending.id,
+        reviewItemId: pending.id,
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -4660,10 +4660,10 @@ describe("workbook agent service", () => {
       });
 
       await expect(
-        service.applyPendingBundle({
+        service.applyReviewItem({
           documentId: "doc-1",
           threadId: snapshot.threadId,
-          bundleId: "bundle-shared-1",
+          reviewItemId: "bundle-shared-1",
           session: {
             userID: "casey@example.com",
             roles: ["editor"],
@@ -4755,10 +4755,10 @@ describe("workbook agent service", () => {
         },
       });
 
-      const applied = await service.applyPendingBundle({
+      const applied = await service.applyReviewItem({
         documentId: "doc-1",
         threadId: snapshot.threadId,
-        bundleId: "bundle-shared-low",
+        reviewItemId: "bundle-shared-low",
         session: {
           userID: "casey@example.com",
           roles: ["editor"],
@@ -4847,10 +4847,10 @@ describe("workbook agent service", () => {
       });
 
       await expect(
-        service.applyPendingBundle({
+        service.applyReviewItem({
           documentId: "doc-1",
           threadId: snapshot.threadId,
-          bundleId: "bundle-shared-review",
+          reviewItemId: "bundle-shared-review",
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -4862,10 +4862,10 @@ describe("workbook agent service", () => {
         "Shared medium/high-risk workbook bundles must be approved by the thread owner before apply.",
       );
 
-      const reviewed = await service.reviewPendingBundle({
+      const reviewed = await service.reviewReviewItem({
         documentId: "doc-1",
         threadId: snapshot.threadId,
-        bundleId: "bundle-shared-review",
+        reviewItemId: "bundle-shared-review",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -4885,10 +4885,10 @@ describe("workbook agent service", () => {
         }),
       );
 
-      const applied = await service.applyPendingBundle({
+      const applied = await service.applyReviewItem({
         documentId: "doc-1",
         threadId: snapshot.threadId,
-        bundleId: "bundle-shared-review",
+        reviewItemId: "bundle-shared-review",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -4970,10 +4970,10 @@ describe("workbook agent service", () => {
         },
       });
 
-      const reviewed = await service.reviewPendingBundle({
+      const reviewed = await service.reviewReviewItem({
         documentId: "doc-1",
         threadId: snapshot.threadId,
-        bundleId: "bundle-shared-review",
+        reviewItemId: "bundle-shared-review",
         session: {
           userID: "pat@example.com",
           roles: ["editor"],

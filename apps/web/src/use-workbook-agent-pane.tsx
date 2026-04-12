@@ -175,7 +175,7 @@ export function useWorkbookAgentPane(input: {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isApplyingBundle, setIsApplyingBundle] = useState(false);
+  const [isApplyingReviewItem, setIsApplyingReviewItem] = useState(false);
   const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
   const [pendingUserPrompt, setPendingUserPrompt] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
@@ -280,40 +280,40 @@ export function useWorkbookAgentPane(input: {
     () => resolvePrimaryWorkbookAgentReviewItem(reviewQueueItems),
     [reviewQueueItems],
   );
-  const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(
+  const reviewBundle = useMemo<WorkbookAgentCommandBundle | null>(
     () => (primaryReviewItem ? toWorkbookAgentCommandBundle(primaryReviewItem) : null),
     [primaryReviewItem],
   );
-  const pendingCommandCount = primaryReviewItem?.commands.length ?? 0;
+  const reviewCommandCount = primaryReviewItem?.commands.length ?? 0;
 
   const normalizedCommandIndexes = useMemo(
     () =>
-      pendingBundle
-        ? normalizeWorkbookAgentCommandIndexes(pendingBundle, selectedCommandIndexes)
+      reviewBundle
+        ? normalizeWorkbookAgentCommandIndexes(reviewBundle, selectedCommandIndexes)
         : [],
-    [pendingBundle, selectedCommandIndexes],
+    [reviewBundle, selectedCommandIndexes],
   );
 
-  const selectedPendingBundle = useMemo<WorkbookAgentCommandBundle | null>(
+  const selectedReviewBundle = useMemo<WorkbookAgentCommandBundle | null>(
     () =>
-      pendingBundle
+      reviewBundle
         ? projectWorkbookAgentBundle({
-            bundle: pendingBundle,
+            bundle: reviewBundle,
             commandIndexes: normalizedCommandIndexes,
-            bundleId: pendingBundle.id,
+            bundleId: reviewBundle.id,
           })
         : null,
-    [normalizedCommandIndexes, pendingBundle],
+    [normalizedCommandIndexes, reviewBundle],
   );
   const previewRequestKey = useMemo(() => {
-    if (!pendingBundle || !selectedPendingBundle) {
+    if (!reviewBundle || !selectedReviewBundle) {
       return null;
     }
     return createWorkbookAgentPreviewRequestKey({
-      bundle: pendingBundle,
+      bundle: reviewBundle,
       commandIndexes: normalizedCommandIndexes,
     });
-  }, [normalizedCommandIndexes, pendingBundle, selectedPendingBundle]);
+  }, [normalizedCommandIndexes, reviewBundle, selectedReviewBundle]);
 
   const executionRecords = useMemo<WorkbookAgentExecutionRecord[]>(() => {
     const candidates = snapshot?.executionRecords ?? [];
@@ -402,12 +402,12 @@ export function useWorkbookAgentPane(input: {
     sharedReviewOwnerUserId !== null &&
     sharedReviewOwnerUserId === currentUserId &&
     sharedReviewStatus === "pending" &&
-    !isApplyingBundle;
+    !isApplyingReviewItem;
   const canRecommendSharedBundle =
     sharedReviewOwnerUserId !== null &&
     sharedReviewOwnerUserId !== currentUserId &&
     sharedReviewStatus === "pending" &&
-    !isApplyingBundle;
+    !isApplyingReviewItem;
 
   const closeStream = useCallback(() => {
     eventSourceRef.current?.close();
@@ -564,10 +564,10 @@ export function useWorkbookAgentPane(input: {
 
   useEffect(() => {
     setSelectedCommandIndexes((current) => (current === null ? current : null));
-  }, [pendingBundle?.id, pendingCommandCount]);
+  }, [reviewBundle?.id, reviewCommandCount]);
 
   useEffect(() => {
-    if (!enabled || selectedPendingBundle === null || previewRequestKey === null) {
+    if (!enabled || selectedReviewBundle === null || previewRequestKey === null) {
       previewRequestKeyRef.current = null;
       setPreview(null);
       return;
@@ -587,7 +587,7 @@ export function useWorkbookAgentPane(input: {
       try {
         const nextPreview = await loadWorkbookAgentPreview({
           requestKey: previewRequestKey,
-          load: () => previewBundle(selectedPendingBundle),
+          load: () => previewBundle(selectedReviewBundle),
         });
         if (!cancelled) {
           setPreview(nextPreview);
@@ -602,7 +602,7 @@ export function useWorkbookAgentPane(input: {
     return () => {
       cancelled = true;
     };
-  }, [enabled, previewBundle, previewRequestKey, selectedPendingBundle]);
+  }, [enabled, previewBundle, previewRequestKey, selectedReviewBundle]);
 
   useEffect(() => {
     if (!preview) {
@@ -611,10 +611,10 @@ export function useWorkbookAgentPane(input: {
     perfSession.markFirstPreviewVisible?.();
   }, [perfSession, preview]);
 
-  const applyPendingBundle = useCallback(
+  const applyReviewItem = useCallback(
     async (appliedBy: "user" | "auto" = "user") => {
       const activeSession = sessionRef.current;
-      if (!activeSession || !pendingBundle || !selectedPendingBundle || !preview) {
+      if (!activeSession || !reviewBundle || !selectedReviewBundle || !preview) {
         return;
       }
       if (sharedApplyRequiresOwnerApproval) {
@@ -626,9 +626,9 @@ export function useWorkbookAgentPane(input: {
         return;
       }
       try {
-        setIsApplyingBundle(true);
+        setIsApplyingReviewItem(true);
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/review-items/${encodeURIComponent(reviewBundle.id)}/apply`,
           {
             method: "POST",
             headers: {
@@ -656,45 +656,45 @@ export function useWorkbookAgentPane(input: {
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
       } finally {
-        setIsApplyingBundle(false);
+        setIsApplyingReviewItem(false);
       }
     },
     [
       documentId,
       normalizedCommandIndexes,
-      pendingBundle,
+      reviewBundle,
       perfSession,
       persistSessionSnapshot,
       preview,
-      selectedPendingBundle,
+      selectedReviewBundle,
       sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
     ],
   );
 
-  const togglePendingCommand = useCallback(
+  const toggleReviewCommand = useCallback(
     (commandIndex: number) => {
       setSelectedCommandIndexes((current) => {
-        if (!pendingBundle || commandIndex < 0 || commandIndex >= pendingBundle.commands.length) {
+        if (!reviewBundle || commandIndex < 0 || commandIndex >= reviewBundle.commands.length) {
           return current;
         }
-        const selected = new Set(normalizeWorkbookAgentCommandIndexes(pendingBundle, current));
+        const selected = new Set(normalizeWorkbookAgentCommandIndexes(reviewBundle, current));
         if (selected.has(commandIndex)) {
           selected.delete(commandIndex);
         } else {
           selected.add(commandIndex);
         }
-        return pendingBundle.commands.flatMap((_command, index) =>
+        return reviewBundle.commands.flatMap((_command, index) =>
           selected.has(index) ? [index] : [],
         );
       });
     },
-    [pendingBundle],
+    [reviewBundle],
   );
 
-  const selectAllPendingCommands = useCallback(() => {
-    setSelectedCommandIndexes(pendingBundle ? null : []);
-  }, [pendingBundle]);
+  const selectAllReviewCommands = useCallback(() => {
+    setSelectedCommandIndexes(reviewBundle ? null : []);
+  }, [reviewBundle]);
 
   useEffect(() => {
     if (!enabled) {
@@ -906,14 +906,14 @@ export function useWorkbookAgentPane(input: {
     }
   }, [documentId]);
 
-  const dismissPendingBundle = useCallback(async () => {
+  const dismissReviewItem = useCallback(async () => {
     const activeSession = sessionRef.current;
-    if (!activeSession || !pendingBundle) {
+    if (!activeSession || !reviewBundle) {
       return;
     }
     try {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
+        `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/review-items/${encodeURIComponent(reviewBundle.id)}/dismiss`,
         {
           method: "POST",
           headers: {
@@ -936,17 +936,17 @@ export function useWorkbookAgentPane(input: {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
-  }, [documentId, pendingBundle, persistSessionSnapshot]);
+  }, [documentId, reviewBundle, persistSessionSnapshot]);
 
-  const reviewPendingBundle = useCallback(
+  const reviewReviewItem = useCallback(
     async (decision: "approved" | "rejected") => {
       const activeSession = sessionRef.current;
-      if (!activeSession || !pendingBundle) {
+      if (!activeSession || !reviewBundle) {
         return;
       }
       try {
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/review`,
+          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/review-items/${encodeURIComponent(reviewBundle.id)}/review`,
           {
             method: "POST",
             headers: {
@@ -970,7 +970,7 @@ export function useWorkbookAgentPane(input: {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
       }
     },
-    [documentId, pendingBundle, persistSessionSnapshot],
+    [documentId, reviewBundle, persistSessionSnapshot],
   );
 
   const replayExecutionRecord = useCallback(
@@ -1049,9 +1049,9 @@ export function useWorkbookAgentPane(input: {
         draft={draft}
         executionRecords={executionRecords}
         cancellingWorkflowRunId={cancellingWorkflowRunId}
-        isApplyingBundle={isApplyingBundle}
+        isApplyingReviewItem={isApplyingReviewItem}
         isLoading={isLoading}
-        pendingBundle={pendingBundle}
+        reviewBundle={reviewBundle}
         preview={preview}
         showAssistantProgress={showAssistantProgress}
         sharedApprovalOwnerUserId={
@@ -1069,21 +1069,21 @@ export function useWorkbookAgentPane(input: {
         snapshot={snapshot}
         threadSummaries={threadSummaries}
         workflowRuns={workflowRuns}
-        onApplyPendingBundle={() => {
-          void applyPendingBundle("user");
+        onApplyReviewItem={() => {
+          void applyReviewItem("user");
         }}
         onDraftChange={setDraft}
-        onDismissPendingBundle={() => {
-          void dismissPendingBundle();
+        onDismissReviewItem={() => {
+          void dismissReviewItem();
         }}
-        onReviewPendingBundle={(decision) => {
-          void reviewPendingBundle(decision);
+        onReviewReviewItem={(decision) => {
+          void reviewReviewItem(decision);
         }}
         onInterrupt={() => {
           void interrupt();
         }}
-        onSelectAllPendingCommands={selectAllPendingCommands}
-        onTogglePendingCommand={togglePendingCommand}
+        onSelectAllReviewCommands={selectAllReviewCommands}
+        onToggleReviewCommand={toggleReviewCommand}
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
         }}
@@ -1099,18 +1099,18 @@ export function useWorkbookAgentPane(input: {
       />
     ),
     [
-      applyPendingBundle,
+      applyReviewItem,
       cancelWorkflowRun,
       cancellingWorkflowRunId,
-      dismissPendingBundle,
+      dismissReviewItem,
       draft,
       executionRecords,
       interrupt,
-      isApplyingBundle,
+      isApplyingReviewItem,
       isLoading,
       normalizedCommandIndexes,
       optimisticEntries,
-      pendingBundle,
+      reviewBundle,
       preview,
       activeThreadSummary?.ownerUserId,
       activeResponseTurnId,
@@ -1118,7 +1118,7 @@ export function useWorkbookAgentPane(input: {
       canRecommendSharedBundle,
       currentUserSharedRecommendation,
       replayExecutionRecord,
-      reviewPendingBundle,
+      reviewReviewItem,
       sendPrompt,
       selectThread,
       snapshot,
@@ -1128,10 +1128,10 @@ export function useWorkbookAgentPane(input: {
       sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
       showAssistantProgress,
-      selectAllPendingCommands,
+      selectAllReviewCommands,
       threadSummaries,
       workflowRuns,
-      togglePendingCommand,
+      toggleReviewCommand,
     ],
   );
 
@@ -1139,8 +1139,8 @@ export function useWorkbookAgentPane(input: {
     agentPanel,
     agentError: error ? normalizeWorkbookAgentErrorMessage(error) : null,
     clearAgentError,
-    pendingCommandCount,
-    previewRanges: preview?.ranges ?? pendingBundle?.affectedRanges ?? [],
+    pendingCommandCount: reviewCommandCount,
+    previewRanges: preview?.ranges ?? reviewBundle?.affectedRanges ?? [],
     startNewThread,
   };
 }

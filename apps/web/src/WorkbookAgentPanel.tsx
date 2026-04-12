@@ -759,8 +759,8 @@ function summarizeTimelineCitations(
   return segments;
 }
 
-function PendingBundleCard(props: {
-  readonly bundle: WorkbookAgentCommandBundle;
+function ReviewItemCard(props: {
+  readonly reviewBundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
   readonly sharedReviewOwnerUserId: string | null;
@@ -771,7 +771,7 @@ function PendingBundleCard(props: {
   readonly canFinalizeSharedBundle: boolean;
   readonly canRecommendSharedBundle: boolean;
   readonly selectedCommandIndexes: readonly number[];
-  readonly isApplyingBundle: boolean;
+  readonly isApplyingReviewItem: boolean;
   readonly onApply: () => void;
   readonly onDismiss: () => void;
   readonly onReview: (decision: "approved" | "rejected") => void;
@@ -779,7 +779,7 @@ function PendingBundleCard(props: {
   readonly onToggleCommand: (commandIndex: number) => void;
 }) {
   const selectedCount = props.selectedCommandIndexes.length;
-  const hasFullSelection = selectedCount === props.bundle.commands.length;
+  const hasFullSelection = selectedCount === props.reviewBundle.commands.length;
   const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId
     ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId)
     : null;
@@ -801,20 +801,20 @@ function PendingBundleCard(props: {
       : `${String(approvalRecommendationCount)} approval ${approvalRecommendationCount === 1 ? "recommendation" : "recommendations"} · ${String(rejectionRecommendationCount)} rejection ${rejectionRecommendationCount === 1 ? "recommendation" : "recommendations"}`;
   const canApply =
     props.preview !== null &&
-    !props.isApplyingBundle &&
+    !props.isApplyingReviewItem &&
     selectedCount > 0 &&
     sharedApprovalOwnerLabel === null &&
     (props.sharedReviewStatus === null || props.sharedReviewStatus === "approved");
   const applyLabel =
     selectedCount > 0 && !hasFullSelection
-      ? props.isApplyingBundle
+      ? props.isApplyingReviewItem
         ? "Applying…"
         : "Apply"
       : props.sharedReviewStatus === "pending"
         ? "Owner review"
         : props.sharedReviewStatus === "rejected"
           ? "Returned"
-          : props.isApplyingBundle
+          : props.isApplyingReviewItem
             ? "Applying…"
             : "Apply";
   return (
@@ -824,11 +824,13 @@ function PendingBundleCard(props: {
         "border-[var(--wb-border-strong)] px-3 py-3",
       )}
     >
-      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>{props.bundle.summary}</div>
+      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
+        {props.reviewBundle.summary}
+      </div>
       <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className={agentPanelEyebrowTextClass()}>
-            {String(selectedCount)}/{String(props.bundle.commands.length)}
+            {String(selectedCount)}/{String(props.reviewBundle.commands.length)}
           </div>
           {!hasFullSelection ? (
             <Button
@@ -841,12 +843,12 @@ function PendingBundleCard(props: {
           ) : null}
         </div>
         <div className="mt-2 flex flex-col gap-2">
-          {props.bundle.commands.map((command, index) => {
+          {props.reviewBundle.commands.map((command, index) => {
             const checked = props.selectedCommandIndexes.includes(index);
             const commandLabel = describeWorkbookAgentCommand(command);
             return (
               <div
-                key={`${props.bundle.id}:${JSON.stringify(command)}`}
+                key={`${props.reviewBundle.id}:${JSON.stringify(command)}`}
                 className={cn(
                   "flex items-start gap-3 rounded-[var(--wb-radius-control)] border px-3 py-2 transition-colors",
                   checked
@@ -855,10 +857,10 @@ function PendingBundleCard(props: {
                 )}
               >
                 <input
-                  aria-label={`Toggle staged workbook change ${String(index + 1)}: ${commandLabel}`}
+                  aria-label={`Toggle workbook review item change ${String(index + 1)}: ${commandLabel}`}
                   checked={checked}
                   className="mt-0.5 h-4 w-4 rounded border-[var(--wb-border)] text-[var(--wb-accent)] focus:ring-[var(--wb-accent-ring)]"
-                  data-testid={`workbook-agent-command-toggle-${String(index)}`}
+                  data-testid={`workbook-agent-review-command-toggle-${String(index)}`}
                   type="checkbox"
                   onChange={() => {
                     props.onToggleCommand(index);
@@ -872,7 +874,7 @@ function PendingBundleCard(props: {
           })}
         </div>
       </div>
-      <PreviewRangeList ranges={props.preview?.ranges ?? props.bundle.affectedRanges} />
+      <PreviewRangeList ranges={props.preview?.ranges ?? props.reviewBundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
         <div
           className={cn(
@@ -931,7 +933,7 @@ function PendingBundleCard(props: {
         <div className="mt-2 flex items-center justify-end gap-2">
           <Button
             className={workbookButtonClass({ tone: "neutral" })}
-            data-testid="workbook-agent-review-reject"
+            data-testid="workbook-agent-review-item-reject"
             type="button"
             onClick={() => {
               props.onReview("rejected");
@@ -941,7 +943,7 @@ function PendingBundleCard(props: {
           </Button>
           <Button
             className={workbookButtonClass({ tone: "accent" })}
-            data-testid="workbook-agent-review-approve"
+            data-testid="workbook-agent-review-item-approve"
             type="button"
             onClick={() => {
               props.onReview("approved");
@@ -955,7 +957,7 @@ function PendingBundleCard(props: {
         <div className="mt-2 flex items-center justify-end gap-2">
           <Button
             className={workbookButtonClass({ tone: "neutral" })}
-            data-testid="workbook-agent-review-reject"
+            data-testid="workbook-agent-review-item-reject"
             type="button"
             onClick={() => {
               props.onReview("rejected");
@@ -965,7 +967,7 @@ function PendingBundleCard(props: {
           </Button>
           <Button
             className={workbookButtonClass({ tone: "accent" })}
-            data-testid="workbook-agent-review-approve"
+            data-testid="workbook-agent-review-item-approve"
             type="button"
             onClick={() => {
               props.onReview("approved");
@@ -1014,7 +1016,7 @@ function PendingBundleCard(props: {
         </Button>
         <Button
           className={workbookButtonClass({ tone: "accent", weight: "strong" })}
-          data-testid="workbook-agent-apply-pending"
+          data-testid="workbook-agent-apply-review-item"
           disabled={!canApply}
           type="button"
           onClick={props.onApply}
@@ -1067,7 +1069,7 @@ export function WorkbookAgentPanel(props: {
   readonly snapshot: WorkbookAgentThreadSnapshot | null;
   readonly activeResponseTurnId: string | null;
   readonly showAssistantProgress: boolean;
-  readonly pendingBundle: WorkbookAgentCommandBundle | null;
+  readonly reviewBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
   readonly sharedReviewOwnerUserId: string | null;
@@ -1084,15 +1086,15 @@ export function WorkbookAgentPanel(props: {
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
   readonly isLoading: boolean;
-  readonly isApplyingBundle: boolean;
-  readonly onApplyPendingBundle: () => void;
+  readonly isApplyingReviewItem: boolean;
+  readonly onApplyReviewItem: () => void;
   readonly onDraftChange: (value: string) => void;
-  readonly onDismissPendingBundle: () => void;
-  readonly onReviewPendingBundle: (decision: "approved" | "rejected") => void;
+  readonly onDismissReviewItem: () => void;
+  readonly onReviewReviewItem: (decision: "approved" | "rejected") => void;
   readonly onInterrupt: () => void;
-  readonly onSelectAllPendingCommands: () => void;
+  readonly onSelectAllReviewCommands: () => void;
   readonly onSelectThread: (threadId: string) => void;
-  readonly onTogglePendingCommand: (commandIndex: number) => void;
+  readonly onToggleReviewCommand: (commandIndex: number) => void;
   readonly onCancelWorkflowRun: (runId: string) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onSubmit: () => void;
@@ -1201,10 +1203,10 @@ export function WorkbookAgentPanel(props: {
         </ScrollArea.Scrollbar>
       </ScrollArea.Root>
       <div className={agentPanelFooterClass()}>
-        {props.pendingBundle ? (
+        {props.reviewBundle ? (
           <div className="mb-3">
-            <PendingBundleCard
-              bundle={props.pendingBundle}
+            <ReviewItemCard
+              reviewBundle={props.reviewBundle}
               preview={props.preview}
               sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
               sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}
@@ -1215,12 +1217,12 @@ export function WorkbookAgentPanel(props: {
               canFinalizeSharedBundle={props.canFinalizeSharedBundle}
               canRecommendSharedBundle={props.canRecommendSharedBundle}
               selectedCommandIndexes={props.selectedCommandIndexes}
-              isApplyingBundle={props.isApplyingBundle}
-              onApply={props.onApplyPendingBundle}
-              onDismiss={props.onDismissPendingBundle}
-              onReview={props.onReviewPendingBundle}
-              onSelectAll={props.onSelectAllPendingCommands}
-              onToggleCommand={props.onTogglePendingCommand}
+              isApplyingReviewItem={props.isApplyingReviewItem}
+              onApply={props.onApplyReviewItem}
+              onDismiss={props.onDismissReviewItem}
+              onReview={props.onReviewReviewItem}
+              onSelectAll={props.onSelectAllReviewCommands}
+              onToggleCommand={props.onToggleReviewCommand}
             />
           </div>
         ) : null}
