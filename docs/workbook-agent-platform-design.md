@@ -113,6 +113,18 @@ Legacy code is removed as each replacement lands.
 
 This design does not allow a permanent dual-runtime model.
 
+## Explicit Non-Goals
+
+The following are out of scope for the platform itself:
+
+- natural-language prompt tuning as the primary safety mechanism
+- workbook file importers and exporters as the primary architecture driver
+- long-lived mixed runtime support for legacy mutation models
+- spreadsheet-editor features that bypass the canonical change-set executor
+- partial support for workbook objects with opaque pass-through payloads
+
+This program is about a first-class workbook agent platform, not an adapter layer over inconsistent capabilities.
+
 ## Required Product Behavior
 
 ### Private threads
@@ -223,9 +235,106 @@ Selectors resolve through one service:
 
 The resolver returns authoritative workbook objects with explicit revision identity. Every read and write path depends on this resolver.
 
+### Selector grammar
+
+The selector grammar must be explicit and typed.
+
+Canonical union:
+
+- `{"kind":"a1Range","sheet":"Sheet1","start":"B2","end":"F20"}`
+- `{"kind":"namedRange","name":"Inputs"}`
+- `{"kind":"table","sheet":"Sheet1","table":"Revenue"}`
+- `{"kind":"tableColumn","sheet":"Sheet1","table":"Revenue","column":"Net Margin"}`
+- `{"kind":"currentSelection"}`
+- `{"kind":"currentRegion","anchor":{"sheet":"Sheet1","address":"B2"}}`
+- `{"kind":"visibleRows","sheet":"Sheet1"}`
+- `{"kind":"rowQuery","sheet":"Orders","predicate":{"column":"OrderID","op":"eq","value":"123"}}`
+- `{"kind":"columnQuery","sheet":"Orders","headers":["Revenue","Cost","Margin"]}`
+
+Selector rules:
+
+- selectors always resolve against a specific workbook revision
+- selectors resolve to one or more typed workbook objects
+- selector resolution either succeeds with a concrete object set or fails with a typed resolution error
+- write tools may accept semantic selectors directly; they do not require callers to pre-resolve to A1 ranges
+- selectors that map to discontiguous areas resolve to an ordered object set, not a lossy merged range
+
+Typed resolution result:
+
+- `resolvedRevision`
+- `objectType`
+- `objects`
+- `derivedA1Ranges`
+- `displayLabel`
+
+The runtime should expose this resolver result to both tools and workflow code so every path reasons over the same object shape.
+
+### Selector error model
+
+Resolution failures must be explicit:
+
+- `selector_not_found`
+- `selector_ambiguous`
+- `selector_type_mismatch`
+- `selector_revision_stale`
+- `selector_hidden_by_filter`
+- `selector_blocked_by_protection`
+
+The model should never silently degrade to a guessed coordinate.
+
 ## Tool Surface
 
 The workbook toolset should be layered, typed, and workbook-native.
+
+### Tool contract standard
+
+Every tool must follow one contract family.
+
+Request envelope:
+
+- `tool`
+- `documentId`
+- `threadId`
+- `revision`
+- `selector` or `input`
+- `idempotencyKey`
+
+Response envelope:
+
+- `ok`
+- `revision`
+- `result`
+- `citations`
+- `diff` for mutating tools
+- `executionRecordId` or `reviewQueueItemId` for mutating tools
+
+Mutating tools do not return raw success booleans as their primary output. They return authoritative change metadata.
+
+### Read tool output standard
+
+Read tool responses must be typed snapshots. They should never return ad hoc JSON fragments that vary by caller.
+
+Required conventions:
+
+- cell snapshots expose raw input, formula, display value, type, style, validation, comments, merge state, hyperlink state, and visibility state
+- range snapshots expose bounds, object membership, table membership, row and column metadata, and derived display summary
+- workbook object reads expose stable ids and user-facing names
+
+### Mutating tool output standard
+
+Every mutating tool must resolve to one of two outcomes:
+
+- direct execution:
+  - `executionRecordId`
+  - `appliedRevision`
+  - `changeDiff`
+  - `undoAvailable`
+- owner review:
+  - `reviewQueueItemId`
+  - `queuedRevision`
+  - `changeDiff`
+
+This keeps the tool surface aligned with the product model instead of exposing transport-only responses.
 
 ### Layer 1: context and navigation
 
@@ -427,6 +536,254 @@ Read payloads must include the full semantic snapshot where relevant:
 - `scan_performance_hotspots`
 - `verify_invariants`
 
+## Change-Set Model
+
+`WorkbookChangeSet` is the only executable mutation unit.
+
+Required fields:
+
+- `changeSetId`
+- `documentId`
+- `threadId`
+- `turnId`
+- `baseRevision`
+- `selectorResolutions`
+- `operations`
+- `riskClass`
+- `scope`
+- `summary`
+- `createdAtUnixMs`
+
+`WorkbookChangeOperation` families:
+
+- cell value operations
+- formula operations
+- formatting operations
+- structural row and column operations
+- sheet operations
+- table operations
+- analytics object operations
+- validation operations
+- collaboration object operations
+- protection operations
+- media object operations
+
+Execution rules:
+
+- all operations in a change set commit or none commit
+- diff generation is based on authoritative before and after state, not caller intent
+- undo payload is captured at the executor boundary, not reconstructed later
+- verification hooks run before commit and after commit using the same authoritative state source
+
+## Transaction and Apply Semantics
+
+The canonical apply pipeline is:
+
+1. resolve selectors
+2. build a typed change set
+3. compute risk classification
+4. validate protections, invariants, and revision identity
+5. compute authoritative diff preview
+6. route by `executionPolicy`
+7. commit atomically through the executor
+8. persist undo payload and execution record
+9. publish snapshot and event updates
+
+This same pipeline must be used by:
+
+- direct tools
+- workflows
+- replay
+- owner review apply
+- undo
+- redo
+
+There is no secondary execution engine.
+
+## API Surface By Layer
+
+### Session API
+
+Required operations:
+
+- create session
+- update context
+- start turn
+- interrupt turn
+- start workflow
+- cancel workflow
+- list threads
+- get snapshot
+
+Session snapshot shape after cutover:
+
+- `sessionId`
+- `documentId`
+- `threadId`
+- `scope`
+- `executionPolicy`
+- `status`
+- `activeTurnId`
+- `lastError`
+- `context`
+- `entries`
+- `executionRecords`
+- `reviewQueueItems`
+- `workflowRuns`
+
+### Review queue API
+
+Required operations:
+
+- list review items
+- approve review item
+- return review item
+- dismiss review item
+- apply approved review item
+
+Review queue item shape:
+
+- `reviewQueueItemId`
+- `documentId`
+- `threadId`
+- `turnId`
+- `scope`
+- `riskClass`
+- `summary`
+- `changeSet`
+- `changeDiff`
+- `ownerUserId`
+- `status`
+- `recommendations`
+- `createdAtUnixMs`
+- `updatedAtUnixMs`
+
+### Execution history API
+
+Required operations:
+
+- list execution records
+- get execution record
+- replay execution record
+- undo execution record
+- redo execution record
+
+Execution record shape:
+
+- `executionRecordId`
+- `changeSetId`
+- `documentId`
+- `threadId`
+- `turnId`
+- `actorUserId`
+- `scope`
+- `riskClass`
+- `summary`
+- `baseRevision`
+- `appliedRevision`
+- `changeDiff`
+- `undoPayloadId`
+- `appliedBy`
+- `appliedAtUnixMs`
+
+## Storage Schema
+
+### workbook_execution_record
+
+Columns:
+
+- `execution_record_id TEXT PRIMARY KEY`
+- `change_set_id TEXT NOT NULL`
+- `workbook_id TEXT NOT NULL`
+- `thread_id TEXT NOT NULL`
+- `turn_id TEXT NOT NULL`
+- `actor_user_id TEXT NOT NULL`
+- `scope TEXT NOT NULL`
+- `risk_class TEXT NOT NULL`
+- `summary TEXT NOT NULL`
+- `base_revision BIGINT NOT NULL`
+- `applied_revision BIGINT NOT NULL`
+- `applied_by TEXT NOT NULL`
+- `change_diff_json JSONB NOT NULL`
+- `undo_payload_id TEXT NOT NULL`
+- `created_at_unix_ms BIGINT NOT NULL`
+- `applied_at_unix_ms BIGINT NOT NULL`
+
+Indexes:
+
+- `(workbook_id, actor_user_id, applied_at_unix_ms DESC)`
+- `(workbook_id, thread_id, applied_at_unix_ms DESC)`
+- `(change_set_id)`
+
+### workbook_review_queue_item
+
+Columns:
+
+- `review_queue_item_id TEXT PRIMARY KEY`
+- `change_set_id TEXT NOT NULL`
+- `workbook_id TEXT NOT NULL`
+- `thread_id TEXT NOT NULL`
+- `turn_id TEXT NOT NULL`
+- `owner_user_id TEXT NOT NULL`
+- `scope TEXT NOT NULL`
+- `risk_class TEXT NOT NULL`
+- `summary TEXT NOT NULL`
+- `status TEXT NOT NULL`
+- `change_set_json JSONB NOT NULL`
+- `change_diff_json JSONB NOT NULL`
+- `created_at_unix_ms BIGINT NOT NULL`
+- `updated_at_unix_ms BIGINT NOT NULL`
+
+Indexes:
+
+- `(workbook_id, owner_user_id, updated_at_unix_ms DESC)`
+- `(workbook_id, thread_id, updated_at_unix_ms DESC)`
+- `(status, updated_at_unix_ms DESC)`
+
+### workbook_review_decision
+
+Columns:
+
+- `decision_id TEXT PRIMARY KEY`
+- `review_queue_item_id TEXT NOT NULL`
+- `actor_user_id TEXT NOT NULL`
+- `decision TEXT NOT NULL`
+- `comment_text TEXT`
+- `created_at_unix_ms BIGINT NOT NULL`
+
+Indexes:
+
+- `(review_queue_item_id, created_at_unix_ms ASC)`
+
+### workbook_undo_payload
+
+Columns:
+
+- `undo_payload_id TEXT PRIMARY KEY`
+- `workbook_id TEXT NOT NULL`
+- `base_revision BIGINT NOT NULL`
+- `target_revision BIGINT NOT NULL`
+- `payload_json JSONB NOT NULL`
+- `created_at_unix_ms BIGINT NOT NULL`
+
+Indexes:
+
+- `(workbook_id, target_revision DESC)`
+
+### Session/thread summary storage
+
+Thread summary storage should only cache:
+
+- thread ownership
+- scope
+- execution policy
+- timeline entries
+- latest entry text
+- entry count
+- latest review-queue presence
+
+It should not persist an alternate mutation model.
+
 ## Backend Architecture
 
 The backend should be split into explicit services with narrow ownership.
@@ -609,6 +966,96 @@ Session snapshot must not contain:
 - `pendingBundle`
 - `approvalMode`
 
+## Review Queue State Machine
+
+`reviewQueueItem.status` is one of:
+
+- `queued`
+- `approved`
+- `returned`
+- `applied`
+- `dismissed`
+
+Transitions:
+
+- `queued -> approved`
+- `queued -> returned`
+- `queued -> dismissed`
+- `approved -> applied`
+- `returned -> queued` only through a new change-set submission, not in-place mutation
+
+The system does not mutate a returned review item back into queued state. A new change set creates a new review queue item.
+
+## Invariant Catalog
+
+The executor must validate the following invariants for the relevant operation families.
+
+### Grid and formula invariants
+
+- formulas preserve intended references after row and column insertion
+- filled formulas preserve relative reference behavior
+- converted values preserve displayed values where requested
+- circular-reference detection remains accurate after execution
+
+### Table invariants
+
+- table bounds remain rectangular
+- header rows remain valid
+- table formulas resize with table changes
+- table sort and filter metadata remain attached to the same logical table
+
+### Validation invariants
+
+- validation rules stay attached to the intended logical cells after inserts, deletes, and moves
+- dropdown source references remain valid
+- checkbox state remains consistent with validation type
+
+### Conditional format invariants
+
+- rule priority order remains deterministic
+- applied ranges remain valid after structure changes
+- formulas inside conditional rules remain aligned to target ranges
+
+### Chart and pivot invariants
+
+- source ranges remain bound to valid workbook objects
+- field mappings survive source refreshes
+- object ids remain stable across non-destructive edits
+
+### Protection invariants
+
+- protected sheets and ranges reject unauthorized change-set operations before execution
+- hidden formulas and locked cell states remain coherent after structure edits
+
+### Collaboration invariants
+
+- execution and review history preserve actor identity and ordering
+- review decisions are append-only
+- undo and redo preserve authorship and revision traceability
+
+## Failure Model
+
+Failures must be typed and explicit.
+
+Required classes:
+
+- selector resolution failures
+- revision identity failures
+- protection failures
+- invariant failures
+- review authorization failures
+- execution persistence failures
+- publication failures
+
+Required properties:
+
+- stable error code
+- user-safe message
+- retryability flag
+- affected selector or object ids where relevant
+
+The runtime should fail before commit when correctness cannot be guaranteed.
+
 ## Cutover Strategy
 
 This design does not allow a long-lived mixed runtime.
@@ -641,6 +1088,15 @@ The following code and concepts are scheduled for deletion as part of the implem
 - duplicate write paths outside the change-set executor
 
 Deletion must occur in the same phase that replaces the old behavior.
+
+Explicit code families to delete:
+
+- `apps/bilig/src/zero/workbook-pending-bundle-*`
+- preview-first service methods and endpoints
+- preview-card rendering paths in `apps/web`
+- preview-specific timeline entry helpers
+- `approvalMode` fields in live runtime types
+- legacy tests that assert staged private-thread behavior
 
 ## Module Refactor Plan
 
@@ -723,6 +1179,16 @@ Every write family requires invariant tests:
 - hidden and grouped rows remain coherent
 - chart and pivot bindings survive source updates
 
+### Differential and corpus testing
+
+The following suites are required before completion:
+
+- selector differential tests against the current grid runtime
+- style snapshot differentials across formatting operations
+- table and validation corpus tests using real workbook fixtures
+- analytics object fixture tests for charts and pivots
+- concurrency tests for shared review decisions and execution history ordering
+
 ## Execution Plan
 
 ### Phase 1: contracts and selectors
@@ -734,6 +1200,7 @@ Every write family requires invariant tests:
 Exit gate:
 
 - reads and tool schemas operate on selector and snapshot contracts only
+- contract docs and fixture payloads exist for every selector family
 
 ### Phase 2: single change-set executor
 
@@ -745,6 +1212,7 @@ Exit gate:
 Exit gate:
 
 - all direct writes use the executor
+- undo payload capture is present for every mutating family introduced in phase 2
 
 ### Phase 3: execution history and review queue
 
@@ -755,6 +1223,7 @@ Exit gate:
 Exit gate:
 
 - execution records and review queue items are the only durable mutation models
+- private-thread runtime no longer reads legacy staged state
 
 ### Phase 4: tool surface expansion
 
@@ -767,6 +1236,7 @@ Exit gate:
 Exit gate:
 
 - the agent can complete typical operational workbook tasks end to end
+- selector-based targeting is used for tables and named ranges rather than coordinate-only writes
 
 ### Phase 5: analytics and advanced workbook objects
 
@@ -779,6 +1249,7 @@ Exit gate:
 Exit gate:
 
 - dashboard and reporting workbooks are fully operable by the agent
+- chart and pivot round-trip tests are green
 
 ### Phase 6: panel rewrite and cutover
 
@@ -789,6 +1260,7 @@ Exit gate:
 Exit gate:
 
 - private threads are execution-first in UI and runtime
+- review queue UI appears only when policy requires it
 
 ### Phase 7: legacy deletion
 
@@ -798,6 +1270,96 @@ Exit gate:
 Exit gate:
 
 - no runtime code references preview-first mutation state
+- no database writes target deleted legacy tables
+
+## Workstream Ownership
+
+Implementation should be split by responsibility, not by arbitrary files.
+
+### Workstream A: contracts and selectors
+
+Primary surfaces:
+
+- `packages/contracts`
+- `packages/agent-api`
+- selector resolver
+
+Deliverables:
+
+- canonical type system
+- selector grammar
+- fixture payloads
+
+### Workstream B: inspection and object model
+
+Primary surfaces:
+
+- inspection service
+- workbook object snapshots
+- read tools
+
+Deliverables:
+
+- rich workbook reads
+- semantic object coverage
+
+### Workstream C: change execution and undo
+
+Primary surfaces:
+
+- change-set builder
+- executor
+- diff generation
+- undo payloads
+
+Deliverables:
+
+- single write engine
+- atomic apply
+- undo and redo
+
+### Workstream D: review queue and execution history
+
+Primary surfaces:
+
+- review queue store
+- execution history store
+- service orchestration
+
+Deliverables:
+
+- review queue state machine
+- execution record persistence
+
+### Workstream E: web panel cutover
+
+Primary surfaces:
+
+- panel state hooks
+- rendering primitives
+- execution history UI
+- review queue UI
+
+Deliverables:
+
+- execution-first private-thread UI
+- isolated shared review UI
+
+## Phase Sizing
+
+This program should be treated as a multi-commit architecture program, not one giant merge.
+
+Sizing guidance:
+
+- Phase 1: medium
+- Phase 2: large
+- Phase 3: large
+- Phase 4: large
+- Phase 5: large
+- Phase 6: medium
+- Phase 7: medium
+
+A phase is complete only when its exit gate is green on the committed tree.
 
 ## Acceptance Criteria
 
