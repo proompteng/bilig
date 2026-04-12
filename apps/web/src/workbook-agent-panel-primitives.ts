@@ -66,7 +66,7 @@ export const agentPanelScrollAreaThumbClass = cva(
 
 export const agentPanelTimelineListClass = cva("flex min-w-0 flex-col");
 
-export const agentPanelDisclosureFrameClass = cva("space-y-1 overflow-hidden transition-colors", {
+export const agentPanelDisclosureFrameClass = cva("space-y-2 overflow-hidden transition-colors", {
   variants: {
     open: {
       true: "",
