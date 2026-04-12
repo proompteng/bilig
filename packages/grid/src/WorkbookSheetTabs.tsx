@@ -19,7 +19,7 @@ const sheetStripClass = cva(
 const sheetTabsShellClass = cva("flex min-w-0 flex-1 items-center gap-2 overflow-hidden");
 
 const sheetListClass = cva(
-  "relative flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--color-mauve-200)]",
+  "wb-scrollbar-none relative flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--color-mauve-200)]",
 );
 
 const sheetIndicatorClass = cva(

@@ -228,7 +228,7 @@ export function WorkbookView({
 
   return (
     <section
-      className="flex h-screen flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
       data-testid="workbook-shell"
     >
       {ribbon ? <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div> : null}

@@ -27,7 +27,7 @@ export const toolbarRootClass = cva(
 );
 
 export const toolbarRowClass = cva(
-  "mx-0 flex h-10 items-center gap-1 overflow-x-auto px-2.5 py-0 text-[12px] text-[var(--color-mauve-900)]",
+  "wb-scrollbar-none mx-0 flex h-10 items-center gap-1 overflow-x-auto overflow-y-hidden px-2.5 py-0 text-[12px] text-[var(--color-mauve-900)]",
 );
 
 export const toolbarGroupClass = cva("flex flex-none items-center gap-1");

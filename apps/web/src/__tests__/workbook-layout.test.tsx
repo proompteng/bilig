@@ -89,7 +89,10 @@ describe("workbook layout", () => {
 
     const sideRail = host.querySelector("[data-testid='workbook-side-rail']");
     const gridSurface = host.querySelector("[data-testid='grid-surface']");
+    const shell = host.querySelector("[data-testid='workbook-shell']");
     expect(sideRail).not.toBeNull();
+    expect(shell?.className).toContain("h-full");
+    expect(shell?.className).not.toContain("h-screen");
     expect(sideRail?.getAttribute("id")).toBe("workbook-side-rail-doc-1");
     expect(sideRail?.textContent).toContain("Assistant rail");
     expect(sideRail instanceof HTMLElement ? sideRail.style.width : null).toBe("384px");

@@ -77,6 +77,17 @@
 }
 
 @layer utilities {
+  .wb-scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .wb-scrollbar-none::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
   .workbook-agent-thinking-letter {
     animation: workbook-agent-thinking-wave 1.15s ease-in-out infinite;
     will-change: transform, opacity;

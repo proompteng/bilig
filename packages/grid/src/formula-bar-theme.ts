@@ -48,5 +48,5 @@ export const formulaPopupOptionClass = cva("cursor-pointer px-3 py-2 transition-
 });
 
 export const formulaHintClass = cva(
-  "flex min-h-7 items-center gap-2 overflow-x-auto rounded-md border border-[var(--color-mauve-200)] bg-white px-2.5 text-[11px] text-[var(--color-mauve-600)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+  "wb-scrollbar-none flex min-h-7 items-center gap-2 overflow-x-auto rounded-md border border-[var(--color-mauve-200)] bg-white px-2.5 text-[11px] text-[var(--color-mauve-600)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
 );

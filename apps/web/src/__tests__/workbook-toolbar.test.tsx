@@ -406,4 +406,68 @@ describe("WorkbookToolbar", () => {
       root.unmount();
     });
   });
+
+  it("hides native toolbar overflow scrollbars while preserving horizontal scrolling", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkbookToolbar
+          canHideCurrentColumn={false}
+          canHideCurrentRow={false}
+          canRedo={false}
+          canUndo={false}
+          canUnhideCurrentColumn={false}
+          canUnhideCurrentRow={false}
+          currentFillColor="#ffffff"
+          currentNumberFormatKind="general"
+          currentTextColor="#111827"
+          horizontalAlignment={null}
+          isBoldActive={false}
+          isItalicActive={false}
+          isUnderlineActive={false}
+          isWrapActive={false}
+          onApplyBorderPreset={() => {}}
+          onClearStyle={() => {}}
+          onFillColorReset={() => {}}
+          onFillColorSelect={() => {}}
+          onFontSizeChange={() => {}}
+          onHideCurrentColumn={() => {}}
+          onHideCurrentRow={() => {}}
+          onHorizontalAlignmentChange={() => {}}
+          onNumberFormatChange={() => {}}
+          onRedo={() => {}}
+          onTextColorReset={() => {}}
+          onTextColorSelect={() => {}}
+          onToggleBold={() => {}}
+          onToggleItalic={() => {}}
+          onToggleUnderline={() => {}}
+          onToggleWrap={() => {}}
+          onUndo={() => {}}
+          onUnhideCurrentColumn={() => {}}
+          onUnhideCurrentRow={() => {}}
+          recentFillColors={[]}
+          recentTextColors={[]}
+          selectedFontSize="11"
+          trailingContent={<div>Trailing</div>}
+          writesAllowed
+        />,
+      );
+    });
+
+    const toolbar = host.querySelector("[aria-label='Formatting toolbar']");
+    expect(toolbar?.className).toContain("overflow-x-auto");
+    expect(toolbar?.className).toContain("overflow-y-hidden");
+    expect(toolbar?.className).toContain("wb-scrollbar-none");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
