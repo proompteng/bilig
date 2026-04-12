@@ -12,6 +12,7 @@ import {
   handleWorkbookAgentToolCall,
   type WorkbookAgentStartWorkflowRequest,
 } from "./workbook-agent-tools.js";
+import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import { type WorkbookAgentThreadState, toContextRef } from "./workbook-agent-service-shared.js";
 
 export function createWorkbookAgentDynamicToolHandler(input: {
@@ -112,6 +113,15 @@ export function createWorkbookAgentDynamicToolHandler(input: {
               bundle,
               executionRecord,
             };
+          }
+          if (sessionState.scope === "private") {
+            throw createWorkbookAgentServiceError({
+              code: "WORKBOOK_AGENT_PRIVATE_EXECUTION_BLOCKED",
+              message:
+                "Private workbook threads execute changes directly and do not queue review items under the current execution policy.",
+              statusCode: 409,
+              retryable: false,
+            });
           }
           input.stageReviewBundle(sessionState, request.turnId, bundle);
           await input.persistSessionState(sessionState);

@@ -672,13 +672,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     actorUserId: string;
     bundle: WorkbookAgentCommandBundle;
   }): Promise<WorkbookAgentExecutionRecord | null> {
-    this.replaceCurrentReviewItem(
-      input.sessionState,
-      toWorkbookAgentReviewQueueItem({
-        bundle: input.bundle,
-        reviewMode: "manual",
-      }),
-    );
     const preview = await this.buildAuthoritativePreview(
       input.sessionState.documentId,
       input.bundle,
@@ -723,18 +716,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.stageReviewBundle(
-        input.sessionState,
-        input.turnId,
-        attachSharedReviewState(queuedBundle, input.sessionState),
-      );
       input.sessionState.live.lastError = message;
       input.sessionState.durable.entries = upsertEntry(
         input.sessionState.durable.entries,
         createSystemEntry(
-          `system-review-fallback:${queuedBundle.id}:${this.now()}`,
+          `system-auto-apply-failed:${queuedBundle.id}:${this.now()}`,
           input.turnId,
-          `Prepared workbook review item after turn apply failed: ${queuedBundle.summary}`,
+          `Automatic workbook apply failed: ${queuedBundle.summary}. ${message}`,
           createBundleRangeCitations(queuedBundle),
         ),
       );
@@ -1026,6 +1014,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         appliedBy: "auto",
         preview,
       });
+    } else if (resolvedScope === "private" && bootstrapReviewItem) {
+      this.replaceCurrentReviewItem(sessionState, null);
+      sessionState.live.lastError =
+        "Private workbook threads no longer keep queued review items. Replay the request to apply it again.";
+      sessionState.durable.entries = upsertEntry(
+        sessionState.durable.entries,
+        createSystemEntry(
+          `system-private-review-item-cleared:${bootstrapReviewItem.id}:${this.now()}`,
+          bootstrapReviewItem.turnId,
+          `Cleared a legacy private review item that could not be resumed automatically: ${bootstrapReviewItem.summary}`,
+          createBundleRangeCitations(toWorkbookAgentCommandBundle(bootstrapReviewItem)),
+        ),
+      );
     }
     this.sessions.set(threadId, sessionState);
     this.evictIfNeeded();
@@ -1461,13 +1462,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       now: this.now(),
     });
     if (this.shouldApplyToolBundleImmediately(sessionState, replayedBundle)) {
-      this.replaceCurrentReviewItem(
-        sessionState,
-        toWorkbookAgentReviewQueueItem({
-          bundle: replayedBundle,
-          reviewMode: "manual",
-        }),
-      );
       const preview = await this.buildAuthoritativePreview(input.documentId, replayedBundle);
       await this.applyCommandBundleForSessionState({
         sessionState,
@@ -1479,6 +1473,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       await this.persistSessionState(sessionState);
       this.emitSnapshot(sessionState.threadId);
       return buildSnapshot(sessionState);
+    }
+    if (sessionState.scope === "private") {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_PRIVATE_EXECUTION_BLOCKED",
+        message:
+          "Private workbook threads execute replayed changes directly and do not queue review items under the current execution policy.",
+        statusCode: 409,
+        retryable: false,
+      });
     }
     this.replaceCurrentReviewItem(
       sessionState,

@@ -280,11 +280,16 @@ export function useWorkbookAgentPane(input: {
     () => resolvePrimaryWorkbookAgentReviewItem(reviewQueueItems),
     [reviewQueueItems],
   );
-  const reviewBundle = useMemo<WorkbookAgentCommandBundle | null>(
-    () => (primaryReviewItem ? toWorkbookAgentCommandBundle(primaryReviewItem) : null),
-    [primaryReviewItem],
+  const visibleReviewItem = useMemo(
+    () =>
+      primaryReviewItem && (snapshot?.scope ?? "private") === "shared" ? primaryReviewItem : null,
+    [primaryReviewItem, snapshot?.scope],
   );
-  const reviewCommandCount = primaryReviewItem?.commands.length ?? 0;
+  const reviewBundle = useMemo<WorkbookAgentCommandBundle | null>(
+    () => (visibleReviewItem ? toWorkbookAgentCommandBundle(visibleReviewItem) : null),
+    [visibleReviewItem],
+  );
+  const reviewCommandCount = visibleReviewItem?.commands.length ?? 0;
 
   const normalizedCommandIndexes = useMemo(
     () =>
@@ -353,22 +358,22 @@ export function useWorkbookAgentPane(input: {
   );
   const sharedApplyRequiresOwnerApproval =
     snapshot?.scope === "shared" &&
-    primaryReviewItem?.riskClass !== undefined &&
-    primaryReviewItem.riskClass !== "low" &&
+    visibleReviewItem?.riskClass !== undefined &&
+    visibleReviewItem.riskClass !== "low" &&
     activeThreadSummary !== null &&
     activeThreadSummary.ownerUserId !== currentUserId;
   const sharedReviewOwnerUserId = resolveWorkbookAgentReviewOwnerUserId({
-    reviewItem: primaryReviewItem,
+    reviewItem: visibleReviewItem,
     sessionScope: snapshot?.scope ?? "private",
     activeThreadOwnerUserId: activeThreadSummary?.ownerUserId ?? null,
   });
   const sharedReviewStatus =
-    sharedReviewOwnerUserId !== null ? (primaryReviewItem?.status ?? "pending") : null;
+    sharedReviewOwnerUserId !== null ? (visibleReviewItem?.status ?? "pending") : null;
   const sharedReviewDecidedByUserId =
-    sharedReviewOwnerUserId !== null ? (primaryReviewItem?.decidedByUserId ?? null) : null;
+    sharedReviewOwnerUserId !== null ? (visibleReviewItem?.decidedByUserId ?? null) : null;
   const sharedReviewRecommendations = useMemo(
-    () => (sharedReviewOwnerUserId !== null ? (primaryReviewItem?.recommendations ?? []) : []),
-    [primaryReviewItem?.recommendations, sharedReviewOwnerUserId],
+    () => (sharedReviewOwnerUserId !== null ? (visibleReviewItem?.recommendations ?? []) : []),
+    [sharedReviewOwnerUserId, visibleReviewItem?.recommendations],
   );
   const currentUserSharedRecommendation =
     sharedReviewRecommendations.find((recommendation) => recommendation.userId === currentUserId)

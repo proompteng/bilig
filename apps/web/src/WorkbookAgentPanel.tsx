@@ -152,7 +152,7 @@ function ThreadSummaryStrip(props: {
                 </div>
               ) : null}
             </div>
-            {threadSummary.reviewQueueItemCount > 0 ? (
+            {threadSummary.scope === "shared" && threadSummary.reviewQueueItemCount > 0 ? (
               <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
                 Review
               </span>

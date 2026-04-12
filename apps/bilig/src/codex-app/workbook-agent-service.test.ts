@@ -872,23 +872,10 @@ describe("workbook agent service", () => {
         },
       });
 
-      await expect(
-        service.applyReviewItem({
-          documentId: "doc-1",
-          threadId: snapshot.threadId,
-          reviewItemId: "bundle-auto-1",
-          session: {
-            userID: "alex@example.com",
-            roles: ["editor"],
-          },
-          appliedBy: "auto",
-          preview: createPreviewSummary(),
-        }),
-      ).rejects.toMatchObject({
-        code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
-        statusCode: 409,
-        retryable: false,
-      });
+      expect(snapshot.reviewQueueItems).toEqual([]);
+      expect(snapshot.lastError).toBe(
+        "Private workbook threads no longer keep queued review items. Replay the request to apply it again.",
+      );
     } finally {
       await service.close();
     }
@@ -976,23 +963,10 @@ describe("workbook agent service", () => {
         retryable: false,
       });
 
-      await expect(
-        service.applyReviewItem({
-          documentId: "doc-1",
-          threadId: snapshot.threadId,
-          reviewItemId: "bundle-auto-1",
-          session: {
-            userID: "alex@example.com",
-            roles: ["editor"],
-          },
-          appliedBy: "auto",
-          preview: createPreviewSummary(),
-        }),
-      ).rejects.toMatchObject({
-        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
-        statusCode: 409,
-        retryable: false,
-      });
+      expect(snapshot.reviewQueueItems).toEqual([]);
+      expect(snapshot.lastError).toBe(
+        "Private workbook threads no longer keep queued review items. Replay the request to apply it again.",
+      );
     } finally {
       await service.close();
     }
@@ -1849,6 +1823,7 @@ describe("workbook agent service", () => {
         },
         body: {
           threadId: "thr-test",
+          scope: "shared",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -1971,6 +1946,7 @@ describe("workbook agent service", () => {
         },
         body: {
           threadId: "thr-test",
+          scope: "shared",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3127,7 +3103,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("rejects mutating workflows when a preview bundle is already staged", async () => {
+  it("clears legacy private review items before starting a new workflow", async () => {
     const service = createWorkbookAgentService(
       createZeroSyncStub({
         async loadWorkbookAgentThreadState() {
@@ -3201,23 +3177,24 @@ describe("workbook agent service", () => {
         },
       });
 
-      await expect(
-        service.startWorkflow({
-          documentId: "doc-1",
-          threadId: snapshot.threadId,
-          session: {
-            userID: "alex@example.com",
-            roles: ["editor"],
-          },
-          body: {
-            workflowTemplate: "createSheet",
-            name: "Summary",
-          },
-        }),
-      ).rejects.toMatchObject({
-        code: "WORKBOOK_AGENT_REVIEW_ITEM_EXISTS",
-        statusCode: 409,
+      expect(snapshot.reviewQueueItems).toEqual([]);
+      expect(snapshot.lastError).toBe(
+        "Private workbook threads no longer keep queued review items. Replay the request to apply it again.",
+      );
+
+      const running = await service.startWorkflow({
+        documentId: "doc-1",
+        threadId: snapshot.threadId,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "createSheet",
+          name: "Summary",
+        },
       });
+      expect(running.workflowRuns[0]?.status).toBe("running");
     } finally {
       await service.close();
     }
@@ -3542,6 +3519,7 @@ describe("workbook agent service", () => {
         },
         body: {
           threadId: "thr-test",
+          scope: "shared",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3584,6 +3562,19 @@ describe("workbook agent service", () => {
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
       }
+
+      await service.reviewReviewItem({
+        documentId: "doc-1",
+        threadId: "thr-test",
+        reviewItemId: pending.id,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          decision: "approved",
+        },
+      });
 
       const applied = await service.applyReviewItem({
         documentId: "doc-1",
@@ -3677,6 +3668,7 @@ describe("workbook agent service", () => {
         },
         body: {
           threadId: "thr-test",
+          scope: "shared",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3718,6 +3710,19 @@ describe("workbook agent service", () => {
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
       }
+
+      await service.reviewReviewItem({
+        documentId: "doc-1",
+        threadId: "thr-test",
+        reviewItemId: pending.id,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          decision: "approved",
+        },
+      });
 
       await expect(
         service.applyReviewItem({
@@ -3804,6 +3809,7 @@ describe("workbook agent service", () => {
         },
         body: {
           threadId: "thr-test",
+          scope: "shared",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3856,6 +3862,19 @@ describe("workbook agent service", () => {
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
       }
+
+      await service.reviewReviewItem({
+        documentId: "doc-1",
+        threadId: "thr-test",
+        reviewItemId: pending.id,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          decision: "approved",
+        },
+      });
 
       const applied = await service.applyReviewItem({
         documentId: "doc-1",

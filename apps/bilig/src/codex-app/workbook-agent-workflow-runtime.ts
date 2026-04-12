@@ -252,6 +252,11 @@ export class WorkbookAgentWorkflowRuntime {
             completedSummary = `Applied workflow: ${executionRecord.summary}`;
           }
         } else {
+          if (input.sessionState.scope === "private") {
+            throw new Error(
+              "Private workbook threads execute workflow changes directly and do not queue review items under the current execution policy.",
+            );
+          }
           this.options.stageReviewBundle(input.sessionState, input.workflowTurnId, workflowBundle);
         }
       }

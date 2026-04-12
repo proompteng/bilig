@@ -2035,7 +2035,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("keeps restored private review items stable on load", async () => {
+  it("does not render private review controls for restored private review items", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -2213,12 +2213,12 @@ describe("workbook agent pane", () => {
       await Promise.resolve();
     });
 
-    expect(previewBundle).toHaveBeenCalledTimes(1);
+    expect(previewBundle).not.toHaveBeenCalled();
     const applyCall = fetchSpy.mock.calls.find(([input]) =>
       requestUrl(input).endsWith("/review-items/bundle-1/apply"),
     );
     expect(applyCall).toBeUndefined();
-    expect(host.textContent).toContain("Apply");
+    expect(host.textContent).not.toContain("Apply");
     expect(host.textContent).not.toContain("Executions");
     expect(host.textContent).not.toContain("Replay");
 
@@ -2905,6 +2905,7 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
+              scope: "shared",
               pendingBundle: {
                 id: "bundle-1",
                 documentId: "doc-1",
@@ -2967,6 +2968,7 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
+              scope: "shared",
               pendingBundle: {
                 id: "bundle-2",
                 documentId: "doc-1",
