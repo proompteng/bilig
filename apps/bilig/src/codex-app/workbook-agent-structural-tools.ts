@@ -63,7 +63,7 @@ const columnMetadataToolArgsSchema = z
     message: "width or hidden is required",
   });
 
-export const rangeToolArgsSchema = z.object({
+const rangeToolArgsSchema = z.object({
   range: z.object({
     sheetName: z.string().min(1),
     startAddress: z.string().min(1),

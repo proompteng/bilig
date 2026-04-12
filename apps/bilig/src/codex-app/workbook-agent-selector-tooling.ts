@@ -56,10 +56,7 @@ export const writeRangeToolArgsSchema = z.union([
   }),
 ]);
 
-export const transferRangeTargetSchema = z.union([
-  cellRangeRefSchema,
-  workbookSemanticSelectorSchema,
-]);
+const transferRangeTargetSchema = z.union([cellRangeRefSchema, workbookSemanticSelectorSchema]);
 
 export const transferRangeToolArgsSchema = z.object({
   source: transferRangeTargetSchema,
