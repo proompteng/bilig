@@ -208,4 +208,140 @@ describe("workbook agent apply", () => {
       value: "Extra",
     });
   });
+
+  it("captures undo for deleting a sheet", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Imports");
+    engine.setCellValue("Imports", "A1", "Raw");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "deleteSheet",
+          name: "Imports",
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.exportSnapshot().sheets.map((sheet) => sheet.name)).not.toContain("Imports");
+    expect(undoBundle).toEqual(
+      expect.objectContaining({
+        kind: "engineOps",
+      }),
+    );
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.exportSnapshot().sheets.map((sheet) => sheet.name)).toContain("Imports");
+    expect(engine.getCell("Imports", "A1").value).toMatchObject({
+      tag: ValueTag.String,
+      value: "Raw",
+    });
+  });
+
+  it("captures undo for freeze, filter, and sort metadata commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Header");
+    engine.setCellValue("Sheet1", "A2", "Value");
+
+    const setBundle = createBundle({
+      commands: [
+        {
+          kind: "setFreezePane",
+          sheetName: "Sheet1",
+          rows: 1,
+          cols: 1,
+        },
+        {
+          kind: "setFilter",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        },
+        {
+          kind: "setSort",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+          keys: [{ keyAddress: "B1", direction: "asc" }],
+        },
+      ],
+    });
+
+    const setUndoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, setBundle);
+
+    expect(engine.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 1 });
+    expect(engine.getFilters("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+      },
+    ]);
+    expect(engine.getSorts("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        keys: [{ keyAddress: "B1", direction: "asc" }],
+      },
+    ]);
+    if (!setUndoBundle || setUndoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    const clearBundle = createBundle({
+      commands: [
+        {
+          kind: "setFreezePane",
+          sheetName: "Sheet1",
+          rows: 0,
+          cols: 0,
+        },
+        {
+          kind: "clearFilter",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        },
+        {
+          kind: "clearSort",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        },
+      ],
+    });
+
+    const clearUndoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, clearBundle);
+
+    expect(engine.getFreezePane("Sheet1")).toBeUndefined();
+    expect(engine.getFilters("Sheet1")).toEqual([]);
+    expect(engine.getSorts("Sheet1")).toEqual([]);
+    if (!clearUndoBundle || clearUndoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(clearUndoBundle.ops, { trusted: true });
+
+    expect(engine.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 1 });
+    expect(engine.getFilters("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+      },
+    ]);
+    expect(engine.getSorts("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        keys: [{ keyAddress: "B1", direction: "asc" }],
+      },
+    ]);
+
+    engine.applyOps(setUndoBundle.ops, { trusted: true });
+
+    expect(engine.getFreezePane("Sheet1")).toBeUndefined();
+    expect(engine.getFilters("Sheet1")).toEqual([]);
+    expect(engine.getSorts("Sheet1")).toEqual([]);
+  });
 });

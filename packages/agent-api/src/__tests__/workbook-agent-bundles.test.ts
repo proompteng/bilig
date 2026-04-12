@@ -115,6 +115,34 @@ describe("workbook agent bundle semantics", () => {
     expect(bundle.approvalMode).toBe("explicit");
   });
 
+  it("marks sheet deletion as workbook-scoped structural work", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Delete the imports sheet",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "deleteSheet",
+        name: "Imports",
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Delete sheet Imports",
+        riskClass: "high",
+        scope: "workbook",
+        approvalMode: "explicit",
+        estimatedAffectedCells: null,
+        affectedRanges: [],
+      }),
+    );
+  });
+
   it("marks non-structural content edits as preview-required", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,
@@ -217,6 +245,46 @@ describe("workbook agent bundle semantics", () => {
             sheetName: "Sheet1",
             startAddress: "A2",
             endAddress: "A3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("normalizes sort ranges and counts affected cells", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Sort the revenue range",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "setSort",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B3",
+          endAddress: "A1",
+        },
+        keys: [{ keyAddress: "B1", direction: "desc" }],
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Sort Sheet1!A1:B3 by B1 desc",
+        riskClass: "medium",
+        scope: "sheet",
+        approvalMode: "preview",
+        estimatedAffectedCells: 6,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "B3",
             role: "target",
           },
         ],

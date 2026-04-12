@@ -1,7 +1,11 @@
 import { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { WorkbookAgentCommand, WorkbookAgentCommandBundle } from "@bilig/agent-api";
-import type { WorkbookAxisEntrySnapshot } from "@bilig/protocol";
+import {
+  applyWorkbookAgentStructuralCommand,
+  isWorkbookAgentStructuralCommand,
+  type WorkbookAgentCommand,
+  type WorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import type { EngineOp } from "@bilig/workbook-domain";
 import type { WorkbookChangeUndoBundle } from "@bilig/zero-sync";
 
@@ -66,142 +70,15 @@ function buildWriteRangeTransaction(
   return { ops, potentialNewCells };
 }
 
-function hasOwnProperty(value: object, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function formatColumnLabel(index: number): string {
-  return formatAddress(0, index).replace(/\d+/gu, "");
-}
-
-function formatRowSpanLabel(startRow: number, count: number): string {
-  const first = startRow + 1;
-  const last = startRow + count;
-  return count === 1 ? `row ${String(first)}` : `rows ${String(first)}-${String(last)}`;
-}
-
-function formatColumnSpanLabel(startCol: number, count: number): string {
-  const first = formatColumnLabel(startCol);
-  const last = formatColumnLabel(startCol + count - 1);
-  return count === 1 ? `column ${first}` : `columns ${first}-${last}`;
-}
-
-function getConsistentAxisEntrySize(input: {
-  entries: readonly WorkbookAxisEntrySnapshot[];
-  start: number;
-  count: number;
-  spanLabel: string;
-  propertyLabel: string;
-}): number | null {
-  const entryByIndex = new Map(input.entries.map((entry) => [entry.index, entry]));
-  let resolved: number | null | undefined;
-  for (let index = input.start; index < input.start + input.count; index += 1) {
-    const next = entryByIndex.get(index)?.size;
-    const normalized = typeof next === "number" ? next : null;
-    if (resolved === undefined) {
-      resolved = normalized;
-      continue;
-    }
-    if (resolved !== normalized) {
-      throw new Error(
-        `Cannot preserve ${input.propertyLabel} for ${input.spanLabel} because the existing ${input.propertyLabel} state is mixed. Specify ${input.propertyLabel} explicitly.`,
-      );
-    }
-  }
-  return resolved ?? null;
-}
-
-function getConsistentAxisEntryHidden(input: {
-  entries: readonly WorkbookAxisEntrySnapshot[];
-  start: number;
-  count: number;
-  spanLabel: string;
-  propertyLabel: string;
-}): boolean | null {
-  const entryByIndex = new Map(input.entries.map((entry) => [entry.index, entry]));
-  let resolved: boolean | null | undefined;
-  for (let index = input.start; index < input.start + input.count; index += 1) {
-    const next = entryByIndex.get(index)?.hidden;
-    const normalized = typeof next === "boolean" ? next : null;
-    if (resolved === undefined) {
-      resolved = normalized;
-      continue;
-    }
-    if (resolved !== normalized) {
-      throw new Error(
-        `Cannot preserve ${input.propertyLabel} for ${input.spanLabel} because the existing ${input.propertyLabel} state is mixed. Specify ${input.propertyLabel} explicitly.`,
-      );
-    }
-  }
-  return resolved ?? null;
-}
-
-function resolveRowMetadataCommandState(
-  engine: SpreadsheetEngine,
-  command: Extract<WorkbookAgentCommand, { kind: "updateRowMetadata" }>,
-): {
-  height: number | null;
-  hidden: boolean | null;
-} {
-  const spanLabel = formatRowSpanLabel(command.startRow, command.count);
-  const entries = engine.getRowAxisEntries(command.sheetName);
-  return {
-    height: hasOwnProperty(command, "height")
-      ? (command.height ?? null)
-      : getConsistentAxisEntrySize({
-          entries,
-          start: command.startRow,
-          count: command.count,
-          spanLabel,
-          propertyLabel: "row height",
-        }),
-    hidden: hasOwnProperty(command, "hidden")
-      ? (command.hidden ?? null)
-      : getConsistentAxisEntryHidden({
-          entries,
-          start: command.startRow,
-          count: command.count,
-          spanLabel,
-          propertyLabel: "row visibility",
-        }),
-  };
-}
-
-function resolveColumnMetadataCommandState(
-  engine: SpreadsheetEngine,
-  command: Extract<WorkbookAgentCommand, { kind: "updateColumnMetadata" }>,
-): {
-  width: number | null;
-  hidden: boolean | null;
-} {
-  const spanLabel = formatColumnSpanLabel(command.startCol, command.count);
-  const entries = engine.getColumnAxisEntries(command.sheetName);
-  return {
-    width: hasOwnProperty(command, "width")
-      ? (command.width ?? null)
-      : getConsistentAxisEntrySize({
-          entries,
-          start: command.startCol,
-          count: command.count,
-          spanLabel,
-          propertyLabel: "column width",
-        }),
-    hidden: hasOwnProperty(command, "hidden")
-      ? (command.hidden ?? null)
-      : getConsistentAxisEntryHidden({
-          entries,
-          start: command.startCol,
-          count: command.count,
-          spanLabel,
-          propertyLabel: "column visibility",
-        }),
-  };
-}
-
 function applyWorkbookAgentCommandWithUndoCapture(
   engine: SpreadsheetEngine,
   command: WorkbookAgentCommand,
 ): readonly EngineOp[] | null {
+  if (isWorkbookAgentStructuralCommand(command)) {
+    return engine.captureUndoOps(() => {
+      applyWorkbookAgentStructuralCommand(engine, command);
+    }).undoOps;
+  }
   switch (command.kind) {
     case "writeRange": {
       const transaction = buildWriteRangeTransaction(command);
@@ -246,54 +123,6 @@ function applyWorkbookAgentCommandWithUndoCapture(
       return engine.captureUndoOps(() => {
         engine.moveRange(command.source, command.target);
       }).undoOps;
-    case "createSheet":
-      return engine.captureUndoOps(() => {
-        engine.createSheet(command.name);
-      }).undoOps;
-    case "renameSheet":
-      return engine.captureUndoOps(() => {
-        engine.renameSheet(command.currentName, command.nextName);
-      }).undoOps;
-    case "insertRows":
-      return engine.captureUndoOps(() => {
-        engine.insertRows(command.sheetName, command.start, command.count);
-      }).undoOps;
-    case "deleteRows":
-      return engine.captureUndoOps(() => {
-        engine.deleteRows(command.sheetName, command.start, command.count);
-      }).undoOps;
-    case "insertColumns":
-      return engine.captureUndoOps(() => {
-        engine.insertColumns(command.sheetName, command.start, command.count);
-      }).undoOps;
-    case "deleteColumns":
-      return engine.captureUndoOps(() => {
-        engine.deleteColumns(command.sheetName, command.start, command.count);
-      }).undoOps;
-    case "updateRowMetadata": {
-      const resolved = resolveRowMetadataCommandState(engine, command);
-      return engine.captureUndoOps(() => {
-        engine.updateRowMetadata(
-          command.sheetName,
-          command.startRow,
-          command.count,
-          resolved.height,
-          resolved.hidden,
-        );
-      }).undoOps;
-    }
-    case "updateColumnMetadata": {
-      const resolved = resolveColumnMetadataCommandState(engine, command);
-      return engine.captureUndoOps(() => {
-        engine.updateColumnMetadata(
-          command.sheetName,
-          command.startCol,
-          command.count,
-          resolved.width,
-          resolved.hidden,
-        );
-      }).undoOps;
-    }
     default: {
       const exhaustive: never = command;
       throw new Error(`Unhandled workbook agent command: ${JSON.stringify(exhaustive)}`);

@@ -20,9 +20,6 @@ import {
   rangeMutationArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
-  structuralAxisMutationArgsSchema,
-  updateColumnMetadataArgsSchema,
-  updateRowMetadataArgsSchema,
 } from "@bilig/zero-sync";
 import type {
   WorkbookAgentUiContext,
@@ -43,6 +40,10 @@ import {
   inspectWorkbookContext,
   inspectWorkbookRange,
 } from "./workbook-agent-inspection.js";
+import {
+  parseWorkbookAgentStructuralToolCommand,
+  workbookAgentStructuralToolSpecs,
+} from "./workbook-agent-structural-tools.js";
 
 const MAX_MUTATION_RANGE_CELLS = 400;
 const MAX_READ_RANGE_CELLS = 4000;
@@ -182,45 +183,6 @@ const writeRangeToolArgsSchema = z.object({
   startAddress: z.string().min(1),
   values: z.array(z.array(writeCellInputSchema).min(1)).min(1),
 });
-
-const sheetMutationToolArgsSchema = z.object({
-  name: z.string().trim().min(1),
-});
-
-const renameSheetToolArgsSchema = z.object({
-  currentName: z.string().trim().min(1),
-  nextName: z.string().trim().min(1),
-});
-
-const structuralAxisToolArgsSchema = z.object({
-  sheetName: structuralAxisMutationArgsSchema.shape.sheetName,
-  start: structuralAxisMutationArgsSchema.shape.start,
-  count: structuralAxisMutationArgsSchema.shape.count,
-});
-
-const rowMetadataToolArgsSchema = z
-  .object({
-    sheetName: updateRowMetadataArgsSchema.shape.sheetName,
-    startRow: updateRowMetadataArgsSchema.shape.startRow,
-    count: updateRowMetadataArgsSchema.shape.count,
-    height: updateRowMetadataArgsSchema.shape.height.optional(),
-    hidden: updateRowMetadataArgsSchema.shape.hidden.optional(),
-  })
-  .refine((value) => value.height !== undefined || value.hidden !== undefined, {
-    message: "height or hidden is required",
-  });
-
-const columnMetadataToolArgsSchema = z
-  .object({
-    sheetName: updateColumnMetadataArgsSchema.shape.sheetName,
-    startCol: updateColumnMetadataArgsSchema.shape.startCol,
-    count: updateColumnMetadataArgsSchema.shape.count,
-    width: updateColumnMetadataArgsSchema.shape.width.optional(),
-    hidden: updateColumnMetadataArgsSchema.shape.hidden.optional(),
-  })
-  .refine((value) => value.width !== undefined || value.hidden !== undefined, {
-    message: "width or hidden is required",
-  });
 
 const clearRangeToolArgsSchema = clearRangeArgsSchema.pick({ range: true });
 const transferRangeToolArgsSchema = rangeMutationArgsSchema.pick({ source: true, target: true });
@@ -857,129 +819,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         },
       },
     },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.createSheet,
-      description: "Create a new worksheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["name"],
-        properties: {
-          name: { type: "string" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.renameSheet,
-      description: "Rename an existing worksheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["currentName", "nextName"],
-        properties: {
-          currentName: { type: "string" },
-          nextName: { type: "string" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.insertRows,
-      description: "Insert one or more rows at a zero-based row index on a sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "start", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          start: { type: "number" },
-          count: { type: "number" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.deleteRows,
-      description: "Delete one or more rows at a zero-based row index on a sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "start", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          start: { type: "number" },
-          count: { type: "number" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.insertColumns,
-      description: "Insert one or more columns at a zero-based column index on a sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "start", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          start: { type: "number" },
-          count: { type: "number" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.deleteColumns,
-      description: "Delete one or more columns at a zero-based column index on a sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "start", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          start: { type: "number" },
-          count: { type: "number" },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata,
-      description:
-        "Hide, unhide, resize, or reset row metadata across a bounded row span on one sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "startRow", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          startRow: { type: "number" },
-          count: { type: "number" },
-          height: {
-            oneOf: [{ type: "number" }, { type: "null" }],
-          },
-          hidden: {
-            oneOf: [{ type: "boolean" }, { type: "null" }],
-          },
-        },
-      },
-    },
-    {
-      name: WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata,
-      description:
-        "Hide, unhide, resize, or reset column metadata across a bounded column span on one sheet.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["sheetName", "startCol", "count"],
-        properties: {
-          sheetName: { type: "string" },
-          startCol: { type: "number" },
-          count: { type: "number" },
-          width: {
-            oneOf: [{ type: "number" }, { type: "null" }],
-          },
-          hidden: {
-            oneOf: [{ type: "boolean" }, { type: "null" }],
-          },
-        },
-      },
-    },
+    ...workbookAgentStructuralToolSpecs,
   ] satisfies readonly CodexDynamicToolSpec[];
 }
 
@@ -1046,7 +886,12 @@ export async function handleWorkbookAgentToolCall(
   request: CodexDynamicToolCallRequest,
 ): Promise<CodexDynamicToolCallResult> {
   try {
-    switch (normalizeWorkbookAgentToolName(request.tool)) {
+    const normalizedTool = normalizeWorkbookAgentToolName(request.tool);
+    const structuralCommand = parseWorkbookAgentStructuralToolCommand(request);
+    if (structuralCommand) {
+      return await stageCommandResult(context, structuralCommand);
+    }
+    switch (normalizedTool) {
       case WORKBOOK_AGENT_TOOL_NAMES.getContext: {
         const text = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) =>
           inspectWorkbookContext(runtime, context.uiContext),
@@ -1121,7 +966,8 @@ export async function handleWorkbookAgentToolCall(
         const args = inspectCellToolArgsSchema.parse(request.arguments);
         const result = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
-          (runtime) => inspectWorkbookCell(runtime, resolveInspectionTarget(context.uiContext, args)),
+          (runtime) =>
+            inspectWorkbookCell(runtime, resolveInspectionTarget(context.uiContext, args)),
         );
         return textToolResult(stringifyJson(result));
       }
@@ -1261,87 +1107,6 @@ export async function handleWorkbookAgentToolCall(
           kind: "moveRange",
           source: args.source,
           target: args.target,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.createSheet: {
-        const args = sheetMutationToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "createSheet",
-          name: args.name,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.renameSheet: {
-        const args = renameSheetToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "renameSheet",
-          currentName: args.currentName,
-          nextName: args.nextName,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.insertRows: {
-        const args = structuralAxisToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "insertRows",
-          sheetName: args.sheetName,
-          start: args.start,
-          count: args.count,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.deleteRows: {
-        const args = structuralAxisToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "deleteRows",
-          sheetName: args.sheetName,
-          start: args.start,
-          count: args.count,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.insertColumns: {
-        const args = structuralAxisToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "insertColumns",
-          sheetName: args.sheetName,
-          start: args.start,
-          count: args.count,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.deleteColumns: {
-        const args = structuralAxisToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "deleteColumns",
-          sheetName: args.sheetName,
-          start: args.start,
-          count: args.count,
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata: {
-        const args = rowMetadataToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "updateRowMetadata",
-          sheetName: args.sheetName,
-          startRow: args.startRow,
-          count: args.count,
-          ...(args.height !== undefined
-            ? {
-                height: args.height === null ? null : Math.max(1, Math.round(args.height)),
-              }
-            : {}),
-          ...(args.hidden !== undefined ? { hidden: args.hidden } : {}),
-        });
-      }
-      case WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata: {
-        const args = columnMetadataToolArgsSchema.parse(request.arguments);
-        return await stageCommandResult(context, {
-          kind: "updateColumnMetadata",
-          sheetName: args.sheetName,
-          startCol: args.startCol,
-          count: args.count,
-          ...(args.width !== undefined
-            ? {
-                width: args.width === null ? null : Math.max(1, Math.round(args.width)),
-              }
-            : {}),
-          ...(args.hidden !== undefined ? { hidden: args.hidden } : {}),
         });
       }
       default:

@@ -964,6 +964,90 @@ describe("workbook agent tools", () => {
     });
   });
 
+  it.each([
+    {
+      name: "delete_sheet",
+      request: { name: "Imports" },
+      expected: { kind: "deleteSheet", name: "Imports" },
+    },
+    {
+      name: "set_freeze_pane",
+      request: { sheetName: "Sheet1", rows: 1, cols: 2 },
+      expected: { kind: "setFreezePane", sheetName: "Sheet1", rows: 1, cols: 2 },
+    },
+    {
+      name: "set_filter",
+      request: {
+        range: { sheetName: "Sheet1", startAddress: "D4", endAddress: "A1" },
+      },
+      expected: {
+        kind: "setFilter",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "D4" },
+      },
+    },
+    {
+      name: "clear_filter",
+      request: {
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "D4" },
+      },
+      expected: {
+        kind: "clearFilter",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "D4" },
+      },
+    },
+    {
+      name: "set_sort",
+      request: {
+        range: { sheetName: "Sheet1", startAddress: "B3", endAddress: "A1" },
+        keys: [{ keyAddress: "B1", direction: "desc" as const }],
+      },
+      expected: {
+        kind: "setSort",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+        keys: [{ keyAddress: "B1", direction: "desc" as const }],
+      },
+    },
+    {
+      name: "clear_sort",
+      request: {
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+      },
+      expected: {
+        kind: "clearSort",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+      },
+    },
+  ])("stages $name commands", async ({ name, request, expected }) => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: `call-${name}`,
+        tool: name,
+        arguments: request,
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith(expected);
+  });
+
   it("starts built-in durable workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);
