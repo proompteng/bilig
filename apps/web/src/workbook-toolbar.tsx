@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import {
   AlignCenter,
@@ -112,6 +112,7 @@ export interface WorkbookToolbarProps {
   onClearStyle(this: void): void;
   onUndo(this: void): void;
   onRedo(this: void): void;
+  trailingContent?: ReactNode;
 }
 
 export const WorkbookToolbar = memo(function WorkbookToolbar({
@@ -152,6 +153,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onClearStyle,
   onUndo,
   onRedo,
+  trailingContent,
 }: WorkbookToolbarProps) {
   const structureActionAvailability = {
     hideCurrentRow: canHideCurrentRow,
@@ -204,8 +206,11 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               data-current-value={currentNumberFormatKind}
             >
               <span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">
-                {(NUMBER_FORMAT_OPTIONS.find((option) => option.value === currentNumberFormatKind) ??
-                  NUMBER_FORMAT_OPTIONS[0])?.label ?? ""}
+                {(
+                  NUMBER_FORMAT_OPTIONS.find(
+                    (option) => option.value === currentNumberFormatKind,
+                  ) ?? NUMBER_FORMAT_OPTIONS[0]
+                )?.label ?? ""}
               </span>
               <Select.Icon className="ml-2 text-[var(--color-mauve-700)]">
                 <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
@@ -253,8 +258,10 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               data-current-value={selectedFontSize}
             >
               <span className="flex-none w-[2ch] overflow-visible text-center font-medium tabular-nums">
-                {(FONT_SIZE_OPTIONS.find((option) => option.value === selectedFontSize) ??
-                  FONT_SIZE_OPTIONS[0])?.label ?? ""}
+                {(
+                  FONT_SIZE_OPTIONS.find((option) => option.value === selectedFontSize) ??
+                  FONT_SIZE_OPTIONS[0]
+                )?.label ?? ""}
               </span>
               <Select.Icon className="ml-2 text-[var(--color-mauve-700)]">
                 <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
@@ -438,7 +445,10 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               aria-label="Structure"
               aria-haspopup="menu"
               className={cn(toolbarButtonClass(), "gap-1 px-2")}
-              disabled={!writesAllowed || STRUCTURE_ACTIONS.every((action) => !structureActionAvailability[action.template])}
+              disabled={
+                !writesAllowed ||
+                STRUCTURE_ACTIONS.every((action) => !structureActionAvailability[action.template])
+              }
               title="Structure"
               type="button"
             >
@@ -509,6 +519,14 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <span className="sr-only">Clear style</span>
           </Toolbar.Button>
         </Toolbar.Group>
+        {trailingContent ? (
+          <div
+            className="ml-auto flex flex-none items-center gap-1.5 pl-2"
+            data-testid="toolbar-trailing-content"
+          >
+            {trailingContent}
+          </div>
+        ) : null}
       </Toolbar.Root>
     </div>
   );

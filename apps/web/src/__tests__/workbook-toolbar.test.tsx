@@ -55,7 +55,6 @@ function ToolbarHookHarness(props: {
     },
     selectedStyle: undefined,
     selection: { sheetName: "Sheet1" },
-    selectionLabel: "A1",
     selectionRangeRef: props.selectionRangeRef,
     trailingContent: null,
     writesAllowed: true,

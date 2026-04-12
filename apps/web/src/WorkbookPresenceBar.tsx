@@ -39,7 +39,7 @@ export function WorkbookPresenceBar(props: {
   }
 
   return (
-    <div className="flex items-center gap-2 pl-2" data-testid="ax-rail">
+    <div className="flex items-center gap-2" data-testid="ax-rail">
       {props.collaborators.map((collaborator) => {
         const tone =
           PRESENCE_TONE_CLASS_NAMES[collaborator.toneIndex % PRESENCE_TONE_CLASS_NAMES.length]!;

@@ -26,6 +26,7 @@ interface WorkbookViewProps {
   onSelectSheet(this: void, sheetName: string): void;
   onCreateSheet?: (() => void) | undefined;
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
+  onDeleteSheet?: ((sheetName: string) => void) | undefined;
   onSelect(this: void, addr: string): void;
   onAddressCommit(this: void, addr: string): void;
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void;
@@ -69,8 +70,6 @@ interface WorkbookViewProps {
     | ((range: { startAddress: string; endAddress: string }) => void)
     | undefined;
   ribbon?: React.ReactNode;
-  selectionStatus?: React.ReactNode;
-  headerStatus?: React.ReactNode;
   sideRail?: React.ReactNode;
   sideRailId?: string | undefined;
   sideRailWidth?: number | undefined;
@@ -135,6 +134,7 @@ export function WorkbookView({
   onSelectSheet,
   onCreateSheet,
   onRenameSheet,
+  onDeleteSheet,
   onSelect,
   onAddressCommit,
   onBeginEdit,
@@ -151,8 +151,6 @@ export function WorkbookView({
   onSelectionLabelChange,
   onSelectionRangeChange,
   ribbon,
-  selectionStatus,
-  headerStatus,
   sideRail,
   sideRailId,
   sideRailWidth,
@@ -215,16 +213,7 @@ export function WorkbookView({
       className="flex h-screen flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
       data-testid="workbook-shell"
     >
-      {ribbon || headerStatus ? (
-        <div className="flex shrink-0 items-start justify-between gap-3 bg-[var(--wb-surface)]">
-          <div className="min-w-0 flex-1">{ribbon}</div>
-          {headerStatus ? (
-            <div className="flex min-h-10 shrink-0 items-center justify-end px-2.5 py-1">
-              {headerStatus}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {ribbon ? <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div> : null}
       <div className="flex min-h-0 flex-1 bg-[var(--wb-surface)]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <FormulaBar
@@ -285,11 +274,11 @@ export function WorkbookView({
           />
           <WorkbookSheetTabs
             onCreateSheet={onCreateSheet}
+            onDeleteSheet={onDeleteSheet}
             onRenameSheet={onRenameSheet}
             onSelectSheet={onSelectSheet}
             sheetName={sheetName}
             sheetNames={sheetNames}
-            selectionStatus={selectionStatus}
           />
         </div>
         {sideRail ? (

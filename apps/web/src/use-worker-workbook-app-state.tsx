@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useActorRef, useSelector } from "@xstate/react";
 import {
   isWorkbookAgentCommandBundle,
@@ -79,8 +87,9 @@ export function useWorkerWorkbookAppState(input: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
   connectionState: ZeroConnectionState;
   zero?: ZeroClient;
+  toolbarControls?: ReactNode;
 }) {
-  const { runtimeConfig, connectionState, zero } = input;
+  const { runtimeConfig, connectionState, zero, toolbarControls } = input;
   const documentId = runtimeConfig.documentId;
   const zeroConfigured = Boolean(zero);
   const zeroSource = useMemo<LocalOnlyZeroSource>(
@@ -133,7 +142,6 @@ export function useWorkerWorkbookAppState(input: {
     () => emptyCellSnapshot(selection.sheetName, selection.address),
     [selection.address, selection.sheetName],
   );
-  const [selectionLabel, setSelectionLabel] = useState("A1");
   const [editorValue, setEditorValue] = useState("");
   const [editorSelectionBehavior, setEditorSelectionBehavior] =
     useState<EditSelectionBehavior>("select-all");
@@ -166,7 +174,6 @@ export function useWorkerWorkbookAppState(input: {
       endAddress: selection.address,
     };
     agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection);
-    setSelectionLabel((current) => (current === selection.address ? current : selection.address));
   }, [selection]);
 
   useEffect(() => {
@@ -544,7 +551,6 @@ export function useWorkerWorkbookAppState(input: {
         endAddress: address,
       };
       agentSelectionRangeRef.current = singleCellAgentSelectionRange(nextSelection);
-      setSelectionLabel(address);
       if (previousSelection.sheetName !== sheetName) {
         visibleViewportRef.current = selectionViewport(nextSelection);
       }
@@ -627,9 +633,6 @@ export function useWorkerWorkbookAppState(input: {
     },
     [],
   );
-  const handleSelectionLabelChange = useCallback((nextLabel: string) => {
-    setSelectionLabel((current) => (current === nextLabel ? current : nextLabel));
-  }, []);
 
   const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =
     useWorkbookChangesPane({
@@ -677,11 +680,34 @@ export function useWorkerWorkbookAppState(input: {
   });
 
   const {
-    headerStatus: toolbarHeaderStatus,
-    ribbon,
-    selectionStatus,
-    statusModeLabel,
-  } = useWorkbookToolbar({
+    agentError,
+    clearAgentError,
+    agentPanel,
+    previewRanges,
+    sideRailId,
+    setSideRailWidth,
+    sideRail,
+    sideRailWidth,
+    toolbarTrailingContent,
+  } = useWorkbookAppPanels({
+    currentUserId: runtimeConfig.currentUserId,
+    documentId,
+    presenceClientId,
+    replicaId,
+    selection,
+    sheetNames,
+    zero: zeroSource,
+    runtimeReady,
+    zeroConfigured,
+    remoteSyncAvailable,
+    changeCount,
+    changesPanel,
+    selectAddress,
+    getAgentContext,
+    previewAgentBundle,
+  });
+
+  const { ribbon, statusModeLabel } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
     localPersistenceMode,
@@ -718,40 +744,15 @@ export function useWorkerWorkbookAppState(input: {
       );
     },
     selectionRangeRef,
-    selection,
-    selectionLabel,
     selectedCell,
     selectedStyle,
+    trailingContent: (
+      <>
+        {toolbarControls}
+        {toolbarTrailingContent}
+      </>
+    ),
     writesAllowed,
-  });
-
-  const {
-    agentError,
-    clearAgentError,
-    agentPanel,
-    headerStatus,
-    previewRanges,
-    sideRailId,
-    setSideRailWidth,
-    sideRail,
-    sideRailWidth,
-  } = useWorkbookAppPanels({
-    currentUserId: runtimeConfig.currentUserId,
-    documentId,
-    presenceClientId,
-    replicaId,
-    selection,
-    sheetNames,
-    zero: zeroSource,
-    runtimeReady,
-    zeroConfigured,
-    remoteSyncAvailable,
-    changeCount,
-    changesPanel,
-    toolbarHeaderStatus,
-    selectAddress,
-    getAgentContext,
-    previewAgentBundle,
   });
 
   const subscribeViewport = useCallback(
@@ -768,7 +769,7 @@ export function useWorkerWorkbookAppState(input: {
     [runtimeController],
   );
 
-  const { createSheet, renameSheet } = useWorkbookSheetActions({
+  const { createSheet, deleteSheet, renameSheet } = useWorkbookSheetActions({
     sheetNames,
     selectionRef,
     invokeMutation,
@@ -836,13 +837,13 @@ export function useWorkerWorkbookAppState(input: {
     copySelectionRange,
     createSheet,
     changesPanel,
+    deleteSheet,
     definedNames,
     editorConflictBanner,
     editorSelectionBehavior,
     failedPendingMutation,
     fillSelectionRange,
     handleEditorChange,
-    headerStatus,
     handleVisibleViewportChange,
     invokeDeleteColumnsMutation,
     invokeDeleteRowsMutation,
@@ -870,10 +871,8 @@ export function useWorkerWorkbookAppState(input: {
     selectAddress,
     selectedCell,
     selection,
-    selectionStatus,
     sideRailId,
     dismissPersistenceTransferRequest,
-    handleSelectionLabelChange,
     handleSelectionRangeChange,
     setSideRailWidth,
     sheetNames,

@@ -60,8 +60,34 @@ export function useWorkbookSheetActions(input: {
     [invokeMutation, reportRuntimeError, selectAddress, selectionRef, sheetNames],
   );
 
+  const deleteSheet = useCallback(
+    (targetName: string) => {
+      if (sheetNames.length <= 1 || !sheetNames.includes(targetName)) {
+        return;
+      }
+
+      const fallbackSheetName =
+        selectionRef.current.sheetName === targetName
+          ? (sheetNames.find((name) => name !== targetName) ?? null)
+          : null;
+
+      void invokeMutation("renderCommit", [
+        { kind: "deleteSheet", name: targetName } satisfies CommitOp,
+      ])
+        .then(() => {
+          if (fallbackSheetName) {
+            selectAddress(fallbackSheetName, "A1");
+          }
+          return undefined;
+        })
+        .catch(reportRuntimeError);
+    },
+    [invokeMutation, reportRuntimeError, selectAddress, selectionRef, sheetNames],
+  );
+
   return {
     createSheet,
+    deleteSheet,
     renameSheet,
   };
 }

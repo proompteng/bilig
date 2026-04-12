@@ -46,16 +46,22 @@ function WorkerWorkbookAppInner({
   connectionState: ZeroConnectionState;
   zero?: ZeroClient;
 }) {
-  const app = useWorkerWorkbookAppState({
-    runtimeConfig,
-    connectionState,
-    ...(zero ? { zero } : {}),
-  });
   const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
   });
   const shortcuts = useWorkbookShortcutDialog();
+  const app = useWorkerWorkbookAppState({
+    runtimeConfig,
+    connectionState,
+    toolbarControls: (
+      <>
+        {shortcuts.shortcutHelpButton}
+        {importToggle}
+      </>
+    ),
+    ...(zero ? { zero } : {}),
+  });
   const {
     agentError,
     clearAgentError,
@@ -269,6 +275,7 @@ function WorkerWorkbookAppInner({
               onCommitEdit={app.commitEditor}
               onCopyRange={app.copySelectionRange}
               onCreateSheet={app.writesAllowed ? app.createSheet : undefined}
+              onDeleteSheet={app.writesAllowed ? app.deleteSheet : undefined}
               onEditorChange={app.handleEditorChange}
               onFillRange={app.fillSelectionRange}
               onMoveRange={app.moveSelectionRange}
@@ -276,23 +283,14 @@ function WorkerWorkbookAppInner({
               previewRanges={app.previewRanges}
               onToggleBooleanCell={app.toggleBooleanCell}
               onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
-              onSelectionLabelChange={app.handleSelectionLabelChange}
               onSelectionRangeChange={app.handleSelectionRangeChange}
               onSelect={(addr) => app.selectAddress(app.selection.sheetName, addr)}
               onSelectSheet={(sheetName) => app.selectAddress(sheetName, "A1")}
               resolvedValue={app.resolvedValue}
               selectedAddr={app.selection.address}
               selectedCellSnapshot={app.selectedCell}
-              selectionStatus={app.selectionStatus}
               sheetName={app.selection.sheetName}
               sheetNames={app.sheetNames}
-              headerStatus={
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  {shortcuts.shortcutHelpButton}
-                  {importToggle}
-                  {app.headerStatus}
-                </div>
-              }
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
               hiddenColumns={app.hiddenColumns}

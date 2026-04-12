@@ -6,7 +6,6 @@ import { cva } from "class-variance-authority";
 interface WorkbookSheetTabsProps {
   sheetName: string;
   sheetNames: string[];
-  selectionStatus?: React.ReactNode;
   onSelectSheet(this: void, sheetName: string): void;
   onCreateSheet?: (() => void) | undefined;
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
@@ -80,7 +79,6 @@ function SheetAddIcon() {
 export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   sheetName,
   sheetNames,
-  selectionStatus: _selectionStatus,
   onSelectSheet,
   onCreateSheet,
   onRenameSheet,
@@ -191,97 +189,97 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
                   value={renameDraft}
                 />
               </div>
-            ) : (() => {
-              const tab = (
-                <Tabs.Tab
-                  className={(state) => sheetTabClass({ active: state.active })}
-                  data-testid={`workbook-sheet-tab-${name}`}
-                  key={name}
-                  ref={(node) => {
-                    tabRefs.current[name] = node;
-                  }}
-                  title={name}
-                  value={name}
-                  onDoubleClick={() => startSheetRename(name)}
-                  onKeyDown={(event) => {
-                    if (event.key === "F2") {
-                      event.preventDefault();
-                      startSheetRename(name);
-                      return;
-                    }
-                    if (event.key === "ArrowRight") {
-                      event.preventDefault();
-                      moveSheetSelection(index + 1);
-                      return;
-                    }
-                    if (event.key === "ArrowLeft") {
-                      event.preventDefault();
-                      moveSheetSelection(index - 1);
-                      return;
-                    }
-                    if (event.key === "Home") {
-                      event.preventDefault();
-                      moveSheetSelection(0);
-                      return;
-                    }
-                    if (event.key === "End") {
-                      event.preventDefault();
-                      moveSheetSelection(sheetNames.length - 1);
-                    }
-                  }}
-                >
-                  {name}
-                </Tabs.Tab>
-              );
+            ) : (
+              (() => {
+                const tab = (
+                  <Tabs.Tab
+                    className={(state) => sheetTabClass({ active: state.active })}
+                    data-testid={`workbook-sheet-tab-${name}`}
+                    key={name}
+                    ref={(node) => {
+                      tabRefs.current[name] = node;
+                    }}
+                    title={name}
+                    value={name}
+                    onDoubleClick={() => startSheetRename(name)}
+                    onKeyDown={(event) => {
+                      if (event.key === "F2") {
+                        event.preventDefault();
+                        startSheetRename(name);
+                        return;
+                      }
+                      if (event.key === "ArrowRight") {
+                        event.preventDefault();
+                        moveSheetSelection(index + 1);
+                        return;
+                      }
+                      if (event.key === "ArrowLeft") {
+                        event.preventDefault();
+                        moveSheetSelection(index - 1);
+                        return;
+                      }
+                      if (event.key === "Home") {
+                        event.preventDefault();
+                        moveSheetSelection(0);
+                        return;
+                      }
+                      if (event.key === "End") {
+                        event.preventDefault();
+                        moveSheetSelection(sheetNames.length - 1);
+                      }
+                    }}
+                  >
+                    {name}
+                  </Tabs.Tab>
+                );
 
-              if (!onRenameSheet && !onDeleteSheet) {
-                return tab;
-              }
+                if (!onRenameSheet && !onDeleteSheet) {
+                  return tab;
+                }
 
-              return (
-                <ContextMenu.Root key={name}>
-                  <ContextMenu.Trigger className="shrink-0">
-                    {tab}
-                  </ContextMenu.Trigger>
-                  <ContextMenu.Portal>
-                    <ContextMenu.Positioner className="z-[1200]" sideOffset={6}>
-                      <ContextMenu.Popup
-                        aria-label={`${name} sheet actions`}
-                        className={sheetContextMenuPopupClass()}
-                        data-testid={`workbook-sheet-menu-${name}`}
-                      >
-                        {onRenameSheet ? (
-                          <ContextMenu.Item
-                            className={sheetContextMenuItemClass()}
-                            data-testid="workbook-sheet-menu-rename"
-                            onClick={() => {
-                              startSheetRename(name);
-                            }}
-                          >
-                            Rename sheet
-                          </ContextMenu.Item>
-                        ) : null}
-                        {onRenameSheet && onDeleteSheet ? (
-                          <ContextMenu.Separator className={sheetContextMenuSeparatorClass()} />
-                        ) : null}
-                        {onDeleteSheet ? (
-                          <ContextMenu.Item
-                            className={sheetContextMenuItemClass()}
-                            data-testid="workbook-sheet-menu-delete"
-                            disabled={deleteDisabled}
-                            onClick={() => {
-                              onDeleteSheet(name);
-                            }}
-                          >
-                            Delete sheet
-                          </ContextMenu.Item>
-                        ) : null}
-                      </ContextMenu.Popup>
-                    </ContextMenu.Positioner>
-                  </ContextMenu.Portal>
-                </ContextMenu.Root>
-              );
-            })(),
+                return (
+                  <ContextMenu.Root key={name}>
+                    <ContextMenu.Trigger className="shrink-0">{tab}</ContextMenu.Trigger>
+                    <ContextMenu.Portal>
+                      <ContextMenu.Positioner className="z-[1200]" sideOffset={6}>
+                        <ContextMenu.Popup
+                          aria-label={`${name} sheet actions`}
+                          className={sheetContextMenuPopupClass()}
+                          data-testid={`workbook-sheet-menu-${name}`}
+                        >
+                          {onRenameSheet ? (
+                            <ContextMenu.Item
+                              className={sheetContextMenuItemClass()}
+                              data-testid="workbook-sheet-menu-rename"
+                              onClick={() => {
+                                startSheetRename(name);
+                              }}
+                            >
+                              Rename sheet
+                            </ContextMenu.Item>
+                          ) : null}
+                          {onRenameSheet && onDeleteSheet ? (
+                            <ContextMenu.Separator className={sheetContextMenuSeparatorClass()} />
+                          ) : null}
+                          {onDeleteSheet ? (
+                            <ContextMenu.Item
+                              className={sheetContextMenuItemClass()}
+                              data-testid="workbook-sheet-menu-delete"
+                              disabled={deleteDisabled}
+                              onClick={() => {
+                                onDeleteSheet(name);
+                              }}
+                            >
+                              Delete sheet
+                            </ContextMenu.Item>
+                          ) : null}
+                        </ContextMenu.Popup>
+                      </ContextMenu.Positioner>
+                    </ContextMenu.Portal>
+                  </ContextMenu.Root>
+                );
+              })()
+            ),
           )}
           <Tabs.Indicator className={sheetIndicatorClass()} renderBeforeHydration />
         </Tabs.List>

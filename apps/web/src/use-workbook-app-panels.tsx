@@ -42,7 +42,6 @@ export function useWorkbookAppPanels(input: {
   remoteSyncAvailable: boolean;
   changeCount: number;
   changesPanel: ReactNode;
-  toolbarHeaderStatus: ReactNode;
   selectAddress: (sheetName: string, address: string) => void;
   getAgentContext: WorkbookAgentContextGetter;
   previewAgentBundle: WorkbookAgentPreviewBundle;
@@ -61,7 +60,6 @@ export function useWorkbookAppPanels(input: {
     selection,
     selectAddress,
     sheetNames,
-    toolbarHeaderStatus,
     zero,
     zeroConfigured,
   } = input;
@@ -181,11 +179,13 @@ export function useWorkbookAppPanels(input: {
     [activeSideRailTab, isSideRailOpen, sideRailId, toggleSideRail, visibleSideRailTabs],
   );
 
-  const headerStatus = useMemo(
-    () => (
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        {toolbarHeaderStatus}
-        {!isSideRailOpen ? sideRailToggleControls : null}
+  const toolbarTrailingContent = useMemo(() => {
+    if (visibleSideRailTabs.length === 0 && collaborators.length === 0) {
+      return null;
+    }
+    return (
+      <>
+        {visibleSideRailTabs.length > 0 ? sideRailToggleControls : null}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -194,10 +194,9 @@ export function useWorkbookAppPanels(input: {
             }}
           />
         ) : null}
-      </div>
-    ),
-    [collaborators, isSideRailOpen, selectAddress, sideRailToggleControls, toolbarHeaderStatus],
-  );
+      </>
+    );
+  }, [collaborators, selectAddress, sideRailToggleControls, visibleSideRailTabs.length]);
 
   const sideRail = useMemo(
     () =>
@@ -268,12 +267,12 @@ export function useWorkbookAppPanels(input: {
     agentError,
     agentPanel,
     clearAgentError,
-    headerStatus,
     pendingCommandCount,
     previewRanges,
     sideRailId,
     sideRail,
     setSideRailWidth,
     sideRailWidth,
+    toolbarTrailingContent,
   };
 }

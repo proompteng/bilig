@@ -353,13 +353,10 @@ describe("WorkerWorkbookApp", () => {
       workerHandle: {
         viewportStore: {},
       },
-      handleSelectionLabelChange: vi.fn(),
       handleSelectionRangeChange: vi.fn(),
       selection: { sheetName: "Sheet1", address: "B18" },
       selectedCell: { sheetName: "Sheet1", address: "B18" },
       sheetNames: ["Sheet1"],
-      selectionStatus: null,
-      headerStatus: null,
       previewRanges: [],
       resolvedValue: "",
       sideRail: null,

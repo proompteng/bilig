@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
 import {
   parseCellNumberFormatCode,
   type CellRangeRef,
@@ -53,8 +60,6 @@ export function useWorkbookToolbar(input: {
   onUnhideCurrentColumn: () => void;
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>;
   selectionRangeRef: MutableRefObject<CellRangeRef>;
-  selection: { sheetName: string };
-  selectionLabel: string;
   selectedCell: CellSnapshot;
   selectedStyle: CellStyleRecord | undefined;
   writesAllowed: boolean;
@@ -81,8 +86,6 @@ export function useWorkbookToolbar(input: {
     onUnhideCurrentColumn,
     invokeMutation,
     selectionRangeRef,
-    selection,
-    selectionLabel,
     selectedCell,
     selectedStyle,
     writesAllowed,
@@ -131,18 +134,6 @@ export function useWorkbookToolbar(input: {
               : connectionStateName === "disconnected"
                 ? "Local"
                 : "Unavailable";
-  const statusChipClass =
-    "inline-flex h-8 items-center rounded-md border border-[var(--color-mauve-200)] bg-white px-3 text-[12px] font-medium text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]";
-
-  const selectionStatus = useMemo(
-    () => (
-      <span className={statusChipClass} data-testid="status-selection">
-        {selection.sheetName}!{selectionLabel}
-      </span>
-    ),
-    [selection.sheetName, selectionLabel, statusChipClass],
-  );
-
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
       await invokeMutation("setRangeStyle", selectionRangeRef.current, patch);
@@ -527,11 +518,7 @@ export function useWorkbookToolbar(input: {
   );
 
   return {
-    headerStatus: (
-      <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />
-    ),
     ribbon,
-    selectionStatus,
     statusModeLabel,
   };
 }

@@ -34,7 +34,6 @@ function renderHarness(host: HTMLElement) {
       remoteSyncAvailable: true,
       changeCount: 1,
       changesPanel: <div data-testid="changes-panel">Changes panel</div>,
-      toolbarHeaderStatus: <div data-testid="toolbar-status">Status</div>,
       selectAddress: vi.fn(),
       getAgentContext: () => ({
         selection: { sheetName: "Sheet1", address: "A1" },
@@ -50,7 +49,7 @@ function renderHarness(host: HTMLElement) {
 
     return (
       <>
-        <div data-testid="header-status">{panels.headerStatus}</div>
+        <div data-testid="toolbar-trailing-content">{panels.toolbarTrailingContent}</div>
         <div data-testid="side-rail">{panels.sideRail}</div>
       </>
     );
@@ -134,6 +133,7 @@ describe("useWorkbookAppPanels", () => {
     mockAgentPane(2);
     await harness.render();
 
+    expect(host.querySelector("[data-testid='toolbar-trailing-content']")).not.toBeNull();
     expect(host.querySelector("[data-testid='workbook-side-rail-panel-assistant']")).not.toBeNull();
     expect(host.textContent).toContain("Assistant panel");
 

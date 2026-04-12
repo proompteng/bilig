@@ -49,8 +49,8 @@ function renderPanel(entry: {
             executionRecords={[]}
             isApplyingBundle={false}
             isLoading={false}
-            isStartingWorkflow={false}
             optimisticEntries={[]}
+            activeResponseTurnId={null}
             onApplyPendingBundle={() => {}}
             onCancelWorkflowRun={() => {}}
             onDismissPendingBundle={() => {}}
@@ -60,16 +60,12 @@ function renderPanel(entry: {
             onReviewPendingBundle={() => {}}
             onSelectAllPendingCommands={() => {}}
             onSelectThread={() => {}}
-            onSelectThreadScope={() => {}}
-            onStartNamedWorkflow={() => {}}
-            onStartSearchWorkflow={() => {}}
-            onStartStructuralWorkflow={() => {}}
-            onStartWorkflow={() => {}}
             onSubmit={() => {}}
             onTogglePendingCommand={() => {}}
             pendingBundle={null}
             preview={null}
             selectedCommandIndexes={[]}
+            showAssistantProgress={false}
             sharedApprovalOwnerUserId={null}
             sharedReviewDecidedByUserId={null}
             sharedReviewOwnerUserId={null}
@@ -80,7 +76,6 @@ function renderPanel(entry: {
               documentId: "doc-1",
               threadId: "thr-1",
               scope: "private",
-              executionPolicy: "autoApplyAll",
               status: "idle",
               activeTurnId: null,
               lastError: null,
@@ -107,7 +102,6 @@ function renderPanel(entry: {
               executionRecords: [],
               workflowRuns: [],
             }}
-            threadScope="private"
             threadSummaries={[]}
             workflowRuns={[]}
           />,
