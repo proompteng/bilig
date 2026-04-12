@@ -8,11 +8,19 @@ import {
 import { getCompatibilityEntry } from "../../../formula/src/compatibility.js";
 import { SpreadsheetEngine } from "../index.js";
 
+// These formulas still compile onto the wasm-capable path, but the engine intentionally
+// reroutes them to specialized JS lookup handlers at bind time.
+const runtimeJsOnlyFixtureIds = new Set([
+  "lookup-reference:match-exact",
+  "lookup-reference:xmatch-basic",
+]);
+
 const productionRuntimeFixtures = canonicalFormulaFixtures.filter((fixture) => {
   const entry = getCompatibilityEntry(fixture.id);
   return (
     entry?.wasmStatus === "production" &&
     (fixture.family === "text" || fixture.family === "lookup-reference") &&
+    !runtimeJsOnlyFixtureIds.has(fixture.id) &&
     fixture.id !== "lookup-reference:offset-basic" &&
     fixture.definedNames === undefined &&
     fixture.tables === undefined &&
