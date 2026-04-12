@@ -10,6 +10,7 @@ import {
   type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
+  type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookTableSnapshot,
@@ -27,6 +28,7 @@ import {
   type WorkbookAxisEntryRecord,
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
+  type WorkbookDataValidationRecord,
   type WorkbookCellNumberFormatRecord,
   type WorkbookCellStyleRecord,
   type WorkbookDefinedNameRecord,
@@ -83,6 +85,7 @@ export type {
   WorkbookAxisEntryRecord,
   WorkbookAxisMetadataRecord,
   WorkbookCalculationSettingsRecord,
+  WorkbookDataValidationRecord,
   WorkbookCellNumberFormatRecord,
   WorkbookCellStyleRecord,
   WorkbookDefinedNameRecord,
@@ -722,6 +725,25 @@ export class WorkbookStore {
 
   listSorts(sheetName: string): WorkbookSortRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listSorts(sheetName));
+  }
+
+  setDataValidation(record: WorkbookDataValidationSnapshot): WorkbookDataValidationRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setDataValidation(record));
+  }
+
+  getDataValidation(
+    sheetName: string,
+    range: CellRangeRef,
+  ): WorkbookDataValidationRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getDataValidation(sheetName, range));
+  }
+
+  deleteDataValidation(sheetName: string, range: CellRangeRef): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteDataValidation(sheetName, range));
+  }
+
+  listDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listDataValidations(sheetName));
   }
 
   setSpill(sheetName: string, address: string, rows: number, cols: number): WorkbookSpillRecord {

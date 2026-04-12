@@ -68,6 +68,9 @@ export function exportSheetMetadata(
     range: { ...sort.range },
     keys: sort.keys.map((key) => ({ ...key })),
   }));
+  const validations = workbook
+    .listDataValidations(sheetName)
+    .map((validation) => structuredClone(validation));
 
   if (
     rows.length === 0 &&
@@ -78,7 +81,8 @@ export function exportSheetMetadata(
     formatRanges.length === 0 &&
     freezePane === undefined &&
     filters.length === 0 &&
-    sorts.length === 0
+    sorts.length === 0 &&
+    validations.length === 0
   ) {
     return undefined;
   }
@@ -110,6 +114,9 @@ export function exportSheetMetadata(
   }
   if (sorts.length > 0) {
     metadata.sorts = sorts;
+  }
+  if (validations.length > 0) {
+    metadata.validations = validations;
   }
   return metadata;
 }
@@ -167,6 +174,12 @@ export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): 
       sheetName,
       range: { ...record.range },
       keys: record.keys.map((key) => ({ ...key })),
+    });
+  });
+  workbook.listDataValidations(sheetName).forEach((record) => {
+    ops.push({
+      kind: "setDataValidation",
+      validation: structuredClone(record),
     });
   });
   return ops;

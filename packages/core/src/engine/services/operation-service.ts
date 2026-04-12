@@ -257,6 +257,10 @@ export function createEngineOperationService(args: {
       case "setSort":
       case "clearSort":
         return `sort:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+      case "setDataValidation":
+        return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
+      case "clearDataValidation":
+        return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
       case "setCellFormat":
         return `format:${op.sheetName}!${op.address}`;
       case "upsertCellStyle":
@@ -355,6 +359,7 @@ export function createEngineOperationService(args: {
       case "clearFilter":
       case "setSort":
       case "clearSort":
+      case "clearDataValidation":
       case "setCellFormat":
       case "setCellValue":
       case "setCellFormula":
@@ -373,6 +378,8 @@ export function createEngineOperationService(args: {
         return sheetDeleteVersions.get(op.name);
       case "renameSheet":
         return sheetDeleteVersions.get(op.oldName);
+      case "setDataValidation":
+        return sheetDeleteVersions.get(op.validation.range.sheetName);
       case "upsertPivotTable":
         return (
           sheetDeleteVersions.get(op.sheetName) ?? sheetDeleteVersions.get(op.source.sheetName)
@@ -653,6 +660,16 @@ export function createEngineOperationService(args: {
             break;
           case "clearSort":
             args.state.workbook.deleteSort(op.sheetName, op.range);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "setDataValidation":
+            args.state.workbook.setDataValidation(op.validation);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "clearDataValidation":
+            args.state.workbook.deleteDataValidation(op.sheetName, op.range);
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;

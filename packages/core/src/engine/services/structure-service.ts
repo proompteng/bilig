@@ -1,8 +1,5 @@
 import { Effect } from "effect";
-import type {
-  SheetFormatRangeSnapshot,
-  SheetStyleRangeSnapshot,
-} from "@bilig/protocol";
+import type { SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from "@bilig/protocol";
 import {
   formatAddress,
   rewriteAddressForStructuralTransform,
@@ -85,13 +82,7 @@ export function createEngineStructureService(args: {
     sourceSheetName?: string,
     sourceAddress?: string,
   ): EngineOp[] =>
-    args.captureStoredCellOps(
-      cellIndex,
-      sheetName,
-      address,
-      sourceSheetName,
-      sourceAddress,
-    );
+    args.captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress);
 
   const captureAxisRangeCellState = (
     sheetName: string,
@@ -246,6 +237,61 @@ export function createEngineStructureService(args: {
             rewriteAddressForStructuralTransform(key.keyAddress, transform) ?? key.keyAddress,
         })),
       );
+    });
+    args.state.workbook.listDataValidations(sheetName).forEach((validation) => {
+      const range = rewriteRangeForStructuralTransform(
+        validation.range.startAddress,
+        validation.range.endAddress,
+        transform,
+      );
+      args.state.workbook.deleteDataValidation(sheetName, validation.range);
+      if (!range) {
+        return;
+      }
+      const nextValidation = structuredClone(validation);
+      nextValidation.range = {
+        ...validation.range,
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      };
+      if (nextValidation.rule.kind === "list" && nextValidation.rule.source) {
+        switch (nextValidation.rule.source.kind) {
+          case "cell-ref": {
+            if (nextValidation.rule.source.sheetName !== sheetName) {
+              break;
+            }
+            const nextAddress = rewriteAddressForStructuralTransform(
+              nextValidation.rule.source.address,
+              transform,
+            );
+            if (!nextAddress) {
+              return;
+            }
+            nextValidation.rule.source.address = nextAddress;
+            break;
+          }
+          case "range-ref": {
+            if (nextValidation.rule.source.sheetName !== sheetName) {
+              break;
+            }
+            const nextSourceRange = rewriteRangeForStructuralTransform(
+              nextValidation.rule.source.startAddress,
+              nextValidation.rule.source.endAddress,
+              transform,
+            );
+            if (!nextSourceRange) {
+              return;
+            }
+            nextValidation.rule.source.startAddress = nextSourceRange.startAddress;
+            nextValidation.rule.source.endAddress = nextSourceRange.endAddress;
+            break;
+          }
+          case "named-range":
+          case "structured-ref":
+            break;
+        }
+      }
+      args.state.workbook.setDataValidation(nextValidation);
     });
     const rewrittenStyleRanges: SheetStyleRangeSnapshot[] = [];
     const rewrittenFormatRanges: SheetFormatRangeSnapshot[] = [];

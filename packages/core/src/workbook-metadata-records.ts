@@ -1,6 +1,12 @@
-import type { CellRangeRef, WorkbookDefinedNameValueSnapshot } from "@bilig/protocol";
+import type {
+  CellRangeRef,
+  WorkbookDataValidationRuleSnapshot,
+  WorkbookDefinedNameValueSnapshot,
+  WorkbookValidationListSourceSnapshot,
+} from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  type WorkbookDataValidationRecord,
   normalizeWorkbookObjectName,
   pivotKey,
   type WorkbookAxisMetadataRecord,
@@ -90,6 +96,108 @@ export function cloneSortRecord(record: WorkbookSortRecord): WorkbookSortRecord 
   };
 }
 
+function cloneValidationListSource(
+  source: WorkbookValidationListSourceSnapshot,
+): WorkbookValidationListSourceSnapshot {
+  switch (source.kind) {
+    case "named-range":
+      return { kind: "named-range", name: source.name };
+    case "cell-ref":
+      return {
+        kind: "cell-ref",
+        sheetName: source.sheetName,
+        address: canonicalWorkbookAddress(source.sheetName, source.address),
+      };
+    case "range-ref":
+      return {
+        kind: "range-ref",
+        ...canonicalWorkbookRangeRef({
+          sheetName: source.sheetName,
+          startAddress: source.startAddress,
+          endAddress: source.endAddress,
+        }),
+      };
+    case "structured-ref":
+      return {
+        kind: "structured-ref",
+        tableName: source.tableName,
+        columnName: source.columnName,
+      };
+  }
+}
+
+export function cloneDataValidationRule(
+  rule: WorkbookDataValidationRuleSnapshot,
+): WorkbookDataValidationRuleSnapshot {
+  switch (rule.kind) {
+    case "list": {
+      const cloned: Extract<WorkbookDataValidationRuleSnapshot, { kind: "list" }> = {
+        kind: "list",
+      };
+      if (rule.values) {
+        cloned.values = [...rule.values];
+      }
+      if (rule.source) {
+        cloned.source = cloneValidationListSource(rule.source);
+      }
+      return cloned;
+    }
+    case "checkbox": {
+      const cloned: Extract<WorkbookDataValidationRuleSnapshot, { kind: "checkbox" }> = {
+        kind: "checkbox",
+      };
+      if (rule.checkedValue !== undefined) {
+        cloned.checkedValue = rule.checkedValue;
+      }
+      if (rule.uncheckedValue !== undefined) {
+        cloned.uncheckedValue = rule.uncheckedValue;
+      }
+      return cloned;
+    }
+    case "whole":
+    case "decimal":
+    case "date":
+    case "time":
+    case "textLength":
+      return {
+        kind: rule.kind,
+        operator: rule.operator,
+        values: [...rule.values],
+      };
+  }
+}
+
+export function cloneDataValidationRecord(
+  record: WorkbookDataValidationRecord,
+): WorkbookDataValidationRecord {
+  const cloned: WorkbookDataValidationRecord = {
+    range: { ...record.range },
+    rule: cloneDataValidationRule(record.rule),
+  };
+  if (record.allowBlank !== undefined) {
+    cloned.allowBlank = record.allowBlank;
+  }
+  if (record.showDropdown !== undefined) {
+    cloned.showDropdown = record.showDropdown;
+  }
+  if (record.promptTitle !== undefined) {
+    cloned.promptTitle = record.promptTitle;
+  }
+  if (record.promptMessage !== undefined) {
+    cloned.promptMessage = record.promptMessage;
+  }
+  if (record.errorStyle !== undefined) {
+    cloned.errorStyle = record.errorStyle;
+  }
+  if (record.errorTitle !== undefined) {
+    cloned.errorTitle = record.errorTitle;
+  }
+  if (record.errorMessage !== undefined) {
+    cloned.errorMessage = record.errorMessage;
+  }
+  return cloned;
+}
+
 export function clonePivotRecord(record: WorkbookPivotRecord): WorkbookPivotRecord {
   return {
     ...record,
@@ -118,6 +226,11 @@ export function filterKey(sheetName: string, range: CellRangeRef): string {
 }
 
 export function sortKey(sheetName: string, range: CellRangeRef): string {
+  const normalized = canonicalWorkbookRangeRef(range);
+  return `${sheetName}:${normalized.startAddress}:${normalized.endAddress}`;
+}
+
+export function dataValidationKey(sheetName: string, range: CellRangeRef): string {
   const normalized = canonicalWorkbookRangeRef(range);
   return `${sheetName}:${normalized.startAddress}:${normalized.endAddress}`;
 }
@@ -162,6 +275,9 @@ function recordKey(record: unknown): string {
   }
   if (isSortRecord(record)) {
     return sortKey(record.sheetName, record.range);
+  }
+  if (isDataValidationRecord(record)) {
+    return dataValidationKey(record.range.sheetName, record.range);
   }
   if (isTableRecord(record)) {
     return tableKey(record.name);
@@ -215,6 +331,16 @@ function isSortRecord(record: unknown): record is WorkbookSortRecord {
     "sheetName" in record &&
     "range" in record &&
     "keys" in record
+  );
+}
+
+function isDataValidationRecord(record: unknown): record is WorkbookDataValidationRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "range" in record &&
+    "rule" in record &&
+    !("keys" in record)
   );
 }
 

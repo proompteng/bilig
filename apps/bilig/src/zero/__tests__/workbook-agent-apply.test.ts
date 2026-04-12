@@ -456,4 +456,56 @@ describe("workbook agent apply", () => {
     expect(engine.getTable("RevenueTable")).toBeUndefined();
     expect(engine.getPivotTable("Sheet1", "E2")).toBeUndefined();
   });
+
+  it("captures undo for data validation commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "setDataValidation",
+          validation: {
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              endAddress: "B4",
+            },
+            rule: {
+              kind: "list",
+              values: ["Draft", "Final"],
+            },
+            allowBlank: false,
+            showDropdown: true,
+          },
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getDataValidations("Sheet1")).toEqual([
+      {
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        rule: {
+          kind: "list",
+          values: ["Draft", "Final"],
+        },
+        allowBlank: false,
+        showDropdown: true,
+      },
+    ]);
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getDataValidations("Sheet1")).toEqual([]);
+  });
 });

@@ -100,6 +100,59 @@ describe("WorkbookStore", () => {
     expect(workbook.listSorts("Sheet1")).toEqual([]);
   });
 
+  it("normalizes data validation ranges so equivalent reversed bounds reuse the same record", () => {
+    const workbook = new WorkbookStore("normalized-data-validations");
+    workbook.createSheet("Sheet1");
+    const reversedRange = {
+      sheetName: "Sheet1",
+      startAddress: "C3",
+      endAddress: "A1",
+    } as const;
+    const normalizedRange = {
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C3",
+    } as const;
+
+    workbook.setDataValidation({
+      range: reversedRange,
+      rule: {
+        kind: "list",
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+    });
+    workbook.setDataValidation({
+      range: normalizedRange,
+      rule: {
+        kind: "list",
+        values: ["Live", "Archived"],
+      },
+      allowBlank: true,
+    });
+
+    expect(workbook.listDataValidations("Sheet1")).toEqual([
+      {
+        range: normalizedRange,
+        rule: {
+          kind: "list",
+          values: ["Live", "Archived"],
+        },
+        allowBlank: true,
+      },
+    ]);
+    expect(workbook.getDataValidation("Sheet1", reversedRange)).toEqual({
+      range: normalizedRange,
+      rule: {
+        kind: "list",
+        values: ["Live", "Archived"],
+      },
+      allowBlank: true,
+    });
+    expect(workbook.deleteDataValidation("Sheet1", reversedRange)).toBe(true);
+    expect(workbook.listDataValidations("Sheet1")).toEqual([]);
+  });
+
   it("normalizes spill and pivot addresses so case-only variants reuse the same record", () => {
     const workbook = new WorkbookStore("normalized-addresses");
     workbook.createSheet("Sheet1");
@@ -195,11 +248,13 @@ describe("WorkbookStore", () => {
       rows: 1,
       cols: 2,
     });
-    expect(workbook.getFilter("Renamed", {
-      sheetName: "Renamed",
-      startAddress: "A1",
-      endAddress: "C3",
-    })).toEqual({
+    expect(
+      workbook.getFilter("Renamed", {
+        sheetName: "Renamed",
+        startAddress: "A1",
+        endAddress: "C3",
+      }),
+    ).toEqual({
       sheetName: "Renamed",
       range: { sheetName: "Renamed", startAddress: "A1", endAddress: "C3" },
     });

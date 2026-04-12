@@ -124,6 +124,21 @@ describe("binary protocol", () => {
               range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
               keys: [{ keyAddress: "C1", direction: "desc" }],
             },
+            {
+              kind: "setDataValidation",
+              validation: {
+                range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
+                rule: {
+                  kind: "list",
+                  values: ["Draft", "Final"],
+                },
+                allowBlank: false,
+                showDropdown: true,
+                errorStyle: "stop",
+                errorTitle: "Status required",
+                errorMessage: "Pick Draft or Final.",
+              },
+            },
             { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
             {
               kind: "upsertTable",
@@ -175,6 +190,21 @@ describe("binary protocol", () => {
         sheetName: "Sheet1",
         range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
         keys: [{ keyAddress: "C1", direction: "desc" }],
+      },
+      {
+        kind: "setDataValidation",
+        validation: {
+          range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
+          rule: {
+            kind: "list",
+            values: ["Draft", "Final"],
+          },
+          allowBlank: false,
+          showDropdown: true,
+          errorStyle: "stop",
+          errorTitle: "Status required",
+          errorMessage: "Pick Draft or Final.",
+        },
       },
       { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
       {
@@ -263,6 +293,41 @@ describe("binary protocol", () => {
         kind: "upsertDefinedName",
         name: "TaxExpr",
         value: { kind: "formula", formula: "=B1*0.1" },
+      },
+    ]);
+  });
+
+  it("roundtrips data validation clear ops", () => {
+    const decoded = decodeFrame(
+      encodeFrame({
+        kind: "appendBatch",
+        documentId: "book-4",
+        cursor: 11,
+        batch: {
+          id: "replica:4",
+          replicaId: "replica",
+          clock: { counter: 4 },
+          ops: [
+            {
+              kind: "clearDataValidation",
+              sheetName: "Sheet1",
+              range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      {
+        kind: "clearDataValidation",
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
       },
     ]);
   });

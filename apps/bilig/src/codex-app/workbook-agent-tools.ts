@@ -44,6 +44,10 @@ import {
   workbookAgentSheetReadToolSpecs,
 } from "./workbook-agent-sheet-read-tools.js";
 import {
+  handleWorkbookAgentValidationToolCall,
+  workbookAgentValidationToolSpecs,
+} from "./workbook-agent-validation-tools.js";
+import {
   cellRangeRefJsonSchema,
   cellRangeRefSchema,
   rangeOrSelectorJsonSchema,
@@ -531,6 +535,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     ...workbookAgentSheetReadToolSpecs,
     ...workbookAgentObjectToolSpecs,
+    ...workbookAgentValidationToolSpecs,
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
       description:
@@ -911,6 +916,10 @@ export async function handleWorkbookAgentToolCall(
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
       return objectToolResult;
+    }
+    const validationToolResult = await handleWorkbookAgentValidationToolCall(context, request);
+    if (validationToolResult) {
+      return validationToolResult;
     }
     const structuralCommand = parseWorkbookAgentStructuralToolCommand(request);
     if (structuralCommand) {

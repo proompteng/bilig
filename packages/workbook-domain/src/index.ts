@@ -5,6 +5,7 @@ import type {
   CellNumberFormatRecord,
   CellStyleRecord,
   LiteralInput,
+  WorkbookDataValidationSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -40,6 +41,7 @@ export interface WorkbookSortKey {
 export interface WorkbookAxisEntryOp extends WorkbookAxisEntrySnapshot {}
 export interface WorkbookCellStyleOp extends CellStyleRecord {}
 export interface WorkbookCellNumberFormatOp extends CellNumberFormatRecord {}
+export interface WorkbookDataValidationOp extends WorkbookDataValidationSnapshot {}
 
 export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
@@ -89,6 +91,8 @@ export type WorkbookOp =
   | { kind: "clearFilter"; sheetName: string; range: CellRangeRef }
   | { kind: "setSort"; sheetName: string; range: CellRangeRef; keys: WorkbookSortKey[] }
   | { kind: "clearSort"; sheetName: string; range: CellRangeRef }
+  | { kind: "setDataValidation"; validation: WorkbookDataValidationOp }
+  | { kind: "clearDataValidation"; sheetName: string; range: CellRangeRef }
   | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }

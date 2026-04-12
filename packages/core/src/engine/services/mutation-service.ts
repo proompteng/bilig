@@ -523,6 +523,29 @@ export function createEngineMutationService(args: {
           },
         ];
       }
+      case "setDataValidation": {
+        const existing = args.state.workbook.getDataValidation(
+          op.validation.range.sheetName,
+          op.validation.range,
+        );
+        if (!existing) {
+          return [
+            {
+              kind: "clearDataValidation",
+              sheetName: op.validation.range.sheetName,
+              range: { ...op.validation.range },
+            },
+          ];
+        }
+        return [{ kind: "setDataValidation", validation: structuredClone(existing) }];
+      }
+      case "clearDataValidation": {
+        const existing = args.state.workbook.getDataValidation(op.sheetName, op.range);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "setDataValidation", validation: structuredClone(existing) }];
+      }
       case "setCellValue":
       case "setCellFormula":
       case "clearCell":

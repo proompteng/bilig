@@ -320,6 +320,12 @@ export function createEngineSnapshotService(args: {
                 keys: sort.keys.map((key) => Object.assign({}, key)),
               });
             });
+            sheet.metadata?.validations?.forEach((validation) => {
+              ops.push({
+                kind: "setDataValidation",
+                validation: structuredClone(validation),
+              });
+            });
           });
           snapshot.sheets.forEach((sheet) => {
             sheet.cells.forEach((cell) => {

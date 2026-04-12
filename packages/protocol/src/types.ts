@@ -400,6 +400,83 @@ export interface WorkbookSortSnapshot {
   keys: WorkbookSortKeySnapshot[];
 }
 
+export type WorkbookValidationComparisonOperator =
+  | "between"
+  | "notBetween"
+  | "equal"
+  | "notEqual"
+  | "greaterThan"
+  | "greaterThanOrEqual"
+  | "lessThan"
+  | "lessThanOrEqual";
+
+export type WorkbookValidationErrorStyle = "stop" | "warning" | "information";
+
+export interface WorkbookValidationNamedRangeSourceSnapshot {
+  kind: "named-range";
+  name: string;
+}
+
+export interface WorkbookValidationCellRefSourceSnapshot {
+  kind: "cell-ref";
+  sheetName: string;
+  address: string;
+}
+
+export interface WorkbookValidationRangeRefSourceSnapshot {
+  kind: "range-ref";
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+}
+
+export interface WorkbookValidationStructuredRefSourceSnapshot {
+  kind: "structured-ref";
+  tableName: string;
+  columnName: string;
+}
+
+export type WorkbookValidationListSourceSnapshot =
+  | WorkbookValidationNamedRangeSourceSnapshot
+  | WorkbookValidationCellRefSourceSnapshot
+  | WorkbookValidationRangeRefSourceSnapshot
+  | WorkbookValidationStructuredRefSourceSnapshot;
+
+export interface WorkbookListValidationRuleSnapshot {
+  kind: "list";
+  values?: LiteralInput[];
+  source?: WorkbookValidationListSourceSnapshot;
+}
+
+export interface WorkbookCheckboxValidationRuleSnapshot {
+  kind: "checkbox";
+  checkedValue?: LiteralInput;
+  uncheckedValue?: LiteralInput;
+}
+
+export interface WorkbookScalarValidationRuleSnapshot {
+  kind: "whole" | "decimal" | "date" | "time" | "textLength";
+  operator: WorkbookValidationComparisonOperator;
+  values: LiteralInput[];
+}
+
+export type WorkbookDataValidationRuleSnapshot =
+  | WorkbookListValidationRuleSnapshot
+  | WorkbookCheckboxValidationRuleSnapshot
+  | WorkbookScalarValidationRuleSnapshot;
+
+export interface WorkbookDataValidationSnapshot {
+  range: CellRangeRef;
+  rule: WorkbookDataValidationRuleSnapshot;
+  allowBlank?: boolean;
+  showDropdown?: boolean;
+  promptTitle?: string;
+  promptMessage?: string;
+  errorStyle?: WorkbookValidationErrorStyle;
+  errorTitle?: string;
+  errorMessage?: string;
+}
+
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[];
   definedNames?: WorkbookDefinedNameSnapshot[];
@@ -422,6 +499,7 @@ export interface SheetMetadataSnapshot {
   freezePane?: WorkbookFreezePaneSnapshot;
   filters?: CellRangeRef[];
   sorts?: WorkbookSortSnapshot[];
+  validations?: WorkbookDataValidationSnapshot[];
 }
 
 export interface WorkbookSnapshot {

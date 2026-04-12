@@ -5,6 +5,7 @@ import {
   type CellNumberFormatRecord,
   type CellRangeRef,
   type CellStyleRecord,
+  type WorkbookDataValidationSnapshot,
 } from "@bilig/protocol";
 import type { JsonValue } from "@bilig/agent-api";
 import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
@@ -64,6 +65,28 @@ function normalizeRange(range: CellRangeRef): CellRangeRef & {
   };
 }
 
+function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
+  const leftBounds = normalizeRange(left);
+  const rightBounds = normalizeRange(right);
+  return !(
+    leftBounds.sheetName !== rightBounds.sheetName ||
+    leftBounds.endRow < rightBounds.startRow ||
+    rightBounds.endRow < leftBounds.startRow ||
+    leftBounds.endCol < rightBounds.startCol ||
+    rightBounds.endCol < leftBounds.startCol
+  );
+}
+
+function collectIntersectingDataValidations(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookDataValidationSnapshot[] {
+  return runtime.engine
+    .getDataValidations(range.sheetName)
+    .filter((validation) => rangesIntersect(validation.range, range))
+    .map((validation) => structuredClone(validation));
+}
+
 function summarizeWindowAxisState(input: {
   readonly range: ReturnType<typeof normalizeRange>;
   readonly runtime: WorkbookRuntime;
@@ -71,8 +94,7 @@ function summarizeWindowAxisState(input: {
   const rowEntries = input.runtime.engine.getRowAxisEntries(input.range.sheetName);
   const columnEntries = input.runtime.engine.getColumnAxisEntries(input.range.sheetName);
   return {
-    freezePane:
-      input.runtime.engine.getFreezePane(input.range.sheetName) ?? null,
+    freezePane: input.runtime.engine.getFreezePane(input.range.sheetName) ?? null,
     hiddenRows: rowEntries
       .filter(
         (entry) =>
@@ -128,8 +150,7 @@ function summarizeSelection(context: WorkbookAgentUiContext) {
   });
   return {
     ...context.selection,
-    kind:
-      selectionRange.startAddress === selectionRange.endAddress ? "cell" : "range",
+    kind: selectionRange.startAddress === selectionRange.endAddress ? "cell" : "range",
     startAddress: selectionRange.startAddress,
     endAddress: selectionRange.endAddress,
     rowCount: selectionRange.endRow - selectionRange.startRow + 1,
@@ -168,7 +189,9 @@ export function inspectWorkbookContext(
     return "No browser view context is attached to this chat session yet.";
   }
   const selection = summarizeSelection(context);
-  const visibleRange = normalizeRange(viewportToRange(context.selection.sheetName, context.viewport));
+  const visibleRange = normalizeRange(
+    viewportToRange(context.selection.sheetName, context.viewport),
+  );
   return JSON.stringify(
     {
       selection,
@@ -198,6 +221,7 @@ export function inspectWorkbookRange(
 ): {
   readonly range: CellRangeRef;
   readonly sheetState: ReturnType<typeof summarizeWindowAxisState>;
+  readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
   readonly styles: readonly CellStyleRecord[];
   readonly numberFormats: readonly CellNumberFormatRecord[];
   readonly rows: readonly JsonValue[];
@@ -239,6 +263,7 @@ export function inspectWorkbookRange(
       runtime,
       range: normalizedRange,
     }),
+    dataValidations: collectIntersectingDataValidations(runtime, normalizedRange),
     ...collectRangeFormattingCatalog({
       runtime,
       styleIds,
@@ -271,6 +296,7 @@ export function inspectWorkbookCell(
   readonly topoRank: number | null;
   readonly directPrecedents: readonly string[];
   readonly directDependents: readonly string[];
+  readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
 } {
   const snapshot = runtime.engine.getCell(target.sheetName, target.address);
   const cell = runtime.engine.explainCell(target.sheetName, target.address);
@@ -291,5 +317,10 @@ export function inspectWorkbookCell(
     topoRank: cell.topoRank ?? null,
     directPrecedents: [...cell.directPrecedents],
     directDependents: [...cell.directDependents],
+    dataValidations: collectIntersectingDataValidations(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
   };
 }

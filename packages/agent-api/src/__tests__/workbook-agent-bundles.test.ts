@@ -284,6 +284,55 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("summarizes and scopes data validation commands against the normalized target range", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Require a status selection",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "setDataValidation",
+        validation: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B3",
+            endAddress: "A1",
+          },
+          rule: {
+            kind: "list",
+            values: ["Draft", "Final"],
+          },
+          allowBlank: false,
+          showDropdown: true,
+          errorStyle: "stop",
+          errorTitle: "Status required",
+          errorMessage: "Pick Draft or Final.",
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set data validation on Sheet1!A1:B3",
+        riskClass: "medium",
+        scope: "sheet",
+        estimatedAffectedCells: 6,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "B3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
   it("projects a scoped subset as its own preview/apply bundle", () => {
     const staged = appendWorkbookAgentCommandToBundle({
       previousBundle: appendWorkbookAgentCommandToBundle({

@@ -3,6 +3,7 @@ import type {
   CellRangeRef,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookPivotSnapshot,
   WorkbookTableSnapshot,
@@ -10,6 +11,7 @@ import type {
 } from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  cloneDataValidationRecord,
   cloneDefinedNameRecord,
   cloneDefinedNameValue,
   cloneFilterRecord,
@@ -19,6 +21,7 @@ import {
   cloneSortRecord,
   cloneSpillRecord,
   cloneTableRecord,
+  dataValidationKey,
   deleteRecordsBySheet,
   filterKey,
   rekeyRecords,
@@ -31,6 +34,7 @@ import {
   normalizeDefinedName,
   pivotKey,
   type WorkbookCalculationSettingsRecord,
+  type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
   type WorkbookFreezePaneRecord,
@@ -46,6 +50,29 @@ import {
 
 function metadataErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
+}
+
+function renameDataValidationSourceSheet(
+  record: WorkbookDataValidationRecord,
+  oldSheetName: string,
+  newSheetName: string,
+): WorkbookDataValidationRecord {
+  const cloned = cloneDataValidationRecord(record);
+  if (cloned.rule.kind !== "list" || !cloned.rule.source) {
+    return cloned;
+  }
+  switch (cloned.rule.source.kind) {
+    case "cell-ref":
+    case "range-ref":
+      if (cloned.rule.source.sheetName === oldSheetName) {
+        cloned.rule.source.sheetName = newSheetName;
+      }
+      return cloned;
+    case "named-range":
+    case "structured-ref":
+      return cloned;
+  }
+  return cloned;
 }
 
 export class WorkbookMetadataError extends Error {
@@ -64,9 +91,7 @@ export interface WorkbookMetadataService {
     oldSheetName: string,
     newSheetName: string,
   ) => Effect.Effect<void, WorkbookMetadataError>;
-  readonly deleteSheetRecords: (
-    sheetName: string,
-  ) => Effect.Effect<void, WorkbookMetadataError>;
+  readonly deleteSheetRecords: (sheetName: string) => Effect.Effect<void, WorkbookMetadataError>;
   readonly reset: () => Effect.Effect<void, WorkbookMetadataError>;
   readonly setWorkbookProperty: (
     key: string,
@@ -75,7 +100,10 @@ export interface WorkbookMetadataService {
   readonly getWorkbookProperty: (
     key: string,
   ) => Effect.Effect<WorkbookPropertyRecord | undefined, WorkbookMetadataError>;
-  readonly listWorkbookProperties: () => Effect.Effect<WorkbookPropertyRecord[], WorkbookMetadataError>;
+  readonly listWorkbookProperties: () => Effect.Effect<
+    WorkbookPropertyRecord[],
+    WorkbookMetadataError
+  >;
   readonly setCalculationSettings: (
     settings: WorkbookCalculationSettingsSnapshot,
   ) => Effect.Effect<WorkbookCalculationSettingsRecord, WorkbookMetadataError>;
@@ -98,7 +126,10 @@ export interface WorkbookMetadataService {
     name: string,
   ) => Effect.Effect<WorkbookDefinedNameRecord | undefined, WorkbookMetadataError>;
   readonly deleteDefinedName: (name: string) => Effect.Effect<boolean, WorkbookMetadataError>;
-  readonly listDefinedNames: () => Effect.Effect<WorkbookDefinedNameRecord[], WorkbookMetadataError>;
+  readonly listDefinedNames: () => Effect.Effect<
+    WorkbookDefinedNameRecord[],
+    WorkbookMetadataError
+  >;
   readonly setTable: (
     record: WorkbookTableSnapshot,
   ) => Effect.Effect<WorkbookTableRecord, WorkbookMetadataError>;
@@ -147,6 +178,20 @@ export interface WorkbookMetadataService {
   readonly listSorts: (
     sheetName: string,
   ) => Effect.Effect<WorkbookSortRecord[], WorkbookMetadataError>;
+  readonly setDataValidation: (
+    record: WorkbookDataValidationSnapshot,
+  ) => Effect.Effect<WorkbookDataValidationRecord, WorkbookMetadataError>;
+  readonly getDataValidation: (
+    sheetName: string,
+    range: CellRangeRef,
+  ) => Effect.Effect<WorkbookDataValidationRecord | undefined, WorkbookMetadataError>;
+  readonly deleteDataValidation: (
+    sheetName: string,
+    range: CellRangeRef,
+  ) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listDataValidations: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookDataValidationRecord[], WorkbookMetadataError>;
   readonly setSpill: (
     sheetName: string,
     address: string,
@@ -217,8 +262,17 @@ export function createWorkbookMetadataService(
           }
         : cloneSortRecord(record),
     );
+    rekeyRecords(metadata.dataValidations, (record) => {
+      const cloned = renameDataValidationSourceSheet(record, oldSheetName, newSheetName);
+      if (cloned.range.sheetName === oldSheetName) {
+        cloned.range.sheetName = newSheetName;
+      }
+      return cloned;
+    });
     rekeyRecords(metadata.tables, (record) =>
-      record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : cloneTableRecord(record),
+      record.sheetName === oldSheetName
+        ? { ...record, sheetName: newSheetName }
+        : cloneTableRecord(record),
     );
     rekeyRecords(metadata.spills, (record) =>
       record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : { ...record },
@@ -248,6 +302,7 @@ export function createWorkbookMetadataService(
     deleteRecordsBySheet(metadata.columnMetadata, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.sorts, sheetName, (record) => record.sheetName);
+    deleteRecordsBySheet(metadata.dataValidations, sheetName, (record) => record.range.sheetName);
     metadata.freezePanes.delete(sheetName);
   };
 
@@ -263,6 +318,7 @@ export function createWorkbookMetadataService(
     metadata.freezePanes.clear();
     metadata.filters.clear();
     metadata.sorts.clear();
+    metadata.dataValidations.clear();
     metadata.calculationSettings = defaults.calculationSettings;
     metadata.volatileContext = defaults.volatileContext;
   };
@@ -647,12 +703,98 @@ export function createWorkbookMetadataService(
           [...metadata.sorts.values()]
             .filter((record) => record.sheetName === sheetName)
             .toSorted((left, right) =>
-              sortKey(left.sheetName, left.range).localeCompare(sortKey(right.sheetName, right.range)),
+              sortKey(left.sheetName, left.range).localeCompare(
+                sortKey(right.sheetName, right.range),
+              ),
             )
             .map(cloneSortRecord),
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list sort metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setDataValidation(record) {
+      return Effect.try({
+        try: () => {
+          const storedRange = canonicalWorkbookRangeRef(record.range);
+          const nextRecord: WorkbookDataValidationRecord = {
+            range: storedRange,
+            rule: record.rule,
+          };
+          if (record.allowBlank !== undefined) {
+            nextRecord.allowBlank = record.allowBlank;
+          }
+          if (record.showDropdown !== undefined) {
+            nextRecord.showDropdown = record.showDropdown;
+          }
+          if (record.promptTitle !== undefined) {
+            nextRecord.promptTitle = record.promptTitle;
+          }
+          if (record.promptMessage !== undefined) {
+            nextRecord.promptMessage = record.promptMessage;
+          }
+          if (record.errorStyle !== undefined) {
+            nextRecord.errorStyle = record.errorStyle;
+          }
+          if (record.errorTitle !== undefined) {
+            nextRecord.errorTitle = record.errorTitle;
+          }
+          if (record.errorMessage !== undefined) {
+            nextRecord.errorMessage = record.errorMessage;
+          }
+          const stored: WorkbookDataValidationRecord = cloneDataValidationRecord(nextRecord);
+          metadata.dataValidations.set(
+            dataValidationKey(storedRange.sheetName, storedRange),
+            stored,
+          );
+          return cloneDataValidationRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set data validation metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getDataValidation(sheetName, range) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.dataValidations.get(dataValidationKey(sheetName, range));
+          return record ? cloneDataValidationRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get data validation metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteDataValidation(sheetName, range) {
+      return Effect.try({
+        try: () => metadata.dataValidations.delete(dataValidationKey(sheetName, range)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete data validation metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listDataValidations(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.dataValidations.values()]
+            .filter((record) => record.range.sheetName === sheetName)
+            .toSorted((left, right) =>
+              dataValidationKey(left.range.sheetName, left.range).localeCompare(
+                dataValidationKey(right.range.sheetName, right.range),
+              ),
+            )
+            .map(cloneDataValidationRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list data validation metadata", cause),
             cause,
           }),
       });
@@ -700,7 +842,9 @@ export function createWorkbookMetadataService(
         try: () =>
           [...metadata.spills.values()]
             .toSorted((left, right) =>
-              `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`),
+              `${left.sheetName}!${left.address}`.localeCompare(
+                `${right.sheetName}!${right.address}`,
+              ),
             )
             .map(cloneSpillRecord),
         catch: (cause) =>
@@ -773,7 +917,9 @@ export function createWorkbookMetadataService(
         try: () =>
           [...metadata.pivots.values()]
             .toSorted((left, right) =>
-              `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`),
+              `${left.sheetName}!${left.address}`.localeCompare(
+                `${right.sheetName}!${right.address}`,
+              ),
             )
             .map(clonePivotRecord),
         catch: (cause) =>

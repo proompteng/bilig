@@ -10,9 +10,12 @@ import type {
   CellVerticalAlignment,
   PivotAggregation,
   LiteralInput,
+  WorkbookDataValidationRuleSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationMode,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookValidationListSourceSnapshot,
   WorkbookPivotValueSnapshot,
 } from "@bilig/protocol";
 import type {
@@ -182,6 +185,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   insertColumns: 32,
   deleteColumns: 33,
   moveColumns: 34,
+  setDataValidation: 38,
+  clearDataValidation: 39,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -214,6 +219,43 @@ function decodeDefinedNameValueTag(tag: number): DefinedNameValueTag {
       return tag;
     default:
       throw new BinaryProtocolError(`Unknown defined-name value tag ${tag}`);
+  }
+}
+
+function decodeValidationComparisonOperator(
+  value: string,
+):
+  | "between"
+  | "notBetween"
+  | "equal"
+  | "notEqual"
+  | "greaterThan"
+  | "greaterThanOrEqual"
+  | "lessThan"
+  | "lessThanOrEqual" {
+  switch (value) {
+    case "between":
+    case "notBetween":
+    case "equal":
+    case "notEqual":
+    case "greaterThan":
+    case "greaterThanOrEqual":
+    case "lessThan":
+    case "lessThanOrEqual":
+      return value;
+    default:
+      throw new BinaryProtocolError("Unknown data validation comparison operator");
+  }
+}
+
+function decodeValidationErrorStyle(value: string): "stop" | "warning" | "information" {
+  switch (value) {
+    case "stop":
+    case "warning":
+    case "information":
+      return value;
+    default:
+      throw new BinaryProtocolError("Unknown data validation error style");
   }
 }
 
@@ -832,6 +874,256 @@ function decodeTable(reader: BinaryReader): WorkbookTableOp {
   };
 }
 
+function encodeValidationListSource(
+  writer: BinaryWriter,
+  source: WorkbookValidationListSourceSnapshot,
+): void {
+  switch (source.kind) {
+    case "named-range":
+      writer.u8(0);
+      writer.string(source.name);
+      return;
+    case "cell-ref":
+      writer.u8(1);
+      writer.string(source.sheetName);
+      writer.string(source.address);
+      return;
+    case "range-ref":
+      writer.u8(2);
+      writer.string(source.sheetName);
+      writer.string(source.startAddress);
+      writer.string(source.endAddress);
+      return;
+    case "structured-ref":
+      writer.u8(3);
+      writer.string(source.tableName);
+      writer.string(source.columnName);
+      return;
+    default:
+      assertNever(source);
+  }
+}
+
+function decodeValidationListSource(reader: BinaryReader): WorkbookValidationListSourceSnapshot {
+  switch (reader.u8()) {
+    case 0:
+      return { kind: "named-range", name: reader.string() };
+    case 1:
+      return { kind: "cell-ref", sheetName: reader.string(), address: reader.string() };
+    case 2:
+      return {
+        kind: "range-ref",
+        sheetName: reader.string(),
+        startAddress: reader.string(),
+        endAddress: reader.string(),
+      };
+    case 3:
+      return {
+        kind: "structured-ref",
+        tableName: reader.string(),
+        columnName: reader.string(),
+      };
+    default:
+      throw new BinaryProtocolError("Unknown validation source tag");
+  }
+}
+
+function encodeDataValidationRule(
+  writer: BinaryWriter,
+  rule: WorkbookDataValidationRuleSnapshot,
+): void {
+  switch (rule.kind) {
+    case "list":
+      writer.u8(0);
+      writer.bool(rule.values !== undefined);
+      if (rule.values) {
+        writer.u32(rule.values.length);
+        rule.values.forEach((value) => encodeLiteral(writer, value));
+      }
+      writer.bool(rule.source !== undefined);
+      if (rule.source) {
+        encodeValidationListSource(writer, rule.source);
+      }
+      return;
+    case "checkbox":
+      writer.u8(1);
+      writer.bool(rule.checkedValue !== undefined);
+      if (rule.checkedValue !== undefined) {
+        encodeLiteral(writer, rule.checkedValue);
+      }
+      writer.bool(rule.uncheckedValue !== undefined);
+      if (rule.uncheckedValue !== undefined) {
+        encodeLiteral(writer, rule.uncheckedValue);
+      }
+      return;
+    case "whole":
+    case "decimal":
+    case "date":
+    case "time":
+    case "textLength":
+      writer.u8(
+        {
+          whole: 2,
+          decimal: 3,
+          date: 4,
+          time: 5,
+          textLength: 6,
+        }[rule.kind],
+      );
+      writer.string(rule.operator);
+      writer.u32(rule.values.length);
+      rule.values.forEach((value) => encodeLiteral(writer, value));
+      return;
+    default:
+      assertNever(rule);
+  }
+}
+
+function decodeDataValidationRule(reader: BinaryReader): WorkbookDataValidationRuleSnapshot {
+  const tag = reader.u8();
+  switch (tag) {
+    case 0: {
+      const hasValues = reader.bool();
+      const values = hasValues
+        ? (() => {
+            const count = reader.u32();
+            const items: LiteralInput[] = [];
+            for (let index = 0; index < count; index += 1) {
+              items.push(decodeLiteral(reader));
+            }
+            return items;
+          })()
+        : undefined;
+      const hasSource = reader.bool();
+      const rule: Extract<WorkbookDataValidationRuleSnapshot, { kind: "list" }> = {
+        kind: "list",
+      };
+      if (values) {
+        rule.values = values;
+      }
+      if (hasSource) {
+        rule.source = decodeValidationListSource(reader);
+      }
+      return rule;
+    }
+    case 1: {
+      const hasCheckedValue = reader.bool();
+      const checkedValue = hasCheckedValue ? decodeLiteral(reader) : undefined;
+      const hasUncheckedValue = reader.bool();
+      const rule: Extract<WorkbookDataValidationRuleSnapshot, { kind: "checkbox" }> = {
+        kind: "checkbox",
+      };
+      if (checkedValue !== undefined) {
+        rule.checkedValue = checkedValue;
+      }
+      if (hasUncheckedValue) {
+        rule.uncheckedValue = decodeLiteral(reader);
+      }
+      return rule;
+    }
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6: {
+      const operator = decodeValidationComparisonOperator(reader.string());
+      const count = reader.u32();
+      const values: LiteralInput[] = [];
+      for (let index = 0; index < count; index += 1) {
+        values.push(decodeLiteral(reader));
+      }
+      const kind = {
+        2: "whole",
+        3: "decimal",
+        4: "date",
+        5: "time",
+        6: "textLength",
+      } as const satisfies Record<
+        2 | 3 | 4 | 5 | 6,
+        "whole" | "decimal" | "date" | "time" | "textLength"
+      >;
+      const nextKind = kind[tag];
+      if (!nextKind) {
+        throw new BinaryProtocolError("Unknown scalar data validation rule tag");
+      }
+      return {
+        kind: nextKind,
+        operator,
+        values,
+      };
+    }
+    default:
+      throw new BinaryProtocolError("Unknown data validation rule tag");
+  }
+}
+
+function encodeDataValidation(
+  writer: BinaryWriter,
+  validation: WorkbookDataValidationSnapshot,
+): void {
+  encodeCellRangeRef(writer, validation.range);
+  encodeDataValidationRule(writer, validation.rule);
+  writer.bool(validation.allowBlank !== undefined);
+  if (validation.allowBlank !== undefined) {
+    writer.bool(validation.allowBlank);
+  }
+  writer.bool(validation.showDropdown !== undefined);
+  if (validation.showDropdown !== undefined) {
+    writer.bool(validation.showDropdown);
+  }
+  writer.bool(validation.promptTitle !== undefined);
+  if (validation.promptTitle !== undefined) {
+    writer.string(validation.promptTitle);
+  }
+  writer.bool(validation.promptMessage !== undefined);
+  if (validation.promptMessage !== undefined) {
+    writer.string(validation.promptMessage);
+  }
+  writer.bool(validation.errorStyle !== undefined);
+  if (validation.errorStyle !== undefined) {
+    writer.string(validation.errorStyle);
+  }
+  writer.bool(validation.errorTitle !== undefined);
+  if (validation.errorTitle !== undefined) {
+    writer.string(validation.errorTitle);
+  }
+  writer.bool(validation.errorMessage !== undefined);
+  if (validation.errorMessage !== undefined) {
+    writer.string(validation.errorMessage);
+  }
+}
+
+function decodeDataValidation(reader: BinaryReader): WorkbookDataValidationSnapshot {
+  const range = decodeCellRangeRef(reader);
+  const rule = decodeDataValidationRule(reader);
+  const validation: WorkbookDataValidationSnapshot = {
+    range,
+    rule,
+  };
+  if (reader.bool()) {
+    validation.allowBlank = reader.bool();
+  }
+  if (reader.bool()) {
+    validation.showDropdown = reader.bool();
+  }
+  if (reader.bool()) {
+    validation.promptTitle = reader.string();
+  }
+  if (reader.bool()) {
+    validation.promptMessage = reader.string();
+  }
+  if (reader.bool()) {
+    validation.errorStyle = decodeValidationErrorStyle(reader.string());
+  }
+  if (reader.bool()) {
+    validation.errorTitle = reader.string();
+  }
+  if (reader.bool()) {
+    validation.errorMessage = reader.string();
+  }
+  return validation;
+}
+
 function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
   writer.u8(OP_TAGS[op.kind]);
   switch (op.kind) {
@@ -908,6 +1200,13 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       op.keys.forEach((key) => encodeSortKey(writer, key));
       return;
     case "clearSort":
+      writer.string(op.sheetName);
+      encodeCellRangeRef(writer, op.range);
+      return;
+    case "setDataValidation":
+      encodeDataValidation(writer, op.validation);
+      return;
+    case "clearDataValidation":
       writer.string(op.sheetName);
       encodeCellRangeRef(writer, op.range);
       return;
@@ -1114,6 +1413,17 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     case 12:
       return {
         kind: "clearSort",
+        sheetName: reader.string(),
+        range: decodeCellRangeRef(reader),
+      };
+    case 38:
+      return {
+        kind: "setDataValidation",
+        validation: decodeDataValidation(reader),
+      };
+    case 39:
+      return {
+        kind: "clearDataValidation",
         sheetName: reader.string(),
         range: decodeCellRangeRef(reader),
       };

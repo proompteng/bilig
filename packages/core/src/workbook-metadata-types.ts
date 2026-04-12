@@ -4,6 +4,7 @@ import type {
   CellStyleRecord,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
@@ -89,6 +90,8 @@ export interface WorkbookSortRecord {
   keys: WorkbookSortKeyRecord[];
 }
 
+export interface WorkbookDataValidationRecord extends WorkbookDataValidationSnapshot {}
+
 export interface WorkbookMetadataRecord {
   properties: Map<string, WorkbookPropertyRecord>;
   definedNames: Map<string, WorkbookDefinedNameRecord>;
@@ -102,6 +105,7 @@ export interface WorkbookMetadataRecord {
   freezePanes: Map<string, WorkbookFreezePaneRecord>;
   filters: Map<string, WorkbookFilterRecord>;
   sorts: Map<string, WorkbookSortRecord>;
+  dataValidations: Map<string, WorkbookDataValidationRecord>;
 }
 
 export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
@@ -118,6 +122,7 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     freezePanes: new Map(),
     filters: new Map(),
     sorts: new Map(),
+    dataValidations: new Map(),
   };
 }
 

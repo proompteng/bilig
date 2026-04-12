@@ -1089,6 +1089,100 @@ describe("workbook agent tools", () => {
     expect(text && "text" in text ? text.text : "").toContain('"groupBy": [');
   });
 
+  it("lists workbook data validation rules from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setDataValidation({
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
+      },
+      rule: {
+        kind: "list",
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+      showDropdown: true,
+      errorStyle: "stop",
+      errorTitle: "Status required",
+      errorMessage: "Pick Draft or Final.",
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-list-data-validations",
+        tool: "list_data_validation_rules",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"kind": "list"');
+    expect(text && "text" in text ? text.text : "").toContain('"startAddress": "B2"');
+  });
+
+  it("includes intersecting data validation metadata in read_range inspection", async () => {
+    const engine = await createEngine();
+    engine.setDataValidation({
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
+      },
+      rule: {
+        kind: "list",
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-range-with-validation",
+        tool: "read_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"dataValidations": [');
+    expect(text && "text" in text ? text.text : "").toContain('"Draft"');
+  });
+
   it("resolves selectors for read and mutation tools before staging commands", async () => {
     const engine = await createEngine();
     engine.setDefinedName("Inputs", {
@@ -1449,6 +1543,113 @@ describe("workbook agent tools", () => {
         values: [{ sourceColumn: "Margin", summarizeBy: "sum" }],
         rows: 1,
         cols: 2,
+      },
+    });
+  });
+
+  it("stages selector-aware data validation commands", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const createResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B2",
+            range: {
+              startAddress: "B2",
+              endAddress: "B4",
+            },
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-create-data-validation",
+        tool: "create_data_validation",
+        arguments: {
+          selector: {
+            kind: "currentSelection",
+          },
+          rule: {
+            kind: "list",
+            values: ["Draft", "Final"],
+          },
+          allowBlank: false,
+          showDropdown: true,
+        },
+      },
+    );
+
+    expect(createResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "setDataValidation",
+      validation: {
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        rule: {
+          kind: "list",
+          values: ["Draft", "Final"],
+        },
+        allowBlank: false,
+        showDropdown: true,
+      },
+    });
+
+    const removeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-remove-data-validation",
+        tool: "remove_data_validation",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B4",
+          },
+        },
+      },
+    );
+
+    expect(removeResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "clearDataValidation",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
       },
     });
   });

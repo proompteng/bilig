@@ -22,6 +22,8 @@ export type WorkbookAgentStructuralCommand = Exclude<
   | Extract<WorkbookAgentCommand, { kind: "deleteTable" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertPivotTable" }>
   | Extract<WorkbookAgentCommand, { kind: "deletePivotTable" }>
+  | Extract<WorkbookAgentCommand, { kind: "setDataValidation" }>
+  | Extract<WorkbookAgentCommand, { kind: "clearDataValidation" }>
 >;
 
 const HIGH_RISK_STRUCTURAL_COMMAND_KINDS = new Set<WorkbookAgentStructuralCommand["kind"]>([

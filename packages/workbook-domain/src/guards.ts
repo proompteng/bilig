@@ -18,6 +18,17 @@ const NUMBER_FORMAT_KIND_VALUES = new Set([
 const COMPATIBILITY_MODE_VALUES = new Set(["excel-modern", "odf-1.4"]);
 const SORT_DIRECTION_VALUES = new Set(["asc", "desc"]);
 const PIVOT_AGGREGATION_VALUES = new Set(["sum", "count"]);
+const VALIDATION_COMPARISON_OPERATOR_VALUES = new Set([
+  "between",
+  "notBetween",
+  "equal",
+  "notEqual",
+  "greaterThan",
+  "greaterThanOrEqual",
+  "lessThan",
+  "lessThanOrEqual",
+]);
+const VALIDATION_ERROR_STYLE_VALUES = new Set(["stop", "warning", "information"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -45,6 +56,10 @@ function isOptionalNullableNumber(value: unknown): value is number | null | unde
 
 function isOptionalBoolean(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
+}
+
+function isOptionalLiteralInput(value: unknown): boolean {
+  return value === undefined || isLiteralInput(value);
 }
 
 function isOptionalNullableBoolean(value: unknown): value is boolean | null | undefined {
@@ -172,6 +187,77 @@ function isWorkbookSortKey(value: unknown): boolean {
   );
 }
 
+function isWorkbookValidationListSource(value: unknown): boolean {
+  if (!isRecord(value) || typeof value["kind"] !== "string") {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "named-range":
+      return hasString(value, "name");
+    case "cell-ref":
+      return hasString(value, "sheetName") && hasString(value, "address");
+    case "range-ref":
+      return isCellRangeRef(value);
+    case "structured-ref":
+      return hasString(value, "tableName") && hasString(value, "columnName");
+    default:
+      return false;
+  }
+}
+
+function isWorkbookDataValidationRule(value: unknown): boolean {
+  if (!isRecord(value) || typeof value["kind"] !== "string") {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "list": {
+      const hasValues =
+        Array.isArray(value["values"]) && value["values"].every((entry) => isLiteralInput(entry));
+      const hasSource =
+        value["source"] !== undefined && isWorkbookValidationListSource(value["source"]);
+      return (hasValues ? 1 : 0) + (hasSource ? 1 : 0) === 1;
+    }
+    case "checkbox":
+      return (
+        isOptionalLiteralInput(value["checkedValue"]) &&
+        isOptionalLiteralInput(value["uncheckedValue"])
+      );
+    case "whole":
+    case "decimal":
+    case "date":
+    case "time":
+    case "textLength":
+      return (
+        typeof value["operator"] === "string" &&
+        VALIDATION_COMPARISON_OPERATOR_VALUES.has(value["operator"]) &&
+        Array.isArray(value["values"]) &&
+        value["values"].every((entry) => isLiteralInput(entry)) &&
+        (value["operator"] === "between" || value["operator"] === "notBetween"
+          ? value["values"].length === 2
+          : value["values"].length === 1)
+      );
+    default:
+      return false;
+  }
+}
+
+function isWorkbookDataValidation(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isCellRangeRef(value["range"]) &&
+    isWorkbookDataValidationRule(value["rule"]) &&
+    isOptionalBoolean(value["allowBlank"]) &&
+    isOptionalBoolean(value["showDropdown"]) &&
+    isOptionalString(value["promptTitle"]) &&
+    isOptionalString(value["promptMessage"]) &&
+    (value["errorStyle"] === undefined ||
+      (typeof value["errorStyle"] === "string" &&
+        VALIDATION_ERROR_STYLE_VALUES.has(value["errorStyle"]))) &&
+    isOptionalString(value["errorTitle"]) &&
+    isOptionalString(value["errorMessage"])
+  );
+}
+
 function isWorkbookDefinedNameValue(value: unknown): boolean {
   if (isLiteralInput(value)) {
     return true;
@@ -295,6 +381,10 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
         Array.isArray(value["keys"]) &&
         value["keys"].every((entry) => isWorkbookSortKey(entry))
       );
+    case "setDataValidation":
+      return isWorkbookDataValidation(value["validation"]);
+    case "clearDataValidation":
+      return hasString(value, "sheetName") && isCellRangeRef(value["range"]);
     case "setCellValue":
       return (
         hasString(value, "sheetName") &&

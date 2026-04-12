@@ -5,6 +5,7 @@ import type {
   CellRangeRef,
   CellStylePatch,
   LiteralInput,
+  WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookPivotSnapshot,
   WorkbookTableSnapshot,
@@ -29,6 +30,16 @@ import {
   isWorkbookAgentStructuralCommandValue,
   isWorkbookScopeStructuralCommand,
 } from "./workbook-agent-structural-commands.js";
+import {
+  applyWorkbookAgentValidationCommand,
+  deriveWorkbookAgentValidationCommandPreviewRanges,
+  describeWorkbookAgentValidationCommand,
+  estimateWorkbookAgentValidationCommandAffectedCells,
+  isHighRiskWorkbookAgentValidationCommand,
+  isWorkbookAgentValidationCommand,
+  isWorkbookAgentValidationCommandValue,
+  isWorkbookScopeValidationCommand,
+} from "./workbook-agent-validation-commands.js";
 
 export interface WorkbookAgentUiSelectionRef {
   sheetName: string;
@@ -184,6 +195,14 @@ export type WorkbookAgentCommand =
     }
   | {
       kind: "clearSort";
+      range: CellRangeRef;
+    }
+  | {
+      kind: "setDataValidation";
+      validation: WorkbookDataValidationSnapshot;
+    }
+  | {
+      kind: "clearDataValidation";
       range: CellRangeRef;
     }
   | {
@@ -613,6 +632,9 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
   if (isWorkbookAgentObjectCommand(command)) {
     return describeWorkbookAgentObjectCommand(command);
   }
+  if (isWorkbookAgentValidationCommand(command)) {
+    return describeWorkbookAgentValidationCommand(command);
+  }
   switch (command.kind) {
     case "writeRange": {
       const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
@@ -699,7 +721,9 @@ function deriveWorkbookAgentRiskClass(
       (command) =>
         (isWorkbookAgentStructuralCommand(command) &&
           isHighRiskWorkbookAgentStructuralCommand(command)) ||
-        (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)),
+        (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)) ||
+        (isWorkbookAgentValidationCommand(command) &&
+          isHighRiskWorkbookAgentValidationCommand(command)),
     )
   ) {
     return "high";
@@ -722,7 +746,8 @@ function deriveWorkbookAgentBundleScope(
     commands.some(
       (command) =>
         (isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command)) ||
-        (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)),
+        (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)) ||
+        (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)),
     )
   ) {
     return "workbook";
@@ -993,6 +1018,9 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   if (isWorkbookAgentObjectCommandValue(value)) {
     return true;
   }
+  if (isWorkbookAgentValidationCommandValue(value)) {
+    return true;
+  }
   switch (value["kind"]) {
     case "writeRange":
     case "setRangeFormulas":
@@ -1150,6 +1178,9 @@ export function estimateWorkbookAgentCommandAffectedCells(
   if (isWorkbookAgentObjectCommand(command)) {
     return estimateWorkbookAgentObjectCommandAffectedCells(command);
   }
+  if (isWorkbookAgentValidationCommand(command)) {
+    return estimateWorkbookAgentValidationCommandAffectedCells(command);
+  }
   switch (command.kind) {
     case "writeRange":
       return command.values.reduce((sum, row) => sum + row.length, 0);
@@ -1177,6 +1208,9 @@ export function deriveWorkbookAgentCommandPreviewRanges(
   }
   if (isWorkbookAgentObjectCommand(command)) {
     return deriveWorkbookAgentObjectCommandPreviewRanges(command);
+  }
+  if (isWorkbookAgentValidationCommand(command)) {
+    return deriveWorkbookAgentValidationCommandPreviewRanges(command);
   }
   switch (command.kind) {
     case "writeRange":
@@ -1231,6 +1265,10 @@ export function applyWorkbookAgentCommand(
   }
   if (isWorkbookAgentObjectCommand(command)) {
     applyWorkbookAgentObjectCommand(engine, command);
+    return;
+  }
+  if (isWorkbookAgentValidationCommand(command)) {
+    applyWorkbookAgentValidationCommand(engine, command);
     return;
   }
   switch (command.kind) {

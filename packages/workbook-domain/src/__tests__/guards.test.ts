@@ -11,6 +11,21 @@ describe("workbook domain guards", () => {
         ops: [
           { kind: "upsertWorkbook", name: "Book" },
           {
+            kind: "setDataValidation",
+            validation: {
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "D2",
+                endAddress: "D10",
+              },
+              rule: {
+                kind: "list",
+                values: ["Draft", "Final"],
+              },
+              allowBlank: false,
+            },
+          },
+          {
             kind: "upsertPivotTable",
             name: "Pivot1",
             sheetName: "Sheet1",
@@ -48,7 +63,23 @@ describe("workbook domain guards", () => {
         id: "batch-1",
         replicaId: "replica-1",
         clock: { counter: 4 },
-        ops: [{ kind: "setSort", sheetName: "Sheet1", range: { sheetName: "Sheet1" }, keys: [] }],
+        ops: [
+          { kind: "setSort", sheetName: "Sheet1", range: { sheetName: "Sheet1" }, keys: [] },
+          {
+            kind: "setDataValidation",
+            validation: {
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A5",
+              },
+              rule: {
+                kind: "list",
+                values: [undefined],
+              },
+            },
+          },
+        ],
       }),
     ).toBe(false);
   });

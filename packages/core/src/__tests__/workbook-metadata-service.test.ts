@@ -48,6 +48,55 @@ describe("WorkbookMetadataService", () => {
     ]);
   });
 
+  it("clones and normalizes data validation records on write and read", () => {
+    const service = createService();
+    const input = {
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "c4",
+        endAddress: "b2",
+      },
+      rule: {
+        kind: "list" as const,
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+      showDropdown: true,
+      errorStyle: "stop" as const,
+      errorTitle: "Status required",
+      errorMessage: "Pick Draft or Final.",
+    };
+
+    const stored = Effect.runSync(service.setDataValidation(input));
+    input.rule.values[0] = "Mutated";
+    stored.rule.values.push("Broken");
+
+    expect(
+      Effect.runSync(
+        service.getDataValidation("Sheet1", {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "C4",
+        }),
+      ),
+    ).toEqual({
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "C4",
+      },
+      rule: {
+        kind: "list",
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+      showDropdown: true,
+      errorStyle: "stop",
+      errorTitle: "Status required",
+      errorMessage: "Pick Draft or Final.",
+    });
+  });
+
   it("normalizes and clones pivot records so caller mutation does not leak back into metadata", () => {
     const service = createService();
     const input = {
@@ -105,34 +154,49 @@ describe("WorkbookMetadataService", () => {
       }),
     );
     Effect.runSync(
-      service.setSort(
-        "Source",
-        { sheetName: "Source", startAddress: "C3", endAddress: "A1" },
-        [{ keyAddress: "B1", direction: "asc" }],
-      ),
+      service.setSort("Source", { sheetName: "Source", startAddress: "C3", endAddress: "A1" }, [
+        { keyAddress: "B1", direction: "asc" },
+      ]),
     );
-    Effect.runSync(service.setTable({
-      name: " Revenue ",
-      sheetName: "Source",
-      startAddress: "A1",
-      endAddress: "C10",
-      columnNames: ["Region", "Sales"],
-      headerRow: true,
-      totalsRow: false,
-    }));
+    Effect.runSync(
+      service.setDataValidation({
+        range: { sheetName: "Source", startAddress: "B4", endAddress: "A2" },
+        rule: {
+          kind: "list",
+          values: ["Draft", "Final"],
+        },
+        allowBlank: false,
+        showDropdown: true,
+      }),
+    );
+    Effect.runSync(
+      service.setTable({
+        name: " Revenue ",
+        sheetName: "Source",
+        startAddress: "A1",
+        endAddress: "C10",
+        columnNames: ["Region", "Sales"],
+        headerRow: true,
+        totalsRow: false,
+      }),
+    );
     Effect.runSync(service.setSpill("Source", "b2", 2, 3));
-    Effect.runSync(service.setPivot({
-      name: " RevenuePivot ",
-      sheetName: "Source",
-      address: "c3",
-      source: { sheetName: "Source", startAddress: "b4", endAddress: "a1" },
-      groupBy: ["Region"],
-      values: [{ field: "Sales", summarizeBy: "sum" }],
-      rows: 3,
-      cols: 2,
-    }));
+    Effect.runSync(
+      service.setPivot({
+        name: " RevenuePivot ",
+        sheetName: "Source",
+        address: "c3",
+        source: { sheetName: "Source", startAddress: "b4", endAddress: "a1" },
+        groupBy: ["Region"],
+        values: [{ field: "Sales", summarizeBy: "sum" }],
+        rows: 3,
+        cols: 2,
+      }),
+    );
     Effect.runSync(service.setWorkbookProperty(" Author ", "greg"));
-    Effect.runSync(service.setDefinedName(" LocalName ", { kind: "formula", formula: "=Source!A1" }));
+    Effect.runSync(
+      service.setDefinedName(" LocalName ", { kind: "formula", formula: "=Source!A1" }),
+    );
     Effect.runSync(service.setCalculationSettings({ mode: "manual" }));
     Effect.runSync(service.setVolatileContext({ recalcEpoch: 7 }));
     metadata.rowMetadata.set("Source:0:2", {
@@ -157,22 +221,47 @@ describe("WorkbookMetadataService", () => {
       rows: 1,
       cols: 2,
     });
-    expect(Effect.runSync(service.getFilter("Renamed", {
-      sheetName: "Renamed",
-      startAddress: "A1",
-      endAddress: "C3",
-    }))).toEqual({
+    expect(
+      Effect.runSync(
+        service.getFilter("Renamed", {
+          sheetName: "Renamed",
+          startAddress: "A1",
+          endAddress: "C3",
+        }),
+      ),
+    ).toEqual({
       sheetName: "Renamed",
       range: { sheetName: "Renamed", startAddress: "A1", endAddress: "C3" },
     });
-    expect(Effect.runSync(service.getSort("Renamed", {
-      sheetName: "Renamed",
-      startAddress: "A1",
-      endAddress: "C3",
-    }))).toEqual({
+    expect(
+      Effect.runSync(
+        service.getSort("Renamed", {
+          sheetName: "Renamed",
+          startAddress: "A1",
+          endAddress: "C3",
+        }),
+      ),
+    ).toEqual({
       sheetName: "Renamed",
       range: { sheetName: "Renamed", startAddress: "A1", endAddress: "C3" },
       keys: [{ keyAddress: "B1", direction: "asc" }],
+    });
+    expect(
+      Effect.runSync(
+        service.getDataValidation("Renamed", {
+          sheetName: "Renamed",
+          startAddress: "A2",
+          endAddress: "B4",
+        }),
+      ),
+    ).toEqual({
+      range: { sheetName: "Renamed", startAddress: "A2", endAddress: "B4" },
+      rule: {
+        kind: "list",
+        values: ["Draft", "Final"],
+      },
+      allowBlank: false,
+      showDropdown: true,
     });
     expect(Effect.runSync(service.getSpill("Renamed", "B2"))).toEqual({
       sheetName: "Renamed",
@@ -211,6 +300,7 @@ describe("WorkbookMetadataService", () => {
     expect(Effect.runSync(service.getFreezePane("Renamed"))).toBeUndefined();
     expect(Effect.runSync(service.listFilters("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listSorts("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.listDataValidations("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listPivots())).toEqual([]);
     expect(Effect.runSync(service.listTables())).toEqual([]);
     expect(Effect.runSync(service.listSpills())).toEqual([]);

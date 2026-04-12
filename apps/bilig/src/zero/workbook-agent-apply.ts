@@ -5,6 +5,8 @@ import {
   isWorkbookAgentObjectCommand,
   applyWorkbookAgentStructuralCommand,
   isWorkbookAgentStructuralCommand,
+  applyWorkbookAgentValidationCommand,
+  isWorkbookAgentValidationCommand,
   type WorkbookAgentCommand,
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
@@ -84,6 +86,11 @@ function applyWorkbookAgentCommandWithUndoCapture(
   if (isWorkbookAgentObjectCommand(command)) {
     return engine.captureUndoOps(() => {
       applyWorkbookAgentObjectCommand(engine, command);
+    }).undoOps;
+  }
+  if (isWorkbookAgentValidationCommand(command)) {
+    return engine.captureUndoOps(() => {
+      applyWorkbookAgentValidationCommand(engine, command);
     }).undoOps;
   }
   switch (command.kind) {

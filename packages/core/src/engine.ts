@@ -16,6 +16,7 @@ import type {
   SyncState,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
   WorkbookPivotSnapshot,
@@ -52,6 +53,7 @@ import {
   normalizeDefinedName,
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
+  type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
   type WorkbookPropertyRecord,
@@ -61,6 +63,7 @@ import {
   type WorkbookVolatileContextRecord,
 } from "./workbook-store.js";
 import { cellToCsvValue, serializeCsv } from "./csv.js";
+import { canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
   createEngineRuntimeState,
   createInitialRecalcMetrics,
@@ -807,6 +810,37 @@ export class SpreadsheetEngine {
 
   getSorts(sheetName: string): WorkbookSortRecord[] {
     return this.workbook.listSorts(sheetName);
+  }
+
+  setDataValidation(validation: WorkbookDataValidationSnapshot): void {
+    const existing = this.workbook.getDataValidation(validation.range.sheetName, validation.range);
+    const normalized: WorkbookDataValidationSnapshot = {
+      ...structuredClone(validation),
+      range: canonicalWorkbookRangeRef(validation.range),
+    };
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setDataValidation", validation: normalized }]);
+  }
+
+  clearDataValidation(sheetName: string, range: CellRangeRef): boolean {
+    if (!this.workbook.getDataValidation(sheetName, range)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "clearDataValidation", sheetName, range: { ...range } }]);
+    return true;
+  }
+
+  getDataValidation(
+    sheetName: string,
+    range: CellRangeRef,
+  ): WorkbookDataValidationRecord | undefined {
+    return this.workbook.getDataValidation(sheetName, range);
+  }
+
+  getDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
+    return this.workbook.listDataValidations(sheetName);
   }
 
   setTable(table: WorkbookTableRecord): void {
