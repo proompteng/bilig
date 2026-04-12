@@ -217,9 +217,8 @@ describe("workbook presence", () => {
       );
     });
 
-    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
-    expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Guest BEEF");
+    expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull();
+    expect(host.textContent).not.toContain("Guest BEEF");
     expect(host.textContent).not.toContain("Guest FEED");
 
     await act(async () => {
@@ -227,7 +226,7 @@ describe("workbook presence", () => {
     });
   });
 
-  it("does not render refreshed guest rows from the same browser presence client", async () => {
+  it("never renders guest collaborator rows", async () => {
     const presence = createMockZeroPresenceHarness([
       {
         sessionId: "doc-1:browser:stale-guest",
@@ -247,6 +246,16 @@ describe("workbook presence", () => {
         sheetName: "Sheet1",
         address: "E35",
         selectionJson: { sheetName: "Sheet1", address: "E35" },
+        updatedAt: Date.now(),
+      },
+      {
+        sessionId: "doc-1:browser:real-user",
+        userId: "amy.smith@example.com",
+        presenceClientId: "presence:real-user",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "F2",
+        selectionJson: { sheetName: "Sheet1", address: "F2" },
         updatedAt: Date.now(),
       },
     ]);
@@ -272,8 +281,9 @@ describe("workbook presence", () => {
 
     const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
     expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Guest CAB7");
+    expect(chips[0]?.textContent).toContain("Amy Smith");
     expect(host.textContent).not.toContain("Guest EC9C");
+    expect(host.textContent).not.toContain("Guest CAB7");
 
     await act(async () => {
       root.unmount();
@@ -348,12 +358,23 @@ describe("workbook presence", () => {
           selectionJson: { sheetName: "Sheet1", address: "D4" },
           updatedAt: Date.now(),
         },
+        {
+          sessionId: "doc-1:browser:other-3",
+          userId: "casey@example.com",
+          presenceClientId: "presence:other-3",
+          sheetId: 1,
+          sheetName: "Sheet1",
+          address: "E6",
+          selectionJson: { sheetName: "Sheet1", address: "E6" },
+          updatedAt: Date.now(),
+        },
       ]);
     });
 
     const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
     expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Guest FEED");
+    expect(chips[0]?.textContent).toContain("Casey");
+    expect(host.textContent).not.toContain("Guest FEED");
 
     await act(async () => {
       root.unmount();

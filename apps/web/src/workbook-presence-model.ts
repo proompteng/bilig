@@ -122,6 +122,7 @@ export function selectActiveWorkbookCollaborators(input: {
   const staleAfterMs = input.staleAfterMs ?? WORKBOOK_PRESENCE_STALE_AFTER_MS;
   const knownSheets = new Set(input.knownSheetNames);
   return input.rows
+    .filter((row) => !row.userId.startsWith("guest:"))
     .filter((row) => row.userId !== input.currentUserId)
     .filter((row) => row.presenceClientId !== input.currentPresenceClientId)
     .filter((row) => row.sessionId !== input.currentSessionId)
