@@ -39,7 +39,7 @@ export class WorkbookAgentWorkflowRuntime {
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
       ) => boolean;
       stageReviewBundle: (
-        sessionState: WorkbookAgentSessionState,
+        sessionState: WorkbookAgentThreadState,
         turnId: string,
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
       ) => void;
