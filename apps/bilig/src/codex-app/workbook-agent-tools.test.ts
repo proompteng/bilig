@@ -812,6 +812,43 @@ describe("workbook agent tools", () => {
     expect(tablesText && "text" in tablesText ? tablesText.text : "").toContain('"columnNames": [');
   });
 
+  it("lists workbook pivots from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setPivotTable("Sheet1", "E2", {
+      name: "RevenuePivot",
+      source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Revenue"],
+      values: [{ sourceColumn: "Margin", summarizeBy: "sum" }],
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-list-pivots",
+        tool: "list_pivots",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"name": "RevenuePivot"');
+    expect(text && "text" in text ? text.text : "").toContain('"groupBy": [');
+  });
+
   it("resolves selectors for read and mutation tools before staging commands", async () => {
     const engine = await createEngine();
     engine.setDefinedName("Inputs", {
@@ -1012,6 +1049,167 @@ describe("workbook agent tools", () => {
         endAddress: "B3",
       },
       keys: [{ keyAddress: "B2", direction: "desc" }],
+    });
+  });
+
+  it("stages named range, table, and pivot object commands", async () => {
+    const engine = await createEngine();
+    engine.setTable({
+      name: "RevenueTable",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Revenue", "Margin"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const namedRangeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A2",
+            range: {
+              startAddress: "A2",
+              endAddress: "B3",
+            },
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 5,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-create-named-range",
+        tool: "create_named_range",
+        arguments: {
+          name: "Inputs",
+          selector: {
+            kind: "currentSelection",
+          },
+        },
+      },
+    );
+
+    expect(namedRangeResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "upsertDefinedName",
+      name: "Inputs",
+      value: {
+        kind: "range-ref",
+        sheetName: "Sheet1",
+        startAddress: "A2",
+        endAddress: "B3",
+      },
+    });
+
+    const tableResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-create-table",
+        tool: "create_table",
+        arguments: {
+          name: "RegionTable",
+          selector: {
+            kind: "table",
+            table: "RevenueTable",
+            sheet: "Sheet1",
+          },
+          headerRow: true,
+        },
+      },
+    );
+
+    expect(tableResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenNthCalledWith(2, {
+      kind: "upsertTable",
+      table: {
+        name: "RegionTable",
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B3",
+        columnNames: ["Revenue", "Margin"],
+        headerRow: true,
+        totalsRow: false,
+      },
+    });
+
+    const pivotResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-create-pivot",
+        tool: "create_pivot_table",
+        arguments: {
+          name: "RevenuePivot",
+          sheetName: "Sheet1",
+          address: "E2",
+          selector: {
+            kind: "table",
+            table: "RevenueTable",
+            sheet: "Sheet1",
+          },
+          groupBy: ["Revenue"],
+          values: [{ sourceColumn: "Margin", summarizeBy: "sum" }],
+        },
+      },
+    );
+
+    expect(pivotResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "upsertPivotTable",
+      pivot: {
+        name: "RevenuePivot",
+        sheetName: "Sheet1",
+        address: "E2",
+        source: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "B3",
+        },
+        groupBy: ["Revenue"],
+        values: [{ sourceColumn: "Margin", summarizeBy: "sum" }],
+        rows: 1,
+        cols: 2,
+      },
     });
   });
 

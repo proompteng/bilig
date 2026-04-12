@@ -36,6 +36,10 @@ import {
   inspectWorkbookRange,
 } from "./workbook-agent-inspection.js";
 import {
+  handleWorkbookAgentObjectToolCall,
+  workbookAgentObjectToolSpecs,
+} from "./workbook-agent-object-tools.js";
+import {
   cellRangeRefJsonSchema,
   cellRangeRefSchema,
   rangeOrSelectorJsonSchema,
@@ -515,6 +519,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         properties: {},
       },
     },
+    ...workbookAgentObjectToolSpecs,
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
       description:
@@ -867,6 +872,10 @@ export async function handleWorkbookAgentToolCall(
 ): Promise<CodexDynamicToolCallResult> {
   try {
     const normalizedTool = normalizeWorkbookAgentToolName(request.tool);
+    const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
+    if (objectToolResult) {
+      return objectToolResult;
+    }
     const structuralCommand = parseWorkbookAgentStructuralToolCommand(request);
     if (structuralCommand) {
       return await stageCommandResult(context, structuralCommand);

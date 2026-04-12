@@ -5,7 +5,20 @@ import type {
   CellRangeRef,
   CellStylePatch,
   LiteralInput,
+  WorkbookDefinedNameValueSnapshot,
+  WorkbookPivotSnapshot,
+  WorkbookTableSnapshot,
 } from "@bilig/protocol";
+import {
+  applyWorkbookAgentObjectCommand,
+  deriveWorkbookAgentObjectCommandPreviewRanges,
+  describeWorkbookAgentObjectCommand,
+  estimateWorkbookAgentObjectCommandAffectedCells,
+  isHighRiskWorkbookAgentObjectCommand,
+  isWorkbookAgentObjectCommand,
+  isWorkbookAgentObjectCommandValue,
+  isWorkbookScopeObjectCommand,
+} from "./workbook-agent-object-commands.js";
 import {
   applyWorkbookAgentStructuralCommand,
   describeWorkbookAgentStructuralCommand,
@@ -78,6 +91,32 @@ export type WorkbookAgentCommand =
       kind: "moveRange";
       source: CellRangeRef;
       target: CellRangeRef;
+    }
+  | {
+      kind: "upsertDefinedName";
+      name: string;
+      value: WorkbookDefinedNameValueSnapshot;
+    }
+  | {
+      kind: "deleteDefinedName";
+      name: string;
+    }
+  | {
+      kind: "upsertTable";
+      table: WorkbookTableSnapshot;
+    }
+  | {
+      kind: "deleteTable";
+      name: string;
+    }
+  | {
+      kind: "upsertPivotTable";
+      pivot: WorkbookPivotSnapshot;
+    }
+  | {
+      kind: "deletePivotTable";
+      sheetName: string;
+      address: string;
     }
   | {
       kind: "createSheet";
@@ -566,6 +605,9 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
   if (isWorkbookAgentStructuralCommand(command)) {
     return describeWorkbookAgentStructuralCommand(command);
   }
+  if (isWorkbookAgentObjectCommand(command)) {
+    return describeWorkbookAgentObjectCommand(command);
+  }
   switch (command.kind) {
     case "writeRange": {
       const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
@@ -648,8 +690,9 @@ function deriveWorkbookAgentRiskClass(
   if (
     commands.some(
       (command) =>
-        isWorkbookAgentStructuralCommand(command) &&
-        isHighRiskWorkbookAgentStructuralCommand(command),
+        (isWorkbookAgentStructuralCommand(command) &&
+          isHighRiskWorkbookAgentStructuralCommand(command)) ||
+        (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)),
     )
   ) {
     return "high";
@@ -671,7 +714,8 @@ function deriveWorkbookAgentBundleScope(
   if (
     commands.some(
       (command) =>
-        isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command),
+        (isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command)) ||
+        (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)),
     )
   ) {
     return "workbook";
@@ -939,6 +983,9 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   if (isWorkbookAgentStructuralCommandValue(value)) {
     return true;
   }
+  if (isWorkbookAgentObjectCommandValue(value)) {
+    return true;
+  }
   switch (value["kind"]) {
     case "writeRange":
       return (
@@ -1085,6 +1132,9 @@ export function estimateWorkbookAgentCommandAffectedCells(
   if (isWorkbookAgentStructuralCommand(command)) {
     return estimateWorkbookAgentStructuralCommandAffectedCells(command);
   }
+  if (isWorkbookAgentObjectCommand(command)) {
+    return estimateWorkbookAgentObjectCommandAffectedCells(command);
+  }
   switch (command.kind) {
     case "writeRange":
       return command.values.reduce((sum, row) => sum + row.length, 0);
@@ -1107,6 +1157,9 @@ export function deriveWorkbookAgentCommandPreviewRanges(
 ): WorkbookAgentPreviewRange[] {
   if (isWorkbookAgentStructuralCommand(command)) {
     return deriveWorkbookAgentStructuralCommandPreviewRanges(command);
+  }
+  if (isWorkbookAgentObjectCommand(command)) {
+    return deriveWorkbookAgentObjectCommandPreviewRanges(command);
   }
   switch (command.kind) {
     case "writeRange":
@@ -1150,6 +1203,10 @@ export function applyWorkbookAgentCommand(
 ): void {
   if (isWorkbookAgentStructuralCommand(command)) {
     applyWorkbookAgentStructuralCommand(engine, command);
+    return;
+  }
+  if (isWorkbookAgentObjectCommand(command)) {
+    applyWorkbookAgentObjectCommand(engine, command);
     return;
   }
   switch (command.kind) {

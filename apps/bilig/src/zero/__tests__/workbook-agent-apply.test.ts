@@ -343,4 +343,73 @@ describe("workbook agent apply", () => {
     expect(engine.getFilters("Sheet1")).toEqual([]);
     expect(engine.getSorts("Sheet1")).toEqual([]);
   });
+
+  it("captures undo for named ranges, tables, and pivots", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Revenue");
+    engine.setCellValue("Sheet1", "B1", "Margin");
+    engine.setCellValue("Sheet1", "A2", 10);
+    engine.setCellValue("Sheet1", "B2", 2);
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "upsertDefinedName",
+          name: "Inputs",
+          value: {
+            kind: "range-ref",
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "B2",
+          },
+        },
+        {
+          kind: "upsertTable",
+          table: {
+            name: "RevenueTable",
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "B2",
+            columnNames: ["Revenue", "Margin"],
+            headerRow: true,
+            totalsRow: false,
+          },
+        },
+        {
+          kind: "upsertPivotTable",
+          pivot: {
+            name: "RevenuePivot",
+            sheetName: "Sheet1",
+            address: "E2",
+            source: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "B2",
+            },
+            groupBy: ["Revenue"],
+            values: [{ sourceColumn: "Margin", summarizeBy: "sum" }],
+            rows: 1,
+            cols: 2,
+          },
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getDefinedName("Inputs")).toBeTruthy();
+    expect(engine.getTable("RevenueTable")).toBeTruthy();
+    expect(engine.getPivotTable("Sheet1", "E2")).toBeTruthy();
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getDefinedName("Inputs")).toBeUndefined();
+    expect(engine.getTable("RevenueTable")).toBeUndefined();
+    expect(engine.getPivotTable("Sheet1", "E2")).toBeUndefined();
+  });
 });

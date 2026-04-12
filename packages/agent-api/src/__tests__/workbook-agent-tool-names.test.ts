@@ -11,6 +11,10 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.startWorkflow).toBe("start_workflow");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges).toBe("list_named_ranges");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.createNamedRange).toBe("create_named_range");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.createTable).toBe("create_table");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.createPivotTable).toBe("create_pivot_table");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createSheet).toBe("create_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.deleteSheet).toBe("delete_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.insertRows).toBe("insert_rows");
@@ -34,6 +38,18 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig.list_tables")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listTables,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_list_pivots")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listPivots,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.update_named_range")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.updateNamedRange,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_create_table")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.createTable,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.delete_pivot_table")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
+    );
     expect(normalizeWorkbookAgentToolName("bilig_insert_rows")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.insertRows,
     );
@@ -52,5 +68,9 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("search_workbook")).toBe(true);
     expect(isWorkbookAgentToolName("list_named_ranges")).toBe(true);
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
+    expect(isWorkbookAgentToolName("list_pivots")).toBe(true);
+    expect(isWorkbookAgentToolName("create_named_range")).toBe(true);
+    expect(isWorkbookAgentToolName("create_table")).toBe(true);
+    expect(isWorkbookAgentToolName("delete_pivot_table")).toBe(true);
   });
 });

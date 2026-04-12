@@ -305,4 +305,5 @@ export * from "./workbook-agent-execution-policy.js";
 export * from "./workbook-agent-preview.js";
 export * from "./workbook-agent-review-items.js";
 export * from "./workbook-agent-skills.js";
+export * from "./workbook-agent-object-commands.js";
 export * from "./workbook-agent-structural-commands.js";

@@ -15,6 +15,12 @@ export type WorkbookAgentStructuralCommand = Exclude<
   | Extract<WorkbookAgentCommand, { kind: "fillRange" }>
   | Extract<WorkbookAgentCommand, { kind: "copyRange" }>
   | Extract<WorkbookAgentCommand, { kind: "moveRange" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertDefinedName" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteDefinedName" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertTable" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteTable" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertPivotTable" }>
+  | Extract<WorkbookAgentCommand, { kind: "deletePivotTable" }>
 >;
 
 const HIGH_RISK_STRUCTURAL_COMMAND_KINDS = new Set<WorkbookAgentStructuralCommand["kind"]>([
@@ -386,6 +392,10 @@ export function describeWorkbookAgentStructuralCommand(
         ...(hasOwnProperty(command, "width") ? { size: command.width ?? null } : {}),
         ...(hasOwnProperty(command, "hidden") ? { hidden: command.hidden ?? null } : {}),
       });
+    default: {
+      const exhaustive: never = command;
+      return exhaustive;
+    }
   }
 }
 
@@ -409,6 +419,10 @@ export function estimateWorkbookAgentStructuralCommandAffectedCells(
     case "updateRowMetadata":
     case "updateColumnMetadata":
       return null;
+    default: {
+      const exhaustive: never = command;
+      return exhaustive;
+    }
   }
 }
 
@@ -469,6 +483,10 @@ export function deriveWorkbookAgentStructuralCommandPreviewRanges(
           role: "target",
         },
       ];
+    default: {
+      const exhaustive: never = command;
+      return exhaustive;
+    }
   }
 }
 
