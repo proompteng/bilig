@@ -1,6 +1,6 @@
 import { BuiltinId, FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
-import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
+import { formatRangeAddress, parseCellAddress, parseRangeAddress } from "./addressing.js";
 import { getNativeGroupedArrayKind } from "./binder-wasm-rules.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
 import { lowerToPlan, type JsPlanInstruction } from "./js-evaluator.js";
@@ -478,7 +478,13 @@ export interface CompiledFormula extends FormulaRecord {
   ast: FormulaNode;
   optimizedAst: FormulaNode;
   deps: string[];
-  parsedDeps?: Array<{ address: string; kind: "cell"; sheetName?: string }>;
+  parsedDeps?: Array<{
+    address: string;
+    kind: "cell";
+    sheetName?: string;
+    row?: number;
+    col?: number;
+  }>;
   symbolicNames: string[];
   symbolicTables: string[];
   symbolicSpills: string[];
@@ -489,7 +495,7 @@ export interface CompiledFormula extends FormulaRecord {
   program: Uint32Array;
   constants: Float64Array;
   symbolicRefs: string[];
-  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string }>;
+  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string; row?: number; col?: number }>;
   symbolicRanges: string[];
   symbolicStrings: string[];
 }
@@ -569,9 +575,15 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
   const trimmed = source.trim();
   const singleOperand = parseSimpleOperand(trimmed);
   const refs: string[] = [];
-  const parsedRefs: Array<{ address: string; sheetName?: string }> = [];
+  const parsedRefs: Array<{ address: string; sheetName?: string; row?: number; col?: number }> = [];
   const deps: string[] = [];
-  const parsedDeps: Array<{ address: string; kind: "cell"; sheetName?: string }> = [];
+  const parsedDeps: Array<{
+    address: string;
+    kind: "cell";
+    sheetName?: string;
+    row?: number;
+    col?: number;
+  }> = [];
   const constants: number[] = [];
   const program: number[] = [];
 
@@ -581,9 +593,10 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
       return existing;
     }
     const index = refs.push(ref) - 1;
-    parsedRefs.push({ address: ref });
+    const parsed = parseCellAddress(ref);
+    parsedRefs.push({ address: ref, row: parsed.row, col: parsed.col });
     deps.push(ref);
-    parsedDeps.push({ kind: "cell", address: ref });
+    parsedDeps.push({ kind: "cell", address: ref, row: parsed.row, col: parsed.col });
     return index;
   };
 

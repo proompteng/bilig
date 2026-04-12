@@ -1,4 +1,9 @@
-import { SpreadsheetEngine, makeCellKey, type EngineCellMutationRef } from "@bilig/core";
+import {
+  SpreadsheetEngine,
+  makeCellKey,
+  type EngineCellMutationRef,
+  type SheetRecord,
+} from "@bilig/core";
 import {
   ErrorCode,
   MAX_COLS,
@@ -163,9 +168,13 @@ type QueuedEvent = Extract<
   }
 >;
 
+type HistoryTransactionRecord =
+  | { kind: "ops"; ops: unknown[]; potentialNewCells?: number }
+  | { kind: "single-op"; op: unknown; potentialNewCells?: number };
+
 interface HistoryRecord {
-  forward: { ops: unknown[]; potentialNewCells?: number };
-  inverse: { ops: unknown[]; potentialNewCells?: number };
+  forward: HistoryTransactionRecord;
+  inverse: HistoryTransactionRecord;
 }
 
 const DEFAULT_CONFIG: Readonly<WorkPaperConfig> = Object.freeze({
@@ -1009,6 +1018,7 @@ export class WorkPaper {
   private clipboard: ClipboardPayload | null = null;
   private visibilityCache: VisibilitySnapshot | null = null;
   private namedExpressionValueCache: NamedExpressionValueSnapshot | null = null;
+  private sheetRecordsCache: readonly SheetRecord[] | null = null;
   private batchDepth = 0;
   private batchStartVisibility: VisibilitySnapshot | null = null;
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null;
@@ -2237,14 +2247,60 @@ export class WorkPaper {
     content: RawCellContent | WorkPaperSheet,
   ): WorkPaperChange[] {
     this.assertNotDisposed();
+    const sheet = this.sheetRecord(address.sheet);
+    assertRowAndColumn(address.row, "address.row");
+    assertRowAndColumn(address.col, "address.col");
+    if (!isWorkPaperSheetMatrix(content)) {
+      if (
+        address.row >= (this.config.maxRows ?? MAX_ROWS) ||
+        address.col >= (this.config.maxColumns ?? MAX_COLS)
+      ) {
+        throw new WorkPaperOperationError("Cell contents cannot be set");
+      }
+      const existingCellIndex = sheet.grid.get(address.row, address.col);
+      if (
+        this.enqueueDeferredBatchLiteral(
+          address.sheet,
+          address.row,
+          address.col,
+          content,
+          existingCellIndex,
+        )
+      ) {
+        return [];
+      }
+      return this.captureChanges(undefined, () => {
+        this.flushPendingBatchOps();
+        const mutation: EngineCellMutationRef["mutation"] =
+          content === null
+            ? { kind: "clearCell", row: address.row, col: address.col }
+            : typeof content === "string" && content.trim().startsWith("=")
+              ? {
+                  kind: "setCellFormula",
+                  row: address.row,
+                  col: address.col,
+                  formula: this.rewriteFormulaForStorage(
+                    stripLeadingEquals(content),
+                    address.sheet,
+                  ),
+                }
+              : {
+                  kind: "setCellValue",
+                  row: address.row,
+                  col: address.col,
+                  value: content,
+                };
+        this.engine.applyCellMutationsAtWithOptions([{ sheetId: address.sheet, mutation }], {
+          captureUndo: true,
+          potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
+          source: "local",
+          returnUndoOps: false,
+          reuseRefs: true,
+        });
+      });
+    }
     if (!this.isItPossibleToSetCellContents(address, content)) {
       throw new WorkPaperOperationError("Cell contents cannot be set");
-    }
-    if (
-      !isWorkPaperSheetMatrix(content) &&
-      this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content)
-    ) {
-      return [];
     }
     return this.captureChanges(undefined, () => {
       if (isWorkPaperSheetMatrix(content)) {
@@ -2252,8 +2308,6 @@ export class WorkPaper {
         this.applyMatrixContents(address, content);
         return;
       }
-      this.flushPendingBatchOps();
-      this.applyRawContent(address, content);
     });
   }
 
@@ -2476,6 +2530,7 @@ export class WorkPaper {
     const beforeNames = this.ensureNamedExpressionValueCache();
     this.drainTrackedEngineEvents();
     this.engine.createSheet(name);
+    this.sheetRecordsCache = null;
     const sheetId = this.requireSheetId(name);
     const payload: WorkPaperDetailedEventMap["sheetAdded"] = { sheetId, sheetName: name };
     if (this.shouldSuppressEvents()) {
@@ -2506,6 +2561,7 @@ export class WorkPaper {
       },
       () => {
         this.engine.deleteSheet(sheetName);
+        this.sheetRecordsCache = null;
       },
     );
   }
@@ -2553,6 +2609,7 @@ export class WorkPaper {
       },
       () => {
         this.engine.renameSheet(oldName, newName);
+        this.sheetRecordsCache = null;
       },
     );
   }
@@ -2876,6 +2933,7 @@ export class WorkPaper {
   }
 
   private primeChangeTrackingCaches(): void {
+    this.sheetRecordsCache = null;
     this.visibilityCache = this.captureVisibilitySnapshot();
     this.namedExpressionValueCache =
       this.namedExpressions.size > 0
@@ -2923,6 +2981,7 @@ export class WorkPaper {
     row: number,
     col: number,
     content: RawCellContent,
+    existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1,
   ): boolean {
     if (
       this.batchDepth === 0 ||
@@ -2931,7 +2990,6 @@ export class WorkPaper {
     ) {
       return false;
     }
-    const existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1;
     if (content === null) {
       this.pendingBatchOps.push({ sheetId, mutation: { kind: "clearCell", row, col } });
       return true;
@@ -3011,9 +3069,13 @@ export class WorkPaper {
   }
 
   private listSheetRecords() {
-    return [...this.engine.workbook.sheetsByName.values()].toSorted(
+    if (this.sheetRecordsCache) {
+      return this.sheetRecordsCache;
+    }
+    this.sheetRecordsCache = [...this.engine.workbook.sheetsByName.values()].toSorted(
       (left, right) => left.order - right.order || left.name.localeCompare(right.name),
     );
+    return this.sheetRecordsCache;
   }
 
   private getDenseRange<Value>(
@@ -3137,6 +3199,84 @@ export class WorkPaper {
       nextVisibility.set(sheetId, created);
       return created;
     };
+    if (events.length === 1) {
+      const event = events[0]!;
+      let hasDuplicateCellKey = false;
+      if (event.changedCells.length <= 4) {
+        for (let index = 0; index < event.changedCells.length; index += 1) {
+          const change = event.changedCells[index]!;
+          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col);
+          for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
+            const prior = event.changedCells[priorIndex]!;
+            if (
+              makeCellKey(prior.address.sheet, prior.address.row, prior.address.col) === cellKey
+            ) {
+              hasDuplicateCellKey = true;
+              break;
+            }
+          }
+          if (hasDuplicateCellKey) {
+            break;
+          }
+        }
+      } else {
+        const seenCellKeys = new Set<number>();
+        for (let index = 0; index < event.changedCells.length; index += 1) {
+          const change = event.changedCells[index]!;
+          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col);
+          if (seenCellKeys.has(cellKey)) {
+            hasDuplicateCellKey = true;
+            break;
+          }
+          seenCellKeys.add(cellKey);
+        }
+      }
+      if (!hasDuplicateCellKey) {
+        const directChanges: WorkPaperCellChange[] = [];
+        let alreadySorted = true;
+        let previousSheetOrder = -1;
+        let previousRow = -1;
+        let previousCol = -1;
+        for (let index = 0; index < event.changedCells.length; index += 1) {
+          const change = event.changedCells[index]!;
+          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col);
+          const sheet = ensureMutableSheet(change.address.sheet, change.sheetName);
+          if (
+            sheet.order < previousSheetOrder ||
+            (sheet.order === previousSheetOrder &&
+              (change.address.row < previousRow ||
+                (change.address.row === previousRow && change.address.col < previousCol)))
+          ) {
+            alreadySorted = false;
+          }
+          if (change.newValue.tag === ValueTag.Empty) {
+            sheet.cells.delete(cellKey);
+          } else {
+            sheet.cells.set(cellKey, change.newValue);
+          }
+          directChanges[index] = {
+            kind: "cell",
+            address: change.address,
+            sheetName: change.sheetName,
+            a1: change.a1,
+            newValue: change.newValue,
+          };
+          previousSheetOrder = sheet.order;
+          previousRow = change.address.row;
+          previousCol = change.address.col;
+        }
+        return {
+          changes: alreadySorted
+            ? directChanges
+            : orderWorkPaperCellChanges(
+                directChanges,
+                this.listSheetRecords(),
+                event.explicitChangedCount,
+              ),
+          nextVisibility,
+        };
+      }
+    }
     const latestChangesByKey = new Map<number, WorkPaperCellChange>();
     for (const event of events) {
       for (let index = 0; index < event.changedCells.length; index += 1) {
@@ -3145,7 +3285,7 @@ export class WorkPaper {
         latestChangesByKey.delete(cellKey);
         latestChangesByKey.set(cellKey, {
           kind: "cell",
-          address: { ...change.address },
+          address: change.address,
           sheetName: change.sheetName,
           a1: change.a1,
           newValue: change.newValue,
@@ -3162,17 +3302,6 @@ export class WorkPaper {
       }
     }
     const directChanges = [...latestChangesByKey.values()];
-    if (events.length === 1) {
-      const event = events[0]!;
-      return {
-        changes: orderWorkPaperCellChanges(
-          directChanges,
-          this.listSheetRecords(),
-          event.explicitChangedCount,
-        ),
-        nextVisibility,
-      };
-    }
     return {
       changes: orderWorkPaperCellChanges(directChanges, this.listSheetRecords()),
       nextVisibility,
@@ -3326,6 +3455,15 @@ export class WorkPaper {
     this.getRedoStack().length = 0;
   }
 
+  private historyTransactionOps(record: HistoryTransactionRecord): unknown[] {
+    switch (record.kind) {
+      case "ops":
+        return record.ops;
+      case "single-op":
+        return [record.op];
+    }
+  }
+
   private mergeUndoHistory(startIndex: number): void {
     const undoStack = this.getUndoStack();
     if (undoStack.length - startIndex <= 1) {
@@ -3334,11 +3472,13 @@ export class WorkPaper {
     const entries = undoStack.splice(startIndex);
     const merged: HistoryRecord = {
       forward: {
-        ops: entries.flatMap((entry) => structuredClone(entry.forward.ops)),
+        kind: "ops",
+        ops: entries.flatMap((entry) => this.historyTransactionOps(entry.forward)),
         potentialNewCells: sumNumbers(entries.map((entry) => entry.forward.potentialNewCells)),
       },
       inverse: {
-        ops: entries.toReversed().flatMap((entry) => structuredClone(entry.inverse.ops)),
+        kind: "ops",
+        ops: entries.toReversed().flatMap((entry) => this.historyTransactionOps(entry.inverse)),
         potentialNewCells: sumNumbers(entries.map((entry) => entry.inverse.potentialNewCells)),
       },
     };

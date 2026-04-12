@@ -2824,14 +2824,14 @@ describe("SpreadsheetEngine", () => {
     });
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "C2", 4);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
-    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 });
   });
 
-  it("uses the indexed js path for exact MATCH when column indexing is enabled", async () => {
+  it("uses the direct indexed path for exact MATCH when column indexing is enabled", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "indexed-lookup", useColumnIndex: true });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -2857,7 +2857,7 @@ describe("SpreadsheetEngine", () => {
     });
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "A2", 20);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({
@@ -2867,10 +2867,10 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellValue("Sheet1", "D1", 3);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 3 });
-    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 });
   });
 
-  it("uses the indexed js path for exact string MATCH and reverse XMATCH when column indexing is enabled", async () => {
+  it("uses the direct indexed path for exact string MATCH and reverse XMATCH when column indexing is enabled", async () => {
     const engine = new SpreadsheetEngine({
       workbookName: "indexed-string-lookup",
       useColumnIndex: true,

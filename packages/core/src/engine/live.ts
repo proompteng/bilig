@@ -17,6 +17,10 @@ import {
   createEngineFormulaBindingService,
   type EngineFormulaBindingService,
 } from "./services/formula-binding-service.js";
+import {
+  createEngineFormulaInitializationService,
+  type EngineFormulaInitializationService,
+} from "./services/formula-initialization-service.js";
 import { createEngineCompiledPlanService } from "./services/compiled-plan-service.js";
 import {
   createEngineFormulaGraphService,
@@ -80,6 +84,7 @@ export interface EngineServiceRuntime {
   readonly evaluation: EngineFormulaEvaluationService;
   readonly selection: EngineSelectionService;
   readonly binding: EngineFormulaBindingService;
+  readonly formulaInitialization: EngineFormulaInitializationService;
   readonly graph: EngineFormulaGraphService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
@@ -173,11 +178,17 @@ type EngineRecalcRuntimeConfig = Omit<
   | "emptyChangedSet"
   | "ensureRecalcScratchCapacity"
   | "getPendingKernelSync"
+  | "getDeferredKernelSyncCount"
+  | "setDeferredKernelSyncCount"
+  | "getDeferredKernelSyncEpoch"
+  | "setDeferredKernelSyncEpoch"
+  | "getDeferredKernelSyncSeen"
   | "getWasmBatch"
   | "getChangedInputBuffer"
   | "dirtyScheduler"
   | "materializeSpill"
   | "clearOwnedSpill"
+  | "evaluateDirectLookupFormula"
   | "evaluateUnsupportedFormula"
   | "materializePivot"
 >;
@@ -195,6 +206,7 @@ type EnginePivotRuntimeConfig = Omit<
   Parameters<typeof createEnginePivotService>[0],
   | "ensureCellTrackedByCoords"
   | "forEachSheetCell"
+  | "flushDeferredKernelSync"
   | "scheduleWasmProgramSync"
   | "flushWasmProgramSync"
   | "applyDerivedOp"
@@ -286,6 +298,7 @@ export function createEngineServiceRuntime(args: {
   let operations: EngineOperationService | undefined;
   let pivot: EnginePivotService | undefined;
   let recalc: EngineRecalcService | undefined;
+  let formulaInitialization: EngineFormulaInitializationService | undefined;
   let dirtyScheduler: EngineDirtyFrontierSchedulerService | undefined;
   const selection = createEngineSelectionService(args.state);
   const support = createEngineMutationSupportService({
@@ -477,15 +490,52 @@ export function createEngineServiceRuntime(args: {
     emptyChangedSet: () => support.unionChangedSetsNow(),
     ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     getPendingKernelSync: () => scratch.getPendingKernelSyncNow(),
+    getDeferredKernelSyncCount: () => scratch.getDeferredKernelSyncCountNow(),
+    setDeferredKernelSyncCount: (next) => scratch.setDeferredKernelSyncCountNow(next),
+    getDeferredKernelSyncEpoch: () => scratch.getDeferredKernelSyncEpochNow(),
+    setDeferredKernelSyncEpoch: (next) => scratch.setDeferredKernelSyncEpochNow(next),
+    getDeferredKernelSyncSeen: () => scratch.getDeferredKernelSyncSeenNow(),
     getWasmBatch: () => scratch.getWasmBatchNow(),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
     dirtyScheduler,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
     clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
+    evaluateDirectLookupFormula: (cellIndex) =>
+      evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     evaluateUnsupportedFormula: (cellIndex) =>
       runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivotRecord) =>
       requireService(pivot, "pivot").materializePivotNow(pivotRecord),
+  });
+  formulaInitialization = createEngineFormulaInitializationService({
+    state: args.state,
+    beginMutationCollection: () => support.beginMutationCollectionNow(),
+    ensureCellTrackedByCoords: (sheetId, row, col) =>
+      support.ensureCellTrackedByCoordsNow(sheetId, row, col),
+    resetMaterializedCellScratch: (expectedSize) =>
+      support.resetMaterializedCellScratchNow(expectedSize),
+    bindFormula: (cellIndex, ownerSheetName, source) =>
+      binding.bindInitialFormulaNow(cellIndex, ownerSheetName, source),
+    removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
+    setInvalidFormulaValue: (cellIndex) => binding.invalidateFormulaNow(cellIndex),
+    markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
+    markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
+    markVolatileFormulasChanged: (count) => support.markVolatileFormulasChangedNow(count),
+    syncDynamicRanges: (formulaChangedCount) => support.syncDynamicRangesNow(formulaChangedCount),
+    composeMutationRoots: (changedInputCount, formulaChangedCount) =>
+      support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
+    getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    rebuildTopoRanks: () => graph.rebuildTopoRanksNow(),
+    detectCycles: () => graph.detectCyclesNow(),
+    recalculate: (changedRoots, kernelSyncRoots) =>
+      requireService(recalc, "recalc").recalculateNowSync(changedRoots, kernelSyncRoots),
+    reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
+      requireService(recalc, "recalc").reconcilePivotOutputsNow(baseChanged, forceAllPivots),
+    getBatchMutationDepth: () => args.operation.getBatchMutationDepth(),
+    setBatchMutationDepth: (next) => {
+      args.operation.setBatchMutationDepth(next);
+    },
+    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
   });
   operations = createEngineOperationService({
     ...args.operation,
@@ -578,6 +628,23 @@ export function createEngineServiceRuntime(args: {
     ensureCellTrackedByCoords: (sheetId, row, col) =>
       support.ensureCellTrackedByCoordsNow(sheetId, row, col),
     forEachSheetCell: (sheetId, fn) => traversal.forEachSheetCellNow(sheetId, fn),
+    flushDeferredKernelSync: () => {
+      const deferredCount = scratch.getDeferredKernelSyncCountNow();
+      if (deferredCount === 0 || !args.state.wasm.ready) {
+        return;
+      }
+      args.state.wasm.syncFromStore(
+        args.state.workbook.cellStore,
+        scratch.getPendingKernelSyncNow().subarray(0, deferredCount),
+      );
+      scratch.setDeferredKernelSyncCountNow(0);
+      let nextEpoch = scratch.getDeferredKernelSyncEpochNow() + 1;
+      if (nextEpoch === 0xffff_ffff) {
+        nextEpoch = 1;
+        scratch.getDeferredKernelSyncSeenNow().fill(0);
+      }
+      scratch.setDeferredKernelSyncEpochNow(nextEpoch);
+    },
     scheduleWasmProgramSync: () => graph.scheduleWasmProgramSyncNow(),
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     applyDerivedOp: (op) => runEngineEffect(operations.applyDerivedOp(op)),
@@ -603,6 +670,7 @@ export function createEngineServiceRuntime(args: {
     evaluation,
     selection,
     binding,
+    formulaInitialization,
     graph,
     history,
     support,

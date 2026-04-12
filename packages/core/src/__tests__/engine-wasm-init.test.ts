@@ -30,4 +30,20 @@ describe("SpreadsheetEngine wasm initialization", () => {
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
+
+  it("flushes deferred JS-only edits before the first wasm formula evaluation", () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A1", 12);
+    engine.setCellFormula("Sheet1", "B1", "A1+1");
+
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 13 });
+
+    engine.setCellValue("Sheet1", "A1", 20);
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 21 });
+  });
 });

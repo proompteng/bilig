@@ -111,6 +111,11 @@ export function createEngineRecalcService(args: {
   readonly emptyChangedSet: () => U32;
   readonly ensureRecalcScratchCapacity: (size: number) => void;
   readonly getPendingKernelSync: () => U32;
+  readonly getDeferredKernelSyncCount: () => number;
+  readonly setDeferredKernelSyncCount: (next: number) => void;
+  readonly getDeferredKernelSyncEpoch: () => number;
+  readonly setDeferredKernelSyncEpoch: (next: number) => void;
+  readonly getDeferredKernelSyncSeen: () => U32;
   readonly getWasmBatch: () => U32;
   readonly getChangedInputBuffer: () => U32;
   readonly now: () => Date;
@@ -122,6 +127,7 @@ export function createEngineRecalcService(args: {
     arrayValue: { values: import("@bilig/protocol").CellValue[]; rows: number; cols: number },
   ) => import("../runtime-state.js").SpillMaterialization;
   readonly clearOwnedSpill: (cellIndex: number) => number[];
+  readonly evaluateDirectLookupFormula: (cellIndex: number) => number[] | undefined;
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[];
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[];
 }): EngineRecalcService {
@@ -192,6 +198,20 @@ export function createEngineRecalcService(args: {
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1);
     let pendingKernelSync = args.getPendingKernelSync();
     let wasmBatch = args.getWasmBatch();
+    let deferredKernelSyncCount = args.getDeferredKernelSyncCount();
+    let deferredKernelSyncEpoch = args.getDeferredKernelSyncEpoch() + 1;
+    const deferredKernelSyncSeen = args.getDeferredKernelSyncSeen();
+    if (deferredKernelSyncEpoch === 0xffff_ffff) {
+      deferredKernelSyncEpoch = 1;
+      deferredKernelSyncSeen.fill(0);
+    }
+    args.setDeferredKernelSyncEpoch(deferredKernelSyncEpoch);
+    for (let index = 0; index < deferredKernelSyncCount; index += 1) {
+      const cellIndex = pendingKernelSync[index];
+      if (cellIndex !== undefined) {
+        deferredKernelSyncSeen[cellIndex] = deferredKernelSyncEpoch;
+      }
+    }
     if (args.state.wasm.ready) {
       args.state.wasm.syncStringPool(args.state.strings.exportLayout());
     }
@@ -206,7 +226,7 @@ export function createEngineRecalcService(args: {
     let totalRangeNodeVisits = 0;
     let wasmCount = 0;
     let jsCount = 0;
-    let pendingKernelSyncCount = 0;
+    let pendingKernelSyncCount = deferredKernelSyncCount;
     const volatileState = createRecalcVolatileState(args.now);
 
     const flushWasmBatch = (
@@ -222,6 +242,14 @@ export function createEngineRecalcService(args: {
         pendingKernelSync.subarray(0, pendingKernelSyncCount),
       );
       pendingKernelSyncCount = 0;
+      deferredKernelSyncCount = 0;
+      args.setDeferredKernelSyncCount(0);
+      deferredKernelSyncEpoch += 1;
+      if (deferredKernelSyncEpoch === 0xffff_ffff) {
+        deferredKernelSyncEpoch = 1;
+        deferredKernelSyncSeen.fill(0);
+      }
+      args.setDeferredKernelSyncEpoch(deferredKernelSyncEpoch);
       if (hasVolatile) {
         args.state.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
         args.state.wasm.uploadVolatileRandomValues(
@@ -264,9 +292,13 @@ export function createEngineRecalcService(args: {
         }
       }
 
-      pendingKernelSyncCount = 0;
       for (let index = 0; index < passKernelRoots.length; index += 1) {
-        pendingKernelSync[pendingKernelSyncCount] = passKernelRoots[index]!;
+        const cellIndex = passKernelRoots[index]!;
+        if (deferredKernelSyncSeen[cellIndex] === deferredKernelSyncEpoch) {
+          continue;
+        }
+        deferredKernelSyncSeen[cellIndex] = deferredKernelSyncEpoch;
+        pendingKernelSync[pendingKernelSyncCount] = cellIndex;
         pendingKernelSyncCount += 1;
       }
 
@@ -286,6 +318,10 @@ export function createEngineRecalcService(args: {
         }
       };
       const queueKernelSync = (cellIndex: number): void => {
+        if (deferredKernelSyncSeen[cellIndex] === deferredKernelSyncEpoch) {
+          return;
+        }
+        deferredKernelSyncSeen[cellIndex] = deferredKernelSyncEpoch;
         pendingKernelSync[pendingKernelSyncCount] = cellIndex;
         pendingKernelSyncCount += 1;
       };
@@ -295,6 +331,14 @@ export function createEngineRecalcService(args: {
           pendingKernelSync.subarray(0, pendingKernelSyncCount),
         );
         pendingKernelSyncCount = 0;
+        deferredKernelSyncCount = 0;
+        args.setDeferredKernelSyncCount(0);
+        deferredKernelSyncEpoch += 1;
+        if (deferredKernelSyncEpoch === 0xffff_ffff) {
+          deferredKernelSyncEpoch = 1;
+          deferredKernelSyncSeen.fill(0);
+        }
+        args.setDeferredKernelSyncEpoch(deferredKernelSyncEpoch);
         if (formula.compiled.volatile) {
           args.state.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
           args.state.wasm.uploadVolatileRandomValues(
@@ -350,6 +394,14 @@ export function createEngineRecalcService(args: {
         if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
           continue;
         }
+        if (formula.directLookup !== undefined) {
+          const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex);
+          if (directLookupChanges !== undefined) {
+            noteSpillChanges(directLookupChanges);
+            queueKernelSync(cellIndex);
+            continue;
+          }
+        }
         if (formula.compiled.mode === FormulaMode.WasmFastPath && args.state.wasm.ready) {
           if (formula.compiled.producesSpill) {
             wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
@@ -376,12 +428,8 @@ export function createEngineRecalcService(args: {
       }
 
       wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
-      if (pendingKernelSyncCount > 0) {
-        args.state.wasm.syncFromStore(
-          args.state.workbook.cellStore,
-          pendingKernelSync.subarray(0, pendingKernelSyncCount),
-        );
-      }
+      args.setDeferredKernelSyncCount(pendingKernelSyncCount);
+      deferredKernelSyncCount = pendingKernelSyncCount;
 
       if (spillChangedRoots.length === 0) {
         break;
@@ -408,6 +456,7 @@ export function createEngineRecalcService(args: {
     lastMetrics.rangeNodeVisits = totalRangeNodeVisits;
     lastMetrics.recalcMs = args.performanceNow() - started;
     args.state.setLastMetrics(lastMetrics);
+    args.setDeferredKernelSyncCount(pendingKernelSyncCount);
     if (singlePassOrdered !== null) {
       return totalOrderedCount === 0 && allChangedRoots.length === 0
         ? args.emptyChangedSet()

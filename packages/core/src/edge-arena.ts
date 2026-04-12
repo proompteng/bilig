@@ -84,10 +84,33 @@ export class EdgeArena {
         return slice;
       }
     }
-    const next = new Uint32Array(values.length + 1);
-    next.set(values);
-    next[values.length] = value;
-    return this.replace(slice, next);
+    if (slice.ptr < 0 || slice.cap <= 0) {
+      const target = this.alloc(1);
+      this.buffer[target.ptr] = value;
+      return {
+        ptr: target.ptr,
+        len: 1,
+        cap: target.cap,
+      };
+    }
+    if (slice.len < slice.cap) {
+      this.buffer[slice.ptr + slice.len] = value;
+      return {
+        ptr: slice.ptr,
+        len: slice.len + 1,
+        cap: slice.cap,
+      };
+    }
+    const nextCap = Math.max(slice.cap * 2, slice.len + 1);
+    const target = this.alloc(nextCap);
+    this.buffer.set(values, target.ptr);
+    this.buffer[target.ptr + values.length] = value;
+    this.free(slice);
+    return {
+      ptr: target.ptr,
+      len: values.length + 1,
+      cap: target.cap,
+    };
   }
 
   removeValue(slice: EdgeSlice, value: number): EdgeSlice {

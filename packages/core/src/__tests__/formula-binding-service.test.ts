@@ -84,4 +84,22 @@ describe("EngineFormulaBindingService", () => {
     expect(engine.getCellValue("Sheet1", "E2")).toEqual({ tag: ValueTag.Number, value: 22 });
     expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 44 });
   });
+
+  it("preserves dependency wiring across formula rewrites with the same dependencies", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-same-deps-rewrite" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellFormula("Sheet1", "C1", "A1+B1");
+    engine.setCellFormula("Sheet1", "D1", "C1*2");
+
+    engine.setCellFormula("Sheet1", "C1", "A1*B1");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(engine.getDependencies("Sheet1", "A1").directDependents).toContain("Sheet1!C1");
+    expect(engine.getDependencies("Sheet1", "C1").directDependents).toContain("Sheet1!D1");
+  });
 });

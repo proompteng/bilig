@@ -22,6 +22,8 @@ describe("EngineRuntimeScratchService", () => {
   it("tracks epochs and materialized cell counters through the extracted scratch boundary", () => {
     const scratch = createEngineRuntimeScratchService();
 
+    scratch.setDeferredKernelSyncCountNow(3);
+    scratch.setDeferredKernelSyncEpochNow(4);
     scratch.setChangedInputEpochNow(5);
     scratch.setChangedFormulaEpochNow(6);
     scratch.setChangedUnionEpochNow(7);
@@ -29,6 +31,8 @@ describe("EngineRuntimeScratchService", () => {
     scratch.setImpactedFormulaEpochNow(9);
     scratch.setMaterializedCellCountNow(4);
 
+    expect(scratch.getDeferredKernelSyncCountNow()).toBe(3);
+    expect(scratch.getDeferredKernelSyncEpochNow()).toBe(4);
     expect(scratch.getChangedInputEpochNow()).toBe(5);
     expect(scratch.getChangedFormulaEpochNow()).toBe(6);
     expect(scratch.getChangedUnionEpochNow()).toBe(7);

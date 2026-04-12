@@ -72,13 +72,19 @@ export type TransactionRecord =
       kind: "ops";
       ops: EngineOp[];
       potentialNewCells?: number;
+<<<<<<< HEAD
       preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[];
+=======
+>>>>>>> 28168c3 (perf(core): hard-cut engine hot paths)
     }
   | {
       kind: "single-op";
       op: EngineOp;
       potentialNewCells?: number;
+<<<<<<< HEAD
       preparedCellAddress?: PreparedCellAddress | null;
+=======
+>>>>>>> 28168c3 (perf(core): hard-cut engine hot paths)
     };
 
 export interface TransactionLogEntry {

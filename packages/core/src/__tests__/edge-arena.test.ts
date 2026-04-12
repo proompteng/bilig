@@ -68,4 +68,19 @@ describe("EdgeArena", () => {
     arena.free(arena.empty());
     expect(arena.alloc(1).ptr).toBe(3);
   });
+
+  it("appends in place when capacity is available and grows geometrically when it is not", () => {
+    const arena = new EdgeArena();
+    const seeded = arena.replace(arena.alloc(2), Uint32Array.from([5]));
+
+    const appendedInPlace = arena.appendUnique(seeded, 9);
+    expect(appendedInPlace.ptr).toBe(seeded.ptr);
+    expect(appendedInPlace.cap).toBe(seeded.cap);
+    expect([...arena.read(appendedInPlace)]).toEqual([5, 9]);
+
+    const grown = arena.appendUnique(appendedInPlace, 13);
+    expect(grown.ptr).not.toBe(appendedInPlace.ptr);
+    expect(grown.cap).toBeGreaterThanOrEqual(3);
+    expect([...arena.read(grown)]).toEqual([5, 9, 13]);
+  });
 });

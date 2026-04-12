@@ -9,7 +9,7 @@ export interface EngineCompiledPlanService {
 
 interface MutableCompiledPlanRecord extends CompiledPlanRecord {
   refCount: number;
-  signature: string;
+  signature?: string;
 }
 
 function compiledPlanSignature(source: string, compiled: CompiledFormula): string {
@@ -34,31 +34,43 @@ function compiledPlanSignature(source: string, compiled: CompiledFormula): strin
 
 export function createEngineCompiledPlanService(): EngineCompiledPlanService {
   const records = new Map<number, MutableCompiledPlanRecord>();
-  const planIdBySignature = new Map<string, number>();
+  const planIdsBySource = new Map<string, number[]>();
   let nextPlanId = 1;
 
   return {
     intern(source, compiled) {
-      const signature = compiledPlanSignature(source, compiled);
-      const existingId = planIdBySignature.get(signature);
-      if (existingId !== undefined) {
-        const existing = records.get(existingId);
-        if (!existing) {
-          throw new Error(`Missing compiled plan record for id ${existingId}`);
+      const existingIds = planIdsBySource.get(source);
+      if (existingIds && existingIds.length > 0) {
+        const signature = compiledPlanSignature(source, compiled);
+        for (let index = 0; index < existingIds.length; index += 1) {
+          const existingId = existingIds[index]!;
+          const existing = records.get(existingId);
+          if (!existing) {
+            throw new Error(`Missing compiled plan record for id ${existingId}`);
+          }
+          if (existing.signature === undefined) {
+            existing.signature = compiledPlanSignature(existing.source, existing.compiled);
+          }
+          if (existing.signature !== signature) {
+            continue;
+          }
+          existing.refCount += 1;
+          return existing;
         }
-        existing.refCount += 1;
-        return existing;
       }
       const record: MutableCompiledPlanRecord = {
         id: nextPlanId,
         source,
         compiled,
         refCount: 1,
-        signature,
       };
       nextPlanId += 1;
       records.set(record.id, record);
-      planIdBySignature.set(signature, record.id);
+      if (existingIds) {
+        existingIds.push(record.id);
+      } else {
+        planIdsBySource.set(source, [record.id]);
+      }
       return record;
     },
     get(planId) {
@@ -74,7 +86,16 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
         return;
       }
       records.delete(planId);
-      planIdBySignature.delete(existing.signature);
+      const sourceIds = planIdsBySource.get(existing.source);
+      if (!sourceIds) {
+        return;
+      }
+      const nextSourceIds = sourceIds.filter((id) => id !== planId);
+      if (nextSourceIds.length === 0) {
+        planIdsBySource.delete(existing.source);
+        return;
+      }
+      planIdsBySource.set(existing.source, nextSourceIds);
     },
   };
 }

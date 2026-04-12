@@ -52,8 +52,8 @@ export interface EngineOperationService {
   ) => Effect.Effect<void, EngineMutationError>;
   readonly applyCellMutationsAt: (
     refs: readonly EngineCellMutationRef[],
-    batch: EngineOpBatch,
-    source: "local" | "restore",
+    batch: EngineOpBatch | null,
+    source: "local" | "restore" | "history",
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>;
   readonly applyDerivedOp: (op: DerivedOp) => Effect.Effect<number[], EngineMutationError>;
@@ -1412,8 +1412,8 @@ export function createEngineOperationService(args: {
 
   const applyCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
-    batch: EngineOpBatch,
-    source: "local" | "restore",
+    batch: EngineOpBatch | null,
+    source: "local" | "restore" | "history",
     potentialNewCells?: number,
   ): void => {
     const isRestore = source === "restore";
@@ -1448,7 +1448,8 @@ export function createEngineOperationService(args: {
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
         refs.forEach((ref, refIndex) => {
           const { sheetId, mutation } = ref;
-          const order = args.state.trackReplicaVersions ? batchOpOrder(batch, refIndex) : undefined;
+          const order =
+            args.state.trackReplicaVersions && batch ? batchOpOrder(batch, refIndex) : undefined;
           const existingIndex = args.state.workbook.cellKeyToIndex.get(
             makeCellKey(sheetId, mutation.row, mutation.col),
           );
@@ -1653,9 +1654,11 @@ export function createEngineOperationService(args: {
       args.flushWasmProgramSync();
     }
 
-    markBatchApplied(args.state.replicaState, batch);
+    if (batch) {
+      markBatchApplied(args.state.replicaState, batch);
+    }
     if (refs.length === 0) {
-      if (!isRestore) {
+      if (!isRestore && batch) {
         emitBatch(batch);
       }
       return;
@@ -1707,8 +1710,10 @@ export function createEngineOperationService(args: {
     } else if (isRestore) {
       return;
     }
-    void args.state.getSyncClientConnection()?.send(batch);
-    emitBatch(batch);
+    if (batch) {
+      void args.state.getSyncClientConnection()?.send(batch);
+      emitBatch(batch);
+    }
   };
 
   return {

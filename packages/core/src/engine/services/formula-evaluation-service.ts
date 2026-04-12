@@ -27,6 +27,10 @@ import type { EngineRuntimeColumnStoreService } from "./runtime-column-store-ser
 import type { SortedColumnSearchService } from "./sorted-column-search-service.js";
 
 export interface EngineFormulaEvaluationService {
+  readonly evaluateDirectLookupFormula: (
+    cellIndex: number,
+  ) => Effect.Effect<number[] | undefined, EngineFormulaEvaluationError>;
+  readonly evaluateDirectLookupFormulaNow: (cellIndex: number) => number[] | undefined;
   readonly evaluateUnsupportedFormula: (
     cellIndex: number,
   ) => Effect.Effect<number[], EngineFormulaEvaluationError>;
@@ -86,6 +90,18 @@ export function createEngineFormulaEvaluationService(args: {
 }): EngineFormulaEvaluationService {
   const normalizedStrings = new Map<number, string>();
   const emptyChangedCellIndices: number[] = [];
+  const reusableDirectNumberResult: CellValue = { tag: ValueTag.Number, value: 0 };
+  const reusableDirectErrorResult: CellValue = { tag: ValueTag.Error, code: ErrorCode.None };
+
+  const directNumberResult = (value: number): CellValue => {
+    reusableDirectNumberResult.value = value;
+    return reusableDirectNumberResult;
+  };
+
+  const directErrorResult = (code: ErrorCode): CellValue => {
+    reusableDirectErrorResult.code = code;
+    return reusableDirectErrorResult;
+  };
 
   const readCellValue = (sheetName: string, address: string): CellValue => {
     const parsed = parseCellAddress(address, sheetName);
@@ -338,16 +354,33 @@ export function createEngineFormulaEvaluationService(args: {
         return undefined;
       }
       if (tag !== ValueTag.Number) {
-        return errorValue(ErrorCode.NA);
+        return directErrorResult(ErrorCode.NA);
       }
       const numericValue = Object.is(cellStore.numbers[refreshed.operandCellIndex] ?? 0, -0)
         ? 0
         : (cellStore.numbers[refreshed.operandCellIndex] ?? 0);
+      if (refreshed.step === 1) {
+        if (!Number.isInteger(numericValue)) {
+          return directErrorResult(ErrorCode.NA);
+        }
+        const position = numericValue - refreshed.start + 1;
+        return position >= 1 && position <= refreshed.length
+          ? directNumberResult(position)
+          : directErrorResult(ErrorCode.NA);
+      }
+      if (refreshed.step === -1) {
+        if (!Number.isInteger(numericValue)) {
+          return directErrorResult(ErrorCode.NA);
+        }
+        const position = refreshed.start - numericValue + 1;
+        return position >= 1 && position <= refreshed.length
+          ? directNumberResult(position)
+          : directErrorResult(ErrorCode.NA);
+      }
       const relative = (numericValue - refreshed.start) / refreshed.step;
-      const position = Number.isInteger(relative) ? relative + 1 : undefined;
-      return position !== undefined && position >= 1 && position <= refreshed.length
-        ? { tag: ValueTag.Number, value: position }
-        : errorValue(ErrorCode.NA);
+      return Number.isInteger(relative) && relative >= 0 && relative < refreshed.length
+        ? directNumberResult(relative + 1)
+        : directErrorResult(ErrorCode.NA);
     }
     if (directLookup.kind === "exact") {
       const prepared = refreshDirectExactLookup(directLookup);
@@ -358,7 +391,7 @@ export function createEngineFormulaEvaluationService(args: {
           return undefined;
         }
         if (tag !== ValueTag.Number) {
-          return errorValue(ErrorCode.NA);
+          return directErrorResult(ErrorCode.NA);
         }
         const numericValue = Object.is(cellStore.numbers[cellIndex] ?? 0, -0)
           ? 0
@@ -367,8 +400,8 @@ export function createEngineFormulaEvaluationService(args: {
           const relative = (numericValue - prepared.uniformStart) / prepared.uniformStep;
           const position = Number.isInteger(relative) ? relative + 1 : undefined;
           return position !== undefined && position >= 1 && position <= prepared.length
-            ? { tag: ValueTag.Number, value: position }
-            : errorValue(ErrorCode.NA);
+            ? directNumberResult(position)
+            : directErrorResult(ErrorCode.NA);
         }
         const row = (
           directLookup.searchMode === -1
@@ -376,23 +409,23 @@ export function createEngineFormulaEvaluationService(args: {
             : prepared.firstNumericPositions
         )?.get(numericValue);
         return row === undefined
-          ? errorValue(ErrorCode.NA)
-          : { tag: ValueTag.Number, value: row - prepared.rowStart + 1 };
+          ? directErrorResult(ErrorCode.NA)
+          : directNumberResult(row - prepared.rowStart + 1);
       }
       if (prepared.comparableKind === "text") {
         if (tag === ValueTag.Error) {
           return undefined;
         }
         if (tag !== ValueTag.String) {
-          return errorValue(ErrorCode.NA);
+          return directErrorResult(ErrorCode.NA);
         }
         const textValue = readNormalizedString(cellStore.stringIds[cellIndex] ?? 0);
         const row = (
           directLookup.searchMode === -1 ? prepared.lastTextPositions : prepared.firstTextPositions
         )?.get(textValue);
         return row === undefined
-          ? errorValue(ErrorCode.NA)
-          : { tag: ValueTag.Number, value: row - prepared.rowStart + 1 };
+          ? directErrorResult(ErrorCode.NA)
+          : directNumberResult(row - prepared.rowStart + 1);
       }
 
       let normalizedLookupKey: string | undefined;
@@ -425,8 +458,8 @@ export function createEngineFormulaEvaluationService(args: {
         directLookup.searchMode === -1 ? prepared.lastPositions : prepared.firstPositions
       ).get(normalizedLookupKey);
       return row === undefined
-        ? errorValue(ErrorCode.NA)
-        : { tag: ValueTag.Number, value: row - prepared.rowStart + 1 };
+        ? directErrorResult(ErrorCode.NA)
+        : directNumberResult(row - prepared.rowStart + 1);
     }
     if (directLookup.kind === "approximate-uniform-numeric") {
       const refreshed = refreshDirectApproximateUniformLookup(formula, directLookup);
@@ -455,29 +488,23 @@ export function createEngineFormulaEvaluationService(args: {
       const lastValue = refreshed.start + refreshed.step * (refreshed.length - 1);
       if (refreshed.matchMode === 1 && refreshed.step > 0) {
         if (lookupValue < refreshed.start) {
-          return errorValue(ErrorCode.NA);
+          return directErrorResult(ErrorCode.NA);
         }
         if (lookupValue >= lastValue) {
-          return { tag: ValueTag.Number, value: refreshed.length };
+          return directNumberResult(refreshed.length);
         }
         const position = Math.floor((lookupValue - refreshed.start) / refreshed.step) + 1;
-        return {
-          tag: ValueTag.Number,
-          value: Math.min(refreshed.length, Math.max(1, position)),
-        };
+        return directNumberResult(Math.min(refreshed.length, Math.max(1, position)));
       }
       if (refreshed.matchMode === -1 && refreshed.step < 0) {
         if (lookupValue > refreshed.start) {
-          return errorValue(ErrorCode.NA);
+          return directErrorResult(ErrorCode.NA);
         }
         if (lookupValue <= lastValue) {
-          return { tag: ValueTag.Number, value: refreshed.length };
+          return directNumberResult(refreshed.length);
         }
         const position = Math.floor((refreshed.start - lookupValue) / -refreshed.step) + 1;
-        return {
-          tag: ValueTag.Number,
-          value: Math.min(refreshed.length, Math.max(1, position)),
-        };
+        return directNumberResult(Math.min(refreshed.length, Math.max(1, position)));
       }
       return undefined;
     }
@@ -521,23 +548,33 @@ export function createEngineFormulaEvaluationService(args: {
         const lastValue = uniformStart + uniformStep * (values.length - 1);
         if (directLookup.matchMode === 1 && uniformStep > 0) {
           if (lookupValue < uniformStart) {
-            return errorValue(ErrorCode.NA);
+            return directErrorResult(ErrorCode.NA);
           }
           if (lookupValue >= lastValue) {
-            return { tag: ValueTag.Number, value: values.length };
+            return directNumberResult(values.length);
+          }
+          if (uniformStep === 1) {
+            return directNumberResult(
+              Math.min(values.length, Math.max(1, Math.floor(lookupValue - uniformStart) + 1)),
+            );
           }
           const position = Math.floor((lookupValue - uniformStart) / uniformStep) + 1;
-          return { tag: ValueTag.Number, value: Math.min(values.length, Math.max(1, position)) };
+          return directNumberResult(Math.min(values.length, Math.max(1, position)));
         }
         if (directLookup.matchMode === -1 && uniformStep < 0) {
           if (lookupValue > uniformStart) {
-            return errorValue(ErrorCode.NA);
+            return directErrorResult(ErrorCode.NA);
           }
           if (lookupValue <= lastValue) {
-            return { tag: ValueTag.Number, value: values.length };
+            return directNumberResult(values.length);
+          }
+          if (uniformStep === -1) {
+            return directNumberResult(
+              Math.min(values.length, Math.max(1, Math.floor(uniformStart - lookupValue) + 1)),
+            );
           }
           const position = Math.floor((uniformStart - lookupValue) / -uniformStep) + 1;
-          return { tag: ValueTag.Number, value: Math.min(values.length, Math.max(1, position)) };
+          return directNumberResult(Math.min(values.length, Math.max(1, position)));
         }
       }
       let low = 0;
@@ -560,7 +597,7 @@ export function createEngineFormulaEvaluationService(args: {
           high = mid - 1;
         }
       }
-      return best === -1 ? errorValue(ErrorCode.NA) : { tag: ValueTag.Number, value: best + 1 };
+      return best === -1 ? directErrorResult(ErrorCode.NA) : directNumberResult(best + 1);
     }
 
     let lookupValue = "";
@@ -601,7 +638,7 @@ export function createEngineFormulaEvaluationService(args: {
         high = mid - 1;
       }
     }
-    return best === -1 ? errorValue(ErrorCode.NA) : { tag: ValueTag.Number, value: best + 1 };
+    return best === -1 ? directErrorResult(ErrorCode.NA) : directNumberResult(best + 1);
   };
 
   const resolveStructuredReferenceNow = (
@@ -816,6 +853,31 @@ export function createEngineFormulaEvaluationService(args: {
     return materialization.changedCellIndices;
   };
 
+  const storeDirectScalarResult = (cellIndex: number, result: CellValue): number[] => {
+    args.state.workbook.cellStore.flags[cellIndex] =
+      (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
+      ~(CellFlags.SpillChild | CellFlags.PivotOutput);
+    args.state.workbook.cellStore.setValue(
+      cellIndex,
+      result,
+      result.tag === ValueTag.String ? args.state.strings.intern(result.value) : 0,
+    );
+    return emptyChangedCellIndices;
+  };
+
+  const evaluateDirectLookupFormulaNow = (cellIndex: number): number[] | undefined => {
+    const formula = args.state.formulas.get(cellIndex);
+    if (!formula) {
+      return undefined;
+    }
+    const directResult = tryEvaluateDirectVectorLookup(formula);
+    return directResult === undefined
+      ? undefined
+      : formula.compiled.producesSpill
+        ? storeFormulaResult(cellIndex, formula, directResult)
+        : storeDirectScalarResult(cellIndex, directResult);
+  };
+
   const evaluateUnsupportedFormulaNow = (cellIndex: number): number[] => {
     const formula = args.state.formulas.get(cellIndex);
     const sheetName = args.state.workbook.getSheetNameById(
@@ -914,6 +976,22 @@ export function createEngineFormulaEvaluationService(args: {
   };
 
   return {
+    evaluateDirectLookupFormulaNow: evaluateDirectLookupFormulaNow,
+    evaluateDirectLookupFormula(cellIndex) {
+      return Effect.try({
+        try: () => {
+          return evaluateDirectLookupFormulaNow(cellIndex);
+        },
+        catch: (cause) =>
+          new EngineFormulaEvaluationError({
+            message: evaluationErrorMessage(
+              `Failed to evaluate direct lookup formula ${cellIndex}`,
+              cause,
+            ),
+            cause,
+          }),
+      });
+    },
     evaluateUnsupportedFormula(cellIndex) {
       return Effect.try({
         try: () => evaluateUnsupportedFormulaNow(cellIndex),

@@ -20,11 +20,7 @@ function readExplicitChangedCount(event: EngineEvent): number | undefined {
 export function captureTrackedEngineEvent(event: EngineEvent): TrackedEngineEvent {
   return {
     invalidation: event.invalidation,
-    changedCells: event.changedCells.map((change) => ({
-      ...change,
-      address: { ...change.address },
-      newValue: { ...change.newValue },
-    })),
+    changedCells: event.changedCells,
     changedInputCount: event.metrics.changedInputCount,
     explicitChangedCount: readExplicitChangedCount(event),
     hasInvalidatedRanges: event.invalidatedRanges.length > 0,

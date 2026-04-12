@@ -11,7 +11,8 @@ export function orderWorkPaperCellChanges(
     return changes;
   }
 
-  const compare = compareWorkPaperCellChanges(sheets);
+  const compare =
+    sheets.length === 1 ? compareSingleSheetCellChanges : compareWorkPaperCellChanges(sheets);
   const split =
     explicitChangedCount === undefined ? undefined : Math.min(explicitChangedCount, changes.length);
 
@@ -30,6 +31,13 @@ export function orderWorkPaperCellChanges(
   }
 
   return changes.toSorted(compare);
+}
+
+function compareSingleSheetCellChanges(left: WorkPaperChange, right: WorkPaperChange): number {
+  if (left.kind !== "cell" || right.kind !== "cell") {
+    return 0;
+  }
+  return left.address.row - right.address.row || left.address.col - right.address.col;
 }
 
 function compareWorkPaperCellChanges(

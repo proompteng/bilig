@@ -216,6 +216,11 @@ describe("EngineMutationSupportService", () => {
     );
     expect(Array.from(eventChanges)).toEqual([a1Index, b1Index]);
 
+    const eventChangesWithRootEcho = Effect.runSync(
+      support.composeEventChanges(Uint32Array.of(a1Index!, b1Index!), explicitChangedCount),
+    );
+    expect(Array.from(eventChangesWithRootEcho)).toEqual([a1Index, b1Index]);
+
     const union = Effect.runSync(
       support.unionChangedSets(Uint32Array.of(a1Index!), Uint32Array.of(a1Index!, b1Index!)),
     );

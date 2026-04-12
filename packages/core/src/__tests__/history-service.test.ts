@@ -7,8 +7,8 @@ describe("EngineHistoryService", () => {
   it("restores replay depth even when history replay throws", () => {
     let replayDepth = 0;
     const entry: TransactionLogEntry = {
-      forward: { ops: [{ kind: "upsertWorkbook", name: "book" }] },
-      inverse: { ops: [{ kind: "upsertWorkbook", name: "book" }] },
+      forward: { kind: "ops", ops: [{ kind: "upsertWorkbook", name: "book" }] },
+      inverse: { kind: "ops", ops: [{ kind: "upsertWorkbook", name: "book" }] },
     };
     const service = createEngineHistoryService({
       state: {

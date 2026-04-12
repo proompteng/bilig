@@ -76,6 +76,7 @@ export function createEnginePivotService(args: {
     sheetId: number,
     fn: (cellIndex: number, row: number, col: number) => void,
   ) => void;
+  readonly flushDeferredKernelSync: () => void;
   readonly scheduleWasmProgramSync: () => void;
   readonly flushWasmProgramSync: () => void;
   readonly applyDerivedOp: (
@@ -300,6 +301,7 @@ export function createEnginePivotService(args: {
       });
       args.scheduleWasmProgramSync();
       args.flushWasmProgramSync();
+      args.flushDeferredKernelSync();
 
       const sourceHeader =
         readPivotSourceRows({

@@ -556,6 +556,15 @@ export class SpreadsheetEngine {
     return this.runtime.mutation.applyCellMutationsAtNow(refs, options);
   }
 
+  initializeCellFormulasAt(
+    refs: readonly EngineCellMutationRef[],
+    potentialNewCells?: number,
+  ): void {
+    runEngineEffect(
+      this.runtime.formulaInitialization.initializeCellFormulasAt(refs, potentialNewCells),
+    );
+  }
+
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
     const ops = buildFormatPatchOps(this.workbook, range, format);
     this.executeLocalTransaction(ops);

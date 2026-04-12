@@ -297,9 +297,10 @@ export function tryBuildFastMutationHistory(
   return {
     forward:
       args.potentialNewCells === undefined
-        ? { ops: forwardOps }
-        : { ops: forwardOps, potentialNewCells: args.potentialNewCells },
+        ? { kind: "ops", ops: forwardOps }
+        : { kind: "ops", ops: forwardOps, potentialNewCells: args.potentialNewCells },
     inverse: {
+      kind: "ops",
       ops: inverseOps,
       potentialNewCells: args.ops.length,
     },

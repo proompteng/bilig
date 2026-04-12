@@ -866,6 +866,29 @@ export function createEngineMutationSupportService(args: {
         args.getChangedUnion()[1] = recalculatedCellIndex;
         return args.getChangedUnion().subarray(0, 2);
       }
+      if (explicitChangedCount === 1 && recalculated.length === 2) {
+        const explicitCellIndex = args.getExplicitChangedBuffer()[0]!;
+        const firstRecalculated = recalculated[0]!;
+        const secondRecalculated = recalculated[1]!;
+        args.getChangedUnion()[0] = explicitCellIndex;
+        if (firstRecalculated === explicitCellIndex) {
+          if (secondRecalculated === explicitCellIndex) {
+            return args.getChangedUnion().subarray(0, 1);
+          }
+          args.getChangedUnion()[1] = secondRecalculated;
+          return args.getChangedUnion().subarray(0, 2);
+        }
+        if (secondRecalculated === explicitCellIndex) {
+          args.getChangedUnion()[1] = firstRecalculated;
+          return args.getChangedUnion().subarray(0, 2);
+        }
+        args.getChangedUnion()[1] = firstRecalculated;
+        if (firstRecalculated === secondRecalculated) {
+          return args.getChangedUnion().subarray(0, 2);
+        }
+        args.getChangedUnion()[2] = secondRecalculated;
+        return args.getChangedUnion().subarray(0, 3);
+      }
       args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
       if (args.getChangedUnionEpoch() === 0xffff_ffff) {
         args.setChangedUnionEpoch(1);

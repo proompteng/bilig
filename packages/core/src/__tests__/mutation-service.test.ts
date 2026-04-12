@@ -51,7 +51,12 @@ describe("EngineMutationService", () => {
         workbook,
         replicaState,
         undoStack: [],
-        redoStack: [{ forward: { ops: [] }, inverse: { ops: [] } }],
+        redoStack: [
+          {
+            forward: { kind: "ops", ops: [] },
+            inverse: { kind: "ops", ops: [] },
+          },
+        ],
         getTransactionReplayDepth: () => replayDepth,
         setTransactionReplayDepth: (next) => {
           replayDepth = next;
@@ -83,8 +88,14 @@ describe("EngineMutationService", () => {
     const state = {
       workbook,
       replicaState,
-      undoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
-      redoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
+      undoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
+      redoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
       getTransactionReplayDepth: () => replayDepth,
       setTransactionReplayDepth: (next: number) => {
         replayDepth = next;
@@ -341,8 +352,14 @@ describe("EngineMutationService", () => {
     const state = {
       workbook,
       replicaState,
-      undoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
-      redoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
+      undoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
+      redoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
       getTransactionReplayDepth: () => replayDepth,
       setTransactionReplayDepth: (next: number) => {
         replayDepth = next;
@@ -379,8 +396,74 @@ describe("EngineMutationService", () => {
 
     expect(inverseOps).toBeNull();
     expect(state.undoStack).toHaveLength(1);
-    expect(state.undoStack[0]?.inverse.ops).toEqual([
-      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
+    expect(state.undoStack[0]?.inverse).toEqual({
+      kind: "single-op",
+      op: { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
+      potentialNewCells: 1,
+    });
+  });
+
+  it("lazily materializes forward ops for multi-cell local history when no replica batch is needed", () => {
+    const workbook = new WorkbookStore("lazy-forward");
+    const sheet = workbook.getOrCreateSheet("Sheet1");
+    let replayDepth = 0;
+    const state = {
+      workbook,
+      replicaState: createReplicaState("local"),
+      undoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
+      redoStack: [] as Array<{
+        forward: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+        inverse: { kind: "ops"; ops: unknown[] } | { kind: "single-op"; op: unknown };
+      }>,
+      trackReplicaVersions: false,
+      getSyncClientConnection: () => null,
+      batchListeners: new Set<() => void>(),
+      formulas: new Map<number, unknown>(),
+      getTransactionReplayDepth: () => replayDepth,
+      setTransactionReplayDepth: (next: number) => {
+        replayDepth = next;
+      },
+    };
+    const service = createEngineMutationService({
+      state,
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      restoreCellOps: () => [],
+      getCellByIndex: (cellIndex) => ({
+        sheetName: "Sheet1",
+        address: cellIndex === 0 ? "A1" : "A2",
+        value: { tag: ValueTag.Empty },
+        flags: 0,
+        version: 0,
+      }),
+      applyCellMutationsAtBatchNow: () => {},
+      applyBatchNow: () => {},
+    });
+
+    const inverseOps = service.applyCellMutationsAtNow(
+      [
+        { sheetId: sheet.id, mutation: { kind: "setCellValue", row: 0, col: 0, value: 1 } },
+        { sheetId: sheet.id, mutation: { kind: "setCellValue", row: 1, col: 0, value: 2 } },
+      ],
+      {
+        captureUndo: true,
+        source: "local",
+        potentialNewCells: 2,
+        returnUndoOps: false,
+        reuseRefs: true,
+      },
+    );
+
+    expect(inverseOps).toBeNull();
+    expect(state.undoStack).toHaveLength(1);
+    expect(state.undoStack[0]?.forward.kind).toBe("ops");
+    expect(state.undoStack[0]?.forward.ops).toEqual([
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 },
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A2", value: 2 },
     ]);
   });
 

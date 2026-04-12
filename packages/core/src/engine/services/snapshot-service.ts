@@ -458,7 +458,7 @@ export function createEngineSnapshotService(args: {
             0,
           );
           args.executeRestoreTransaction(
-            potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
+            potentialNewCells > 0 ? { kind: "ops", ops, potentialNewCells } : { kind: "ops", ops },
           );
         },
         catch: (cause) =>

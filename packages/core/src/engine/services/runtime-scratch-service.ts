@@ -12,6 +12,12 @@ export interface EngineRuntimeScratchService {
   readonly ensureRecalcCapacityNow: (size: number) => void;
   readonly getPendingKernelSyncNow: () => U32;
   readonly setPendingKernelSyncNow: (next: U32) => void;
+  readonly getDeferredKernelSyncCountNow: () => number;
+  readonly setDeferredKernelSyncCountNow: (next: number) => void;
+  readonly getDeferredKernelSyncEpochNow: () => number;
+  readonly setDeferredKernelSyncEpochNow: (next: number) => void;
+  readonly getDeferredKernelSyncSeenNow: () => U32;
+  readonly setDeferredKernelSyncSeenNow: (next: U32) => void;
   readonly getWasmBatchNow: () => U32;
   readonly setWasmBatchNow: (next: U32) => void;
   readonly getMutationRootsNow: () => U32;
@@ -54,6 +60,9 @@ export interface EngineRuntimeScratchService {
 
 export function createEngineRuntimeScratchService(): EngineRuntimeScratchService {
   let pendingKernelSync: U32 = new Uint32Array(128);
+  let deferredKernelSyncCount = 0;
+  let deferredKernelSyncEpoch = 1;
+  let deferredKernelSyncSeen: U32 = new Uint32Array(128);
   let wasmBatch: U32 = new Uint32Array(128);
   let mutationRoots: U32 = new Uint32Array(128);
   let changedInputEpoch = 1;
@@ -92,6 +101,9 @@ export function createEngineRuntimeScratchService(): EngineRuntimeScratchService
     }
     if (size > pendingKernelSync.length) {
       pendingKernelSync = growUint32(pendingKernelSync, size);
+    }
+    if (size > deferredKernelSyncSeen.length) {
+      deferredKernelSyncSeen = growUint32(deferredKernelSyncSeen, size);
     }
     if (size > wasmBatch.length) {
       wasmBatch = growUint32(wasmBatch, size);
@@ -136,6 +148,18 @@ export function createEngineRuntimeScratchService(): EngineRuntimeScratchService
     getPendingKernelSyncNow: () => pendingKernelSync,
     setPendingKernelSyncNow: (next) => {
       pendingKernelSync = next;
+    },
+    getDeferredKernelSyncCountNow: () => deferredKernelSyncCount,
+    setDeferredKernelSyncCountNow: (next) => {
+      deferredKernelSyncCount = next;
+    },
+    getDeferredKernelSyncEpochNow: () => deferredKernelSyncEpoch,
+    setDeferredKernelSyncEpochNow: (next) => {
+      deferredKernelSyncEpoch = next;
+    },
+    getDeferredKernelSyncSeenNow: () => deferredKernelSyncSeen,
+    setDeferredKernelSyncSeenNow: (next) => {
+      deferredKernelSyncSeen = next;
     },
     getWasmBatchNow: () => wasmBatch,
     setWasmBatchNow: (next) => {
