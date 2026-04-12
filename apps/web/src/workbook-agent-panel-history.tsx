@@ -15,6 +15,11 @@ import {
 } from "./workbook-shell-chrome.js";
 
 const THINKING_LABEL = "Thinking";
+const THINKING_GLYPHS = Array.from(THINKING_LABEL, (character, index) => ({
+  character,
+  delayMs: index * 55,
+  id: `${String(index)}-${String(character.charCodeAt(0))}`,
+}));
 
 export function AssistantProgressRow() {
   return (
@@ -30,14 +35,14 @@ export function AssistantProgressRow() {
           "inline-flex items-center text-[var(--wb-text-subtle)]",
         )}
       >
-        {THINKING_LABEL.split("").map((character, index) => (
+        {THINKING_GLYPHS.map((glyph) => (
           <span
-            key={`${character}-${String(index)}`}
+            key={glyph.id}
             aria-hidden="true"
             className="inline-block animate-[pulse_800ms_ease-in-out_infinite]"
-            style={{ animationDelay: `${index * 55}ms` }}
+            style={{ animationDelay: `${glyph.delayMs}ms` }}
           >
-            {character}
+            {glyph.character}
           </span>
         ))}
       </div>
@@ -77,9 +82,7 @@ export function ExecutionRecordRow(props: {
           <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
             {props.record.summary}
           </div>
-          <div className={agentPanelMetaTextClass()}>
-            r{String(props.record.appliedRevision)}
-          </div>
+          <div className={agentPanelMetaTextClass()}>r{String(props.record.appliedRevision)}</div>
         </div>
         <span className={workbookPillClass({ tone: "neutral" })}>{props.record.scope}</span>
       </div>
@@ -193,18 +196,14 @@ export function WorkflowRunRow(props: {
                   {workflowStepLabel(step.status)}
                 </span>
               </div>
-              <div className={cn(agentPanelMetaTextClass(), "mt-1")}>
-                {step.summary}
-              </div>
+              <div className={cn(agentPanelMetaTextClass(), "mt-1")}>{step.summary}</div>
             </div>
           ))}
         </div>
       ) : null}
       {props.run.artifact ? (
         <div className={cn(workbookInsetClass(), "mt-2 px-3 py-2")}>
-          <div className={agentPanelLabelTextClass()}>
-            {props.run.artifact.title}
-          </div>
+          <div className={agentPanelLabelTextClass()}>{props.run.artifact.title}</div>
           <WorkbookAgentMarkdown
             className="mt-1"
             markdown={props.run.artifact.text}
