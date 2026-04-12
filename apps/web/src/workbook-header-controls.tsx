@@ -66,15 +66,13 @@ export function WorkbookHeaderStatusChip(props: { modeLabel: string; syncLabel: 
       <span
         aria-label={`Workbook status: ${props.modeLabel}, ${props.syncLabel}`}
         className={cn(
-          workbookHeaderSurfaceClass,
-          "gap-2 px-2.5 text-[12px] font-medium text-[var(--color-mauve-700)]",
+          "inline-flex h-8 w-8 items-center justify-center text-[var(--color-mauve-700)]",
         )}
         data-testid="status-mode"
         role="status"
         title={`${props.modeLabel} • ${props.syncLabel}`}
       >
         <span aria-hidden="true" className={cn("size-2 rounded-full", toneClass)} />
-        <span className="text-[var(--color-mauve-900)]">{props.syncLabel}</span>
       </span>
       <span className="sr-only" data-testid="status-sync">
         {props.syncLabel}

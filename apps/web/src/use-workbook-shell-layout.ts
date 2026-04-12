@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-shell-layout:";
 
-export const DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH = 344;
-const MIN_WORKBOOK_SIDE_RAIL_WIDTH = 304;
-const MAX_WORKBOOK_SIDE_RAIL_WIDTH = 520;
+export const DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH = 320;
+const MIN_WORKBOOK_SIDE_RAIL_WIDTH = 280;
+const MAX_WORKBOOK_SIDE_RAIL_WIDTH = 420;
+const WORKBOOK_SIDE_RAIL_VIEWPORT_FRACTION = 0.42;
 
 interface StoredWorkbookShellLayout {
   sideRailOpen?: boolean;
@@ -27,10 +28,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function clampWorkbookSideRailWidth(width: number): number {
-  return Math.min(
-    MAX_WORKBOOK_SIDE_RAIL_WIDTH,
-    Math.max(MIN_WORKBOOK_SIDE_RAIL_WIDTH, Math.round(width)),
-  );
+  const viewportWidth = typeof window === "undefined" ? null : window.innerWidth;
+  const viewportAwareMax =
+    viewportWidth && Number.isFinite(viewportWidth)
+      ? Math.min(
+          MAX_WORKBOOK_SIDE_RAIL_WIDTH,
+          Math.max(
+            MIN_WORKBOOK_SIDE_RAIL_WIDTH,
+            Math.round(viewportWidth * WORKBOOK_SIDE_RAIL_VIEWPORT_FRACTION),
+          ),
+        )
+      : MAX_WORKBOOK_SIDE_RAIL_WIDTH;
+  return Math.min(viewportAwareMax, Math.max(MIN_WORKBOOK_SIDE_RAIL_WIDTH, Math.round(width)));
 }
 
 function normalizeStoredWorkbookShellLayout(

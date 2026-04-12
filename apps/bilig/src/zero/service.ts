@@ -1,8 +1,6 @@
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
-import type { SpreadsheetEngine } from "@bilig/core";
 import { schema } from "@bilig/zero-sync";
 import {
-  type WorkbookChangeUndoBundle,
   type AuthoritativeWorkbookEventBatch,
   queries,
   workbookCellArgsSchema,
@@ -12,12 +10,12 @@ import {
   workbookTileArgsSchema,
 } from "@bilig/zero-sync";
 import {
-  applyWorkbookAgentCommandBundle,
   areWorkbookAgentPreviewSummariesEqual,
   buildWorkbookAgentPreview,
+  type WorkbookAgentCommandBundle,
+  type WorkbookAgentExecutionRecord,
   type WorkbookAgentPreviewSummary,
 } from "@bilig/agent-api";
-import type { EngineOp } from "@bilig/workbook-domain";
 import type { FastifyRequest } from "fastify";
 import type { SessionIdentity } from "../http/session.js";
 import { resolveSessionIdentity } from "../http/session.js";
@@ -29,6 +27,7 @@ import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import { loadWorkbookEventRecordsAfter } from "./store.js";
+import { applyWorkbookAgentCommandBundleWithUndoCapture } from "./workbook-agent-apply.js";
 import {
   assertZeroDataMigrationsReady,
   ensureZeroDataMigrationSchema,
@@ -62,7 +61,6 @@ import {
   saveWorkbookAgentThreadState,
   type WorkbookAgentThreadStateRecord,
 } from "./workbook-chat-thread-store.js";
-import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 import type { WorkbookAgentThreadSummary, WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import {
@@ -438,7 +436,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
               retryable: true,
             });
           }
-          const undoBundle = captureAgentUndoBundle(state.engine, bundle);
+          const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(state.engine, bundle);
           const ownerUserId = resolveOwnerUserId(state, session);
           const result = await persistWorkbookMutation(client, documentId, {
             previousState: state,
@@ -588,27 +586,6 @@ function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIde
     return state.ownerUserId;
   }
   return session.userID;
-}
-
-function toEngineUndoBundle(undoOps: readonly EngineOp[] | null): WorkbookChangeUndoBundle | null {
-  if (!undoOps || undoOps.length === 0) {
-    return null;
-  }
-  return {
-    kind: "engineOps",
-    ops: structuredClone([...undoOps]),
-  };
-}
-
-function captureAgentUndoBundle(
-  engine: SpreadsheetEngine,
-  bundle: WorkbookAgentCommandBundle,
-): WorkbookChangeUndoBundle | null {
-  return toEngineUndoBundle(
-    engine.captureUndoOps(() => {
-      applyWorkbookAgentCommandBundle(engine, bundle);
-    }).undoOps,
-  );
 }
 
 function hasOwn<ObjectType extends object>(

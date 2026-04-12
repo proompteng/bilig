@@ -224,7 +224,7 @@ export function WorkbookAgentMarkdown(props: {
   const tone = props.tone ?? "default";
   const tokens: TokensList = marked.lexer(normalized, { gfm: true, breaks: true });
   return (
-    <div className={cn("flex flex-col gap-2", props.className)}>
+    <div className={cn("flex min-w-0 flex-col gap-2", props.className)}>
       {renderBlockTokens(tokens, "markdown", tone)}
     </div>
   );

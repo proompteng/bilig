@@ -327,18 +327,18 @@ describe("gridGpuScene", () => {
     });
 
     expect(scene.fillRects).toContainEqual({
-      x: 147,
+      x: 148,
       y: 0,
-      width: 6,
+      width: 3,
       height: 68,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.18 },
+      color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
     });
     expect(scene.borderRects).toContainEqual({
       x: 149,
       y: 0,
-      width: 2,
+      width: 1,
       height: 68,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
   });
 
@@ -362,17 +362,17 @@ describe("gridGpuScene", () => {
 
     expect(scene.fillRects).toContainEqual({
       x: 0,
-      y: 43,
+      y: 44,
       width: 254,
-      height: 6,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.18 },
+      height: 3,
+      color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
     });
     expect(scene.borderRects).toContainEqual({
       x: 0,
       y: 45,
       width: 254,
-      height: 2,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      height: 1,
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
   });
 
@@ -401,24 +401,78 @@ describe("gridGpuScene", () => {
     expect(scene.borderRects).toContainEqual({
       x: 46,
       y: 0,
-      width: 2,
+      width: 1,
       height: 68,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
     expect(scene.borderRects).toContainEqual({
-      x: 252,
+      x: 253,
       y: 0,
-      width: 2,
+      width: 1,
       height: 68,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
     expect(scene.fillRects).toContainEqual({
       x: 46,
       y: 21,
       width: 104,
       height: 3,
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+    });
+  });
+
+  test("keeps the active cell outline localized inside a column slice selection", () => {
+    const scene = buildGridGpuScene({
+      engine: makeEngine({}),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: {
+        columns: CompactSelection.fromSingleSelection([1, 3]),
+        rows: CompactSelection.empty(),
+        current: {
+          cell: [1, 10],
+          range: { x: 1, y: 10, width: 2, height: 1 },
+          rangeStack: [],
+        },
+      },
+      selectedCell: [1, 10],
+      selectionRange: { x: 1, y: 10, width: 2, height: 1 },
+      sheetName: "Sheet1",
+      visibleItems: [
+        [1, 10],
+        [2, 10],
+        [1, 11],
+        [2, 11],
+      ],
+      visibleRegion: { range: { x: 1, y: 10, width: 2, height: 2 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: (col, row) => ({
+        x: col * 100,
+        y: row * 24,
+        width: 100,
+        height: 24,
+      }),
+    });
+
+    expect(scene.borderRects).toContainEqual({
+      x: 100,
+      y: 240,
+      width: 100,
+      height: 1,
       color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
     });
+    expect(
+      scene.borderRects.some(
+        (rect) =>
+          rect.color.r === 31 / 255 &&
+          rect.color.g === 122 / 255 &&
+          rect.color.b === 67 / 255 &&
+          rect.color.a === 1 &&
+          rect.x === 100 &&
+          rect.y === 240 &&
+          rect.width === 200,
+      ),
+    ).toBe(false);
   });
 
   test("adds GPU drag guides for active row header drags", () => {
@@ -447,22 +501,22 @@ describe("gridGpuScene", () => {
       x: 0,
       y: 24,
       width: 254,
-      height: 2,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      height: 1,
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
     expect(scene.borderRects).toContainEqual({
       x: 0,
-      y: 66,
+      y: 67,
       width: 254,
-      height: 2,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      height: 1,
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
     expect(scene.fillRects).toContainEqual({
       x: 43,
       y: 24,
       width: 3,
       height: 22,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
     });
   });
 

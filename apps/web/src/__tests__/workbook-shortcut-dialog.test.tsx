@@ -49,6 +49,7 @@ describe("workbook shortcut dialog", () => {
     });
 
     const openButton = document.querySelector("[data-testid='workbook-shortcut-button']");
+    expect(openButton?.textContent?.trim()).toBe("");
     await act(async () => {
       openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

@@ -34,7 +34,6 @@ import { WorkbookAgentDisclosureRow } from "./workbook-agent-panel-disclosure-ro
 import {
   agentPanelBodyMutedTextClass,
   agentPanelBodyTextClass,
-  agentPanelComposerActionsClass,
   agentPanelComposerFrameClass,
   agentPanelComposerSendButtonClass,
   agentPanelComposerTextareaClass,
@@ -291,9 +290,7 @@ function summarizePlainText(text: string | null, maxLength = 88): string | null 
   if (normalized.length === 0) {
     return null;
   }
-  return normalized.length <= maxLength
-    ? normalized
-    : `${normalized.slice(0, maxLength - 3)}...`;
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`;
 }
 
 function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
@@ -341,7 +338,11 @@ function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
     return summarizePlainText(outputText, 96);
   }
   const argumentsText = entry.argumentsText?.trim() ?? "";
-  if (argumentsText.length > 0 && !argumentsText.startsWith("{") && !argumentsText.startsWith("[")) {
+  if (
+    argumentsText.length > 0 &&
+    !argumentsText.startsWith("{") &&
+    !argumentsText.startsWith("[")
+  ) {
     return summarizePlainText(argumentsText, 96);
   }
   return null;
@@ -527,9 +528,7 @@ function StructuredToolOutput(props: {
               key={`trace-layer-${readNumber(layer["depth"])}`}
               className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
             >
-              <div className={agentPanelEyebrowTextClass()}>
-                Hop {readNumber(layer["depth"])}
-              </div>
+              <div className={agentPanelEyebrowTextClass()}>Hop {readNumber(layer["depth"])}</div>
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <div>
                   <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>Precedents</div>
@@ -594,7 +593,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         <div
           className={cn(
             agentPanelBodyTextClass(),
-            "max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+            "max-w-[82%] break-words rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
           )}
         >
           <WorkbookAgentMarkdown markdown={entry.text ?? ""} />
@@ -635,11 +634,14 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         <div className="px-3 py-2.5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex flex-1 items-center gap-2.5">
-              <div className={cn(agentPanelLabelTextClass(), "min-w-0")}>
-                {displayName}
-              </div>
+              <div className={cn(agentPanelLabelTextClass(), "min-w-0")}>{displayName}</div>
               {summary ? (
-                <div className={cn(agentPanelMetaTextClass(), "min-w-0 flex-1 truncate")}>
+                <div
+                  className={cn(
+                    agentPanelMetaTextClass(),
+                    "min-w-0 flex-1 whitespace-normal break-words",
+                  )}
+                >
                   {summary}
                 </div>
               ) : null}
@@ -665,9 +667,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       >
         {entry.argumentsText?.trim().length ? (
           <div>
-            <div className={agentPanelEyebrowTextClass()}>
-              Arguments
-            </div>
+            <div className={agentPanelEyebrowTextClass()}>Arguments</div>
             <pre
               className={cn(
                 agentPanelMetaTextClass(),
@@ -680,9 +680,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         ) : null}
         {entry.outputText?.trim().length ? (
           <div className={entry.argumentsText?.trim().length ? "mt-2" : undefined}>
-            <div className={agentPanelEyebrowTextClass()}>
-              Output
-            </div>
+            <div className={agentPanelEyebrowTextClass()}>Output</div>
             {hasStructuredOutput && parsedOutput !== null ? (
               <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
             ) : (
@@ -726,7 +724,7 @@ function TimelineCitationList(props: {
     return null;
   }
   return (
-    <div className={cn(agentPanelMetaTextClass(), "mt-1")}>
+    <div className={cn(agentPanelMetaTextClass(), "mt-1 break-words")}>
       {segments.map((segment, index) => (
         <Fragment key={segment}>
           {index > 0 ? <span aria-hidden="true"> · </span> : null}
@@ -825,9 +823,7 @@ function PendingBundleCard(props: {
         "border-[var(--wb-border-strong)] px-3 py-3",
       )}
     >
-      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-        {props.bundle.summary}
-      </div>
+      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>{props.bundle.summary}</div>
       <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className={agentPanelEyebrowTextClass()}>
@@ -1126,9 +1122,7 @@ export function WorkbookAgentPanel(props: {
                   </div>
                   {props.workflowRuns.length > 0 ? (
                     <div className="pt-1">
-                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>
-                        Workflows
-                      </div>
+                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>Workflows</div>
                       <div className="flex flex-col gap-2">
                         {props.workflowRuns.slice(0, 5).map((run) => (
                           <WorkflowRunRow
@@ -1181,7 +1175,6 @@ export function WorkbookAgentPanel(props: {
           </div>
         ) : null}
         <form
-          className="mt-2"
           onSubmit={(event) => {
             event.preventDefault();
             props.onSubmit();
@@ -1211,24 +1204,22 @@ export function WorkbookAgentPanel(props: {
                 props.onSubmit();
               }}
             />
-            <div className={agentPanelComposerActionsClass()}>
-              <Button
-                aria-label={isRunning ? "Stop" : "Send message"}
-                className={agentPanelComposerSendButtonClass()}
-                data-testid="workbook-agent-send"
-                disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
-                type="button"
-                onClick={() => {
-                  if (isRunning) {
-                    props.onInterrupt();
-                    return;
-                  }
-                  props.onSubmit();
-                }}
-              >
-                {isRunning ? <StopIcon /> : <SendArrowIcon />}
-              </Button>
-            </div>
+            <Button
+              aria-label={isRunning ? "Stop" : "Send message"}
+              className={agentPanelComposerSendButtonClass()}
+              data-testid="workbook-agent-send"
+              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+              type="button"
+              onClick={() => {
+                if (isRunning) {
+                  props.onInterrupt();
+                  return;
+                }
+                props.onSubmit();
+              }}
+            >
+              {isRunning ? <StopIcon /> : <SendArrowIcon />}
+            </Button>
           </div>
         </form>
       </div>

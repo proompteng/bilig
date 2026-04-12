@@ -117,7 +117,6 @@ export function buildGridGpuHeaderScene(options: {
       fillRects,
       gridMetrics,
       resizeGuideColor: palette.resizeGuideColor,
-      resizeGuideGlowColor: palette.resizeGuideGlowColor,
       selectedColumns,
       visibleColumns,
       visibleRows,
@@ -131,7 +130,6 @@ export function buildGridGpuHeaderScene(options: {
       fillRects,
       gridMetrics,
       resizeGuideColor: palette.resizeGuideColor,
-      resizeGuideGlowColor: palette.resizeGuideGlowColor,
       selectedRows,
       visibleRows,
       visibleWidth:
@@ -393,16 +391,16 @@ function pushResizeGuideRects(options: {
   const totalHeight =
     visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
   fillRects.push({
-    x: lineX - 2,
+    x: lineX - 1,
     y: 0,
-    width: 6,
+    width: 3,
     height: totalHeight,
     color: resizeGuideGlowColor,
   });
   borderRects.push({
     x: lineX,
     y: 0,
-    width: 2,
+    width: 1,
     height: totalHeight,
     color: resizeGuideColor,
   });
@@ -447,16 +445,16 @@ function pushRowResizeGuideRects(options: {
     visibleColumns.length === 0 ? gridMetrics.rowMarkerWidth : visibleColumns.at(-1)!.right;
   fillRects.push({
     x: 0,
-    y: lineY - 2,
+    y: lineY - 1,
     width: totalWidth,
-    height: 6,
+    height: 3,
     color: resizeGuideGlowColor,
   });
   borderRects.push({
     x: 0,
     y: lineY,
     width: totalWidth,
-    height: 2,
+    height: 1,
     color: resizeGuideColor,
   });
 }
@@ -467,7 +465,6 @@ function pushColumnHeaderDragGuideRects(options: {
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   resizeGuideColor: GridGpuColor;
-  resizeGuideGlowColor: GridGpuColor;
   selectedColumns: { start: number; end: number };
   visibleColumns: ReadonlyArray<{
     index: number;
@@ -488,7 +485,6 @@ function pushColumnHeaderDragGuideRects(options: {
     fillRects,
     gridMetrics,
     resizeGuideColor,
-    resizeGuideGlowColor,
     selectedColumns,
     visibleColumns,
     visibleRows,
@@ -502,32 +498,18 @@ function pushColumnHeaderDragGuideRects(options: {
   const right = endColumn.right;
   const totalHeight =
     visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
-  fillRects.push({
-    x: left,
-    y: 0,
-    width: right - left,
-    height: 3,
-    color: resizeGuideGlowColor,
-  });
-  fillRects.push({
-    x: left,
-    y: totalHeight - 3,
-    width: right - left,
-    height: 3,
-    color: resizeGuideGlowColor,
-  });
   borderRects.push(
     {
       x: left,
       y: 0,
-      width: 2,
+      width: 1,
       height: totalHeight,
       color: resizeGuideColor,
     },
     {
-      x: right - 2,
+      x: right - 1,
       y: 0,
-      width: 2,
+      width: 1,
       height: totalHeight,
       color: resizeGuideColor,
     },
@@ -550,7 +532,6 @@ function pushRowHeaderDragGuideRects(options: {
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   resizeGuideColor: GridGpuColor;
-  resizeGuideGlowColor: GridGpuColor;
   selectedRows: { start: number; end: number };
   visibleRows: ReadonlyArray<{
     index: number;
@@ -566,7 +547,6 @@ function pushRowHeaderDragGuideRects(options: {
     fillRects,
     gridMetrics,
     resizeGuideColor,
-    resizeGuideGlowColor,
     selectedRows,
     visibleRows,
     visibleWidth,
@@ -587,33 +567,19 @@ function pushRowHeaderDragGuideRects(options: {
   const top = topEntry.top;
   const bottom = bottomEntry.bottom;
   const totalWidth = gridMetrics.rowMarkerWidth + visibleWidth;
-  fillRects.push({
-    x: 0,
-    y: top,
-    width: 3,
-    height: bottom - top,
-    color: resizeGuideGlowColor,
-  });
-  fillRects.push({
-    x: totalWidth - 3,
-    y: top,
-    width: 3,
-    height: bottom - top,
-    color: resizeGuideGlowColor,
-  });
   borderRects.push(
     {
       x: 0,
       y: top,
       width: totalWidth,
-      height: 2,
+      height: 1,
       color: resizeGuideColor,
     },
     {
       x: 0,
-      y: bottom - 2,
+      y: bottom - 1,
       width: totalWidth,
-      height: 2,
+      height: 1,
       color: resizeGuideColor,
     },
   );

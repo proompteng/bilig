@@ -13,11 +13,11 @@ export const railRootClass = cva(
 );
 
 export const railListClass = cva(
-  "relative flex w-full items-end gap-1 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-3 pt-2",
+  "relative flex min-h-11 w-full items-center gap-2 border-b border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 py-1.5",
 );
 
 export const railTabClass = cva(
-  "group relative inline-flex h-9 items-center justify-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 pb-2 text-[13px] font-medium break-keep whitespace-nowrap outline-none select-none transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
+  "group relative inline-flex h-8 items-center justify-center gap-1.5 rounded-md border-b-2 border-transparent px-2.5 text-[13px] font-medium break-keep whitespace-nowrap outline-none select-none transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
   {
     variants: {
       active: {

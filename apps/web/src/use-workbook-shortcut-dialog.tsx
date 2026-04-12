@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@base-ui/react/button";
-import { workbookHeaderActionButtonClass } from "./workbook-header-controls.js";
+import { CircleHelp } from "lucide-react";
 import { WorkbookShortcutDialog } from "./WorkbookShortcutDialog.js";
 import { isTextEntryTarget } from "./worker-workbook-app-model.js";
 
@@ -45,12 +45,12 @@ export function useWorkbookShortcutDialog() {
     () => (
       <Button
         aria-label="Show keyboard shortcuts"
-        className={workbookHeaderActionButtonClass()}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent p-0 text-[var(--color-mauve-700)] shadow-none transition-colors hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]"
         data-testid="workbook-shortcut-button"
         type="button"
         onClick={openShortcutDialog}
       >
-        <span className="text-[11px] font-semibold">Shortcuts</span>
+        <CircleHelp aria-hidden="true" className="size-4" strokeWidth={1.9} />
       </Button>
     ),
     [openShortcutDialog],

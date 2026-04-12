@@ -1,10 +1,11 @@
 import { formatAddress } from "@bilig/formula";
 import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
-import type { GridMetrics } from "./gridMetrics.js";
+import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from "./gridMetrics.js";
 import { buildGridGpuHeaderScene } from "./gridGpuHeaderScene.js";
 import type { HeaderSelection } from "./gridPointer.js";
 import type { GridSelection, Item, Rectangle } from "./gridTypes.js";
+import { collectVisibleColumnBounds, collectVisibleRowBounds } from "./visibleGridAxes.js";
 
 export interface GridGpuColor {
   readonly r: number;
@@ -62,8 +63,11 @@ const SELECTION_FILL_COLOR = parseGpuColor("rgba(31, 122, 67, 0.06)");
 const SELECTION_OUTLINE_COLOR = parseGpuColor("#1f7a43");
 const HOVER_FILL_COLOR = parseGpuColor("rgba(95, 99, 104, 0.06)");
 const HOVER_OUTLINE_COLOR = parseGpuColor("rgba(95, 99, 104, 0.45)");
-const RESIZE_GUIDE_COLOR = parseGpuColor("#1f7a43");
-const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor("rgba(31, 122, 67, 0.18)");
+// Match the workbook chrome by using Tailwind's mauve guide tones instead of a saturated green.
+const RESIZE_GUIDE_COLOR = parseGpuColor("rgba(121, 105, 123, 0.82)");
+const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor("rgba(168, 158, 169, 0.18)");
+const RESIZE_GUIDE_CORE_THICKNESS = 1;
+const RESIZE_GUIDE_GLOW_THICKNESS = 3;
 const CHECKBOX_BORDER_COLOR = parseGpuColor("#5f6368");
 const CHECKBOX_SURFACE_COLOR = parseGpuColor("#ffffff");
 const CHECKBOX_SELECTED_COLOR = parseGpuColor("#1f7a43");
@@ -90,6 +94,25 @@ export function buildGridGpuScene({
 }: BuildGridGpuSceneOptions): GridGpuScene {
   const fillRects: GridGpuRect[] = [];
   const borderRects: GridGpuRect[] = [];
+  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0;
+  const visibleColumnBounds = hasFrozenAxes
+    ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleColumnBounds(
+        visibleRegion.range,
+        gridMetrics.rowMarkerWidth - visibleRegion.tx,
+        Number.MAX_SAFE_INTEGER,
+        columnWidths,
+        gridMetrics.columnWidth,
+      );
+  const visibleRowBounds = hasFrozenAxes
+    ? collectVisibleRowBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleRowBounds(
+        visibleRegion.range,
+        gridMetrics.headerHeight - visibleRegion.ty,
+        Number.MAX_SAFE_INTEGER,
+        rowHeights,
+        gridMetrics.rowHeight,
+      );
   const headerScene = buildGridGpuHeaderScene({
     palette: {
       gridLineColor: GRID_LINE_COLOR,
@@ -107,8 +130,8 @@ export function buildGridGpuScene({
     rowHeights,
     activeHeaderDrag,
     hoveredHeader,
-    resizeGuideColumn,
-    resizeGuideRow,
+    resizeGuideColumn: null,
+    resizeGuideRow: null,
     selectedCell,
     selectionRange,
     visibleRegion,
@@ -130,6 +153,10 @@ export function buildGridGpuScene({
   const visibleMaxCol = Math.max(...visibleCols);
   const visibleMinRow = Math.min(...visibleRows);
   const visibleMaxRow = Math.max(...visibleRows);
+  const selectionOutlineRange =
+    gridSelection.columns.length > 0 || gridSelection.rows.length > 0
+      ? { x: selectedCell[0], y: selectedCell[1], width: 1, height: 1 }
+      : selectionRange;
 
   for (const [col, row] of visibleItems) {
     const bounds = getCellBounds(col, row);
@@ -181,18 +208,49 @@ export function buildGridGpuScene({
     }
   }
 
-  if (selectionRange) {
+  if (selectionOutlineRange) {
     pushSelectionRects({
       allowHandle: gridSelection.columns.length === 0 && gridSelection.rows.length === 0,
       borderRects,
       fillRects,
       getCellBounds,
       hostBounds,
-      selectionRange,
+      selectionRange: selectionOutlineRange,
       visibleMaxCol,
       visibleMaxRow,
       visibleMinCol,
       visibleMinRow,
+    });
+  }
+
+  if (activeHeaderDrag?.kind === "column" && gridSelection.columns.length > 0) {
+    pushColumnHeaderDragGuideRectsTopLayer({
+      borderRects,
+      resizeGuideColor: RESIZE_GUIDE_COLOR,
+      selectedColumns: {
+        start: gridSelection.columns.first() ?? selectedCell[0],
+        end: gridSelection.columns.last() ?? selectedCell[0],
+      },
+      visibleColumns: visibleColumnBounds,
+      visibleRows: visibleRowBounds,
+      gridMetrics,
+    });
+  }
+
+  if (activeHeaderDrag?.kind === "row" && gridSelection.rows.length > 0) {
+    pushRowHeaderDragGuideRectsTopLayer({
+      borderRects,
+      resizeGuideColor: RESIZE_GUIDE_COLOR,
+      selectedRows: {
+        start: gridSelection.rows.first() ?? selectedCell[1],
+        end: gridSelection.rows.last() ?? selectedCell[1],
+      },
+      visibleRows: visibleRowBounds,
+      visibleWidth:
+        visibleColumnBounds.length === 0
+          ? 0
+          : visibleColumnBounds.at(-1)!.right - gridMetrics.rowMarkerWidth,
+      gridMetrics,
     });
   }
 
@@ -208,10 +266,129 @@ export function buildGridGpuScene({
     });
   }
 
+  if (resizeGuideColumn !== null) {
+    pushResizeGuideRectsTopLayer({
+      borderRects,
+      fillRects,
+      gridMetrics,
+      resizeGuideColumn,
+      resizeGuideColor: RESIZE_GUIDE_COLOR,
+      resizeGuideGlowColor: RESIZE_GUIDE_GLOW_COLOR,
+      visibleColumns: visibleColumnBounds,
+      visibleRows: visibleRowBounds,
+    });
+  }
+
+  if (resizeGuideRow !== null) {
+    pushRowResizeGuideRectsTopLayer({
+      borderRects,
+      fillRects,
+      gridMetrics,
+      resizeGuideRow,
+      resizeGuideColor: RESIZE_GUIDE_COLOR,
+      resizeGuideGlowColor: RESIZE_GUIDE_GLOW_COLOR,
+      visibleColumns: visibleColumnBounds,
+      visibleRows: visibleRowBounds,
+    });
+  }
+
   return {
     fillRects,
     borderRects,
   };
+}
+
+function pushColumnHeaderDragGuideRectsTopLayer(options: {
+  borderRects: GridGpuRect[];
+  resizeGuideColor: GridGpuColor;
+  selectedColumns: { start: number; end: number };
+  visibleColumns: ReadonlyArray<{
+    index: number;
+    left: number;
+    right: number;
+    width: number;
+  }>;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
+  gridMetrics: GridMetrics;
+}) {
+  const {
+    borderRects,
+    resizeGuideColor,
+    selectedColumns,
+    visibleColumns,
+    visibleRows,
+    gridMetrics,
+  } = options;
+  const startColumn = visibleColumns.find((entry) => entry.index === selectedColumns.start);
+  const endColumn = visibleColumns.find((entry) => entry.index === selectedColumns.end);
+  if (!startColumn || !endColumn) {
+    return;
+  }
+  const totalHeight =
+    visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
+  borderRects.push(
+    {
+      x: startColumn.left,
+      y: 0,
+      width: 1,
+      height: totalHeight,
+      color: resizeGuideColor,
+    },
+    {
+      x: endColumn.right - 1,
+      y: 0,
+      width: 1,
+      height: totalHeight,
+      color: resizeGuideColor,
+    },
+  );
+}
+
+function pushRowHeaderDragGuideRectsTopLayer(options: {
+  borderRects: GridGpuRect[];
+  resizeGuideColor: GridGpuColor;
+  selectedRows: { start: number; end: number };
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
+  visibleWidth: number;
+  gridMetrics: GridMetrics;
+}) {
+  const { borderRects, resizeGuideColor, selectedRows, visibleRows, visibleWidth, gridMetrics } =
+    options;
+  if (visibleWidth <= 0) {
+    return;
+  }
+  const startRow = visibleRows.find((entry) => entry.index === selectedRows.start);
+  const endRow = visibleRows.find((entry) => entry.index === selectedRows.end);
+  if (!startRow || !endRow) {
+    return;
+  }
+  const totalWidth = gridMetrics.rowMarkerWidth + visibleWidth;
+  borderRects.push(
+    {
+      x: 0,
+      y: startRow.top,
+      width: totalWidth,
+      height: 1,
+      color: resizeGuideColor,
+    },
+    {
+      x: 0,
+      y: endRow.bottom - 1,
+      width: totalWidth,
+      height: 1,
+      color: resizeGuideColor,
+    },
+  );
 }
 
 function pushGridLineRects(
@@ -510,6 +687,112 @@ function pushHoveredCellRects(options: {
       color: HOVER_OUTLINE_COLOR,
     },
   );
+}
+
+function pushResizeGuideRectsTopLayer(options: {
+  borderRects: GridGpuRect[];
+  fillRects: GridGpuRect[];
+  gridMetrics: GridMetrics;
+  resizeGuideColumn: number;
+  resizeGuideColor: GridGpuColor;
+  resizeGuideGlowColor: GridGpuColor;
+  visibleColumns: ReadonlyArray<{
+    index: number;
+    left: number;
+    right: number;
+    width: number;
+  }>;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
+}) {
+  const {
+    borderRects,
+    fillRects,
+    gridMetrics,
+    resizeGuideColumn,
+    resizeGuideColor,
+    resizeGuideGlowColor,
+    visibleColumns,
+    visibleRows,
+  } = options;
+  const column = visibleColumns.find((entry) => entry.index === resizeGuideColumn);
+  if (!column) {
+    return;
+  }
+  const lineX = column.right - 1;
+  const totalHeight =
+    visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
+  fillRects.push({
+    x: lineX - Math.floor(RESIZE_GUIDE_GLOW_THICKNESS / 2),
+    y: 0,
+    width: RESIZE_GUIDE_GLOW_THICKNESS,
+    height: totalHeight,
+    color: resizeGuideGlowColor,
+  });
+  borderRects.push({
+    x: lineX,
+    y: 0,
+    width: RESIZE_GUIDE_CORE_THICKNESS,
+    height: totalHeight,
+    color: resizeGuideColor,
+  });
+}
+
+function pushRowResizeGuideRectsTopLayer(options: {
+  borderRects: GridGpuRect[];
+  fillRects: GridGpuRect[];
+  gridMetrics: GridMetrics;
+  resizeGuideRow: number;
+  resizeGuideColor: GridGpuColor;
+  resizeGuideGlowColor: GridGpuColor;
+  visibleColumns: ReadonlyArray<{
+    index: number;
+    left: number;
+    right: number;
+    width: number;
+  }>;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
+}) {
+  const {
+    borderRects,
+    fillRects,
+    gridMetrics,
+    resizeGuideRow,
+    resizeGuideColor,
+    resizeGuideGlowColor,
+    visibleColumns,
+    visibleRows,
+  } = options;
+  const row = visibleRows.find((entry) => entry.index === resizeGuideRow);
+  if (!row) {
+    return;
+  }
+  const lineY = row.bottom - 1;
+  const totalWidth =
+    visibleColumns.length === 0 ? gridMetrics.rowMarkerWidth : visibleColumns.at(-1)!.right;
+  fillRects.push({
+    x: 0,
+    y: lineY - Math.floor(RESIZE_GUIDE_GLOW_THICKNESS / 2),
+    width: totalWidth,
+    height: RESIZE_GUIDE_GLOW_THICKNESS,
+    color: resizeGuideGlowColor,
+  });
+  borderRects.push({
+    x: 0,
+    y: lineY,
+    width: totalWidth,
+    height: RESIZE_GUIDE_CORE_THICKNESS,
+    color: resizeGuideColor,
+  });
 }
 
 function createBorderRects(

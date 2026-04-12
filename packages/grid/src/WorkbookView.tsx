@@ -104,11 +104,20 @@ interface WorkbookViewProps {
     | undefined;
 }
 
-const MIN_SIDE_RAIL_WIDTH = 304;
-const MAX_SIDE_RAIL_WIDTH = 520;
+const MIN_SIDE_RAIL_WIDTH = 280;
+const MAX_SIDE_RAIL_WIDTH = 420;
+const SIDE_RAIL_VIEWPORT_FRACTION = 0.42;
 
 function clampSideRailWidth(width: number): number {
-  return Math.min(MAX_SIDE_RAIL_WIDTH, Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(width)));
+  const viewportWidth = typeof window === "undefined" ? null : window.innerWidth;
+  const viewportAwareMax =
+    viewportWidth && Number.isFinite(viewportWidth)
+      ? Math.min(
+          MAX_SIDE_RAIL_WIDTH,
+          Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(viewportWidth * SIDE_RAIL_VIEWPORT_FRACTION)),
+        )
+      : MAX_SIDE_RAIL_WIDTH;
+  return Math.min(viewportAwareMax, Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(width)));
 }
 
 export function WorkbookView({

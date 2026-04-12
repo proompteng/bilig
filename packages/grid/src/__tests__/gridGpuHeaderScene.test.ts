@@ -11,8 +11,8 @@ const palette = {
   headerHoverFillColor: parseGpuColor("#f1f3f4"),
   headerDragAnchorFillColor: parseGpuColor("#d7eadf"),
   selectionFillColor: parseGpuColor("rgba(31, 122, 67, 0.06)"),
-  resizeGuideColor: parseGpuColor("#1f7a43"),
-  resizeGuideGlowColor: parseGpuColor("rgba(31, 122, 67, 0.18)"),
+  resizeGuideColor: parseGpuColor("rgba(121, 105, 123, 0.82)"),
+  resizeGuideGlowColor: parseGpuColor("rgba(168, 158, 169, 0.18)"),
 };
 
 function createSelection() {
@@ -83,18 +83,18 @@ test("builds GPU resize guides for hovered columns", () => {
   });
 
   expect(scene.fillRects).toContainEqual({
-    x: 147,
+    x: 148,
     y: 0,
-    width: 6,
+    width: 3,
     height: 68,
-    color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.18 },
+    color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
   });
   expect(scene.borderRects).toContainEqual({
     x: 149,
     y: 0,
-    width: 2,
+    width: 1,
     height: 68,
-    color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+    color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
   });
 });
 
@@ -126,22 +126,22 @@ test("builds GPU drag guides for active column header drags", () => {
   expect(scene.borderRects).toContainEqual({
     x: 46,
     y: 0,
-    width: 2,
+    width: 1,
     height: 68,
-    color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+    color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
   });
   expect(scene.borderRects).toContainEqual({
-    x: 252,
+    x: 253,
     y: 0,
-    width: 2,
+    width: 1,
     height: 68,
-    color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+    color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
   });
   expect(scene.fillRects).toContainEqual({
     x: 46,
     y: 21,
     width: 104,
     height: 3,
-    color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+    color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
   });
 });

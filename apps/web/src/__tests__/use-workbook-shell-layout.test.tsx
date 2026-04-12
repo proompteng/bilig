@@ -132,6 +132,81 @@ describe("workbook shell layout", () => {
     });
   });
 
+  it("clamps oversized persisted rail widths back into the supported range", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    window.localStorage.setItem(
+      "bilig:workbook-shell-layout:doc-oversized",
+      JSON.stringify({
+        sideRailOpen: true,
+        sideRailTab: "assistant",
+        sideRailWidth: 640,
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness documentId="doc-oversized" />);
+    });
+
+    const state = host.querySelector("[data-testid='shell-layout-state']");
+    expect(state?.getAttribute("data-open")).toBe("true");
+    expect(state?.getAttribute("data-tab")).toBe("assistant");
+    expect(state?.getAttribute("data-width")).toBe("420");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("uses a viewport-aware width clamp on narrow windows", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const previousInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 720,
+    });
+
+    window.localStorage.setItem(
+      "bilig:workbook-shell-layout:doc-narrow",
+      JSON.stringify({
+        sideRailOpen: true,
+        sideRailTab: "assistant",
+        sideRailWidth: 420,
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness documentId="doc-narrow" />);
+    });
+
+    const state = host.querySelector("[data-testid='shell-layout-state']");
+    expect(state?.getAttribute("data-open")).toBe("true");
+    expect(state?.getAttribute("data-tab")).toBe("assistant");
+    expect(state?.getAttribute("data-width")).toBe("302");
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: previousInnerWidth,
+    });
+  });
+
   it("closes the rail when the active tab toggle is pressed again", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
