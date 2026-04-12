@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
 import {
   parseCellNumberFormatCode,
   type CellRangeRef,
@@ -52,12 +52,13 @@ export function useWorkbookToolbar(input: {
   onUnhideCurrentRow: () => void;
   onUnhideCurrentColumn: () => void;
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>;
-  selectionRange: CellRangeRef;
+  selectionRangeRef: MutableRefObject<CellRangeRef>;
   selection: { sheetName: string };
   selectionLabel: string;
   selectedCell: CellSnapshot;
   selectedStyle: CellStyleRecord | undefined;
   writesAllowed: boolean;
+  trailingContent?: ReactNode;
 }) {
   const {
     connectionStateName,
@@ -79,12 +80,13 @@ export function useWorkbookToolbar(input: {
     onUnhideCurrentRow,
     onUnhideCurrentColumn,
     invokeMutation,
-    selectionRange,
+    selectionRangeRef,
     selection,
     selectionLabel,
     selectedCell,
     selectedStyle,
     writesAllowed,
+    trailingContent,
   } = input;
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([]);
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([]);
@@ -141,23 +143,18 @@ export function useWorkbookToolbar(input: {
     [selection.sheetName, selectionLabel, statusChipClass],
   );
 
-  const headerStatus = useMemo(
-    () => <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />,
-    [statusModeValue, statusSyncValue],
-  );
-
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
-      await invokeMutation("setRangeStyle", selectionRange, patch);
+      await invokeMutation("setRangeStyle", selectionRangeRef.current, patch);
     },
-    [invokeMutation, selectionRange],
+    [invokeMutation, selectionRangeRef],
   );
 
   const clearRangeStyleFields = useCallback(
     async (fields?: CellStyleField[]) => {
-      await invokeMutation("clearRangeStyle", selectionRange, fields);
+      await invokeMutation("clearRangeStyle", selectionRangeRef.current, fields);
     },
-    [invokeMutation, selectionRange],
+    [invokeMutation, selectionRangeRef],
   );
 
   const applyFillColor = useCallback(
@@ -192,6 +189,7 @@ export function useWorkbookToolbar(input: {
 
   const applyBorderPreset = useCallback(
     async (preset: BorderPreset) => {
+      const selectionRange = selectionRangeRef.current;
       const { sheetName, startRow, endRow, startCol, endCol } =
         getNormalizedRangeBounds(selectionRange);
       const applyBorders = async (
@@ -256,11 +254,12 @@ export function useWorkbookToolbar(input: {
         }
       }
     },
-    [invokeMutation, selectionRange],
+    [invokeMutation, selectionRangeRef],
   );
 
   const setNumberFormatPreset = useCallback(
     async (preset: string) => {
+      const selectionRange = selectionRangeRef.current;
       switch (preset) {
         case "general":
           await invokeMutation("clearRangeNumberFormat", selectionRange);
@@ -309,7 +308,7 @@ export function useWorkbookToolbar(input: {
           return;
       }
     },
-    [invokeMutation, selectionRange],
+    [invokeMutation, selectionRangeRef],
   );
 
   useEffect(() => {
@@ -479,6 +478,12 @@ export function useWorkbookToolbar(input: {
         recentFillColors={visibleRecentFillColors}
         recentTextColors={visibleRecentTextColors}
         selectedFontSize={selectedFontSize}
+        trailingContent={
+          <>
+            <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />
+            {trailingContent}
+          </>
+        }
         writesAllowed={writesAllowed}
       />
     ),
@@ -512,6 +517,9 @@ export function useWorkbookToolbar(input: {
       resetTextColor,
       selectedFontSize,
       setNumberFormatPreset,
+      statusModeValue,
+      statusSyncValue,
+      trailingContent,
       visibleRecentFillColors,
       visibleRecentTextColors,
       writesAllowed,
@@ -519,7 +527,9 @@ export function useWorkbookToolbar(input: {
   );
 
   return {
-    headerStatus,
+    headerStatus: (
+      <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />
+    ),
     ribbon,
     selectionStatus,
     statusModeLabel,

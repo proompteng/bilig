@@ -137,4 +137,59 @@ describe("WorkbookSheetTabs", () => {
       root.unmount();
     });
   });
+
+  it("opens a context menu on right click and deletes the requested sheet", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const onDeleteSheet = vi.fn();
+    const onRenameSheet = vi.fn();
+    const onSelectSheet = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkbookSheetTabs
+          onDeleteSheet={onDeleteSheet}
+          onRenameSheet={onRenameSheet}
+          onSelectSheet={onSelectSheet}
+          sheetName="Sheet1"
+          sheetNames={["Sheet1", "Sheet2", "Sheet3"]}
+        />,
+      );
+    });
+
+    const targetTab = host.querySelector("[data-testid='workbook-sheet-tab-Sheet2']");
+    expect(targetTab).not.toBeNull();
+
+    await act(async () => {
+      targetTab?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 48,
+          clientY: 24,
+        }),
+      );
+    });
+
+    expect(onSelectSheet).not.toHaveBeenCalled();
+
+    const deleteItem = document.body.querySelector("[data-testid='workbook-sheet-menu-delete']");
+    expect(deleteItem).not.toBeNull();
+
+    await act(async () => {
+      deleteItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDeleteSheet).toHaveBeenCalledWith("Sheet2");
+    expect(onRenameSheet).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

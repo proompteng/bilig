@@ -20,6 +20,10 @@ interface ZeroPresenceSource {
   mutate(mutation: unknown): unknown;
 }
 
+type UpdatePresenceArgs = Parameters<typeof mutators.workbook.updatePresence>[0] & {
+  presenceClientId?: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -76,17 +80,16 @@ export function useWorkbookPresence(input: {
     if (!enabled) {
       return;
     }
+    const presenceArgs: UpdatePresenceArgs = {
+      documentId,
+      sessionId,
+      presenceClientId: currentPresenceClientId,
+      sheetName: latestSelectionRef.current.sheetName,
+      address: latestSelectionRef.current.address,
+      selection: latestSelectionRef.current,
+    };
     observeZeroMutationResult(
-      zero.mutate(
-        mutators.workbook.updatePresence({
-          documentId,
-          sessionId,
-          presenceClientId: currentPresenceClientId,
-          sheetName: latestSelectionRef.current.sheetName,
-          address: latestSelectionRef.current.address,
-          selection: latestSelectionRef.current,
-        }),
-      ),
+      zero.mutate(mutators.workbook.updatePresence(presenceArgs)),
     );
   }, [currentPresenceClientId, documentId, enabled, sessionId, zero]);
 

@@ -1,4 +1,6 @@
 import React from "react";
+import { ContextMenu } from "@base-ui/react/context-menu";
+import { Tabs } from "@base-ui/react/tabs";
 import { cva } from "class-variance-authority";
 
 interface WorkbookSheetTabsProps {
@@ -8,47 +10,59 @@ interface WorkbookSheetTabsProps {
   onSelectSheet(this: void, sheetName: string): void;
   onCreateSheet?: (() => void) | undefined;
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
+  onDeleteSheet?: ((sheetName: string) => void) | undefined;
 }
 
 const sheetStripClass = cva(
-  "flex min-h-12 items-center justify-between gap-3 border-t border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 py-1.5",
+  "flex min-h-11 items-center justify-between gap-2 border-t border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 py-1.5",
 );
 
 const sheetTabsShellClass = cva("flex min-w-0 flex-1 items-center gap-2 overflow-hidden");
 
 const sheetListClass = cva(
-  "inline-flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--color-mauve-200)] bg-[var(--color-mauve-100)] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
+  "relative flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--color-mauve-200)]",
 );
 
-const sheetRenameShellClass = cva(
-  "inline-flex h-8 items-center rounded-md border border-[var(--color-mauve-300)] bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
-);
-
-const sheetActionButtonClass = cva(
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-100)] text-[var(--color-mauve-700)] outline-none transition-[background-color,border-color,color,box-shadow] hover:bg-[var(--color-mauve-200)] hover:text-[var(--color-mauve-900)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50",
+const sheetIndicatorClass = cva(
+  "absolute bottom-[-1px] left-0 z-10 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--color-mauve-800)] transition-[translate,width] duration-200 ease-out",
 );
 
 const sheetTabClass = cva(
-  "inline-flex h-8 items-center rounded-md border px-3.5 text-[12px] whitespace-nowrap outline-none transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-100)]",
+  "inline-flex h-8 shrink-0 items-center justify-center border-b-2 border-transparent px-3 text-[12px] font-medium whitespace-nowrap text-[var(--color-mauve-600)] outline-none transition-[color] hover:text-[var(--color-mauve-900)] focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
   {
     variants: {
       active: {
-        true:
-          "border-[var(--color-mauve-300)] bg-white font-semibold text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
-        false:
-          "border-transparent bg-transparent font-medium text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-200)] hover:text-[var(--color-mauve-900)]",
+        true: "text-[var(--color-mauve-950)]",
+        false: "border-transparent",
       },
-      disabled: {
-        true: "cursor-not-allowed opacity-50",
-        false: "",
-      },
+    },
+    defaultVariants: {
+      active: false,
     },
   },
 );
 
-const sheetStatusSlotClass = cva(
-  "inline-flex min-h-10 items-center rounded-lg border border-[var(--color-mauve-200)] bg-[var(--color-mauve-100)] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
+const sheetRenameShellClass = cva(
+  "inline-flex h-8 shrink-0 items-center border-b-2 border-[var(--color-mauve-700)] px-2",
 );
+
+const sheetRenameInputClass = cva(
+  "w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-medium text-[var(--color-mauve-950)] outline-none",
+);
+
+const sheetActionButtonClass = cva(
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-[var(--color-mauve-700)] outline-none transition-colors hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50",
+);
+
+const sheetContextMenuPopupClass = cva(
+  "min-w-40 overflow-hidden rounded-lg border border-[var(--color-mauve-200)] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.12)] outline-none",
+);
+
+const sheetContextMenuItemClass = cva(
+  "flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium text-[var(--color-mauve-900)] outline-none transition-colors data-[highlighted]:bg-[var(--color-mauve-100)] data-[disabled]:pointer-events-none data-[disabled]:opacity-45",
+);
+
+const sheetContextMenuSeparatorClass = cva("my-1 h-px bg-[var(--color-mauve-200)]");
 
 function SheetAddIcon() {
   return (
@@ -66,15 +80,16 @@ function SheetAddIcon() {
 export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   sheetName,
   sheetNames,
-  selectionStatus,
+  selectionStatus: _selectionStatus,
   onSelectSheet,
   onCreateSheet,
   onRenameSheet,
+  onDeleteSheet,
 }: WorkbookSheetTabsProps) {
   const [renamingSheetName, setRenamingSheetName] = React.useState<string | null>(null);
   const [renameDraft, setRenameDraft] = React.useState("");
   const renameInputRef = React.useRef<HTMLInputElement | null>(null);
-  const tabRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
+  const tabRefs = React.useRef<Record<string, HTMLElement | null>>({});
 
   const startSheetRename = React.useCallback(
     (targetSheetName: string) => {
@@ -139,16 +154,24 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
     [focusSheetTab, onSelectSheet, sheetNames],
   );
 
+  const deleteDisabled = sheetNames.length <= 1;
+
   return (
-    <div className={sheetStripClass()}>
+    <Tabs.Root
+      className={sheetStripClass()}
+      value={sheetName}
+      onValueChange={(nextValue) => {
+        onSelectSheet(String(nextValue));
+      }}
+    >
       <div className={sheetTabsShellClass()}>
-        <div aria-label="Sheets" className={sheetListClass()} role="tablist">
+        <Tabs.List aria-label="Sheets" className={sheetListClass()}>
           {sheetNames.map((name, index) =>
             renamingSheetName === name ? (
               <div className={sheetRenameShellClass()} key={name}>
                 <input
                   aria-label={`Rename ${name}`}
-                  className="w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--color-mauve-900)] outline-none"
+                  className={sheetRenameInputClass()}
                   data-testid="workbook-sheet-rename-input"
                   onBlur={() => commitSheetRename(name)}
                   onChange={(event) => setRenameDraft(event.target.value)}
@@ -168,53 +191,100 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
                   value={renameDraft}
                 />
               </div>
-            ) : (
-              <button
-                aria-selected={name === sheetName}
-                className={sheetTabClass({ active: name === sheetName })}
-                data-testid={`workbook-sheet-tab-${name}`}
-                key={name}
-                onClick={() => onSelectSheet(name)}
-                onDoubleClick={() => startSheetRename(name)}
-                onKeyDown={(event) => {
-                  if (event.key === "F2") {
-                    event.preventDefault();
-                    startSheetRename(name);
-                    return;
-                  }
-                  if (event.key === "ArrowRight") {
-                    event.preventDefault();
-                    moveSheetSelection(index + 1);
-                    return;
-                  }
-                  if (event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    moveSheetSelection(index - 1);
-                    return;
-                  }
-                  if (event.key === "Home") {
-                    event.preventDefault();
-                    moveSheetSelection(0);
-                    return;
-                  }
-                  if (event.key === "End") {
-                    event.preventDefault();
-                    moveSheetSelection(sheetNames.length - 1);
-                  }
-                }}
-                ref={(node) => {
-                  tabRefs.current[name] = node;
-                }}
-                role="tab"
-                tabIndex={name === sheetName ? 0 : -1}
-                title={name}
-                type="button"
-              >
-                {name}
-              </button>
-            ),
+            ) : (() => {
+              const tab = (
+                <Tabs.Tab
+                  className={(state) => sheetTabClass({ active: state.active })}
+                  data-testid={`workbook-sheet-tab-${name}`}
+                  key={name}
+                  ref={(node) => {
+                    tabRefs.current[name] = node;
+                  }}
+                  title={name}
+                  value={name}
+                  onDoubleClick={() => startSheetRename(name)}
+                  onKeyDown={(event) => {
+                    if (event.key === "F2") {
+                      event.preventDefault();
+                      startSheetRename(name);
+                      return;
+                    }
+                    if (event.key === "ArrowRight") {
+                      event.preventDefault();
+                      moveSheetSelection(index + 1);
+                      return;
+                    }
+                    if (event.key === "ArrowLeft") {
+                      event.preventDefault();
+                      moveSheetSelection(index - 1);
+                      return;
+                    }
+                    if (event.key === "Home") {
+                      event.preventDefault();
+                      moveSheetSelection(0);
+                      return;
+                    }
+                    if (event.key === "End") {
+                      event.preventDefault();
+                      moveSheetSelection(sheetNames.length - 1);
+                    }
+                  }}
+                >
+                  {name}
+                </Tabs.Tab>
+              );
+
+              if (!onRenameSheet && !onDeleteSheet) {
+                return tab;
+              }
+
+              return (
+                <ContextMenu.Root key={name}>
+                  <ContextMenu.Trigger className="shrink-0">
+                    {tab}
+                  </ContextMenu.Trigger>
+                  <ContextMenu.Portal>
+                    <ContextMenu.Positioner className="z-[1200]" sideOffset={6}>
+                      <ContextMenu.Popup
+                        aria-label={`${name} sheet actions`}
+                        className={sheetContextMenuPopupClass()}
+                        data-testid={`workbook-sheet-menu-${name}`}
+                      >
+                        {onRenameSheet ? (
+                          <ContextMenu.Item
+                            className={sheetContextMenuItemClass()}
+                            data-testid="workbook-sheet-menu-rename"
+                            onClick={() => {
+                              startSheetRename(name);
+                            }}
+                          >
+                            Rename sheet
+                          </ContextMenu.Item>
+                        ) : null}
+                        {onRenameSheet && onDeleteSheet ? (
+                          <ContextMenu.Separator className={sheetContextMenuSeparatorClass()} />
+                        ) : null}
+                        {onDeleteSheet ? (
+                          <ContextMenu.Item
+                            className={sheetContextMenuItemClass()}
+                            data-testid="workbook-sheet-menu-delete"
+                            disabled={deleteDisabled}
+                            onClick={() => {
+                              onDeleteSheet(name);
+                            }}
+                          >
+                            Delete sheet
+                          </ContextMenu.Item>
+                        ) : null}
+                      </ContextMenu.Popup>
+                    </ContextMenu.Positioner>
+                  </ContextMenu.Portal>
+                </ContextMenu.Root>
+              );
+            })(),
           )}
-        </div>
+          <Tabs.Indicator className={sheetIndicatorClass()} renderBeforeHydration />
+        </Tabs.List>
         {onCreateSheet ? (
           <button
             aria-label="Create sheet"
@@ -228,11 +298,6 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
           </button>
         ) : null}
       </div>
-      {selectionStatus ? (
-        <div className={sheetStatusSlotClass()}>
-          {selectionStatus}
-        </div>
-      ) : null}
-    </div>
+    </Tabs.Root>
   );
 });

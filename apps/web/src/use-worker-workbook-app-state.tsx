@@ -7,7 +7,7 @@ import {
 } from "@bilig/agent-api";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
 import { parseCellAddress } from "@bilig/formula";
-import type { CellSnapshot, Viewport } from "@bilig/protocol";
+import type { CellRangeRef, CellSnapshot, Viewport } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
@@ -153,6 +153,11 @@ export function useWorkerWorkbookAppState(input: {
   const agentSelectionRangeRef = useRef<WorkbookAgentSelectionRange>(
     singleCellAgentSelectionRange(selection),
   );
+  const selectionRangeRef = useRef<CellRangeRef>({
+    sheetName: selection.sheetName,
+    startAddress: selection.address,
+    endAddress: selection.address,
+  });
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -490,8 +495,8 @@ export function useWorkerWorkbookAppState(input: {
     pasteIntoSelection,
     toggleBooleanCell,
   } = useWorkbookSelectionActions({
-    selectionLabel,
     writesAllowed,
+    selectionRangeRef,
     selectionRef,
     editorTargetRef,
     editorValueRef,
@@ -624,6 +629,9 @@ export function useWorkerWorkbookAppState(input: {
 
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
+  useEffect(() => {
+    selectionRangeRef.current = selectionRange;
+  }, [selectionRange]);
   const selectedPosition = useMemo(
     () => parseCellAddress(selection.address, selection.sheetName),
     [selection.address, selection.sheetName],
@@ -683,7 +691,7 @@ export function useWorkerWorkbookAppState(input: {
         reportRuntimeError,
       );
     },
-    selectionRange,
+    selectionRangeRef,
     selection,
     selectionLabel,
     selectedCell,

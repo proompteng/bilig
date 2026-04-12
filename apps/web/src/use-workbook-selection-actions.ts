@@ -7,7 +7,6 @@ import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import type { WorkbookMutationMethod } from "./workbook-sync.js";
 import {
   parseEditorInput,
-  parseSelectionRangeLabel,
   type EditingMode,
   type ParsedEditorInput,
 } from "./worker-workbook-app-model.js";
@@ -71,8 +70,8 @@ export function createSheetScopedRangePair(
 }
 
 export function useWorkbookSelectionActions(input: {
-  selectionLabel: string;
   writesAllowed: boolean;
+  selectionRangeRef: MutableRefObject<CellRangeRef>;
   selectionRef: MutableRefObject<WorkerRuntimeSelection>;
   editorTargetRef: MutableRefObject<WorkerRuntimeSelection>;
   editorValueRef: MutableRefObject<string>;
@@ -99,7 +98,7 @@ export function useWorkbookSelectionActions(input: {
     onPasteApplied,
     reportRuntimeError,
     resetEditorConflictTracking,
-    selectionLabel,
+    selectionRangeRef,
     selectionRef,
     setEditingMode,
     setEditorSelectionBehavior,
@@ -169,17 +168,15 @@ export function useWorkbookSelectionActions(input: {
     if (!writesAllowed) {
       return;
     }
-    const targetRange = parseSelectionRangeLabel(selectionLabel, selectionRef.current.sheetName);
     resetEditingState("");
     resetEditorConflictTracking();
-    void invokeMutation("clearRange", targetRange).catch(reportRuntimeError);
+    void invokeMutation("clearRange", selectionRangeRef.current).catch(reportRuntimeError);
   }, [
     invokeMutation,
     reportRuntimeError,
     resetEditingState,
     resetEditorConflictTracking,
-    selectionLabel,
-    selectionRef,
+    selectionRangeRef,
     writesAllowed,
   ]);
 
