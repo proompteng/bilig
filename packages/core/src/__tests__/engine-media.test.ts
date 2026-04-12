@@ -1,3 +1,4 @@
+import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
 import { SpreadsheetEngine } from "../engine.js";
 
@@ -144,5 +145,60 @@ describe("engine media metadata", () => {
     expect(engine.getShape("Review Callout")).toBeUndefined();
     expect(engine.getImages()).toEqual([]);
     expect(engine.getShapes()).toEqual([]);
+  });
+
+  it("skips duplicate media writes, exposes delete booleans, and aliases pasteRange to copyRange", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "media-idempotent" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+
+    engine.setImage({
+      id: "Revenue Image",
+      sheetName: "Sheet1",
+      address: "B2",
+      sourceUrl: "https://example.com/revenue.png",
+      rows: 2,
+      cols: 3,
+    });
+    engine.setImage({
+      id: "Revenue Image",
+      sheetName: "Sheet1",
+      address: "B2",
+      sourceUrl: "https://example.com/revenue.png",
+      rows: 2,
+      cols: 3,
+    });
+    engine.setShape({
+      id: "Review Callout",
+      sheetName: "Sheet1",
+      address: "C3",
+      shapeType: "roundedRectangle",
+      rows: 2,
+      cols: 3,
+    });
+    engine.setShape({
+      id: "Review Callout",
+      sheetName: "Sheet1",
+      address: "C3",
+      shapeType: "roundedRectangle",
+      rows: 2,
+      cols: 3,
+    });
+
+    expect(engine.getImages()).toHaveLength(1);
+    expect(engine.getShapes()).toHaveLength(1);
+    expect(engine.deleteImage("Missing")).toBe(false);
+    expect(engine.deleteShape("Missing")).toBe(false);
+    expect(engine.deleteImage("Revenue Image")).toBe(true);
+    expect(engine.deleteShape("Review Callout")).toBe(true);
+    expect(engine.getImages()).toEqual([]);
+    expect(engine.getShapes()).toEqual([]);
+
+    engine.pasteRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+    );
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 10 });
   });
 });

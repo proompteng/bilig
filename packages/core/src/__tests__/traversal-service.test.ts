@@ -89,4 +89,58 @@ describe("EngineTraversalService", () => {
     expect(sheetCells).toContain("Sheet1!B1@0,1");
     expect(sheetCells).toContain("Sheet1!C2@1,2");
   });
+
+  it("exposes immediate traversal reads and wraps callback failures", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "traversal-direct-now" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 3);
+    engine.setCellFormula("Sheet1", "B1", "A1+2");
+
+    const traversal = getTraversalService(engine);
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+
+    expect(a1Index).toBeDefined();
+    expect(b1Index).toBeDefined();
+    expect(sheetId).toBeDefined();
+
+    const dependents = traversal.getEntityDependentsNow(makeCellEntity(a1Index!));
+    expect(
+      [...dependents].map((cellIndex) => engine.workbook.getQualifiedAddress(cellIndex)),
+    ).toEqual(["Sheet1!B1"]);
+
+    const formulaDependents = traversal.collectFormulaDependentsNow(makeCellEntity(a1Index!));
+    expect(
+      [...formulaDependents].map((cellIndex) => engine.workbook.getQualifiedAddress(cellIndex)),
+    ).toEqual(["Sheet1!B1"]);
+
+    const directDependencies: string[] = [];
+    traversal.forEachFormulaDependencyCellNow(b1Index!, (dependencyCellIndex) => {
+      directDependencies.push(engine.workbook.getQualifiedAddress(dependencyCellIndex));
+    });
+    expect(directDependencies).toEqual(["Sheet1!A1"]);
+
+    const directSheetCells: string[] = [];
+    traversal.forEachSheetCellNow(sheetId!, (cellIndex) => {
+      directSheetCells.push(engine.workbook.getQualifiedAddress(cellIndex));
+    });
+    expect(directSheetCells).toEqual(["Sheet1!A1", "Sheet1!B1"]);
+
+    expect(() =>
+      Effect.runSync(
+        traversal.forEachFormulaDependencyCell(b1Index!, () => {
+          throw new Error("dependency boom");
+        }),
+      ),
+    ).toThrow("dependency boom");
+    expect(() =>
+      Effect.runSync(
+        traversal.forEachSheetCell(sheetId!, () => {
+          throw new Error("sheet boom");
+        }),
+      ),
+    ).toThrow("sheet boom");
+  });
 });

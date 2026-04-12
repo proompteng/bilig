@@ -36,4 +36,60 @@ describe("EngineRuntimeScratchService", () => {
     expect(scratch.getImpactedFormulaEpochNow()).toBe(9);
     expect(scratch.getMaterializedCellCountNow()).toBe(4);
   });
+
+  it("roundtrips every scratch buffer setter and getter through the extracted boundary", () => {
+    const scratch = createEngineRuntimeScratchService();
+    const pendingKernelSync = new Uint32Array([1, 2]);
+    const wasmBatch = new Uint32Array([3, 4]);
+    const mutationRoots = new Uint32Array([5, 6]);
+    const changedInputSeen = new Uint32Array([7, 8]);
+    const changedInputBuffer = new Uint32Array([9, 10]);
+    const changedFormulaSeen = new Uint32Array([11, 12]);
+    const changedFormulaBuffer = new Uint32Array([13, 14]);
+    const changedUnionSeen = new Uint32Array([15, 16]);
+    const changedUnion = new Uint32Array([17, 18]);
+    const materializedCells = new Uint32Array([19, 20]);
+    const explicitChangedSeen = new Uint32Array([21, 22]);
+    const explicitChangedBuffer = new Uint32Array([23, 24]);
+    const impactedFormulaSeen = new Uint32Array([25, 26]);
+    const impactedFormulaBuffer = new Uint32Array([27, 28]);
+
+    scratch.setPendingKernelSyncNow(pendingKernelSync);
+    scratch.setWasmBatchNow(wasmBatch);
+    scratch.setMutationRootsNow(mutationRoots);
+    scratch.setChangedInputSeenNow(changedInputSeen);
+    scratch.setChangedInputBufferNow(changedInputBuffer);
+    scratch.setChangedFormulaSeenNow(changedFormulaSeen);
+    scratch.setChangedFormulaBufferNow(changedFormulaBuffer);
+    scratch.setChangedUnionSeenNow(changedUnionSeen);
+    scratch.setChangedUnionNow(changedUnion);
+    scratch.setMaterializedCellsNow(materializedCells);
+    scratch.setExplicitChangedSeenNow(explicitChangedSeen);
+    scratch.setExplicitChangedBufferNow(explicitChangedBuffer);
+    scratch.setImpactedFormulaSeenNow(impactedFormulaSeen);
+    scratch.setImpactedFormulaBufferNow(impactedFormulaBuffer);
+
+    expect(scratch.getPendingKernelSyncNow()).toBe(pendingKernelSync);
+    expect(scratch.getWasmBatchNow()).toBe(wasmBatch);
+    expect(scratch.getMutationRootsNow()).toBe(mutationRoots);
+    expect(scratch.getChangedInputSeenNow()).toBe(changedInputSeen);
+    expect(scratch.getChangedInputBufferNow()).toBe(changedInputBuffer);
+    expect(scratch.getChangedFormulaSeenNow()).toBe(changedFormulaSeen);
+    expect(scratch.getChangedFormulaBufferNow()).toBe(changedFormulaBuffer);
+    expect(scratch.getChangedUnionSeenNow()).toBe(changedUnionSeen);
+    expect(scratch.getChangedUnionNow()).toBe(changedUnion);
+    expect(scratch.getMaterializedCellsNow()).toBe(materializedCells);
+    expect(scratch.getExplicitChangedSeenNow()).toBe(explicitChangedSeen);
+    expect(scratch.getExplicitChangedBufferNow()).toBe(explicitChangedBuffer);
+    expect(scratch.getImpactedFormulaSeenNow()).toBe(impactedFormulaSeen);
+    expect(scratch.getImpactedFormulaBufferNow()).toBe(impactedFormulaBuffer);
+  });
+
+  it("wraps allocation failures when recalc scratch growth cannot be satisfied", () => {
+    const scratch = createEngineRuntimeScratchService();
+
+    expect(() => Effect.runSync(scratch.ensureRecalcCapacity(Number.MAX_SAFE_INTEGER))).toThrow(
+      "Invalid typed array length",
+    );
+  });
 });

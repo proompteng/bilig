@@ -1,8 +1,12 @@
+/* eslint-disable typescript-eslint/no-unsafe-type-assertion -- error-path tests intentionally inject partial collaborators */
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import type { EngineOp } from "@bilig/workbook-domain";
 import { SpreadsheetEngine } from "../engine.js";
-import type { EngineMaintenanceService } from "../engine/services/maintenance-service.js";
+import {
+  createEngineMaintenanceService,
+  type EngineMaintenanceService,
+} from "../engine/services/maintenance-service.js";
 
 function isEngineMaintenanceService(value: unknown): value is EngineMaintenanceService {
   if (typeof value !== "object" || value === null) {
@@ -79,5 +83,137 @@ describe("EngineMaintenanceService", () => {
       wasmFormulaCount: 0,
       jsFormulaCount: 0,
     });
+  });
+
+  it("captures sheet and range cell state through the extracted maintenance boundary", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "maintenance-capture" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "C3", 30);
+
+    const maintenance = getMaintenanceService(engine);
+
+    expect(
+      Effect.runSync(maintenance.captureSheetCellState("Sheet1")).map((op) => op.kind),
+    ).toEqual([
+      "setCellValue",
+      "setCellFormat",
+      "setCellValue",
+      "setCellFormat",
+      "setCellValue",
+      "setCellFormat",
+    ]);
+    expect(
+      Effect.runSync(maintenance.captureRowRangeCellState("Sheet1", 0, 2)).map((op) => op.kind),
+    ).toEqual(["setCellValue", "setCellFormat", "setCellValue", "setCellFormat"]);
+    expect(
+      Effect.runSync(maintenance.captureColumnRangeCellState("Sheet1", 0, 2)).map((op) => op.kind),
+    ).toEqual(["setCellValue", "setCellFormat", "setCellValue", "setCellFormat"]);
+  });
+
+  it("wraps capture callback failures with maintenance service errors", () => {
+    const service = createEngineMaintenanceService({
+      state: {
+        workbook: { listDefinedNames: () => [] },
+        formulas: new Map(),
+        ranges: { reset: () => undefined },
+        entityVersions: new Map(),
+        sheetDeleteVersions: new Map(),
+        undoStack: [],
+        redoStack: [],
+        setSelection: () => undefined,
+        setSyncState: () => undefined,
+        getLastMetrics: () => ({ batchId: "batch-1" }),
+        setLastMetrics: () => undefined,
+      } as never,
+      edgeArena: { reset: () => undefined } as never,
+      reverseState: {
+        reverseCellEdges: [],
+        reverseRangeEdges: [],
+        reverseDefinedNameEdges: new Map(),
+        reverseTableEdges: new Map(),
+        reverseSpillEdges: new Map(),
+      },
+      pivotOutputOwners: new Map(),
+      captureSheetCellState: () => {
+        throw new Error("sheet capture boom");
+      },
+      captureRowRangeCellState: () => {
+        throw new Error("row capture boom");
+      },
+      captureColumnRangeCellState: () => {
+        throw new Error("column capture boom");
+      },
+      setWasmProgramSyncPending: () => undefined,
+      setMaterializedCellCount: () => undefined,
+      scheduleWasmProgramSync: () => undefined,
+      resetWasmState: () => undefined,
+    });
+
+    expect(() => Effect.runSync(service.captureSheetCellState("Sheet1"))).toThrow(
+      "sheet capture boom",
+    );
+    expect(() => Effect.runSync(service.captureRowRangeCellState("Sheet1", 0, 1))).toThrow(
+      "row capture boom",
+    );
+    expect(() => Effect.runSync(service.captureColumnRangeCellState("Sheet1", 0, 1))).toThrow(
+      "column capture boom",
+    );
+  });
+
+  it("wraps rename, estimate, and reset failures with maintenance service errors", () => {
+    const service = createEngineMaintenanceService({
+      state: {
+        workbook: {
+          listDefinedNames: () => {
+            throw new Error("rename boom");
+          },
+          reset: () => {
+            throw new Error("reset boom");
+          },
+        },
+        formulas: new Map(),
+        ranges: { reset: () => undefined },
+        entityVersions: new Map(),
+        sheetDeleteVersions: new Map(),
+        undoStack: [],
+        redoStack: [],
+        setSelection: () => undefined,
+        setSyncState: () => undefined,
+        getLastMetrics: () => ({ batchId: "batch-1" }),
+        setLastMetrics: () => undefined,
+      } as never,
+      edgeArena: { reset: () => undefined } as never,
+      reverseState: {
+        reverseCellEdges: [],
+        reverseRangeEdges: [],
+        reverseDefinedNameEdges: new Map(),
+        reverseTableEdges: new Map(),
+        reverseSpillEdges: new Map(),
+      },
+      pivotOutputOwners: new Map(),
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      setWasmProgramSyncPending: () => undefined,
+      setMaterializedCellCount: () => undefined,
+      scheduleWasmProgramSync: () => undefined,
+      resetWasmState: () => undefined,
+    });
+    const poisonedOps = {
+      get length() {
+        throw new Error("estimate boom");
+      },
+    } as unknown as EngineOp[];
+
+    expect(() =>
+      Effect.runSync(service.rewriteDefinedNamesForSheetRename("Sheet1", "Renamed")),
+    ).toThrow("rename boom");
+    expect(() => Effect.runSync(service.estimatePotentialNewCells(poisonedOps))).toThrow(
+      "estimate boom",
+    );
+    expect(() => Effect.runSync(service.resetWorkbook("Reset"))).toThrow("reset boom");
   });
 });

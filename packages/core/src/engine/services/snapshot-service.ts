@@ -69,15 +69,15 @@ export function createEngineSnapshotService(args: {
           args.state.workbook.sheetsByName.forEach((sheet) => {
             sheet.styleRanges.forEach((record) => referencedStyleIds.add(record.styleId));
             sheet.formatRanges.forEach((record) => referencedFormatIds.add(record.formatId));
+            sheet.grid.forEachCell((cellIndex) => {
+              const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
+              if (explicitFormat !== undefined) {
+                referencedFormatIds.add(
+                  args.state.workbook.internCellNumberFormat(explicitFormat).id,
+                );
+              }
+            });
           });
-          for (let cellIndex = 0; cellIndex < args.state.workbook.cellStore.size; cellIndex += 1) {
-            const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
-            if (explicitFormat !== undefined) {
-              referencedFormatIds.add(
-                args.state.workbook.internCellNumberFormat(explicitFormat).id,
-              );
-            }
-          }
           const styles = args.state.workbook
             .listCellStyles()
             .filter((style) => referencedStyleIds.has(style.id))

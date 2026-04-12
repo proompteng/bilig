@@ -417,6 +417,36 @@ describe("engine correctness", () => {
     expect(restored.exportSnapshot()).toEqual(snapshot);
   });
 
+  it("prunes orphaned explicit formats after structural undo restores", async () => {
+    const initialSnapshot = await createBaselineSnapshot("correctness-undo-format-orphan-prune");
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-undo-format-orphan-prune",
+      replicaId: "correctness-undo-format-orphan-prune",
+    });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A1", endAddress: "B2" }, "0.00");
+    engine.insertColumns(sheetName, 0, 1);
+    engine.insertColumns(sheetName, 0, 1);
+    engine.setCellFormula(sheetName, "A1", "D4+A1");
+    engine.deleteColumns(sheetName, 1, 1);
+    engine.fillRange(
+      { sheetName, startAddress: "B1", endAddress: "C2" },
+      { sheetName, startAddress: "B4", endAddress: "C5" },
+    );
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A1", endAddress: "A1" }, "0.00");
+    engine.insertColumns(sheetName, 0, 1);
+    engine.deleteRows(sheetName, 3, 1);
+    engine.setRangeStyle(
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+      { fill: { backgroundColor: "#dbeafe" } },
+    );
+
+    expect(undoAll(engine, 24)).toBeGreaterThan(0);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+  });
+
   it("drops orphaned formula dependents during structural undo replay", async () => {
     const initialSnapshot = await createBaselineSnapshot("correctness-orphan-formula-undo");
     const engine = new SpreadsheetEngine({

@@ -1,9 +1,163 @@
+/* eslint-disable typescript-eslint/no-unsafe-type-assertion -- support-service error-path tests intentionally inject partial collaborators */
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { ValueTag } from "@bilig/protocol";
+import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { CellFlags } from "../cell-store.js";
 import { SpreadsheetEngine } from "../engine.js";
-import type { EngineMutationSupportService } from "../engine/services/mutation-support-service.js";
+import {
+  createEngineMutationSupportService,
+  type EngineMutationSupportService,
+} from "../engine/services/mutation-support-service.js";
+
+function createStubMutationSupportService(
+  overrides: Partial<Parameters<typeof createEngineMutationSupportService>[0]> = {},
+): EngineMutationSupportService {
+  const scratch = {
+    changedInputEpoch: 1,
+    changedFormulaEpoch: 1,
+    changedUnionEpoch: 1,
+    explicitChangedEpoch: 1,
+    impactedFormulaEpoch: 1,
+    materializedCellCount: 0,
+    changedInputSeen: new Uint32Array(16),
+    changedInputBuffer: new Uint32Array(16),
+    changedFormulaSeen: new Uint32Array(16),
+    changedFormulaBuffer: new Uint32Array(16),
+    changedUnionSeen: new Uint32Array(16),
+    changedUnion: new Uint32Array(16),
+    mutationRoots: new Uint32Array(16),
+    materializedCells: new Uint32Array(4),
+    explicitChangedSeen: new Uint32Array(16),
+    explicitChangedBuffer: new Uint32Array(16),
+    impactedFormulaSeen: new Uint32Array(16),
+    impactedFormulaBuffer: new Uint32Array(16),
+  };
+
+  const defaults: Parameters<typeof createEngineMutationSupportService>[0] = {
+    state: {
+      workbook: {
+        cellStore: {
+          size: 0,
+          sheetIds: [],
+          rows: [],
+          cols: [],
+          flags: [],
+          getValue: () => ({ tag: ValueTag.Empty }),
+          setValue: () => undefined,
+        },
+        ensureCellRecord: () => ({ created: false, cellIndex: 0 }),
+        ensureCellAt: () => ({ created: false, cellIndex: 0 }),
+        getSheetNameById: () => "Sheet1",
+        getAddress: () => "A1",
+        getSpill: () => undefined,
+        getSheet: () => undefined,
+        deleteSheet: () => undefined,
+        sheetsByName: new Map(),
+      },
+      strings: { get: () => "" },
+      formulas: new Map(),
+      ranges: { addDynamicMember: () => [] },
+    } as never,
+    edgeArena: {
+      empty: () => ({ ptr: -1, len: 0 }),
+      appendUnique: () => ({ ptr: -1, len: 0 }),
+      readView: () => new Uint32Array(),
+    } as never,
+    reverseState: {
+      reverseCellEdges: [],
+      reverseRangeEdges: [],
+    },
+    removeFormula: () => false,
+    rebindFormulasForSheet: () => 0,
+    getSelectionState: () =>
+      ({
+        sheetName: "Sheet1",
+        address: "A1",
+        anchorAddress: "A1",
+        range: { startAddress: "A1", endAddress: "A1" },
+        editMode: "idle",
+      }) as never,
+    setSelection: () => undefined,
+    applyDerivedOp: () => [],
+    scheduleWasmProgramSync: () => undefined,
+    ensureRecalcScratchCapacity: () => undefined,
+    collectFormulaDependents: () => new Uint32Array(),
+    getChangedInputEpoch: () => scratch.changedInputEpoch,
+    setChangedInputEpoch: (next) => {
+      scratch.changedInputEpoch = next;
+    },
+    getChangedInputSeen: () => scratch.changedInputSeen,
+    setChangedInputSeen: (next) => {
+      scratch.changedInputSeen = next;
+    },
+    getChangedInputBuffer: () => scratch.changedInputBuffer,
+    setChangedInputBuffer: (next) => {
+      scratch.changedInputBuffer = next;
+    },
+    getChangedFormulaEpoch: () => scratch.changedFormulaEpoch,
+    setChangedFormulaEpoch: (next) => {
+      scratch.changedFormulaEpoch = next;
+    },
+    getChangedFormulaSeen: () => scratch.changedFormulaSeen,
+    setChangedFormulaSeen: (next) => {
+      scratch.changedFormulaSeen = next;
+    },
+    getChangedFormulaBuffer: () => scratch.changedFormulaBuffer,
+    setChangedFormulaBuffer: (next) => {
+      scratch.changedFormulaBuffer = next;
+    },
+    getChangedUnionEpoch: () => scratch.changedUnionEpoch,
+    setChangedUnionEpoch: (next) => {
+      scratch.changedUnionEpoch = next;
+    },
+    getChangedUnionSeen: () => scratch.changedUnionSeen,
+    setChangedUnionSeen: (next) => {
+      scratch.changedUnionSeen = next;
+    },
+    getChangedUnion: () => scratch.changedUnion,
+    setChangedUnion: (next) => {
+      scratch.changedUnion = next;
+    },
+    getMutationRoots: () => scratch.mutationRoots,
+    setMutationRoots: (next) => {
+      scratch.mutationRoots = next;
+    },
+    getMaterializedCellCount: () => scratch.materializedCellCount,
+    setMaterializedCellCount: (next) => {
+      scratch.materializedCellCount = next;
+    },
+    getMaterializedCells: () => scratch.materializedCells,
+    setMaterializedCells: (next) => {
+      scratch.materializedCells = next;
+    },
+    getExplicitChangedEpoch: () => scratch.explicitChangedEpoch,
+    setExplicitChangedEpoch: (next) => {
+      scratch.explicitChangedEpoch = next;
+    },
+    getExplicitChangedSeen: () => scratch.explicitChangedSeen,
+    setExplicitChangedSeen: (next) => {
+      scratch.explicitChangedSeen = next;
+    },
+    getExplicitChangedBuffer: () => scratch.explicitChangedBuffer,
+    setExplicitChangedBuffer: (next) => {
+      scratch.explicitChangedBuffer = next;
+    },
+    getImpactedFormulaEpoch: () => scratch.impactedFormulaEpoch,
+    setImpactedFormulaEpoch: (next) => {
+      scratch.impactedFormulaEpoch = next;
+    },
+    getImpactedFormulaSeen: () => scratch.impactedFormulaSeen,
+    setImpactedFormulaSeen: (next) => {
+      scratch.impactedFormulaSeen = next;
+    },
+    getImpactedFormulaBuffer: () => scratch.impactedFormulaBuffer,
+    setImpactedFormulaBuffer: (next) => {
+      scratch.impactedFormulaBuffer = next;
+    },
+  };
+
+  return createEngineMutationSupportService({ ...defaults, ...overrides });
+}
 
 function isEngineMutationSupportService(value: unknown): value is EngineMutationSupportService {
   if (typeof value !== "object" || value === null) {
@@ -187,5 +341,219 @@ describe("EngineMutationSupportService", () => {
       anchorAddress: "A1",
     });
     expect((engine.workbook.cellStore.flags[a1Index!] & CellFlags.PendingDelete) !== 0).toBe(true);
+  });
+
+  it("covers direct mutation helpers for volatile formulas and deduplicated unions", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "support-direct-helpers" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A2", 7);
+    engine.setCellFormula("Sheet1", "A1", "RAND()");
+    engine.setCellFormula("Sheet1", "B1", "A2*2");
+
+    const support = getMutationSupportService(engine);
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    const a2Index = engine.workbook.getCellIndex("Sheet1", "A2");
+    expect(a1Index).toBeDefined();
+    expect(b1Index).toBeDefined();
+    expect(a2Index).toBeDefined();
+
+    support.beginMutationCollectionNow();
+    expect(support.markVolatileFormulasChangedNow(0)).toBe(1);
+    expect(Array.from(support.composeMutationRootsNow(0, 1))).toEqual([a1Index]);
+
+    const explicitChangedCount = support.markExplicitChangedNow(a2Index!, 0);
+    expect(explicitChangedCount).toBe(1);
+    expect(support.markPivotRootsChangedNow([a2Index!], 0)).toBe(1);
+
+    const eventChanges = support.composeEventChangesNow(
+      Uint32Array.of(a2Index!, a1Index!),
+      explicitChangedCount,
+    );
+    expect(Array.from(eventChanges)).toEqual([a2Index, a1Index]);
+
+    const union = support.unionChangedSetsNow(
+      Uint32Array.of(a2Index!, a1Index!),
+      Uint32Array.of(a2Index!, b1Index!),
+    );
+    expect(Array.from(union)).toEqual([a2Index, a1Index, b1Index]);
+
+    const changedRootsAndOrdered = support.composeChangedRootsAndOrderedNow(
+      Uint32Array.of(a2Index!, a1Index!),
+      Uint32Array.of(a1Index!, b1Index!),
+      2,
+    );
+    expect(Array.from(changedRootsAndOrdered)).toEqual([a2Index, a1Index, b1Index]);
+
+    support.resetMaterializedCellScratchNow(128);
+  });
+
+  it("returns a spill error when a materialized array would overflow sheet bounds", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "support-spill-overflow" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "XFD1048576", 1);
+
+    const lastCellIndex = engine.workbook.getCellIndex("Sheet1", "XFD1048576");
+    expect(lastCellIndex).toBeDefined();
+
+    const materialized = Effect.runSync(
+      getMutationSupportService(engine).materializeSpill(lastCellIndex!, {
+        rows: 1,
+        cols: 2,
+        values: [
+          { tag: ValueTag.Number, value: 1 },
+          { tag: ValueTag.Number, value: 2 },
+        ],
+      }),
+    );
+
+    expect(materialized.ownerValue).toMatchObject({
+      tag: ValueTag.Error,
+      code: ErrorCode.Spill,
+    });
+    expect(materialized.changedCellIndices).toEqual([]);
+  });
+
+  it("wraps mutation support callback failures with engine mutation errors", () => {
+    const poisonedCellIndices = {
+      get length() {
+        throw new Error("roots boom");
+      },
+    } as unknown as readonly number[];
+
+    const unionErrorService = createStubMutationSupportService({
+      getChangedUnionEpoch: () => {
+        throw new Error("union boom");
+      },
+    });
+    expect(() =>
+      Effect.runSync(unionErrorService.composeEventChanges(Uint32Array.of(1), 1)),
+    ).toThrow("union boom");
+    expect(() =>
+      Effect.runSync(unionErrorService.unionChangedSets(Uint32Array.of(1), Uint32Array.of(2))),
+    ).toThrow("union boom");
+    expect(() =>
+      Effect.runSync(
+        unionErrorService.composeChangedRootsAndOrdered(Uint32Array.of(1), Uint32Array.of(2), 1),
+      ),
+    ).toThrow("union boom");
+
+    const workbookErrorService = createStubMutationSupportService({
+      state: {
+        workbook: {
+          cellStore: {
+            size: 0,
+            sheetIds: [],
+            rows: [],
+            cols: [],
+            flags: [],
+            getValue: () => ({ tag: ValueTag.Empty }),
+            setValue: () => undefined,
+          },
+          ensureCellRecord: () => {
+            throw new Error("ensure by name boom");
+          },
+          ensureCellAt: () => {
+            throw new Error("ensure coords boom");
+          },
+          getSheetNameById: () => {
+            throw new Error("spill boom");
+          },
+          getAddress: () => "A1",
+          getSpill: () => undefined,
+          getSheet: () => {
+            throw new Error("remove sheet boom");
+          },
+          deleteSheet: () => undefined,
+          sheetsByName: new Map(),
+        },
+        strings: { get: () => "" },
+        formulas: {
+          forEach: () => {
+            throw new Error("volatile boom");
+          },
+        },
+        ranges: { addDynamicMember: () => [] },
+      } as never,
+      getChangedInputBuffer: () => {
+        throw new Error("buffer boom");
+      },
+      getMaterializedCellCount: () => {
+        throw new Error("sync boom");
+      },
+      setMaterializedCellCount: () => {
+        throw new Error("scratch boom");
+      },
+      ensureRecalcScratchCapacity: () => {
+        throw new Error("compose roots boom");
+      },
+    });
+
+    expect(() => Effect.runSync(workbookErrorService.markVolatileFormulasChanged(0))).toThrow(
+      "volatile boom",
+    );
+    expect(() =>
+      Effect.runSync(workbookErrorService.markSpillRootsChanged(poisonedCellIndices, 0)),
+    ).toThrow("roots boom");
+    expect(() =>
+      Effect.runSync(workbookErrorService.markPivotRootsChanged(poisonedCellIndices, 0)),
+    ).toThrow("roots boom");
+    expect(() => Effect.runSync(workbookErrorService.composeMutationRoots(1, 1))).toThrow(
+      "compose roots boom",
+    );
+    expect(() => Effect.runSync(workbookErrorService.getChangedInputBuffer())).toThrow(
+      "buffer boom",
+    );
+    expect(() => Effect.runSync(workbookErrorService.ensureCellTracked("Sheet1", "A1"))).toThrow(
+      "ensure by name boom",
+    );
+    expect(() => Effect.runSync(workbookErrorService.ensureCellTrackedByCoords(1, 0, 0))).toThrow(
+      "ensure coords boom",
+    );
+    expect(() => Effect.runSync(workbookErrorService.clearOwnedSpill(1))).toThrow("spill boom");
+    expect(() =>
+      Effect.runSync(
+        workbookErrorService.materializeSpill(1, {
+          rows: 1,
+          cols: 1,
+          values: [{ tag: ValueTag.Number, value: 1 }],
+        }),
+      ),
+    ).toThrow("spill boom");
+    expect(() => Effect.runSync(workbookErrorService.removeSheetRuntime("Sheet1", 0))).toThrow(
+      "remove sheet boom",
+    );
+    expect(() => Effect.runSync(workbookErrorService.syncDynamicRanges(0))).toThrow("sync boom");
+    expect(() => Effect.runSync(workbookErrorService.resetMaterializedCellScratch(4))).toThrow(
+      "scratch boom",
+    );
+  });
+
+  it("resets union epochs and grows scratch buffers in direct helper overflow paths", () => {
+    let changedUnionEpoch = 0xffff_fffe;
+
+    const support = createStubMutationSupportService({
+      getChangedUnionEpoch: () => changedUnionEpoch,
+      setChangedUnionEpoch: (next) => {
+        changedUnionEpoch = next;
+      },
+    });
+
+    expect(Array.from(support.composeEventChangesNow(Uint32Array.of(2), 0))).toEqual([2]);
+    expect(changedUnionEpoch).toBe(1);
+
+    changedUnionEpoch = 0xffff_fffe;
+    expect(Array.from(support.unionChangedSetsNow(Uint32Array.of(3)))).toEqual([3]);
+    expect(changedUnionEpoch).toBe(1);
+
+    changedUnionEpoch = 0xffff_fffe;
+    expect(
+      Array.from(support.composeChangedRootsAndOrderedNow(Uint32Array.of(4), Uint32Array.of(4), 1)),
+    ).toEqual([4]);
+    expect(changedUnionEpoch).toBe(1);
+
+    support.resetMaterializedCellScratchNow(8);
   });
 });

@@ -645,13 +645,21 @@ function isSpillRecord(record: unknown): record is WorkbookSpillRecord {
     "address" in record &&
     "rows" in record &&
     "cols" in record &&
-    !("source" in record)
+    !("source" in record) &&
+    !("id" in record) &&
+    !("sourceUrl" in record) &&
+    !("shapeType" in record)
   );
 }
 
 function isPivotRecord(record: unknown): record is WorkbookPivotRecord {
   return (
-    typeof record === "object" && record !== null && "sheetName" in record && "source" in record
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "source" in record &&
+    !("id" in record) &&
+    !("chartType" in record)
   );
 }
 

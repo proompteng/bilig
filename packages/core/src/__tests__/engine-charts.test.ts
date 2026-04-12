@@ -127,4 +127,39 @@ describe("engine chart metadata", () => {
     expect(engine.getChart("Trend")).toBeUndefined();
     expect(engine.getCharts()).toEqual([]);
   });
+
+  it("skips duplicate chart writes and returns correct delete booleans", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "charts-idempotent" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Dashboard");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B2" }, [
+      ["Month", "Revenue"],
+      ["Jan", 10],
+    ]);
+
+    engine.setChart({
+      id: "Trend",
+      sheetName: "Dashboard",
+      address: "B2",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B2" },
+      chartType: "line",
+      rows: 3,
+      cols: 4,
+    });
+    engine.setChart({
+      id: "Trend",
+      sheetName: "Dashboard",
+      address: "B2",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B2" },
+      chartType: "line",
+      rows: 3,
+      cols: 4,
+    });
+
+    expect(engine.getCharts()).toHaveLength(1);
+    expect(engine.deleteChart("Missing")).toBe(false);
+    expect(engine.deleteChart("Trend")).toBe(true);
+    expect(engine.getCharts()).toEqual([]);
+  });
 });

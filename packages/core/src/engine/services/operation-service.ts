@@ -1205,8 +1205,8 @@ export function createEngineOperationService(args: {
           case "setCellFormat": {
             const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
             args.state.workbook.setCellFormat(cellIndex, op.format);
+            pruneCellIfOrphaned(cellIndex);
             if (!isRestore) {
-              pruneCellIfOrphaned(cellIndex);
               explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
               setEntityVersionForOp(op, order);
             }

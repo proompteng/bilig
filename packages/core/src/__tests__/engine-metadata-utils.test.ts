@@ -137,6 +137,100 @@ describe("engine metadata utils", () => {
     });
   });
 
+  it("treats broken formula metadata and unresolved scalar names predictably", () => {
+    expect(
+      resolveMetadataReferencesInAst(
+        { kind: "NameRef", name: "BrokenFormulaObject" },
+        {
+          resolveName: (name) =>
+            name === "BrokenFormulaObject" ? { kind: "formula", formula: "=(" } : undefined,
+          resolveStructuredReference: () => undefined,
+          resolveSpillReference: () => undefined,
+        },
+      ),
+    ).toEqual({
+      fullyResolved: true,
+      substituted: true,
+      node: { kind: "ErrorLiteral", code: ErrorCode.Value },
+    });
+
+    expect(
+      resolveMetadataReferencesInAst(
+        { kind: "NameRef", name: "BrokenFormulaString" },
+        {
+          resolveName: (name) => (name === "BrokenFormulaString" ? "=(" : undefined),
+          resolveStructuredReference: () => undefined,
+          resolveSpillReference: () => undefined,
+        },
+      ),
+    ).toEqual({
+      fullyResolved: true,
+      substituted: true,
+      node: { kind: "ErrorLiteral", code: ErrorCode.Value },
+    });
+
+    const unresolved = resolveMetadataReferencesInAst(
+      { kind: "NameRef", name: "PendingNull" },
+      {
+        resolveName: (name) =>
+          name === "PendingNull" ? { kind: "scalar", value: null } : undefined,
+        resolveStructuredReference: () => undefined,
+        resolveSpillReference: () => undefined,
+      },
+    );
+    expect(unresolved.fullyResolved).toBe(false);
+    expect(unresolved.substituted).toBe(false);
+    expect(unresolved.node).toEqual({ kind: "NameRef", name: "PendingNull" });
+  });
+
+  it("propagates missing refs and cycles through unary, call, and invoke nodes", () => {
+    const resolved = resolveMetadataReferencesInAst(
+      {
+        kind: "InvokeExpr",
+        callee: { kind: "NameRef", name: "Loop" },
+        args: [
+          {
+            kind: "UnaryExpr",
+            operator: "-",
+            argument: { kind: "StructuredRef", tableName: "MissingTable", columnName: "Amount" },
+          },
+          {
+            kind: "CallExpr",
+            callee: "SUM",
+            args: [{ kind: "SpillRef", sheetName: "Sheet1", ref: "B2" }],
+          },
+        ],
+      },
+      {
+        resolveName: (name) =>
+          name === "Loop" ? { kind: "formula", formula: "=Loop" } : undefined,
+        resolveStructuredReference: () => undefined,
+        resolveSpillReference: () => undefined,
+      },
+    );
+
+    expect(resolved).toEqual({
+      fullyResolved: true,
+      substituted: true,
+      node: {
+        kind: "InvokeExpr",
+        callee: { kind: "ErrorLiteral", code: ErrorCode.Cycle },
+        args: [
+          {
+            kind: "UnaryExpr",
+            operator: "-",
+            argument: { kind: "ErrorLiteral", code: ErrorCode.Ref },
+          },
+          {
+            kind: "CallExpr",
+            callee: "SUM",
+            args: [{ kind: "ErrorLiteral", code: ErrorCode.Ref }],
+          },
+        ],
+      },
+    });
+  });
+
   it("normalizes quoted spill references with escaped apostrophes", () => {
     expect(spillDependencyKeyFromRef("'O''Brien''s Sheet'!A1", "Sheet1")).toBe(
       "O'Brien's Sheet!A1",

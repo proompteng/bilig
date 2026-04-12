@@ -408,4 +408,378 @@ describe("createEngineLookupService", () => {
       }),
     ).toEqual({ handled: true, position: 2 });
   });
+
+  it("handles uniform approximate boundary conditions and empty text lookups", () => {
+    const workbook = new WorkbookStore("lookup-service-approx-boundaries");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+      setStoredCellValue(workbook, strings, "Sheet1", `B${index + 1}`, {
+        tag: ValueTag.Number,
+        value: 9 - index * 2,
+      });
+    });
+    workbook.ensureCell("Sheet1", "C1");
+    ["apple", "banana", "pear"].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `C${index + 2}`, {
+        tag: ValueTag.String,
+        value,
+      });
+    });
+
+    const lookup = createEngineLookupService({
+      state: {
+        workbook,
+        strings,
+      },
+    });
+
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 0 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A4",
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 8 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A4",
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 4 });
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 10 },
+        sheetName: "Sheet1",
+        start: "B1",
+        end: "B4",
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 2 },
+        sheetName: "Sheet1",
+        start: "B1",
+        end: "B4",
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 4 });
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Empty, value: null },
+        sheetName: "Sheet1",
+        start: "C1",
+        end: "C4",
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 1 });
+    expect(
+      lookup.findApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: true },
+        sheetName: "Sheet1",
+        start: "C1",
+        end: "C4",
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+  });
+
+  it("supports prepared exact lookups across numeric, text, and mixed columns", () => {
+    const workbook = new WorkbookStore("lookup-service-prepared-exact");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+    ["apple", "pear", "pear", "plum"].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `B${index + 1}`, {
+        tag: ValueTag.String,
+        value,
+      });
+    });
+    workbook.ensureCell("Sheet1", "C1");
+    setStoredCellValue(workbook, strings, "Sheet1", "C2", {
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+    setStoredCellValue(workbook, strings, "Sheet1", "C3", {
+      tag: ValueTag.String,
+      value: "pear",
+    });
+
+    const lookup = createEngineLookupService({
+      state: {
+        workbook,
+        strings,
+      },
+    });
+
+    const numericPrepared = lookup.prepareExactVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    });
+    expect(numericPrepared.comparableKind).toBe("numeric");
+    expect(numericPrepared.uniformStart).toBe(1);
+    expect(numericPrepared.uniformStep).toBe(2);
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 5 },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "5" },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Ref },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    setStoredCellValue(workbook, strings, "Sheet1", "A2", {
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const textPrepared = lookup.prepareExactVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 1,
+    });
+    expect(textPrepared.comparableKind).toBe("text");
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "PEAR" },
+        prepared: textPrepared,
+        searchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+
+    const mixedPrepared = lookup.prepareExactVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 2,
+    });
+    expect(mixedPrepared.comparableKind).toBe("mixed");
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.Empty, value: null },
+        prepared: mixedPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 1 });
+    expect(
+      lookup.findPreparedExactVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        prepared: mixedPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+  });
+
+  it("supports prepared approximate lookups across uniform, irregular, and invalid columns", () => {
+    const workbook = new WorkbookStore("lookup-service-prepared-approx");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+      setStoredCellValue(workbook, strings, "Sheet1", `B${index + 1}`, {
+        tag: ValueTag.Number,
+        value: 9 - index * 2,
+      });
+    });
+    [1, 4, 10].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `C${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+    ["apple", "banana", "pear", "plum"].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `D${index + 1}`, {
+        tag: ValueTag.String,
+        value,
+      });
+      setStoredCellValue(workbook, strings, "Sheet1", `E${index + 1}`, {
+        tag: ValueTag.String,
+        value: ["pear", "orange", "banana", "apple"][index],
+      });
+    });
+    setStoredCellValue(workbook, strings, "Sheet1", "F1", {
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    setStoredCellValue(workbook, strings, "Sheet1", "F2", {
+      tag: ValueTag.String,
+      value: "pear",
+    });
+    setStoredCellValue(workbook, strings, "Sheet1", "F3", {
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+
+    const lookup = createEngineLookupService({
+      state: {
+        workbook,
+        strings,
+      },
+    });
+
+    const ascendingPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    });
+    expect(ascendingPrepared.comparableKind).toBe("numeric");
+    expect(ascendingPrepared.sortedAscending).toBe(true);
+    expect(ascendingPrepared.sortedDescending).toBe(false);
+    expect(ascendingPrepared.uniformStart).toBe(1);
+    expect(ascendingPrepared.uniformStep).toBe(2);
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "pear" },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    const descendingPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 1,
+    });
+    expect(descendingPrepared.sortedAscending).toBe(false);
+    expect(descendingPrepared.sortedDescending).toBe(true);
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: descendingPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const irregularPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 2,
+    });
+    expect(irregularPrepared.uniformStep).toBeUndefined();
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: irregularPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const ascendingTextPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 3,
+    });
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "peach" },
+        prepared: ascendingTextPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const descendingTextPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 4,
+    });
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "orange" },
+        prepared: descendingTextPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const invalidPrepared = lookup.prepareApproximateVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 5,
+    });
+    expect(invalidPrepared.comparableKind).toBeUndefined();
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 2 },
+        prepared: invalidPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+    invalidPrepared.comparableKind = "text";
+    invalidPrepared.textValues = undefined;
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "pear" },
+        prepared: invalidPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    setStoredCellValue(workbook, strings, "Sheet1", "A2", {
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(
+      lookup.findPreparedApproximateVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+  });
 });

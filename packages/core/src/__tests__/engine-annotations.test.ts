@@ -108,4 +108,102 @@ describe("SpreadsheetEngine comments and notes", () => {
       },
     ]);
   });
+
+  it("skips duplicate note writes and returns correct delete booleans", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "annotation-idempotent" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setNote({
+      sheetName: "Sheet1",
+      address: "c3",
+      text: " Manual override ",
+    });
+    engine.setNote({
+      sheetName: "Sheet1",
+      address: "C3",
+      text: "Manual override",
+    });
+
+    expect(engine.getNote("Sheet1", "C3")).toEqual({
+      sheetName: "Sheet1",
+      address: "C3",
+      text: "Manual override",
+    });
+    expect(engine.getNotes("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        address: "C3",
+        text: "Manual override",
+      },
+    ]);
+    expect(engine.deleteNote("Sheet1", "A1")).toBe(false);
+    expect(engine.deleteNote("Sheet1", "C3")).toBe(true);
+    expect(engine.getNote("Sheet1", "C3")).toBeUndefined();
+    expect(engine.getNotes("Sheet1")).toEqual([]);
+  });
+
+  it("skips duplicate comment-thread writes and returns correct delete booleans", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "annotation-comment-idempotent" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "b2",
+      comments: [
+        {
+          id: "comment-1",
+          body: "Check this total.",
+          authorUserId: "user-1",
+          authorDisplayName: "Greg",
+          createdAtUnixMs: 123,
+        },
+      ],
+      resolved: true,
+      resolvedByUserId: "user-1",
+      resolvedAtUnixMs: 456,
+    });
+    engine.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [
+        {
+          id: "comment-1",
+          body: "Check this total.",
+          authorUserId: "user-1",
+          authorDisplayName: "Greg",
+          createdAtUnixMs: 123,
+        },
+      ],
+      resolved: true,
+      resolvedByUserId: "user-1",
+      resolvedAtUnixMs: 456,
+    });
+
+    expect(engine.getCommentThread("Sheet1", "B2")).toEqual({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [
+        {
+          id: "comment-1",
+          body: "Check this total.",
+          authorUserId: "user-1",
+          authorDisplayName: "Greg",
+          createdAtUnixMs: 123,
+        },
+      ],
+      resolved: true,
+      resolvedByUserId: "user-1",
+      resolvedAtUnixMs: 456,
+    });
+    expect(engine.getCommentThreads("Sheet1")).toHaveLength(1);
+    expect(engine.deleteCommentThread("Sheet1", "A1")).toBe(false);
+    expect(engine.deleteCommentThread("Sheet1", "B2")).toBe(true);
+    expect(engine.getCommentThread("Sheet1", "B2")).toBeUndefined();
+    expect(engine.getCommentThreads("Sheet1")).toEqual([]);
+  });
 });
