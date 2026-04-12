@@ -3,7 +3,6 @@ import {
   type CellRangeRef,
   type CellNumberFormatInput,
   type CellNumberFormatPreset,
-  type CellStylePatch,
   normalizeCellNumberFormatPreset,
 } from "@bilig/protocol";
 import { WORKBOOK_AGENT_TOOL_NAMES, normalizeWorkbookAgentToolName } from "@bilig/agent-api";
@@ -15,7 +14,7 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
-import { setRangeNumberFormatArgsSchema, setRangeStyleArgsSchema } from "@bilig/zero-sync";
+import { setRangeNumberFormatArgsSchema } from "@bilig/zero-sync";
 import type {
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
@@ -83,6 +82,12 @@ import {
   workbookSemanticSelectorJsonSchema,
   writeRangeToolArgsSchema,
 } from "./workbook-agent-selector-tooling.js";
+import {
+  normalizeWorkbookAgentStylePatch,
+  workbookAgentStylePatchHasChanges,
+  workbookAgentStylePatchJsonSchema,
+  workbookAgentStylePatchSchema,
+} from "./workbook-agent-style-patches.js";
 import {
   listWorkbookNamedRanges,
   listWorkbookTables,
@@ -218,7 +223,7 @@ const formatRangeToolArgsSchema = z
   .object({
     range: cellRangeRefSchema.optional(),
     selector: workbookSemanticSelectorSchema.optional(),
-    patch: setRangeStyleArgsSchema.shape.patch.optional(),
+    patch: workbookAgentStylePatchSchema.optional(),
     numberFormat: setRangeNumberFormatArgsSchema.shape.format.optional(),
   })
   .refine((value) => (value.range ? 1 : 0) + (value.selector ? 1 : 0) === 1, {
@@ -228,7 +233,6 @@ const formatRangeToolArgsSchema = z
     message: "patch or numberFormat is required",
   });
 
-type FormatRangePatchInput = NonNullable<z.infer<typeof setRangeStyleArgsSchema.shape.patch>>;
 type FormatRangeNumberFormatInput = NonNullable<
   z.infer<typeof setRangeNumberFormatArgsSchema.shape.format>
 >;
@@ -282,94 +286,6 @@ function summarizeWorkbookChangeRecord(
 
 function normalizeFormula(formula: string): string {
   return formula.startsWith("=") ? formula.slice(1) : formula;
-}
-
-function normalizeStylePatch(patch: FormatRangePatchInput): CellStylePatch {
-  const normalized: CellStylePatch = {};
-  if (patch.fill === null) {
-    normalized.fill = null;
-  } else if (patch.fill !== undefined) {
-    const fill: NonNullable<CellStylePatch["fill"]> = {};
-    if (patch.fill.backgroundColor !== undefined) {
-      fill.backgroundColor = patch.fill.backgroundColor;
-    }
-    normalized.fill = fill;
-  }
-  if (patch.font === null) {
-    normalized.font = null;
-  } else if (patch.font !== undefined) {
-    const font: NonNullable<CellStylePatch["font"]> = {};
-    if (patch.font.family !== undefined) {
-      font.family = patch.font.family;
-    }
-    if (patch.font.size !== undefined) {
-      font.size = patch.font.size;
-    }
-    if (patch.font.bold !== undefined) {
-      font.bold = patch.font.bold;
-    }
-    if (patch.font.italic !== undefined) {
-      font.italic = patch.font.italic;
-    }
-    if (patch.font.underline !== undefined) {
-      font.underline = patch.font.underline;
-    }
-    if (patch.font.color !== undefined) {
-      font.color = patch.font.color;
-    }
-    normalized.font = font;
-  }
-  if (patch.alignment === null) {
-    normalized.alignment = null;
-  } else if (patch.alignment !== undefined) {
-    const alignment: NonNullable<CellStylePatch["alignment"]> = {};
-    if (patch.alignment.horizontal !== undefined) {
-      alignment.horizontal = patch.alignment.horizontal;
-    }
-    if (patch.alignment.vertical !== undefined) {
-      alignment.vertical = patch.alignment.vertical;
-    }
-    if (patch.alignment.wrap !== undefined) {
-      alignment.wrap = patch.alignment.wrap;
-    }
-    if (patch.alignment.indent !== undefined) {
-      alignment.indent = patch.alignment.indent;
-    }
-    normalized.alignment = alignment;
-  }
-  if (patch.borders === null) {
-    normalized.borders = null;
-  } else if (patch.borders !== undefined) {
-    const borders: NonNullable<CellStylePatch["borders"]> = {};
-    const sides = [
-      ["top", patch.borders.top],
-      ["right", patch.borders.right],
-      ["bottom", patch.borders.bottom],
-      ["left", patch.borders.left],
-    ] as const;
-    for (const [sideName, sideValue] of sides) {
-      if (sideValue === undefined) {
-        continue;
-      }
-      if (sideValue === null) {
-        borders[sideName] = null;
-        continue;
-      }
-      const side: NonNullable<NonNullable<CellStylePatch["borders"]>[typeof sideName]> = {};
-      if (sideValue.style !== undefined) {
-        side.style = sideValue.style;
-      }
-      if (sideValue.weight !== undefined) {
-        side.weight = sideValue.weight;
-      }
-      if (sideValue.color !== undefined) {
-        side.color = sideValue.color;
-      }
-      borders[sideName] = side;
-    }
-    normalized.borders = borders;
-  }
-  return normalized;
 }
 
 function normalizeNumberFormatInput(input: FormatRangeNumberFormatInput): CellNumberFormatInput {
@@ -799,7 +715,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         properties: {
           range: cellRangeRefJsonSchema,
           selector: workbookSemanticSelectorJsonSchema,
-          patch: { type: "object" },
+          patch: workbookAgentStylePatchJsonSchema,
           numberFormat: {
             oneOf: [{ type: "string" }, { type: "object" }],
           },
@@ -1239,7 +1155,11 @@ export async function handleWorkbookAgentToolCall(
           range: resolved.range,
         };
         if (args.patch !== undefined) {
-          formatCommand.patch = normalizeStylePatch(args.patch);
+          const normalizedPatch = normalizeWorkbookAgentStylePatch(args.patch);
+          if (!workbookAgentStylePatchHasChanges(normalizedPatch)) {
+            throw new Error("format_range patch did not include any supported style fields");
+          }
+          formatCommand.patch = normalizedPatch;
         }
         if (args.numberFormat !== undefined) {
           formatCommand.numberFormat = normalizeNumberFormatInput(args.numberFormat);

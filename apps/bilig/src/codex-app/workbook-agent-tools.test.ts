@@ -2496,6 +2496,178 @@ describe("workbook agent tools", () => {
     });
   });
 
+  it("normalizes flat format_range patch aliases into workbook style patches", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-flat-format-range",
+        tool: "format_range",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "K1",
+          },
+          patch: {
+            fontWeight: "700",
+            fontSize: 16,
+            fillColor: "#E8F0FE",
+            horizontalAlignment: "left",
+            verticalAlignment: "middle",
+            borderBottom: { style: "solid", color: "#C7D2FE" },
+          },
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "formatRange",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "K1",
+      },
+      patch: {
+        fill: {
+          backgroundColor: "#E8F0FE",
+        },
+        font: {
+          bold: true,
+          size: 16,
+        },
+        alignment: {
+          horizontal: "left",
+          vertical: "middle",
+        },
+        borders: {
+          bottom: {
+            style: "solid",
+            color: "#C7D2FE",
+          },
+        },
+      },
+    });
+  });
+
+  it("expands border shorthand across all sides for format_range", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-border-shorthand-format-range",
+        tool: "format_range",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "D1",
+            endAddress: "E5",
+          },
+          patch: {
+            border: { style: "solid", color: "#CBD5E1" },
+          },
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "formatRange",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "D1",
+        endAddress: "E5",
+      },
+      patch: {
+        borders: {
+          top: { style: "solid", color: "#CBD5E1" },
+          right: { style: "solid", color: "#CBD5E1" },
+          bottom: { style: "solid", color: "#CBD5E1" },
+          left: { style: "solid", color: "#CBD5E1" },
+        },
+      },
+    });
+  });
+
+  it("rejects empty format_range style patches instead of staging a no-op", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-empty-format-range",
+        tool: "format_range",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "A1",
+          },
+          patch: {},
+        },
+      },
+    );
+
+    expect(response.success).toBe(false);
+    expect(response.contentItems[0]).toEqual(
+      expect.objectContaining({
+        type: "inputText",
+        text: expect.stringContaining(
+          "format_range patch did not include any supported style fields",
+        ),
+      }),
+    );
+    expect(stageCommand).not.toHaveBeenCalled();
+  });
+
   it("stages row metadata commands for hide and resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);
