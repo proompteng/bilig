@@ -8,6 +8,7 @@ import type {
   WorkbookAgentAppliedBy,
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
+  WorkbookAgentPreviewSummary,
   WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
 import {
@@ -447,6 +448,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState: WorkbookAgentSessionState,
     bundle: WorkbookAgentCommandBundle,
   ): boolean {
+    if (
+      sessionState.executionPolicy === "autoApplySafe" &&
+      !this.featureFlags.autoApplyLowRiskEnabled
+    ) {
+      return false;
+    }
     if (!this.isRolloutAllowed(sessionState.documentId, sessionState.storageActorUserId)) {
       return false;
     }
@@ -469,6 +476,161 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
   }
 
+  private async applyPendingBundleForSessionState(input: {
+    sessionState: WorkbookAgentSessionState;
+    pendingBundle: WorkbookAgentCommandBundle;
+    actorUserId: string;
+    appliedBy: WorkbookAgentAppliedBy;
+    commandIndexes?: readonly number[] | null | undefined;
+    preview: WorkbookAgentPreviewSummary;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const selection = splitWorkbookAgentCommandBundle({
+      bundle: input.pendingBundle,
+      acceptedCommandIndexes: input.commandIndexes,
+    });
+    if (!selection.acceptedBundle || !selection.acceptedScope) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_COMMAND_SELECTION_REQUIRED",
+        message: "Select at least one staged workbook change before apply",
+        statusCode: 400,
+        retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto" && selection.acceptedScope !== "full") {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+        message: "Automatic apply runs one complete change set per turn.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto") {
+      if (
+        !isWorkbookAgentBundleAutoApplyEligible(
+          resolveWorkbookAgentBundleExecutionPolicyInput({
+            scope: input.sessionState.scope,
+            executionPolicy: input.sessionState.executionPolicy,
+            bundle: selection.acceptedBundle,
+          }),
+        )
+      ) {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+          message: "This session routes workbook edits through the review queue.",
+          statusCode: 409,
+          retryable: false,
+        });
+      }
+      if (
+        input.sessionState.executionPolicy === "autoApplySafe" &&
+        !this.featureFlags.autoApplyLowRiskEnabled
+      ) {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
+          message: "Automatic safe-apply is paused for this environment.",
+          statusCode: 409,
+          retryable: false,
+        });
+      }
+      this.assertRolloutAllowed({
+        documentId: input.sessionState.documentId,
+        userId: input.actorUserId,
+        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
+        message: "Automatic apply is limited to the rollout allowlist for this environment.",
+      });
+    }
+    if (
+      requiresWorkbookAgentOwnerReview({
+        scope: input.sessionState.scope,
+        riskClass: input.pendingBundle.riskClass,
+      }) &&
+      input.sessionState.storageActorUserId !== input.actorUserId
+    ) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SHARED_APPROVAL_REQUIRED",
+        message: "Shared medium/high-risk workbook bundles must be applied by the thread owner.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    const sharedReview = normalizeSharedReviewState(input.pendingBundle, input.sessionState);
+    if (
+      requiresWorkbookAgentOwnerReview({
+        scope: input.sessionState.scope,
+        riskClass: input.pendingBundle.riskClass,
+      }) &&
+      sharedReview?.status !== "approved"
+    ) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SHARED_REVIEW_REQUIRED",
+        message:
+          "Shared medium/high-risk workbook bundles must be approved by the thread owner before apply.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    const result = await this.zeroSyncService.applyAgentCommandBundle(
+      input.sessionState.documentId,
+      selection.acceptedBundle,
+      input.preview,
+      {
+        userID: input.actorUserId,
+        roles: ["editor"],
+      },
+    );
+    const executionRecord = buildWorkbookAgentExecutionRecord({
+      bundle: selection.acceptedBundle,
+      actorUserId: input.actorUserId,
+      planText: this.collectPlanTextForTurn(input.sessionState, input.pendingBundle.turnId),
+      preview: result.preview,
+      appliedRevision: result.revision,
+      appliedBy: input.appliedBy,
+      acceptedScope: selection.acceptedScope,
+      now: this.now(),
+    });
+    await this.zeroSyncService.appendWorkbookAgentRun(executionRecord);
+    input.sessionState.snapshot.executionRecords = [
+      executionRecord,
+      ...input.sessionState.snapshot.executionRecords.filter(
+        (record) => record.id !== executionRecord.id,
+      ),
+    ];
+    input.sessionState.snapshot.pendingBundle =
+      selection.remainingBundle === null
+        ? null
+        : attachSharedReviewState(
+            createWorkbookAgentCommandBundle({
+              documentId: selection.remainingBundle.documentId,
+              threadId: selection.remainingBundle.threadId,
+              turnId: selection.remainingBundle.turnId,
+              goalText: selection.remainingBundle.goalText,
+              baseRevision: result.revision,
+              context: selection.remainingBundle.context,
+              commands: selection.remainingBundle.commands,
+              now: this.now(),
+            }),
+            input.sessionState,
+          );
+    input.sessionState.snapshot.entries = upsertEntry(
+      input.sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-apply:${executionRecord.id}`,
+        input.pendingBundle.turnId,
+        `${input.appliedBy === "auto" ? "Applied automatically" : "Applied"} ${
+          selection.acceptedScope === "partial" ? "selected " : ""
+        }workbook change set at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
+        appendRevisionCitation(
+          createBundleRangeCitations(selection.acceptedBundle),
+          result.revision,
+        ),
+      ),
+    );
+    this.touch(input.sessionState);
+    await this.persistSessionState(input.sessionState);
+    this.emitSnapshot(input.sessionState.threadId);
+    return cloneSnapshot(input.sessionState.snapshot);
+  }
+
   private async applyToolBundleAutomatically(input: {
     sessionState: WorkbookAgentSessionState;
     actorUserId: string;
@@ -479,14 +641,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionState.documentId,
       input.bundle,
     );
-    const appliedSnapshot = await this.applyPendingBundle({
-      documentId: input.sessionState.documentId,
-      sessionId: input.sessionState.sessionId,
-      bundleId: input.bundle.id,
-      session: {
-        userID: input.actorUserId,
-        roles: ["editor"],
-      },
+    const appliedSnapshot = await this.applyPendingBundleForSessionState({
+      sessionState: input.sessionState,
+      pendingBundle: input.bundle,
+      actorUserId: input.actorUserId,
       appliedBy: "auto",
       preview,
     });
@@ -761,6 +919,42 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       turnContextByTurn: new Map(),
       lastAccessedAt: this.now(),
     };
+    const canApplyBootstrapBundle =
+      resolvedScope === "private" &&
+      sessionState.snapshot.pendingBundle !== null &&
+      this.isRolloutAllowed(input.documentId, input.session.userID) &&
+      (sessionState.executionPolicy === "autoApplyAll" ||
+        (sessionState.executionPolicy === "autoApplySafe" &&
+          this.featureFlags.autoApplyLowRiskEnabled &&
+          sessionState.snapshot.pendingBundle.riskClass === "low"));
+    if (canApplyBootstrapBundle && sessionState.snapshot.pendingBundle) {
+      const queuedBundle = sessionState.snapshot.pendingBundle;
+      const currentRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
+      const migratedBundle =
+        queuedBundle.baseRevision === currentRevision
+          ? queuedBundle
+          : createWorkbookAgentCommandBundle({
+              bundleId: queuedBundle.id,
+              documentId: queuedBundle.documentId,
+              threadId: queuedBundle.threadId,
+              turnId: queuedBundle.turnId,
+              goalText: queuedBundle.goalText,
+              baseRevision: currentRevision,
+              context: queuedBundle.context,
+              commands: queuedBundle.commands,
+              now: queuedBundle.createdAtUnixMs,
+              sharedReview: queuedBundle.sharedReview ?? null,
+            });
+      sessionState.snapshot.pendingBundle = migratedBundle;
+      const preview = await this.buildAuthoritativePreview(input.documentId, migratedBundle);
+      await this.applyPendingBundleForSessionState({
+        sessionState,
+        pendingBundle: migratedBundle,
+        actorUserId: input.session.userID,
+        appliedBy: "auto",
+        preview,
+      });
+    }
     this.sessions.set(sessionId, sessionState);
     this.threadToSessionId.set(threadId, sessionId);
     this.evictIfNeeded();
@@ -1015,148 +1209,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    const selection = splitWorkbookAgentCommandBundle({
-      bundle: pendingBundle,
-      acceptedCommandIndexes: input.commandIndexes,
-    });
-    if (!selection.acceptedBundle || !selection.acceptedScope) {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_COMMAND_SELECTION_REQUIRED",
-        message: "Select at least one staged workbook change before apply",
-        statusCode: 400,
-        retryable: false,
-      });
-    }
-    if (input.appliedBy === "auto" && selection.acceptedScope !== "full") {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
-        message: "Automatic apply runs one complete change set per turn.",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
-    if (input.appliedBy === "auto") {
-      if (
-        !isWorkbookAgentBundleAutoApplyEligible(
-          resolveWorkbookAgentBundleExecutionPolicyInput({
-            scope: sessionState.scope,
-            executionPolicy: sessionState.executionPolicy,
-            bundle: selection.acceptedBundle,
-          }),
-        )
-      ) {
-        throw createWorkbookAgentServiceError({
-          code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
-          message: "This session routes workbook edits through the review queue.",
-          statusCode: 409,
-          retryable: false,
-        });
-      }
-      if (
-        sessionState.executionPolicy === "autoApplySafe" &&
-        !this.featureFlags.autoApplyLowRiskEnabled
-      ) {
-        throw createWorkbookAgentServiceError({
-          code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
-          message: "Automatic safe-apply is paused for this environment.",
-          statusCode: 409,
-          retryable: false,
-        });
-      }
-      this.assertRolloutAllowed({
-        documentId: input.documentId,
-        userId: input.session.userID,
-        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
-        message: "Automatic apply is limited to the rollout allowlist for this environment.",
-      });
-    }
-    if (
-      requiresWorkbookAgentOwnerReview({
-        scope: sessionState.scope,
-        riskClass: pendingBundle.riskClass,
-      }) &&
-      sessionState.storageActorUserId !== input.session.userID
-    ) {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_SHARED_APPROVAL_REQUIRED",
-        message: "Shared medium/high-risk workbook bundles must be applied by the thread owner.",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
-    const sharedReview = normalizeSharedReviewState(pendingBundle, sessionState);
-    if (
-      requiresWorkbookAgentOwnerReview({
-        scope: sessionState.scope,
-        riskClass: pendingBundle.riskClass,
-      }) &&
-      sharedReview?.status !== "approved"
-    ) {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_SHARED_REVIEW_REQUIRED",
-        message:
-          "Shared medium/high-risk workbook bundles must be approved by the thread owner before apply.",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
-    const result = await this.zeroSyncService.applyAgentCommandBundle(
-      input.documentId,
-      selection.acceptedBundle,
-      preview,
-      input.session,
-    );
-    const executionRecord = buildWorkbookAgentExecutionRecord({
-      bundle: selection.acceptedBundle,
+    return await this.applyPendingBundleForSessionState({
+      sessionState,
+      pendingBundle,
       actorUserId: input.session.userID,
-      planText: this.collectPlanTextForTurn(sessionState, pendingBundle.turnId),
-      preview: result.preview,
-      appliedRevision: result.revision,
       appliedBy: input.appliedBy,
-      acceptedScope: selection.acceptedScope,
-      now: this.now(),
+      commandIndexes: input.commandIndexes,
+      preview,
     });
-    await this.zeroSyncService.appendWorkbookAgentRun(executionRecord);
-    sessionState.snapshot.executionRecords = [
-      executionRecord,
-      ...sessionState.snapshot.executionRecords.filter(
-        (record) => record.id !== executionRecord.id,
-      ),
-    ];
-    sessionState.snapshot.pendingBundle =
-      selection.remainingBundle === null
-        ? null
-        : attachSharedReviewState(
-            createWorkbookAgentCommandBundle({
-              documentId: selection.remainingBundle.documentId,
-              threadId: selection.remainingBundle.threadId,
-              turnId: selection.remainingBundle.turnId,
-              goalText: selection.remainingBundle.goalText,
-              baseRevision: result.revision,
-              context: selection.remainingBundle.context,
-              commands: selection.remainingBundle.commands,
-              now: this.now(),
-            }),
-            sessionState,
-          );
-    sessionState.snapshot.entries = upsertEntry(
-      sessionState.snapshot.entries,
-      createSystemEntry(
-        `system-apply:${executionRecord.id}`,
-        pendingBundle.turnId,
-        `${input.appliedBy === "auto" ? "Applied automatically" : "Applied"} ${
-          selection.acceptedScope === "partial" ? "selected " : ""
-        }workbook change set at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
-        appendRevisionCitation(
-          createBundleRangeCitations(selection.acceptedBundle),
-          result.revision,
-        ),
-      ),
-    );
-    this.touch(sessionState);
-    await this.persistSessionState(sessionState);
-    this.emitSnapshot(sessionState.threadId);
-    return cloneSnapshot(sessionState.snapshot);
   }
 
   async reviewPendingBundle(input: {
@@ -1316,6 +1376,17 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       commands: record.commands,
       now: this.now(),
     });
+    if (this.shouldApplyToolBundleImmediately(sessionState, replayedBundle)) {
+      sessionState.snapshot.pendingBundle = replayedBundle;
+      const preview = await this.buildAuthoritativePreview(input.documentId, replayedBundle);
+      return await this.applyPendingBundleForSessionState({
+        sessionState,
+        pendingBundle: replayedBundle,
+        actorUserId: input.session.userID,
+        appliedBy: "auto",
+        preview,
+      });
+    }
     sessionState.snapshot.pendingBundle = replayedBundle;
     sessionState.snapshot.entries = upsertEntry(
       sessionState.snapshot.entries,

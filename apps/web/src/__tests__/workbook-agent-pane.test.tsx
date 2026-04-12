@@ -111,6 +111,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     sessionId: "agent-session-1",
     documentId: "doc-1",
     threadId: "thr-1",
+    executionPolicy: "autoApplyAll",
     scope: "private",
     executionPolicy: "autoApplyAll",
     status: "idle",

@@ -46,6 +46,8 @@ export function describeWorkbookAgentExecutionPolicy(policy: WorkbookAgentExecut
       return "auto-apply all changes";
     case "ownerReview":
       return "owner review";
+    default:
+      return policy;
   }
 }
 

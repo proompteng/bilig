@@ -98,6 +98,10 @@ interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly latestEntryText?: unknown;
 }
 
+function isExecutionPolicy(value: unknown): value is WorkbookAgentExecutionPolicy {
+  return value === "autoApplySafe" || value === "autoApplyAll" || value === "ownerReview";
+}
+
 function dedupeTimelineEntries(
   entries: readonly WorkbookAgentTimelineEntry[],
 ): WorkbookAgentTimelineEntry[] {
@@ -429,6 +433,10 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ALTER COLUMN execution_policy SET DEFAULT 'autoApplyAll';
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ALTER COLUMN execution_policy SET NOT NULL;
   `);
   await db.query(`
     ALTER TABLE workbook_chat_thread

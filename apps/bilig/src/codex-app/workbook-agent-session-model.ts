@@ -161,8 +161,8 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Range and cell reads expose formatting metadata, including fill/background, font, alignment, borders, and number format when present.",
     "Use the workflow tool only for built-in multi-step or durable tasks.",
     "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
-    "Other workbook writes should stage one coherent preview bundle per turn.",
-    "After staging a preview bundle, summarize it and tell the user to review and apply it from the rail.",
+    "Apply workbook changes directly when the session policy allows it.",
+    "When the session policy routes a change set to owner review, summarize the prepared review item in workbook terms.",
     "Do not use non-workbook tools or invent unsupported capabilities.",
   ].join(" ");
 }

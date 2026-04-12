@@ -120,7 +120,7 @@ export function normalizeExecutionPolicy(input: {
   if (input.scope === "shared") {
     return "ownerReview";
   }
-  return input.requestedPolicy ?? resolveDefaultExecutionPolicy(input.scope);
+  return "autoApplyAll";
 }
 
 export function toContextRef(

@@ -243,6 +243,15 @@ describe("workbook agent service", () => {
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
       );
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
+        "Apply workbook changes directly when the session policy allows it.",
+      );
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
+        "review and apply it from the rail",
+      );
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
+        "stage one coherent preview bundle per turn",
+      );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
         "summarizeWorkbook",
       );
@@ -3895,10 +3904,117 @@ describe("workbook agent service", () => {
   });
 
   it("recovers durable pending bundle state after the service restarts", async () => {
-    let durableThreadState: WorkbookAgentThreadStateRecord | null = null;
-    const fakeCodexA = new FakeCodexTransport();
-    const capturedA: { current: CodexAppServerClientOptions | null } = { current: null };
+    let durableThreadState: WorkbookAgentThreadStateRecord | null = {
+      documentId: "doc-1",
+      threadId: "thr-test",
+      actorUserId: "alex@example.com",
+      scope: "private",
+      executionPolicy: "autoApplyAll",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      entries: [],
+      pendingBundle: {
+        id: "bundle-legacy-1",
+        documentId: "doc-1",
+        threadId: "thr-test",
+        turnId: "turn-1",
+        goalText: "Update workbook from assistant request",
+        summary: "Write cells in Sheet1!B2",
+        scope: "sheet",
+        riskClass: "medium",
+        approvalMode: "preview",
+        baseRevision: 1,
+        createdAtUnixMs: 100,
+        context: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 20,
+            colStart: 0,
+            colEnd: 10,
+          },
+        },
+        commands: [
+          {
+            kind: "writeRange",
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            values: [[42]],
+          },
+        ],
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B2",
+            role: "target",
+          },
+        ],
+        estimatedAffectedCells: 1,
+        sharedReview: null,
+      },
+      updatedAtUnixMs: 100,
+    };
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const inspectWorkbook = async <T>(
+      _documentId: string,
+      task: (runtime: WorkbookRuntime) => T | Promise<T>,
+    ): Promise<T> => {
+      const runtime: WorkbookRuntime = {
+        documentId: "doc-1",
+        engine,
+        projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+          revision: 1,
+          calculatedRevision: 1,
+          ownerUserId: "alex@example.com",
+          updatedBy: "alex@example.com",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+        }),
+        headRevision: 1,
+        calculatedRevision: 1,
+        ownerUserId: "alex@example.com",
+      };
+      return await task(runtime);
+    };
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 7,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: "Sheet1",
+            address: "B2",
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: 42,
+            afterFormula: null,
+            changeKinds: ["input"],
+          },
+        ],
+      }),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
     const zeroSync = createZeroSyncStub({
+      applyAgentCommandBundle,
+      appendWorkbookAgentRun,
+      inspectWorkbook,
       async loadWorkbookAgentThreadState() {
         return durableThreadState ? structuredClone(durableThreadState) : null;
       },
@@ -3906,73 +4022,6 @@ describe("workbook agent service", () => {
         durableThreadState = structuredClone(record);
       },
     });
-    const serviceA = createWorkbookAgentService(zeroSync, {
-      codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
-        capturedA.current = options;
-        return fakeCodexA;
-      },
-    });
-
-    try {
-      await serviceA.createSession({
-        documentId: "doc-1",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-        body: {
-          sessionId: "agent-session-1",
-          executionPolicy: "ownerReview",
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "A1",
-            },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 20,
-              colStart: 0,
-              colEnd: 10,
-            },
-          },
-        },
-      });
-
-      await capturedA.current?.handleDynamicToolCall({
-        threadId: "thr-test",
-        turnId: "turn-1",
-        callId: "call-1",
-        tool: "bilig_write_range",
-        arguments: {
-          sheetName: "Sheet1",
-          startAddress: "B2",
-          values: [[42]],
-        },
-      });
-
-      const pending = serviceA.getSnapshot({
-        documentId: "doc-1",
-        sessionId: "agent-session-1",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-      }).pendingBundle;
-      if (!isWorkbookAgentCommandBundle(pending)) {
-        throw new Error("Expected a staged pending bundle before restart");
-      }
-      expect(durableThreadState).toEqual(
-        expect.objectContaining({
-          pendingBundle: expect.objectContaining({
-            id: pending.id,
-            summary: pending.summary,
-          }),
-        }),
-      );
-    } finally {
-      await serviceA.close();
-    }
-
     const fakeCodexB = new FakeCodexTransport();
     const serviceB = createWorkbookAgentService(zeroSync, {
       codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
@@ -4008,15 +4057,198 @@ describe("workbook agent service", () => {
           }),
         ]),
       );
-      expect(resumed.pendingBundle).toEqual(
+      expect(resumed.pendingBundle).toBeNull();
+      expect(resumed.executionRecords).toEqual([
         expect.objectContaining({
-          documentId: "doc-1",
-          threadId: "thr-test",
+          summary: "Write cells in Sheet1!B2",
+          appliedRevision: 7,
+          appliedBy: "auto",
+        }),
+      ]);
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        "doc-1",
+        expect.objectContaining({
           summary: "Write cells in Sheet1!B2",
         }),
+        expect.objectContaining({
+          ranges: [
+            expect.objectContaining({
+              sheetName: "Sheet1",
+              startAddress: "B2",
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          userID: "alex@example.com",
+        }),
       );
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
+      const savedThreadState = durableThreadState as WorkbookAgentThreadStateRecord | null;
+      if (!savedThreadState) {
+        throw new Error("Expected durable thread state to be saved");
+      }
+      expect(savedThreadState.pendingBundle).toBeNull();
     } finally {
       await serviceB.close();
+    }
+  });
+
+  it("replays private-thread execution history directly into the workbook", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const inspectWorkbook = async <T>(
+      _documentId: string,
+      task: (runtime: WorkbookRuntime) => T | Promise<T>,
+    ): Promise<T> => {
+      const runtime: WorkbookRuntime = {
+        documentId: "doc-1",
+        engine,
+        projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+          revision: 4,
+          calculatedRevision: 4,
+          ownerUserId: "alex@example.com",
+          updatedBy: "alex@example.com",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+        }),
+        headRevision: 4,
+        calculatedRevision: 4,
+        ownerUserId: "alex@example.com",
+      };
+      return await task(runtime);
+    };
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 11,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: "Sheet1",
+            address: "B2",
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: 42,
+            afterFormula: null,
+            changeKinds: ["input"],
+          },
+        ],
+      }),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const historicalRecord = {
+      id: "run-1",
+      bundleId: "bundle-1",
+      documentId: "doc-1",
+      threadId: "thr-test",
+      turnId: "turn-1",
+      actorUserId: "alex@example.com",
+      goalText: "Write 42",
+      planText: "Write 42 into the active cell",
+      summary: "Write cells in Sheet1!B2",
+      scope: "selection" as const,
+      riskClass: "low" as const,
+      approvalMode: "auto" as const,
+      acceptedScope: "full" as const,
+      appliedBy: "user" as const,
+      baseRevision: 3,
+      appliedRevision: 4,
+      createdAtUnixMs: 100,
+      appliedAtUnixMs: 101,
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "B2",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      commands: [
+        {
+          kind: "writeRange" as const,
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      ],
+      preview: null,
+    };
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+        inspectWorkbook,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-test",
+            actorUserId: "alex@example.com",
+            scope: "private",
+            executionPolicy: "autoApplyAll",
+            context: null,
+            entries: [],
+            pendingBundle: null,
+            updatedAtUnixMs: 100,
+          };
+        },
+        async listWorkbookAgentThreadRuns() {
+          return [historicalRecord];
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          threadId: "thr-test",
+        },
+      });
+
+      const replayed = await service.replayExecutionRecord({
+        documentId: "doc-1",
+        sessionId: snapshot.sessionId,
+        recordId: "run-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(replayed.pendingBundle).toBeNull();
+      expect(replayed.executionRecords[0]).toEqual(
+        expect.objectContaining({
+          summary: "Write cells in Sheet1!B2",
+          appliedBy: "auto",
+          appliedRevision: 11,
+        }),
+      );
+      expect(replayed.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Applied automatically workbook change set at revision r11: Write cells in Sheet1!B2",
+          }),
+        ]),
+      );
+      expect(applyAgentCommandBundle).toHaveBeenCalledTimes(1);
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
+    } finally {
+      await service.close();
     }
   });
 

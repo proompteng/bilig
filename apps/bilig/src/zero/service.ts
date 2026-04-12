@@ -417,7 +417,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
             throw createWorkbookAgentServiceError({
               code: "WORKBOOK_AGENT_PREVIEW_STALE",
               message:
-                "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+                "Workbook changed while the change set was being prepared. Run the request again to prepare a fresh change set.",
               statusCode: 409,
               retryable: true,
             });
@@ -431,7 +431,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
             throw createWorkbookAgentServiceError({
               code: "WORKBOOK_AGENT_PREVIEW_MISMATCH",
               message:
-                "Local preview no longer matches the authoritative workbook state. Replay the plan to refresh the preview.",
+                "Local workbook state changed before apply. Run the request again to refresh the change set.",
               statusCode: 409,
               retryable: true,
             });

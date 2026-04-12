@@ -28,6 +28,7 @@ function renderPanel(entry: {
         role: "source" | "target";
       }
   >;
+  executionRecords?: Array<Record<string, unknown>>;
 }) {
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -46,7 +47,7 @@ function renderPanel(entry: {
             cancellingWorkflowRunId={null}
             currentUserSharedRecommendation={null}
             draft=""
-            executionRecords={[]}
+            executionRecords={entry.executionRecords ?? []}
             isApplyingBundle={false}
             isLoading={false}
             optimisticEntries={[]}
@@ -75,6 +76,7 @@ function renderPanel(entry: {
               sessionId: "agent-session-1",
               documentId: "doc-1",
               threadId: "thr-1",
+              executionPolicy: "autoApplyAll",
               scope: "private",
               status: "idle",
               activeTurnId: null,
@@ -99,7 +101,7 @@ function renderPanel(entry: {
                 },
               ],
               pendingBundle: null,
-              executionRecords: [],
+              executionRecords: entry.executionRecords ?? [],
               workflowRuns: [],
             }}
             threadSummaries={[]}
@@ -193,6 +195,57 @@ describe("WorkbookAgentPanel reasoning", () => {
     );
     expect(panel.host.textContent).toContain("Target Sheet1!B2");
     expect(panel.host.textContent).not.toContain("Target Sheet1!B2 · r7");
+
+    await act(async () => {
+      panel.root.unmount();
+    });
+  });
+
+  it("renders execution history rows with direct rerun actions", async () => {
+    const panel = renderPanel({
+      id: "system-1",
+      kind: "system",
+      text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
+      executionRecords: [
+        {
+          id: "run-1",
+          bundleId: "bundle-1",
+          documentId: "doc-1",
+          threadId: "thr-1",
+          turnId: "turn-1",
+          actorUserId: "alex@example.com",
+          goalText: "Write 42",
+          planText: null,
+          summary: "Write cells in Sheet1!B2",
+          scope: "selection",
+          riskClass: "low",
+          approvalMode: "auto",
+          acceptedScope: "full",
+          appliedBy: "auto",
+          baseRevision: 6,
+          appliedRevision: 7,
+          createdAtUnixMs: 100,
+          appliedAtUnixMs: 200,
+          context: null,
+          commands: [
+            {
+              kind: "writeRange",
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              values: [[42]],
+            },
+          ],
+          preview: null,
+        },
+      ],
+    });
+
+    await panel.render();
+
+    expect(panel.host.textContent).toContain("Recent changes");
+    expect(panel.host.textContent).toContain("Applied automatically");
+    expect(panel.host.textContent).toContain("Revision r7");
+    expect(panel.host.textContent).toContain("Run again");
 
     await act(async () => {
       panel.root.unmount();

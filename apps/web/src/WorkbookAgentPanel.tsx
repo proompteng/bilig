@@ -153,9 +153,7 @@ function ThreadSummaryStrip(props: {
               ) : null}
             </div>
             {threadSummary.hasPendingBundle ? (
-              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
-                Pending
-              </span>
+              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>Review</span>
             ) : null}
           </Button>
         );
@@ -1026,6 +1024,41 @@ function PendingBundleCard(props: {
   );
 }
 
+function ExecutionRecordRow(props: {
+  readonly record: WorkbookAgentExecutionRecord;
+  readonly onReplay: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        workbookSurfaceClass({ emphasis: "raised" }),
+        "border-[var(--wb-border)] px-3 py-2.5",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
+              {props.record.appliedBy === "auto" ? "Applied automatically" : "Applied"}
+            </span>
+            <span className={agentPanelMetaTextClass()}>
+              Revision r{String(props.record.appliedRevision)}
+            </span>
+          </div>
+          <div className={cn(agentPanelLabelTextClass(), "mt-1.5")}>{props.record.summary}</div>
+        </div>
+        <Button
+          className={workbookButtonClass({ tone: "neutral" })}
+          type="button"
+          onClick={props.onReplay}
+        >
+          Run again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
   readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
@@ -1119,6 +1152,24 @@ export function WorkbookAgentPanel(props: {
                       <AssistantProgressRow />
                     ) : null}
                   </div>
+                  {props.executionRecords.length > 0 ? (
+                    <div className="pt-1">
+                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>
+                        Recent changes
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {props.executionRecords.slice(0, 5).map((record) => (
+                          <ExecutionRecordRow
+                            key={record.id}
+                            record={record}
+                            onReplay={() => {
+                              props.onReplayExecutionRecord(record.id);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   {props.workflowRuns.length > 0 ? (
                     <div className="pt-1">
                       <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>Workflows</div>
