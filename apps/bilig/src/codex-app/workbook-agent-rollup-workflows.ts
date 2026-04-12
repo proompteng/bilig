@@ -138,7 +138,7 @@ function summarizeRollupMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle creates a new rollup sheet and writes the aggregate table through the normal workbook mutation path.",
+    "The staged workbook change set creates a new rollup sheet and writes the aggregate table through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -168,9 +168,9 @@ export function getRollupWorkflowTemplateMetadata(
         {
           stepId: "stage-review-tab-preview",
           label: "Stage review tab preview",
-          runningSummary: "Staging the semantic preview that creates and copies the review tab.",
+          runningSummary: "Staging the semantic change set that creates and copies the review tab.",
           pendingSummary:
-            "Waiting to stage the semantic preview that creates and copies the review tab.",
+            "Waiting to stage the semantic change set that creates and copies the review tab.",
         },
         {
           stepId: "draft-review-tab-report",
@@ -200,9 +200,9 @@ export function getRollupWorkflowTemplateMetadata(
       },
       {
         stepId: "stage-rollup-preview",
-        label: "Stage rollup preview",
-        runningSummary: "Staging the semantic preview that creates the rollup sheet.",
-        pendingSummary: "Waiting to stage the semantic preview that creates the rollup sheet.",
+        label: "Stage rollup change set",
+        runningSummary: "Staging the semantic change set that creates the rollup sheet.",
+        pendingSummary: "Waiting to stage the semantic change set that creates the rollup sheet.",
       },
       {
         stepId: "draft-rollup-report",
@@ -257,7 +257,7 @@ export async function executeRollupWorkflow(input: {
               "",
               `Source sheet: ${sheetName}`,
               "",
-              "No review-tab preview was staged because the sheet is empty.",
+              "Sheet is empty. Review-tab rows copied: 0.",
             ].join("\n"),
           },
           citations: [],
@@ -270,7 +270,7 @@ export async function executeRollupWorkflow(input: {
             {
               stepId: "stage-review-tab-preview",
               label: "Stage review tab preview",
-              summary: "No review-tab preview was staged because the sheet is empty.",
+              summary: "Sheet is empty. Review-tab rows copied: 0.",
             },
             {
               stepId: "draft-review-tab-report",
@@ -291,7 +291,7 @@ export async function executeRollupWorkflow(input: {
             "",
             `Source sheet: ${sheetName}`,
             "",
-            "No rollup preview was staged because the sheet is empty.",
+            "Sheet is empty. Rollup columns summarized: 0.",
           ].join("\n"),
         },
         citations: [],
@@ -308,8 +308,8 @@ export async function executeRollupWorkflow(input: {
           },
           {
             stepId: "stage-rollup-preview",
-            label: "Stage rollup preview",
-            summary: "No rollup preview was staged because the sheet is empty.",
+            label: "Stage rollup change set",
+            summary: "Sheet is empty. Rollup columns summarized: 0.",
           },
           {
             stepId: "draft-rollup-report",
@@ -332,7 +332,7 @@ export async function executeRollupWorkflow(input: {
       const targetEndAddress = formatAddress(maxRow - headerRow, maxCol - minCol);
       return {
         title: "Create Current Sheet Review Tab",
-        summary: `Staged a review-tab preview for ${sheetName} into ${targetSheetName}.`,
+        summary: `Staged a review-tab change set for ${sheetName} into ${targetSheetName}.`,
         artifact: {
           kind: "markdown",
           title: "Current Sheet Review Tab Preview",
@@ -343,7 +343,7 @@ export async function executeRollupWorkflow(input: {
             `Source range: ${sourceStartAddress}:${sourceEndAddress}`,
             `Target sheet: ${targetSheetName}`,
             "",
-            "The staged preview bundle creates a new review tab and copies the current sheet's used range into it for review-oriented work.",
+            "The staged workbook change set creates a new review tab and copies the current sheet's used range into it for review-oriented work.",
           ].join("\n"),
         },
         citations: [
@@ -371,7 +371,7 @@ export async function executeRollupWorkflow(input: {
           {
             stepId: "stage-review-tab-preview",
             label: "Stage review tab preview",
-            summary: `Prepared the semantic preview that creates ${targetSheetName}.`,
+            summary: `Prepared the semantic change set that creates ${targetSheetName}.`,
           },
           {
             stepId: "draft-review-tab-report",
@@ -468,8 +468,8 @@ export async function executeRollupWorkflow(input: {
           },
           {
             stepId: "stage-rollup-preview",
-            label: "Stage rollup preview",
-            summary: "No rollup preview was staged because the sheet has no numeric columns.",
+            label: "Stage rollup change set",
+            summary: "Rollup analysis complete. Numeric columns summarized: 0.",
           },
           {
             stepId: "draft-rollup-report",
@@ -504,7 +504,7 @@ export async function executeRollupWorkflow(input: {
 
     return {
       title: "Create Current Sheet Rollup",
-      summary: `Staged a rollup preview for ${sheetName} into ${targetSheetName}.`,
+      summary: `Staged a rollup change set for ${sheetName} into ${targetSheetName}.`,
       artifact: {
         kind: "markdown",
         title: "Current Sheet Rollup Preview",
@@ -545,8 +545,8 @@ export async function executeRollupWorkflow(input: {
         },
         {
           stepId: "stage-rollup-preview",
-          label: "Stage rollup preview",
-          summary: `Prepared the semantic preview that creates ${targetSheetName}.`,
+          label: "Stage rollup change set",
+          summary: `Prepared the semantic change set that creates ${targetSheetName}.`,
         },
         {
           stepId: "draft-rollup-report",

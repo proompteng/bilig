@@ -920,9 +920,9 @@ export function describeWorkbookAgentBundle(bundle: WorkbookAgentCommandBundle):
           bundle.estimatedAffectedCells === 1 ? "" : "s"
         }`;
   return [
-    `Staged preview bundle: ${bundle.summary}.`,
+    `Prepared workbook review item: ${bundle.summary}.`,
     `Risk: ${bundle.riskClass}. Scope: ${bundle.scope}.`,
-    `Preview target: ${affectedCells}.`,
+    `Impact: ${affectedCells}.`,
   ].join(" ");
 }
 

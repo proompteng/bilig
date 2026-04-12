@@ -293,7 +293,7 @@ function summarizeNumberFormatNormalizationMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle applies semantic number-format commands through the normal workbook mutation path.",
+    "The staged workbook change set applies semantic number-format commands through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -328,7 +328,7 @@ function summarizeHeaderNormalizationMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle writes the normalized header row through the normal workbook mutation path.",
+    "The staged workbook change set writes the normalized header row through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -367,7 +367,7 @@ function summarizeWhitespaceNormalizationMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle writes the normalized text cells through the normal workbook mutation path.",
+    "The staged workbook change set writes the normalized text cells through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -408,7 +408,7 @@ function summarizeFormulaFillMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle applies semantic fill commands through the normal workbook mutation path.",
+    "The staged workbook change set applies semantic fill commands through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -437,9 +437,9 @@ export function getImportWorkflowTemplateMetadata(
             stepId: "stage-header-normalization",
             label: "Stage header normalization",
             runningSummary:
-              "Staging the semantic preview that normalizes the current sheet header row.",
+              "Staging the semantic change set that normalizes the current sheet header row.",
             pendingSummary:
-              "Waiting to stage the semantic preview that normalizes the current sheet header row.",
+              "Waiting to stage the semantic change set that normalizes the current sheet header row.",
           },
           {
             stepId: "draft-header-report",
@@ -464,9 +464,9 @@ export function getImportWorkflowTemplateMetadata(
             stepId: "stage-number-formats",
             label: "Stage number formats",
             runningSummary:
-              "Staging semantic number-format previews for the current sheet data columns.",
+              "Preparing semantic number-format commands for the current sheet data columns.",
             pendingSummary:
-              "Waiting to stage semantic number-format previews for the current sheet data columns.",
+              "Waiting to prepare semantic number-format commands for the current sheet data columns.",
           },
           {
             stepId: "draft-number-format-report",
@@ -491,9 +491,9 @@ export function getImportWorkflowTemplateMetadata(
             stepId: "stage-whitespace-normalization",
             label: "Stage whitespace normalization",
             runningSummary:
-              "Staging the semantic preview that trims and collapses whitespace across the current sheet.",
+              "Staging the semantic change set that trims and collapses whitespace across the current sheet.",
             pendingSummary:
-              "Waiting to stage the semantic preview that trims and collapses whitespace across the current sheet.",
+              "Waiting to stage the semantic change set that trims and collapses whitespace across the current sheet.",
           },
           {
             stepId: "draft-whitespace-report",
@@ -517,9 +517,9 @@ export function getImportWorkflowTemplateMetadata(
           {
             stepId: "stage-formula-fill",
             label: "Stage formula fill-down",
-            runningSummary: "Staging semantic fill-down previews for the detected formula gaps.",
+            runningSummary: "Preparing semantic fill-down commands for the detected formula gaps.",
             pendingSummary:
-              "Waiting to stage semantic fill-down previews for the detected formula gaps.",
+              "Waiting to prepare semantic fill-down commands for the detected formula gaps.",
           },
           {
             stepId: "draft-formula-fill-report",
@@ -592,7 +592,7 @@ export async function executeImportWorkflow(input: {
             {
               stepId: "stage-header-normalization",
               label: "Stage header normalization",
-              summary: "No header normalization preview was staged because the sheet is empty.",
+              summary: "Sheet is empty. Header normalization change count: 0.",
             },
             {
               stepId: "draft-header-report",
@@ -627,7 +627,7 @@ export async function executeImportWorkflow(input: {
             {
               stepId: "stage-whitespace-normalization",
               label: "Stage whitespace normalization",
-              summary: "No whitespace normalization preview was staged because the sheet is empty.",
+              summary: "Sheet is empty. Whitespace normalization change count: 0.",
             },
             {
               stepId: "draft-whitespace-report",
@@ -662,7 +662,7 @@ export async function executeImportWorkflow(input: {
             {
               stepId: "stage-formula-fill",
               label: "Stage formula fill-down",
-              summary: "No formula fill-down preview was staged because the sheet is empty.",
+              summary: "Sheet is empty. Formula fill-down change count: 0.",
             },
             {
               stepId: "draft-formula-fill-report",
@@ -696,7 +696,7 @@ export async function executeImportWorkflow(input: {
           {
             stepId: "stage-number-formats",
             label: "Stage number formats",
-            summary: "No number-format preview was staged because the sheet is empty.",
+            summary: "Sheet is empty. Number-format change count: 0.",
           },
           {
             stepId: "draft-number-format-report",
@@ -789,8 +789,8 @@ export async function executeImportWorkflow(input: {
             label: "Stage number formats",
             summary:
               recommendations.length === 0
-                ? "No number-format preview was staged because the sheet is already normalized."
-                : `Prepared semantic number-format previews for ${String(recommendations.length)} numeric column${recommendations.length === 1 ? "" : "s"}.`,
+                ? "Number-format normalization complete. Column updates: 0."
+                : `Prepared semantic number-format commands for ${String(recommendations.length)} numeric column${recommendations.length === 1 ? "" : "s"}.`,
           },
           {
             stepId: "draft-number-format-report",
@@ -893,8 +893,8 @@ export async function executeImportWorkflow(input: {
             label: "Stage whitespace normalization",
             summary:
               changes.length === 0
-                ? "No whitespace normalization preview was staged because the sheet is already normalized."
-                : `Prepared the semantic write preview that normalizes whitespace across ${String(changes.length)} text cell${changes.length === 1 ? "" : "s"}.`,
+                ? "Whitespace normalization complete. Cell updates: 0."
+                : `Prepared the semantic write change set that normalizes whitespace across ${String(changes.length)} text cell${changes.length === 1 ? "" : "s"}.`,
           },
           {
             stepId: "draft-whitespace-report",
@@ -988,8 +988,8 @@ export async function executeImportWorkflow(input: {
             label: "Stage formula fill-down",
             summary:
               recommendations.length === 0
-                ? "No formula fill-down preview was staged because the sheet already has no blank gaps below formula cells."
-                : `Prepared semantic fill-down previews for ${String(recommendations.length)} formula region${recommendations.length === 1 ? "" : "s"}.`,
+                ? "Formula fill-down analysis complete. Filled regions: 0."
+                : `Prepared semantic fill-down commands for ${String(recommendations.length)} formula region${recommendations.length === 1 ? "" : "s"}.`,
           },
           {
             stepId: "draft-formula-fill-report",
@@ -1100,8 +1100,8 @@ export async function executeImportWorkflow(input: {
           label: "Stage header normalization",
           summary:
             changes.length === 0
-              ? "No header normalization preview was staged because the header row is already normalized."
-              : `Prepared the semantic write preview that normalizes ${String(changes.length)} header cell${changes.length === 1 ? "" : "s"}.`,
+              ? "Header normalization complete. Header updates: 0."
+              : `Prepared the semantic write change set that normalizes ${String(changes.length)} header cell${changes.length === 1 ? "" : "s"}.`,
         },
         {
           stepId: "draft-header-report",

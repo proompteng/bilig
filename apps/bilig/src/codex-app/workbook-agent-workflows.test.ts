@@ -105,7 +105,7 @@ describe("workbook agent workflows", () => {
       }),
     ).toEqual({
       title: "Create Sheet",
-      runningSummary: "Preparing a structural preview bundle to create Ops Review.",
+      runningSummary: "Preparing a structural workbook change set to create Ops Review.",
     });
   });
 
@@ -579,7 +579,7 @@ describe("workbook agent workflows", () => {
     });
 
     expect(result.title).toBe("Style Current Sheet Headers");
-    expect(result.summary).toContain("Staged a consistent header style preview");
+    expect(result.summary).toContain("Prepared a consistent header style change set");
     expect(result.commands).toEqual([
       expect.objectContaining({
         kind: "formatRange",
@@ -652,7 +652,7 @@ describe("workbook agent workflows", () => {
     });
 
     expect(result.title).toBe("Create Current Sheet Review Tab");
-    expect(result.summary).toContain("Staged a review-tab preview");
+    expect(result.summary).toContain("Staged a review-tab change set");
     expect(result.commands).toEqual([
       expect.objectContaining({
         kind: "createSheet",

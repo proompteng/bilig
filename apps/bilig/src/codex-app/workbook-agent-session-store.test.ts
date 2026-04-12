@@ -51,6 +51,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: {
         selection: {
           sheetName: "Sheet1",
@@ -72,6 +73,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: {
         selection: {
           sheetName: "Sheet1",
@@ -113,6 +115,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: null,
       entries: [createSystemEntry("entry-1", null, "first")],
       pendingBundle: null,
@@ -123,6 +126,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: null,
       entries: [createSystemEntry("entry-2", null, "second")],
       pendingBundle: null,
@@ -151,6 +155,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: null,
       entries: [
         createSystemEntry("entry-1", null, "first"),
@@ -218,6 +223,7 @@ describe("WorkbookAgentSessionStore", () => {
       threadId: "thr-1",
       actorUserId: "alex@example.com",
       scope: "private" as const,
+      executionPolicy: "autoApplyAll" as const,
       context: null,
       entries: [],
       pendingBundle: null,
@@ -252,6 +258,7 @@ describe("WorkbookAgentSessionStore", () => {
         threadId: "thr-1",
         actorUserId: "alex@example.com",
         scope: "private",
+        executionPolicy: "autoApplyAll",
         context: null,
         entries: [],
         pendingBundle: null,

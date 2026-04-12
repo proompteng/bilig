@@ -186,7 +186,7 @@ function summarizeOutlierMarkdown(input: {
     `Outliers highlighted: ${String(input.highlightedOutlierCount)}`,
   ];
   if (input.truncated) {
-    lines.push(`Only the first ${String(input.limit)} outlier cells were staged in this preview.`);
+    lines.push(`Highlighted outlier sample limit: ${String(input.limit)}.`);
   }
   lines.push("");
   if (input.highlightedOutlierCount === 0) {
@@ -208,7 +208,7 @@ function summarizeOutlierMarkdown(input: {
   }
   lines.push(
     "",
-    "The staged preview bundle applies visible formatting to the outlier cells so reviewers can inspect and apply the change through the normal workbook mutation path.",
+    "The staged workbook change set applies visible formatting to the outlier cells so reviewers can inspect and apply the change through the normal workbook mutation path.",
   );
   return lines.join("\n");
 }
@@ -266,8 +266,9 @@ export function getFormattingWorkflowTemplateMetadata(
         {
           stepId: "stage-header-style",
           label: "Stage header style",
-          runningSummary: "Staging a semantic header-style preview for the current sheet.",
-          pendingSummary: "Waiting to stage a semantic header-style preview for the current sheet.",
+          runningSummary: "Staging a semantic header-style change set for the current sheet.",
+          pendingSummary:
+            "Waiting to stage a semantic header-style change set for the current sheet.",
         },
         {
           stepId: "draft-header-style-report",
@@ -324,7 +325,7 @@ export async function executeFormattingWorkflow(input: {
               "",
               `Sheet: ${sheetName}`,
               "",
-              "No header-style preview was staged because the sheet is empty.",
+              "Sheet is empty. Header styling change count: 0.",
             ].join("\n"),
           },
           citations: [],
@@ -337,7 +338,7 @@ export async function executeFormattingWorkflow(input: {
             {
               stepId: "stage-header-style",
               label: "Stage header style",
-              summary: "No header-style preview was staged because the sheet is empty.",
+              summary: "Sheet is empty. Header styling change count: 0.",
             },
             {
               stepId: "draft-header-style-report",
@@ -358,7 +359,7 @@ export async function executeFormattingWorkflow(input: {
             "",
             `Sheet: ${sheetName}`,
             "",
-            "No outlier preview was staged because the sheet is empty.",
+            "Sheet is empty. Outlier highlight count: 0.",
           ].join("\n"),
         },
         citations: [],
@@ -376,7 +377,7 @@ export async function executeFormattingWorkflow(input: {
           {
             stepId: "stage-outlier-highlights",
             label: "Stage outlier highlights",
-            summary: "No outlier highlight commands were staged because the sheet is empty.",
+            summary: "Sheet is empty. Outlier highlight count: 0.",
           },
           {
             stepId: "draft-outlier-report",
@@ -393,7 +394,7 @@ export async function executeFormattingWorkflow(input: {
       const headerEndAddress = formatAddress(headerRow, maxCol);
       return {
         title: "Style Current Sheet Headers",
-        summary: `Staged a consistent header style preview for ${sheetName}.`,
+        summary: `Prepared a consistent header style change set for ${sheetName}.`,
         artifact: {
           kind: "markdown",
           title: "Header Style Preview",
@@ -403,7 +404,7 @@ export async function executeFormattingWorkflow(input: {
             `Sheet: ${sheetName}`,
             `Header row: ${headerStartAddress}:${headerEndAddress}`,
             "",
-            "The staged preview bundle applies a bold header style with stronger contrast and bottom borders so the sheet is easier to review.",
+            "The staged workbook change set applies a bold header style with stronger contrast and bottom borders so the sheet is easier to review.",
           ].join("\n"),
         },
         citations: [
@@ -424,7 +425,7 @@ export async function executeFormattingWorkflow(input: {
           {
             stepId: "stage-header-style",
             label: "Stage header style",
-            summary: "Prepared a semantic format preview for the current sheet header row.",
+            summary: "Prepared a semantic format change set for the current sheet header row.",
           },
           {
             stepId: "draft-header-style-report",
@@ -578,7 +579,7 @@ export async function executeFormattingWorkflow(input: {
           label: "Stage outlier highlights",
           summary:
             highlightedOutlierCount === 0
-              ? "No outlier highlight commands were staged because no numeric outliers were found."
+              ? "Outlier scan complete. Highlight count: 0."
               : `Prepared ${String(highlightedOutlierCount)} semantic formatting command${highlightedOutlierCount === 1 ? "" : "s"} to highlight numeric outliers${truncated ? ` (limited to the top ${String(limit)} cells)` : ""}.`,
         },
         {

@@ -1,5 +1,6 @@
 import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 import type {
+  WorkbookAgentExecutionPolicy,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
@@ -20,6 +21,7 @@ export interface WorkbookAgentPersistedSessionInput {
   readonly threadId: string;
   readonly actorUserId: string;
   readonly scope: "private" | "shared";
+  readonly executionPolicy: WorkbookAgentExecutionPolicy;
   readonly context: WorkbookAgentUiContext | null;
   readonly entries: readonly WorkbookAgentTimelineEntry[];
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
@@ -66,19 +68,22 @@ export class WorkbookAgentSessionStore {
     const key = persistenceKey(input);
     const entries = dedupeTimelineEntries(input.entries);
     const previous = this.pendingSaves.get(key) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(async () => {
-      await this.source.saveWorkbookAgentThreadState({
-        documentId: input.documentId,
-        threadId: input.threadId,
-        actorUserId: input.actorUserId,
-        scope: input.scope,
-        context: input.context,
-        entries,
-        pendingBundle: input.pendingBundle,
-        updatedAtUnixMs: input.updatedAtUnixMs,
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        await this.source.saveWorkbookAgentThreadState({
+          documentId: input.documentId,
+          threadId: input.threadId,
+          actorUserId: input.actorUserId,
+          scope: input.scope,
+          executionPolicy: input.executionPolicy,
+          context: input.context,
+          entries,
+          pendingBundle: input.pendingBundle,
+          updatedAtUnixMs: input.updatedAtUnixMs,
+        });
+        return undefined;
       });
-      return undefined;
-    });
     this.pendingSaves.set(key, next);
     try {
       await next;

@@ -6,7 +6,6 @@ import type {
 } from "@bilig/contracts";
 import type {
   WorkbookAgentAppliedBy,
-  WorkbookAgentCommand,
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
   WorkbookAgentSharedReviewState,
@@ -68,6 +67,7 @@ import {
   cloneUiContext,
   isMutatingWorkflowTemplate,
   mergeTimelineEntries,
+  normalizeExecutionPolicy,
   type MutableWorkbookAgentSessionSnapshot,
   type WorkbookAgentSessionState,
   toContextRef,
@@ -400,9 +400,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       touch: (sessionState) => this.touch(sessionState),
       persistSessionState: (sessionState) => this.persistSessionState(sessionState),
       emitSnapshot: (threadId) => this.emitSnapshot(threadId),
-      shouldApplyCommandImmediately: (sessionState, command) =>
-        this.shouldApplyToolCommandImmediately(sessionState, command),
-      applyCommandBundleImmediately: (args) => this.applyToolCommandImmediately(args),
+      shouldApplyBundleImmediately: (sessionState, bundle) =>
+        this.shouldApplyToolBundleImmediately(sessionState, bundle),
+      applyCommandBundleAutomatically: (args) => this.applyToolBundleAutomatically(args),
       incrementCounter: (counter) => {
         this.counters[counter] += 1;
       },
@@ -415,6 +415,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       threadId: sessionState.threadId,
       actorUserId: sessionState.storageActorUserId,
       scope: sessionState.scope,
+      executionPolicy: sessionState.executionPolicy,
       context: sessionState.snapshot.context,
       entries: sessionState.snapshot.entries,
       pendingBundle: sessionState.snapshot.pendingBundle,
@@ -439,19 +440,20 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
   }
 
-  private shouldApplyToolCommandImmediately(
+  private shouldApplyToolBundleImmediately(
     sessionState: WorkbookAgentSessionState,
-    command: WorkbookAgentCommand,
+    bundle: WorkbookAgentCommandBundle,
   ): boolean {
-    if (sessionState.scope === "shared") {
+    if (sessionState.scope === "shared" || sessionState.executionPolicy === "ownerReview") {
       return false;
     }
-    return (
-      command.kind === "createSheet" ||
-      command.kind === "renameSheet" ||
-      command.kind === "updateRowMetadata" ||
-      command.kind === "updateColumnMetadata"
-    );
+    if (!this.isRolloutAllowed(sessionState.documentId, sessionState.storageActorUserId)) {
+      return false;
+    }
+    if (sessionState.executionPolicy === "autoApplyAll") {
+      return true;
+    }
+    return bundle.riskClass === "low";
   }
 
   private async buildAuthoritativePreview(documentId: string, bundle: WorkbookAgentCommandBundle) {
@@ -464,7 +466,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
   }
 
-  private async applyToolCommandImmediately(input: {
+  private async applyToolBundleAutomatically(input: {
     sessionState: WorkbookAgentSessionState;
     actorUserId: string;
     bundle: WorkbookAgentCommandBundle;
@@ -482,7 +484,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         userID: input.actorUserId,
         roles: ["editor"],
       },
-      appliedBy: "user",
+      appliedBy: "auto",
       preview,
     });
     for (const record of appliedSnapshot.executionRecords) {
@@ -604,6 +606,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         );
         if (parsed.context) {
           accessibleSession.snapshot.context = parsed.context;
+        }
+        if (parsed.executionPolicy) {
+          accessibleSession.executionPolicy = normalizeExecutionPolicy({
+            scope: accessibleSession.scope,
+            requestedPolicy: parsed.executionPolicy,
+          });
+          accessibleSession.snapshot.executionPolicy = accessibleSession.executionPolicy;
+        }
+        if (parsed.context || parsed.executionPolicy) {
           await this.persistSessionState(accessibleSession);
           this.emitSnapshot(accessibleSession.threadId);
         }
@@ -620,6 +631,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       );
       if (parsed.context) {
         sessionState.snapshot.context = parsed.context;
+      }
+      if (parsed.executionPolicy) {
+        sessionState.executionPolicy = normalizeExecutionPolicy({
+          scope: sessionState.scope,
+          requestedPolicy: parsed.executionPolicy,
+        });
+        sessionState.snapshot.executionPolicy = sessionState.executionPolicy;
+      }
+      if (parsed.context || parsed.executionPolicy) {
         await this.persistSessionState(sessionState);
         this.emitSnapshot(existing.threadId);
       }
@@ -686,6 +706,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         : new Error("Workbook agent thread bootstrap failed");
     }
     const resolvedScope = durableThreadState?.scope ?? parsed.scope ?? "private";
+    const resolvedExecutionPolicy = normalizeExecutionPolicy({
+      scope: resolvedScope,
+      requestedPolicy: parsed.executionPolicy ?? durableThreadState?.executionPolicy ?? null,
+    });
     const executionRecords = durableThreadSession.executionRecords;
     const workflowRuns = durableThreadSession.workflowRuns;
     const codexEntries = thread ? buildEntriesFromThread(thread) : [];
@@ -701,6 +725,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       documentId: input.documentId,
       threadId,
       scope: resolvedScope,
+      executionPolicy: resolvedExecutionPolicy,
       status: !thread
         ? "failed"
         : thread.turns.some((turn) => turn.status === "failed")
@@ -724,6 +749,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       userId: input.session.userID,
       storageActorUserId: durableThreadState?.actorUserId ?? input.session.userID,
       scope: resolvedScope,
+      executionPolicy: resolvedExecutionPolicy,
       threadId,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),
@@ -875,7 +901,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
         message:
-          "Apply or dismiss the staged preview bundle before starting another mutating workflow.",
+          "Finish the current workbook review item before starting another mutating workflow.",
         statusCode: 409,
         retryable: false,
       });
@@ -972,7 +998,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!pendingBundle || pendingBundle.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
-        message: "Workbook agent preview bundle not found",
+        message: "Workbook agent change set was not found.",
         statusCode: 404,
         retryable: false,
       });
@@ -981,33 +1007,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!preview) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PREVIEW_REQUIRED",
-        message: "Workbook agent preview summary is required before apply",
+        message: "Workbook preview details are required before applying this change set.",
         statusCode: 400,
         retryable: false,
-      });
-    }
-    if (input.appliedBy === "auto" && pendingBundle.approvalMode !== "auto") {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
-        message: "Workbook agent bundle requires manual approval",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
-    if (input.appliedBy === "auto" && !this.featureFlags.autoApplyLowRiskEnabled) {
-      throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
-        message: "Workbook agent auto-apply is currently disabled.",
-        statusCode: 409,
-        retryable: false,
-      });
-    }
-    if (input.appliedBy === "auto") {
-      this.assertRolloutAllowed({
-        documentId: input.documentId,
-        userId: input.session.userID,
-        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
-        message: "Workbook agent auto-apply is still limited to the rollout allowlist.",
       });
     }
     const selection = splitWorkbookAgentCommandBundle({
@@ -1025,9 +1027,47 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (input.appliedBy === "auto" && selection.acceptedScope !== "full") {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
-        message: "Partial workbook agent apply requires manual approval",
+        message: "Automatic apply runs one complete change set per turn.",
         statusCode: 409,
         retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto") {
+      if (sessionState.executionPolicy === "ownerReview") {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+          message: "This session routes workbook edits through the review queue.",
+          statusCode: 409,
+          retryable: false,
+        });
+      }
+      if (
+        sessionState.executionPolicy === "autoApplySafe" &&
+        !this.featureFlags.autoApplyLowRiskEnabled
+      ) {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_AUTO_APPLY_DISABLED",
+          message: "Automatic safe-apply is paused for this environment.",
+          statusCode: 409,
+          retryable: false,
+        });
+      }
+      if (
+        sessionState.executionPolicy === "autoApplySafe" &&
+        selection.acceptedBundle.riskClass !== "low"
+      ) {
+        throw createWorkbookAgentServiceError({
+          code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+          message: "This change set is routed to review under the current session policy.",
+          statusCode: 409,
+          retryable: false,
+        });
+      }
+      this.assertRolloutAllowed({
+        documentId: input.documentId,
+        userId: input.session.userID,
+        code: "WORKBOOK_AGENT_AUTO_APPLY_ROLLOUT_BLOCKED",
+        message: "Automatic apply is limited to the rollout allowlist for this environment.",
       });
     }
     if (
@@ -1100,9 +1140,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       createSystemEntry(
         `system-apply:${executionRecord.id}`,
         pendingBundle.turnId,
-        `${input.appliedBy === "auto" ? "Auto-applied" : "Applied"} ${
+        `${input.appliedBy === "auto" ? "Applied automatically" : "Applied"} ${
           selection.acceptedScope === "partial" ? "selected " : ""
-        }preview bundle at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
+        }workbook change set at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
         appendRevisionCitation(
           createBundleRangeCitations(selection.acceptedBundle),
           result.revision,
@@ -1132,7 +1172,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!pendingBundle || pendingBundle.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
-        message: "Workbook agent preview bundle not found",
+        message: "Workbook review item was not found.",
         statusCode: 404,
         retryable: false,
       });
@@ -1192,8 +1232,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         `system-review:${reviewedBundle.id}:${now}`,
         reviewedBundle.turnId,
         isOwnerReviewer
-          ? `${parsed.decision === "approved" ? "Approved" : "Rejected"} shared preview bundle: ${reviewedBundle.summary}`
-          : `${input.session.userID} recommended ${parsed.decision === "approved" ? "approval" : "rejection"} for shared preview bundle: ${reviewedBundle.summary}`,
+          ? `${parsed.decision === "approved" ? "Approved" : "Returned"} shared review item: ${reviewedBundle.summary}`
+          : `${input.session.userID} shared a ${parsed.decision === "approved" ? "ready-to-apply" : "return-for-edit"} review recommendation: ${reviewedBundle.summary}`,
         createBundleRangeCitations(reviewedBundle),
       ),
     );
@@ -1218,7 +1258,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!pendingBundle || pendingBundle.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
-        message: "Workbook agent preview bundle not found",
+        message: "Workbook review item was not found.",
         statusCode: 404,
         retryable: false,
       });
@@ -1229,7 +1269,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       createSystemEntry(
         `system-dismiss:${pendingBundle.id}:${this.now()}`,
         pendingBundle.turnId,
-        `Dismissed preview bundle: ${pendingBundle.summary}`,
+        `Cleared workbook review item: ${pendingBundle.summary}`,
         createBundleRangeCitations(pendingBundle),
       ),
     );
@@ -1278,7 +1318,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       createSystemEntry(
         `system-replay:${record.id}:${String(this.now())}`,
         replayedBundle.turnId,
-        `Replayed prior agent plan as preview bundle: ${replayedBundle.summary}`,
+        `Prepared workbook review item from a prior execution: ${replayedBundle.summary}`,
         createBundleRangeCitations(replayedBundle),
       ),
     );
@@ -1370,9 +1410,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                 turnId,
                 attachSharedReviewState(bundle, sessionState),
               ),
-            shouldApplyToolCommandImmediately: (sessionState, command) =>
-              this.shouldApplyToolCommandImmediately(sessionState, command),
-            applyToolCommandImmediately: (args) => this.applyToolCommandImmediately(args),
+            shouldApplyToolBundleImmediately: (sessionState, bundle) =>
+              this.shouldApplyToolBundleImmediately(sessionState, bundle),
+            applyToolBundleAutomatically: (args) => this.applyToolBundleAutomatically(args),
             persistSessionState: (sessionState) => this.persistSessionState(sessionState),
             emitSnapshot: (threadId) => this.emitSnapshot(threadId),
             startWorkflow: (request) => this.startWorkflow(request),

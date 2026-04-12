@@ -27,11 +27,11 @@ export function createWorkbookAgentDynamicToolHandler(input: {
     turnId: string,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
   ) => void;
-  shouldApplyToolCommandImmediately: (
+  shouldApplyToolBundleImmediately: (
     sessionState: WorkbookAgentSessionState,
-    command: ReturnType<typeof appendWorkbookAgentCommandToBundle>["commands"][number],
+    bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
   ) => boolean;
-  applyToolCommandImmediately: (input: {
+  applyToolBundleAutomatically: (input: {
     sessionState: WorkbookAgentSessionState;
     actorUserId: string;
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>;
@@ -77,23 +77,16 @@ export function createWorkbookAgentDynamicToolHandler(input: {
             command,
             now: input.now(),
           });
-          if (input.shouldApplyToolCommandImmediately(sessionState, command)) {
-            try {
-              const executionRecord = await input.applyToolCommandImmediately({
-                sessionState,
-                actorUserId: requestActorUserId,
-                bundle,
-              });
-              return {
-                bundle,
-                executionRecord,
-              };
-            } catch {
-              input.stagePendingBundle(sessionState, request.turnId, bundle);
-              await input.persistSessionState(sessionState);
-              input.emitSnapshot(sessionState.threadId);
-              return bundle;
-            }
+          if (input.shouldApplyToolBundleImmediately(sessionState, bundle)) {
+            const executionRecord = await input.applyToolBundleAutomatically({
+              sessionState,
+              actorUserId: requestActorUserId,
+              bundle,
+            });
+            return {
+              bundle,
+              executionRecord,
+            };
           }
           input.stagePendingBundle(sessionState, request.turnId, bundle);
           await input.persistSessionState(sessionState);

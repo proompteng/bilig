@@ -37,11 +37,11 @@ export class WorkbookAgentWorkflowRuntime {
       touch: (sessionState: WorkbookAgentSessionState) => void;
       persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
       emitSnapshot: (threadId: string) => void;
-      shouldApplyCommandImmediately: (
+      shouldApplyBundleImmediately: (
         sessionState: WorkbookAgentSessionState,
-        command: ReturnType<typeof createWorkbookAgentCommandBundle>["commands"][number],
+        bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
       ) => boolean;
-      applyCommandBundleImmediately: (input: {
+      applyCommandBundleAutomatically: (input: {
         sessionState: WorkbookAgentSessionState;
         actorUserId: string;
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>;
@@ -236,43 +236,18 @@ export class WorkbookAgentWorkflowRuntime {
           }),
           input.sessionState,
         );
-        const shouldApplyImmediately =
-          input.sessionState.scope !== "shared" &&
-          workflowBundle.commands.every((command) =>
-            this.options.shouldApplyCommandImmediately(input.sessionState, command),
-          );
+        const shouldApplyImmediately = this.options.shouldApplyBundleImmediately(
+          input.sessionState,
+          workflowBundle,
+        );
         if (shouldApplyImmediately) {
-          try {
-            const executionRecord = await this.options.applyCommandBundleImmediately({
-              sessionState: input.sessionState,
-              actorUserId: input.startedByUserId,
-              bundle: workflowBundle,
-            });
-            if (executionRecord) {
-              completedSummary = `Applied workflow: ${executionRecord.summary}`;
-            } else {
-              input.sessionState.snapshot.pendingBundle = workflowBundle;
-              input.sessionState.snapshot.entries = upsertEntry(
-                input.sessionState.snapshot.entries,
-                createSystemEntry(
-                  `system-preview:${workflowBundle.id}`,
-                  input.workflowTurnId,
-                  describeWorkbookAgentBundle(workflowBundle),
-                  createBundleRangeCitations(workflowBundle),
-                ),
-              );
-            }
-          } catch {
-            input.sessionState.snapshot.pendingBundle = workflowBundle;
-            input.sessionState.snapshot.entries = upsertEntry(
-              input.sessionState.snapshot.entries,
-              createSystemEntry(
-                `system-preview:${workflowBundle.id}`,
-                input.workflowTurnId,
-                describeWorkbookAgentBundle(workflowBundle),
-                createBundleRangeCitations(workflowBundle),
-              ),
-            );
+          const executionRecord = await this.options.applyCommandBundleAutomatically({
+            sessionState: input.sessionState,
+            actorUserId: input.startedByUserId,
+            bundle: workflowBundle,
+          });
+          if (executionRecord) {
+            completedSummary = `Applied workflow: ${executionRecord.summary}`;
           }
         } else {
           input.sessionState.snapshot.pendingBundle = workflowBundle;

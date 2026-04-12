@@ -133,6 +133,15 @@ export type WorkbookAgentSessionStatus = Schema.Schema.Type<
 export const WorkbookAgentThreadScopeSchema = Schema.Literal("private", "shared");
 export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentThreadScopeSchema>;
 
+export const WorkbookAgentExecutionPolicySchema = Schema.Literal(
+  "autoApplySafe",
+  "autoApplyAll",
+  "ownerReview",
+);
+export type WorkbookAgentExecutionPolicy = Schema.Schema.Type<
+  typeof WorkbookAgentExecutionPolicySchema
+>;
+
 export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
@@ -236,6 +245,7 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   documentId: Schema.String,
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
+  executionPolicy: WorkbookAgentExecutionPolicySchema,
   status: WorkbookAgentSessionStatusSchema,
   activeTurnId: Schema.Union(Schema.String, Schema.Null),
   lastError: Schema.Union(Schema.String, Schema.Null),

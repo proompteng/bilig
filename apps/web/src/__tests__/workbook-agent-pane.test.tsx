@@ -121,6 +121,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     documentId: "doc-1",
     threadId: "thr-1",
     scope: "private",
+    executionPolicy: "autoApplyAll",
     status: "idle",
     activeTurnId: null,
     lastError: null,
@@ -446,7 +447,7 @@ describe("workbook agent pane", () => {
                     id: "system-apply:run-1",
                     kind: "system",
                     turnId: "turn-1",
-                    text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+                    text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -488,7 +489,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.textContent).toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).toContain("Applied workbook change set at revision r7");
     expect(host.textContent).toContain("Sheet1!B2");
     expect(host.textContent).toContain("r7");
 
@@ -2411,7 +2412,7 @@ describe("workbook agent pane", () => {
               scope: "shared",
               entryCount: 4,
               hasPendingBundle: true,
-              latestEntryText: "Applied preview bundle at revision r7",
+              latestEntryText: "Applied workbook change set at revision r7",
             }),
             createThreadSummary({
               threadId: "thr-private",
@@ -2443,7 +2444,7 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Shared");
     expect(host.textContent).toContain("Pending");
     expect(host.textContent).toContain("4 items");
-    expect(host.textContent).toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).toContain("Applied workbook change set at revision r7");
 
     await act(async () => {
       root.unmount();

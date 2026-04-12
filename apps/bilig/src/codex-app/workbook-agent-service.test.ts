@@ -635,6 +635,7 @@ describe("workbook agent service", () => {
             threadId: "thr-test",
             actorUserId: "alex@example.com",
             scope: "private",
+            executionPolicy: "autoApplySafe",
             context: null,
             entries: [],
             pendingBundle: {
@@ -719,6 +720,7 @@ describe("workbook agent service", () => {
             threadId: "thr-test",
             actorUserId: "alex@example.com",
             scope: "private",
+            executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
             pendingBundle: {
@@ -1167,9 +1169,10 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
-          baseRevision: 7,
+          appliedBy: "auto",
           commands: expect.arrayContaining([
             expect.objectContaining({
               kind: "formatRange",
@@ -1186,12 +1189,12 @@ describe("workbook agent service", () => {
             }),
           ]),
         }),
-      );
+      ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("Staged preview bundle"),
+            text: expect.stringContaining("Applied automatically workbook change set"),
           }),
           expect.objectContaining({
             kind: "system",
@@ -1308,9 +1311,10 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
-          baseRevision: 7,
+          appliedBy: "auto",
           commands: [
             expect.objectContaining({
               kind: "writeRange",
@@ -1320,12 +1324,12 @@ describe("workbook agent service", () => {
             }),
           ],
         }),
-      );
+      ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("Staged preview bundle"),
+            text: expect.stringContaining("Applied automatically workbook change set"),
           }),
           expect.objectContaining({
             kind: "system",
@@ -1454,9 +1458,10 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
-          baseRevision: 7,
+          appliedBy: "auto",
           commands: [
             expect.objectContaining({
               kind: "writeRange",
@@ -1466,12 +1471,12 @@ describe("workbook agent service", () => {
             }),
           ],
         }),
-      );
+      ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("Staged preview bundle"),
+            text: expect.stringContaining("Applied automatically workbook change set"),
           }),
           expect.objectContaining({
             kind: "system",
@@ -1669,6 +1674,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -1790,6 +1796,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -2080,14 +2087,14 @@ describe("workbook agent service", () => {
         expect.objectContaining({
           summary: "Create sheet Forecast",
           appliedRevision: 8,
-          appliedBy: "user",
+          appliedBy: "auto",
         }),
       ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: "Applied preview bundle at revision r8: Create sheet Forecast",
+            text: "Applied automatically workbook change set at revision r8: Create sheet Forecast",
           }),
           expect.objectContaining({
             kind: "system",
@@ -2220,7 +2227,7 @@ describe("workbook agent service", () => {
         expect.objectContaining({
           summary: "Rename sheet Revenue to Forecast",
           appliedRevision: 9,
-          appliedBy: "user",
+          appliedBy: "auto",
         }),
       ]);
     } finally {
@@ -2344,9 +2351,10 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toEqual(
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
-          baseRevision: 7,
+          appliedBy: "auto",
           commands: [
             expect.objectContaining({
               kind: "formatRange",
@@ -2363,12 +2371,12 @@ describe("workbook agent service", () => {
             }),
           ],
         }),
-      );
+      ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("Staged preview bundle"),
+            text: expect.stringContaining("Applied automatically workbook change set"),
           }),
           expect.objectContaining({
             kind: "system",
@@ -2586,14 +2594,14 @@ describe("workbook agent service", () => {
         expect.objectContaining({
           summary: "Create sheet Prepaid Expenses",
           appliedRevision: 7,
-          appliedBy: "user",
+          appliedBy: "auto",
         }),
       ]);
       expect(snapshot.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: "Applied preview bundle at revision r7: Create sheet Prepaid Expenses",
+            text: expect.stringContaining("Applied automatically workbook change set"),
           }),
         ]),
       );
@@ -2637,6 +2645,7 @@ describe("workbook agent service", () => {
       threadId: "thr-shared",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: {
         selection: {
           sheetName: "Sheet1",
@@ -2928,6 +2937,7 @@ describe("workbook agent service", () => {
             threadId: "thr-existing",
             actorUserId: "alex@example.com",
             scope: "private",
+            executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
             pendingBundle: {
@@ -3338,6 +3348,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -3418,7 +3429,7 @@ describe("workbook agent service", () => {
       expect(applied.entries).toContainEqual(
         expect.objectContaining({
           kind: "system",
-          text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+          text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
           citations: [
             expect.objectContaining({
               kind: "range",
@@ -3470,6 +3481,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -3593,6 +3605,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -3774,6 +3787,7 @@ describe("workbook agent service", () => {
         },
         body: {
           sessionId: "agent-session-1",
+          executionPolicy: "ownerReview",
           context: {
             selection: {
               sheetName: "Sheet1",
@@ -3879,6 +3893,7 @@ describe("workbook agent service", () => {
       threadId: "thr-durable-only",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: {
         selection: {
           sheetName: "Sheet2",
@@ -3971,6 +3986,7 @@ describe("workbook agent service", () => {
       threadId: "thr-shared",
       actorUserId: "alex@example.com",
       scope: "shared",
+      executionPolicy: "ownerReview",
       context: {
         selection: {
           sheetName: "Sheet1",
@@ -4115,6 +4131,7 @@ describe("workbook agent service", () => {
             threadId: "thr-shared",
             actorUserId: "alex@example.com",
             scope: "shared",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: null,
@@ -4168,6 +4185,7 @@ describe("workbook agent service", () => {
             threadId: "thr-shared",
             actorUserId: "alex@example.com",
             scope: "shared",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: {
@@ -4252,6 +4270,7 @@ describe("workbook agent service", () => {
             threadId: "thr-shared",
             actorUserId: "alex@example.com",
             scope: "shared",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: {
@@ -4343,6 +4362,7 @@ describe("workbook agent service", () => {
             threadId: "thr-shared",
             actorUserId: "alex@example.com",
             scope: "shared",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: {
@@ -4465,6 +4485,7 @@ describe("workbook agent service", () => {
             threadId: "thr-shared",
             actorUserId: "alex@example.com",
             scope: "shared",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: {
@@ -4550,7 +4571,9 @@ describe("workbook agent service", () => {
         expect.arrayContaining([
           expect.objectContaining({
             kind: "system",
-            text: expect.stringContaining("pat@example.com recommended approval"),
+            text: expect.stringContaining(
+              "pat@example.com shared a ready-to-apply review recommendation",
+            ),
           }),
         ]),
       );
@@ -4610,6 +4633,7 @@ describe("workbook agent service", () => {
             threadId: "thr-private",
             actorUserId: "alex@example.com",
             scope: "private",
+            executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
             pendingBundle: null,

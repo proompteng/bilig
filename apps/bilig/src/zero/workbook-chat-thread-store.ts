@@ -1,6 +1,7 @@
 import {
   isWorkbookAgentCommand,
   isWorkbookAgentCommandBundle,
+  type WorkbookAgentExecutionPolicy,
   normalizeWorkbookAgentToolName,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentSharedReviewState,
@@ -21,6 +22,7 @@ export interface WorkbookAgentThreadStateRecord {
   readonly threadId: string;
   readonly actorUserId: string;
   readonly scope: WorkbookChatThreadScope;
+  readonly executionPolicy: WorkbookAgentExecutionPolicy;
   readonly context: WorkbookAgentUiContext | null;
   readonly entries: readonly WorkbookAgentTimelineEntry[];
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
@@ -32,6 +34,7 @@ interface WorkbookChatThreadRow extends QueryResultRow {
   readonly threadId?: unknown;
   readonly actorUserId?: unknown;
   readonly scope?: unknown;
+  readonly executionPolicy?: unknown;
   readonly contextJson?: unknown;
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
@@ -150,6 +153,10 @@ function isWorkbookAgentUiContext(value: unknown): value is WorkbookAgentUiConte
     typeof value["viewport"]["colStart"] === "number" &&
     typeof value["viewport"]["colEnd"] === "number"
   );
+}
+
+function isExecutionPolicy(value: unknown): value is WorkbookAgentExecutionPolicy {
+  return value === "autoApplySafe" || value === "autoApplyAll" || value === "ownerReview";
 }
 
 function isToolStatus(value: unknown): value is WorkbookAgentToolStatus {
@@ -380,6 +387,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       thread_id TEXT NOT NULL,
       actor_user_id TEXT NOT NULL,
       scope TEXT NOT NULL DEFAULT 'private',
+      execution_policy TEXT NOT NULL DEFAULT 'ownerReview',
       context_json JSONB,
       entry_count BIGINT NOT NULL DEFAULT 0,
       has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE,
@@ -399,6 +407,10 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS latest_entry_text TEXT;
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS execution_policy TEXT NOT NULL DEFAULT 'ownerReview';
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_chat_item (
@@ -522,16 +534,18 @@ export async function saveWorkbookAgentThreadState(
         thread_id,
         actor_user_id,
         scope,
+        execution_policy,
         context_json,
         entry_count,
         has_pending_bundle,
         latest_entry_text,
         updated_at_unix_ms
       )
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
       ON CONFLICT (workbook_id, thread_id, actor_user_id)
       DO UPDATE SET
         scope = EXCLUDED.scope,
+        execution_policy = EXCLUDED.execution_policy,
         context_json = EXCLUDED.context_json,
         entry_count = EXCLUDED.entry_count,
         has_pending_bundle = EXCLUDED.has_pending_bundle,
@@ -543,6 +557,7 @@ export async function saveWorkbookAgentThreadState(
       record.threadId,
       record.actorUserId,
       record.scope,
+      record.executionPolicy,
       JSON.stringify(record.context),
       persistedEntries.length,
       record.pendingBundle !== null,
@@ -755,6 +770,7 @@ export async function loadWorkbookAgentThreadState(
         thread_id AS "threadId",
         actor_user_id AS "actorUserId",
         scope AS "scope",
+        execution_policy AS "executionPolicy",
         context_json AS "contextJson",
         updated_at_unix_ms AS "updatedAtUnixMs"
       FROM workbook_chat_thread
@@ -776,6 +792,7 @@ export async function loadWorkbookAgentThreadState(
     typeof thread.threadId !== "string" ||
     typeof thread.actorUserId !== "string" ||
     (thread.scope !== "private" && thread.scope !== "shared") ||
+    !isExecutionPolicy(thread.executionPolicy) ||
     updatedAtUnixMs === null
   ) {
     return null;
@@ -865,6 +882,7 @@ export async function loadWorkbookAgentThreadState(
     threadId: thread.threadId,
     actorUserId: thread.actorUserId,
     scope: thread.scope,
+    executionPolicy: thread.executionPolicy,
     context: isWorkbookAgentUiContext(thread.contextJson) ? thread.contextJson : null,
     entries,
     pendingBundle,

@@ -503,7 +503,7 @@ describe("workbook agent tools", () => {
         actorUserId: "alex@example.com",
         clientMutationId: null,
         eventKind: "applyAgentCommandBundle" as const,
-        summary: "Applied preview bundle at revision r12",
+        summary: "Applied workbook change set at revision r12",
         sheetId: 1,
         sheetName: "Sheet1",
         anchorAddress: "B2",
@@ -549,7 +549,7 @@ describe("workbook agent tools", () => {
     const text = textItem && "text" in textItem ? textItem.text : "";
     expect(text).toContain('"changeCount": 1');
     expect(text).toContain('"revision": 12');
-    expect(text).toContain('"summary": "Applied preview bundle at revision r12"');
+    expect(text).toContain('"summary": "Applied workbook change set at revision r12"');
     expect(text).toContain('"startAddress": "B2"');
   });
 

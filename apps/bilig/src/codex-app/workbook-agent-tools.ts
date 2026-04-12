@@ -617,8 +617,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readSelection,
-      description:
-        "Read the currently selected range from the attached browser workbook context.",
+      description: "Read the currently selected range from the attached browser workbook context.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -1026,8 +1025,9 @@ async function stageCommandResult(
       stringifyJson({
         applied: true,
         staged: false,
+        reviewQueued: false,
         bundleId: bundle.id,
-        summary: `Applied preview bundle at revision r${String(normalized.executionRecord.appliedRevision)}: ${normalized.executionRecord.summary}`,
+        summary: `Applied workbook change set at revision r${String(normalized.executionRecord.appliedRevision)}: ${normalized.executionRecord.summary}`,
         revision: normalized.executionRecord.appliedRevision,
         scope: normalized.executionRecord.scope,
         riskClass: normalized.executionRecord.riskClass,
@@ -1038,9 +1038,11 @@ async function stageCommandResult(
   }
   return textToolResult(
     stringifyJson({
+      applied: false,
       staged: true,
+      reviewQueued: true,
       bundleId: bundle.id,
-      summary: bundle.summary,
+      summary: `Prepared workbook review item: ${bundle.summary}`,
       scope: bundle.scope,
       riskClass: bundle.riskClass,
       estimatedAffectedCells: bundle.estimatedAffectedCells,

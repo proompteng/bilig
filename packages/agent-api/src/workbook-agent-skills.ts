@@ -40,7 +40,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "analyze",
     description: "Scan the workbook for broken formulas, cycles, and JS-only fallback formulas.",
     prompt:
-      "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first. Prefer the built-in durable workflows when the user wants either a saved report, a staged highlight preview, or a staged repair preview in the thread.",
+      "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first. Prefer the built-in durable workflows when the user wants either a saved report, a staged highlight change set, or a staged repair change set in the thread.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
       WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
@@ -95,9 +95,9 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     id: "edit-selection",
     label: "Edit Selection",
     focus: "edit",
-    description: "Use the current selection to stage a spreadsheet-native preview bundle.",
+    description: "Use the current selection to stage a spreadsheet-native workbook change set.",
     prompt:
-      "Use the current selection context to stage the right spreadsheet edit as one coherent preview bundle.",
+      "Use the current selection context to stage the right spreadsheet edit as one coherent workbook change set.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.getContext,
       WORKBOOK_AGENT_TOOL_NAMES.readSelection,
@@ -111,7 +111,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "edit",
     description: "Reorganize sheet structure with semantic copy, move, fill, and sheet tools.",
     prompt:
-      "Restructure or clean up this sheet using semantic range and sheet tools. Prefer the built-in durable workflows for create-sheet, rename-current-sheet, row/column hide or unhide, and current-sheet header, number-format, whitespace, or formula fill-down cleanup when they match, otherwise stage one coherent preview bundle.",
+      "Restructure or clean up this sheet using semantic range and sheet tools. Prefer the built-in durable workflows for create-sheet, rename-current-sheet, row/column hide or unhide, and current-sheet header, number-format, whitespace, or formula fill-down cleanup when they match, otherwise stage one coherent workbook change set.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
       WORKBOOK_AGENT_TOOL_NAMES.readRange,

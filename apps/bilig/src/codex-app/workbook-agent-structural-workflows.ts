@@ -111,19 +111,19 @@ export function getStructuralWorkflowTemplateMetadata(
       const sheetName = workflowInput?.name?.trim() || "new sheet";
       return {
         title: "Create Sheet",
-        runningSummary: `Preparing a structural preview bundle to create ${sheetName}.`,
+        runningSummary: `Preparing a structural workbook change set to create ${sheetName}.`,
         stepPlans: [
           {
             stepId: "plan-sheet-create",
             label: "Plan sheet creation",
-            runningSummary: `Preparing the semantic sheet-creation preview for ${sheetName}.`,
-            pendingSummary: "Waiting to plan the semantic sheet-creation preview.",
+            runningSummary: `Preparing the semantic sheet-creation change set for ${sheetName}.`,
+            pendingSummary: "Waiting to plan the semantic sheet-creation change set.",
           },
           {
             stepId: "stage-structural-preview",
-            label: "Stage structural preview",
-            runningSummary: "Staging the structural preview bundle in the thread rail.",
-            pendingSummary: "Waiting to stage the structural preview bundle in the thread rail.",
+            label: "Prepare structural change set",
+            runningSummary: "Preparing the structural workbook change set.",
+            pendingSummary: "Waiting to prepare the structural workbook change set.",
           },
         ],
       };
@@ -132,7 +132,7 @@ export function getStructuralWorkflowTemplateMetadata(
       const nextName = workflowInput?.name?.trim() || "renamed sheet";
       return {
         title: "Rename Current Sheet",
-        runningSummary: `Preparing a structural preview bundle to rename the active sheet to ${nextName}.`,
+        runningSummary: `Preparing a structural workbook change set to rename the active sheet to ${nextName}.`,
         stepPlans: [
           {
             stepId: "inspect-current-sheet",
@@ -143,9 +143,9 @@ export function getStructuralWorkflowTemplateMetadata(
           },
           {
             stepId: "stage-sheet-rename-preview",
-            label: "Stage sheet rename preview",
-            runningSummary: `Staging the semantic preview that renames the active sheet to ${nextName}.`,
-            pendingSummary: "Waiting to stage the semantic sheet-rename preview.",
+            label: "Prepare sheet rename change set",
+            runningSummary: `Preparing the semantic change set that renames the active sheet to ${nextName}.`,
+            pendingSummary: "Waiting to prepare the semantic sheet-rename change set.",
           },
         ],
       };
@@ -153,7 +153,7 @@ export function getStructuralWorkflowTemplateMetadata(
     case "hideCurrentRow":
       return {
         title: "Hide Current Row",
-        runningSummary: "Preparing a structural preview bundle to hide the current row.",
+        runningSummary: "Preparing a structural workbook change set to hide the current row.",
         stepPlans: [
           {
             stepId: "resolve-current-row",
@@ -164,16 +164,16 @@ export function getStructuralWorkflowTemplateMetadata(
           },
           {
             stepId: "stage-row-visibility-preview",
-            label: "Stage row visibility preview",
-            runningSummary: "Staging the semantic preview that hides the current row.",
-            pendingSummary: "Waiting to stage the semantic row-visibility preview.",
+            label: "Prepare row visibility change set",
+            runningSummary: "Staging the semantic change set that hides the current row.",
+            pendingSummary: "Waiting to prepare the semantic row-visibility change set.",
           },
         ],
       };
     case "hideCurrentColumn":
       return {
         title: "Hide Current Column",
-        runningSummary: "Preparing a structural preview bundle to hide the current column.",
+        runningSummary: "Preparing a structural workbook change set to hide the current column.",
         stepPlans: [
           {
             stepId: "resolve-current-column",
@@ -184,16 +184,16 @@ export function getStructuralWorkflowTemplateMetadata(
           },
           {
             stepId: "stage-column-visibility-preview",
-            label: "Stage column visibility preview",
-            runningSummary: "Staging the semantic preview that hides the current column.",
-            pendingSummary: "Waiting to stage the semantic column-visibility preview.",
+            label: "Prepare column visibility change set",
+            runningSummary: "Staging the semantic change set that hides the current column.",
+            pendingSummary: "Waiting to prepare the semantic column-visibility change set.",
           },
         ],
       };
     case "unhideCurrentRow":
       return {
         title: "Unhide Current Row",
-        runningSummary: "Preparing a structural preview bundle to unhide the current row.",
+        runningSummary: "Preparing a structural workbook change set to unhide the current row.",
         stepPlans: [
           {
             stepId: "resolve-current-row",
@@ -204,16 +204,16 @@ export function getStructuralWorkflowTemplateMetadata(
           },
           {
             stepId: "stage-row-visibility-preview",
-            label: "Stage row visibility preview",
-            runningSummary: "Staging the semantic preview that unhides the current row.",
-            pendingSummary: "Waiting to stage the semantic row-visibility preview.",
+            label: "Prepare row visibility change set",
+            runningSummary: "Staging the semantic change set that unhides the current row.",
+            pendingSummary: "Waiting to prepare the semantic row-visibility change set.",
           },
         ],
       };
     case "unhideCurrentColumn":
       return {
         title: "Unhide Current Column",
-        runningSummary: "Preparing a structural preview bundle to unhide the current column.",
+        runningSummary: "Preparing a structural workbook change set to unhide the current column.",
         stepPlans: [
           {
             stepId: "resolve-current-column",
@@ -224,9 +224,9 @@ export function getStructuralWorkflowTemplateMetadata(
           },
           {
             stepId: "stage-column-visibility-preview",
-            label: "Stage column visibility preview",
-            runningSummary: "Staging the semantic preview that unhides the current column.",
-            pendingSummary: "Waiting to stage the semantic column-visibility preview.",
+            label: "Prepare column visibility change set",
+            runningSummary: "Staging the semantic change set that unhides the current column.",
+            pendingSummary: "Waiting to prepare the semantic column-visibility change set.",
           },
         ],
       };
@@ -250,12 +250,12 @@ export function executeStructuralWorkflow(input: {
       const sheetName = requireWorkflowName(input.workflowInput);
       return {
         title: "Create Sheet",
-        summary: `Staged a structural preview bundle to create ${sheetName}.`,
+        summary: `Prepared a structural workbook change set to create ${sheetName}.`,
         artifact: createMarkdownArtifact("Create Sheet Preview", [
           "## Create Sheet Preview",
           "",
           `- Create a new sheet named \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [],
         steps: [
@@ -266,8 +266,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-structural-preview",
-            label: "Stage structural preview",
-            summary: "Staged the structural preview bundle in the thread rail.",
+            label: "Prepare structural change set",
+            summary: "Prepared the structural workbook change set.",
           },
         ],
         commands: [{ kind: "createSheet", name: sheetName }],
@@ -282,12 +282,12 @@ export function executeStructuralWorkflow(input: {
       }
       return {
         title: "Rename Current Sheet",
-        summary: `Staged a structural preview bundle to rename ${currentName} to ${nextName}.`,
+        summary: `Prepared a structural workbook change set to rename ${currentName} to ${nextName}.`,
         artifact: createMarkdownArtifact("Rename Sheet Preview", [
           "## Rename Sheet Preview",
           "",
           `- Rename the active sheet from \`${currentName}\` to \`${nextName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [
           {
@@ -306,8 +306,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-sheet-rename-preview",
-            label: "Stage sheet rename preview",
-            summary: `Staged the semantic preview that renames ${currentName} to ${nextName}.`,
+            label: "Prepare sheet rename change set",
+            summary: `Staged the semantic change set that renames ${currentName} to ${nextName}.`,
           },
         ],
         commands: [{ kind: "renameSheet", currentName, nextName }],
@@ -320,12 +320,12 @@ export function executeStructuralWorkflow(input: {
       const { row } = parseCellAddress(address);
       return {
         title: "Hide Current Row",
-        summary: `Staged a structural preview bundle to hide row ${String(row)} on ${sheetName}.`,
+        summary: `Prepared a structural workbook change set to hide row ${String(row)} on ${sheetName}.`,
         artifact: createMarkdownArtifact("Hide Current Row Preview", [
           "## Hide Current Row Preview",
           "",
           `- Hide row ${String(row)} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [
           {
@@ -344,8 +344,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-row-visibility-preview",
-            label: "Stage row visibility preview",
-            summary: `Staged the semantic preview that hides row ${String(row)} on ${sheetName}.`,
+            label: "Prepare row visibility change set",
+            summary: `Staged the semantic change set that hides row ${String(row)} on ${sheetName}.`,
           },
         ],
         commands: [
@@ -367,12 +367,12 @@ export function executeStructuralWorkflow(input: {
       const columnLabel = formatAddress(0, col).replace(/\d+/gu, "");
       return {
         title: "Hide Current Column",
-        summary: `Staged a structural preview bundle to hide column ${columnLabel} on ${sheetName}.`,
+        summary: `Prepared a structural workbook change set to hide column ${columnLabel} on ${sheetName}.`,
         artifact: createMarkdownArtifact("Hide Current Column Preview", [
           "## Hide Current Column Preview",
           "",
           `- Hide column ${columnLabel} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [
           {
@@ -391,8 +391,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-column-visibility-preview",
-            label: "Stage column visibility preview",
-            summary: `Staged the semantic preview that hides column ${columnLabel} on ${sheetName}.`,
+            label: "Prepare column visibility change set",
+            summary: `Staged the semantic change set that hides column ${columnLabel} on ${sheetName}.`,
           },
         ],
         commands: [
@@ -413,12 +413,12 @@ export function executeStructuralWorkflow(input: {
       const { row } = parseCellAddress(address);
       return {
         title: "Unhide Current Row",
-        summary: `Staged a structural preview bundle to unhide row ${String(row)} on ${sheetName}.`,
+        summary: `Prepared a structural workbook change set to unhide row ${String(row)} on ${sheetName}.`,
         artifact: createMarkdownArtifact("Unhide Current Row Preview", [
           "## Unhide Current Row Preview",
           "",
           `- Unhide row ${String(row)} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [
           {
@@ -437,8 +437,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-row-visibility-preview",
-            label: "Stage row visibility preview",
-            summary: `Staged the semantic preview that unhides row ${String(row)} on ${sheetName}.`,
+            label: "Prepare row visibility change set",
+            summary: `Staged the semantic change set that unhides row ${String(row)} on ${sheetName}.`,
           },
         ],
         commands: [
@@ -460,12 +460,12 @@ export function executeStructuralWorkflow(input: {
       const columnLabel = formatAddress(0, col).replace(/\d+/gu, "");
       return {
         title: "Unhide Current Column",
-        summary: `Staged a structural preview bundle to unhide column ${columnLabel} on ${sheetName}.`,
+        summary: `Prepared a structural workbook change set to unhide column ${columnLabel} on ${sheetName}.`,
         artifact: createMarkdownArtifact("Unhide Current Column Preview", [
           "## Unhide Current Column Preview",
           "",
           `- Unhide column ${columnLabel} on \`${sheetName}\`.`,
-          "- Review and apply the staged preview bundle from the assistant rail preview card to commit it authoritatively.",
+          "- Workbook panel review item is ready whenever the session policy routes this change set to review.",
         ]),
         citations: [
           {
@@ -484,8 +484,8 @@ export function executeStructuralWorkflow(input: {
           },
           {
             stepId: "stage-column-visibility-preview",
-            label: "Stage column visibility preview",
-            summary: `Staged the semantic preview that unhides column ${columnLabel} on ${sheetName}.`,
+            label: "Prepare column visibility change set",
+            summary: `Staged the semantic change set that unhides column ${columnLabel} on ${sheetName}.`,
           },
         ],
         commands: [

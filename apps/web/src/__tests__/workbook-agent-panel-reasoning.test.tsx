@@ -84,6 +84,7 @@ function renderPanel(entry: {
               documentId: "doc-1",
               threadId: "thr-1",
               scope: "private",
+              executionPolicy: "autoApplyAll",
               status: "idle",
               activeTurnId: null,
               lastError: null,
@@ -177,7 +178,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     const panel = renderPanel({
       id: "system-apply-1",
       kind: "system",
-      text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+      text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
       citations: [
         {
           kind: "range",
@@ -196,7 +197,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     await panel.render();
 
     expect(panel.host.textContent).toContain(
-      "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+      "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
     );
     expect(panel.host.textContent).toContain("Target Sheet1!B2");
     expect(panel.host.textContent).not.toContain("Target Sheet1!B2 · r7");

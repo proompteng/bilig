@@ -108,7 +108,7 @@ function summarizeHighlightedFormulaIssuesMarkdown(
     `Issues highlighted: ${String(report.issues.length)}`,
   ];
   if (report.issues.length === 0) {
-    lines.push("", "No formula issues were detected, so no preview bundle was staged.");
+    lines.push("", "Formula scan complete. Issue count: 0.");
     return lines.join("\n");
   }
   lines.push("", "### Highlighted Cells");
@@ -119,7 +119,7 @@ function summarizeHighlightedFormulaIssuesMarkdown(
   });
   lines.push(
     "",
-    "The staged preview bundle applies visible formatting to the listed cells so reviewers can inspect and apply the change authoritatively from the rail.",
+    "The workbook change set applies visible formatting to the listed cells. Review flows surface it in the workbook panel, and autonomous sessions apply it directly.",
   );
   return lines.join("\n");
 }
@@ -414,9 +414,9 @@ export function getFormulaWorkflowTemplateMetadata(
           stepId: "stage-formula-repairs",
           label: "Stage formula repairs",
           runningSummary:
-            "Staging semantic write previews for the formula repairs that passed the safety checks.",
+            "Preparing semantic write commands for the formula repairs that passed the safety checks.",
           pendingSummary:
-            "Waiting to stage semantic write previews for the formula repairs that passed the safety checks.",
+            "Waiting to prepare semantic write commands for the formula repairs that passed the safety checks.",
         },
         {
           stepId: "draft-repair-report",
@@ -527,7 +527,7 @@ export async function executeFormulaWorkflow(input: {
           label: "Stage issue highlights",
           summary:
             formulaIssues.summary.issueCount === 0
-              ? "No issue highlight commands were staged because no formula issues were found."
+              ? "Formula issue scan complete. Issue count: 0."
               : `Prepared ${String(formulaIssues.issues.length)} semantic formatting command${formulaIssues.issues.length === 1 ? "" : "s"} to highlight the detected formula issues.`,
         },
         {
@@ -598,8 +598,8 @@ export async function executeFormulaWorkflow(input: {
         label: "Stage formula repairs",
         summary:
           repairPlan.repaired.length === 0
-            ? "No formula repair preview was staged because every issue was ambiguous or unsafe to rewrite automatically."
-            : `Prepared ${String(repairPlan.repaired.length)} semantic write command${repairPlan.repaired.length === 1 ? "" : "s"} for the repair preview bundle.`,
+            ? "Formula repair analysis complete. Repair-ready issues: 0."
+            : `Prepared ${String(repairPlan.repaired.length)} semantic write command${repairPlan.repaired.length === 1 ? "" : "s"} for the repair workbook change set.`,
       },
       {
         stepId: "draft-repair-report",

@@ -5,6 +5,7 @@ import type {
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
 import type {
+  WorkbookAgentExecutionPolicy,
   WorkbookAgentSessionSnapshot,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
@@ -29,6 +30,7 @@ export interface WorkbookAgentSessionState {
   readonly userId: string;
   readonly storageActorUserId: string;
   scope: "private" | "shared";
+  executionPolicy: WorkbookAgentExecutionPolicy;
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
   optimisticUserEntryIdByTurn: Map<string, string>;
@@ -105,6 +107,22 @@ export function mergeTimelineEntries(
     merged[existingIndex] = entry;
   }
   return merged;
+}
+
+export function resolveDefaultExecutionPolicy(
+  scope: "private" | "shared",
+): WorkbookAgentExecutionPolicy {
+  return scope === "shared" ? "ownerReview" : "autoApplyAll";
+}
+
+export function normalizeExecutionPolicy(input: {
+  scope: "private" | "shared";
+  requestedPolicy?: WorkbookAgentExecutionPolicy | null;
+}): WorkbookAgentExecutionPolicy {
+  if (input.scope === "shared") {
+    return "ownerReview";
+  }
+  return input.requestedPolicy ?? resolveDefaultExecutionPolicy(input.scope);
 }
 
 export function toContextRef(
