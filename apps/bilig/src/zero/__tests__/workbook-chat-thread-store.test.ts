@@ -44,6 +44,7 @@ function createThreadState() {
     threadId: "thr-1",
     actorUserId: "alex@example.com",
     scope: "private" as const,
+    executionPolicy: "autoApplyAll" as const,
     context: {
       selection: {
         sheetName: "Sheet1",
@@ -164,10 +165,11 @@ describe("workbook-chat-thread-store", () => {
     const threadInsert = queryable.calls.find((call) =>
       call.text.includes("INSERT INTO workbook_chat_thread"),
     );
-    expect(threadInsert?.values?.[4]).toBe(JSON.stringify(createThreadState().context));
-    expect(threadInsert?.values?.[5]).toBe(3);
-    expect(threadInsert?.values?.[6]).toBe(true);
-    expect(threadInsert?.values?.[7]).toBe("Preview bundle staged");
+    expect(threadInsert?.values?.[4]).toBe(createThreadState().executionPolicy);
+    expect(threadInsert?.values?.[5]).toBe(JSON.stringify(createThreadState().context));
+    expect(threadInsert?.values?.[6]).toBe(3);
+    expect(threadInsert?.values?.[7]).toBe(true);
+    expect(threadInsert?.values?.[8]).toBe("Preview bundle staged");
     expect(
       queryable.calls.some((call) => call.text.includes("DELETE FROM workbook_chat_item")),
     ).toBe(true);
@@ -246,6 +248,7 @@ describe("workbook-chat-thread-store", () => {
                 threadId: state.threadId,
                 actorUserId: state.actorUserId,
                 scope: state.scope,
+                executionPolicy: state.executionPolicy,
                 contextJson: state.context,
                 updatedAtUnixMs: state.updatedAtUnixMs,
               } satisfies QueryResultRow,
@@ -324,6 +327,7 @@ describe("workbook-chat-thread-store", () => {
       threadId: "thr-shared",
       actorUserId: "alex@example.com",
       scope: "shared" as const,
+      executionPolicy: "ownerReview" as const,
     };
     const queryable = new FakeQueryable([
       (text, values) =>
@@ -334,6 +338,7 @@ describe("workbook-chat-thread-store", () => {
                 threadId: state.threadId,
                 actorUserId: state.actorUserId,
                 scope: state.scope,
+                executionPolicy: state.executionPolicy,
                 contextJson: state.context,
                 updatedAtUnixMs: state.updatedAtUnixMs,
               } satisfies QueryResultRow,
@@ -417,6 +422,7 @@ describe("workbook-chat-thread-store", () => {
                 threadId: state.threadId,
                 actorUserId: state.actorUserId,
                 scope: state.scope,
+                executionPolicy: state.executionPolicy,
                 contextJson: state.context,
                 updatedAtUnixMs: state.updatedAtUnixMs,
               } satisfies QueryResultRow,

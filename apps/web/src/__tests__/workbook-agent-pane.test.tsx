@@ -112,6 +112,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     documentId: "doc-1",
     threadId: "thr-1",
     scope: "private",
+    executionPolicy: "autoApplyAll",
     status: "idle",
     activeTurnId: null,
     lastError: null,
@@ -836,7 +837,9 @@ describe("workbook agent pane", () => {
     });
 
     const restoredInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe("Persisted draft");
+    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe(
+      "Persisted draft",
+    );
 
     await act(async () => {
       remountRoot.unmount();
@@ -1640,14 +1643,117 @@ describe("workbook agent pane", () => {
 
     await act(async () => {
       MockEventSource.latest?.emit({
-        type: "assistantDelta",
+        type: "entryTextDelta",
         itemId: "assistant-1",
+        turnId: "turn-1",
+        entryKind: "assistant",
         delta: "Updated Sheet1",
       });
     });
 
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
       "Updated Sheet1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders reasoning text immediately from streamed deltas without waiting for a snapshot refresh", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+          return new Response(
+            JSON.stringify(
+              createSnapshot({
+                status: "inProgress",
+                activeTurnId: "turn-1",
+                entries: [
+                  {
+                    id: "optimistic-user:turn-1",
+                    kind: "user",
+                    turnId: "turn-1",
+                    text: "Check version issues",
+                    phase: null,
+                    toolName: null,
+                    toolStatus: null,
+                    argumentsText: null,
+                    outputText: null,
+                    success: null,
+                    citations: [],
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
+      "Thought",
+    );
+
+    await act(async () => {
+      MockEventSource.latest?.emit({
+        type: "entryTextDelta",
+        itemId: "reasoning-1",
+        turnId: "turn-1",
+        entryKind: "reasoning",
+        delta: "Examining version issues",
+      });
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
+      "Thought",
+    );
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
+      "Examining version issues",
+    );
+
+    await act(async () => {
+      MockEventSource.latest?.emit({
+        type: "entryTextDelta",
+        itemId: "reasoning-1",
+        turnId: "turn-1",
+        entryKind: "reasoning",
+        delta: " before deciding whether staged changes must be cleared.",
+      });
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
+      "Examining version issues before deciding whether staged changes must be cleared.",
     );
 
     await act(async () => {

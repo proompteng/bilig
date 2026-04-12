@@ -5,6 +5,7 @@ import type {
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
 import type {
+  WorkbookAgentExecutionPolicy,
   WorkbookAgentSessionSnapshot,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
@@ -23,14 +24,13 @@ export type MutableWorkbookAgentSessionSnapshot = {
   workflowRuns: WorkbookAgentWorkflowRun[];
 };
 
-type WorkbookAgentExecutionPolicy = "autoApplySafe" | "autoApplyAll" | "ownerReview";
-
 export interface WorkbookAgentSessionState {
   readonly sessionId: string;
   readonly documentId: string;
   readonly userId: string;
   readonly storageActorUserId: string;
   scope: "private" | "shared";
+  executionPolicy: WorkbookAgentExecutionPolicy;
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
   optimisticUserEntryIdByTurn: Map<string, string>;

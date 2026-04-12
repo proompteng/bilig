@@ -1,6 +1,10 @@
 import type { CodexServerNotification } from "@bilig/agent-api";
-import type { WorkbookAgentStreamEvent, WorkbookAgentTimelineEntry } from "@bilig/contracts";
-import { createSystemEntry, mapThreadItemToEntry } from "./workbook-agent-session-model.js";
+import type { WorkbookAgentStreamEvent, WorkbookAgentTextEntryKind } from "@bilig/contracts";
+import {
+  createSystemEntry,
+  createTextTimelineEntry,
+  mapThreadItemToEntry,
+} from "./workbook-agent-session-model.js";
 import {
   type WorkbookAgentSessionState,
   normalizeCodexNotificationErrorMessage,
@@ -17,6 +21,38 @@ export async function routeWorkbookAgentCodexNotification(input: {
   emit: (threadId: string, event: WorkbookAgentStreamEvent) => void;
   now: () => number;
 }): Promise<void> {
+  function appendTextDelta(params: {
+    threadId: string;
+    turnId: string;
+    itemId: string;
+    delta: string;
+    entryKind: WorkbookAgentTextEntryKind;
+  }): void {
+    const sessionState = input.tryGetSessionByThreadId(params.threadId);
+    if (!sessionState) {
+      return;
+    }
+    const existing = sessionState.snapshot.entries.find((entry) => entry.id === params.itemId);
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createTextTimelineEntry({
+        id: params.itemId,
+        kind: params.entryKind,
+        turnId: params.turnId,
+        text: `${existing?.text ?? ""}${params.delta}`,
+        phase: existing?.phase ?? null,
+        citations: existing?.citations ?? [],
+      }),
+    );
+    input.emit(sessionState.threadId, {
+      type: "entryTextDelta",
+      entryKind: params.entryKind,
+      itemId: params.itemId,
+      turnId: params.turnId,
+      delta: params.delta,
+    });
+  }
+
   switch (input.notification.method) {
     case "thread/started":
       return;
@@ -72,66 +108,23 @@ export async function routeWorkbookAgentCodexNotification(input: {
       return;
     }
     case "item/agentMessage/delta": {
-      const params = input.notification.params;
-      const sessionState = input.tryGetSessionByThreadId(params.threadId);
-      if (!sessionState) {
-        return;
-      }
-      const existing =
-        sessionState.snapshot.entries.find((entry) => entry.id === params.itemId) ??
-        ({
-          id: params.itemId,
-          kind: "assistant",
-          turnId: params.turnId,
-          text: "",
-          phase: null,
-          toolName: null,
-          toolStatus: null,
-          argumentsText: null,
-          outputText: null,
-          success: null,
-          citations: [],
-        } satisfies WorkbookAgentTimelineEntry);
-      sessionState.snapshot.entries = upsertEntry(sessionState.snapshot.entries, {
-        ...existing,
-        text: `${existing.text ?? ""}${params.delta}`,
-      });
-      input.emit(sessionState.threadId, {
-        type: "assistantDelta",
-        itemId: params.itemId,
-        delta: params.delta,
+      appendTextDelta({
+        ...input.notification.params,
+        entryKind: "assistant",
       });
       return;
     }
     case "item/plan/delta": {
-      const params = input.notification.params;
-      const sessionState = input.tryGetSessionByThreadId(params.threadId);
-      if (!sessionState) {
-        return;
-      }
-      const existing =
-        sessionState.snapshot.entries.find((entry) => entry.id === params.itemId) ??
-        ({
-          id: params.itemId,
-          kind: "plan",
-          turnId: params.turnId,
-          text: "",
-          phase: null,
-          toolName: null,
-          toolStatus: null,
-          argumentsText: null,
-          outputText: null,
-          success: null,
-          citations: [],
-        } satisfies WorkbookAgentTimelineEntry);
-      sessionState.snapshot.entries = upsertEntry(sessionState.snapshot.entries, {
-        ...existing,
-        text: `${existing.text ?? ""}${params.delta}`,
+      appendTextDelta({
+        ...input.notification.params,
+        entryKind: "plan",
       });
-      input.emit(sessionState.threadId, {
-        type: "planDelta",
-        itemId: params.itemId,
-        delta: params.delta,
+      return;
+    }
+    case "item/reasoning/delta": {
+      appendTextDelta({
+        ...input.notification.params,
+        entryKind: "reasoning",
       });
       return;
     }

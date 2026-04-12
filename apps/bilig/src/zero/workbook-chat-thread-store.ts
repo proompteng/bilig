@@ -6,6 +6,7 @@ import {
   type WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
 import type {
+  WorkbookAgentExecutionPolicy,
   WorkbookAgentTimelineCitation,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
@@ -21,6 +22,7 @@ export interface WorkbookAgentThreadStateRecord {
   readonly threadId: string;
   readonly actorUserId: string;
   readonly scope: WorkbookChatThreadScope;
+  readonly executionPolicy: WorkbookAgentExecutionPolicy;
   readonly context: WorkbookAgentUiContext | null;
   readonly entries: readonly WorkbookAgentTimelineEntry[];
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
@@ -32,6 +34,7 @@ interface WorkbookChatThreadRow extends QueryResultRow {
   readonly threadId?: unknown;
   readonly actorUserId?: unknown;
   readonly scope?: unknown;
+  readonly executionPolicy?: unknown;
   readonly contextJson?: unknown;
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
@@ -185,6 +188,7 @@ function isTimelineKind(value: unknown): value is WorkbookAgentTimelineEntry["ki
     value === "user" ||
     value === "assistant" ||
     value === "plan" ||
+    value === "reasoning" ||
     value === "tool" ||
     value === "system"
   );
@@ -404,6 +408,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       thread_id TEXT NOT NULL,
       actor_user_id TEXT NOT NULL,
       scope TEXT NOT NULL DEFAULT 'private',
+      execution_policy TEXT NOT NULL DEFAULT 'autoApplyAll',
       context_json JSONB,
       entry_count BIGINT NOT NULL DEFAULT 0,
       has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE,
@@ -411,6 +416,19 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
     )
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS execution_policy TEXT;
+  `);
+  await db.query(`
+    UPDATE workbook_chat_thread
+    SET execution_policy = CASE WHEN scope = 'shared' THEN 'ownerReview' ELSE 'autoApplyAll' END
+    WHERE execution_policy IS NULL;
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ALTER COLUMN execution_policy SET DEFAULT 'autoApplyAll';
   `);
   await db.query(`
     ALTER TABLE workbook_chat_thread
@@ -529,6 +547,12 @@ function normalizeThreadSummary(
   };
 }
 
+function defaultExecutionPolicyForScope(
+  scope: WorkbookChatThreadScope,
+): WorkbookAgentExecutionPolicy {
+  return scope === "shared" ? "ownerReview" : "autoApplyAll";
+}
+
 export async function saveWorkbookAgentThreadState(
   db: Queryable,
   record: WorkbookAgentThreadStateRecord,
@@ -546,16 +570,18 @@ export async function saveWorkbookAgentThreadState(
         thread_id,
         actor_user_id,
         scope,
+        execution_policy,
         context_json,
         entry_count,
         has_pending_bundle,
         latest_entry_text,
         updated_at_unix_ms
       )
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
       ON CONFLICT (workbook_id, thread_id, actor_user_id)
       DO UPDATE SET
         scope = EXCLUDED.scope,
+        execution_policy = EXCLUDED.execution_policy,
         context_json = EXCLUDED.context_json,
         entry_count = EXCLUDED.entry_count,
         has_pending_bundle = EXCLUDED.has_pending_bundle,
@@ -567,6 +593,7 @@ export async function saveWorkbookAgentThreadState(
       record.threadId,
       record.actorUserId,
       record.scope,
+      record.executionPolicy,
       JSON.stringify(record.context),
       persistedEntries.length,
       record.pendingBundle !== null,
@@ -779,6 +806,7 @@ export async function loadWorkbookAgentThreadState(
         thread_id AS "threadId",
         actor_user_id AS "actorUserId",
         scope AS "scope",
+        execution_policy AS "executionPolicy",
         context_json AS "contextJson",
         updated_at_unix_ms AS "updatedAtUnixMs"
       FROM workbook_chat_thread
@@ -794,13 +822,22 @@ export async function loadWorkbookAgentThreadState(
   );
   const thread = threadResult.rows[0];
   const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs);
+  const executionPolicy =
+    thread?.executionPolicy === "autoApplySafe" ||
+    thread?.executionPolicy === "autoApplyAll" ||
+    thread?.executionPolicy === "ownerReview"
+      ? thread.executionPolicy
+      : thread?.scope === "private" || thread?.scope === "shared"
+        ? defaultExecutionPolicyForScope(thread.scope)
+        : null;
   if (
     !thread ||
     typeof thread.workbookId !== "string" ||
     typeof thread.threadId !== "string" ||
     typeof thread.actorUserId !== "string" ||
     (thread.scope !== "private" && thread.scope !== "shared") ||
-    updatedAtUnixMs === null
+    updatedAtUnixMs === null ||
+    executionPolicy === null
   ) {
     return null;
   }
@@ -889,6 +926,7 @@ export async function loadWorkbookAgentThreadState(
     threadId: thread.threadId,
     actorUserId: thread.actorUserId,
     scope: thread.scope,
+    executionPolicy,
     context: isWorkbookAgentUiContext(thread.contextJson) ? thread.contextJson : null,
     entries,
     pendingBundle,

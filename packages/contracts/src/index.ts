@@ -65,10 +65,25 @@ export const WorkbookAgentEntryKindSchema = Schema.Literal(
   "user",
   "assistant",
   "plan",
+  "reasoning",
   "tool",
   "system",
 );
 export type WorkbookAgentEntryKind = Schema.Schema.Type<typeof WorkbookAgentEntryKindSchema>;
+
+export const WorkbookAgentTextEntryKindSchema = Schema.Literal("assistant", "plan", "reasoning");
+export type WorkbookAgentTextEntryKind = Schema.Schema.Type<
+  typeof WorkbookAgentTextEntryKindSchema
+>;
+
+export const WorkbookAgentExecutionPolicySchema = Schema.Literal(
+  "autoApplySafe",
+  "autoApplyAll",
+  "ownerReview",
+);
+export type WorkbookAgentExecutionPolicy = Schema.Schema.Type<
+  typeof WorkbookAgentExecutionPolicySchema
+>;
 
 export const WorkbookAgentToolStatusSchema = Schema.Union(
   Schema.Literal("inProgress", "completed", "failed"),
@@ -236,6 +251,7 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   documentId: Schema.String,
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
+  executionPolicy: WorkbookAgentExecutionPolicySchema,
   status: WorkbookAgentSessionStatusSchema,
   activeTurnId: Schema.Union(Schema.String, Schema.Null),
   lastError: Schema.Union(Schema.String, Schema.Null),
@@ -255,13 +271,10 @@ export const WorkbookAgentStreamEventSchema = Schema.Union(
     snapshot: WorkbookAgentSessionSnapshotSchema,
   }),
   Schema.Struct({
-    type: Schema.Literal("assistantDelta"),
+    type: Schema.Literal("entryTextDelta"),
+    entryKind: WorkbookAgentTextEntryKindSchema,
     itemId: Schema.String,
-    delta: Schema.String,
-  }),
-  Schema.Struct({
-    type: Schema.Literal("planDelta"),
-    itemId: Schema.String,
+    turnId: Schema.String,
     delta: Schema.String,
   }),
 );

@@ -256,6 +256,7 @@ describe("workbook agent service", () => {
     const service = createWorkbookAgentService(createZeroSyncStub(), {
       codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
         fakeCodex,
+      maxCodexClients: 1,
     });
 
     try {
@@ -350,9 +351,143 @@ describe("workbook agent service", () => {
         ]),
       );
       expect(events).toContainEqual({
-        type: "assistantDelta",
+        type: "entryTextDelta",
+        turnId: "turn-1",
+        entryKind: "assistant",
         itemId: "msg-1",
         delta: "Checking Sheet1",
+      });
+
+      unsubscribe();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("streams reasoning updates into first-class reasoning timeline entries", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+      maxCodexClients: 1,
+    });
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const events: unknown[] = [];
+      const unsubscribe = service.subscribe(snapshot.threadId, (event) => {
+        events.push(event);
+      });
+
+      await service.startTurn({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          prompt: "Check the version issues",
+        },
+      });
+
+      fakeCodex.emit({
+        method: "item/reasoning/delta",
+        params: {
+          threadId: "thr-test",
+          turnId: "turn-1",
+          itemId: "reasoning-1",
+          delta: "Examining version issues",
+        },
+      });
+
+      const streamingSnapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(streamingSnapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "reasoning-1",
+            kind: "reasoning",
+            text: "Examining version issues",
+          }),
+        ]),
+      );
+
+      fakeCodex.emit({
+        method: "item/completed",
+        params: {
+          threadId: "thr-test",
+          turnId: "turn-1",
+          item: {
+            type: "reasoning",
+            id: "reasoning-1",
+            summary: [
+              {
+                type: "summary_text",
+                text: "Examining version issues",
+              },
+              {
+                type: "summary_text",
+                text: "Confirming whether staged changes must be cleared first.",
+              },
+            ],
+          },
+        },
+      });
+      fakeCodex.emit({
+        method: "turn/completed",
+        params: {
+          threadId: "thr-test",
+          turn: {
+            id: "turn-1",
+            status: "completed",
+            items: [],
+            error: null,
+          },
+        },
+      });
+
+      const finalSnapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(finalSnapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "reasoning-1",
+            kind: "reasoning",
+            text: "Examining version issues\nConfirming whether staged changes must be cleared first.",
+          }),
+        ]),
+      );
+      expect(events).toContainEqual({
+        type: "entryTextDelta",
+        turnId: "turn-1",
+        entryKind: "reasoning",
+        itemId: "reasoning-1",
+        delta: "Examining version issues",
       });
 
       unsubscribe();

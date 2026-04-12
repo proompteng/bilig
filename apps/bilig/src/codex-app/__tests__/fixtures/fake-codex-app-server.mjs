@@ -97,6 +97,31 @@ reader.on("line", (line) => {
     });
     return;
   }
+  if (message.method === "turn/start") {
+    if (process.env.BILIG_TEST_EMIT_REASONING_DELTA === "1") {
+      write({
+        method: "item/reasoning/delta",
+        params: {
+          threadId: message.params?.threadId ?? "thr-fixture",
+          turnId: "turn-fixture",
+          itemId: "reasoning-fixture",
+          delta: "Examining staged changes",
+        },
+      });
+    }
+    write({
+      id: message.id,
+      result: {
+        turn: {
+          id: "turn-fixture",
+          status: "inProgress",
+          items: [],
+          error: null,
+        },
+      },
+    });
+    return;
+  }
   if (typeof message.id === "number") {
     write({
       id: message.id,

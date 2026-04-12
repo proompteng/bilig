@@ -255,10 +255,6 @@ function renderPreviewChangeKind(kind: WorkbookAgentPreviewChangeKind): string {
   }
 }
 
-function isReasoningPlaceholderEntry(entry: WorkbookAgentTimelineEntry): boolean {
-  return entry.kind === "system" && entry.text?.trim() === "Codex emitted reasoning.";
-}
-
 function renderMarkdownPlainText(markdown: string): string {
   return markdown
     .replaceAll(/```[\s\S]*?```/g, " ")
@@ -271,7 +267,7 @@ function renderMarkdownPlainText(markdown: string): string {
     .replaceAll(/\s+/g, " ");
 }
 
-function summarizeReasoningText(text: string | null): string | null {
+function summarizeDisclosureText(text: string | null): string | null {
   if (!text) {
     return null;
   }
@@ -355,25 +351,30 @@ function isAppliedPreviewSystemEntry(entry: WorkbookAgentTimelineEntry): boolean
   );
 }
 
-function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
-  const bodyText = props.entry.kind === "plan" ? props.entry.text : null;
+function TextDisclosureEntryRow(props: {
+  readonly entry: WorkbookAgentTimelineEntry;
+  readonly label: "Thought" | "Plan";
+}) {
+  const bodyText =
+    props.entry.kind === "reasoning" || props.entry.kind === "plan" ? props.entry.text : null;
   if (!bodyText?.trim().length) {
     return null;
   }
-  const summary = summarizeReasoningText(bodyText);
+  const summary = summarizeDisclosureText(bodyText);
+  const disclosureKey = props.entry.kind;
 
   return (
     <WorkbookAgentDisclosureRow
       id={props.entry.id}
-      label="Thought"
+      label={props.label}
       labelClassName="font-semibold"
-      panelTestId={`workbook-agent-reasoning-panel-${props.entry.id}`}
-      summary={summary ?? "No reasoning details available."}
+      panelTestId={`workbook-agent-${disclosureKey}-panel-${props.entry.id}`}
+      summary={summary ?? `No ${props.label.toLowerCase()} details available.`}
       triggerLabel={{
-        expanded: "Collapse reasoning",
-        collapsed: "Expand reasoning",
+        expanded: `Collapse ${props.label.toLowerCase()}`,
+        collapsed: `Expand ${props.label.toLowerCase()}`,
       }}
-      triggerTestId={`workbook-agent-reasoning-toggle-${props.entry.id}`}
+      triggerTestId={`workbook-agent-${disclosureKey}-toggle-${props.entry.id}`}
     >
       <div className={agentPanelBodyMutedTextClass()}>
         <WorkbookAgentMarkdown markdown={bodyText} />
@@ -618,8 +619,12 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     );
   }
 
-  if (entry.kind === "plan" || isReasoningPlaceholderEntry(entry)) {
-    return <ReasoningEntryRow entry={entry} />;
+  if (entry.kind === "reasoning") {
+    return <TextDisclosureEntryRow entry={entry} label="Thought" />;
+  }
+
+  if (entry.kind === "plan") {
+    return <TextDisclosureEntryRow entry={entry} label="Plan" />;
   }
 
   if (entry.kind === "tool") {
@@ -701,10 +706,6 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   if (isAppliedPreviewSystemEntry(entry)) {
-    return null;
-  }
-
-  if (isReasoningPlaceholderEntry(entry)) {
     return null;
   }
 
@@ -1079,9 +1080,7 @@ export function WorkbookAgentPanel(props: {
     props.showAssistantProgress && props.activeResponseTurnId
       ? visibleEntries.findLastIndex(
           (entry) =>
-            entry.turnId === props.activeResponseTurnId &&
-            !isAppliedPreviewSystemEntry(entry) &&
-            !isReasoningPlaceholderEntry(entry),
+            entry.turnId === props.activeResponseTurnId && !isAppliedPreviewSystemEntry(entry),
         )
       : -1;
 

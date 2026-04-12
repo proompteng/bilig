@@ -520,12 +520,15 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
           </Toolbar.Button>
         </Toolbar.Group>
         {trailingContent ? (
-          <div
-            className="ml-auto flex flex-none items-center gap-1.5 pl-2"
-            data-testid="toolbar-trailing-content"
-          >
-            {trailingContent}
-          </div>
+          <>
+            <Toolbar.Separator className={toolbarSeparatorClass()} />
+            <div
+              className="ml-auto flex flex-none items-center gap-1.5 pl-2"
+              data-testid="toolbar-trailing-content"
+            >
+              {trailingContent}
+            </div>
+          </>
         ) : null}
       </Toolbar.Root>
     </div>

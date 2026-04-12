@@ -177,6 +177,15 @@ export type CodexServerNotification =
       };
     }
   | {
+      method: "item/reasoning/delta";
+      params: {
+        threadId: string;
+        turnId: string;
+        itemId: string;
+        delta: string;
+      };
+    }
+  | {
       method: "error";
       params: {
         message?: string;

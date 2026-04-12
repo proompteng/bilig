@@ -16,7 +16,7 @@ afterEach(() => {
 
 function renderPanel(entry: {
   id: string;
-  kind: "plan" | "system";
+  kind: "reasoning" | "plan" | "system";
   text: string | null;
   citations?: Array<
     | { kind: "revision"; revision: number }
@@ -89,7 +89,7 @@ function renderPanel(entry: {
                   kind: entry.kind,
                   turnId: "turn-1",
                   text: entry.text,
-                  phase: entry.kind === "plan" ? "reasoning" : null,
+                  phase: null,
                   toolName: null,
                   toolStatus: null,
                   argumentsText: null,
@@ -112,10 +112,10 @@ function renderPanel(entry: {
 }
 
 describe("WorkbookAgentPanel reasoning", () => {
-  it("renders plan entries as collapsible thought rows", async () => {
+  it("renders reasoning entries as collapsible thought rows", async () => {
     const panel = renderPanel({
-      id: "plan-1",
-      kind: "plan",
+      id: "reasoning-1",
+      kind: "reasoning",
       text: "**Check** the visible formulas before applying edits.",
     });
 
@@ -126,7 +126,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     expect(panel.host.textContent).not.toContain("**Check**");
 
     const toggle = panel.host.querySelector(
-      "[data-testid='workbook-agent-reasoning-toggle-plan-1']",
+      "[data-testid='workbook-agent-reasoning-toggle-reasoning-1']",
     );
     expect(toggle instanceof HTMLButtonElement).toBe(true);
 
@@ -138,7 +138,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     });
 
     expect(
-      panel.host.querySelector("[data-testid='workbook-agent-reasoning-panel-plan-1']"),
+      panel.host.querySelector("[data-testid='workbook-agent-reasoning-panel-reasoning-1']"),
     ).not.toBeNull();
     expect(panel.host.textContent).not.toContain("**Check**");
 
@@ -147,17 +147,19 @@ describe("WorkbookAgentPanel reasoning", () => {
     });
   });
 
-  it("hides legacy reasoning placeholders with no details", async () => {
+  it("renders plan entries as plan rows instead of overloading them as reasoning", async () => {
     const panel = renderPanel({
-      id: "system-1",
-      kind: "system",
-      text: "Codex emitted reasoning.",
+      id: "plan-1",
+      kind: "plan",
+      text: "Inspect the named ranges and verify the import columns.",
     });
 
     await panel.render();
 
-    expect(panel.host.textContent).not.toContain("Thought");
-    expect(panel.host.textContent).not.toContain("Codex emitted reasoning.");
+    expect(panel.host.textContent).toContain("Plan");
+    expect(panel.host.textContent).toContain(
+      "Inspect the named ranges and verify the import columns.",
+    );
 
     await act(async () => {
       panel.root.unmount();

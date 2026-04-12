@@ -243,6 +243,7 @@ function createAgentSessionSnapshot(
     documentId: "doc-1",
     threadId: "thr-1",
     scope: "private",
+    executionPolicy: "autoApplyAll",
     status: "idle",
     activeTurnId: null,
     lastError: null,

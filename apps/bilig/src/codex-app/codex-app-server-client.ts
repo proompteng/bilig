@@ -543,6 +543,7 @@ function parseServerNotification(value: unknown): CodexServerNotification | null
     }
     case "item/agentMessage/delta":
     case "item/plan/delta":
+    case "item/reasoning/delta":
       return isString(params["threadId"]) &&
         isString(params["turnId"]) &&
         isString(params["itemId"]) &&

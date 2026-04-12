@@ -84,4 +84,48 @@ describe("Codex app-server client", () => {
 
     expect(thread.id).toBe("thr-fixture");
   });
+
+  it("parses reasoning delta notifications from the app-server stream", async () => {
+    const notifications: unknown[] = [];
+    client = new CodexAppServerClient({
+      command: process.execPath,
+      args: [fixturePath],
+      env: {
+        BILIG_TEST_EMIT_REASONING_DELTA: "1",
+      },
+      handleDynamicToolCall: async () => ({
+        success: true,
+        contentItems: [],
+      }),
+    });
+
+    client.subscribe((notification) => {
+      notifications.push(notification);
+    });
+
+    await client.ensureReady();
+    await client.threadStart({
+      model: "gpt-5.4",
+      approvalPolicy: "never",
+      sandbox: "read-only",
+      baseInstructions: "base",
+      developerInstructions: "developer",
+      dynamicTools: [],
+    });
+    const turn = await client.turnStart({
+      threadId: "thr-fixture",
+      prompt: "Check staged changes",
+    });
+
+    expect(turn.id).toBe("turn-fixture");
+    expect(notifications).toContainEqual({
+      method: "item/reasoning/delta",
+      params: {
+        threadId: "thr-fixture",
+        turnId: "turn-fixture",
+        itemId: "reasoning-fixture",
+        delta: "Examining staged changes",
+      },
+    });
+  });
 });

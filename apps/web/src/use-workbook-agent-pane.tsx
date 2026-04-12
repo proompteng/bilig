@@ -15,9 +15,9 @@ import {
   decodeUnknownSync,
   type WorkbookAgentSessionSnapshot,
   type WorkbookAgentStreamEvent,
+  type WorkbookAgentTimelineEntry,
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
-  type WorkbookAgentTimelineEntry,
   type WorkbookAgentUiContext,
   type WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
@@ -92,24 +92,49 @@ function threadSnapshotUrl(documentId: string, threadId: string): string {
   return `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(threadId)}`;
 }
 
+function createTextEntryFromDelta(
+  event: Extract<WorkbookAgentStreamEvent, { type: "entryTextDelta" }>,
+) {
+  return {
+    id: event.itemId,
+    kind: event.entryKind,
+    turnId: event.turnId,
+    text: event.delta,
+    phase: null,
+    toolName: null,
+    toolStatus: null,
+    argumentsText: null,
+    outputText: null,
+    success: null,
+    citations: [],
+  } satisfies WorkbookAgentTimelineEntry;
+}
+
 function updateSnapshotFromDelta(
   snapshot: WorkbookAgentSessionSnapshot | null,
-  event: Extract<WorkbookAgentStreamEvent, { type: "assistantDelta" | "planDelta" }>,
+  event: Extract<WorkbookAgentStreamEvent, { type: "entryTextDelta" }>,
 ): WorkbookAgentSessionSnapshot | null {
   if (!snapshot) {
     return snapshot;
   }
+  let matched = false;
   return {
     ...snapshot,
-    entries: snapshot.entries.map((entry) => {
-      if (entry.id !== event.itemId) {
-        return entry;
-      }
-      return {
-        ...entry,
-        text: `${entry.text ?? ""}${event.delta}`,
-      };
-    }),
+    entries: (() => {
+      const nextEntries = snapshot.entries.map((entry) => {
+        if (entry.id !== event.itemId) {
+          return entry;
+        }
+        matched = true;
+        return {
+          ...entry,
+          kind: event.entryKind,
+          turnId: event.turnId,
+          text: `${entry.text ?? ""}${event.delta}`,
+        };
+      });
+      return matched ? nextEntries : [...nextEntries, createTextEntryFromDelta(event)];
+    })(),
   };
 }
 
@@ -417,7 +442,7 @@ export function useWorkbookAgentPane(input: {
           setSnapshot((current: WorkbookAgentSessionSnapshot | null) =>
             updateSnapshotFromDelta(current, event),
           );
-          if (event.type === "assistantDelta") {
+          if (event.type === "entryTextDelta" && event.entryKind === "assistant") {
             perfSession.markFirstAssistantDeltaVisible?.();
           }
         } catch (nextError) {
@@ -643,7 +668,7 @@ export function useWorkbookAgentPane(input: {
     (commandIndex: number) => {
       setSelectedCommandIndexes((current) => {
         if (!pendingBundle || commandIndex < 0 || commandIndex >= pendingBundle.commands.length) {
-        return current;
+          return current;
         }
         const selected = new Set(normalizeWorkbookAgentCommandIndexes(pendingBundle, current));
         if (selected.has(commandIndex)) {

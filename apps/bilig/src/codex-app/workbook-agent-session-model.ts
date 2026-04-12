@@ -5,6 +5,7 @@ import {
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
+  WorkbookAgentTextEntryKind,
   WorkbookAgentTimelineCitation,
   WorkbookAgentTimelineEntry,
 } from "@bilig/contracts";
@@ -251,12 +252,12 @@ function extractReasoningFragments(value: unknown): string[] {
   ];
 }
 
-function extractReasoningText(item: CodexThreadItem): string | null {
-  if (!isRecord(item) || item.type !== "reasoning") {
-    return null;
+function extractReasoningText(item: CodexThreadItem): string {
+  if (!isRecord(item) || item["type"] !== "reasoning") {
+    return "";
   }
   const text = extractReasoningFragments(item).join("\n").trim();
-  return text.length > 0 ? text : null;
+  return text;
 }
 
 function isToolContentItem(item: unknown): item is
@@ -317,6 +318,29 @@ export function createSystemEntry(
   };
 }
 
+export function createTextTimelineEntry(input: {
+  id: string;
+  kind: WorkbookAgentTextEntryKind;
+  turnId: string | null;
+  text: string;
+  phase?: string | null;
+  citations?: readonly WorkbookAgentTimelineCitation[];
+}): WorkbookAgentTimelineEntry {
+  return {
+    id: input.id,
+    kind: input.kind,
+    turnId: input.turnId,
+    text: input.text,
+    phase: input.phase ?? null,
+    toolName: null,
+    toolStatus: null,
+    argumentsText: null,
+    outputText: null,
+    success: null,
+    citations: [...(input.citations ?? [])],
+  };
+}
+
 export function mapThreadItemToEntry(
   item: CodexThreadItem,
   turnId: string | null,
@@ -338,52 +362,31 @@ export function mapThreadItemToEntry(
   }
 
   if (isAgentMessageItem(item)) {
-    return {
+    return createTextTimelineEntry({
       id: item.id,
       kind: "assistant",
       turnId,
       text: item.text,
       phase: item.phase,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-      citations: [],
-    };
+    });
   }
 
   if (isPlanItem(item)) {
-    return {
+    return createTextTimelineEntry({
       id: item.id,
       kind: "plan",
       turnId,
       text: item.text,
-      phase: null,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-      citations: [],
-    };
+    });
   }
 
-  const reasoningText = extractReasoningText(item);
-  if (reasoningText !== null) {
-    return {
+  if (item.type === "reasoning") {
+    return createTextTimelineEntry({
       id: item.id,
-      kind: "plan",
+      kind: "reasoning",
       turnId,
-      text: reasoningText,
-      phase: "reasoning",
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-      citations: [],
-    };
+      text: extractReasoningText(item),
+    });
   }
 
   if (isDynamicToolCallItem(item)) {
