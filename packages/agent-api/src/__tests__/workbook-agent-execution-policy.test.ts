@@ -56,6 +56,40 @@ describe("workbook agent execution policy", () => {
     ).toBe(false);
   });
 
+  it("allows shared low-risk work to execute directly when session policy allows it", () => {
+    expect(
+      resolveWorkbookAgentReviewDisposition({
+        scope: "shared",
+        executionPolicy: "autoApplyAll",
+        riskClass: "low",
+      }),
+    ).toBe("applyAutomatically");
+    expect(
+      resolveWorkbookAgentReviewDisposition({
+        scope: "shared",
+        executionPolicy: "autoApplySafe",
+        riskClass: "low",
+      }),
+    ).toBe("applyAutomatically");
+  });
+
+  it("keeps shared medium and high risk work behind review even under auto-apply policies", () => {
+    expect(
+      resolveWorkbookAgentReviewDisposition({
+        scope: "shared",
+        executionPolicy: "autoApplyAll",
+        riskClass: "medium",
+      }),
+    ).toBe("reviewQueue");
+    expect(
+      resolveWorkbookAgentReviewDisposition({
+        scope: "shared",
+        executionPolicy: "autoApplySafe",
+        riskClass: "high",
+      }),
+    ).toBe("reviewQueue");
+  });
+
   it("describes execution policies for user-facing summaries", () => {
     expect(describeWorkbookAgentExecutionPolicy("autoApplySafe")).toBe("auto-apply safe changes");
     expect(describeWorkbookAgentExecutionPolicy("autoApplyAll")).toBe("auto-apply all changes");

@@ -135,10 +135,10 @@ export function normalizeExecutionPolicy(input: {
   scope: "private" | "shared";
   requestedPolicy?: WorkbookAgentExecutionPolicy | null;
 }): WorkbookAgentExecutionPolicy {
-  if (input.scope === "shared") {
-    return "ownerReview";
+  if (input.requestedPolicy) {
+    return input.requestedPolicy;
   }
-  return input.requestedPolicy ?? "autoApplyAll";
+  return input.scope === "shared" ? "ownerReview" : "autoApplyAll";
 }
 
 export function toContextRef(

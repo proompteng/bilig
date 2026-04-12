@@ -16,7 +16,13 @@ export type WorkbookAgentReviewDisposition = "applyAutomatically" | "reviewQueue
 export function resolveWorkbookAgentReviewDisposition(
   input: WorkbookAgentExecutionPolicyInput,
 ): WorkbookAgentReviewDisposition {
-  if (input.scope === "shared" || input.executionPolicy === "ownerReview") {
+  if (
+    requiresWorkbookAgentOwnerReview({
+      scope: input.scope,
+      riskClass: input.riskClass,
+    }) ||
+    input.executionPolicy === "ownerReview"
+  ) {
     return "reviewQueue";
   }
   if (input.executionPolicy === "autoApplyAll") {

@@ -765,6 +765,120 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("preserves shared auto-apply-safe policy and auto-applies low-risk work", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 7,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: "Sheet1",
+            address: "B2",
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: null,
+            afterFormula: null,
+            changeKinds: ["style"],
+          },
+        ],
+        effectSummary: {
+          displayedCellDiffCount: 1,
+          truncatedCellDiffs: false,
+          inputChangeCount: 0,
+          formulaChangeCount: 0,
+          styleChangeCount: 1,
+          numberFormatChangeCount: 0,
+          structuralChangeCount: 0,
+        },
+      }),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          threadId: "thr-shared",
+          scope: "shared",
+          executionPolicy: "autoApplySafe",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      expect(snapshot.scope).toBe("shared");
+      expect(snapshot.executionPolicy).toBe("autoApplySafe");
+
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-shared",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: "bilig_format_range",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B2",
+          },
+          patch: {
+            font: {
+              bold: true,
+            },
+          },
+        },
+      });
+
+      const after = service.getSnapshot({
+        documentId: "doc-1",
+        threadId: "thr-shared",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(after.reviewQueueItems).toEqual([]);
+      expect(after.executionRecords).toEqual([
+        expect.objectContaining({
+          appliedBy: "auto",
+          summary: "Format Sheet1!B2",
+          appliedRevision: 7,
+        }),
+      ]);
+      expect(applyAgentCommandBundle).toHaveBeenCalledTimes(1);
+      expect(appendWorkbookAgentRun).toHaveBeenCalledTimes(1);
+    } finally {
+      await service.close();
+    }
+  });
+
   it("disables workflow families behind feature flags", async () => {
     const fakeCodex = new FakeCodexTransport();
     const service = createWorkbookAgentService(createZeroSyncStub(), {
