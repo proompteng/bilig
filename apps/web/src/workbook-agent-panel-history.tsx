@@ -34,8 +34,8 @@ export function AssistantProgressRow() {
           <span
             key={`${character}-${String(index)}`}
             aria-hidden="true"
-            className="inline-block animate-pulse"
-            style={{ animationDelay: `${index * 90}ms` }}
+            className="inline-block animate-[pulse_800ms_ease-in-out_infinite]"
+            style={{ animationDelay: `${index * 55}ms` }}
           >
             {character}
           </span>
