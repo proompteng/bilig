@@ -158,6 +158,8 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Prefer semantic selectors such as named ranges, tables, and table columns over hard-coded coordinates when the workbook exposes them.",
     "Use workbook or range reads for workbook-wide structure or unseen regions instead of guessing.",
     "Use list_tables and list_named_ranges when the workbook likely has meaningful named structures and the user refers to them conceptually.",
+    "Use list_sheets, get_sheet_view, get_used_range, and get_current_region when the request is really about sheet layout or navigation state rather than raw cell contents.",
+    "Use list_pivots when workbook summaries or edits might depend on pivot outputs.",
     "Range and cell reads expose formatting metadata, including fill/background, font, alignment, borders, and number format when present.",
     "Use the workflow tool only for built-in multi-step or durable tasks.",
     "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
