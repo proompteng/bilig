@@ -79,7 +79,7 @@ export const agentPanelDisclosureFrameClass = cva("overflow-hidden transition-co
 });
 
 export const agentPanelDisclosureTriggerClass = cva(
-  "flex min-h-10 w-full items-start gap-2 px-3 py-2 text-left outline-none transition-colors hover:bg-[var(--wb-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-inset",
+  "flex min-h-10 w-full items-start gap-2 px-2 py-0 text-left outline-none transition-colors hover:bg-[var(--wb-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-inset",
 );
 
 export const agentPanelDisclosureChevronClass = cva(
@@ -115,4 +115,4 @@ export const agentPanelDisclosurePanelClass = cva("overflow-hidden");
 
 export const agentPanelDisclosureViewportClass = cva("h-44 w-full");
 
-export const agentPanelDisclosureBodyClass = cva("min-w-0 px-3 py-3");
+export const agentPanelDisclosureBodyClass = cva("min-w-0 px-2 py-0");
