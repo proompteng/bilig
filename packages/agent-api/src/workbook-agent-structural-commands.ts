@@ -24,6 +24,10 @@ export type WorkbookAgentStructuralCommand = Exclude<
   | Extract<WorkbookAgentCommand, { kind: "deletePivotTable" }>
   | Extract<WorkbookAgentCommand, { kind: "setDataValidation" }>
   | Extract<WorkbookAgentCommand, { kind: "clearDataValidation" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertCommentThread" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteCommentThread" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertNote" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteNote" }>
 >;
 
 const HIGH_RISK_STRUCTURAL_COMMAND_KINDS = new Set<WorkbookAgentStructuralCommand["kind"]>([

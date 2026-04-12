@@ -4,12 +4,24 @@ import type {
   CellNumberFormatInput,
   CellRangeRef,
   CellStylePatch,
+  WorkbookCommentThreadSnapshot,
   LiteralInput,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookTableSnapshot,
 } from "@bilig/protocol";
+import {
+  applyWorkbookAgentAnnotationCommand,
+  deriveWorkbookAgentAnnotationCommandPreviewRanges,
+  describeWorkbookAgentAnnotationCommand,
+  estimateWorkbookAgentAnnotationCommandAffectedCells,
+  isHighRiskWorkbookAgentAnnotationCommand,
+  isWorkbookAgentAnnotationCommand,
+  isWorkbookAgentAnnotationCommandValue,
+  isWorkbookScopeAnnotationCommand,
+} from "./workbook-agent-annotation-commands.js";
 import {
   applyWorkbookAgentObjectCommand,
   deriveWorkbookAgentObjectCommandPreviewRanges,
@@ -204,6 +216,24 @@ export type WorkbookAgentCommand =
   | {
       kind: "clearDataValidation";
       range: CellRangeRef;
+    }
+  | {
+      kind: "upsertCommentThread";
+      thread: WorkbookCommentThreadSnapshot;
+    }
+  | {
+      kind: "deleteCommentThread";
+      sheetName: string;
+      address: string;
+    }
+  | {
+      kind: "upsertNote";
+      note: WorkbookNoteSnapshot;
+    }
+  | {
+      kind: "deleteNote";
+      sheetName: string;
+      address: string;
     }
   | {
       kind: "updateRowMetadata";
@@ -635,6 +665,9 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
   if (isWorkbookAgentValidationCommand(command)) {
     return describeWorkbookAgentValidationCommand(command);
   }
+  if (isWorkbookAgentAnnotationCommand(command)) {
+    return describeWorkbookAgentAnnotationCommand(command);
+  }
   switch (command.kind) {
     case "writeRange": {
       const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
@@ -723,7 +756,9 @@ function deriveWorkbookAgentRiskClass(
           isHighRiskWorkbookAgentStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) &&
-          isHighRiskWorkbookAgentValidationCommand(command)),
+          isHighRiskWorkbookAgentValidationCommand(command)) ||
+        (isWorkbookAgentAnnotationCommand(command) &&
+          isHighRiskWorkbookAgentAnnotationCommand(command)),
     )
   ) {
     return "high";
@@ -747,7 +782,8 @@ function deriveWorkbookAgentBundleScope(
       (command) =>
         (isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)) ||
-        (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)),
+        (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)) ||
+        (isWorkbookAgentAnnotationCommand(command) && isWorkbookScopeAnnotationCommand(command)),
     )
   ) {
     return "workbook";
@@ -1021,6 +1057,9 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   if (isWorkbookAgentValidationCommandValue(value)) {
     return true;
   }
+  if (isWorkbookAgentAnnotationCommandValue(value)) {
+    return true;
+  }
   switch (value["kind"]) {
     case "writeRange":
     case "setRangeFormulas":
@@ -1181,6 +1220,9 @@ export function estimateWorkbookAgentCommandAffectedCells(
   if (isWorkbookAgentValidationCommand(command)) {
     return estimateWorkbookAgentValidationCommandAffectedCells(command);
   }
+  if (isWorkbookAgentAnnotationCommand(command)) {
+    return estimateWorkbookAgentAnnotationCommandAffectedCells(command);
+  }
   switch (command.kind) {
     case "writeRange":
       return command.values.reduce((sum, row) => sum + row.length, 0);
@@ -1211,6 +1253,9 @@ export function deriveWorkbookAgentCommandPreviewRanges(
   }
   if (isWorkbookAgentValidationCommand(command)) {
     return deriveWorkbookAgentValidationCommandPreviewRanges(command);
+  }
+  if (isWorkbookAgentAnnotationCommand(command)) {
+    return deriveWorkbookAgentAnnotationCommandPreviewRanges(command);
   }
   switch (command.kind) {
     case "writeRange":
@@ -1269,6 +1314,10 @@ export function applyWorkbookAgentCommand(
   }
   if (isWorkbookAgentValidationCommand(command)) {
     applyWorkbookAgentValidationCommand(engine, command);
+    return;
+  }
+  if (isWorkbookAgentAnnotationCommand(command)) {
+    applyWorkbookAgentAnnotationCommand(engine, command);
     return;
   }
   switch (command.kind) {

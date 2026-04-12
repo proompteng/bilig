@@ -293,6 +293,28 @@ export function createEngineStructureService(args: {
       }
       args.state.workbook.setDataValidation(nextValidation);
     });
+    args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
+      const nextAddress = rewriteAddressForStructuralTransform(thread.address, transform);
+      args.state.workbook.deleteCommentThread(sheetName, thread.address);
+      if (!nextAddress) {
+        return;
+      }
+      args.state.workbook.setCommentThread({
+        ...thread,
+        address: nextAddress,
+      });
+    });
+    args.state.workbook.listNotes(sheetName).forEach((note) => {
+      const nextAddress = rewriteAddressForStructuralTransform(note.address, transform);
+      args.state.workbook.deleteNote(sheetName, note.address);
+      if (!nextAddress) {
+        return;
+      }
+      args.state.workbook.setNote({
+        ...note,
+        address: nextAddress,
+      });
+    });
     const rewrittenStyleRanges: SheetStyleRangeSnapshot[] = [];
     const rewrittenFormatRanges: SheetFormatRangeSnapshot[] = [];
     args.state.workbook.listStyleRanges(sheetName).forEach((record) => {

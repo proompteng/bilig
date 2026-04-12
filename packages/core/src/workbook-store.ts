@@ -10,8 +10,10 @@ import {
   type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
+  type WorkbookCommentThreadSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
+  type WorkbookNoteSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
@@ -28,6 +30,7 @@ import {
   type WorkbookAxisEntryRecord,
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
+  type WorkbookCommentThreadRecord,
   type WorkbookDataValidationRecord,
   type WorkbookCellNumberFormatRecord,
   type WorkbookCellStyleRecord,
@@ -44,6 +47,7 @@ import {
   type WorkbookStyleRangeRecord,
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
+  type WorkbookNoteRecord,
 } from "./workbook-metadata-types.js";
 import {
   getAxisMetadataRecord,
@@ -85,6 +89,7 @@ export type {
   WorkbookAxisEntryRecord,
   WorkbookAxisMetadataRecord,
   WorkbookCalculationSettingsRecord,
+  WorkbookCommentThreadRecord,
   WorkbookDataValidationRecord,
   WorkbookCellNumberFormatRecord,
   WorkbookCellStyleRecord,
@@ -101,6 +106,7 @@ export type {
   WorkbookStyleRangeRecord,
   WorkbookTableRecord,
   WorkbookVolatileContextRecord,
+  WorkbookNoteRecord,
 } from "./workbook-metadata-types.js";
 
 export interface SheetRecord {
@@ -744,6 +750,38 @@ export class WorkbookStore {
 
   listDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listDataValidations(sheetName));
+  }
+
+  setCommentThread(record: WorkbookCommentThreadSnapshot): WorkbookCommentThreadRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setCommentThread(record));
+  }
+
+  getCommentThread(sheetName: string, address: string): WorkbookCommentThreadRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getCommentThread(sheetName, address));
+  }
+
+  deleteCommentThread(sheetName: string, address: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteCommentThread(sheetName, address));
+  }
+
+  listCommentThreads(sheetName: string): WorkbookCommentThreadRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listCommentThreads(sheetName));
+  }
+
+  setNote(record: WorkbookNoteSnapshot): WorkbookNoteRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setNote(record));
+  }
+
+  getNote(sheetName: string, address: string): WorkbookNoteRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getNote(sheetName, address));
+  }
+
+  deleteNote(sheetName: string, address: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteNote(sheetName, address));
+  }
+
+  listNotes(sheetName: string): WorkbookNoteRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listNotes(sheetName));
   }
 
   setSpill(sheetName: string, address: string, rows: number, cols: number): WorkbookSpillRecord {

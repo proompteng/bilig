@@ -258,6 +258,41 @@ function isWorkbookDataValidation(value: unknown): boolean {
   );
 }
 
+function isWorkbookCommentEntry(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "id") &&
+    hasString(value, "body") &&
+    isOptionalString(value["authorUserId"]) &&
+    isOptionalString(value["authorDisplayName"]) &&
+    isOptionalNumber(value["createdAtUnixMs"])
+  );
+}
+
+function isWorkbookCommentThread(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "threadId") &&
+    hasString(value, "sheetName") &&
+    hasString(value, "address") &&
+    Array.isArray(value["comments"]) &&
+    value["comments"].length > 0 &&
+    value["comments"].every((entry) => isWorkbookCommentEntry(entry)) &&
+    isOptionalBoolean(value["resolved"]) &&
+    isOptionalString(value["resolvedByUserId"]) &&
+    isOptionalNumber(value["resolvedAtUnixMs"])
+  );
+}
+
+function isWorkbookNote(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "sheetName") &&
+    hasString(value, "address") &&
+    hasString(value, "text")
+  );
+}
+
 function isWorkbookDefinedNameValue(value: unknown): boolean {
   if (isLiteralInput(value)) {
     return true;
@@ -385,6 +420,13 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
       return isWorkbookDataValidation(value["validation"]);
     case "clearDataValidation":
       return hasString(value, "sheetName") && isCellRangeRef(value["range"]);
+    case "upsertCommentThread":
+      return isWorkbookCommentThread(value["thread"]);
+    case "deleteCommentThread":
+    case "deleteNote":
+      return hasString(value, "sheetName") && hasString(value, "address");
+    case "upsertNote":
+      return isWorkbookNote(value["note"]);
     case "setCellValue":
       return (
         hasString(value, "sheetName") &&

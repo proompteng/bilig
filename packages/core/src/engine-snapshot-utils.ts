@@ -71,6 +71,10 @@ export function exportSheetMetadata(
   const validations = workbook
     .listDataValidations(sheetName)
     .map((validation) => structuredClone(validation));
+  const commentThreads = workbook
+    .listCommentThreads(sheetName)
+    .map((thread) => structuredClone(thread));
+  const notes = workbook.listNotes(sheetName).map((note) => structuredClone(note));
 
   if (
     rows.length === 0 &&
@@ -82,7 +86,9 @@ export function exportSheetMetadata(
     freezePane === undefined &&
     filters.length === 0 &&
     sorts.length === 0 &&
-    validations.length === 0
+    validations.length === 0 &&
+    commentThreads.length === 0 &&
+    notes.length === 0
   ) {
     return undefined;
   }
@@ -117,6 +123,12 @@ export function exportSheetMetadata(
   }
   if (validations.length > 0) {
     metadata.validations = validations;
+  }
+  if (commentThreads.length > 0) {
+    metadata.commentThreads = commentThreads;
+  }
+  if (notes.length > 0) {
+    metadata.notes = notes;
   }
   return metadata;
 }
@@ -180,6 +192,18 @@ export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): 
     ops.push({
       kind: "setDataValidation",
       validation: structuredClone(record),
+    });
+  });
+  workbook.listCommentThreads(sheetName).forEach((record) => {
+    ops.push({
+      kind: "upsertCommentThread",
+      thread: structuredClone(record),
+    });
+  });
+  workbook.listNotes(sheetName).forEach((record) => {
+    ops.push({
+      kind: "upsertNote",
+      note: structuredClone(record),
     });
   });
   return ops;

@@ -36,6 +36,10 @@ import {
   inspectWorkbookRange,
 } from "./workbook-agent-inspection.js";
 import {
+  handleWorkbookAgentAnnotationToolCall,
+  workbookAgentAnnotationToolSpecs,
+} from "./workbook-agent-annotation-tools.js";
+import {
   handleWorkbookAgentObjectToolCall,
   workbookAgentObjectToolSpecs,
 } from "./workbook-agent-object-tools.js";
@@ -534,6 +538,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     ...workbookAgentSheetReadToolSpecs,
+    ...workbookAgentAnnotationToolSpecs,
     ...workbookAgentObjectToolSpecs,
     ...workbookAgentValidationToolSpecs,
     {
@@ -916,6 +921,10 @@ export async function handleWorkbookAgentToolCall(
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
       return objectToolResult;
+    }
+    const annotationToolResult = await handleWorkbookAgentAnnotationToolCall(context, request);
+    if (annotationToolResult) {
+      return annotationToolResult;
     }
     const validationToolResult = await handleWorkbookAgentValidationToolCall(context, request);
     if (validationToolResult) {

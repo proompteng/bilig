@@ -477,6 +477,30 @@ export interface WorkbookDataValidationSnapshot {
   errorMessage?: string;
 }
 
+export interface WorkbookCommentEntrySnapshot {
+  id: string;
+  body: string;
+  authorUserId?: string;
+  authorDisplayName?: string;
+  createdAtUnixMs?: number;
+}
+
+export interface WorkbookCommentThreadSnapshot {
+  threadId: string;
+  sheetName: string;
+  address: string;
+  comments: WorkbookCommentEntrySnapshot[];
+  resolved?: boolean;
+  resolvedByUserId?: string;
+  resolvedAtUnixMs?: number;
+}
+
+export interface WorkbookNoteSnapshot {
+  sheetName: string;
+  address: string;
+  text: string;
+}
+
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[];
   definedNames?: WorkbookDefinedNameSnapshot[];
@@ -500,6 +524,8 @@ export interface SheetMetadataSnapshot {
   filters?: CellRangeRef[];
   sorts?: WorkbookSortSnapshot[];
   validations?: WorkbookDataValidationSnapshot[];
+  commentThreads?: WorkbookCommentThreadSnapshot[];
+  notes?: WorkbookNoteSnapshot[];
 }
 
 export interface WorkbookSnapshot {

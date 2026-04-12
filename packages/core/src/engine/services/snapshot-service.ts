@@ -326,6 +326,18 @@ export function createEngineSnapshotService(args: {
                 validation: structuredClone(validation),
               });
             });
+            sheet.metadata?.commentThreads?.forEach((thread) => {
+              ops.push({
+                kind: "upsertCommentThread",
+                thread: structuredClone(thread),
+              });
+            });
+            sheet.metadata?.notes?.forEach((note) => {
+              ops.push({
+                kind: "upsertNote",
+                note: structuredClone(note),
+              });
+            });
           });
           snapshot.sheets.forEach((sheet) => {
             sheet.cells.forEach((cell) => {

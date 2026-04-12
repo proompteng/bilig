@@ -153,6 +153,54 @@ describe("WorkbookStore", () => {
     expect(workbook.listDataValidations("Sheet1")).toEqual([]);
   });
 
+  it("normalizes comment-thread and note addresses so equivalent case variants reuse the same record", () => {
+    const workbook = new WorkbookStore("normalized-annotations");
+    workbook.createSheet("Sheet1");
+
+    workbook.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "b2",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+    workbook.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [{ id: "comment-1", body: "Updated." }],
+    });
+    workbook.setNote({
+      sheetName: "Sheet1",
+      address: "c3",
+      text: "Manual override",
+    });
+    workbook.setNote({
+      sheetName: "Sheet1",
+      address: "C3",
+      text: "Updated note",
+    });
+
+    expect(workbook.listCommentThreads("Sheet1")).toEqual([
+      {
+        threadId: "thread-1",
+        sheetName: "Sheet1",
+        address: "B2",
+        comments: [{ id: "comment-1", body: "Updated." }],
+      },
+    ]);
+    expect(workbook.listNotes("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        address: "C3",
+        text: "Updated note",
+      },
+    ]);
+    expect(workbook.deleteCommentThread("Sheet1", "b2")).toBe(true);
+    expect(workbook.deleteNote("Sheet1", "c3")).toBe(true);
+    expect(workbook.listCommentThreads("Sheet1")).toEqual([]);
+    expect(workbook.listNotes("Sheet1")).toEqual([]);
+  });
+
   it("normalizes spill and pivot addresses so case-only variants reuse the same record", () => {
     const workbook = new WorkbookStore("normalized-addresses");
     workbook.createSheet("Sheet1");

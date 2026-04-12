@@ -1183,6 +1183,96 @@ describe("workbook agent tools", () => {
     expect(text && "text" in text ? text.text : "").toContain('"Draft"');
   });
 
+  it("lists workbook comments and notes from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+    engine.setNote({
+      sheetName: "Sheet1",
+      address: "C3",
+      text: "Manual override",
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-get-comments",
+        tool: "get_comments",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"threadId": "thread-1"');
+    expect(text && "text" in text ? text.text : "").toContain('"text": "Manual override"');
+  });
+
+  it("includes intersecting comment threads and notes in read_range inspection", async () => {
+    const engine = await createEngine();
+    engine.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+    engine.setNote({
+      sheetName: "Sheet1",
+      address: "C3",
+      text: "Manual override",
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-range-with-annotations",
+        tool: "read_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "C3",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"commentThreads": [');
+    expect(text && "text" in text ? text.text : "").toContain('"notes": [');
+    expect(text && "text" in text ? text.text : "").toContain('"Check this total."');
+    expect(text && "text" in text ? text.text : "").toContain('"Manual override"');
+  });
+
   it("resolves selectors for read and mutation tools before staging commands", async () => {
     const engine = await createEngine();
     engine.setDefinedName("Inputs", {
@@ -1650,6 +1740,146 @@ describe("workbook agent tools", () => {
         sheetName: "Sheet1",
         startAddress: "B2",
         endAddress: "B4",
+      },
+    });
+  });
+
+  it("stages comment and note commands against single-cell selector targets", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const addCommentResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B2",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-add-comment",
+        tool: "add_comment",
+        arguments: {
+          selector: {
+            kind: "currentSelection",
+          },
+          text: "Check this total.",
+        },
+      },
+    );
+
+    expect(addCommentResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "upsertCommentThread",
+      thread: {
+        threadId: expect.any(String),
+        sheetName: "Sheet1",
+        address: "B2",
+        comments: [{ id: expect.any(String), body: "Check this total." }],
+      },
+    });
+
+    engine.setCommentThread({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "B2",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+
+    const replyCommentResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-reply-comment",
+        tool: "reply_comment",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B2",
+          },
+          text: "Looks good.",
+        },
+      },
+    );
+
+    expect(replyCommentResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "upsertCommentThread",
+      thread: {
+        threadId: "thread-1",
+        sheetName: "Sheet1",
+        address: "B2",
+        comments: [
+          { id: "comment-1", body: "Check this total." },
+          { id: expect.any(String), body: "Looks good." },
+        ],
+      },
+    });
+
+    const addNoteResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-add-note",
+        tool: "add_note",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "C3",
+            endAddress: "C3",
+          },
+          text: "Manual override",
+        },
+      },
+    );
+
+    expect(addNoteResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "upsertNote",
+      note: {
+        sheetName: "Sheet1",
+        address: "C3",
+        text: "Manual override",
       },
     });
   });

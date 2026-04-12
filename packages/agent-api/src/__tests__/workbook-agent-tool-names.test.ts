@@ -17,6 +17,7 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules).toBe("list_data_validation_rules");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
     expect(WORKBOOK_AGENT_TOOL_NAMES.setFormula).toBe("set_formula");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getColumnMetadata).toBe("get_column_metadata");
@@ -26,6 +27,13 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.createDataValidation).toBe("create_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateDataValidation).toBe("update_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation).toBe("remove_data_validation");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.addComment).toBe("add_comment");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.replyComment).toBe("reply_comment");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.resolveComment).toBe("resolve_comment");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.deleteComment).toBe("delete_comment");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.addNote).toBe("add_note");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.updateNote).toBe("update_note");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.deleteNote).toBe("delete_note");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createSheet).toBe("create_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.deleteSheet).toBe("delete_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.insertRows).toBe("insert_rows");
@@ -64,6 +72,9 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig.list_data_validation_rules")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
     );
+    expect(normalizeWorkbookAgentToolName("bilig.get_comments")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.getComments,
+    );
     expect(normalizeWorkbookAgentToolName("bilig.update_named_range")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.updateNamedRange,
     );
@@ -78,6 +89,27 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.remove_data_validation")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_add_comment")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.addComment,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.reply_comment")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.replyComment,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_resolve_comment")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.resolveComment,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.delete_comment")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deleteComment,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_add_note")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.addNote,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.update_note")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.updateNote,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_delete_note")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deleteNote,
     );
     expect(normalizeWorkbookAgentToolName("bilig.delete_pivot_table")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
@@ -108,6 +140,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
     expect(isWorkbookAgentToolName("list_pivots")).toBe(true);
     expect(isWorkbookAgentToolName("list_data_validation_rules")).toBe(true);
+    expect(isWorkbookAgentToolName("get_comments")).toBe(true);
     expect(isWorkbookAgentToolName("get_row_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("get_column_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("create_named_range")).toBe(true);
@@ -115,6 +148,13 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("create_data_validation")).toBe(true);
     expect(isWorkbookAgentToolName("update_data_validation")).toBe(true);
     expect(isWorkbookAgentToolName("remove_data_validation")).toBe(true);
+    expect(isWorkbookAgentToolName("add_comment")).toBe(true);
+    expect(isWorkbookAgentToolName("reply_comment")).toBe(true);
+    expect(isWorkbookAgentToolName("resolve_comment")).toBe(true);
+    expect(isWorkbookAgentToolName("delete_comment")).toBe(true);
+    expect(isWorkbookAgentToolName("add_note")).toBe(true);
+    expect(isWorkbookAgentToolName("update_note")).toBe(true);
+    expect(isWorkbookAgentToolName("delete_note")).toBe(true);
     expect(isWorkbookAgentToolName("delete_pivot_table")).toBe(true);
   });
 });

@@ -546,6 +546,49 @@ export function createEngineMutationService(args: {
         }
         return [{ kind: "setDataValidation", validation: structuredClone(existing) }];
       }
+      case "upsertCommentThread": {
+        const existing = args.state.workbook.getCommentThread(
+          op.thread.sheetName,
+          op.thread.address,
+        );
+        if (!existing) {
+          return [
+            {
+              kind: "deleteCommentThread",
+              sheetName: op.thread.sheetName,
+              address: op.thread.address,
+            },
+          ];
+        }
+        return [{ kind: "upsertCommentThread", thread: structuredClone(existing) }];
+      }
+      case "deleteCommentThread": {
+        const existing = args.state.workbook.getCommentThread(op.sheetName, op.address);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertCommentThread", thread: structuredClone(existing) }];
+      }
+      case "upsertNote": {
+        const existing = args.state.workbook.getNote(op.note.sheetName, op.note.address);
+        if (!existing) {
+          return [
+            {
+              kind: "deleteNote",
+              sheetName: op.note.sheetName,
+              address: op.note.address,
+            },
+          ];
+        }
+        return [{ kind: "upsertNote", note: structuredClone(existing) }];
+      }
+      case "deleteNote": {
+        const existing = args.state.workbook.getNote(op.sheetName, op.address);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertNote", note: structuredClone(existing) }];
+      }
       case "setCellValue":
       case "setCellFormula":
       case "clearCell":

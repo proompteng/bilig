@@ -261,6 +261,14 @@ export function createEngineOperationService(args: {
         return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
       case "clearDataValidation":
         return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+      case "upsertCommentThread":
+        return `comment:${op.thread.sheetName}!${op.thread.address}`;
+      case "deleteCommentThread":
+        return `comment:${op.sheetName}!${op.address}`;
+      case "upsertNote":
+        return `note:${op.note.sheetName}!${op.note.address}`;
+      case "deleteNote":
+        return `note:${op.sheetName}!${op.address}`;
       case "setCellFormat":
         return `format:${op.sheetName}!${op.address}`;
       case "upsertCellStyle":
@@ -360,6 +368,8 @@ export function createEngineOperationService(args: {
       case "setSort":
       case "clearSort":
       case "clearDataValidation":
+      case "deleteCommentThread":
+      case "deleteNote":
       case "setCellFormat":
       case "setCellValue":
       case "setCellFormula":
@@ -380,6 +390,10 @@ export function createEngineOperationService(args: {
         return sheetDeleteVersions.get(op.oldName);
       case "setDataValidation":
         return sheetDeleteVersions.get(op.validation.range.sheetName);
+      case "upsertCommentThread":
+        return sheetDeleteVersions.get(op.thread.sheetName);
+      case "upsertNote":
+        return sheetDeleteVersions.get(op.note.sheetName);
       case "upsertPivotTable":
         return (
           sheetDeleteVersions.get(op.sheetName) ?? sheetDeleteVersions.get(op.source.sheetName)
@@ -670,6 +684,26 @@ export function createEngineOperationService(args: {
             break;
           case "clearDataValidation":
             args.state.workbook.deleteDataValidation(op.sheetName, op.range);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertCommentThread":
+            args.state.workbook.setCommentThread(op.thread);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteCommentThread":
+            args.state.workbook.deleteCommentThread(op.sheetName, op.address);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertNote":
+            args.state.workbook.setNote(op.note);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteNote":
+            args.state.workbook.deleteNote(op.sheetName, op.address);
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;

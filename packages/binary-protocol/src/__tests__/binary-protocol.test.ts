@@ -139,6 +139,23 @@ describe("binary protocol", () => {
                 errorMessage: "Pick Draft or Final.",
               },
             },
+            {
+              kind: "upsertCommentThread",
+              thread: {
+                threadId: "thread-1",
+                sheetName: "Sheet1",
+                address: "E2",
+                comments: [{ id: "comment-1", body: "Check this total." }],
+              },
+            },
+            {
+              kind: "upsertNote",
+              note: {
+                sheetName: "Sheet1",
+                address: "F3",
+                text: "Manual override",
+              },
+            },
             { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
             {
               kind: "upsertTable",
@@ -204,6 +221,23 @@ describe("binary protocol", () => {
           errorStyle: "stop",
           errorTitle: "Status required",
           errorMessage: "Pick Draft or Final.",
+        },
+      },
+      {
+        kind: "upsertCommentThread",
+        thread: {
+          threadId: "thread-1",
+          sheetName: "Sheet1",
+          address: "E2",
+          comments: [{ id: "comment-1", body: "Check this total." }],
+        },
+      },
+      {
+        kind: "upsertNote",
+        note: {
+          sheetName: "Sheet1",
+          address: "F3",
+          text: "Manual override",
         },
       },
       { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
@@ -329,6 +363,35 @@ describe("binary protocol", () => {
         sheetName: "Sheet1",
         range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
       },
+    ]);
+  });
+
+  it("roundtrips comment and note deletion ops", () => {
+    const decoded = decodeFrame(
+      encodeFrame({
+        kind: "appendBatch",
+        documentId: "book-5",
+        cursor: 12,
+        batch: {
+          id: "replica:5",
+          replicaId: "replica",
+          clock: { counter: 5 },
+          ops: [
+            { kind: "deleteCommentThread", sheetName: "Sheet1", address: "E2" },
+            { kind: "deleteNote", sheetName: "Sheet1", address: "F3" },
+          ],
+        },
+      }),
+    );
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      { kind: "deleteCommentThread", sheetName: "Sheet1", address: "E2" },
+      { kind: "deleteNote", sheetName: "Sheet1", address: "F3" },
     ]);
   });
 

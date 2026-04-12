@@ -10,8 +10,10 @@ import type {
   CellVerticalAlignment,
   PivotAggregation,
   LiteralInput,
+  WorkbookCommentThreadSnapshot,
   WorkbookDataValidationRuleSnapshot,
   WorkbookDataValidationSnapshot,
+  WorkbookNoteSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationMode,
   WorkbookDefinedNameValueSnapshot,
@@ -187,6 +189,10 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   moveColumns: 34,
   setDataValidation: 38,
   clearDataValidation: 39,
+  upsertCommentThread: 40,
+  deleteCommentThread: 41,
+  upsertNote: 42,
+  deleteNote: 43,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -1124,6 +1130,102 @@ function decodeDataValidation(reader: BinaryReader): WorkbookDataValidationSnaps
   return validation;
 }
 
+function encodeCommentEntry(
+  writer: BinaryWriter,
+  entry: WorkbookCommentThreadSnapshot["comments"][number],
+): void {
+  writer.string(entry.id);
+  writer.string(entry.body);
+  writer.bool(entry.authorUserId !== undefined);
+  if (entry.authorUserId !== undefined) {
+    writer.string(entry.authorUserId);
+  }
+  writer.bool(entry.authorDisplayName !== undefined);
+  if (entry.authorDisplayName !== undefined) {
+    writer.string(entry.authorDisplayName);
+  }
+  writer.bool(entry.createdAtUnixMs !== undefined);
+  if (entry.createdAtUnixMs !== undefined) {
+    writer.u32(entry.createdAtUnixMs);
+  }
+}
+
+function decodeCommentEntry(
+  reader: BinaryReader,
+): WorkbookCommentThreadSnapshot["comments"][number] {
+  const entry: WorkbookCommentThreadSnapshot["comments"][number] = {
+    id: reader.string(),
+    body: reader.string(),
+  };
+  if (reader.bool()) {
+    entry.authorUserId = reader.string();
+  }
+  if (reader.bool()) {
+    entry.authorDisplayName = reader.string();
+  }
+  if (reader.bool()) {
+    entry.createdAtUnixMs = reader.u32();
+  }
+  return entry;
+}
+
+function encodeCommentThread(writer: BinaryWriter, thread: WorkbookCommentThreadSnapshot): void {
+  writer.string(thread.threadId);
+  writer.string(thread.sheetName);
+  writer.string(thread.address);
+  writer.u32(thread.comments.length);
+  thread.comments.forEach((entry) => encodeCommentEntry(writer, entry));
+  writer.bool(thread.resolved !== undefined);
+  if (thread.resolved !== undefined) {
+    writer.bool(thread.resolved);
+  }
+  writer.bool(thread.resolvedByUserId !== undefined);
+  if (thread.resolvedByUserId !== undefined) {
+    writer.string(thread.resolvedByUserId);
+  }
+  writer.bool(thread.resolvedAtUnixMs !== undefined);
+  if (thread.resolvedAtUnixMs !== undefined) {
+    writer.u32(thread.resolvedAtUnixMs);
+  }
+}
+
+function decodeCommentThread(reader: BinaryReader): WorkbookCommentThreadSnapshot {
+  const thread: WorkbookCommentThreadSnapshot = {
+    threadId: reader.string(),
+    sheetName: reader.string(),
+    address: reader.string(),
+    comments: [],
+  };
+  const count = reader.u32();
+  for (let index = 0; index < count; index += 1) {
+    thread.comments.push(decodeCommentEntry(reader));
+  }
+  if (reader.bool()) {
+    thread.resolved = reader.bool();
+  }
+  if (reader.bool()) {
+    thread.resolvedByUserId = reader.string();
+  }
+  if (reader.bool()) {
+    thread.resolvedAtUnixMs = reader.u32();
+  }
+  return thread;
+}
+
+function encodeNote(writer: BinaryWriter, note: WorkbookNoteSnapshot): void {
+  writer.string(note.sheetName);
+  writer.string(note.address);
+  writer.string(note.text);
+}
+
+function decodeNote(reader: BinaryReader): WorkbookNoteSnapshot {
+  return {
+    sheetName: reader.string(),
+    address: reader.string(),
+    text: reader.string(),
+  };
+}
+
 function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
   writer.u8(OP_TAGS[op.kind]);
   switch (op.kind) {
@@ -1209,6 +1311,20 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "clearDataValidation":
       writer.string(op.sheetName);
       encodeCellRangeRef(writer, op.range);
+      return;
+    case "upsertCommentThread":
+      encodeCommentThread(writer, op.thread);
+      return;
+    case "deleteCommentThread":
+      writer.string(op.sheetName);
+      writer.string(op.address);
+      return;
+    case "upsertNote":
+      encodeNote(writer, op.note);
+      return;
+    case "deleteNote":
+      writer.string(op.sheetName);
+      writer.string(op.address);
       return;
     case "setCellValue":
       writer.string(op.sheetName);
@@ -1426,6 +1542,28 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         kind: "clearDataValidation",
         sheetName: reader.string(),
         range: decodeCellRangeRef(reader),
+      };
+    case 40:
+      return {
+        kind: "upsertCommentThread",
+        thread: decodeCommentThread(reader),
+      };
+    case 41:
+      return {
+        kind: "deleteCommentThread",
+        sheetName: reader.string(),
+        address: reader.string(),
+      };
+    case 42:
+      return {
+        kind: "upsertNote",
+        note: decodeNote(reader),
+      };
+    case 43:
+      return {
+        kind: "deleteNote",
+        sheetName: reader.string(),
+        address: reader.string(),
       };
     case 13:
       return {

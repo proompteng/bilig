@@ -508,4 +508,58 @@ describe("workbook agent apply", () => {
 
     expect(engine.getDataValidations("Sheet1")).toEqual([]);
   });
+
+  it("captures undo for comment thread and note commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "upsertCommentThread",
+          thread: {
+            threadId: "thread-1",
+            sheetName: "Sheet1",
+            address: "B2",
+            comments: [{ id: "comment-1", body: "Check this total." }],
+          },
+        },
+        {
+          kind: "upsertNote",
+          note: {
+            sheetName: "Sheet1",
+            address: "C3",
+            text: "Manual override",
+          },
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getCommentThreads("Sheet1")).toEqual([
+      {
+        threadId: "thread-1",
+        sheetName: "Sheet1",
+        address: "B2",
+        comments: [{ id: "comment-1", body: "Check this total." }],
+      },
+    ]);
+    expect(engine.getNotes("Sheet1")).toEqual([
+      {
+        sheetName: "Sheet1",
+        address: "C3",
+        text: "Manual override",
+      },
+    ]);
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getCommentThreads("Sheet1")).toEqual([]);
+    expect(engine.getNotes("Sheet1")).toEqual([]);
+  });
 });

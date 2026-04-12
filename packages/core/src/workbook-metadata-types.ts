@@ -4,8 +4,11 @@ import type {
   CellStyleRecord,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookCommentEntrySnapshot,
+  WorkbookCommentThreadSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookTableSnapshot,
@@ -91,6 +94,11 @@ export interface WorkbookSortRecord {
 }
 
 export interface WorkbookDataValidationRecord extends WorkbookDataValidationSnapshot {}
+export interface WorkbookCommentEntryRecord extends WorkbookCommentEntrySnapshot {}
+export interface WorkbookCommentThreadRecord extends WorkbookCommentThreadSnapshot {
+  comments: WorkbookCommentEntryRecord[];
+}
+export interface WorkbookNoteRecord extends WorkbookNoteSnapshot {}
 
 export interface WorkbookMetadataRecord {
   properties: Map<string, WorkbookPropertyRecord>;
@@ -106,6 +114,8 @@ export interface WorkbookMetadataRecord {
   filters: Map<string, WorkbookFilterRecord>;
   sorts: Map<string, WorkbookSortRecord>;
   dataValidations: Map<string, WorkbookDataValidationRecord>;
+  commentThreads: Map<string, WorkbookCommentThreadRecord>;
+  notes: Map<string, WorkbookNoteRecord>;
 }
 
 export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
@@ -123,6 +133,8 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     filters: new Map(),
     sorts: new Map(),
     dataValidations: new Map(),
+    commentThreads: new Map(),
+    notes: new Map(),
   };
 }
 

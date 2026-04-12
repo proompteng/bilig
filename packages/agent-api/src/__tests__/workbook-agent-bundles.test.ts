@@ -333,6 +333,83 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("summarizes comment thread commands against a single target cell", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Leave a comment on B3",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "upsertCommentThread",
+        thread: {
+          threadId: "thread-1",
+          sheetName: "Sheet1",
+          address: "B3",
+          comments: [{ id: "comment-1", body: "Check this total." }],
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set comment thread on Sheet1!B3",
+        riskClass: "medium",
+        scope: "sheet",
+        estimatedAffectedCells: 1,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "B3",
+            endAddress: "B3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("summarizes note commands against the normalized target cell", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Attach a note to C4",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "upsertNote",
+        note: {
+          sheetName: "Sheet1",
+          address: "c4",
+          text: "Manual override",
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set note on Sheet1!C4",
+        riskClass: "medium",
+        scope: "sheet",
+        estimatedAffectedCells: 1,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "C4",
+            endAddress: "C4",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
   it("projects a scoped subset as its own preview/apply bundle", () => {
     const staged = appendWorkbookAgentCommandToBundle({
       previousBundle: appendWorkbookAgentCommandToBundle({

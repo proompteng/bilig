@@ -1,6 +1,8 @@
 import { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
+  applyWorkbookAgentAnnotationCommand,
+  isWorkbookAgentAnnotationCommand,
   applyWorkbookAgentObjectCommand,
   isWorkbookAgentObjectCommand,
   applyWorkbookAgentStructuralCommand,
@@ -86,6 +88,11 @@ function applyWorkbookAgentCommandWithUndoCapture(
   if (isWorkbookAgentObjectCommand(command)) {
     return engine.captureUndoOps(() => {
       applyWorkbookAgentObjectCommand(engine, command);
+    }).undoOps;
+  }
+  if (isWorkbookAgentAnnotationCommand(command)) {
+    return engine.captureUndoOps(() => {
+      applyWorkbookAgentAnnotationCommand(engine, command);
     }).undoOps;
   }
   if (isWorkbookAgentValidationCommand(command)) {

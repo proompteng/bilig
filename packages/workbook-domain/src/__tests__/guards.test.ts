@@ -26,6 +26,23 @@ describe("workbook domain guards", () => {
             },
           },
           {
+            kind: "upsertCommentThread",
+            thread: {
+              threadId: "thread-1",
+              sheetName: "Sheet1",
+              address: "E2",
+              comments: [{ id: "comment-1", body: "Check this total." }],
+            },
+          },
+          {
+            kind: "upsertNote",
+            note: {
+              sheetName: "Sheet1",
+              address: "F3",
+              text: "Manual override",
+            },
+          },
+          {
             kind: "upsertPivotTable",
             name: "Pivot1",
             sheetName: "Sheet1",
@@ -77,6 +94,15 @@ describe("workbook domain guards", () => {
                 kind: "list",
                 values: [undefined],
               },
+            },
+          },
+          {
+            kind: "upsertCommentThread",
+            thread: {
+              threadId: "thread-1",
+              sheetName: "Sheet1",
+              address: "E2",
+              comments: [{ id: "comment-1" }],
             },
           },
         ],

@@ -167,6 +167,14 @@ function entityKeyForOp(op: EngineOp): string {
       return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
     case "clearDataValidation":
       return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+    case "upsertCommentThread":
+      return `comment:${op.thread.sheetName}!${op.thread.address}`;
+    case "deleteCommentThread":
+      return `comment:${op.sheetName}!${op.address}`;
+    case "upsertNote":
+      return `note:${op.note.sheetName}!${op.note.address}`;
+    case "deleteNote":
+      return `note:${op.sheetName}!${op.address}`;
     case "setCellValue":
     case "setCellFormula":
     case "clearCell":
@@ -233,6 +241,8 @@ function sheetDeleteBarrierForOp(
     case "setSort":
     case "clearSort":
     case "clearDataValidation":
+    case "deleteCommentThread":
+    case "deleteNote":
     case "setCellValue":
     case "setCellFormula":
     case "setCellFormat":
@@ -249,6 +259,10 @@ function sheetDeleteBarrierForOp(
       return undefined;
     case "setDataValidation":
       return latestSheetDeletes.get(op.validation.range.sheetName);
+    case "upsertCommentThread":
+      return latestSheetDeletes.get(op.thread.sheetName);
+    case "upsertNote":
+      return latestSheetDeletes.get(op.note.sheetName);
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }

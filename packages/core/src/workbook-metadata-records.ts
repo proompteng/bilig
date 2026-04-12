@@ -6,8 +6,11 @@ import type {
 } from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  type WorkbookCommentEntryRecord,
+  type WorkbookCommentThreadRecord,
   type WorkbookDataValidationRecord,
   normalizeWorkbookObjectName,
+  type WorkbookNoteRecord,
   pivotKey,
   type WorkbookAxisMetadataRecord,
   type WorkbookDefinedNameRecord,
@@ -198,6 +201,54 @@ export function cloneDataValidationRecord(
   return cloned;
 }
 
+export function cloneCommentEntryRecord(
+  record: WorkbookCommentEntryRecord,
+): WorkbookCommentEntryRecord {
+  const cloned: WorkbookCommentEntryRecord = {
+    id: record.id,
+    body: record.body,
+  };
+  if (record.authorUserId !== undefined) {
+    cloned.authorUserId = record.authorUserId;
+  }
+  if (record.authorDisplayName !== undefined) {
+    cloned.authorDisplayName = record.authorDisplayName;
+  }
+  if (record.createdAtUnixMs !== undefined) {
+    cloned.createdAtUnixMs = record.createdAtUnixMs;
+  }
+  return cloned;
+}
+
+export function cloneCommentThreadRecord(
+  record: WorkbookCommentThreadRecord,
+): WorkbookCommentThreadRecord {
+  const cloned: WorkbookCommentThreadRecord = {
+    threadId: record.threadId,
+    sheetName: record.sheetName,
+    address: canonicalWorkbookAddress(record.sheetName, record.address),
+    comments: record.comments.map(cloneCommentEntryRecord),
+  };
+  if (record.resolved !== undefined) {
+    cloned.resolved = record.resolved;
+  }
+  if (record.resolvedByUserId !== undefined) {
+    cloned.resolvedByUserId = record.resolvedByUserId;
+  }
+  if (record.resolvedAtUnixMs !== undefined) {
+    cloned.resolvedAtUnixMs = record.resolvedAtUnixMs;
+  }
+  return cloned;
+}
+
+export function cloneNoteRecord(record: WorkbookNoteRecord): WorkbookNoteRecord {
+  return {
+    sheetName: record.sheetName,
+    address: canonicalWorkbookAddress(record.sheetName, record.address),
+    text: record.text,
+  };
+}
+
 export function clonePivotRecord(record: WorkbookPivotRecord): WorkbookPivotRecord {
   return {
     ...record,
@@ -233,6 +284,14 @@ export function sortKey(sheetName: string, range: CellRangeRef): string {
 export function dataValidationKey(sheetName: string, range: CellRangeRef): string {
   const normalized = canonicalWorkbookRangeRef(range);
   return `${sheetName}:${normalized.startAddress}:${normalized.endAddress}`;
+}
+
+export function commentThreadKey(sheetName: string, address: string): string {
+  return `${sheetName}!${canonicalWorkbookAddress(sheetName, address)}`;
+}
+
+export function noteKey(sheetName: string, address: string): string {
+  return `${sheetName}!${canonicalWorkbookAddress(sheetName, address)}`;
 }
 
 export function tableKey(name: string): string {
@@ -278,6 +337,12 @@ function recordKey(record: unknown): string {
   }
   if (isDataValidationRecord(record)) {
     return dataValidationKey(record.range.sheetName, record.range);
+  }
+  if (isCommentThreadRecord(record)) {
+    return commentThreadKey(record.sheetName, record.address);
+  }
+  if (isNoteRecord(record)) {
+    return noteKey(record.sheetName, record.address);
   }
   if (isTableRecord(record)) {
     return tableKey(record.name);
@@ -341,6 +406,22 @@ function isDataValidationRecord(record: unknown): record is WorkbookDataValidati
     "range" in record &&
     "rule" in record &&
     !("keys" in record)
+  );
+}
+
+function isCommentThreadRecord(record: unknown): record is WorkbookCommentThreadRecord {
+  return (
+    typeof record === "object" && record !== null && "threadId" in record && "comments" in record
+  );
+}
+
+function isNoteRecord(record: unknown): record is WorkbookNoteRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "address" in record &&
+    "text" in record &&
+    !("comments" in record)
   );
 }
 

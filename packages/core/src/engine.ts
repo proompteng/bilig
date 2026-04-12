@@ -16,14 +16,16 @@ import type {
   SyncState,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookCommentThreadSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
+  WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookSortSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
-import { Float64Arena, Uint32Arena, formatAddress } from "@bilig/formula";
+import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import type { EngineCellMutationRef } from "./cell-mutations-at.js";
 import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
@@ -53,6 +55,7 @@ import {
   normalizeDefinedName,
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
+  type WorkbookCommentThreadRecord,
   type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
@@ -61,6 +64,7 @@ import {
   type WorkbookSpillRecord,
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
+  type WorkbookNoteRecord,
 } from "./workbook-store.js";
 import { cellToCsvValue, serializeCsv } from "./csv.js";
 import { canonicalWorkbookRangeRef } from "./workbook-range-records.js";
@@ -841,6 +845,84 @@ export class SpreadsheetEngine {
 
   getDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
     return this.workbook.listDataValidations(sheetName);
+  }
+
+  setCommentThread(thread: WorkbookCommentThreadSnapshot): void {
+    const parsed = parseCellAddress(thread.address, thread.sheetName);
+    const normalized: WorkbookCommentThreadSnapshot = {
+      threadId: thread.threadId.trim(),
+      sheetName: thread.sheetName,
+      address: formatAddress(parsed.row, parsed.col),
+      comments: thread.comments.map((comment) => ({
+        id: comment.id.trim(),
+        body: comment.body.trim(),
+        ...(comment.authorUserId !== undefined ? { authorUserId: comment.authorUserId } : {}),
+        ...(comment.authorDisplayName !== undefined
+          ? { authorDisplayName: comment.authorDisplayName }
+          : {}),
+        ...(comment.createdAtUnixMs !== undefined
+          ? { createdAtUnixMs: comment.createdAtUnixMs }
+          : {}),
+      })),
+      ...(thread.resolved !== undefined ? { resolved: thread.resolved } : {}),
+      ...(thread.resolvedByUserId !== undefined
+        ? { resolvedByUserId: thread.resolvedByUserId }
+        : {}),
+      ...(thread.resolvedAtUnixMs !== undefined
+        ? { resolvedAtUnixMs: thread.resolvedAtUnixMs }
+        : {}),
+    };
+    const existing = this.workbook.getCommentThread(thread.sheetName, thread.address);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertCommentThread", thread: normalized }]);
+  }
+
+  deleteCommentThread(sheetName: string, address: string): boolean {
+    if (!this.workbook.getCommentThread(sheetName, address)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteCommentThread", sheetName, address }]);
+    return true;
+  }
+
+  getCommentThread(sheetName: string, address: string): WorkbookCommentThreadRecord | undefined {
+    return this.workbook.getCommentThread(sheetName, address);
+  }
+
+  getCommentThreads(sheetName: string): WorkbookCommentThreadRecord[] {
+    return this.workbook.listCommentThreads(sheetName);
+  }
+
+  setNote(note: WorkbookNoteSnapshot): void {
+    const parsed = parseCellAddress(note.address, note.sheetName);
+    const normalized: WorkbookNoteSnapshot = {
+      sheetName: note.sheetName,
+      address: formatAddress(parsed.row, parsed.col),
+      text: note.text.trim(),
+    };
+    const existing = this.workbook.getNote(note.sheetName, note.address);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertNote", note: normalized }]);
+  }
+
+  deleteNote(sheetName: string, address: string): boolean {
+    if (!this.workbook.getNote(sheetName, address)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteNote", sheetName, address }]);
+    return true;
+  }
+
+  getNote(sheetName: string, address: string): WorkbookNoteRecord | undefined {
+    return this.workbook.getNote(sheetName, address);
+  }
+
+  getNotes(sheetName: string): WorkbookNoteRecord[] {
+    return this.workbook.listNotes(sheetName);
   }
 
   setTable(table: WorkbookTableRecord): void {

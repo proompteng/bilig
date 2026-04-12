@@ -3,27 +3,33 @@ import type {
   CellRangeRef,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookCommentThreadSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookTableSnapshot,
   WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
+  cloneCommentThreadRecord,
   cloneDataValidationRecord,
   cloneDefinedNameRecord,
   cloneDefinedNameValue,
   cloneFilterRecord,
+  cloneNoteRecord,
   clonePivotRecord,
   clonePropertyRecord,
   cloneSortKeyRecord,
   cloneSortRecord,
   cloneSpillRecord,
   cloneTableRecord,
+  commentThreadKey,
   dataValidationKey,
   deleteRecordsBySheet,
   filterKey,
+  noteKey,
   rekeyRecords,
   sortKey,
   spillKey,
@@ -31,7 +37,9 @@ import {
 } from "./workbook-metadata-records.js";
 import {
   createWorkbookMetadataRecord,
+  type WorkbookCommentThreadRecord,
   normalizeDefinedName,
+  type WorkbookNoteRecord,
   pivotKey,
   type WorkbookCalculationSettingsRecord,
   type WorkbookDataValidationRecord,
@@ -192,6 +200,34 @@ export interface WorkbookMetadataService {
   readonly listDataValidations: (
     sheetName: string,
   ) => Effect.Effect<WorkbookDataValidationRecord[], WorkbookMetadataError>;
+  readonly setCommentThread: (
+    record: WorkbookCommentThreadSnapshot,
+  ) => Effect.Effect<WorkbookCommentThreadRecord, WorkbookMetadataError>;
+  readonly getCommentThread: (
+    sheetName: string,
+    address: string,
+  ) => Effect.Effect<WorkbookCommentThreadRecord | undefined, WorkbookMetadataError>;
+  readonly deleteCommentThread: (
+    sheetName: string,
+    address: string,
+  ) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listCommentThreads: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookCommentThreadRecord[], WorkbookMetadataError>;
+  readonly setNote: (
+    record: WorkbookNoteSnapshot,
+  ) => Effect.Effect<WorkbookNoteRecord, WorkbookMetadataError>;
+  readonly getNote: (
+    sheetName: string,
+    address: string,
+  ) => Effect.Effect<WorkbookNoteRecord | undefined, WorkbookMetadataError>;
+  readonly deleteNote: (
+    sheetName: string,
+    address: string,
+  ) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listNotes: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookNoteRecord[], WorkbookMetadataError>;
   readonly setSpill: (
     sheetName: string,
     address: string,
@@ -269,6 +305,16 @@ export function createWorkbookMetadataService(
       }
       return cloned;
     });
+    rekeyRecords(metadata.commentThreads, (record) =>
+      record.sheetName === oldSheetName
+        ? { ...cloneCommentThreadRecord(record), sheetName: newSheetName }
+        : cloneCommentThreadRecord(record),
+    );
+    rekeyRecords(metadata.notes, (record) =>
+      record.sheetName === oldSheetName
+        ? { ...cloneNoteRecord(record), sheetName: newSheetName }
+        : cloneNoteRecord(record),
+    );
     rekeyRecords(metadata.tables, (record) =>
       record.sheetName === oldSheetName
         ? { ...record, sheetName: newSheetName }
@@ -303,6 +349,8 @@ export function createWorkbookMetadataService(
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.sorts, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.dataValidations, sheetName, (record) => record.range.sheetName);
+    deleteRecordsBySheet(metadata.commentThreads, sheetName, (record) => record.sheetName);
+    deleteRecordsBySheet(metadata.notes, sheetName, (record) => record.sheetName);
     metadata.freezePanes.delete(sheetName);
   };
 
@@ -319,6 +367,8 @@ export function createWorkbookMetadataService(
     metadata.filters.clear();
     metadata.sorts.clear();
     metadata.dataValidations.clear();
+    metadata.commentThreads.clear();
+    metadata.notes.clear();
     metadata.calculationSettings = defaults.calculationSettings;
     metadata.volatileContext = defaults.volatileContext;
   };
@@ -795,6 +845,140 @@ export function createWorkbookMetadataService(
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list data validation metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setCommentThread(record) {
+      return Effect.try({
+        try: () => {
+          const normalizedAddress = canonicalWorkbookAddress(record.sheetName, record.address);
+          const stored: WorkbookCommentThreadRecord = cloneCommentThreadRecord({
+            ...record,
+            threadId: record.threadId.trim(),
+            address: normalizedAddress,
+            comments: record.comments.map((comment) => ({
+              id: comment.id.trim(),
+              body: comment.body.trim(),
+              ...(comment.authorUserId !== undefined ? { authorUserId: comment.authorUserId } : {}),
+              ...(comment.authorDisplayName !== undefined
+                ? { authorDisplayName: comment.authorDisplayName }
+                : {}),
+              ...(comment.createdAtUnixMs !== undefined
+                ? { createdAtUnixMs: comment.createdAtUnixMs }
+                : {}),
+            })),
+          });
+          metadata.commentThreads.set(
+            commentThreadKey(record.sheetName, normalizedAddress),
+            stored,
+          );
+          return cloneCommentThreadRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set comment thread metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getCommentThread(sheetName, address) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.commentThreads.get(commentThreadKey(sheetName, address));
+          return record ? cloneCommentThreadRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get comment thread metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteCommentThread(sheetName, address) {
+      return Effect.try({
+        try: () => metadata.commentThreads.delete(commentThreadKey(sheetName, address)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete comment thread metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listCommentThreads(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.commentThreads.values()]
+            .filter((record) => record.sheetName === sheetName)
+            .toSorted((left, right) =>
+              commentThreadKey(left.sheetName, left.address).localeCompare(
+                commentThreadKey(right.sheetName, right.address),
+              ),
+            )
+            .map(cloneCommentThreadRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list comment thread metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setNote(record) {
+      return Effect.try({
+        try: () => {
+          const normalizedAddress = canonicalWorkbookAddress(record.sheetName, record.address);
+          const stored: WorkbookNoteRecord = cloneNoteRecord({
+            sheetName: record.sheetName,
+            address: normalizedAddress,
+            text: record.text.trim(),
+          });
+          metadata.notes.set(noteKey(record.sheetName, normalizedAddress), stored);
+          return cloneNoteRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set note metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getNote(sheetName, address) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.notes.get(noteKey(sheetName, address));
+          return record ? cloneNoteRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get note metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteNote(sheetName, address) {
+      return Effect.try({
+        try: () => metadata.notes.delete(noteKey(sheetName, address)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete note metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listNotes(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.notes.values()]
+            .filter((record) => record.sheetName === sheetName)
+            .toSorted((left, right) =>
+              noteKey(left.sheetName, left.address).localeCompare(
+                noteKey(right.sheetName, right.address),
+              ),
+            )
+            .map(cloneNoteRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list note metadata", cause),
             cause,
           }),
       });

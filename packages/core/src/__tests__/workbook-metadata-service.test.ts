@@ -97,6 +97,40 @@ describe("WorkbookMetadataService", () => {
     });
   });
 
+  it("clones and normalizes comment threads and notes on write and read", () => {
+    const service = createService();
+    const threadInput = {
+      threadId: " thread-1 ",
+      sheetName: "Sheet1",
+      address: "c4",
+      comments: [{ id: " comment-1 ", body: "Check this total." }],
+    };
+    const noteInput = {
+      sheetName: "Sheet1",
+      address: "d5",
+      text: " Manual override ",
+    };
+
+    const storedThread = Effect.runSync(service.setCommentThread(threadInput));
+    const storedNote = Effect.runSync(service.setNote(noteInput));
+    threadInput.comments[0].body = "Mutated";
+    storedThread.comments[0].body = "Leaked";
+    noteInput.text = "Changed";
+    storedNote.text = "Broken";
+
+    expect(Effect.runSync(service.getCommentThread("Sheet1", "C4"))).toEqual({
+      threadId: "thread-1",
+      sheetName: "Sheet1",
+      address: "C4",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+    expect(Effect.runSync(service.getNote("Sheet1", "D5"))).toEqual({
+      sheetName: "Sheet1",
+      address: "D5",
+      text: "Manual override",
+    });
+  });
+
   it("normalizes and clones pivot records so caller mutation does not leak back into metadata", () => {
     const service = createService();
     const input = {
@@ -167,6 +201,21 @@ describe("WorkbookMetadataService", () => {
         },
         allowBlank: false,
         showDropdown: true,
+      }),
+    );
+    Effect.runSync(
+      service.setCommentThread({
+        threadId: "thread-1",
+        sheetName: "Source",
+        address: "C4",
+        comments: [{ id: "comment-1", body: "Check this total." }],
+      }),
+    );
+    Effect.runSync(
+      service.setNote({
+        sheetName: "Source",
+        address: "D5",
+        text: "Manual override",
       }),
     );
     Effect.runSync(
@@ -263,6 +312,17 @@ describe("WorkbookMetadataService", () => {
       allowBlank: false,
       showDropdown: true,
     });
+    expect(Effect.runSync(service.getCommentThread("Renamed", "C4"))).toEqual({
+      threadId: "thread-1",
+      sheetName: "Renamed",
+      address: "C4",
+      comments: [{ id: "comment-1", body: "Check this total." }],
+    });
+    expect(Effect.runSync(service.getNote("Renamed", "D5"))).toEqual({
+      sheetName: "Renamed",
+      address: "D5",
+      text: "Manual override",
+    });
     expect(Effect.runSync(service.getSpill("Renamed", "B2"))).toEqual({
       sheetName: "Renamed",
       address: "B2",
@@ -301,6 +361,8 @@ describe("WorkbookMetadataService", () => {
     expect(Effect.runSync(service.listFilters("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listSorts("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listDataValidations("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.listCommentThreads("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.listNotes("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listPivots())).toEqual([]);
     expect(Effect.runSync(service.listTables())).toEqual([]);
     expect(Effect.runSync(service.listSpills())).toEqual([]);

@@ -5,7 +5,9 @@ import {
   type CellNumberFormatRecord,
   type CellRangeRef,
   type CellStyleRecord,
+  type WorkbookCommentThreadSnapshot,
   type WorkbookDataValidationSnapshot,
+  type WorkbookNoteSnapshot,
 } from "@bilig/protocol";
 import type { JsonValue } from "@bilig/agent-api";
 import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
@@ -85,6 +87,38 @@ function collectIntersectingDataValidations(
     .getDataValidations(range.sheetName)
     .filter((validation) => rangesIntersect(validation.range, range))
     .map((validation) => structuredClone(validation));
+}
+
+function collectIntersectingCommentThreads(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookCommentThreadSnapshot[] {
+  return runtime.engine
+    .getCommentThreads(range.sheetName)
+    .filter((thread) =>
+      rangesIntersect(range, {
+        sheetName: thread.sheetName,
+        startAddress: thread.address,
+        endAddress: thread.address,
+      }),
+    )
+    .map((thread) => structuredClone(thread));
+}
+
+function collectIntersectingNotes(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookNoteSnapshot[] {
+  return runtime.engine
+    .getNotes(range.sheetName)
+    .filter((note) =>
+      rangesIntersect(range, {
+        sheetName: note.sheetName,
+        startAddress: note.address,
+        endAddress: note.address,
+      }),
+    )
+    .map((note) => structuredClone(note));
 }
 
 function summarizeWindowAxisState(input: {
@@ -222,6 +256,8 @@ export function inspectWorkbookRange(
   readonly range: CellRangeRef;
   readonly sheetState: ReturnType<typeof summarizeWindowAxisState>;
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
+  readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
+  readonly notes: readonly WorkbookNoteSnapshot[];
   readonly styles: readonly CellStyleRecord[];
   readonly numberFormats: readonly CellNumberFormatRecord[];
   readonly rows: readonly JsonValue[];
@@ -264,6 +300,8 @@ export function inspectWorkbookRange(
       range: normalizedRange,
     }),
     dataValidations: collectIntersectingDataValidations(runtime, normalizedRange),
+    commentThreads: collectIntersectingCommentThreads(runtime, normalizedRange),
+    notes: collectIntersectingNotes(runtime, normalizedRange),
     ...collectRangeFormattingCatalog({
       runtime,
       styleIds,
@@ -297,6 +335,8 @@ export function inspectWorkbookCell(
   readonly directPrecedents: readonly string[];
   readonly directDependents: readonly string[];
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
+  readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
+  readonly notes: readonly WorkbookNoteSnapshot[];
 } {
   const snapshot = runtime.engine.getCell(target.sheetName, target.address);
   const cell = runtime.engine.explainCell(target.sheetName, target.address);
@@ -318,6 +358,16 @@ export function inspectWorkbookCell(
     directPrecedents: [...cell.directPrecedents],
     directDependents: [...cell.directDependents],
     dataValidations: collectIntersectingDataValidations(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
+    commentThreads: collectIntersectingCommentThreads(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
+    notes: collectIntersectingNotes(runtime, {
       sheetName: target.sheetName,
       startAddress: target.address,
       endAddress: target.address,
