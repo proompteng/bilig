@@ -353,7 +353,8 @@ describe("WorkerWorkbookApp", () => {
       workerHandle: {
         viewportStore: {},
       },
-      handleAgentSelectionRangeChange: vi.fn(),
+      handleSelectionLabelChange: vi.fn(),
+      handleSelectionRangeChange: vi.fn(),
       selection: { sheetName: "Sheet1", address: "B18" },
       selectedCell: { sheetName: "Sheet1", address: "B18" },
       sheetNames: ["Sheet1"],
@@ -364,7 +365,6 @@ describe("WorkerWorkbookApp", () => {
       sideRail: null,
       sideRailId: undefined,
       sideRailWidth: undefined,
-      setSelectionLabel: vi.fn(),
       setSideRailWidth: vi.fn(),
       commitEditor: vi.fn(),
       copySelectionRange: vi.fn(),

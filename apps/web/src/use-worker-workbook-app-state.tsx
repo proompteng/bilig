@@ -31,7 +31,6 @@ import {
   parsedEditorInputEquals,
   parsedEditorInputFromSnapshot,
   parsedEditorInputMatchesSnapshot,
-  parseSelectionRangeLabel,
   sameCellContent,
   toEditorValue,
   toResolvedValue,
@@ -161,7 +160,13 @@ export function useWorkerWorkbookAppState(input: {
 
   useEffect(() => {
     selectionRef.current = selection;
+    selectionRangeRef.current = {
+      sheetName: selection.sheetName,
+      startAddress: selection.address,
+      endAddress: selection.address,
+    };
     agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection);
+    setSelectionLabel((current) => (current === selection.address ? current : selection.address));
   }, [selection]);
 
   useEffect(() => {
@@ -516,10 +521,14 @@ export function useWorkerWorkbookAppState(input: {
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
       const previousSelection = selectionRef.current;
+      const previousRange = selectionRangeRef.current;
       if (
         editingModeRef.current === "idle" &&
         previousSelection.sheetName === sheetName &&
-        previousSelection.address === address
+        previousSelection.address === address &&
+        previousRange.sheetName === sheetName &&
+        previousRange.startAddress === address &&
+        previousRange.endAddress === address
       ) {
         return;
       }
@@ -529,6 +538,13 @@ export function useWorkerWorkbookAppState(input: {
         setEditingMode("idle");
       }
       const nextSelection = { sheetName, address };
+      selectionRangeRef.current = {
+        sheetName,
+        startAddress: address,
+        endAddress: address,
+      };
+      agentSelectionRangeRef.current = singleCellAgentSelectionRange(nextSelection);
+      setSelectionLabel(address);
       if (previousSelection.sheetName !== sheetName) {
         visibleViewportRef.current = selectionViewport(nextSelection);
       }
@@ -597,8 +613,22 @@ export function useWorkerWorkbookAppState(input: {
       }),
     [],
   );
-  const handleAgentSelectionRangeChange = useCallback((range: WorkbookAgentSelectionRange) => {
-    agentSelectionRangeRef.current = range;
+  const handleSelectionRangeChange = useCallback(
+    (range: { startAddress: string; endAddress: string }) => {
+      selectionRangeRef.current = {
+        sheetName: selectionRef.current.sheetName,
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      };
+      agentSelectionRangeRef.current = {
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      };
+    },
+    [],
+  );
+  const handleSelectionLabelChange = useCallback((nextLabel: string) => {
+    setSelectionLabel((current) => (current === nextLabel ? current : nextLabel));
   }, []);
 
   const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =
@@ -628,10 +658,6 @@ export function useWorkerWorkbookAppState(input: {
   );
 
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
-  const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
-  useEffect(() => {
-    selectionRangeRef.current = selectionRange;
-  }, [selectionRange]);
   const selectedPosition = useMemo(
     () => parseCellAddress(selection.address, selection.sheetName),
     [selection.address, selection.sheetName],
@@ -847,9 +873,9 @@ export function useWorkerWorkbookAppState(input: {
     selectionStatus,
     sideRailId,
     dismissPersistenceTransferRequest,
-    handleAgentSelectionRangeChange,
+    handleSelectionLabelChange,
+    handleSelectionRangeChange,
     setSideRailWidth,
-    setSelectionLabel,
     sheetNames,
     sideRail,
     sideRailWidth,

@@ -276,8 +276,8 @@ function WorkerWorkbookAppInner({
               previewRanges={app.previewRanges}
               onToggleBooleanCell={app.toggleBooleanCell}
               onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
-              onSelectionLabelChange={app.setSelectionLabel}
-              onSelectionRangeChange={app.handleAgentSelectionRangeChange}
+              onSelectionLabelChange={app.handleSelectionLabelChange}
+              onSelectionRangeChange={app.handleSelectionRangeChange}
               onSelect={(addr) => app.selectAddress(app.selection.sheetName, addr)}
               onSelectSheet={(sheetName) => app.selectAddress(sheetName, "A1")}
               resolvedValue={app.resolvedValue}
