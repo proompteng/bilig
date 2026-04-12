@@ -40,6 +40,8 @@ export class RecalcScheduler {
     let rangeNodeVisits = 0;
     let minRank = Number.MAX_SAFE_INTEGER;
     let maxRank = 0;
+    let isAlreadyOrdered = true;
+    let previousRank = -1;
 
     for (let index = 0; index < changedRoots.length; index += 1) {
       const cellIndex = changedRoots[index]!;
@@ -54,6 +56,11 @@ export class RecalcScheduler {
         this.dirtyFormulaIds[dirtyLength] = cellIndex;
         dirtyLength += 1;
         const rank = cellStore.topoRanks[cellIndex] ?? 0;
+        if (rank < previousRank) {
+          isAlreadyOrdered = false;
+        } else {
+          previousRank = rank;
+        }
         minRank = Math.min(minRank, rank);
         maxRank = Math.max(maxRank, rank);
       }
@@ -91,6 +98,11 @@ export class RecalcScheduler {
         this.dirtyFormulaIds[dirtyLength] = cellIndex;
         dirtyLength += 1;
         const rank = cellStore.topoRanks[cellIndex] ?? 0;
+        if (rank < previousRank) {
+          isAlreadyOrdered = false;
+        } else {
+          previousRank = rank;
+        }
         minRank = Math.min(minRank, rank);
         maxRank = Math.max(maxRank, rank);
       }
@@ -100,6 +112,14 @@ export class RecalcScheduler {
       return {
         orderedFormulaCellIndices: this.orderedDirty,
         orderedFormulaCount: 0,
+        rangeNodeVisits,
+      };
+    }
+
+    if (isAlreadyOrdered) {
+      return {
+        orderedFormulaCellIndices: this.dirtyFormulaIds,
+        orderedFormulaCount: dirtyLength,
         rangeNodeVisits,
       };
     }

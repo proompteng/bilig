@@ -8,13 +8,15 @@ export function loadLiteralSheetIntoEmptySheet(
   strings: StringPool,
   sheetId: number,
   content: readonly (readonly LiteralInput[])[],
+  shouldMaterialize: (raw: LiteralInput, rowIndex: number, colIndex: number) => boolean = (raw) =>
+    raw !== null,
 ): number {
   const sheet = workbook.getSheetById(sheetId);
   if (!sheet) {
     throw new Error(`Unknown sheet id: ${sheetId}`);
   }
 
-  const literalCount = countMaterializedLiteralCells(content);
+  const literalCount = countMaterializedLiteralCells(content, shouldMaterialize);
   if (literalCount === 0) {
     return 0;
   }
@@ -26,6 +28,9 @@ export function loadLiteralSheetIntoEmptySheet(
   try {
     content.forEach((row, rowIndex) => {
       row.forEach((raw, colIndex) => {
+        if (!shouldMaterialize(raw, rowIndex, colIndex)) {
+          return;
+        }
         if (raw === null) {
           return;
         }
@@ -44,11 +49,14 @@ export function loadLiteralSheetIntoEmptySheet(
   return literalCount;
 }
 
-function countMaterializedLiteralCells(content: readonly (readonly LiteralInput[])[]): number {
+function countMaterializedLiteralCells(
+  content: readonly (readonly LiteralInput[])[],
+  shouldMaterialize: (raw: LiteralInput, rowIndex: number, colIndex: number) => boolean,
+): number {
   let count = 0;
-  content.forEach((row) => {
-    row.forEach((value) => {
-      if (value !== null) {
+  content.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      if (shouldMaterialize(value, rowIndex, colIndex)) {
         count += 1;
       }
     });

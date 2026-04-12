@@ -316,6 +316,7 @@ describe("EngineMutationService", () => {
         flags: 0,
         version: 0,
       }),
+      applyCellMutationsAtBatchNow: () => {},
       applyBatchNow: () => {},
     });
 
@@ -326,6 +327,59 @@ describe("EngineMutationService", () => {
     );
 
     expect(inverseOps).toEqual([
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
+    ]);
+  });
+
+  it("can record simple cell mutation history without allocating undo ops", () => {
+    const replicaState = createReplicaState("local");
+    const workbook = new WorkbookStore("fast-history-no-return");
+    const sheet = workbook.createSheet("Sheet1");
+    const cell = workbook.ensureCellAt(sheet.id, 0, 0);
+    workbook.cellStore.setValue(cell.cellIndex, { tag: ValueTag.Number, value: 7 }, 0);
+    let replayDepth = 0;
+    const state = {
+      workbook,
+      replicaState,
+      undoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
+      redoStack: [] as Array<{ forward: { ops: unknown[] }; inverse: { ops: unknown[] } }>,
+      getTransactionReplayDepth: () => replayDepth,
+      setTransactionReplayDepth: (next: number) => {
+        replayDepth = next;
+      },
+    };
+    const service = createEngineMutationService({
+      state,
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      restoreCellOps: () => {
+        throw new Error("restoreCellOps should not be used for simple cell history");
+      },
+      getCellByIndex: () => ({
+        sheetName: "Sheet1",
+        address: "A1",
+        value: { tag: ValueTag.Number, value: 7 },
+        flags: 0,
+        version: 0,
+      }),
+      applyCellMutationsAtBatchNow: () => {},
+      applyBatchNow: () => {},
+    });
+
+    const inverseOps = service.applyCellMutationsAtNow(
+      [{ sheetId: sheet.id, mutation: { kind: "setCellValue", row: 0, col: 0, value: 9 } }],
+      {
+        captureUndo: true,
+        source: "local",
+        potentialNewCells: 1,
+        returnUndoOps: false,
+      },
+    );
+
+    expect(inverseOps).toBeNull();
+    expect(state.undoStack).toHaveLength(1);
+    expect(state.undoStack[0]?.inverse.ops).toEqual([
       { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
     ]);
   });

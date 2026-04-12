@@ -14,9 +14,13 @@ import {
 import { CellFlags } from "../../cell-store.js";
 import { definedNameValueToCellValue } from "../../engine-metadata-utils.js";
 import { emptyValue, errorValue } from "../../engine-value-utils.js";
-import type { EngineRuntimeState } from "../runtime-state.js";
+import type { EngineRuntimeState, RuntimeFormula } from "../runtime-state.js";
 import { EngineFormulaEvaluationError } from "../errors.js";
-import type { EngineLookupService } from "./lookup-service.js";
+import type {
+  EngineLookupService,
+  PreparedApproximateVectorLookup,
+  PreparedExactVectorLookup,
+} from "./lookup-service.js";
 
 export interface EngineFormulaEvaluationService {
   readonly evaluateUnsupportedFormula: (
@@ -53,6 +57,121 @@ function referenceReplacementKey(sheetName: string, address: string): string {
   return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
 }
 
+type DirectLookupOperandInstruction =
+  | { opcode: "push-cell"; address: string; sheetName?: string }
+  | { opcode: "push-number"; value: number }
+  | { opcode: "push-boolean"; value: boolean }
+  | { opcode: "push-string"; value: string }
+  | { opcode: "push-error"; code: ErrorCode }
+  | { opcode: "push-name"; name: string };
+
+type DirectExactLookupInstruction = {
+  opcode: "lookup-exact-match";
+  sheetName?: string;
+  start: string;
+  end: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+  searchMode: 1 | -1;
+};
+
+type DirectApproximateLookupInstruction = {
+  opcode: "lookup-approximate-match";
+  sheetName?: string;
+  start: string;
+  end: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+  matchMode: 1 | -1;
+};
+
+type DirectVectorLookupInstruction =
+  | DirectExactLookupInstruction
+  | DirectApproximateLookupInstruction;
+
+type CachedDirectVectorLookup =
+  | {
+      kind: "exact";
+      operandSheetName: string;
+      operandRow: number;
+      operandCol: number;
+      prepared: PreparedExactVectorLookup;
+      searchMode: 1 | -1;
+    }
+  | {
+      kind: "approximate";
+      operandSheetName: string;
+      operandRow: number;
+      operandCol: number;
+      prepared: PreparedApproximateVectorLookup;
+      matchMode: 1 | -1;
+    };
+
+function directLookupCacheKey(
+  kind: "exact" | "approximate",
+  sheetName: string,
+  rowStart: number,
+  rowEnd: number,
+  col: number,
+): string {
+  return `${kind}\t${sheetName}\t${rowStart}\t${rowEnd}\t${col}`;
+}
+
+function isDirectLookupOperandInstruction(value: unknown): value is DirectLookupOperandInstruction {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const opcode = Reflect.get(value, "opcode");
+  switch (opcode) {
+    case "push-cell":
+      return typeof Reflect.get(value, "address") === "string";
+    case "push-number":
+      return typeof Reflect.get(value, "value") === "number";
+    case "push-boolean":
+      return typeof Reflect.get(value, "value") === "boolean";
+    case "push-string":
+      return typeof Reflect.get(value, "value") === "string";
+    case "push-error":
+      return typeof Reflect.get(value, "code") === "number";
+    case "push-name":
+      return typeof Reflect.get(value, "name") === "string";
+    default:
+      return false;
+  }
+}
+
+function isDirectVectorLookupInstruction(value: unknown): value is DirectVectorLookupInstruction {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const opcode = Reflect.get(value, "opcode");
+  if (
+    (opcode !== "lookup-exact-match" && opcode !== "lookup-approximate-match") ||
+    typeof Reflect.get(value, "start") !== "string" ||
+    typeof Reflect.get(value, "end") !== "string" ||
+    typeof Reflect.get(value, "startRow") !== "number" ||
+    typeof Reflect.get(value, "endRow") !== "number" ||
+    typeof Reflect.get(value, "startCol") !== "number" ||
+    typeof Reflect.get(value, "endCol") !== "number"
+  ) {
+    return false;
+  }
+  if (opcode === "lookup-exact-match") {
+    const searchMode = Reflect.get(value, "searchMode");
+    return searchMode === 1 || searchMode === -1;
+  }
+  const matchMode = Reflect.get(value, "matchMode");
+  return matchMode === 1 || matchMode === -1;
+}
+
+function isReturnInstruction(value: unknown): value is { opcode: "return" } {
+  return !!value && typeof value === "object" && Reflect.get(value, "opcode") === "return";
+}
+
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "useColumnIndex">;
   readonly lookup: EngineLookupService;
@@ -68,12 +187,58 @@ export function createEngineFormulaEvaluationService(args: {
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ) => CellValue;
 }): EngineFormulaEvaluationService {
+  const preparedExactLookupCache = new WeakMap<
+    RuntimeFormula,
+    Map<string, PreparedExactVectorLookup>
+  >();
+  const preparedApproximateLookupCache = new WeakMap<
+    RuntimeFormula,
+    Map<string, PreparedApproximateVectorLookup>
+  >();
+  const directVectorLookupPlanCache = new WeakMap<
+    RuntimeFormula,
+    CachedDirectVectorLookup | null
+  >();
+
   const readCellValue = (sheetName: string, address: string): CellValue => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
       return emptyValue();
     }
     return args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id));
+  };
+
+  const readCellValueAt = (sheetName: string, row: number, col: number): CellValue => {
+    const sheet = args.state.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return emptyValue();
+    }
+    const cellIndex = sheet.grid.get(row, col);
+    if (cellIndex === -1) {
+      return emptyValue();
+    }
+    const cellStore = args.state.workbook.cellStore;
+    const tag = cellStore.tags[cellIndex];
+    switch (tag) {
+      case undefined:
+      case ValueTag.Empty:
+        return emptyValue();
+      case ValueTag.Number:
+        return { tag: ValueTag.Number, value: cellStore.numbers[cellIndex] ?? 0 };
+      case ValueTag.Boolean:
+        return { tag: ValueTag.Boolean, value: (cellStore.numbers[cellIndex] ?? 0) !== 0 };
+      case ValueTag.String: {
+        const stringId = cellStore.stringIds[cellIndex] ?? 0;
+        return {
+          tag: ValueTag.String,
+          value: stringId === 0 ? "" : args.state.strings.get(stringId),
+          stringId,
+        };
+      }
+      case ValueTag.Error:
+        return errorValue(cellStore.errors[cellIndex] ?? ErrorCode.Value);
+    }
+    return emptyValue();
   };
 
   const readRangeValues = (
@@ -134,6 +299,200 @@ export function createEngineFormulaEvaluationService(args: {
         resolveIndexedExactMatch,
       })
     : undefined;
+
+  const resolvePreparedExactVectorMatch = (
+    formula: RuntimeFormula,
+    request: {
+      lookupValue: CellValue;
+      sheetName: string;
+      start: string;
+      end: string;
+      startRow: number;
+      endRow: number;
+      startCol: number;
+      endCol: number;
+      searchMode: 1 | -1;
+    },
+  ) => {
+    if (request.startCol !== request.endCol) {
+      return args.lookup.findExactVectorMatch(request);
+    }
+    let preparedByKey = preparedExactLookupCache.get(formula);
+    if (!preparedByKey) {
+      preparedByKey = new Map();
+      preparedExactLookupCache.set(formula, preparedByKey);
+    }
+    const cacheKey = directLookupCacheKey(
+      "exact",
+      request.sheetName,
+      request.startRow,
+      request.endRow,
+      request.startCol,
+    );
+    let prepared = preparedByKey.get(cacheKey);
+    if (!prepared) {
+      prepared = args.lookup.prepareExactVectorLookup({
+        sheetName: request.sheetName,
+        rowStart: request.startRow,
+        rowEnd: request.endRow,
+        col: request.startCol,
+      });
+      preparedByKey.set(cacheKey, prepared);
+    }
+    return args.lookup.findPreparedExactVectorMatch({
+      lookupValue: request.lookupValue,
+      prepared,
+      searchMode: request.searchMode,
+    });
+  };
+
+  const resolvePreparedApproximateVectorMatch = (
+    formula: RuntimeFormula,
+    request: {
+      lookupValue: CellValue;
+      sheetName: string;
+      start: string;
+      end: string;
+      startRow: number;
+      endRow: number;
+      startCol: number;
+      endCol: number;
+      matchMode: 1 | -1;
+    },
+  ) => {
+    if (request.startCol !== request.endCol) {
+      return args.lookup.findApproximateVectorMatch(request);
+    }
+    let preparedByKey = preparedApproximateLookupCache.get(formula);
+    if (!preparedByKey) {
+      preparedByKey = new Map();
+      preparedApproximateLookupCache.set(formula, preparedByKey);
+    }
+    const cacheKey = directLookupCacheKey(
+      "approximate",
+      request.sheetName,
+      request.startRow,
+      request.endRow,
+      request.startCol,
+    );
+    let prepared = preparedByKey.get(cacheKey);
+    if (!prepared) {
+      prepared = args.lookup.prepareApproximateVectorLookup({
+        sheetName: request.sheetName,
+        rowStart: request.startRow,
+        rowEnd: request.endRow,
+        col: request.startCol,
+      });
+      preparedByKey.set(cacheKey, prepared);
+    }
+    return args.lookup.findPreparedApproximateVectorMatch({
+      lookupValue: request.lookupValue,
+      prepared,
+      matchMode: request.matchMode,
+    });
+  };
+
+  const getCachedDirectVectorLookup = (
+    formula: RuntimeFormula,
+    ownerSheetName: string,
+    jsPlan: readonly unknown[],
+  ): CachedDirectVectorLookup | null => {
+    const cached = directVectorLookupPlanCache.get(formula);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const [operand, lookup, terminal] = jsPlan;
+    if (!operand || !lookup || !terminal || !isReturnInstruction(terminal)) {
+      directVectorLookupPlanCache.set(formula, null);
+      return null;
+    }
+    if (!isDirectLookupOperandInstruction(operand) || !isDirectVectorLookupInstruction(lookup)) {
+      directVectorLookupPlanCache.set(formula, null);
+      return null;
+    }
+    if (operand.opcode !== "push-cell") {
+      directVectorLookupPlanCache.set(formula, null);
+      return null;
+    }
+    const operandSheetName = operand.sheetName ?? ownerSheetName;
+    const operandAddress = parseCellAddress(operand.address, operandSheetName);
+    if (lookup.opcode === "lookup-exact-match") {
+      const prepared = args.lookup.prepareExactVectorLookup({
+        sheetName: lookup.sheetName ?? ownerSheetName,
+        rowStart: lookup.startRow,
+        rowEnd: lookup.endRow,
+        col: lookup.startCol,
+      });
+      const directLookup: CachedDirectVectorLookup = {
+        kind: "exact",
+        operandSheetName,
+        operandRow: operandAddress.row,
+        operandCol: operandAddress.col,
+        prepared,
+        searchMode: lookup.searchMode,
+      };
+      directVectorLookupPlanCache.set(formula, directLookup);
+      return directLookup;
+    }
+    if (lookup.opcode === "lookup-approximate-match") {
+      const prepared = args.lookup.prepareApproximateVectorLookup({
+        sheetName: lookup.sheetName ?? ownerSheetName,
+        rowStart: lookup.startRow,
+        rowEnd: lookup.endRow,
+        col: lookup.startCol,
+      });
+      const directLookup: CachedDirectVectorLookup = {
+        kind: "approximate",
+        operandSheetName,
+        operandRow: operandAddress.row,
+        operandCol: operandAddress.col,
+        prepared,
+        matchMode: lookup.matchMode,
+      };
+      directVectorLookupPlanCache.set(formula, directLookup);
+      return directLookup;
+    }
+    directVectorLookupPlanCache.set(formula, null);
+    return null;
+  };
+
+  const tryEvaluateDirectVectorLookup = (
+    formula: RuntimeFormula,
+    ownerSheetName: string,
+    jsPlan: readonly unknown[],
+  ): CellValue | undefined => {
+    const directLookup = getCachedDirectVectorLookup(formula, ownerSheetName, jsPlan);
+    if (!directLookup) {
+      return undefined;
+    }
+    const lookupValue = readCellValueAt(
+      directLookup.operandSheetName,
+      directLookup.operandRow,
+      directLookup.operandCol,
+    );
+    if (directLookup.kind === "exact") {
+      const result = args.lookup.findPreparedExactVectorMatch({
+        lookupValue,
+        prepared: directLookup.prepared,
+        searchMode: directLookup.searchMode,
+      });
+      return result.handled
+        ? result.position === undefined
+          ? errorValue(ErrorCode.NA)
+          : { tag: ValueTag.Number, value: result.position }
+        : undefined;
+    }
+    const result = args.lookup.findPreparedApproximateVectorMatch({
+      lookupValue,
+      prepared: directLookup.prepared,
+      matchMode: directLookup.matchMode,
+    });
+    return result.handled
+      ? result.position === undefined
+        ? errorValue(ErrorCode.NA)
+        : { tag: ValueTag.Number, value: result.position }
+      : undefined;
+  };
 
   const resolveStructuredReferenceNow = (
     tableName: string,
@@ -376,15 +735,37 @@ export function createEngineFormulaEvaluationService(args: {
         [...args.state.workbook.sheetsByName.values()]
           .toSorted((left, right) => left.order - right.order)
           .map((sheet) => sheet.name),
-      resolveExactVectorMatch: (request) => args.lookup.findExactVectorMatch(request),
-      resolveApproximateVectorMatch: (request) => args.lookup.findApproximateVectorMatch(request),
+      resolveExactVectorMatch: (request) => {
+        if (
+          request.startRow === undefined ||
+          request.endRow === undefined ||
+          request.startCol === undefined ||
+          request.endCol === undefined
+        ) {
+          return args.lookup.findExactVectorMatch(request);
+        }
+        return resolvePreparedExactVectorMatch(formula, request);
+      },
+      resolveApproximateVectorMatch: (request) => {
+        if (
+          request.startRow === undefined ||
+          request.endRow === undefined ||
+          request.startCol === undefined ||
+          request.endCol === undefined
+        ) {
+          return args.lookup.findApproximateVectorMatch(request);
+        }
+        return resolvePreparedApproximateVectorMatch(formula, request);
+      },
       ...(lookupBuiltinResolver
         ? {
             resolveLookupBuiltin: lookupBuiltinResolver,
           }
         : {}),
     };
-    const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
+    const result =
+      tryEvaluateDirectVectorLookup(formula, sheetName, formula.compiled.jsPlan) ??
+      evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
 
     const materialization = isArrayValue(result)
       ? args.materializeSpill(cellIndex, result)

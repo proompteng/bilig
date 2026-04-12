@@ -27,7 +27,7 @@ import {
   type NameRefNode,
   type CallExprNode,
 } from "@bilig/formula";
-import { tryLoadInitialLiteralSheet } from "./initial-sheet-load.js";
+import { loadInitialMixedSheet, tryLoadInitialLiteralSheet } from "./initial-sheet-load.js";
 import { orderWorkPaperCellChanges } from "./change-order.js";
 import {
   WorkPaperConfigValueTooBigError,
@@ -477,6 +477,12 @@ function isDeferredBatchLiteralContent(content: RawCellContent): boolean {
     typeof content === "boolean" ||
     typeof content === "number" ||
     typeof content === "string"
+  );
+}
+
+function canUseInitialMixedSheetFastPath(content: WorkPaperSheet): boolean {
+  return content.some((row) =>
+    row.some((value) => typeof value === "string" && value.trim().startsWith("=")),
   );
 }
 
@@ -1130,9 +1136,20 @@ export class WorkPaper {
       });
       Object.entries(sheets).forEach(([sheetName, sheet]) => {
         const sheetId = workbook.requireSheetId(sheetName);
-        if (!tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
-          workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+        if (tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
+          return;
         }
+        if (canUseInitialMixedSheetFastPath(sheet)) {
+          loadInitialMixedSheet({
+            engine: workbook.engine,
+            sheetId,
+            content: sheet,
+            rewriteFormula: (formula, destination) =>
+              workbook.rewriteFormulaForStorage(formula, destination.sheet),
+          });
+          return;
+        }
+        workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
       });
     });
     workbook.clearHistoryStacks();
@@ -1632,9 +1649,7 @@ export class WorkPaper {
   getRangeValues(range: WorkPaperCellRange): CellValue[][] {
     this.assertReadable();
     const ref = this.rangeRef(range);
-    return this.engine
-      .getRangeValues(ref)
-      .map((row: readonly CellValue[]) => row.map((value: CellValue) => cloneCellValue(value)));
+    return this.engine.getRangeValues(ref);
   }
 
   getRangeFormulas(range: WorkPaperCellRange): Array<Array<string | undefined>> {
@@ -2861,7 +2876,10 @@ export class WorkPaper {
 
   private primeChangeTrackingCaches(): void {
     this.visibilityCache = this.captureVisibilitySnapshot();
-    this.namedExpressionValueCache = this.captureNamedExpressionValueSnapshot();
+    this.namedExpressionValueCache =
+      this.namedExpressions.size > 0
+        ? this.captureNamedExpressionValueSnapshot()
+        : EMPTY_NAMED_EXPRESSION_VALUES;
     this.drainTrackedEngineEvents();
   }
 
@@ -2874,7 +2892,10 @@ export class WorkPaper {
 
   private ensureNamedExpressionValueCache(): NamedExpressionValueSnapshot {
     if (!this.namedExpressionValueCache) {
-      this.namedExpressionValueCache = this.captureNamedExpressionValueSnapshot();
+      this.namedExpressionValueCache =
+        this.namedExpressions.size > 0
+          ? this.captureNamedExpressionValueSnapshot()
+          : EMPTY_NAMED_EXPRESSION_VALUES;
     }
     return this.namedExpressionValueCache;
   }
@@ -2887,7 +2908,13 @@ export class WorkPaper {
     const potentialNewCells = this.pendingBatchPotentialNewCells;
     this.pendingBatchOps = [];
     this.pendingBatchPotentialNewCells = 0;
-    this.engine.applyCellMutationsAt(ops, potentialNewCells > 0 ? potentialNewCells : undefined);
+    this.engine.applyCellMutationsAtWithOptions(ops, {
+      captureUndo: true,
+      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      source: "local",
+      returnUndoOps: false,
+      reuseRefs: true,
+    });
   }
 
   private enqueueDeferredBatchLiteral(
@@ -2903,6 +2930,7 @@ export class WorkPaper {
     ) {
       return false;
     }
+    const existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1;
     if (content === null) {
       this.pendingBatchOps.push({ sheetId, mutation: { kind: "clearCell", row, col } });
       return true;
@@ -2911,7 +2939,9 @@ export class WorkPaper {
       sheetId,
       mutation: { kind: "setCellValue", row, col, value: content },
     });
-    this.pendingBatchPotentialNewCells += 1;
+    if (existingCellIndex === -1) {
+      this.pendingBatchPotentialNewCells += 1;
+    }
     return true;
   }
 
@@ -3302,7 +3332,10 @@ export class WorkPaper {
       return [];
     }
     const beforeVisibility = this.ensureVisibilityCache();
-    const beforeNames = this.ensureNamedExpressionValueCache();
+    const beforeNames =
+      this.namedExpressions.size > 0
+        ? this.ensureNamedExpressionValueCache()
+        : EMPTY_NAMED_EXPRESSION_VALUES;
     this.drainTrackedEngineEvents();
     try {
       mutate();
@@ -3453,6 +3486,8 @@ export class WorkPaper {
       captureUndo: true,
       potentialNewCells,
       source: "local",
+      returnUndoOps: false,
+      reuseRefs: true,
     });
   }
 
@@ -3484,6 +3519,8 @@ export class WorkPaper {
         captureUndo?: boolean;
         potentialNewCells?: number;
         source?: "local" | "restore";
+        returnUndoOps?: boolean;
+        reuseRefs?: boolean;
       },
     ): void => {
       if (phaseRefs.length === 0) {
@@ -3498,6 +3535,8 @@ export class WorkPaper {
         captureUndo: options.captureUndo,
         potentialNewCells,
         source: phaseSource,
+        returnUndoOps: false,
+        reuseRefs: true,
       });
       return;
     }
@@ -3506,16 +3545,22 @@ export class WorkPaper {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,
+      returnUndoOps: false,
+      reuseRefs: true,
     });
     applyPlannedRefs(formulaRefs, {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,
+      returnUndoOps: false,
+      reuseRefs: true,
     });
     applyPlannedRefs(trailingLiteralRefs, {
       captureUndo: options.captureUndo,
       potentialNewCells,
       source: phaseSource,
+      returnUndoOps: false,
+      reuseRefs: true,
     });
   }
 
@@ -3541,24 +3586,29 @@ export class WorkPaper {
   }
 
   private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
-    if (content === null) {
-      this.engine.clearCellAt(address.sheet, address.row, address.col);
-      return;
-    }
-    if (typeof content === "boolean" || typeof content === "number") {
-      this.engine.setCellValueAt(address.sheet, address.row, address.col, content);
-      return;
-    }
-    if (typeof content === "string" && content.trim().startsWith("=")) {
-      this.engine.setCellFormulaAt(
-        address.sheet,
-        address.row,
-        address.col,
-        this.rewriteFormulaForStorage(stripLeadingEquals(content), address.sheet),
-      );
-      return;
-    }
-    this.engine.setCellValueAt(address.sheet, address.row, address.col, content);
+    const mutation: EngineCellMutationRef["mutation"] =
+      content === null
+        ? { kind: "clearCell", row: address.row, col: address.col }
+        : typeof content === "string" && content.trim().startsWith("=")
+          ? {
+              kind: "setCellFormula",
+              row: address.row,
+              col: address.col,
+              formula: this.rewriteFormulaForStorage(stripLeadingEquals(content), address.sheet),
+            }
+          : {
+              kind: "setCellValue",
+              row: address.row,
+              col: address.col,
+              value: content,
+            };
+    this.engine.applyCellMutationsAtWithOptions([{ sheetId: address.sheet, mutation }], {
+      captureUndo: true,
+      potentialNewCells: content === null ? 0 : 1,
+      source: "local",
+      returnUndoOps: false,
+      reuseRefs: true,
+    });
   }
 
   private captureFunctionRegistry(): void {
@@ -3642,9 +3692,10 @@ export class WorkPaper {
       });
       Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
         const sheetId = this.requireSheetId(sheetName);
-        if (!tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
-          this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+        if (tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
+          return;
         }
+        this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
       });
     });
     this.clearHistoryStacks();

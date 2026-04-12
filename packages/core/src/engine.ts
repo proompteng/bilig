@@ -371,7 +371,9 @@ export class SpreadsheetEngine {
         collectFormulaDependents: () => new Uint32Array(),
       },
     });
-    void this.wasm.init();
+    if (!this.wasm.initSyncIfPossible()) {
+      void this.wasm.init();
+    }
   }
 
   async ready(): Promise<void> {
@@ -474,6 +476,7 @@ export class SpreadsheetEngine {
     this.runtime.mutation.executeLocalCellMutationsAtNow(
       [{ sheetId, mutation: { kind: "setCellValue", row, col, value } }],
       1,
+      { returnUndoOps: false },
     );
     return this.getCellValue(sheetName, address);
   }
@@ -492,6 +495,7 @@ export class SpreadsheetEngine {
     this.runtime.mutation.executeLocalCellMutationsAtNow(
       [{ sheetId, mutation: { kind: "setCellFormula", row, col, formula } }],
       1,
+      { returnUndoOps: false },
     );
     return this.getCellValue(sheetName, address);
   }
@@ -504,6 +508,7 @@ export class SpreadsheetEngine {
     this.runtime.mutation.executeLocalCellMutationsAtNow(
       [{ sheetId, mutation: { kind: "clearCell", row, col } }],
       0,
+      { returnUndoOps: false },
     );
   }
 
@@ -520,6 +525,8 @@ export class SpreadsheetEngine {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
     } = {},
   ): readonly EngineOp[] | null {
     return this.runtime.mutation.applyCellMutationsAtNow(refs, options);

@@ -2652,7 +2652,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
   });
 
-  it("uses the wasm fast path for exact vector lookup builtins", async () => {
+  it("uses the direct js path for exact MATCH and XMATCH while keeping XLOOKUP on wasm", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -2670,11 +2670,11 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellFormula("Sheet1", "D1", 'MATCH("pear",A1:A4,0)');
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
 
     engine.setCellFormula("Sheet1", "D3", 'XMATCH("pear",A1:A4,0,-1)');
     expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 3 });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
 
     engine.setCellFormula("Sheet1", "D4", 'XLOOKUP("pear",A1:A4,B1:B4)');
     expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Number, value: 20 });
@@ -2691,7 +2691,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 1 });
     expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Number, value: 10 });
-    expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 2, jsFormulaCount: 2 });
   });
 
   it("uses the direct js path for approximate sorted MATCH", async () => {

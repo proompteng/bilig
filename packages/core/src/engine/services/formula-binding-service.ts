@@ -35,7 +35,7 @@ export interface EngineFormulaBindingService {
     cellIndex: number,
     ownerSheetName: string,
     source: string,
-  ) => Effect.Effect<void, EngineFormulaBindingError>;
+  ) => Effect.Effect<boolean, EngineFormulaBindingError>;
   readonly clearFormula: (cellIndex: number) => Effect.Effect<boolean, EngineFormulaBindingError>;
   readonly invalidateFormula: (cellIndex: number) => Effect.Effect<void, EngineFormulaBindingError>;
   readonly rewriteCellFormulasForSheetRename: (
@@ -61,7 +61,7 @@ export interface EngineFormulaBindingService {
     formulaChangedCount: number,
     candidates?: readonly number[] | U32,
   ) => Effect.Effect<number, EngineFormulaBindingError>;
-  readonly bindFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void;
+  readonly bindFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean;
   readonly clearFormulaNow: (cellIndex: number) => boolean;
   readonly invalidateFormulaNow: (cellIndex: number) => void;
   readonly rebindFormulaCellsNow: (
@@ -251,6 +251,33 @@ type ParsedCompiledFormula = ReturnType<typeof compileFormula> & {
   parsedDeps?: Array<{ address: string; kind: "cell"; sheetName?: string }>;
   parsedSymbolicRefs?: Array<{ address: string; sheetName?: string }>;
 };
+
+function uint32ArrayEqual(
+  left: Uint32Array | readonly number[],
+  right: Uint32Array | readonly number[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function stringArrayEqual(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function collectDirectApproximateLookupCandidates(
   node: FormulaNode,
@@ -502,7 +529,7 @@ export function createEngineFormulaBindingService(args: {
     const compiled = compileFormula(source);
     if (compiled.mode === FormulaMode.WasmFastPath) {
       if (
-        (args.state.useColumnIndex && hasIndexedExactLookupCandidate(compiled.optimizedAst)) ||
+        hasIndexedExactLookupCandidate(compiled.optimizedAst) ||
         hasDirectApproximateLookupCandidate(compiled.optimizedAst)
       ) {
         compiled.mode = FormulaMode.JsOnly;
@@ -535,8 +562,7 @@ export function createEngineFormulaBindingService(args: {
     });
     if (resolvedCompiled.mode === FormulaMode.WasmFastPath) {
       if (
-        (args.state.useColumnIndex &&
-          hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst)) ||
+        hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst) ||
         hasDirectApproximateLookupCandidate(resolvedCompiled.optimizedAst)
       ) {
         resolvedCompiled.mode = FormulaMode.JsOnly;
@@ -757,7 +783,7 @@ export function createEngineFormulaBindingService(args: {
     return existing !== undefined;
   };
 
-  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
+  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
     const compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
     const indexedExactLookupCandidates = args.state.useColumnIndex
       ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
@@ -766,6 +792,17 @@ export function createEngineFormulaBindingService(args: {
       compiled.optimizedAst,
     );
     const dependencies = materializeDependencies(ownerSheetName, compiled);
+    const existing = args.state.formulas.get(cellIndex);
+    const topologyChanged =
+      existing === undefined ||
+      !uint32ArrayEqual(
+        args.edgeArena.readView(existing.dependencyEntities),
+        dependencies.dependencyEntities,
+      ) ||
+      !uint32ArrayEqual(existing.rangeDependencies, dependencies.rangeDependencies) ||
+      !stringArrayEqual(existing.compiled.symbolicNames, compiled.symbolicNames) ||
+      !stringArrayEqual(existing.compiled.symbolicTables, compiled.symbolicTables) ||
+      !stringArrayEqual(existing.compiled.symbolicSpills, compiled.symbolicSpills);
     clearFormulaNow(cellIndex);
 
     ensureDependencyBuildCapacity(
@@ -929,6 +966,7 @@ export function createEngineFormulaBindingService(args: {
         col: candidate.startCol,
       });
     });
+    return topologyChanged;
   };
 
   const invalidateFormulaNow = (cellIndex: number): void => {
@@ -1033,7 +1071,7 @@ export function createEngineFormulaBindingService(args: {
     bindFormula(cellIndex, ownerSheetName, source) {
       return Effect.try({
         try: () => {
-          bindFormulaNow(cellIndex, ownerSheetName, source);
+          return bindFormulaNow(cellIndex, ownerSheetName, source);
         },
         catch: (cause) =>
           new EngineFormulaBindingError({

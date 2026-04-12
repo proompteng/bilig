@@ -19,7 +19,7 @@ type FastHistoryCloneOp = FastHistoryOp | Extract<EngineOp, { kind: "deleteSheet
 export interface FastMutationHistoryResult {
   forward: TransactionRecord;
   inverse: TransactionRecord;
-  undoOps: EngineOp[];
+  undoOps: EngineOp[] | null;
 }
 
 interface FastMutationHistoryArgs {
@@ -27,6 +27,7 @@ interface FastMutationHistoryArgs {
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
   readonly ops: readonly EngineOp[];
   readonly potentialNewCells?: number;
+  readonly includeUndoOps?: boolean;
 }
 
 function isFastHistoryOp(op: EngineOp): op is FastHistoryOp {
@@ -222,14 +223,17 @@ export function tryBuildFastMutationHistory(
       ops: inverseOps,
       potentialNewCells: args.ops.length,
     },
-    undoOps: inverseOps.map((op) => {
-      if (op.kind === "deleteSheet") {
-        return cloneFastHistoryUndoOp(op);
-      }
-      if (!isFastHistoryOp(op)) {
-        throw new TypeError(`Unsupported fast-path undo op: ${op.kind}`);
-      }
-      return cloneFastHistoryUndoOp(op);
-    }),
+    undoOps:
+      args.includeUndoOps === false
+        ? null
+        : inverseOps.map((op) => {
+            if (op.kind === "deleteSheet") {
+              return cloneFastHistoryUndoOp(op);
+            }
+            if (!isFastHistoryOp(op)) {
+              throw new TypeError(`Unsupported fast-path undo op: ${op.kind}`);
+            }
+            return cloneFastHistoryUndoOp(op);
+          }),
   };
 }

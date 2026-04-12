@@ -157,7 +157,7 @@ export function createEngineOperationService(args: {
   readonly clearPivotForCell: (cellIndex: number) => number[];
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
   readonly removeFormula: (cellIndex: number) => boolean;
-  readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void;
+  readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => boolean;
   readonly setInvalidFormulaValue: (cellIndex: number) => void;
   readonly beginMutationCollection: () => void;
   readonly markInputChanged: (cellIndex: number, count: number) => number;
@@ -708,12 +708,12 @@ export function createEngineOperationService(args: {
             }
             const compileStarted = isRestore ? 0 : performance.now();
             try {
-              args.bindFormula(cellIndex, op.sheetName, op.formula);
+              const changedTopology = args.bindFormula(cellIndex, op.sheetName, op.formula);
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted;
               }
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
-              topologyChanged = true;
+              topologyChanged = topologyChanged || changedTopology;
             } catch {
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted;
@@ -1030,12 +1030,12 @@ export function createEngineOperationService(args: {
               }
               const compileStarted = isRestore ? 0 : performance.now();
               try {
-                args.bindFormula(cellIndex, sheetName, mutation.formula);
+                const changedTopology = args.bindFormula(cellIndex, sheetName, mutation.formula);
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted;
                 }
                 formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
-                topologyChanged = true;
+                topologyChanged = topologyChanged || changedTopology;
               } catch {
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted;

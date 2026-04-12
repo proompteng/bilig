@@ -39,4 +39,32 @@ describe("loadLiteralSheetIntoEmptySheet", () => {
 
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 7 });
   });
+
+  it("can skip formula-like strings while bulk-loading the literal subset", () => {
+    const engine = new SpreadsheetEngine({ workbookName: "literal-filtered-load" });
+    engine.workbook.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    const loaded = loadLiteralSheetIntoEmptySheet(
+      engine.workbook,
+      engine.strings,
+      sheetId,
+      [
+        [1, "=A1+1", "ok"],
+        [null, "=B1+1", false],
+      ],
+      (raw) => !(typeof raw === "string" && raw.startsWith("=")),
+    );
+
+    expect(loaded).toBe(4);
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({
+      tag: ValueTag.String,
+      value: "ok",
+      stringId: expect.any(Number),
+    });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Boolean, value: false });
+  });
 });

@@ -58,6 +58,10 @@ export interface EngineMutationService {
   readonly executeLocalCellMutationsAtNow: (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
+    options?: {
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
+    },
   ) => readonly EngineOp[] | null;
   readonly applyCellMutationsAtNow: (
     refs: readonly EngineCellMutationRef[],
@@ -65,6 +69,8 @@ export interface EngineMutationService {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
     },
   ) => readonly EngineOp[] | null;
   readonly applyCellMutationsAt: (
@@ -73,6 +79,8 @@ export interface EngineMutationService {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
     },
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>;
   readonly executeLocal: (
@@ -182,11 +190,38 @@ export function createEngineMutationService(args: {
       throw new Error(`Unknown sheet id: ${ref.sheetId}`);
     }
     const address = formatAddress(ref.mutation.row, ref.mutation.col);
-    const cellIndex = args.state.workbook.cellKeyToIndex.get(
-      makeCellKey(ref.sheetId, ref.mutation.row, ref.mutation.col),
-    );
+    const cellIndex =
+      sheet.grid.get(ref.mutation.row, ref.mutation.col) === -1
+        ? undefined
+        : args.state.workbook.cellKeyToIndex.get(
+            makeCellKey(ref.sheetId, ref.mutation.row, ref.mutation.col),
+          );
     if (cellIndex === undefined) {
       return { kind: "clearCell", sheetName: sheet.name, address };
+    }
+    const cellStore = args.state.workbook.cellStore;
+    const formulaId = cellStore.formulaIds[cellIndex] ?? 0;
+    if (formulaId === 0) {
+      const tag = cellStore.tags[cellIndex];
+      if (tag === ValueTag.Number) {
+        return {
+          kind: "setCellValue",
+          sheetName: sheet.name,
+          address,
+          value: cellStore.numbers[cellIndex] ?? 0,
+        };
+      }
+      if (tag === ValueTag.Boolean) {
+        return {
+          kind: "setCellValue",
+          sheetName: sheet.name,
+          address,
+          value: (cellStore.numbers[cellIndex] ?? 0) !== 0,
+        };
+      }
+      if (tag === ValueTag.Empty || tag === ValueTag.Error || tag === undefined) {
+        return { kind: "clearCell", sheetName: sheet.name, address };
+      }
     }
     const snapshot = args.getCellByIndex(cellIndex);
     if (snapshot.formula !== undefined) {
@@ -216,6 +251,9 @@ export function createEngineMutationService(args: {
   const buildFastMutationHistoryFromRefs = (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells: number,
+    options: {
+      includeUndoOps?: boolean;
+    } = {},
   ): FastMutationHistoryResult => {
     const forwardOps: EngineOp[] = Array.from({ length: refs.length });
     for (let index = 0; index < refs.length; index += 1) {
@@ -231,7 +269,7 @@ export function createEngineMutationService(args: {
     return {
       forward: { ops: forwardOps, potentialNewCells },
       inverse: { ops: inverseOps, potentialNewCells: refs.length },
-      undoOps: structuredClone(inverseOps),
+      undoOps: options.includeUndoOps === false ? null : structuredClone(inverseOps),
     };
   };
 
@@ -696,14 +734,20 @@ export function createEngineMutationService(args: {
   const executeLocalCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
+    options: {
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
+    } = {},
   ): readonly EngineOp[] | null => {
     if (refs.length === 0) {
       return null;
     }
-    const nextRefs = refs.map((ref) => cloneCellMutationRef(ref));
+    const nextRefs = options.reuseRefs ? refs : refs.map((ref) => cloneCellMutationRef(ref));
     const nextPotentialNewCells =
       potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs);
-    const fastHistory = buildFastMutationHistoryFromRefs(nextRefs, nextPotentialNewCells);
+    const fastHistory = buildFastMutationHistoryFromRefs(nextRefs, nextPotentialNewCells, {
+      includeUndoOps: options.returnUndoOps !== false,
+    });
     const inverse: TransactionRecord = fastHistory?.inverse ?? {
       ops: buildInverseOps(fastHistory.forward.ops),
       potentialNewCells: fastHistory.forward.ops.length,
@@ -724,6 +768,9 @@ export function createEngineMutationService(args: {
       });
       args.state.redoStack.length = 0;
     }
+    if (options.returnUndoOps === false) {
+      return null;
+    }
     return fastHistory?.undoOps ?? structuredClone(inverse.ops);
   };
 
@@ -733,17 +780,31 @@ export function createEngineMutationService(args: {
       captureUndo?: boolean;
       potentialNewCells?: number;
       source?: "local" | "restore";
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
     } = {},
   ): readonly EngineOp[] | null => {
     const source = options.source ?? "restore";
     const captureUndo = options.captureUndo ?? source === "local";
     if (captureUndo) {
-      return executeLocalCellMutationsAtNow(refs, options.potentialNewCells);
+      const executeOptions: {
+        returnUndoOps?: boolean;
+        reuseRefs?: boolean;
+      } = {};
+      if (options.returnUndoOps !== undefined) {
+        executeOptions.returnUndoOps = options.returnUndoOps;
+      }
+      if (options.reuseRefs !== undefined) {
+        executeOptions.reuseRefs = options.reuseRefs;
+      }
+      return executeLocalCellMutationsAtNow(refs, options.potentialNewCells, {
+        ...executeOptions,
+      });
     }
     if (refs.length === 0) {
       return null;
     }
-    const nextRefs = refs.map((ref) => cloneCellMutationRef(ref));
+    const nextRefs = options.reuseRefs ? refs : refs.map((ref) => cloneCellMutationRef(ref));
     const nextPotentialNewCells =
       options.potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs);
     const forwardOps = nextRefs.map((ref) => cellMutationRefToEngineOp(args.state.workbook, ref));
