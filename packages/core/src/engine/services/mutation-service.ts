@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { formatAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type CellSnapshot, type LiteralInput } from "@bilig/protocol";
 import { normalizeRange } from "../../engine-range-utils.js";
@@ -15,7 +15,12 @@ import {
   countPotentialNewCellsForMutationRefs,
   type EngineCellMutationRef,
 } from "../../cell-mutations-at.js";
-import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
+import type {
+  CommitOp,
+  EngineRuntimeState,
+  PreparedCellAddress,
+  TransactionRecord,
+} from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 import {
   tryBuildFastMutationHistory,
@@ -176,6 +181,7 @@ export function createEngineMutationService(args: {
     batch: EngineOpBatch,
     source: "local" | "restore" | "history",
     potentialNewCells?: number,
+    preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[],
   ) => void;
   readonly applyCellMutationsAtBatchNow: (
     refs: readonly EngineCellMutationRef[],
@@ -731,6 +737,67 @@ export function createEngineMutationService(args: {
     args.applyBatchNow(batch, source, record.potentialNewCells);
   };
 
+  const executeLocalNowWithCustomApply = (
+    ops: EngineOp[],
+    potentialNewCells: number | undefined,
+    applyForward: (forward: TransactionRecord) => void,
+    options: {
+      returnUndoOps?: boolean;
+      reuseForwardOps?: boolean;
+      preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[];
+    } = {},
+  ): readonly EngineOp[] | null => {
+    if (ops.length === 0) {
+      return null;
+    }
+    const forward: TransactionRecord =
+      potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
+    const baseFastHistoryArgs: Parameters<typeof tryBuildFastMutationHistory>[0] =
+      potentialNewCells === undefined
+        ? {
+            workbook: args.state.workbook,
+            getCellByIndex: args.getCellByIndex,
+            ops,
+            cloneForwardOps: options.reuseForwardOps !== true,
+          }
+        : {
+            workbook: args.state.workbook,
+            getCellByIndex: args.getCellByIndex,
+            ops,
+            potentialNewCells,
+            includeUndoOps: options.returnUndoOps !== false,
+            cloneForwardOps: options.reuseForwardOps !== true,
+          };
+    const fastHistoryArgs: Parameters<typeof tryBuildFastMutationHistory>[0] =
+      options.preparedCellAddressesByOpIndex
+        ? {
+            ...baseFastHistoryArgs,
+            preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
+          }
+        : baseFastHistoryArgs;
+    const fastHistory = tryBuildFastMutationHistory(fastHistoryArgs);
+    const inverse: TransactionRecord = fastHistory?.inverse ?? {
+      ops: buildInverseOps(ops),
+      potentialNewCells: ops.length,
+    };
+    applyForward(forward);
+    if (args.state.getTransactionReplayDepth() === 0) {
+      args.state.undoStack.push({
+        forward:
+          fastHistory?.forward ??
+          (potentialNewCells === undefined
+            ? { ops: canonicalizeForwardOps(ops) }
+            : { ops: canonicalizeForwardOps(ops), potentialNewCells }),
+        inverse,
+      });
+      args.state.redoStack.length = 0;
+    }
+    if (options.returnUndoOps === false) {
+      return null;
+    }
+    return fastHistory?.undoOps ?? structuredClone(inverse.ops);
+  };
+
   const executeLocalCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
@@ -832,42 +899,14 @@ export function createEngineMutationService(args: {
       });
     },
     executeLocalNow(ops, potentialNewCells) {
-      if (ops.length === 0) {
-        return null;
-      }
-      const forward: TransactionRecord =
-        potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
-      const fastHistory = tryBuildFastMutationHistory(
-        potentialNewCells === undefined
-          ? {
-              workbook: args.state.workbook,
-              getCellByIndex: args.getCellByIndex,
-              ops,
-            }
-          : {
-              workbook: args.state.workbook,
-              getCellByIndex: args.getCellByIndex,
-              ops,
-              potentialNewCells,
-            },
+      return executeLocalNowWithCustomApply(
+        ops,
+        potentialNewCells,
+        (forward) => {
+          executeTransactionNow(forward, "local");
+        },
+        { returnUndoOps: true, reuseForwardOps: false },
       );
-      const inverse: TransactionRecord = fastHistory?.inverse ?? {
-        ops: buildInverseOps(ops),
-        potentialNewCells: ops.length,
-      };
-      executeTransactionNow(forward, "local");
-      if (args.state.getTransactionReplayDepth() === 0) {
-        args.state.undoStack.push({
-          forward:
-            fastHistory?.forward ??
-            (potentialNewCells === undefined
-              ? { ops: canonicalizeForwardOps(ops) }
-              : { ops: canonicalizeForwardOps(ops), potentialNewCells }),
-          inverse,
-        });
-        args.state.redoStack.length = 0;
-      }
-      return fastHistory?.undoOps ?? structuredClone(inverse.ops);
     },
     executeLocalCellMutationsAtNow(refs, potentialNewCells) {
       return executeLocalCellMutationsAtNow(refs, potentialNewCells);
@@ -1236,22 +1275,30 @@ export function createEngineMutationService(args: {
         Effect.try({
           try: () => {
             const engineOps: EngineOp[] = [];
+            const preparedCellAddressesByOpIndex: Array<PreparedCellAddress | null> = [];
             let potentialNewCells = 0;
+            const pushEngineOp = (
+              engineOp: EngineOp,
+              preparedCellAddress: PreparedCellAddress | null = null,
+            ): void => {
+              engineOps.push(engineOp);
+              preparedCellAddressesByOpIndex.push(preparedCellAddress);
+            };
             ops.forEach((op) => {
               switch (op.kind) {
                 case "upsertWorkbook":
                   if (op.name) {
-                    engineOps.push({ kind: "upsertWorkbook", name: op.name });
+                    pushEngineOp({ kind: "upsertWorkbook", name: op.name });
                   }
                   break;
                 case "upsertSheet":
                   if (op.name) {
-                    engineOps.push({ kind: "upsertSheet", name: op.name, order: op.order ?? 0 });
+                    pushEngineOp({ kind: "upsertSheet", name: op.name, order: op.order ?? 0 });
                   }
                   break;
                 case "renameSheet":
                   if (op.oldName && op.newName) {
-                    engineOps.push({
+                    pushEngineOp({
                       kind: "renameSheet",
                       oldName: op.oldName,
                       newName: op.newName,
@@ -1260,31 +1307,38 @@ export function createEngineMutationService(args: {
                   break;
                 case "deleteSheet":
                   if (op.name) {
-                    engineOps.push({ kind: "deleteSheet", name: op.name });
+                    pushEngineOp({ kind: "deleteSheet", name: op.name });
                   }
                   break;
-                case "upsertCell":
+                case "upsertCell": {
                   if (!op.sheetName || !op.addr) {
                     break;
                   }
+                  const preparedCellAddress = parseCellAddress(op.addr, op.sheetName);
                   if (op.formula !== undefined) {
-                    engineOps.push({
-                      kind: "setCellFormula",
-                      sheetName: op.sheetName,
-                      address: op.addr,
-                      formula: op.formula,
-                    });
+                    pushEngineOp(
+                      {
+                        kind: "setCellFormula",
+                        sheetName: op.sheetName,
+                        address: op.addr,
+                        formula: op.formula,
+                      },
+                      { row: preparedCellAddress.row, col: preparedCellAddress.col },
+                    );
                   } else {
-                    engineOps.push({
-                      kind: "setCellValue",
-                      sheetName: op.sheetName,
-                      address: op.addr,
-                      value: op.value ?? null,
-                    });
+                    pushEngineOp(
+                      {
+                        kind: "setCellValue",
+                        sheetName: op.sheetName,
+                        address: op.addr,
+                        value: op.value ?? null,
+                      },
+                      { row: preparedCellAddress.row, col: preparedCellAddress.col },
+                    );
                   }
                   potentialNewCells += 1;
                   if (op.format !== undefined) {
-                    engineOps.push({
+                    pushEngineOp({
                       kind: "setCellFormat",
                       sheetName: op.sheetName,
                       address: op.addr,
@@ -1292,14 +1346,19 @@ export function createEngineMutationService(args: {
                     });
                   }
                   break;
-                case "deleteCell":
+                }
+                case "deleteCell": {
                   if (op.sheetName && op.addr) {
-                    engineOps.push({
-                      kind: "clearCell",
-                      sheetName: op.sheetName,
-                      address: op.addr,
-                    });
-                    engineOps.push({
+                    const preparedCellAddress = parseCellAddress(op.addr, op.sheetName);
+                    pushEngineOp(
+                      {
+                        kind: "clearCell",
+                        sheetName: op.sheetName,
+                        address: op.addr,
+                      },
+                      { row: preparedCellAddress.row, col: preparedCellAddress.col },
+                    );
+                    pushEngineOp({
                       kind: "setCellFormat",
                       sheetName: op.sheetName,
                       address: op.addr,
@@ -1307,9 +1366,10 @@ export function createEngineMutationService(args: {
                     });
                   }
                   break;
+                }
               }
             });
-            return { engineOps, potentialNewCells };
+            return { engineOps, potentialNewCells, preparedCellAddressesByOpIndex };
           },
           catch: (cause) =>
             new EngineMutationError({
@@ -1317,7 +1377,33 @@ export function createEngineMutationService(args: {
               cause,
             }),
         }),
-        ({ engineOps, potentialNewCells }) => this.executeLocal(engineOps, potentialNewCells),
+        ({ engineOps, potentialNewCells, preparedCellAddressesByOpIndex }) =>
+          Effect.try({
+            try: () => {
+              executeLocalNowWithCustomApply(
+                engineOps,
+                potentialNewCells,
+                (forward) => {
+                  args.applyBatchNow(
+                    createBatch(args.state.replicaState, forward.ops),
+                    "local",
+                    forward.potentialNewCells,
+                    preparedCellAddressesByOpIndex,
+                  );
+                },
+                {
+                  returnUndoOps: false,
+                  reuseForwardOps: true,
+                  preparedCellAddressesByOpIndex,
+                },
+              );
+            },
+            catch: (cause) =>
+              new EngineMutationError({
+                message: "Failed to execute render commit transaction",
+                cause,
+              }),
+          }),
       ).pipe(Effect.asVoid);
     },
   };

@@ -530,8 +530,10 @@ export function createEngineServiceRuntime(args: {
     readRangeCells: (range) => cellState.readRangeCellsNow(range),
     toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
       cellState.toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),
-    applyBatchNow: (batch, source, potentialNewCells) =>
-      runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),
+    applyBatchNow: (batch, source, potentialNewCells, preparedCellAddressesByOpIndex) =>
+      runEngineEffect(
+        operations.applyBatch(batch, source, potentialNewCells, preparedCellAddressesByOpIndex),
+      ),
     applyCellMutationsAtBatchNow: (refs, batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyCellMutationsAt(refs, batch, source, potentialNewCells)),
   });

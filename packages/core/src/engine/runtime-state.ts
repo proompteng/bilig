@@ -77,6 +77,11 @@ export interface TransactionLogEntry {
   inverse: TransactionRecord;
 }
 
+export interface PreparedCellAddress {
+  readonly row: number;
+  readonly col: number;
+}
+
 export interface RuntimeFormula {
   cellIndex: number;
   source: string;

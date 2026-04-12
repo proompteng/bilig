@@ -1,7 +1,7 @@
 import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import type { EngineOp } from "@bilig/workbook-domain";
-import type { WorkbookStore } from "../../workbook-store.js";
-import type { TransactionRecord } from "../runtime-state.js";
+import { makeCellKey, type WorkbookStore } from "../../workbook-store.js";
+import type { PreparedCellAddress, TransactionRecord } from "../runtime-state.js";
 
 type FastHistoryOp = Extract<
   EngineOp,
@@ -28,6 +28,8 @@ interface FastMutationHistoryArgs {
   readonly ops: readonly EngineOp[];
   readonly potentialNewCells?: number;
   readonly includeUndoOps?: boolean;
+  readonly cloneForwardOps?: boolean;
+  readonly preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[];
 }
 
 function isFastHistoryOp(op: EngineOp): op is FastHistoryOp {
@@ -106,8 +108,15 @@ function restoreCellOpFromSnapshot(
   getCellByIndex: (cellIndex: number) => CellSnapshot,
   sheetName: string,
   address: string,
+  preparedCellAddress: PreparedCellAddress | null,
 ): Extract<FastHistoryOp, { kind: "setCellValue" | "setCellFormula" | "clearCell" }> {
-  const cellIndex = workbook.getCellIndex(sheetName, address);
+  const sheet = workbook.getSheet(sheetName);
+  const cellIndex =
+    preparedCellAddress && sheet
+      ? workbook.cellKeyToIndex.get(
+          makeCellKey(sheet.id, preparedCellAddress.row, preparedCellAddress.col),
+        )
+      : workbook.getCellIndex(sheetName, address);
   if (cellIndex === undefined) {
     return { kind: "clearCell", sheetName, address };
   }
@@ -142,6 +151,7 @@ function buildFastInverseOp(
   workbook: WorkbookStore,
   getCellByIndex: (cellIndex: number) => CellSnapshot,
   op: FastHistoryOp,
+  preparedCellAddress: PreparedCellAddress | null,
 ): FastHistoryCloneOp | null {
   switch (op.kind) {
     case "upsertWorkbook":
@@ -174,9 +184,21 @@ function buildFastInverseOp(
     case "setCellValue":
     case "setCellFormula":
     case "clearCell":
-      return restoreCellOpFromSnapshot(workbook, getCellByIndex, op.sheetName, op.address);
+      return restoreCellOpFromSnapshot(
+        workbook,
+        getCellByIndex,
+        op.sheetName,
+        op.address,
+        preparedCellAddress,
+      );
     case "setCellFormat": {
-      const cellIndex = workbook.getCellIndex(op.sheetName, op.address);
+      const sheet = workbook.getSheet(op.sheetName);
+      const cellIndex =
+        preparedCellAddress && sheet
+          ? workbook.cellKeyToIndex.get(
+              makeCellKey(sheet.id, preparedCellAddress.row, preparedCellAddress.col),
+            )
+          : workbook.getCellIndex(op.sheetName, op.address);
       return {
         kind: "setCellFormat",
         sheetName: op.sheetName,
@@ -189,17 +211,61 @@ function buildFastInverseOp(
   }
 }
 
+function collectCreatedSheetNames(
+  workbook: WorkbookStore,
+  ops: readonly FastHistoryOp[],
+): ReadonlySet<string> {
+  const knownSheetNames = new Set(workbook.sheetsByName.keys());
+  const liveCreatedSheetNames = new Set<string>();
+  const createdSheetNames = new Set<string>();
+
+  for (let index = 0; index < ops.length; index += 1) {
+    const op = ops[index];
+    if (!op) {
+      continue;
+    }
+    if (op.kind === "upsertSheet") {
+      if (!knownSheetNames.has(op.name)) {
+        liveCreatedSheetNames.add(op.name);
+        createdSheetNames.add(op.name);
+      }
+      knownSheetNames.add(op.name);
+      continue;
+    }
+    if (op.kind !== "renameSheet") {
+      continue;
+    }
+    if (liveCreatedSheetNames.delete(op.oldName)) {
+      liveCreatedSheetNames.add(op.newName);
+      createdSheetNames.add(op.newName);
+    }
+    if (knownSheetNames.delete(op.oldName)) {
+      knownSheetNames.add(op.newName);
+    }
+  }
+
+  return createdSheetNames;
+}
+
 export function tryBuildFastMutationHistory(
   args: FastMutationHistoryArgs,
 ): FastMutationHistoryResult | null {
   const forwardOps = Array<FastHistoryOp>(args.ops.length);
+  if (
+    args.preparedCellAddressesByOpIndex &&
+    args.preparedCellAddressesByOpIndex.length !== args.ops.length
+  ) {
+    throw new Error("Prepared cell addresses must align with fast-history operations");
+  }
   for (let index = 0; index < args.ops.length; index += 1) {
     const op = args.ops[index];
     if (op === undefined || !isFastHistoryOp(op)) {
       return null;
     }
-    forwardOps[index] = cloneFastHistoryForwardOp(op);
+    forwardOps[index] = args.cloneForwardOps === false ? op : cloneFastHistoryForwardOp(op);
   }
+
+  const createdSheetNames = collectCreatedSheetNames(args.workbook, forwardOps);
 
   const inverseOps: EngineOp[] = [];
   for (let index = forwardOps.length - 1; index >= 0; index -= 1) {
@@ -207,7 +273,21 @@ export function tryBuildFastMutationHistory(
     if (op === undefined) {
       return null;
     }
-    const inverse = buildFastInverseOp(args.workbook, args.getCellByIndex, op);
+    if (
+      (op.kind === "setCellValue" ||
+        op.kind === "setCellFormula" ||
+        op.kind === "clearCell" ||
+        op.kind === "setCellFormat") &&
+      createdSheetNames.has(op.sheetName)
+    ) {
+      continue;
+    }
+    const inverse = buildFastInverseOp(
+      args.workbook,
+      args.getCellByIndex,
+      op,
+      args.preparedCellAddressesByOpIndex?.[index] ?? null,
+    );
     if (!inverse) {
       return null;
     }

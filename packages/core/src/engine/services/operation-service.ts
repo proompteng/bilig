@@ -20,7 +20,7 @@ import {
   pivotKey,
   type WorkbookPivotRecord,
 } from "../../workbook-store.js";
-import type { EngineRuntimeState, U32 } from "../runtime-state.js";
+import type { EngineRuntimeState, PreparedCellAddress, U32 } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 
 type MutationSource = "local" | "remote" | "restore" | "history";
@@ -48,6 +48,7 @@ export interface EngineOperationService {
     batch: EngineOpBatch,
     source: MutationSource,
     potentialNewCells?: number,
+    preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[],
   ) => Effect.Effect<void, EngineMutationError>;
   readonly applyCellMutationsAt: (
     refs: readonly EngineCellMutationRef[],
@@ -295,6 +296,39 @@ export function createEngineOperationService(args: {
     );
   };
 
+  const getPreparedExistingCellIndex = (
+    sheetName: string,
+    address: string,
+    preparedCellAddress: PreparedCellAddress | null,
+  ): number | undefined => {
+    if (!preparedCellAddress) {
+      return args.state.workbook.getCellIndex(sheetName, address);
+    }
+    const sheet = args.state.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return undefined;
+    }
+    return args.state.workbook.cellKeyToIndex.get(
+      makeCellKey(sheet.id, preparedCellAddress.row, preparedCellAddress.col),
+    );
+  };
+
+  const ensurePreparedCellTracked = (
+    sheetName: string,
+    address: string,
+    preparedCellAddress: PreparedCellAddress | null,
+  ): number => {
+    if (!preparedCellAddress) {
+      return args.ensureCellTracked(sheetName, address);
+    }
+    const sheet = args.state.workbook.getOrCreateSheet(sheetName);
+    return args.state.workbook.ensureCellAt(
+      sheet.id,
+      preparedCellAddress.row,
+      preparedCellAddress.col,
+    ).cellIndex;
+  };
+
   const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => {
     switch (op.kind) {
       case "upsertWorkbook":
@@ -431,7 +465,14 @@ export function createEngineOperationService(args: {
     batch: EngineOpBatch,
     source: MutationSource,
     potentialNewCells?: number,
+    preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[],
   ): void => {
+    if (
+      preparedCellAddressesByOpIndex &&
+      preparedCellAddressesByOpIndex.length !== batch.ops.length
+    ) {
+      throw new Error("Prepared cell addresses must align with batch operations");
+    }
     const isRestore = source === "restore";
     args.beginMutationCollection();
     let changedInputCount = 0;
@@ -458,6 +499,7 @@ export function createEngineOperationService(args: {
     try {
       batch.ops.forEach((op, opIndex) => {
         const order = batchOpOrder(batch, opIndex);
+        const preparedCellAddress = preparedCellAddressesByOpIndex?.[opIndex] ?? null;
         if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
           return;
         }
@@ -648,7 +690,11 @@ export function createEngineOperationService(args: {
           }
           case "setCellValue": {
             if (!isRestore) {
-              const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+              const existingIndex = getPreparedExistingCellIndex(
+                op.sheetName,
+                op.address,
+                preparedCellAddress,
+              );
               if (existingIndex !== undefined) {
                 changedInputCount = args.markPivotRootsChanged(
                   args.clearPivotForCell(existingIndex),
@@ -656,7 +702,11 @@ export function createEngineOperationService(args: {
                 );
               }
             }
-            const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
+            const cellIndex = ensurePreparedCellTracked(
+              op.sheetName,
+              op.address,
+              preparedCellAddress,
+            );
             if (!isRestore) {
               changedInputCount = args.markSpillRootsChanged(
                 args.clearOwnedSpill(cellIndex),
@@ -679,7 +729,7 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
-            if (!isRestore) {
+            if (!isRestore && op.value === null) {
               pruneCellIfOrphaned(cellIndex);
             }
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
@@ -691,7 +741,11 @@ export function createEngineOperationService(args: {
           }
           case "setCellFormula": {
             if (!isRestore) {
-              const existingIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+              const existingIndex = getPreparedExistingCellIndex(
+                op.sheetName,
+                op.address,
+                preparedCellAddress,
+              );
               if (existingIndex !== undefined) {
                 changedInputCount = args.markPivotRootsChanged(
                   args.clearPivotForCell(existingIndex),
@@ -699,7 +753,11 @@ export function createEngineOperationService(args: {
                 );
               }
             }
-            const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
+            const cellIndex = ensurePreparedCellTracked(
+              op.sheetName,
+              op.address,
+              preparedCellAddress,
+            );
             if (!isRestore) {
               changedInputCount = args.markSpillRootsChanged(
                 args.clearOwnedSpill(cellIndex),
@@ -757,7 +815,11 @@ export function createEngineOperationService(args: {
             setEntityVersionForOp(op, order);
             break;
           case "clearCell": {
-            const cellIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+            const cellIndex = getPreparedExistingCellIndex(
+              op.sheetName,
+              op.address,
+              preparedCellAddress,
+            );
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order);
               break;
@@ -857,9 +919,12 @@ export function createEngineOperationService(args: {
       changedInputArray,
     );
     recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots);
-    const changed = isRestore
-      ? new Uint32Array()
-      : args.composeEventChanges(recalculated, explicitChangedCount);
+    const hasEventListeners =
+      args.state.events.hasListeners() || args.state.events.hasCellListeners();
+    const changed =
+      isRestore || !hasEventListeners
+        ? new Uint32Array()
+        : args.composeEventChanges(recalculated, explicitChangedCount);
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -867,22 +932,24 @@ export function createEngineOperationService(args: {
       compileMs,
     };
     args.state.setLastMetrics(lastMetrics);
-    const event: EngineEvent & { explicitChangedCount: number } = {
-      kind: "batch",
-      invalidation: isRestore || sheetDeleted || structuralInvalidation ? "full" : "cells",
-      changedCellIndices: changed,
-      invalidatedRanges,
-      invalidatedRows,
-      invalidatedColumns,
-      metrics: lastMetrics,
-      explicitChangedCount,
-    };
-    if (event.invalidation === "full") {
-      args.state.events.emitAllWatched(event);
-    } else {
-      args.state.events.emit(event, changed, (cellIndex) =>
-        args.state.workbook.getQualifiedAddress(cellIndex),
-      );
+    if (hasEventListeners) {
+      const event: EngineEvent & { explicitChangedCount: number } = {
+        kind: "batch",
+        invalidation: isRestore || sheetDeleted || structuralInvalidation ? "full" : "cells",
+        changedCellIndices: changed,
+        invalidatedRanges,
+        invalidatedRows,
+        invalidatedColumns,
+        metrics: lastMetrics,
+        explicitChangedCount,
+      };
+      if (event.invalidation === "full") {
+        args.state.events.emitAllWatched(event);
+      } else {
+        args.state.events.emit(event, changed, (cellIndex) =>
+          args.state.workbook.getQualifiedAddress(cellIndex),
+        );
+      }
     }
     if (source === "local") {
       void args.state.getSyncClientConnection()?.send(batch);
@@ -993,7 +1060,7 @@ export function createEngineOperationService(args: {
                   CellFlags.SpillChild |
                   CellFlags.PivotOutput
                 );
-              if (!isRestore) {
+              if (!isRestore && mutation.value === null) {
                 pruneCellIfOrphaned(cellIndex);
               }
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
@@ -1152,9 +1219,12 @@ export function createEngineOperationService(args: {
       changedInputArray,
     );
     recalculated = args.reconcilePivotOutputs(recalculated, false);
-    const changed = isRestore
-      ? new Uint32Array()
-      : args.composeEventChanges(recalculated, explicitChangedCount);
+    const hasEventListeners =
+      args.state.events.hasListeners() || args.state.events.hasCellListeners();
+    const changed =
+      isRestore || !hasEventListeners
+        ? new Uint32Array()
+        : args.composeEventChanges(recalculated, explicitChangedCount);
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -1162,32 +1232,36 @@ export function createEngineOperationService(args: {
       compileMs,
     };
     args.state.setLastMetrics(lastMetrics);
-    const event: EngineEvent & { explicitChangedCount: number } = {
-      kind: "batch",
-      invalidation: isRestore ? "full" : "cells",
-      changedCellIndices: changed,
-      invalidatedRanges: [],
-      invalidatedRows: [],
-      invalidatedColumns: [],
-      metrics: lastMetrics,
-      explicitChangedCount,
-    };
-    if (isRestore) {
-      args.state.events.emitAllWatched(event);
+    if (hasEventListeners) {
+      const event: EngineEvent & { explicitChangedCount: number } = {
+        kind: "batch",
+        invalidation: isRestore ? "full" : "cells",
+        changedCellIndices: changed,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        metrics: lastMetrics,
+        explicitChangedCount,
+      };
+      if (isRestore) {
+        args.state.events.emitAllWatched(event);
+        return;
+      }
+      args.state.events.emit(event, changed, (cellIndex) =>
+        args.state.workbook.getQualifiedAddress(cellIndex),
+      );
+    } else if (isRestore) {
       return;
     }
-    args.state.events.emit(event, changed, (cellIndex) =>
-      args.state.workbook.getQualifiedAddress(cellIndex),
-    );
     void args.state.getSyncClientConnection()?.send(batch);
     emitBatch(batch);
   };
 
   return {
-    applyBatch(batch, source, potentialNewCells) {
+    applyBatch(batch, source, potentialNewCells, preparedCellAddressesByOpIndex) {
       return Effect.try({
         try: () => {
-          applyBatchNow(batch, source, potentialNewCells);
+          applyBatchNow(batch, source, potentialNewCells, preparedCellAddressesByOpIndex);
         },
         catch: (cause) =>
           new EngineMutationError({
