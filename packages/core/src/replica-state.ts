@@ -123,6 +123,10 @@ export function compareOpOrder(left: OpOrder, right: OpOrder): number {
   );
 }
 
+function assertNever(value: never): never {
+  throw new Error(`Unhandled engine op kind: ${JSON.stringify(value)}`);
+}
+
 function entityKeyForOp(op: EngineOp): string {
   switch (op.kind) {
     case "upsertWorkbook":
@@ -159,6 +163,10 @@ function entityKeyForOp(op: EngineOp): string {
     case "setSort":
     case "clearSort":
       return `sort:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+    case "setDataValidation":
+      return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
+    case "clearDataValidation":
+      return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
     case "setCellValue":
     case "setCellFormula":
     case "clearCell":
@@ -187,7 +195,7 @@ function entityKeyForOp(op: EngineOp): string {
     case "deletePivotTable":
       return pivotEntityKey(op.sheetName, op.address);
   }
-  return String(op);
+  return assertNever(op);
 }
 
 function sheetDeleteBarrierForOp(
@@ -224,6 +232,7 @@ function sheetDeleteBarrierForOp(
     case "clearFilter":
     case "setSort":
     case "clearSort":
+    case "clearDataValidation":
     case "setCellValue":
     case "setCellFormula":
     case "setCellFormat":
@@ -238,10 +247,12 @@ function sheetDeleteBarrierForOp(
     case "upsertCellNumberFormat":
     case "upsertCellStyle":
       return undefined;
+    case "setDataValidation":
+      return latestSheetDeletes.get(op.validation.range.sheetName);
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }
-  return undefined;
+  return assertNever(op);
 }
 
 export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
