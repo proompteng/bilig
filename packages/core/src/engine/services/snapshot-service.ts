@@ -97,6 +97,8 @@ export function createEngineSnapshotService(args: {
             cols: pivot.cols,
           }));
           const charts = args.state.workbook.listCharts().map((chart) => structuredClone(chart));
+          const images = args.state.workbook.listImages().map((image) => structuredClone(image));
+          const shapes = args.state.workbook.listShapes().map((shape) => structuredClone(shape));
           if (
             properties.length > 0 ||
             definedNames.length > 0 ||
@@ -104,6 +106,8 @@ export function createEngineSnapshotService(args: {
             spills.length > 0 ||
             pivots.length > 0 ||
             charts.length > 0 ||
+            images.length > 0 ||
+            shapes.length > 0 ||
             styles.length > 0 ||
             formats.length > 0 ||
             calculationSettings.mode !== "automatic" ||
@@ -128,6 +132,12 @@ export function createEngineSnapshotService(args: {
             }
             if (charts.length > 0) {
               workbook.metadata.charts = charts;
+            }
+            if (images.length > 0) {
+              workbook.metadata.images = images;
+            }
+            if (shapes.length > 0) {
+              workbook.metadata.shapes = shapes;
             }
             if (styles.length > 0) {
               workbook.metadata.styles = styles;
@@ -429,6 +439,18 @@ export function createEngineSnapshotService(args: {
             ops.push({
               kind: "upsertChart",
               chart: structuredClone(chart),
+            });
+          });
+          snapshot.workbook.metadata?.images?.forEach((image) => {
+            ops.push({
+              kind: "upsertImage",
+              image: structuredClone(image),
+            });
+          });
+          snapshot.workbook.metadata?.shapes?.forEach((shape) => {
+            ops.push({
+              kind: "upsertShape",
+              shape: structuredClone(shape),
             });
           });
           const potentialNewCells = snapshot.sheets.reduce(

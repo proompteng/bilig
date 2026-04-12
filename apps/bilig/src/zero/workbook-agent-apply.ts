@@ -5,6 +5,8 @@ import {
   isWorkbookAgentAnnotationCommand,
   applyWorkbookAgentConditionalFormatCommand,
   isWorkbookAgentConditionalFormatCommand,
+  applyWorkbookAgentMediaCommand,
+  isWorkbookAgentMediaCommand,
   applyWorkbookAgentObjectCommand,
   isWorkbookAgentObjectCommand,
   applyWorkbookAgentProtectionCommand,
@@ -92,6 +94,11 @@ function applyWorkbookAgentCommandWithUndoCapture(
   if (isWorkbookAgentObjectCommand(command)) {
     return engine.captureUndoOps(() => {
       applyWorkbookAgentObjectCommand(engine, command);
+    }).undoOps;
+  }
+  if (isWorkbookAgentMediaCommand(command)) {
+    return engine.captureUndoOps(() => {
+      applyWorkbookAgentMediaCommand(engine, command);
     }).undoOps;
   }
   if (isWorkbookAgentProtectionCommand(command)) {

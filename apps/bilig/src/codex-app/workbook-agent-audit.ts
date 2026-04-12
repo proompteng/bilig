@@ -51,6 +51,8 @@ interface MetadataBoundsDriver {
     | "table"
     | "pivot"
     | "chart"
+    | "image"
+    | "shape"
     | "spill"
     | "definedName"
     | "rowMetadata"
@@ -561,6 +563,34 @@ function collectSheetBloatDrivers(
     if (chart.source.sheetName === sheetName) {
       addRangeDriver("chart", chart.source);
     }
+  }
+  for (const image of snapshot.workbook.metadata?.images ?? []) {
+    if (image.sheetName !== sheetName) {
+      continue;
+    }
+    const start = parseCellAddress(image.address, sheetName);
+    addAddressDriver(
+      "image",
+      image.address,
+      formatAddress(
+        start.row + Math.max(0, image.rows - 1),
+        start.col + Math.max(0, image.cols - 1),
+      ),
+    );
+  }
+  for (const shape of snapshot.workbook.metadata?.shapes ?? []) {
+    if (shape.sheetName !== sheetName) {
+      continue;
+    }
+    const start = parseCellAddress(shape.address, sheetName);
+    addAddressDriver(
+      "shape",
+      shape.address,
+      formatAddress(
+        start.row + Math.max(0, shape.rows - 1),
+        start.col + Math.max(0, shape.cols - 1),
+      ),
+    );
   }
   for (const spill of snapshot.workbook.metadata?.spills ?? []) {
     if (spill.sheetName !== sheetName) {
@@ -1295,6 +1325,32 @@ function collectInvariantProblems(snapshot: WorkbookSnapshot): InvariantProblem[
         problems,
         "invalidChartExtent",
         `Chart ${chart.id} has invalid footprint ${String(chart.rows)}x${String(chart.cols)}`,
+      );
+    }
+  }
+  for (const image of snapshot.workbook.metadata?.images ?? []) {
+    if (ensureSheetExists(sheetNames, problems, image.sheetName, `Image ${image.id}`)) {
+      validateAddressRef(problems, image.sheetName, image.address, `Image ${image.id}`);
+    }
+    if (image.rows <= 0 || image.cols <= 0) {
+      addProblem(
+        problems,
+        "invalidImageExtent",
+        `Image ${image.id} has invalid footprint ${String(image.rows)}x${String(image.cols)}`,
+        { sheetName: image.sheetName, address: image.address },
+      );
+    }
+  }
+  for (const shape of snapshot.workbook.metadata?.shapes ?? []) {
+    if (ensureSheetExists(sheetNames, problems, shape.sheetName, `Shape ${shape.id}`)) {
+      validateAddressRef(problems, shape.sheetName, shape.address, `Shape ${shape.id}`);
+    }
+    if (shape.rows <= 0 || shape.cols <= 0) {
+      addProblem(
+        problems,
+        "invalidShapeExtent",
+        `Shape ${shape.id} has invalid footprint ${String(shape.rows)}x${String(shape.cols)}`,
+        { sheetName: shape.sheetName, address: shape.address },
       );
     }
   }

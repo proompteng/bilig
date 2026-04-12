@@ -464,6 +464,34 @@ export function createEngineStructureService(args: {
         },
       });
     });
+    args.state.workbook.listImages().forEach((image) => {
+      if (image.sheetName !== sheetName) {
+        return;
+      }
+      const nextAddress = rewriteAddressForStructuralTransform(image.address, transform);
+      if (!nextAddress) {
+        args.state.workbook.deleteImage(image.id);
+        return;
+      }
+      args.state.workbook.setImage({
+        ...image,
+        address: nextAddress,
+      });
+    });
+    args.state.workbook.listShapes().forEach((shape) => {
+      if (shape.sheetName !== sheetName) {
+        return;
+      }
+      const nextAddress = rewriteAddressForStructuralTransform(shape.address, transform);
+      if (!nextAddress) {
+        args.state.workbook.deleteShape(shape.id);
+        return;
+      }
+      args.state.workbook.setShape({
+        ...shape,
+        address: nextAddress,
+      });
+    });
   };
 
   return {

@@ -17,6 +17,8 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listCharts).toBe("list_charts");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listImages).toBe("list_images");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listShapes).toBe("list_shapes");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules).toBe("list_data_validation_rules");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats).toBe("get_conditional_formats");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
@@ -38,6 +40,12 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.createChart).toBe("create_chart");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateChart).toBe("update_chart");
     expect(WORKBOOK_AGENT_TOOL_NAMES.deleteChart).toBe("delete_chart");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.insertImage).toBe("insert_image");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.moveImage).toBe("move_image");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.deleteImage).toBe("delete_image");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.insertShape).toBe("insert_shape");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.updateShape).toBe("update_shape");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.deleteShape).toBe("delete_shape");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createDataValidation).toBe("create_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateDataValidation).toBe("update_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation).toBe("remove_data_validation");
@@ -95,6 +103,12 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.list_charts")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listCharts,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_list_images")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listImages,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.list_shapes")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listShapes,
     );
     expect(normalizeWorkbookAgentToolName("bilig.list_data_validation_rules")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
@@ -203,6 +217,24 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig_delete_chart")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_insert_image")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.insertImage,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.move_image")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.moveImage,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_delete_image")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deleteImage,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_insert_shape")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.insertShape,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.update_shape")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.updateShape,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_delete_shape")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.deleteShape,
     );
     expect(normalizeWorkbookAgentToolName("bilig_get_row_metadata")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata,

@@ -52,6 +52,10 @@ import {
   workbookAgentObjectToolSpecs,
 } from "./workbook-agent-object-tools.js";
 import {
+  handleWorkbookAgentMediaToolCall,
+  workbookAgentMediaToolSpecs,
+} from "./workbook-agent-media-tools.js";
+import {
   handleWorkbookAgentProtectionToolCall,
   workbookAgentProtectionToolSpecs,
 } from "./workbook-agent-protection-tools.js";
@@ -553,6 +557,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     ...workbookAgentAnnotationToolSpecs,
     ...workbookAgentConditionalFormatToolSpecs,
     ...workbookAgentObjectToolSpecs,
+    ...workbookAgentMediaToolSpecs,
     ...workbookAgentProtectionToolSpecs,
     ...workbookAgentValidationToolSpecs,
     {
@@ -940,6 +945,10 @@ export async function handleWorkbookAgentToolCall(
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
       return objectToolResult;
+    }
+    const mediaToolResult = await handleWorkbookAgentMediaToolCall(context, request);
+    if (mediaToolResult) {
+      return mediaToolResult;
     }
     const protectionToolResult = await handleWorkbookAgentProtectionToolCall(context, request);
     if (protectionToolResult) {

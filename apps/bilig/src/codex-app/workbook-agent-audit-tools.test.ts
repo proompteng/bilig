@@ -43,6 +43,23 @@ async function createAuditEngine(): Promise<SpreadsheetEngine> {
       fill: { backgroundColor: "#fee2e2" },
     },
   );
+  engine.setImage({
+    id: "bloat-image",
+    sheetName: "Bloat",
+    address: "Y190",
+    sourceUrl: "https://example.com/bloat.png",
+    rows: 3,
+    cols: 2,
+  });
+  engine.setShape({
+    id: "bloat-shape",
+    sheetName: "Bloat",
+    address: "X180",
+    shapeType: "rectangle",
+    rows: 2,
+    cols: 4,
+    fillColor: "#dbeafe",
+  });
 
   return engine;
 }
@@ -327,11 +344,17 @@ describe("workbook agent audit tools", () => {
       expect.objectContaining({
         sheetName: "Bloat",
         compositeRange: expect.objectContaining({
-          endAddress: "Z200",
+          endAddress: "AA200",
         }),
         drivers: expect.arrayContaining([
           expect.objectContaining({
             source: "styleRange",
+          }),
+          expect.objectContaining({
+            source: "image",
+          }),
+          expect.objectContaining({
+            source: "shape",
           }),
         ]),
       }),

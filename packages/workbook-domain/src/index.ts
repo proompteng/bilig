@@ -10,9 +10,11 @@ import type {
   WorkbookChartSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
+  WorkbookImageSnapshot,
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
+  WorkbookShapeSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -57,6 +59,8 @@ export interface WorkbookRangeProtectionOp extends WorkbookRangeProtectionSnapsh
 export interface WorkbookCommentThreadOp extends WorkbookCommentThreadSnapshot {}
 export interface WorkbookNoteOp extends WorkbookNoteSnapshot {}
 export interface WorkbookChartOp extends WorkbookChartSnapshot {}
+export interface WorkbookImageOp extends WorkbookImageSnapshot {}
+export interface WorkbookShapeOp extends WorkbookShapeSnapshot {}
 
 export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
@@ -145,7 +149,11 @@ export type WorkbookOp =
     }
   | { kind: "deletePivotTable"; sheetName: string; address: string }
   | { kind: "upsertChart"; chart: WorkbookChartOp }
-  | { kind: "deleteChart"; id: string };
+  | { kind: "deleteChart"; id: string }
+  | { kind: "upsertImage"; image: WorkbookImageOp }
+  | { kind: "deleteImage"; id: string }
+  | { kind: "upsertShape"; shape: WorkbookShapeOp }
+  | { kind: "deleteShape"; id: string };
 
 export type EngineOp = WorkbookOp;
 

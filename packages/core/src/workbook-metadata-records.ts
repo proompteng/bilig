@@ -8,11 +8,14 @@ import type {
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
   chartKey,
+  imageKey,
+  shapeKey,
   type WorkbookChartRecord,
   type WorkbookCommentEntryRecord,
   type WorkbookCommentThreadRecord,
   type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
+  type WorkbookImageRecord,
   normalizeWorkbookObjectName,
   type WorkbookNoteRecord,
   type WorkbookRangeProtectionRecord,
@@ -26,6 +29,7 @@ import {
   type WorkbookPropertyRecord,
   type WorkbookSortKeyRecord,
   type WorkbookSortRecord,
+  type WorkbookShapeRecord,
   type WorkbookSpillRecord,
   type WorkbookTableRecord,
 } from "./workbook-metadata-types.js";
@@ -369,6 +373,42 @@ export function cloneChartRecord(record: WorkbookChartRecord): WorkbookChartReco
   return cloned;
 }
 
+export function cloneImageRecord(record: WorkbookImageRecord): WorkbookImageRecord {
+  const cloned: WorkbookImageRecord = {
+    id: record.id,
+    sheetName: record.sheetName,
+    address: canonicalWorkbookAddress(record.sheetName, record.address),
+    sourceUrl: record.sourceUrl,
+    rows: record.rows,
+    cols: record.cols,
+  };
+  if (record.altText !== undefined) {
+    cloned.altText = record.altText;
+  }
+  return cloned;
+}
+
+export function cloneShapeRecord(record: WorkbookShapeRecord): WorkbookShapeRecord {
+  const cloned: WorkbookShapeRecord = {
+    id: record.id,
+    sheetName: record.sheetName,
+    address: canonicalWorkbookAddress(record.sheetName, record.address),
+    shapeType: record.shapeType,
+    rows: record.rows,
+    cols: record.cols,
+  };
+  if (record.text !== undefined) {
+    cloned.text = record.text;
+  }
+  if (record.fillColor !== undefined) {
+    cloned.fillColor = record.fillColor;
+  }
+  if (record.strokeColor !== undefined) {
+    cloned.strokeColor = record.strokeColor;
+  }
+  return cloned;
+}
+
 export function cloneSpillRecord(record: WorkbookSpillRecord): WorkbookSpillRecord {
   return {
     sheetName: record.sheetName,
@@ -475,6 +515,12 @@ function recordKey(record: unknown): string {
   }
   if (isChartRecord(record)) {
     return chartKey(record.id);
+  }
+  if (isImageRecord(record)) {
+    return imageKey(record.id);
+  }
+  if (isShapeRecord(record)) {
+    return shapeKey(record.id);
   }
   throw new Error("Unsupported workbook metadata record");
 }
@@ -618,5 +664,27 @@ function isChartRecord(record: unknown): record is WorkbookChartRecord {
     "sheetName" in record &&
     "address" in record &&
     "source" in record
+  );
+}
+
+function isImageRecord(record: unknown): record is WorkbookImageRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    "sheetName" in record &&
+    "address" in record &&
+    "sourceUrl" in record
+  );
+}
+
+function isShapeRecord(record: unknown): record is WorkbookShapeRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    "sheetName" in record &&
+    "address" in record &&
+    "shapeType" in record
   );
 }

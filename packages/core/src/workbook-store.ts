@@ -15,10 +15,12 @@ import {
   type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
+  type WorkbookImageSnapshot,
   type WorkbookNoteSnapshot,
   type WorkbookRangeProtectionSnapshot,
   type WorkbookSheetProtectionSnapshot,
   type WorkbookPivotSnapshot,
+  type WorkbookShapeSnapshot,
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
@@ -44,11 +46,13 @@ import {
   type WorkbookFilterRecord,
   type WorkbookFormatRangeRecord,
   type WorkbookFreezePaneRecord,
+  type WorkbookImageRecord,
   type WorkbookMetadataRecord,
   type WorkbookPivotRecord,
   type WorkbookPropertyRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
+  type WorkbookShapeRecord,
   type WorkbookSortKeyRecord,
   type WorkbookSortRecord,
   type WorkbookSpillRecord,
@@ -91,7 +95,9 @@ const SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 export {
   normalizeDefinedName,
   normalizeWorkbookObjectName,
+  imageKey,
   pivotKey,
+  shapeKey,
 } from "./workbook-metadata-types.js";
 export type {
   WorkbookAxisEntryRecord,
@@ -107,11 +113,13 @@ export type {
   WorkbookFilterRecord,
   WorkbookFormatRangeRecord,
   WorkbookFreezePaneRecord,
+  WorkbookImageRecord,
   WorkbookMetadataRecord,
   WorkbookPivotRecord,
   WorkbookPropertyRecord,
   WorkbookRangeProtectionRecord,
   WorkbookSheetProtectionRecord,
+  WorkbookShapeRecord,
   WorkbookSortKeyRecord,
   WorkbookSortRecord,
   WorkbookSpillRecord,
@@ -890,6 +898,38 @@ export class WorkbookStore {
 
   listCharts(): WorkbookChartRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listCharts());
+  }
+
+  setImage(record: WorkbookImageSnapshot): WorkbookImageRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setImage(record));
+  }
+
+  getImage(id: string): WorkbookImageRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getImage(id));
+  }
+
+  deleteImage(id: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteImage(id));
+  }
+
+  listImages(): WorkbookImageRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listImages());
+  }
+
+  setShape(record: WorkbookShapeSnapshot): WorkbookShapeRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setShape(record));
+  }
+
+  getShape(id: string): WorkbookShapeRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getShape(id));
+  }
+
+  deleteShape(id: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteShape(id));
+  }
+
+  listShapes(): WorkbookShapeRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listShapes());
   }
 
   remapSheetCells(

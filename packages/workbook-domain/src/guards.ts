@@ -491,6 +491,14 @@ function isWorkbookPivotValue(value: unknown): boolean {
 const CHART_TYPE_VALUES = new Set(["column", "bar", "line", "area", "pie", "scatter"]);
 const CHART_SERIES_ORIENTATION_VALUES = new Set(["rows", "columns"]);
 const CHART_LEGEND_POSITION_VALUES = new Set(["top", "right", "bottom", "left", "hidden"]);
+const SHAPE_TYPE_VALUES = new Set([
+  "rectangle",
+  "roundedRectangle",
+  "ellipse",
+  "line",
+  "arrow",
+  "textBox",
+]);
 
 function isWorkbookChart(value: unknown): boolean {
   return (
@@ -512,6 +520,35 @@ function isWorkbookChart(value: unknown): boolean {
         CHART_LEGEND_POSITION_VALUES.has(value["legendPosition"]))) &&
     hasFiniteNumber(value, "rows") &&
     hasFiniteNumber(value, "cols")
+  );
+}
+
+function isWorkbookImage(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "id") &&
+    hasString(value, "sheetName") &&
+    hasString(value, "address") &&
+    hasString(value, "sourceUrl") &&
+    hasFiniteNumber(value, "rows") &&
+    hasFiniteNumber(value, "cols") &&
+    isOptionalString(value["altText"])
+  );
+}
+
+function isWorkbookShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "id") &&
+    hasString(value, "sheetName") &&
+    hasString(value, "address") &&
+    typeof value["shapeType"] === "string" &&
+    SHAPE_TYPE_VALUES.has(value["shapeType"]) &&
+    hasFiniteNumber(value, "rows") &&
+    hasFiniteNumber(value, "cols") &&
+    isOptionalString(value["text"]) &&
+    isOptionalString(value["fillColor"]) &&
+    isOptionalString(value["strokeColor"])
   );
 }
 
@@ -671,6 +708,14 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
     case "upsertChart":
       return isWorkbookChart(value["chart"]);
     case "deleteChart":
+      return hasString(value, "id");
+    case "upsertImage":
+      return isWorkbookImage(value["image"]);
+    case "deleteImage":
+      return hasString(value, "id");
+    case "upsertShape":
+      return isWorkbookShape(value["shape"]);
+    case "deleteShape":
       return hasString(value, "id");
     default:
       return false;

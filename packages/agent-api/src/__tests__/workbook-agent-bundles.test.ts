@@ -296,6 +296,48 @@ describe("workbook agent bundle semantics", () => {
     ]);
   });
 
+  it("marks image placement as sheet-scoped medium-risk media work", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Add a revenue image",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "upsertImage",
+        image: {
+          id: "RevenueImage",
+          sheetName: "Dashboard",
+          address: "C3",
+          sourceUrl: "https://example.com/revenue.png",
+          rows: 8,
+          cols: 5,
+          altText: "Revenue image",
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set image RevenueImage at Dashboard!C3",
+        riskClass: "medium",
+        scope: "sheet",
+        estimatedAffectedCells: 40,
+      }),
+    );
+    expect(bundle.affectedRanges).toEqual([
+      {
+        sheetName: "Dashboard",
+        startAddress: "C3",
+        endAddress: "G10",
+        role: "target",
+      },
+    ]);
+  });
+
   it("normalizes sort ranges and counts affected cells", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,

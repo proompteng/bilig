@@ -8,10 +8,12 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookImageSnapshot,
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
   WorkbookPivotSnapshot,
+  WorkbookShapeSnapshot,
   WorkbookTableSnapshot,
   WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
@@ -24,11 +26,13 @@ import {
   cloneDefinedNameRecord,
   cloneDefinedNameValue,
   cloneFilterRecord,
+  cloneImageRecord,
   cloneNoteRecord,
   clonePivotRecord,
   clonePropertyRecord,
   cloneRangeProtectionRecord,
   cloneSheetProtectionRecord,
+  cloneShapeRecord,
   cloneSortKeyRecord,
   cloneSortRecord,
   cloneSpillRecord,
@@ -48,14 +52,17 @@ import {
 import {
   createWorkbookMetadataRecord,
   chartKey,
+  imageKey,
   type WorkbookChartRecord,
   type WorkbookCommentThreadRecord,
   type WorkbookConditionalFormatRecord,
   normalizeDefinedName,
+  type WorkbookImageRecord,
   type WorkbookNoteRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
   pivotKey,
+  shapeKey,
   type WorkbookCalculationSettingsRecord,
   type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
@@ -66,6 +73,7 @@ import {
   type WorkbookPropertyRecord,
   type WorkbookSortKeyRecord,
   type WorkbookSortRecord,
+  type WorkbookShapeRecord,
   type WorkbookSpillRecord,
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
@@ -310,6 +318,22 @@ export interface WorkbookMetadataService {
   ) => Effect.Effect<WorkbookChartRecord | undefined, WorkbookMetadataError>;
   readonly deleteChart: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
   readonly listCharts: () => Effect.Effect<WorkbookChartRecord[], WorkbookMetadataError>;
+  readonly setImage: (
+    record: WorkbookImageSnapshot,
+  ) => Effect.Effect<WorkbookImageRecord, WorkbookMetadataError>;
+  readonly getImage: (
+    id: string,
+  ) => Effect.Effect<WorkbookImageRecord | undefined, WorkbookMetadataError>;
+  readonly deleteImage: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listImages: () => Effect.Effect<WorkbookImageRecord[], WorkbookMetadataError>;
+  readonly setShape: (
+    record: WorkbookShapeSnapshot,
+  ) => Effect.Effect<WorkbookShapeRecord, WorkbookMetadataError>;
+  readonly getShape: (
+    id: string,
+  ) => Effect.Effect<WorkbookShapeRecord | undefined, WorkbookMetadataError>;
+  readonly deleteShape: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listShapes: () => Effect.Effect<WorkbookShapeRecord[], WorkbookMetadataError>;
 }
 
 export function createWorkbookMetadataService(
@@ -430,6 +454,16 @@ export function createWorkbookMetadataService(
           }
         : cloneChartRecord(record),
     );
+    rekeyRecords(metadata.images, (record) =>
+      record.sheetName === oldSheetName
+        ? { ...cloneImageRecord(record), sheetName: newSheetName }
+        : cloneImageRecord(record),
+    );
+    rekeyRecords(metadata.shapes, (record) =>
+      record.sheetName === oldSheetName
+        ? { ...cloneShapeRecord(record), sheetName: newSheetName }
+        : cloneShapeRecord(record),
+    );
   };
 
   const deleteSheetRecordsNow = (sheetName: string): void => {
@@ -441,6 +475,8 @@ export function createWorkbookMetadataService(
         metadata.charts.delete(key);
       }
     }
+    deleteRecordsBySheet(metadata.images, sheetName, (record) => record.sheetName);
+    deleteRecordsBySheet(metadata.shapes, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.rowMetadata, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.columnMetadata, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
@@ -466,6 +502,8 @@ export function createWorkbookMetadataService(
     metadata.spills.clear();
     metadata.pivots.clear();
     metadata.charts.clear();
+    metadata.images.clear();
+    metadata.shapes.clear();
     metadata.rowMetadata.clear();
     metadata.columnMetadata.clear();
     metadata.freezePanes.clear();
@@ -1456,6 +1494,124 @@ export function createWorkbookMetadataService(
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list chart metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setImage(record) {
+      return Effect.try({
+        try: () => {
+          const stored: WorkbookImageRecord = {
+            id: record.id.trim(),
+            sheetName: record.sheetName,
+            address: canonicalWorkbookAddress(record.sheetName, record.address),
+            sourceUrl: record.sourceUrl,
+            rows: record.rows,
+            cols: record.cols,
+            ...(record.altText !== undefined ? { altText: record.altText } : {}),
+          };
+          metadata.images.set(imageKey(stored.id), stored);
+          return cloneImageRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set image metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getImage(id) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.images.get(imageKey(id));
+          return record ? cloneImageRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get image metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteImage(id) {
+      return Effect.try({
+        try: () => metadata.images.delete(imageKey(id)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete image metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listImages() {
+      return Effect.try({
+        try: () =>
+          [...metadata.images.values()]
+            .toSorted((left, right) => left.id.localeCompare(right.id))
+            .map(cloneImageRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list image metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setShape(record) {
+      return Effect.try({
+        try: () => {
+          const stored: WorkbookShapeRecord = {
+            id: record.id.trim(),
+            sheetName: record.sheetName,
+            address: canonicalWorkbookAddress(record.sheetName, record.address),
+            shapeType: record.shapeType,
+            rows: record.rows,
+            cols: record.cols,
+            ...(record.text !== undefined ? { text: record.text } : {}),
+            ...(record.fillColor !== undefined ? { fillColor: record.fillColor } : {}),
+            ...(record.strokeColor !== undefined ? { strokeColor: record.strokeColor } : {}),
+          };
+          metadata.shapes.set(shapeKey(stored.id), stored);
+          return cloneShapeRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set shape metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getShape(id) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.shapes.get(shapeKey(id));
+          return record ? cloneShapeRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get shape metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteShape(id) {
+      return Effect.try({
+        try: () => metadata.shapes.delete(shapeKey(id)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete shape metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listShapes() {
+      return Effect.try({
+        try: () =>
+          [...metadata.shapes.values()]
+            .toSorted((left, right) => left.id.localeCompare(right.id))
+            .map(cloneShapeRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list shape metadata", cause),
             cause,
           }),
       });

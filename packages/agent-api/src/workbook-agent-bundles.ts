@@ -7,6 +7,7 @@ import type {
   WorkbookChartSnapshot,
   WorkbookCommentThreadSnapshot,
   WorkbookConditionalFormatSnapshot,
+  WorkbookImageSnapshot,
   LiteralInput,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -14,6 +15,7 @@ import type {
   WorkbookPivotSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
+  WorkbookShapeSnapshot,
   WorkbookTableSnapshot,
 } from "@bilig/protocol";
 import {
@@ -36,6 +38,16 @@ import {
   isWorkbookAgentConditionalFormatCommandValue,
   isWorkbookScopeConditionalFormatCommand,
 } from "./workbook-agent-conditional-format-commands.js";
+import {
+  applyWorkbookAgentMediaCommand,
+  deriveWorkbookAgentMediaCommandPreviewRanges,
+  describeWorkbookAgentMediaCommand,
+  estimateWorkbookAgentMediaCommandAffectedCells,
+  isHighRiskWorkbookAgentMediaCommand,
+  isWorkbookAgentMediaCommand,
+  isWorkbookAgentMediaCommandValue,
+  isWorkbookScopeMediaCommand,
+} from "./workbook-agent-media-commands.js";
 import {
   applyWorkbookAgentObjectCommand,
   deriveWorkbookAgentObjectCommandPreviewRanges,
@@ -176,6 +188,22 @@ export type WorkbookAgentCommand =
     }
   | {
       kind: "deleteChart";
+      id: string;
+    }
+  | {
+      kind: "upsertImage";
+      image: WorkbookImageSnapshot;
+    }
+  | {
+      kind: "deleteImage";
+      id: string;
+    }
+  | {
+      kind: "upsertShape";
+      shape: WorkbookShapeSnapshot;
+    }
+  | {
+      kind: "deleteShape";
       id: string;
     }
   | {
@@ -720,6 +748,9 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
   if (isWorkbookAgentObjectCommand(command)) {
     return describeWorkbookAgentObjectCommand(command);
   }
+  if (isWorkbookAgentMediaCommand(command)) {
+    return describeWorkbookAgentMediaCommand(command);
+  }
   if (isWorkbookAgentProtectionCommand(command)) {
     return describeWorkbookAgentProtectionCommand(command);
   }
@@ -819,6 +850,7 @@ function deriveWorkbookAgentRiskClass(
         (isWorkbookAgentStructuralCommand(command) &&
           isHighRiskWorkbookAgentStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)) ||
+        (isWorkbookAgentMediaCommand(command) && isHighRiskWorkbookAgentMediaCommand(command)) ||
         (isWorkbookAgentProtectionCommand(command) &&
           isHighRiskWorkbookAgentProtectionCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) &&
@@ -850,6 +882,7 @@ function deriveWorkbookAgentBundleScope(
       (command) =>
         (isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)) ||
+        (isWorkbookAgentMediaCommand(command) && isWorkbookScopeMediaCommand(command)) ||
         (isWorkbookAgentProtectionCommand(command) && isWorkbookScopeProtectionCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)) ||
         (isWorkbookAgentConditionalFormatCommand(command) &&
@@ -1125,6 +1158,9 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   if (isWorkbookAgentObjectCommandValue(value)) {
     return true;
   }
+  if (isWorkbookAgentMediaCommandValue(value)) {
+    return true;
+  }
   if (isWorkbookAgentProtectionCommandValue(value)) {
     return true;
   }
@@ -1294,6 +1330,9 @@ export function estimateWorkbookAgentCommandAffectedCells(
   if (isWorkbookAgentObjectCommand(command)) {
     return estimateWorkbookAgentObjectCommandAffectedCells(command);
   }
+  if (isWorkbookAgentMediaCommand(command)) {
+    return estimateWorkbookAgentMediaCommandAffectedCells(command);
+  }
   if (isWorkbookAgentProtectionCommand(command)) {
     return estimateWorkbookAgentProtectionCommandAffectedCells(command);
   }
@@ -1333,6 +1372,9 @@ export function deriveWorkbookAgentCommandPreviewRanges(
   }
   if (isWorkbookAgentObjectCommand(command)) {
     return deriveWorkbookAgentObjectCommandPreviewRanges(command);
+  }
+  if (isWorkbookAgentMediaCommand(command)) {
+    return deriveWorkbookAgentMediaCommandPreviewRanges(command);
   }
   if (isWorkbookAgentProtectionCommand(command)) {
     return deriveWorkbookAgentProtectionCommandPreviewRanges(command);
@@ -1399,6 +1441,10 @@ export function applyWorkbookAgentCommand(
   }
   if (isWorkbookAgentObjectCommand(command)) {
     applyWorkbookAgentObjectCommand(engine, command);
+    return;
+  }
+  if (isWorkbookAgentMediaCommand(command)) {
+    applyWorkbookAgentMediaCommand(engine, command);
     return;
   }
   if (isWorkbookAgentProtectionCommand(command)) {

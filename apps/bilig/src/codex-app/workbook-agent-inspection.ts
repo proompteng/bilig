@@ -8,9 +8,11 @@ import {
   type WorkbookCommentThreadSnapshot,
   type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
+  type WorkbookImageSnapshot,
   type WorkbookNoteSnapshot,
   type WorkbookRangeProtectionSnapshot,
   type WorkbookSheetProtectionSnapshot,
+  type WorkbookShapeSnapshot,
 } from "@bilig/protocol";
 import type { JsonValue } from "@bilig/agent-api";
 import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
@@ -132,6 +134,46 @@ function collectIntersectingNotes(
       }),
     )
     .map((note) => structuredClone(note));
+}
+
+function collectIntersectingImages(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookImageSnapshot[] {
+  return runtime.engine
+    .getImages()
+    .filter((image) => {
+      const anchor = parseCellAddress(image.address, image.sheetName);
+      return rangesIntersect(range, {
+        sheetName: image.sheetName,
+        startAddress: image.address,
+        endAddress: formatAddress(
+          anchor.row + Math.max(0, image.rows - 1),
+          anchor.col + Math.max(0, image.cols - 1),
+        ),
+      });
+    })
+    .map((image) => structuredClone(image));
+}
+
+function collectIntersectingShapes(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookShapeSnapshot[] {
+  return runtime.engine
+    .getShapes()
+    .filter((shape) => {
+      const anchor = parseCellAddress(shape.address, shape.sheetName);
+      return rangesIntersect(range, {
+        sheetName: shape.sheetName,
+        startAddress: shape.address,
+        endAddress: formatAddress(
+          anchor.row + Math.max(0, shape.rows - 1),
+          anchor.col + Math.max(0, shape.cols - 1),
+        ),
+      });
+    })
+    .map((shape) => structuredClone(shape));
 }
 
 function collectIntersectingRangeProtections(
@@ -306,6 +348,8 @@ export function inspectWorkbookRange(
   readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
   readonly notes: readonly WorkbookNoteSnapshot[];
+  readonly images: readonly WorkbookImageSnapshot[];
+  readonly shapes: readonly WorkbookShapeSnapshot[];
   readonly styles: readonly CellStyleRecord[];
   readonly numberFormats: readonly CellNumberFormatRecord[];
   readonly rows: readonly JsonValue[];
@@ -357,6 +401,8 @@ export function inspectWorkbookRange(
     conditionalFormats: collectIntersectingConditionalFormats(runtime, normalizedRange),
     commentThreads: collectIntersectingCommentThreads(runtime, normalizedRange),
     notes: collectIntersectingNotes(runtime, normalizedRange),
+    images: collectIntersectingImages(runtime, normalizedRange),
+    shapes: collectIntersectingShapes(runtime, normalizedRange),
     ...collectRangeFormattingCatalog({
       runtime,
       styleIds,
@@ -395,6 +441,8 @@ export function inspectWorkbookCell(
   readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
   readonly notes: readonly WorkbookNoteSnapshot[];
+  readonly images: readonly WorkbookImageSnapshot[];
+  readonly shapes: readonly WorkbookShapeSnapshot[];
 } {
   const snapshot = runtime.engine.getCell(target.sheetName, target.address);
   const cell = runtime.engine.explainCell(target.sheetName, target.address);
@@ -440,6 +488,16 @@ export function inspectWorkbookCell(
       endAddress: target.address,
     }),
     notes: collectIntersectingNotes(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
+    images: collectIntersectingImages(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
+    shapes: collectIntersectingShapes(runtime, {
       sheetName: target.sheetName,
       startAddress: target.address,
       endAddress: target.address,

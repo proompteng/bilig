@@ -456,6 +456,44 @@ export function createEngineOperationService(args: {
         }
         return;
       }
+      case "upsertImage":
+        if (
+          sheetHasProtection(op.image.sheetName) ||
+          rangeIsProtected(cellRange(op.image.sheetName, op.image.address))
+        ) {
+          throwProtectionBlocked(`image ${op.image.id} touches protected workbook state`);
+        }
+        return;
+      case "deleteImage": {
+        const existing = args.state.workbook.getImage(op.id);
+        if (
+          existing &&
+          (sheetHasProtection(existing.sheetName) ||
+            rangeIsProtected(cellRange(existing.sheetName, existing.address)))
+        ) {
+          throwProtectionBlocked(`image ${op.id} touches protected workbook state`);
+        }
+        return;
+      }
+      case "upsertShape":
+        if (
+          sheetHasProtection(op.shape.sheetName) ||
+          rangeIsProtected(cellRange(op.shape.sheetName, op.shape.address))
+        ) {
+          throwProtectionBlocked(`shape ${op.shape.id} touches protected workbook state`);
+        }
+        return;
+      case "deleteShape": {
+        const existing = args.state.workbook.getShape(op.id);
+        if (
+          existing &&
+          (sheetHasProtection(existing.sheetName) ||
+            rangeIsProtected(cellRange(existing.sheetName, existing.address)))
+        ) {
+          throwProtectionBlocked(`shape ${op.id} touches protected workbook state`);
+        }
+        return;
+      }
       default:
         return assertNever(op);
     }
@@ -558,6 +596,14 @@ export function createEngineOperationService(args: {
         return `chart:${op.chart.id.trim().toUpperCase()}`;
       case "deleteChart":
         return `chart:${op.id.trim().toUpperCase()}`;
+      case "upsertImage":
+        return `image:${op.image.id.trim().toUpperCase()}`;
+      case "deleteImage":
+        return `image:${op.id.trim().toUpperCase()}`;
+      case "upsertShape":
+        return `shape:${op.shape.id.trim().toUpperCase()}`;
+      case "deleteShape":
+        return `shape:${op.id.trim().toUpperCase()}`;
       default:
         return assertNever(op);
     }
@@ -675,6 +721,14 @@ export function createEngineOperationService(args: {
           sheetDeleteVersions.get(op.chart.source.sheetName)
         );
       case "deleteChart":
+        return undefined;
+      case "upsertImage":
+        return sheetDeleteVersions.get(op.image.sheetName);
+      case "deleteImage":
+        return undefined;
+      case "upsertShape":
+        return sheetDeleteVersions.get(op.shape.sheetName);
+      case "deleteShape":
         return undefined;
       default:
         return assertNever(op);
@@ -1255,6 +1309,26 @@ export function createEngineOperationService(args: {
             break;
           case "deleteChart":
             args.state.workbook.deleteChart(op.id);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertImage":
+            args.state.workbook.setImage(op.image);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteImage":
+            args.state.workbook.deleteImage(op.id);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertShape":
+            args.state.workbook.setShape(op.shape);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteShape":
+            args.state.workbook.deleteShape(op.id);
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;

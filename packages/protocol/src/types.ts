@@ -223,6 +223,36 @@ export interface WorkbookChartSnapshot {
   cols: number;
 }
 
+export interface WorkbookImageSnapshot {
+  id: string;
+  sheetName: string;
+  address: string;
+  sourceUrl: string;
+  rows: number;
+  cols: number;
+  altText?: string;
+}
+
+export type WorkbookShapeType =
+  | "rectangle"
+  | "roundedRectangle"
+  | "ellipse"
+  | "line"
+  | "arrow"
+  | "textBox";
+
+export interface WorkbookShapeSnapshot {
+  id: string;
+  sheetName: string;
+  address: string;
+  shapeType: WorkbookShapeType;
+  rows: number;
+  cols: number;
+  text?: string;
+  fillColor?: string;
+  strokeColor?: string;
+}
+
 export interface WorkbookTableSnapshot {
   name: string;
   sheetName: string;
@@ -579,6 +609,8 @@ export interface WorkbookMetadataSnapshot {
   spills?: WorkbookSpillSnapshot[];
   pivots?: WorkbookPivotSnapshot[];
   charts?: WorkbookChartSnapshot[];
+  images?: WorkbookImageSnapshot[];
+  shapes?: WorkbookShapeSnapshot[];
   styles?: CellStyleRecord[];
   formats?: CellNumberFormatRecord[];
   calculationSettings?: WorkbookCalculationSettingsSnapshot;

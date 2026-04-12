@@ -22,11 +22,13 @@ import type {
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
+  WorkbookImageSnapshot,
   WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
   WorkbookSortSnapshot,
+  WorkbookShapeSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
 import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress } from "@bilig/formula";
@@ -1151,6 +1153,72 @@ export class SpreadsheetEngine {
 
   getCharts(): WorkbookChartSnapshot[] {
     return this.workbook.listCharts();
+  }
+
+  setImage(image: WorkbookImageSnapshot): void {
+    const existing = this.workbook.getImage(image.id);
+    if (
+      existing &&
+      existing.sheetName === image.sheetName &&
+      existing.address === image.address &&
+      existing.sourceUrl === image.sourceUrl &&
+      existing.rows === image.rows &&
+      existing.cols === image.cols &&
+      existing.altText === image.altText
+    ) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertImage", image: structuredClone(image) }]);
+  }
+
+  deleteImage(id: string): boolean {
+    if (!this.workbook.getImage(id)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteImage", id }]);
+    return true;
+  }
+
+  getImage(id: string): WorkbookImageSnapshot | undefined {
+    return this.workbook.getImage(id);
+  }
+
+  getImages(): WorkbookImageSnapshot[] {
+    return this.workbook.listImages();
+  }
+
+  setShape(shape: WorkbookShapeSnapshot): void {
+    const existing = this.workbook.getShape(shape.id);
+    if (
+      existing &&
+      existing.sheetName === shape.sheetName &&
+      existing.address === shape.address &&
+      existing.shapeType === shape.shapeType &&
+      existing.rows === shape.rows &&
+      existing.cols === shape.cols &&
+      existing.text === shape.text &&
+      existing.fillColor === shape.fillColor &&
+      existing.strokeColor === shape.strokeColor
+    ) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertShape", shape: structuredClone(shape) }]);
+  }
+
+  deleteShape(id: string): boolean {
+    if (!this.workbook.getShape(id)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteShape", id }]);
+    return true;
+  }
+
+  getShape(id: string): WorkbookShapeSnapshot | undefined {
+    return this.workbook.getShape(id);
+  }
+
+  getShapes(): WorkbookShapeSnapshot[] {
+    return this.workbook.listShapes();
   }
 
   clearCell(sheetName: string, address: string): void {

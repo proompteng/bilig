@@ -44,6 +44,14 @@ function chartEntityKey(id: string): string {
   return `chart:${id.trim().toUpperCase()}`;
 }
 
+function imageEntityKey(id: string): string {
+  return `image:${id.trim().toUpperCase()}`;
+}
+
+function shapeEntityKey(id: string): string {
+  return `shape:${id.trim().toUpperCase()}`;
+}
+
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
   return {
     replicaId,
@@ -221,6 +229,14 @@ function entityKeyForOp(op: EngineOp): string {
       return chartEntityKey(op.chart.id);
     case "deleteChart":
       return chartEntityKey(op.id);
+    case "upsertImage":
+      return imageEntityKey(op.image.id);
+    case "deleteImage":
+      return imageEntityKey(op.id);
+    case "upsertShape":
+      return shapeEntityKey(op.shape.id);
+    case "deleteShape":
+      return shapeEntityKey(op.id);
   }
   return assertNever(op);
 }
@@ -299,6 +315,14 @@ function sheetDeleteBarrierForOp(
         latestSheetDeletes.get(op.chart.source.sheetName)
       );
     case "deleteChart":
+      return undefined;
+    case "upsertImage":
+      return latestSheetDeletes.get(op.image.sheetName);
+    case "deleteImage":
+      return undefined;
+    case "upsertShape":
+      return latestSheetDeletes.get(op.shape.sheetName);
+    case "deleteShape":
       return undefined;
   }
   return assertNever(op);

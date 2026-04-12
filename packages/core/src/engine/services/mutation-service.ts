@@ -375,6 +375,24 @@ export function createEngineMutationService(args: {
               chart: structuredClone(chart),
             });
           });
+        args.state.workbook
+          .listImages()
+          .filter((image) => image.sheetName === sheet.name)
+          .forEach((image) => {
+            restoredOps.push({
+              kind: "upsertImage",
+              image: structuredClone(image),
+            });
+          });
+        args.state.workbook
+          .listShapes()
+          .filter((shape) => shape.sheetName === sheet.name)
+          .forEach((shape) => {
+            restoredOps.push({
+              kind: "upsertShape",
+              shape: structuredClone(shape),
+            });
+          });
         restoredOps.push(...args.captureSheetCellState(sheet.name));
         return restoredOps;
       }
@@ -825,6 +843,34 @@ export function createEngineMutationService(args: {
           return [];
         }
         return [{ kind: "upsertChart", chart: structuredClone(existing) }];
+      }
+      case "upsertImage": {
+        const existing = args.state.workbook.getImage(op.image.id);
+        if (!existing) {
+          return [{ kind: "deleteImage", id: op.image.id }];
+        }
+        return [{ kind: "upsertImage", image: structuredClone(existing) }];
+      }
+      case "deleteImage": {
+        const existing = args.state.workbook.getImage(op.id);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertImage", image: structuredClone(existing) }];
+      }
+      case "upsertShape": {
+        const existing = args.state.workbook.getShape(op.shape.id);
+        if (!existing) {
+          return [{ kind: "deleteShape", id: op.shape.id }];
+        }
+        return [{ kind: "upsertShape", shape: structuredClone(existing) }];
+      }
+      case "deleteShape": {
+        const existing = args.state.workbook.getShape(op.id);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertShape", shape: structuredClone(existing) }];
       }
       default: {
         const exhaustive: never = op;

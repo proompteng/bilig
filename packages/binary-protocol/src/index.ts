@@ -5,6 +5,9 @@ import type {
   WorkbookChartSeriesOrientation,
   WorkbookChartSnapshot,
   WorkbookChartType,
+  WorkbookImageSnapshot,
+  WorkbookShapeSnapshot,
+  WorkbookShapeType,
   CellHorizontalAlignment,
   CellNumberFormatKind,
   CellNumberFormatRecord,
@@ -210,6 +213,10 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   deleteRangeProtection: 49,
   upsertChart: 50,
   deleteChart: 51,
+  upsertImage: 52,
+  deleteImage: 53,
+  upsertShape: 54,
+  deleteShape: 55,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -1243,6 +1250,120 @@ function decodeChart(reader: BinaryReader): WorkbookChartSnapshot {
   return chart;
 }
 
+function encodeImage(writer: BinaryWriter, image: WorkbookImageSnapshot): void {
+  writer.string(image.id);
+  writer.string(image.sheetName);
+  writer.string(image.address);
+  writer.string(image.sourceUrl);
+  writer.u32(image.rows);
+  writer.u32(image.cols);
+  writer.bool(image.altText !== undefined);
+  if (image.altText !== undefined) {
+    writer.string(image.altText);
+  }
+}
+
+function decodeImage(reader: BinaryReader): WorkbookImageSnapshot {
+  const image: WorkbookImageSnapshot = {
+    id: reader.string(),
+    sheetName: reader.string(),
+    address: reader.string(),
+    sourceUrl: reader.string(),
+    rows: reader.u32(),
+    cols: reader.u32(),
+  };
+  if (reader.bool()) {
+    image.altText = reader.string();
+  }
+  return image;
+}
+
+function encodeShapeType(writer: BinaryWriter, shapeType: WorkbookShapeType): void {
+  switch (shapeType) {
+    case "rectangle":
+      writer.u8(0);
+      return;
+    case "roundedRectangle":
+      writer.u8(1);
+      return;
+    case "ellipse":
+      writer.u8(2);
+      return;
+    case "line":
+      writer.u8(3);
+      return;
+    case "arrow":
+      writer.u8(4);
+      return;
+    case "textBox":
+      writer.u8(5);
+      return;
+    default:
+      assertNever(shapeType);
+  }
+}
+
+function decodeShapeType(reader: BinaryReader): WorkbookShapeType {
+  switch (reader.u8()) {
+    case 0:
+      return "rectangle";
+    case 1:
+      return "roundedRectangle";
+    case 2:
+      return "ellipse";
+    case 3:
+      return "line";
+    case 4:
+      return "arrow";
+    case 5:
+      return "textBox";
+    default:
+      throw new BinaryProtocolError("Unknown shape type tag");
+  }
+}
+
+function encodeShape(writer: BinaryWriter, shape: WorkbookShapeSnapshot): void {
+  writer.string(shape.id);
+  writer.string(shape.sheetName);
+  writer.string(shape.address);
+  encodeShapeType(writer, shape.shapeType);
+  writer.u32(shape.rows);
+  writer.u32(shape.cols);
+  writer.bool(shape.text !== undefined);
+  if (shape.text !== undefined) {
+    writer.string(shape.text);
+  }
+  writer.bool(shape.fillColor !== undefined);
+  if (shape.fillColor !== undefined) {
+    writer.string(shape.fillColor);
+  }
+  writer.bool(shape.strokeColor !== undefined);
+  if (shape.strokeColor !== undefined) {
+    writer.string(shape.strokeColor);
+  }
+}
+
+function decodeShape(reader: BinaryReader): WorkbookShapeSnapshot {
+  const shape: WorkbookShapeSnapshot = {
+    id: reader.string(),
+    sheetName: reader.string(),
+    address: reader.string(),
+    shapeType: decodeShapeType(reader),
+    rows: reader.u32(),
+    cols: reader.u32(),
+  };
+  if (reader.bool()) {
+    shape.text = reader.string();
+  }
+  if (reader.bool()) {
+    shape.fillColor = reader.string();
+  }
+  if (reader.bool()) {
+    shape.strokeColor = reader.string();
+  }
+  return shape;
+}
+
 function encodePivotValue(writer: BinaryWriter, value: WorkbookPivotValueSnapshot): void {
   writer.string(value.sourceColumn);
   encodePivotAggregation(writer, value.summarizeBy);
@@ -1982,6 +2103,18 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "deleteChart":
       writer.string(op.id);
       return;
+    case "upsertImage":
+      encodeImage(writer, op.image);
+      return;
+    case "deleteImage":
+      writer.string(op.id);
+      return;
+    case "upsertShape":
+      encodeShape(writer, op.shape);
+      return;
+    case "deleteShape":
+      writer.string(op.id);
+      return;
     default:
       assertNever(op);
   }
@@ -2276,6 +2409,26 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     case 51:
       return {
         kind: "deleteChart",
+        id: reader.string(),
+      };
+    case 52:
+      return {
+        kind: "upsertImage",
+        image: decodeImage(reader),
+      };
+    case 53:
+      return {
+        kind: "deleteImage",
+        id: reader.string(),
+      };
+    case 54:
+      return {
+        kind: "upsertShape",
+        shape: decodeShape(reader),
+      };
+    case 55:
+      return {
+        kind: "deleteShape",
         id: reader.string(),
       };
     default:

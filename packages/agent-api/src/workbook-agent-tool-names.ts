@@ -9,6 +9,8 @@ export const WORKBOOK_AGENT_TOOL_NAMES = {
   listTables: "list_tables",
   listPivots: "list_pivots",
   listCharts: "list_charts",
+  listImages: "list_images",
+  listShapes: "list_shapes",
   listDataValidationRules: "list_data_validation_rules",
   getConditionalFormats: "get_conditional_formats",
   getComments: "get_comments",
@@ -83,6 +85,12 @@ export const WORKBOOK_AGENT_TOOL_NAMES = {
   createChart: "create_chart",
   updateChart: "update_chart",
   deleteChart: "delete_chart",
+  insertImage: "insert_image",
+  moveImage: "move_image",
+  deleteImage: "delete_image",
+  insertShape: "insert_shape",
+  updateShape: "update_shape",
+  deleteShape: "delete_shape",
 } as const;
 
 export type WorkbookAgentToolName =
@@ -109,6 +117,10 @@ const LEGACY_WORKBOOK_AGENT_TOOL_NAME_MAP: Record<string, WorkbookAgentToolName>
   "bilig.list_pivots": WORKBOOK_AGENT_TOOL_NAMES.listPivots,
   bilig_list_charts: WORKBOOK_AGENT_TOOL_NAMES.listCharts,
   "bilig.list_charts": WORKBOOK_AGENT_TOOL_NAMES.listCharts,
+  bilig_list_images: WORKBOOK_AGENT_TOOL_NAMES.listImages,
+  "bilig.list_images": WORKBOOK_AGENT_TOOL_NAMES.listImages,
+  bilig_list_shapes: WORKBOOK_AGENT_TOOL_NAMES.listShapes,
+  "bilig.list_shapes": WORKBOOK_AGENT_TOOL_NAMES.listShapes,
   bilig_list_data_validation_rules: WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
   "bilig.list_data_validation_rules": WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
   bilig_get_conditional_formats: WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats,
@@ -259,6 +271,18 @@ const LEGACY_WORKBOOK_AGENT_TOOL_NAME_MAP: Record<string, WorkbookAgentToolName>
   "bilig.update_chart": WORKBOOK_AGENT_TOOL_NAMES.updateChart,
   bilig_delete_chart: WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
   "bilig.delete_chart": WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
+  bilig_insert_image: WORKBOOK_AGENT_TOOL_NAMES.insertImage,
+  "bilig.insert_image": WORKBOOK_AGENT_TOOL_NAMES.insertImage,
+  bilig_move_image: WORKBOOK_AGENT_TOOL_NAMES.moveImage,
+  "bilig.move_image": WORKBOOK_AGENT_TOOL_NAMES.moveImage,
+  bilig_delete_image: WORKBOOK_AGENT_TOOL_NAMES.deleteImage,
+  "bilig.delete_image": WORKBOOK_AGENT_TOOL_NAMES.deleteImage,
+  bilig_insert_shape: WORKBOOK_AGENT_TOOL_NAMES.insertShape,
+  "bilig.insert_shape": WORKBOOK_AGENT_TOOL_NAMES.insertShape,
+  bilig_update_shape: WORKBOOK_AGENT_TOOL_NAMES.updateShape,
+  "bilig.update_shape": WORKBOOK_AGENT_TOOL_NAMES.updateShape,
+  bilig_delete_shape: WORKBOOK_AGENT_TOOL_NAMES.deleteShape,
+  "bilig.delete_shape": WORKBOOK_AGENT_TOOL_NAMES.deleteShape,
 };
 
 const workbookAgentToolNameSet = new Set<string>(Object.values(WORKBOOK_AGENT_TOOL_NAMES));
