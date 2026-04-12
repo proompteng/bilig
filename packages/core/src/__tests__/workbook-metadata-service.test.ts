@@ -131,6 +131,51 @@ describe("WorkbookMetadataService", () => {
     });
   });
 
+  it("clones and normalizes conditional formats on write and read", () => {
+    const service = createService();
+    const input = {
+      id: " cf-1 ",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "c4",
+        endAddress: "b2",
+      },
+      rule: {
+        kind: "cellIs" as const,
+        operator: "greaterThan" as const,
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+      stopIfTrue: true,
+      priority: 1,
+    };
+
+    const stored = Effect.runSync(service.setConditionalFormat(input));
+    input.rule.values[0] = 99;
+    stored.style.fill!.backgroundColor = "#00ff00";
+
+    expect(Effect.runSync(service.getConditionalFormat("cf-1"))).toEqual({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "C4",
+      },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+      stopIfTrue: true,
+      priority: 1,
+    });
+  });
+
   it("normalizes and clones pivot records so caller mutation does not leak back into metadata", () => {
     const service = createService();
     const input = {
@@ -216,6 +261,20 @@ describe("WorkbookMetadataService", () => {
         sheetName: "Source",
         address: "D5",
         text: "Manual override",
+      }),
+    );
+    Effect.runSync(
+      service.setConditionalFormat({
+        id: "cf-1",
+        range: { sheetName: "Source", startAddress: "A2", endAddress: "A5" },
+        rule: {
+          kind: "cellIs",
+          operator: "greaterThan",
+          values: [10],
+        },
+        style: {
+          fill: { backgroundColor: "#ff0000" },
+        },
       }),
     );
     Effect.runSync(
@@ -323,6 +382,18 @@ describe("WorkbookMetadataService", () => {
       address: "D5",
       text: "Manual override",
     });
+    expect(Effect.runSync(service.getConditionalFormat("cf-1"))).toEqual({
+      id: "cf-1",
+      range: { sheetName: "Renamed", startAddress: "A2", endAddress: "A5" },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+    });
     expect(Effect.runSync(service.getSpill("Renamed", "B2"))).toEqual({
       sheetName: "Renamed",
       address: "B2",
@@ -361,6 +432,7 @@ describe("WorkbookMetadataService", () => {
     expect(Effect.runSync(service.listFilters("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listSorts("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listDataValidations("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.listConditionalFormats("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listCommentThreads("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listNotes("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listPivots())).toEqual([]);

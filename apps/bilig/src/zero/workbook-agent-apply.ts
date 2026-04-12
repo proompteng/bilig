@@ -3,6 +3,8 @@ import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
   applyWorkbookAgentAnnotationCommand,
   isWorkbookAgentAnnotationCommand,
+  applyWorkbookAgentConditionalFormatCommand,
+  isWorkbookAgentConditionalFormatCommand,
   applyWorkbookAgentObjectCommand,
   isWorkbookAgentObjectCommand,
   applyWorkbookAgentStructuralCommand,
@@ -88,6 +90,11 @@ function applyWorkbookAgentCommandWithUndoCapture(
   if (isWorkbookAgentObjectCommand(command)) {
     return engine.captureUndoOps(() => {
       applyWorkbookAgentObjectCommand(engine, command);
+    }).undoOps;
+  }
+  if (isWorkbookAgentConditionalFormatCommand(command)) {
+    return engine.captureUndoOps(() => {
+      applyWorkbookAgentConditionalFormatCommand(engine, command);
     }).undoOps;
   }
   if (isWorkbookAgentAnnotationCommand(command)) {

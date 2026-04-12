@@ -1,5 +1,6 @@
 import type {
   CellRangeRef,
+  WorkbookConditionalFormatRuleSnapshot,
   WorkbookDataValidationRuleSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookValidationListSourceSnapshot,
@@ -8,6 +9,7 @@ import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-
 import {
   type WorkbookCommentEntryRecord,
   type WorkbookCommentThreadRecord,
+  type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
   normalizeWorkbookObjectName,
   type WorkbookNoteRecord,
@@ -201,6 +203,53 @@ export function cloneDataValidationRecord(
   return cloned;
 }
 
+export function cloneConditionalFormatRule(
+  rule: WorkbookConditionalFormatRuleSnapshot,
+): WorkbookConditionalFormatRuleSnapshot {
+  switch (rule.kind) {
+    case "cellIs":
+      return {
+        kind: "cellIs",
+        operator: rule.operator,
+        values: [...rule.values],
+      };
+    case "textContains": {
+      const cloned: Extract<WorkbookConditionalFormatRuleSnapshot, { kind: "textContains" }> = {
+        kind: "textContains",
+        text: rule.text,
+      };
+      if (rule.caseSensitive !== undefined) {
+        cloned.caseSensitive = rule.caseSensitive;
+      }
+      return cloned;
+    }
+    case "formula":
+      return { kind: "formula", formula: rule.formula };
+    case "blanks":
+      return { kind: "blanks" };
+    case "notBlanks":
+      return { kind: "notBlanks" };
+  }
+}
+
+export function cloneConditionalFormatRecord(
+  record: WorkbookConditionalFormatRecord,
+): WorkbookConditionalFormatRecord {
+  const cloned: WorkbookConditionalFormatRecord = {
+    id: record.id,
+    range: { ...record.range },
+    rule: cloneConditionalFormatRule(record.rule),
+    style: structuredClone(record.style),
+  };
+  if (record.stopIfTrue !== undefined) {
+    cloned.stopIfTrue = record.stopIfTrue;
+  }
+  if (record.priority !== undefined) {
+    cloned.priority = record.priority;
+  }
+  return cloned;
+}
+
 export function cloneCommentEntryRecord(
   record: WorkbookCommentEntryRecord,
 ): WorkbookCommentEntryRecord {
@@ -247,6 +296,14 @@ export function cloneNoteRecord(record: WorkbookNoteRecord): WorkbookNoteRecord 
     address: canonicalWorkbookAddress(record.sheetName, record.address),
     text: record.text,
   };
+}
+
+export function conditionalFormatKey(id: string): string {
+  const normalized = id.trim();
+  if (normalized.length === 0) {
+    throw new Error("Conditional format id must be non-empty");
+  }
+  return normalized;
 }
 
 export function clonePivotRecord(record: WorkbookPivotRecord): WorkbookPivotRecord {
@@ -335,6 +392,9 @@ function recordKey(record: unknown): string {
   if (isSortRecord(record)) {
     return sortKey(record.sheetName, record.range);
   }
+  if (isConditionalFormatRecord(record)) {
+    return conditionalFormatKey(record.id);
+  }
   if (isDataValidationRecord(record)) {
     return dataValidationKey(record.range.sheetName, record.range);
   }
@@ -405,13 +465,25 @@ function isDataValidationRecord(record: unknown): record is WorkbookDataValidati
     record !== null &&
     "range" in record &&
     "rule" in record &&
-    !("keys" in record)
+    !("keys" in record) &&
+    !("id" in record && "style" in record)
   );
 }
 
 function isCommentThreadRecord(record: unknown): record is WorkbookCommentThreadRecord {
   return (
     typeof record === "object" && record !== null && "threadId" in record && "comments" in record
+  );
+}
+
+function isConditionalFormatRecord(record: unknown): record is WorkbookConditionalFormatRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    "range" in record &&
+    "rule" in record &&
+    "style" in record
   );
 }
 

@@ -562,4 +562,62 @@ describe("workbook agent apply", () => {
     expect(engine.getCommentThreads("Sheet1")).toEqual([]);
     expect(engine.getNotes("Sheet1")).toEqual([]);
   });
+
+  it("captures undo for conditional format commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "upsertConditionalFormat",
+          format: {
+            id: "cf-1",
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              endAddress: "B4",
+            },
+            rule: {
+              kind: "cellIs",
+              operator: "greaterThan",
+              values: [10],
+            },
+            style: {
+              fill: { backgroundColor: "#ff0000" },
+            },
+          },
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getConditionalFormats("Sheet1")).toEqual([
+      {
+        id: "cf-1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        rule: {
+          kind: "cellIs",
+          operator: "greaterThan",
+          values: [10],
+        },
+        style: {
+          fill: { backgroundColor: "#ff0000" },
+        },
+      },
+    ]);
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getConditionalFormats("Sheet1")).toEqual([]);
+  });
 });

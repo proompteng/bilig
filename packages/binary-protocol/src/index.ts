@@ -5,12 +5,15 @@ import type {
   CellNumberFormatKind,
   CellNumberFormatRecord,
   CellRangeRef,
+  CellStylePatch,
   CompatibilityMode,
   CellStyleRecord,
   CellVerticalAlignment,
   PivotAggregation,
   LiteralInput,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatRuleSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationRuleSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookNoteSnapshot,
@@ -193,6 +196,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   deleteCommentThread: 41,
   upsertNote: 42,
   deleteNote: 43,
+  upsertConditionalFormat: 44,
+  deleteConditionalFormat: 45,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -488,6 +493,54 @@ function decodeNullableBoolean(reader: BinaryReader): boolean | null {
   }
 }
 
+function encodeOptionalNullableNumber(
+  writer: BinaryWriter,
+  value: number | null | undefined,
+): void {
+  writer.bool(value !== undefined);
+  if (value !== undefined) {
+    encodeNullableNumber(writer, value);
+  }
+}
+
+function decodeOptionalNullableNumber(reader: BinaryReader): number | null | undefined {
+  return reader.bool() ? decodeNullableNumber(reader) : undefined;
+}
+
+function encodeOptionalNullableBoolean(
+  writer: BinaryWriter,
+  value: boolean | null | undefined,
+): void {
+  writer.bool(value !== undefined);
+  if (value !== undefined) {
+    encodeNullableBoolean(writer, value);
+  }
+}
+
+function decodeOptionalNullableBoolean(reader: BinaryReader): boolean | null | undefined {
+  return reader.bool() ? decodeNullableBoolean(reader) : undefined;
+}
+
+function encodeOptionalNullableString(
+  writer: BinaryWriter,
+  value: string | null | undefined,
+): void {
+  writer.bool(value !== undefined);
+  if (value !== undefined) {
+    writer.bool(value !== null);
+    if (value !== null) {
+      writer.string(value);
+    }
+  }
+}
+
+function decodeOptionalNullableString(reader: BinaryReader): string | null | undefined {
+  if (!reader.bool()) {
+    return undefined;
+  }
+  return reader.bool() ? reader.string() : null;
+}
+
 function encodeCellRangeRef(writer: BinaryWriter, ref: CellRangeRef): void {
   writer.string(ref.sheetName);
   writer.string(ref.startAddress);
@@ -644,6 +697,142 @@ function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
   return style;
 }
 
+function encodeCellStylePatch(writer: BinaryWriter, patch: CellStylePatch): void {
+  writer.bool(patch.fill !== undefined);
+  if (patch.fill !== undefined) {
+    writer.bool(patch.fill !== null);
+    if (patch.fill !== null) {
+      encodeOptionalNullableString(writer, patch.fill.backgroundColor);
+    }
+  }
+  writer.bool(patch.font !== undefined);
+  if (patch.font !== undefined) {
+    writer.bool(patch.font !== null);
+    if (patch.font !== null) {
+      encodeOptionalNullableString(writer, patch.font.family);
+      encodeOptionalNullableNumber(writer, patch.font.size);
+      encodeOptionalNullableBoolean(writer, patch.font.bold);
+      encodeOptionalNullableBoolean(writer, patch.font.italic);
+      encodeOptionalNullableBoolean(writer, patch.font.underline);
+      encodeOptionalNullableString(writer, patch.font.color);
+    }
+  }
+  writer.bool(patch.alignment !== undefined);
+  if (patch.alignment !== undefined) {
+    writer.bool(patch.alignment !== null);
+    if (patch.alignment !== null) {
+      encodeOptionalNullableString(writer, patch.alignment.horizontal);
+      encodeOptionalNullableString(writer, patch.alignment.vertical);
+      encodeOptionalNullableBoolean(writer, patch.alignment.wrap);
+      encodeOptionalNullableNumber(writer, patch.alignment.indent);
+    }
+  }
+  writer.bool(patch.borders !== undefined);
+  if (patch.borders !== undefined) {
+    writer.bool(patch.borders !== null);
+    if (patch.borders !== null) {
+      encodePatchBorderSide(writer, patch.borders.top);
+      encodePatchBorderSide(writer, patch.borders.right);
+      encodePatchBorderSide(writer, patch.borders.bottom);
+      encodePatchBorderSide(writer, patch.borders.left);
+    }
+  }
+}
+
+function decodeCellStylePatch(reader: BinaryReader): CellStylePatch {
+  const patch: CellStylePatch = {};
+  if (reader.bool()) {
+    if (reader.bool()) {
+      const backgroundColor = decodeOptionalNullableString(reader);
+      patch.fill = backgroundColor === undefined ? {} : { backgroundColor };
+    } else {
+      patch.fill = null;
+    }
+  }
+  if (reader.bool()) {
+    if (reader.bool()) {
+      const font: NonNullable<CellStylePatch["font"]> = {};
+      const family = decodeOptionalNullableString(reader);
+      if (family !== undefined) {
+        font.family = family;
+      }
+      const size = decodeOptionalNullableNumber(reader);
+      if (size !== undefined) {
+        font.size = size;
+      }
+      const bold = decodeOptionalNullableBoolean(reader);
+      if (bold !== undefined) {
+        font.bold = bold;
+      }
+      const italic = decodeOptionalNullableBoolean(reader);
+      if (italic !== undefined) {
+        font.italic = italic;
+      }
+      const underline = decodeOptionalNullableBoolean(reader);
+      if (underline !== undefined) {
+        font.underline = underline;
+      }
+      const color = decodeOptionalNullableString(reader);
+      if (color !== undefined) {
+        font.color = color;
+      }
+      patch.font = font;
+    } else {
+      patch.font = null;
+    }
+  }
+  if (reader.bool()) {
+    if (reader.bool()) {
+      const alignment: NonNullable<CellStylePatch["alignment"]> = {};
+      const horizontal = decodeOptionalNullableString(reader);
+      if (horizontal !== undefined) {
+        alignment.horizontal =
+          horizontal === null ? null : (decodeHorizontalAlignment(horizontal) ?? null);
+      }
+      const vertical = decodeOptionalNullableString(reader);
+      if (vertical !== undefined) {
+        alignment.vertical = vertical === null ? null : (decodeVerticalAlignment(vertical) ?? null);
+      }
+      const wrap = decodeOptionalNullableBoolean(reader);
+      if (wrap !== undefined) {
+        alignment.wrap = wrap;
+      }
+      const indent = decodeOptionalNullableNumber(reader);
+      if (indent !== undefined) {
+        alignment.indent = indent;
+      }
+      patch.alignment = alignment;
+    } else {
+      patch.alignment = null;
+    }
+  }
+  if (reader.bool()) {
+    if (reader.bool()) {
+      const borders: NonNullable<CellStylePatch["borders"]> = {};
+      const top = decodePatchBorderSide(reader);
+      if (top !== undefined) {
+        borders.top = top;
+      }
+      const right = decodePatchBorderSide(reader);
+      if (right !== undefined) {
+        borders.right = right;
+      }
+      const bottom = decodePatchBorderSide(reader);
+      if (bottom !== undefined) {
+        borders.bottom = bottom;
+      }
+      const left = decodePatchBorderSide(reader);
+      if (left !== undefined) {
+        borders.left = left;
+      }
+      patch.borders = borders;
+    } else {
+      patch.borders = null;
+    }
+  }
+  return patch;
+}
+
 type EncodedBorderSide = NonNullable<NonNullable<CellStyleRecord["borders"]>["top"]>;
 
 function encodeBorderSide(writer: BinaryWriter, side: EncodedBorderSide | undefined): void {
@@ -667,6 +856,48 @@ function decodeBorderSide(reader: BinaryReader): EncodedBorderSide | undefined {
     weight,
     color: reader.string(),
   };
+}
+
+type EncodedPatchBorderSide = NonNullable<NonNullable<CellStylePatch["borders"]>["top"]>;
+
+function encodePatchBorderSide(
+  writer: BinaryWriter,
+  side: EncodedPatchBorderSide | null | undefined,
+): void {
+  writer.bool(side !== undefined);
+  if (side === undefined) {
+    return;
+  }
+  writer.bool(side !== null);
+  if (side === null) {
+    return;
+  }
+  encodeOptionalNullableString(writer, side.style);
+  encodeOptionalNullableString(writer, side.weight);
+  encodeOptionalNullableString(writer, side.color);
+}
+
+function decodePatchBorderSide(reader: BinaryReader): EncodedPatchBorderSide | null | undefined {
+  if (!reader.bool()) {
+    return undefined;
+  }
+  if (!reader.bool()) {
+    return null;
+  }
+  const side: EncodedPatchBorderSide = {};
+  const style = decodeOptionalNullableString(reader);
+  if (style !== undefined) {
+    side.style = style === null ? null : decodeBorderStyle(style);
+  }
+  const weight = decodeOptionalNullableString(reader);
+  if (weight !== undefined) {
+    side.weight = weight === null ? null : decodeBorderWeight(weight);
+  }
+  const color = decodeOptionalNullableString(reader);
+  if (color !== undefined) {
+    side.color = color;
+  }
+  return side;
 }
 
 function decodeCellNumberFormatKind(value: string): CellNumberFormatKind {
@@ -1130,6 +1361,110 @@ function decodeDataValidation(reader: BinaryReader): WorkbookDataValidationSnaps
   return validation;
 }
 
+function encodeConditionalFormatRule(
+  writer: BinaryWriter,
+  rule: WorkbookConditionalFormatRuleSnapshot,
+): void {
+  switch (rule.kind) {
+    case "cellIs":
+      writer.u8(0);
+      writer.string(rule.operator);
+      writer.u32(rule.values.length);
+      rule.values.forEach((value) => encodeLiteral(writer, value));
+      return;
+    case "textContains":
+      writer.u8(1);
+      writer.string(rule.text);
+      writer.bool(rule.caseSensitive !== undefined);
+      if (rule.caseSensitive !== undefined) {
+        writer.bool(rule.caseSensitive);
+      }
+      return;
+    case "formula":
+      writer.u8(2);
+      writer.string(rule.formula);
+      return;
+    case "blanks":
+      writer.u8(3);
+      return;
+    case "notBlanks":
+      writer.u8(4);
+      return;
+    default:
+      assertNever(rule);
+  }
+}
+
+function decodeConditionalFormatRule(reader: BinaryReader): WorkbookConditionalFormatRuleSnapshot {
+  switch (reader.u8()) {
+    case 0: {
+      const operator = decodeValidationComparisonOperator(reader.string());
+      const count = reader.u32();
+      const values: LiteralInput[] = [];
+      for (let index = 0; index < count; index += 1) {
+        values.push(decodeLiteral(reader));
+      }
+      return {
+        kind: "cellIs",
+        operator,
+        values,
+      };
+    }
+    case 1: {
+      const rule: Extract<WorkbookConditionalFormatRuleSnapshot, { kind: "textContains" }> = {
+        kind: "textContains",
+        text: reader.string(),
+      };
+      if (reader.bool()) {
+        rule.caseSensitive = reader.bool();
+      }
+      return rule;
+    }
+    case 2:
+      return { kind: "formula", formula: reader.string() };
+    case 3:
+      return { kind: "blanks" };
+    case 4:
+      return { kind: "notBlanks" };
+    default:
+      throw new BinaryProtocolError("Unknown conditional format rule tag");
+  }
+}
+
+function encodeConditionalFormat(
+  writer: BinaryWriter,
+  format: WorkbookConditionalFormatSnapshot,
+): void {
+  writer.string(format.id);
+  encodeCellRangeRef(writer, format.range);
+  encodeConditionalFormatRule(writer, format.rule);
+  encodeCellStylePatch(writer, format.style);
+  writer.bool(format.stopIfTrue !== undefined);
+  if (format.stopIfTrue !== undefined) {
+    writer.bool(format.stopIfTrue);
+  }
+  writer.bool(format.priority !== undefined);
+  if (format.priority !== undefined) {
+    writer.f64(format.priority);
+  }
+}
+
+function decodeConditionalFormat(reader: BinaryReader): WorkbookConditionalFormatSnapshot {
+  const format: WorkbookConditionalFormatSnapshot = {
+    id: reader.string(),
+    range: decodeCellRangeRef(reader),
+    rule: decodeConditionalFormatRule(reader),
+    style: decodeCellStylePatch(reader),
+  };
+  if (reader.bool()) {
+    format.stopIfTrue = reader.bool();
+  }
+  if (reader.bool()) {
+    format.priority = reader.f64();
+  }
+  return format;
+}
+
 function encodeCommentEntry(
   writer: BinaryWriter,
   entry: WorkbookCommentThreadSnapshot["comments"][number],
@@ -1311,6 +1646,13 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "clearDataValidation":
       writer.string(op.sheetName);
       encodeCellRangeRef(writer, op.range);
+      return;
+    case "upsertConditionalFormat":
+      encodeConditionalFormat(writer, op.format);
+      return;
+    case "deleteConditionalFormat":
+      writer.string(op.id);
+      writer.string(op.sheetName);
       return;
     case "upsertCommentThread":
       encodeCommentThread(writer, op.thread);
@@ -1542,6 +1884,17 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         kind: "clearDataValidation",
         sheetName: reader.string(),
         range: decodeCellRangeRef(reader),
+      };
+    case 44:
+      return {
+        kind: "upsertConditionalFormat",
+        format: decodeConditionalFormat(reader),
+      };
+    case 45:
+      return {
+        kind: "deleteConditionalFormat",
+        id: reader.string(),
+        sheetName: reader.string(),
       };
     case 40:
       return {

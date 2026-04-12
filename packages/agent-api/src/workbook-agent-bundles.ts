@@ -5,6 +5,7 @@ import type {
   CellRangeRef,
   CellStylePatch,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatSnapshot,
   LiteralInput,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -22,6 +23,16 @@ import {
   isWorkbookAgentAnnotationCommandValue,
   isWorkbookScopeAnnotationCommand,
 } from "./workbook-agent-annotation-commands.js";
+import {
+  applyWorkbookAgentConditionalFormatCommand,
+  deriveWorkbookAgentConditionalFormatCommandPreviewRanges,
+  describeWorkbookAgentConditionalFormatCommand,
+  estimateWorkbookAgentConditionalFormatCommandAffectedCells,
+  isHighRiskWorkbookAgentConditionalFormatCommand,
+  isWorkbookAgentConditionalFormatCommand,
+  isWorkbookAgentConditionalFormatCommandValue,
+  isWorkbookScopeConditionalFormatCommand,
+} from "./workbook-agent-conditional-format-commands.js";
 import {
   applyWorkbookAgentObjectCommand,
   deriveWorkbookAgentObjectCommandPreviewRanges,
@@ -215,6 +226,15 @@ export type WorkbookAgentCommand =
     }
   | {
       kind: "clearDataValidation";
+      range: CellRangeRef;
+    }
+  | {
+      kind: "upsertConditionalFormat";
+      format: WorkbookConditionalFormatSnapshot;
+    }
+  | {
+      kind: "deleteConditionalFormat";
+      id: string;
       range: CellRangeRef;
     }
   | {
@@ -665,6 +685,9 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
   if (isWorkbookAgentValidationCommand(command)) {
     return describeWorkbookAgentValidationCommand(command);
   }
+  if (isWorkbookAgentConditionalFormatCommand(command)) {
+    return describeWorkbookAgentConditionalFormatCommand(command);
+  }
   if (isWorkbookAgentAnnotationCommand(command)) {
     return describeWorkbookAgentAnnotationCommand(command);
   }
@@ -757,6 +780,8 @@ function deriveWorkbookAgentRiskClass(
         (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) &&
           isHighRiskWorkbookAgentValidationCommand(command)) ||
+        (isWorkbookAgentConditionalFormatCommand(command) &&
+          isHighRiskWorkbookAgentConditionalFormatCommand(command)) ||
         (isWorkbookAgentAnnotationCommand(command) &&
           isHighRiskWorkbookAgentAnnotationCommand(command)),
     )
@@ -783,6 +808,8 @@ function deriveWorkbookAgentBundleScope(
         (isWorkbookAgentStructuralCommand(command) && isWorkbookScopeStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isWorkbookScopeObjectCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)) ||
+        (isWorkbookAgentConditionalFormatCommand(command) &&
+          isWorkbookScopeConditionalFormatCommand(command)) ||
         (isWorkbookAgentAnnotationCommand(command) && isWorkbookScopeAnnotationCommand(command)),
     )
   ) {
@@ -1057,6 +1084,9 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
   if (isWorkbookAgentValidationCommandValue(value)) {
     return true;
   }
+  if (isWorkbookAgentConditionalFormatCommandValue(value)) {
+    return true;
+  }
   if (isWorkbookAgentAnnotationCommandValue(value)) {
     return true;
   }
@@ -1220,6 +1250,9 @@ export function estimateWorkbookAgentCommandAffectedCells(
   if (isWorkbookAgentValidationCommand(command)) {
     return estimateWorkbookAgentValidationCommandAffectedCells(command);
   }
+  if (isWorkbookAgentConditionalFormatCommand(command)) {
+    return estimateWorkbookAgentConditionalFormatCommandAffectedCells(command);
+  }
   if (isWorkbookAgentAnnotationCommand(command)) {
     return estimateWorkbookAgentAnnotationCommandAffectedCells(command);
   }
@@ -1253,6 +1286,9 @@ export function deriveWorkbookAgentCommandPreviewRanges(
   }
   if (isWorkbookAgentValidationCommand(command)) {
     return deriveWorkbookAgentValidationCommandPreviewRanges(command);
+  }
+  if (isWorkbookAgentConditionalFormatCommand(command)) {
+    return deriveWorkbookAgentConditionalFormatCommandPreviewRanges(command);
   }
   if (isWorkbookAgentAnnotationCommand(command)) {
     return deriveWorkbookAgentAnnotationCommandPreviewRanges(command);
@@ -1314,6 +1350,10 @@ export function applyWorkbookAgentCommand(
   }
   if (isWorkbookAgentValidationCommand(command)) {
     applyWorkbookAgentValidationCommand(engine, command);
+    return;
+  }
+  if (isWorkbookAgentConditionalFormatCommand(command)) {
+    applyWorkbookAgentConditionalFormatCommand(engine, command);
     return;
   }
   if (isWorkbookAgentAnnotationCommand(command)) {

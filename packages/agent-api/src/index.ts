@@ -306,6 +306,7 @@ export * from "./workbook-agent-preview.js";
 export * from "./workbook-agent-review-items.js";
 export * from "./workbook-agent-skills.js";
 export * from "./workbook-agent-annotation-commands.js";
+export * from "./workbook-agent-conditional-format-commands.js";
 export * from "./workbook-agent-object-commands.js";
 export * from "./workbook-agent-structural-commands.js";
 export * from "./workbook-agent-validation-commands.js";

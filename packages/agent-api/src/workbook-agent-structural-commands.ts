@@ -24,6 +24,8 @@ export type WorkbookAgentStructuralCommand = Exclude<
   | Extract<WorkbookAgentCommand, { kind: "deletePivotTable" }>
   | Extract<WorkbookAgentCommand, { kind: "setDataValidation" }>
   | Extract<WorkbookAgentCommand, { kind: "clearDataValidation" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertConditionalFormat" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteConditionalFormat" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertCommentThread" }>
   | Extract<WorkbookAgentCommand, { kind: "deleteCommentThread" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertNote" }>

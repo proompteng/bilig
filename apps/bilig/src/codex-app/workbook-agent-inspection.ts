@@ -6,6 +6,7 @@ import {
   type CellRangeRef,
   type CellStyleRecord,
   type WorkbookCommentThreadSnapshot,
+  type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookNoteSnapshot,
 } from "@bilig/protocol";
@@ -87,6 +88,16 @@ function collectIntersectingDataValidations(
     .getDataValidations(range.sheetName)
     .filter((validation) => rangesIntersect(validation.range, range))
     .map((validation) => structuredClone(validation));
+}
+
+function collectIntersectingConditionalFormats(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookConditionalFormatSnapshot[] {
+  return runtime.engine
+    .getConditionalFormats(range.sheetName)
+    .filter((format) => rangesIntersect(format.range, range))
+    .map((format) => structuredClone(format));
 }
 
 function collectIntersectingCommentThreads(
@@ -256,6 +267,7 @@ export function inspectWorkbookRange(
   readonly range: CellRangeRef;
   readonly sheetState: ReturnType<typeof summarizeWindowAxisState>;
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
+  readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
   readonly notes: readonly WorkbookNoteSnapshot[];
   readonly styles: readonly CellStyleRecord[];
@@ -300,6 +312,7 @@ export function inspectWorkbookRange(
       range: normalizedRange,
     }),
     dataValidations: collectIntersectingDataValidations(runtime, normalizedRange),
+    conditionalFormats: collectIntersectingConditionalFormats(runtime, normalizedRange),
     commentThreads: collectIntersectingCommentThreads(runtime, normalizedRange),
     notes: collectIntersectingNotes(runtime, normalizedRange),
     ...collectRangeFormattingCatalog({
@@ -335,6 +348,7 @@ export function inspectWorkbookCell(
   readonly directPrecedents: readonly string[];
   readonly directDependents: readonly string[];
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
+  readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
   readonly notes: readonly WorkbookNoteSnapshot[];
 } {
@@ -358,6 +372,11 @@ export function inspectWorkbookCell(
     directPrecedents: [...cell.directPrecedents],
     directDependents: [...cell.directDependents],
     dataValidations: collectIntersectingDataValidations(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
+    conditionalFormats: collectIntersectingConditionalFormats(runtime, {
       sheetName: target.sheetName,
       startAddress: target.address,
       endAddress: target.address,

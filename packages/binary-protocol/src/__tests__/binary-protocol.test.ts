@@ -156,6 +156,23 @@ describe("binary protocol", () => {
                 text: "Manual override",
               },
             },
+            {
+              kind: "upsertConditionalFormat",
+              format: {
+                id: "cf-1",
+                range: { sheetName: "Sheet1", startAddress: "G2", endAddress: "G10" },
+                rule: {
+                  kind: "cellIs",
+                  operator: "greaterThan",
+                  values: [10],
+                },
+                style: {
+                  fill: { backgroundColor: "#ff0000" },
+                },
+                stopIfTrue: true,
+                priority: 1,
+              },
+            },
             { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
             {
               kind: "upsertTable",
@@ -238,6 +255,23 @@ describe("binary protocol", () => {
           sheetName: "Sheet1",
           address: "F3",
           text: "Manual override",
+        },
+      },
+      {
+        kind: "upsertConditionalFormat",
+        format: {
+          id: "cf-1",
+          range: { sheetName: "Sheet1", startAddress: "G2", endAddress: "G10" },
+          rule: {
+            kind: "cellIs",
+            operator: "greaterThan",
+            values: [10],
+          },
+          style: {
+            fill: { backgroundColor: "#ff0000" },
+          },
+          stopIfTrue: true,
+          priority: 1,
         },
       },
       { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
@@ -392,6 +426,31 @@ describe("binary protocol", () => {
     expect(decoded.batch.ops).toEqual([
       { kind: "deleteCommentThread", sheetName: "Sheet1", address: "E2" },
       { kind: "deleteNote", sheetName: "Sheet1", address: "F3" },
+    ]);
+  });
+
+  it("roundtrips conditional format deletion ops", () => {
+    const decoded = decodeFrame(
+      encodeFrame({
+        kind: "appendBatch",
+        documentId: "book-6",
+        cursor: 13,
+        batch: {
+          id: "replica:6",
+          replicaId: "replica",
+          clock: { counter: 6 },
+          ops: [{ kind: "deleteConditionalFormat", id: "cf-1", sheetName: "Sheet1" }],
+        },
+      }),
+    );
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      { kind: "deleteConditionalFormat", id: "cf-1", sheetName: "Sheet1" },
     ]);
   });
 

@@ -11,6 +11,7 @@ import {
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookCommentThreadSnapshot,
+  type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
   type WorkbookNoteSnapshot,
@@ -31,6 +32,7 @@ import {
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
   type WorkbookCommentThreadRecord,
+  type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
   type WorkbookCellNumberFormatRecord,
   type WorkbookCellStyleRecord,
@@ -90,6 +92,7 @@ export type {
   WorkbookAxisMetadataRecord,
   WorkbookCalculationSettingsRecord,
   WorkbookCommentThreadRecord,
+  WorkbookConditionalFormatRecord,
   WorkbookDataValidationRecord,
   WorkbookCellNumberFormatRecord,
   WorkbookCellStyleRecord,
@@ -750,6 +753,22 @@ export class WorkbookStore {
 
   listDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listDataValidations(sheetName));
+  }
+
+  setConditionalFormat(record: WorkbookConditionalFormatSnapshot): WorkbookConditionalFormatRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setConditionalFormat(record));
+  }
+
+  getConditionalFormat(id: string): WorkbookConditionalFormatRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getConditionalFormat(id));
+  }
+
+  deleteConditionalFormat(id: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteConditionalFormat(id));
+  }
+
+  listConditionalFormats(sheetName: string): WorkbookConditionalFormatRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listConditionalFormats(sheetName));
   }
 
   setCommentThread(record: WorkbookCommentThreadSnapshot): WorkbookCommentThreadRecord {

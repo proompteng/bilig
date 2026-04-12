@@ -372,6 +372,55 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("summarizes conditional format commands against the normalized target range", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Highlight values over ten",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "upsertConditionalFormat",
+        format: {
+          id: "cf-1",
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "B3",
+            endAddress: "A1",
+          },
+          rule: {
+            kind: "cellIs",
+            operator: "greaterThan",
+            values: [10],
+          },
+          style: {
+            fill: { backgroundColor: "#ff0000" },
+          },
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Set conditional format on Sheet1!A1:B3",
+        riskClass: "medium",
+        scope: "sheet",
+        estimatedAffectedCells: 6,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "B3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
   it("summarizes note commands against the normalized target cell", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,

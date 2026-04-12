@@ -261,6 +261,10 @@ export function createEngineOperationService(args: {
         return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
       case "clearDataValidation":
         return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+      case "upsertConditionalFormat":
+        return `conditional-format:${op.format.id}`;
+      case "deleteConditionalFormat":
+        return `conditional-format:${op.id}`;
       case "upsertCommentThread":
         return `comment:${op.thread.sheetName}!${op.thread.address}`;
       case "deleteCommentThread":
@@ -368,6 +372,7 @@ export function createEngineOperationService(args: {
       case "setSort":
       case "clearSort":
       case "clearDataValidation":
+      case "deleteConditionalFormat":
       case "deleteCommentThread":
       case "deleteNote":
       case "setCellFormat":
@@ -390,6 +395,8 @@ export function createEngineOperationService(args: {
         return sheetDeleteVersions.get(op.oldName);
       case "setDataValidation":
         return sheetDeleteVersions.get(op.validation.range.sheetName);
+      case "upsertConditionalFormat":
+        return sheetDeleteVersions.get(op.format.range.sheetName);
       case "upsertCommentThread":
         return sheetDeleteVersions.get(op.thread.sheetName);
       case "upsertNote":
@@ -684,6 +691,16 @@ export function createEngineOperationService(args: {
             break;
           case "clearDataValidation":
             args.state.workbook.deleteDataValidation(op.sheetName, op.range);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertConditionalFormat":
+            args.state.workbook.setConditionalFormat(op.format);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteConditionalFormat":
+            args.state.workbook.deleteConditionalFormat(op.id);
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;

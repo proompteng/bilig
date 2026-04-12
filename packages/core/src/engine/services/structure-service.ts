@@ -293,6 +293,25 @@ export function createEngineStructureService(args: {
       }
       args.state.workbook.setDataValidation(nextValidation);
     });
+    args.state.workbook.listConditionalFormats(sheetName).forEach((format) => {
+      const range = rewriteRangeForStructuralTransform(
+        format.range.startAddress,
+        format.range.endAddress,
+        transform,
+      );
+      args.state.workbook.deleteConditionalFormat(format.id);
+      if (!range) {
+        return;
+      }
+      args.state.workbook.setConditionalFormat({
+        ...format,
+        range: {
+          ...format.range,
+          startAddress: range.startAddress,
+          endAddress: range.endAddress,
+        },
+      });
+    });
     args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
       const nextAddress = rewriteAddressForStructuralTransform(thread.address, transform);
       args.state.workbook.deleteCommentThread(sheetName, thread.address);

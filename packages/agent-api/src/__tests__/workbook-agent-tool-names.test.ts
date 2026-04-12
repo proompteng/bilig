@@ -17,6 +17,7 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules).toBe("list_data_validation_rules");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats).toBe("get_conditional_formats");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
     expect(WORKBOOK_AGENT_TOOL_NAMES.setFormula).toBe("set_formula");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
@@ -27,6 +28,9 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.createDataValidation).toBe("create_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateDataValidation).toBe("update_data_validation");
     expect(WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation).toBe("remove_data_validation");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.addConditionalFormat).toBe("add_conditional_format");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.updateConditionalFormat).toBe("update_conditional_format");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.removeConditionalFormat).toBe("remove_conditional_format");
     expect(WORKBOOK_AGENT_TOOL_NAMES.addComment).toBe("add_comment");
     expect(WORKBOOK_AGENT_TOOL_NAMES.replyComment).toBe("reply_comment");
     expect(WORKBOOK_AGENT_TOOL_NAMES.resolveComment).toBe("resolve_comment");
@@ -72,6 +76,9 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig.list_data_validation_rules")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_get_conditional_formats")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats,
+    );
     expect(normalizeWorkbookAgentToolName("bilig.get_comments")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getComments,
     );
@@ -89,6 +96,15 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.remove_data_validation")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.removeDataValidation,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_add_conditional_format")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.addConditionalFormat,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.update_conditional_format")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.updateConditionalFormat,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.remove_conditional_format")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.removeConditionalFormat,
     );
     expect(normalizeWorkbookAgentToolName("bilig_add_comment")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.addComment,
@@ -140,6 +156,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
     expect(isWorkbookAgentToolName("list_pivots")).toBe(true);
     expect(isWorkbookAgentToolName("list_data_validation_rules")).toBe(true);
+    expect(isWorkbookAgentToolName("get_conditional_formats")).toBe(true);
     expect(isWorkbookAgentToolName("get_comments")).toBe(true);
     expect(isWorkbookAgentToolName("get_row_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("get_column_metadata")).toBe(true);
@@ -148,6 +165,9 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("create_data_validation")).toBe(true);
     expect(isWorkbookAgentToolName("update_data_validation")).toBe(true);
     expect(isWorkbookAgentToolName("remove_data_validation")).toBe(true);
+    expect(isWorkbookAgentToolName("add_conditional_format")).toBe(true);
+    expect(isWorkbookAgentToolName("update_conditional_format")).toBe(true);
+    expect(isWorkbookAgentToolName("remove_conditional_format")).toBe(true);
     expect(isWorkbookAgentToolName("add_comment")).toBe(true);
     expect(isWorkbookAgentToolName("reply_comment")).toBe(true);
     expect(isWorkbookAgentToolName("resolve_comment")).toBe(true);

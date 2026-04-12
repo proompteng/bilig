@@ -1,11 +1,13 @@
 import type {
   CellNumberFormatRecord,
   CellRangeRef,
+  CellStylePatch,
   CellStyleRecord,
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
   WorkbookCommentEntrySnapshot,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookNoteSnapshot,
@@ -94,6 +96,9 @@ export interface WorkbookSortRecord {
 }
 
 export interface WorkbookDataValidationRecord extends WorkbookDataValidationSnapshot {}
+export interface WorkbookConditionalFormatRecord extends WorkbookConditionalFormatSnapshot {
+  style: CellStylePatch;
+}
 export interface WorkbookCommentEntryRecord extends WorkbookCommentEntrySnapshot {}
 export interface WorkbookCommentThreadRecord extends WorkbookCommentThreadSnapshot {
   comments: WorkbookCommentEntryRecord[];
@@ -114,6 +119,7 @@ export interface WorkbookMetadataRecord {
   filters: Map<string, WorkbookFilterRecord>;
   sorts: Map<string, WorkbookSortRecord>;
   dataValidations: Map<string, WorkbookDataValidationRecord>;
+  conditionalFormats: Map<string, WorkbookConditionalFormatRecord>;
   commentThreads: Map<string, WorkbookCommentThreadRecord>;
   notes: Map<string, WorkbookNoteRecord>;
 }
@@ -133,6 +139,7 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     filters: new Map(),
     sorts: new Map(),
     dataValidations: new Map(),
+    conditionalFormats: new Map(),
     commentThreads: new Map(),
     notes: new Map(),
   };

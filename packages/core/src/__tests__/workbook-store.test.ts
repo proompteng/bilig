@@ -201,6 +201,78 @@ describe("WorkbookStore", () => {
     expect(workbook.listNotes("Sheet1")).toEqual([]);
   });
 
+  it("reuses conditional format ids while preserving normalized ranges", () => {
+    const workbook = new WorkbookStore("conditional-formats");
+    workbook.createSheet("Sheet1");
+
+    workbook.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "C3",
+        endAddress: "A1",
+      },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+    });
+    workbook.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "C3",
+      },
+      rule: {
+        kind: "textContains",
+        text: "urgent",
+      },
+      style: {
+        font: { bold: true },
+      },
+    });
+
+    expect(workbook.listConditionalFormats("Sheet1")).toEqual([
+      {
+        id: "cf-1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "C3",
+        },
+        rule: {
+          kind: "textContains",
+          text: "urgent",
+        },
+        style: {
+          font: { bold: true },
+        },
+      },
+    ]);
+    expect(workbook.getConditionalFormat("cf-1")).toEqual({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "C3",
+      },
+      rule: {
+        kind: "textContains",
+        text: "urgent",
+      },
+      style: {
+        font: { bold: true },
+      },
+    });
+    expect(workbook.deleteConditionalFormat("cf-1")).toBe(true);
+    expect(workbook.listConditionalFormats("Sheet1")).toEqual([]);
+  });
+
   it("normalizes spill and pivot addresses so case-only variants reuse the same record", () => {
     const workbook = new WorkbookStore("normalized-addresses");
     workbook.createSheet("Sheet1");

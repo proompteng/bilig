@@ -43,6 +43,25 @@ describe("workbook domain guards", () => {
             },
           },
           {
+            kind: "upsertConditionalFormat",
+            format: {
+              id: "cf-1",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A5",
+              },
+              rule: {
+                kind: "cellIs",
+                operator: "greaterThan",
+                values: [10],
+              },
+              style: {
+                fill: { backgroundColor: "#ff0000" },
+              },
+            },
+          },
+          {
             kind: "upsertPivotTable",
             name: "Pivot1",
             sheetName: "Sheet1",
@@ -103,6 +122,23 @@ describe("workbook domain guards", () => {
               sheetName: "Sheet1",
               address: "E2",
               comments: [{ id: "comment-1" }],
+            },
+          },
+          {
+            kind: "upsertConditionalFormat",
+            format: {
+              id: "cf-1",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A5",
+              },
+              rule: {
+                kind: "cellIs",
+                operator: "greaterThan",
+                values: [],
+              },
+              style: "bad",
             },
           },
         ],

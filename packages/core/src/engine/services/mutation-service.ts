@@ -546,6 +546,26 @@ export function createEngineMutationService(args: {
         }
         return [{ kind: "setDataValidation", validation: structuredClone(existing) }];
       }
+      case "upsertConditionalFormat": {
+        const existing = args.state.workbook.getConditionalFormat(op.format.id);
+        if (!existing) {
+          return [
+            {
+              kind: "deleteConditionalFormat",
+              id: op.format.id,
+              sheetName: op.format.range.sheetName,
+            },
+          ];
+        }
+        return [{ kind: "upsertConditionalFormat", format: structuredClone(existing) }];
+      }
+      case "deleteConditionalFormat": {
+        const existing = args.state.workbook.getConditionalFormat(op.id);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertConditionalFormat", format: structuredClone(existing) }];
+      }
       case "upsertCommentThread": {
         const existing = args.state.workbook.getCommentThread(
           op.thread.sheetName,

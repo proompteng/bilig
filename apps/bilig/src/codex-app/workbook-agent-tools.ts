@@ -40,6 +40,10 @@ import {
   workbookAgentAnnotationToolSpecs,
 } from "./workbook-agent-annotation-tools.js";
 import {
+  handleWorkbookAgentConditionalFormatToolCall,
+  workbookAgentConditionalFormatToolSpecs,
+} from "./workbook-agent-conditional-format-tools.js";
+import {
   handleWorkbookAgentObjectToolCall,
   workbookAgentObjectToolSpecs,
 } from "./workbook-agent-object-tools.js";
@@ -539,6 +543,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     ...workbookAgentSheetReadToolSpecs,
     ...workbookAgentAnnotationToolSpecs,
+    ...workbookAgentConditionalFormatToolSpecs,
     ...workbookAgentObjectToolSpecs,
     ...workbookAgentValidationToolSpecs,
     {
@@ -925,6 +930,13 @@ export async function handleWorkbookAgentToolCall(
     const annotationToolResult = await handleWorkbookAgentAnnotationToolCall(context, request);
     if (annotationToolResult) {
       return annotationToolResult;
+    }
+    const conditionalFormatToolResult = await handleWorkbookAgentConditionalFormatToolCall(
+      context,
+      request,
+    );
+    if (conditionalFormatToolResult) {
+      return conditionalFormatToolResult;
     }
     const validationToolResult = await handleWorkbookAgentValidationToolCall(context, request);
     if (validationToolResult) {

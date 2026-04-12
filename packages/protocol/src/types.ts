@@ -477,6 +477,47 @@ export interface WorkbookDataValidationSnapshot {
   errorMessage?: string;
 }
 
+export interface WorkbookConditionalFormatCellIsRuleSnapshot {
+  kind: "cellIs";
+  operator: WorkbookValidationComparisonOperator;
+  values: LiteralInput[];
+}
+
+export interface WorkbookConditionalFormatTextContainsRuleSnapshot {
+  kind: "textContains";
+  text: string;
+  caseSensitive?: boolean;
+}
+
+export interface WorkbookConditionalFormatFormulaRuleSnapshot {
+  kind: "formula";
+  formula: string;
+}
+
+export interface WorkbookConditionalFormatBlanksRuleSnapshot {
+  kind: "blanks";
+}
+
+export interface WorkbookConditionalFormatNotBlanksRuleSnapshot {
+  kind: "notBlanks";
+}
+
+export type WorkbookConditionalFormatRuleSnapshot =
+  | WorkbookConditionalFormatCellIsRuleSnapshot
+  | WorkbookConditionalFormatTextContainsRuleSnapshot
+  | WorkbookConditionalFormatFormulaRuleSnapshot
+  | WorkbookConditionalFormatBlanksRuleSnapshot
+  | WorkbookConditionalFormatNotBlanksRuleSnapshot;
+
+export interface WorkbookConditionalFormatSnapshot {
+  id: string;
+  range: CellRangeRef;
+  rule: WorkbookConditionalFormatRuleSnapshot;
+  style: CellStylePatch;
+  stopIfTrue?: boolean;
+  priority?: number;
+}
+
 export interface WorkbookCommentEntrySnapshot {
   id: string;
   body: string;
@@ -524,6 +565,7 @@ export interface SheetMetadataSnapshot {
   filters?: CellRangeRef[];
   sorts?: WorkbookSortSnapshot[];
   validations?: WorkbookDataValidationSnapshot[];
+  conditionalFormats?: WorkbookConditionalFormatSnapshot[];
   commentThreads?: WorkbookCommentThreadSnapshot[];
   notes?: WorkbookNoteSnapshot[];
 }

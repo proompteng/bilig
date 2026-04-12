@@ -71,6 +71,9 @@ export function exportSheetMetadata(
   const validations = workbook
     .listDataValidations(sheetName)
     .map((validation) => structuredClone(validation));
+  const conditionalFormats = workbook
+    .listConditionalFormats(sheetName)
+    .map((format) => structuredClone(format));
   const commentThreads = workbook
     .listCommentThreads(sheetName)
     .map((thread) => structuredClone(thread));
@@ -87,6 +90,7 @@ export function exportSheetMetadata(
     filters.length === 0 &&
     sorts.length === 0 &&
     validations.length === 0 &&
+    conditionalFormats.length === 0 &&
     commentThreads.length === 0 &&
     notes.length === 0
   ) {
@@ -123,6 +127,9 @@ export function exportSheetMetadata(
   }
   if (validations.length > 0) {
     metadata.validations = validations;
+  }
+  if (conditionalFormats.length > 0) {
+    metadata.conditionalFormats = conditionalFormats;
   }
   if (commentThreads.length > 0) {
     metadata.commentThreads = commentThreads;
@@ -192,6 +199,12 @@ export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): 
     ops.push({
       kind: "setDataValidation",
       validation: structuredClone(record),
+    });
+  });
+  workbook.listConditionalFormats(sheetName).forEach((record) => {
+    ops.push({
+      kind: "upsertConditionalFormat",
+      format: structuredClone(record),
     });
   });
   workbook.listCommentThreads(sheetName).forEach((record) => {

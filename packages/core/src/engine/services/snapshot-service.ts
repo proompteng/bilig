@@ -326,6 +326,12 @@ export function createEngineSnapshotService(args: {
                 validation: structuredClone(validation),
               });
             });
+            sheet.metadata?.conditionalFormats?.forEach((format) => {
+              ops.push({
+                kind: "upsertConditionalFormat",
+                format: structuredClone(format),
+              });
+            });
             sheet.metadata?.commentThreads?.forEach((thread) => {
               ops.push({
                 kind: "upsertCommentThread",

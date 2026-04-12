@@ -4,6 +4,7 @@ import type {
   LiteralInput,
   WorkbookCalculationSettingsSnapshot,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookNoteSnapshot,
@@ -14,6 +15,7 @@ import type {
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from "./workbook-range-records.js";
 import {
   cloneCommentThreadRecord,
+  cloneConditionalFormatRecord,
   cloneDataValidationRecord,
   cloneDefinedNameRecord,
   cloneDefinedNameValue,
@@ -26,6 +28,7 @@ import {
   cloneSpillRecord,
   cloneTableRecord,
   commentThreadKey,
+  conditionalFormatKey,
   dataValidationKey,
   deleteRecordsBySheet,
   filterKey,
@@ -38,6 +41,7 @@ import {
 import {
   createWorkbookMetadataRecord,
   type WorkbookCommentThreadRecord,
+  type WorkbookConditionalFormatRecord,
   normalizeDefinedName,
   type WorkbookNoteRecord,
   pivotKey,
@@ -200,6 +204,16 @@ export interface WorkbookMetadataService {
   readonly listDataValidations: (
     sheetName: string,
   ) => Effect.Effect<WorkbookDataValidationRecord[], WorkbookMetadataError>;
+  readonly setConditionalFormat: (
+    record: WorkbookConditionalFormatSnapshot,
+  ) => Effect.Effect<WorkbookConditionalFormatRecord, WorkbookMetadataError>;
+  readonly getConditionalFormat: (
+    id: string,
+  ) => Effect.Effect<WorkbookConditionalFormatRecord | undefined, WorkbookMetadataError>;
+  readonly deleteConditionalFormat: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listConditionalFormats: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookConditionalFormatRecord[], WorkbookMetadataError>;
   readonly setCommentThread: (
     record: WorkbookCommentThreadSnapshot,
   ) => Effect.Effect<WorkbookCommentThreadRecord, WorkbookMetadataError>;
@@ -305,6 +319,17 @@ export function createWorkbookMetadataService(
       }
       return cloned;
     });
+    rekeyRecords(metadata.conditionalFormats, (record) =>
+      record.range.sheetName === oldSheetName
+        ? {
+            ...cloneConditionalFormatRecord(record),
+            range: {
+              ...record.range,
+              sheetName: newSheetName,
+            },
+          }
+        : cloneConditionalFormatRecord(record),
+    );
     rekeyRecords(metadata.commentThreads, (record) =>
       record.sheetName === oldSheetName
         ? { ...cloneCommentThreadRecord(record), sheetName: newSheetName }
@@ -349,6 +374,11 @@ export function createWorkbookMetadataService(
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.sorts, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.dataValidations, sheetName, (record) => record.range.sheetName);
+    deleteRecordsBySheet(
+      metadata.conditionalFormats,
+      sheetName,
+      (record) => record.range.sheetName,
+    );
     deleteRecordsBySheet(metadata.commentThreads, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.notes, sheetName, (record) => record.sheetName);
     metadata.freezePanes.delete(sheetName);
@@ -367,6 +397,7 @@ export function createWorkbookMetadataService(
     metadata.filters.clear();
     metadata.sorts.clear();
     metadata.dataValidations.clear();
+    metadata.conditionalFormats.clear();
     metadata.commentThreads.clear();
     metadata.notes.clear();
     metadata.calculationSettings = defaults.calculationSettings;
@@ -845,6 +876,78 @@ export function createWorkbookMetadataService(
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list data validation metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setConditionalFormat(record) {
+      return Effect.try({
+        try: () => {
+          const id = conditionalFormatKey(record.id);
+          const nextRecord: WorkbookConditionalFormatRecord = {
+            id,
+            range: canonicalWorkbookRangeRef(record.range),
+            rule: structuredClone(record.rule),
+            style: structuredClone(record.style),
+          };
+          if (record.stopIfTrue !== undefined) {
+            nextRecord.stopIfTrue = record.stopIfTrue;
+          }
+          if (record.priority !== undefined) {
+            nextRecord.priority = record.priority;
+          }
+          const stored = cloneConditionalFormatRecord(nextRecord);
+          metadata.conditionalFormats.set(id, stored);
+          return cloneConditionalFormatRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set conditional format metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getConditionalFormat(id) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.conditionalFormats.get(conditionalFormatKey(id));
+          return record ? cloneConditionalFormatRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get conditional format metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteConditionalFormat(id) {
+      return Effect.try({
+        try: () => metadata.conditionalFormats.delete(conditionalFormatKey(id)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete conditional format metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listConditionalFormats(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.conditionalFormats.values()]
+            .filter((record) => record.range.sheetName === sheetName)
+            .toSorted((left, right) => {
+              const priorityCompare =
+                (left.priority ?? Number.MAX_SAFE_INTEGER) -
+                (right.priority ?? Number.MAX_SAFE_INTEGER);
+              if (priorityCompare !== 0) {
+                return priorityCompare;
+              }
+              return left.id.localeCompare(right.id);
+            })
+            .map(cloneConditionalFormatRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list conditional format metadata", cause),
             cause,
           }),
       });

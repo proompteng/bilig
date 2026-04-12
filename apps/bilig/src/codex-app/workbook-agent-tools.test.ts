@@ -1183,6 +1183,103 @@ describe("workbook agent tools", () => {
     expect(text && "text" in text ? text.text : "").toContain('"Draft"');
   });
 
+  it("lists workbook conditional formats from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
+      },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-get-conditional-formats",
+        tool: "get_conditional_formats",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"id": "cf-1"');
+    expect(text && "text" in text ? text.text : "").toContain('"greaterThan"');
+  });
+
+  it("includes intersecting conditional format metadata in read_range inspection", async () => {
+    const engine = await createEngine();
+    engine.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
+      },
+      rule: {
+        kind: "textContains",
+        text: "urgent",
+      },
+      style: {
+        font: { bold: true },
+      },
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-range-with-conditional-format",
+        tool: "read_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"conditionalFormats": [');
+    expect(text && "text" in text ? text.text : "").toContain('"urgent"');
+  });
+
   it("lists workbook comments and notes from the authoritative runtime", async () => {
     const engine = await createEngine();
     engine.setCommentThread({
@@ -1880,6 +1977,136 @@ describe("workbook agent tools", () => {
         sheetName: "Sheet1",
         address: "C3",
         text: "Manual override",
+      },
+    });
+  });
+
+  it("stages conditional format commands against selector and id targets", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const addResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B2",
+            range: {
+              startAddress: "B2",
+              endAddress: "B4",
+            },
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-add-conditional-format",
+        tool: "add_conditional_format",
+        arguments: {
+          selector: {
+            kind: "currentSelection",
+          },
+          rule: {
+            kind: "cellIs",
+            operator: "greaterThan",
+            values: [10],
+          },
+          style: {
+            fill: {
+              backgroundColor: "#ff0000",
+            },
+          },
+        },
+      },
+    );
+
+    expect(addResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "upsertConditionalFormat",
+      format: {
+        id: expect.any(String),
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        rule: {
+          kind: "cellIs",
+          operator: "greaterThan",
+          values: [10],
+        },
+        style: {
+          fill: {
+            backgroundColor: "#ff0000",
+          },
+        },
+      },
+    });
+
+    engine.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
+      },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [10],
+      },
+      style: {
+        fill: { backgroundColor: "#ff0000" },
+      },
+    });
+
+    const removeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-remove-conditional-format",
+        tool: "remove_conditional_format",
+        arguments: {
+          id: "cf-1",
+        },
+      },
+    );
+
+    expect(removeResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "deleteConditionalFormat",
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B4",
       },
     });
   });

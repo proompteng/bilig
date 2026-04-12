@@ -17,6 +17,7 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
@@ -56,6 +57,7 @@ import {
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
   type WorkbookCommentThreadRecord,
+  type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
@@ -845,6 +847,42 @@ export class SpreadsheetEngine {
 
   getDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
     return this.workbook.listDataValidations(sheetName);
+  }
+
+  setConditionalFormat(format: WorkbookConditionalFormatSnapshot): void {
+    const normalized: WorkbookConditionalFormatSnapshot = {
+      ...structuredClone(format),
+      id: format.id.trim(),
+      range: canonicalWorkbookRangeRef(format.range),
+    };
+    const existing = this.workbook.getConditionalFormat(normalized.id);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertConditionalFormat", format: normalized }]);
+  }
+
+  deleteConditionalFormat(id: string): boolean {
+    const existing = this.workbook.getConditionalFormat(id);
+    if (!existing) {
+      return false;
+    }
+    this.executeLocalTransaction([
+      {
+        kind: "deleteConditionalFormat",
+        id: existing.id,
+        sheetName: existing.range.sheetName,
+      },
+    ]);
+    return true;
+  }
+
+  getConditionalFormat(id: string): WorkbookConditionalFormatRecord | undefined {
+    return this.workbook.getConditionalFormat(id);
+  }
+
+  getConditionalFormats(sheetName: string): WorkbookConditionalFormatRecord[] {
+    return this.workbook.listConditionalFormats(sheetName);
   }
 
   setCommentThread(thread: WorkbookCommentThreadSnapshot): void {

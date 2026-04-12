@@ -4,8 +4,10 @@ import type {
   CellRangeRef,
   CellNumberFormatRecord,
   CellStyleRecord,
+  CellStylePatch,
   LiteralInput,
   WorkbookCommentThreadSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookNoteSnapshot,
   WorkbookAxisEntrySnapshot,
@@ -44,6 +46,9 @@ export interface WorkbookAxisEntryOp extends WorkbookAxisEntrySnapshot {}
 export interface WorkbookCellStyleOp extends CellStyleRecord {}
 export interface WorkbookCellNumberFormatOp extends CellNumberFormatRecord {}
 export interface WorkbookDataValidationOp extends WorkbookDataValidationSnapshot {}
+export interface WorkbookConditionalFormatOp extends WorkbookConditionalFormatSnapshot {
+  style: CellStylePatch;
+}
 export interface WorkbookCommentThreadOp extends WorkbookCommentThreadSnapshot {}
 export interface WorkbookNoteOp extends WorkbookNoteSnapshot {}
 
@@ -97,6 +102,8 @@ export type WorkbookOp =
   | { kind: "clearSort"; sheetName: string; range: CellRangeRef }
   | { kind: "setDataValidation"; validation: WorkbookDataValidationOp }
   | { kind: "clearDataValidation"; sheetName: string; range: CellRangeRef }
+  | { kind: "upsertConditionalFormat"; format: WorkbookConditionalFormatOp }
+  | { kind: "deleteConditionalFormat"; id: string; sheetName: string }
   | { kind: "upsertCommentThread"; thread: WorkbookCommentThreadOp }
   | { kind: "deleteCommentThread"; sheetName: string; address: string }
   | { kind: "upsertNote"; note: WorkbookNoteOp }

@@ -167,6 +167,10 @@ function entityKeyForOp(op: EngineOp): string {
       return `validation:${op.validation.range.sheetName}:${op.validation.range.startAddress}:${op.validation.range.endAddress}`;
     case "clearDataValidation":
       return `validation:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+    case "upsertConditionalFormat":
+      return `conditional-format:${op.format.id}`;
+    case "deleteConditionalFormat":
+      return `conditional-format:${op.id}`;
     case "upsertCommentThread":
       return `comment:${op.thread.sheetName}!${op.thread.address}`;
     case "deleteCommentThread":
@@ -241,6 +245,7 @@ function sheetDeleteBarrierForOp(
     case "setSort":
     case "clearSort":
     case "clearDataValidation":
+    case "deleteConditionalFormat":
     case "deleteCommentThread":
     case "deleteNote":
     case "setCellValue":
@@ -259,6 +264,8 @@ function sheetDeleteBarrierForOp(
       return undefined;
     case "setDataValidation":
       return latestSheetDeletes.get(op.validation.range.sheetName);
+    case "upsertConditionalFormat":
+      return latestSheetDeletes.get(op.format.range.sheetName);
     case "upsertCommentThread":
       return latestSheetDeletes.get(op.thread.sheetName);
     case "upsertNote":
