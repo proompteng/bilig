@@ -1,5 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import type { EvaluationContext, StackValue } from "./js-evaluator-types.js";
+import type { EvaluationContext, StackValue } from "./js-evaluator.js";
 import type { RangeLikeValue } from "./runtime-values.js";
 
 interface ArraySpecialCallDeps {
@@ -12,7 +12,11 @@ interface ArraySpecialCallDeps {
   getRangeCell: (range: RangeLikeValue, row: number, col: number) => CellValue;
   getBroadcastShape: (values: readonly StackValue[]) => { rows: number; cols: number } | undefined;
   makeArrayStack: (rows: number, cols: number, values: CellValue[]) => StackValue;
-  applyLambda: (lambdaValue: StackValue, args: StackValue[], context: EvaluationContext) => StackValue;
+  applyLambda: (
+    lambdaValue: StackValue,
+    args: StackValue[],
+    context: EvaluationContext,
+  ) => StackValue;
   toPositiveInteger: (value: StackValue | undefined) => number | undefined;
   coerceScalarTextArgument: (value: StackValue | undefined) => string | CellValue;
   coerceOptionalBooleanArgument: (
@@ -110,9 +114,7 @@ export function evaluateArraySpecialCall(
       for (let row = 0; row < rows; row += 1) {
         for (let col = 0; col < cols; col += 1) {
           values.push(
-            row < source.rows && col < source.cols
-              ? deps.getRangeCell(source, row, col)
-              : padValue,
+            row < source.rows && col < source.cols ? deps.getRangeCell(source, row, col) : padValue,
           );
         }
       }
@@ -333,7 +335,11 @@ export function evaluateArraySpecialCall(
         for (let col = 0; col < shape.cols; col += 1) {
           const lambdaArgs = ranges.map((range) =>
             deps.stackScalar(
-              deps.getRangeCell(range, Math.min(row, range.rows - 1), Math.min(col, range.cols - 1)),
+              deps.getRangeCell(
+                range,
+                Math.min(row, range.rows - 1),
+                Math.min(col, range.cols - 1),
+              ),
             ),
           );
           const result = deps.applyLambda(lambda, lambdaArgs, context);

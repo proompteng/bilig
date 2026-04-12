@@ -2,7 +2,7 @@ import { ErrorCode } from "@bilig/protocol";
 import { parseRangeAddress } from "./addressing.js";
 import type { FormulaNode } from "./ast.js";
 import { hasBuiltin } from "./builtins.js";
-import type { JsPlanInstruction, ReferenceOperand } from "./js-evaluator-types.js";
+import type { JsPlanInstruction, ReferenceOperand } from "./js-evaluator.js";
 import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 function referenceOperandFromNode(node: FormulaNode): ReferenceOperand | undefined {

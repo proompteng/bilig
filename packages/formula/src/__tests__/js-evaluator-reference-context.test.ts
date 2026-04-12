@@ -9,7 +9,7 @@ import {
   sheetIndexByName,
   sheetNames,
 } from "../js-evaluator-reference-context.js";
-import type { EvaluationContext, ReferenceOperand } from "../js-evaluator-types.js";
+import type { EvaluationContext, ReferenceOperand } from "../js-evaluator.js";
 
 const context: EvaluationContext = {
   sheetName: "Sheet2",

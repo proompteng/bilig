@@ -1,6 +1,6 @@
 import { ValueTag, type CellValue } from "@bilig/protocol";
 import { indexToColumn, parseCellAddress } from "./addressing.js";
-import type { EvaluationContext, ReferenceOperand } from "./js-evaluator-types.js";
+import type { EvaluationContext, ReferenceOperand } from "./js-evaluator.js";
 
 export function currentCellReference(context: EvaluationContext): ReferenceOperand | undefined {
   return context.currentAddress

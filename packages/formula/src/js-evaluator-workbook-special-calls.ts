@@ -2,7 +2,7 @@ import { ErrorCode, type CellValue } from "@bilig/protocol";
 import { parseCellAddress, parseRangeAddress } from "./addressing.js";
 import { evaluateGroupBy, evaluatePivotBy } from "./group-pivot-evaluator.js";
 import { isArrayValue } from "./runtime-values.js";
-import type { EvaluationContext, ReferenceOperand, StackValue } from "./js-evaluator-types.js";
+import type { EvaluationContext, ReferenceOperand, StackValue } from "./js-evaluator.js";
 
 interface MatrixLikeValue {
   rows: number;

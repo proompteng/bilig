@@ -1,5 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import type { EvaluationContext, ReferenceOperand, StackValue } from "./js-evaluator-types.js";
+import type { EvaluationContext, ReferenceOperand, StackValue } from "./js-evaluator.js";
 
 interface ContextSpecialCallDeps {
   error: (code: ErrorCode) => CellValue;
@@ -47,7 +47,9 @@ export function evaluateContextSpecialCall(
         return deps.stackScalar(deps.error(ErrorCode.Value));
       }
       const row = deps.referenceRowNumber(argRefs[0], context);
-      return deps.stackScalar(row === undefined ? deps.error(ErrorCode.Value) : deps.numberValue(row));
+      return deps.stackScalar(
+        row === undefined ? deps.error(ErrorCode.Value) : deps.numberValue(row),
+      );
     }
     case "COLUMN": {
       if (rawArgs.length > 1) {
@@ -117,21 +119,27 @@ export function evaluateContextSpecialCall(
       }
       if (rawArgs.length === 0) {
         const index = deps.sheetIndexByName(context.sheetName, context);
-        return deps.stackScalar(index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index));
+        return deps.stackScalar(
+          index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index),
+        );
       }
       if (argRefs[0]) {
         const index = deps.sheetIndexByName(
           deps.referenceSheetName(argRefs[0], context) ?? context.sheetName,
           context,
         );
-        return deps.stackScalar(index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index));
+        return deps.stackScalar(
+          index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index),
+        );
       }
       const scalar = deps.isSingleCellValue(rawArgs[0]!);
       if (scalar?.tag !== ValueTag.String) {
         return deps.stackScalar(deps.error(ErrorCode.NA));
       }
       const index = deps.sheetIndexByName(scalar.value, context);
-      return deps.stackScalar(index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index));
+      return deps.stackScalar(
+        index === undefined ? deps.error(ErrorCode.NA) : deps.numberValue(index),
+      );
     }
     case "SHEETS": {
       if (rawArgs.length > 1) {
@@ -169,11 +177,15 @@ export function evaluateContextSpecialCall(
       switch (normalizedInfoType) {
         case "address": {
           const address = deps.absoluteAddress(ref, context);
-          return deps.stackScalar(address ? deps.stringValue(address) : deps.error(ErrorCode.Value));
+          return deps.stackScalar(
+            address ? deps.stringValue(address) : deps.error(ErrorCode.Value),
+          );
         }
         case "row": {
           const row = deps.referenceRowNumber(ref, context);
-          return deps.stackScalar(row === undefined ? deps.error(ErrorCode.Value) : deps.numberValue(row));
+          return deps.stackScalar(
+            row === undefined ? deps.error(ErrorCode.Value) : deps.numberValue(row),
+          );
         }
         case "col": {
           const column = deps.referenceColumnNumber(ref, context);
