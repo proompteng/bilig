@@ -421,6 +421,34 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("treats sheet protection commands as high-risk workbook-scope changes", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Protect Sheet1",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "setSheetProtection",
+        protection: {
+          sheetName: "Sheet1",
+          hideFormulas: true,
+        },
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Protect sheet Sheet1 and hide formulas",
+        riskClass: "high",
+        scope: "workbook",
+      }),
+    );
+  });
+
   it("summarizes note commands against the normalized target cell", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,

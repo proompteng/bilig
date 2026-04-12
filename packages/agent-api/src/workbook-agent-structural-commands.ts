@@ -26,6 +26,10 @@ export type WorkbookAgentStructuralCommand = Exclude<
   | Extract<WorkbookAgentCommand, { kind: "clearDataValidation" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertConditionalFormat" }>
   | Extract<WorkbookAgentCommand, { kind: "deleteConditionalFormat" }>
+  | Extract<WorkbookAgentCommand, { kind: "setSheetProtection" }>
+  | Extract<WorkbookAgentCommand, { kind: "clearSheetProtection" }>
+  | Extract<WorkbookAgentCommand, { kind: "upsertRangeProtection" }>
+  | Extract<WorkbookAgentCommand, { kind: "deleteRangeProtection" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertCommentThread" }>
   | Extract<WorkbookAgentCommand, { kind: "deleteCommentThread" }>
   | Extract<WorkbookAgentCommand, { kind: "upsertNote" }>

@@ -19,6 +19,7 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.listDataValidationRules).toBe("list_data_validation_rules");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats).toBe("get_conditional_formats");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getProtectionStatus).toBe("get_protection_status");
     expect(WORKBOOK_AGENT_TOOL_NAMES.setFormula).toBe("set_formula");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getColumnMetadata).toBe("get_column_metadata");
@@ -31,6 +32,13 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.addConditionalFormat).toBe("add_conditional_format");
     expect(WORKBOOK_AGENT_TOOL_NAMES.updateConditionalFormat).toBe("update_conditional_format");
     expect(WORKBOOK_AGENT_TOOL_NAMES.removeConditionalFormat).toBe("remove_conditional_format");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.protectSheet).toBe("protect_sheet");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.unprotectSheet).toBe("unprotect_sheet");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.protectRange).toBe("protect_range");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.unprotectRange).toBe("unprotect_range");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.lockCells).toBe("lock_cells");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.unlockCells).toBe("unlock_cells");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.hideFormulas).toBe("hide_formulas");
     expect(WORKBOOK_AGENT_TOOL_NAMES.addComment).toBe("add_comment");
     expect(WORKBOOK_AGENT_TOOL_NAMES.replyComment).toBe("reply_comment");
     expect(WORKBOOK_AGENT_TOOL_NAMES.resolveComment).toBe("resolve_comment");
@@ -79,6 +87,9 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig_get_conditional_formats")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats,
     );
+    expect(normalizeWorkbookAgentToolName("bilig.get_protection_status")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.getProtectionStatus,
+    );
     expect(normalizeWorkbookAgentToolName("bilig.get_comments")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getComments,
     );
@@ -105,6 +116,27 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.remove_conditional_format")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.removeConditionalFormat,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_protect_sheet")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.protectSheet,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.unprotect_sheet")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.unprotectSheet,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_protect_range")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.protectRange,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_unprotect_range")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.unprotectRange,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.lock_cells")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.lockCells,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_unlock_cells")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.unlockCells,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_hide_formulas")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.hideFormulas,
     );
     expect(normalizeWorkbookAgentToolName("bilig_add_comment")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.addComment,
@@ -158,6 +190,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("list_data_validation_rules")).toBe(true);
     expect(isWorkbookAgentToolName("get_conditional_formats")).toBe(true);
     expect(isWorkbookAgentToolName("get_comments")).toBe(true);
+    expect(isWorkbookAgentToolName("get_protection_status")).toBe(true);
     expect(isWorkbookAgentToolName("get_row_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("get_column_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("create_named_range")).toBe(true);
@@ -168,6 +201,13 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("add_conditional_format")).toBe(true);
     expect(isWorkbookAgentToolName("update_conditional_format")).toBe(true);
     expect(isWorkbookAgentToolName("remove_conditional_format")).toBe(true);
+    expect(isWorkbookAgentToolName("protect_sheet")).toBe(true);
+    expect(isWorkbookAgentToolName("unprotect_sheet")).toBe(true);
+    expect(isWorkbookAgentToolName("protect_range")).toBe(true);
+    expect(isWorkbookAgentToolName("unprotect_range")).toBe(true);
+    expect(isWorkbookAgentToolName("lock_cells")).toBe(true);
+    expect(isWorkbookAgentToolName("unlock_cells")).toBe(true);
+    expect(isWorkbookAgentToolName("hide_formulas")).toBe(true);
     expect(isWorkbookAgentToolName("add_comment")).toBe(true);
     expect(isWorkbookAgentToolName("reply_comment")).toBe(true);
     expect(isWorkbookAgentToolName("resolve_comment")).toBe(true);

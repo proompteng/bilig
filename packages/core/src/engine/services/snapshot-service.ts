@@ -309,6 +309,12 @@ export function createEngineSnapshotService(args: {
                 formatId: formatRange.formatId,
               });
             });
+            if (sheet.metadata?.sheetProtection) {
+              ops.push({
+                kind: "setSheetProtection",
+                protection: structuredClone(sheet.metadata.sheetProtection),
+              });
+            }
             sheet.metadata?.filters?.forEach((range) => {
               ops.push({ kind: "setFilter", sheetName: sheet.name, range: { ...range } });
             });
@@ -330,6 +336,12 @@ export function createEngineSnapshotService(args: {
               ops.push({
                 kind: "upsertConditionalFormat",
                 format: structuredClone(format),
+              });
+            });
+            sheet.metadata?.protectedRanges?.forEach((protection) => {
+              ops.push({
+                kind: "upsertRangeProtection",
+                protection: structuredClone(protection),
               });
             });
             sheet.metadata?.commentThreads?.forEach((thread) => {

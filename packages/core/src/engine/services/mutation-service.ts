@@ -546,6 +546,20 @@ export function createEngineMutationService(args: {
         }
         return [{ kind: "setDataValidation", validation: structuredClone(existing) }];
       }
+      case "setSheetProtection": {
+        const existing = args.state.workbook.getSheetProtection(op.protection.sheetName);
+        if (!existing) {
+          return [{ kind: "clearSheetProtection", sheetName: op.protection.sheetName }];
+        }
+        return [{ kind: "setSheetProtection", protection: structuredClone(existing) }];
+      }
+      case "clearSheetProtection": {
+        const existing = args.state.workbook.getSheetProtection(op.sheetName);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "setSheetProtection", protection: structuredClone(existing) }];
+      }
       case "upsertConditionalFormat": {
         const existing = args.state.workbook.getConditionalFormat(op.format.id);
         if (!existing) {
@@ -565,6 +579,26 @@ export function createEngineMutationService(args: {
           return [];
         }
         return [{ kind: "upsertConditionalFormat", format: structuredClone(existing) }];
+      }
+      case "upsertRangeProtection": {
+        const existing = args.state.workbook.getRangeProtection(op.protection.id);
+        if (!existing) {
+          return [
+            {
+              kind: "deleteRangeProtection",
+              id: op.protection.id,
+              sheetName: op.protection.range.sheetName,
+            },
+          ];
+        }
+        return [{ kind: "upsertRangeProtection", protection: structuredClone(existing) }];
+      }
+      case "deleteRangeProtection": {
+        const existing = args.state.workbook.getRangeProtection(op.id);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertRangeProtection", protection: structuredClone(existing) }];
       }
       case "upsertCommentThread": {
         const existing = args.state.workbook.getCommentThread(

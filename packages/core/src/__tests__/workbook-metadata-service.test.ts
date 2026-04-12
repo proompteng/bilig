@@ -176,6 +176,43 @@ describe("WorkbookMetadataService", () => {
     });
   });
 
+  it("clones and normalizes sheet and range protection records on write and read", () => {
+    const service = createService();
+    const sheet = Effect.runSync(
+      service.setSheetProtection({
+        sheetName: "Sheet1",
+        hideFormulas: true,
+      }),
+    );
+    const range = Effect.runSync(
+      service.setRangeProtection({
+        id: " protect-a1 ",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "c4",
+          endAddress: "b2",
+        },
+        hideFormulas: true,
+      }),
+    );
+    sheet.hideFormulas = false;
+    range.range.startAddress = "Z9";
+
+    expect(Effect.runSync(service.getSheetProtection("Sheet1"))).toEqual({
+      sheetName: "Sheet1",
+      hideFormulas: true,
+    });
+    expect(Effect.runSync(service.getRangeProtection("protect-a1"))).toEqual({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "C4",
+      },
+      hideFormulas: true,
+    });
+  });
+
   it("normalizes and clones pivot records so caller mutation does not leak back into metadata", () => {
     const service = createService();
     const input = {
@@ -275,6 +312,19 @@ describe("WorkbookMetadataService", () => {
         style: {
           fill: { backgroundColor: "#ff0000" },
         },
+      }),
+    );
+    Effect.runSync(
+      service.setSheetProtection({
+        sheetName: "Source",
+        hideFormulas: true,
+      }),
+    );
+    Effect.runSync(
+      service.setRangeProtection({
+        id: "protect-a1",
+        range: { sheetName: "Source", startAddress: "A2", endAddress: "A5" },
+        hideFormulas: true,
       }),
     );
     Effect.runSync(
@@ -394,6 +444,15 @@ describe("WorkbookMetadataService", () => {
         fill: { backgroundColor: "#ff0000" },
       },
     });
+    expect(Effect.runSync(service.getSheetProtection("Renamed"))).toEqual({
+      sheetName: "Renamed",
+      hideFormulas: true,
+    });
+    expect(Effect.runSync(service.getRangeProtection("protect-a1"))).toEqual({
+      id: "protect-a1",
+      range: { sheetName: "Renamed", startAddress: "A2", endAddress: "A5" },
+      hideFormulas: true,
+    });
     expect(Effect.runSync(service.getSpill("Renamed", "B2"))).toEqual({
       sheetName: "Renamed",
       address: "B2",
@@ -432,7 +491,9 @@ describe("WorkbookMetadataService", () => {
     expect(Effect.runSync(service.listFilters("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listSorts("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listDataValidations("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.getSheetProtection("Renamed"))).toBeUndefined();
     expect(Effect.runSync(service.listConditionalFormats("Renamed"))).toEqual([]);
+    expect(Effect.runSync(service.listRangeProtections("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listCommentThreads("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listNotes("Renamed"))).toEqual([]);
     expect(Effect.runSync(service.listPivots())).toEqual([]);

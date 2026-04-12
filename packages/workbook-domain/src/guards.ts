@@ -390,6 +390,21 @@ function isWorkbookConditionalFormat(value: unknown): boolean {
   );
 }
 
+function isWorkbookSheetProtection(value: unknown): boolean {
+  return (
+    isRecord(value) && hasString(value, "sheetName") && isOptionalBoolean(value["hideFormulas"])
+  );
+}
+
+function isWorkbookRangeProtection(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasString(value, "id") &&
+    isCellRangeRef(value["range"]) &&
+    isOptionalBoolean(value["hideFormulas"])
+  );
+}
+
 function isWorkbookCommentEntry(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -537,6 +552,10 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
       );
     case "clearFreezePane":
       return hasString(value, "sheetName");
+    case "setSheetProtection":
+      return isWorkbookSheetProtection(value["protection"]);
+    case "clearSheetProtection":
+      return hasString(value, "sheetName");
     case "setFilter":
     case "clearFilter":
     case "clearSort":
@@ -555,6 +574,10 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
     case "upsertConditionalFormat":
       return isWorkbookConditionalFormat(value["format"]);
     case "deleteConditionalFormat":
+      return hasString(value, "id") && hasString(value, "sheetName");
+    case "upsertRangeProtection":
+      return isWorkbookRangeProtection(value["protection"]);
+    case "deleteRangeProtection":
       return hasString(value, "id") && hasString(value, "sheetName");
     case "upsertCommentThread":
       return isWorkbookCommentThread(value["thread"]);

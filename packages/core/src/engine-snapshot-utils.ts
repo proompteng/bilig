@@ -63,6 +63,7 @@ export function exportSheetMetadata(
     formatId: record.formatId,
   }));
   const freezePane = freezePaneToSnapshot(workbook.getFreezePane(sheetName));
+  const sheetProtection = workbook.getSheetProtection(sheetName);
   const filters = workbook.listFilters(sheetName).map((filter) => Object.assign({}, filter.range));
   const sorts = workbook.listSorts(sheetName).map((sort) => ({
     range: { ...sort.range },
@@ -74,6 +75,9 @@ export function exportSheetMetadata(
   const conditionalFormats = workbook
     .listConditionalFormats(sheetName)
     .map((format) => structuredClone(format));
+  const protectedRanges = workbook
+    .listRangeProtections(sheetName)
+    .map((protection) => structuredClone(protection));
   const commentThreads = workbook
     .listCommentThreads(sheetName)
     .map((thread) => structuredClone(thread));
@@ -87,10 +91,12 @@ export function exportSheetMetadata(
     styleRanges.length === 0 &&
     formatRanges.length === 0 &&
     freezePane === undefined &&
+    sheetProtection === undefined &&
     filters.length === 0 &&
     sorts.length === 0 &&
     validations.length === 0 &&
     conditionalFormats.length === 0 &&
+    protectedRanges.length === 0 &&
     commentThreads.length === 0 &&
     notes.length === 0
   ) {
@@ -119,6 +125,9 @@ export function exportSheetMetadata(
   if (freezePane) {
     metadata.freezePane = freezePane;
   }
+  if (sheetProtection) {
+    metadata.sheetProtection = structuredClone(sheetProtection);
+  }
   if (filters.length > 0) {
     metadata.filters = filters;
   }
@@ -130,6 +139,9 @@ export function exportSheetMetadata(
   }
   if (conditionalFormats.length > 0) {
     metadata.conditionalFormats = conditionalFormats;
+  }
+  if (protectedRanges.length > 0) {
+    metadata.protectedRanges = protectedRanges;
   }
   if (commentThreads.length > 0) {
     metadata.commentThreads = commentThreads;
@@ -184,6 +196,10 @@ export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): 
   if (freezePane) {
     ops.push({ kind: "setFreezePane", sheetName, rows: freezePane.rows, cols: freezePane.cols });
   }
+  const sheetProtection = workbook.getSheetProtection(sheetName);
+  if (sheetProtection) {
+    ops.push({ kind: "setSheetProtection", protection: structuredClone(sheetProtection) });
+  }
   workbook.listFilters(sheetName).forEach((record) => {
     ops.push({ kind: "setFilter", sheetName, range: { ...record.range } });
   });
@@ -205,6 +221,12 @@ export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): 
     ops.push({
       kind: "upsertConditionalFormat",
       format: structuredClone(record),
+    });
+  });
+  workbook.listRangeProtections(sheetName).forEach((record) => {
+    ops.push({
+      kind: "upsertRangeProtection",
+      protection: structuredClone(record),
     });
   });
   workbook.listCommentThreads(sheetName).forEach((record) => {

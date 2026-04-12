@@ -273,6 +273,41 @@ describe("WorkbookStore", () => {
     expect(workbook.listConditionalFormats("Sheet1")).toEqual([]);
   });
 
+  it("stores sheet and range protections with normalized keys and ranges", () => {
+    const workbook = new WorkbookStore("protections");
+    workbook.createSheet("Sheet1");
+
+    workbook.setSheetProtection({ sheetName: "Sheet1", hideFormulas: true });
+    workbook.setRangeProtection({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "C3",
+        endAddress: "A1",
+      },
+      hideFormulas: true,
+    });
+
+    expect(workbook.getSheetProtection("Sheet1")).toEqual({
+      sheetName: "Sheet1",
+      hideFormulas: true,
+    });
+    expect(workbook.getRangeProtection("protect-a1")).toEqual({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "C3",
+      },
+      hideFormulas: true,
+    });
+    expect(workbook.listRangeProtections("Sheet1")).toHaveLength(1);
+    expect(workbook.clearSheetProtection("Sheet1")).toBe(true);
+    expect(workbook.deleteRangeProtection("protect-a1")).toBe(true);
+    expect(workbook.getSheetProtection("Sheet1")).toBeUndefined();
+    expect(workbook.listRangeProtections("Sheet1")).toEqual([]);
+  });
+
   it("normalizes spill and pivot addresses so case-only variants reuse the same record", () => {
     const workbook = new WorkbookStore("normalized-addresses");
     workbook.createSheet("Sheet1");

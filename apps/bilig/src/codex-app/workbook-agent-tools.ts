@@ -48,6 +48,10 @@ import {
   workbookAgentObjectToolSpecs,
 } from "./workbook-agent-object-tools.js";
 import {
+  handleWorkbookAgentProtectionToolCall,
+  workbookAgentProtectionToolSpecs,
+} from "./workbook-agent-protection-tools.js";
+import {
   handleWorkbookAgentSheetReadToolCall,
   workbookAgentSheetReadToolSpecs,
 } from "./workbook-agent-sheet-read-tools.js";
@@ -545,6 +549,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     ...workbookAgentAnnotationToolSpecs,
     ...workbookAgentConditionalFormatToolSpecs,
     ...workbookAgentObjectToolSpecs,
+    ...workbookAgentProtectionToolSpecs,
     ...workbookAgentValidationToolSpecs,
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
@@ -926,6 +931,10 @@ export async function handleWorkbookAgentToolCall(
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
       return objectToolResult;
+    }
+    const protectionToolResult = await handleWorkbookAgentProtectionToolCall(context, request);
+    if (protectionToolResult) {
+      return protectionToolResult;
     }
     const annotationToolResult = await handleWorkbookAgentAnnotationToolCall(context, request);
     if (annotationToolResult) {

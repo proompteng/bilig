@@ -10,6 +10,8 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookNoteSnapshot,
+  WorkbookRangeProtectionSnapshot,
+  WorkbookSheetProtectionSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -49,6 +51,8 @@ export interface WorkbookDataValidationOp extends WorkbookDataValidationSnapshot
 export interface WorkbookConditionalFormatOp extends WorkbookConditionalFormatSnapshot {
   style: CellStylePatch;
 }
+export interface WorkbookSheetProtectionOp extends WorkbookSheetProtectionSnapshot {}
+export interface WorkbookRangeProtectionOp extends WorkbookRangeProtectionSnapshot {}
 export interface WorkbookCommentThreadOp extends WorkbookCommentThreadSnapshot {}
 export interface WorkbookNoteOp extends WorkbookNoteSnapshot {}
 
@@ -96,6 +100,8 @@ export type WorkbookOp =
     }
   | { kind: "setFreezePane"; sheetName: string; rows: number; cols: number }
   | { kind: "clearFreezePane"; sheetName: string }
+  | { kind: "setSheetProtection"; protection: WorkbookSheetProtectionOp }
+  | { kind: "clearSheetProtection"; sheetName: string }
   | { kind: "setFilter"; sheetName: string; range: CellRangeRef }
   | { kind: "clearFilter"; sheetName: string; range: CellRangeRef }
   | { kind: "setSort"; sheetName: string; range: CellRangeRef; keys: WorkbookSortKey[] }
@@ -104,6 +110,8 @@ export type WorkbookOp =
   | { kind: "clearDataValidation"; sheetName: string; range: CellRangeRef }
   | { kind: "upsertConditionalFormat"; format: WorkbookConditionalFormatOp }
   | { kind: "deleteConditionalFormat"; id: string; sheetName: string }
+  | { kind: "upsertRangeProtection"; protection: WorkbookRangeProtectionOp }
+  | { kind: "deleteRangeProtection"; id: string; sheetName: string }
   | { kind: "upsertCommentThread"; thread: WorkbookCommentThreadOp }
   | { kind: "deleteCommentThread"; sheetName: string; address: string }
   | { kind: "upsertNote"; note: WorkbookNoteOp }

@@ -62,6 +62,25 @@ describe("workbook domain guards", () => {
             },
           },
           {
+            kind: "setSheetProtection",
+            protection: {
+              sheetName: "Sheet1",
+              hideFormulas: true,
+            },
+          },
+          {
+            kind: "upsertRangeProtection",
+            protection: {
+              id: "protect-a1",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "B2",
+              },
+              hideFormulas: true,
+            },
+          },
+          {
             kind: "upsertPivotTable",
             name: "Pivot1",
             sheetName: "Sheet1",
@@ -139,6 +158,18 @@ describe("workbook domain guards", () => {
                 values: [],
               },
               style: "bad",
+            },
+          },
+          {
+            kind: "upsertRangeProtection",
+            protection: {
+              id: "protect-a1",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "B2",
+              },
+              hideFormulas: "yes",
             },
           },
         ],

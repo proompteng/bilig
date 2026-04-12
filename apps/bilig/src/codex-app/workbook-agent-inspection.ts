@@ -9,6 +9,8 @@ import {
   type WorkbookConditionalFormatSnapshot,
   type WorkbookDataValidationSnapshot,
   type WorkbookNoteSnapshot,
+  type WorkbookRangeProtectionSnapshot,
+  type WorkbookSheetProtectionSnapshot,
 } from "@bilig/protocol";
 import type { JsonValue } from "@bilig/agent-api";
 import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
@@ -130,6 +132,38 @@ function collectIntersectingNotes(
       }),
     )
     .map((note) => structuredClone(note));
+}
+
+function collectIntersectingRangeProtections(
+  runtime: WorkbookRuntime,
+  range: CellRangeRef,
+): readonly WorkbookRangeProtectionSnapshot[] {
+  return runtime.engine
+    .getRangeProtections(range.sheetName)
+    .filter((protection) => rangesIntersect(protection.range, range))
+    .map((protection) => structuredClone(protection));
+}
+
+function sheetProtection(
+  runtime: WorkbookRuntime,
+  sheetName: string,
+): WorkbookSheetProtectionSnapshot | null {
+  return runtime.engine.getSheetProtection(sheetName) ?? null;
+}
+
+function isFormulaHidden(runtime: WorkbookRuntime, sheetName: string, address: string): boolean {
+  if (runtime.engine.getSheetProtection(sheetName)?.hideFormulas === true) {
+    return true;
+  }
+  return runtime.engine.getRangeProtections(sheetName).some(
+    (protection) =>
+      protection.hideFormulas === true &&
+      rangesIntersect(protection.range, {
+        sheetName,
+        startAddress: address,
+        endAddress: address,
+      }),
+  );
 }
 
 function summarizeWindowAxisState(input: {
@@ -266,6 +300,8 @@ export function inspectWorkbookRange(
 ): {
   readonly range: CellRangeRef;
   readonly sheetState: ReturnType<typeof summarizeWindowAxisState>;
+  readonly sheetProtection: WorkbookSheetProtectionSnapshot | null;
+  readonly rangeProtections: readonly WorkbookRangeProtectionSnapshot[];
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
   readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
@@ -292,7 +328,11 @@ export function inspectWorkbookRange(
         address: cell.address,
         input: cell.input ?? null,
         value: serializeCellValue(cell.value),
-        formula: cell.formula !== undefined ? `=${cell.formula}` : null,
+        formula:
+          cell.formula !== undefined &&
+          !isFormulaHidden(runtime, normalizedRange.sheetName, cell.address)
+            ? `=${cell.formula}`
+            : null,
         displayFormat: cell.format ?? null,
         styleId: cell.styleId ?? null,
         numberFormatId: cell.numberFormatId ?? null,
@@ -311,6 +351,8 @@ export function inspectWorkbookRange(
       runtime,
       range: normalizedRange,
     }),
+    sheetProtection: sheetProtection(runtime, normalizedRange.sheetName),
+    rangeProtections: collectIntersectingRangeProtections(runtime, normalizedRange),
     dataValidations: collectIntersectingDataValidations(runtime, normalizedRange),
     conditionalFormats: collectIntersectingConditionalFormats(runtime, normalizedRange),
     commentThreads: collectIntersectingCommentThreads(runtime, normalizedRange),
@@ -347,6 +389,8 @@ export function inspectWorkbookCell(
   readonly topoRank: number | null;
   readonly directPrecedents: readonly string[];
   readonly directDependents: readonly string[];
+  readonly sheetProtection: WorkbookSheetProtectionSnapshot | null;
+  readonly rangeProtections: readonly WorkbookRangeProtectionSnapshot[];
   readonly dataValidations: readonly WorkbookDataValidationSnapshot[];
   readonly conditionalFormats: readonly WorkbookConditionalFormatSnapshot[];
   readonly commentThreads: readonly WorkbookCommentThreadSnapshot[];
@@ -359,7 +403,10 @@ export function inspectWorkbookCell(
     address: cell.address,
     input: snapshot.input ?? null,
     value: serializeCellValue(cell.value),
-    formula: cell.formula !== undefined ? `=${cell.formula}` : null,
+    formula:
+      cell.formula !== undefined && !isFormulaHidden(runtime, target.sheetName, target.address)
+        ? `=${cell.formula}`
+        : null,
     displayFormat: cell.format ?? null,
     styleId: cell.styleId ?? null,
     style: runtime.engine.getCellStyle(cell.styleId) ?? null,
@@ -371,6 +418,12 @@ export function inspectWorkbookCell(
     topoRank: cell.topoRank ?? null,
     directPrecedents: [...cell.directPrecedents],
     directDependents: [...cell.directDependents],
+    sheetProtection: sheetProtection(runtime, target.sheetName),
+    rangeProtections: collectIntersectingRangeProtections(runtime, {
+      sheetName: target.sheetName,
+      startAddress: target.address,
+      endAddress: target.address,
+    }),
     dataValidations: collectIntersectingDataValidations(runtime, {
       sheetName: target.sheetName,
       startAddress: target.address,

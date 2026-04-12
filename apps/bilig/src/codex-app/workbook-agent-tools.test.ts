@@ -1280,6 +1280,124 @@ describe("workbook agent tools", () => {
     expect(text && "text" in text ? text.text : "").toContain('"urgent"');
   });
 
+  it("lists workbook protection status from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setSheetProtection({ sheetName: "Sheet1", hideFormulas: true });
+    engine.setRangeProtection({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B2",
+      },
+      hideFormulas: true,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-get-protection-status",
+        tool: "get_protection_status",
+        arguments: { sheetName: "Sheet1" },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const text = response.contentItems[0];
+    expect(text?.type).toBe("inputText");
+    expect(text && "text" in text ? text.text : "").toContain('"hideFormulas": true');
+    expect(text && "text" in text ? text.text : "").toContain('"protect-a1"');
+  });
+
+  it("masks hidden formulas in read_range and inspect_cell outputs", async () => {
+    const engine = await createEngine();
+    engine.setCellFormula("Sheet1", "A1", "2+2");
+    engine.setRangeProtection({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A1",
+      },
+      hideFormulas: true,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const rangeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-range-hidden-formula",
+        tool: "read_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+      },
+    );
+
+    expect(rangeResponse.success).toBe(true);
+    const rangeText = rangeResponse.contentItems[0];
+    expect(rangeText?.type).toBe("inputText");
+    expect(rangeText && "text" in rangeText ? rangeText.text : "").toContain(
+      '"rangeProtections": [',
+    );
+    expect(rangeText && "text" in rangeText ? rangeText.text : "").toContain('"formula": null');
+
+    const inspectResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-inspect-cell-hidden-formula",
+        tool: "inspect_cell",
+        arguments: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+      },
+    );
+
+    expect(inspectResponse.success).toBe(true);
+    const inspectText = inspectResponse.contentItems[0];
+    expect(inspectText?.type).toBe("inputText");
+    expect(inspectText && "text" in inspectText ? inspectText.text : "").toContain(
+      '"formula": null',
+    );
+  });
+
   it("lists workbook comments and notes from the authoritative runtime", async () => {
     const engine = await createEngine();
     engine.setCommentThread({
@@ -2107,6 +2225,110 @@ describe("workbook agent tools", () => {
         sheetName: "Sheet1",
         startAddress: "B2",
         endAddress: "B4",
+      },
+    });
+  });
+
+  it("stages sheet and range protection commands", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const protectSheetResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-protect-sheet",
+        tool: "protect_sheet",
+        arguments: {
+          hideFormulas: true,
+        },
+      },
+    );
+
+    expect(protectSheetResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "setSheetProtection",
+      protection: {
+        sheetName: "Sheet1",
+        hideFormulas: true,
+      },
+    });
+
+    const protectRangeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B2",
+            range: {
+              startAddress: "B2",
+              endAddress: "B4",
+            },
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-protect-range",
+        tool: "protect_range",
+        arguments: {
+          selector: {
+            kind: "currentSelection",
+          },
+          hideFormulas: true,
+        },
+      },
+    );
+
+    expect(protectRangeResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "upsertRangeProtection",
+      protection: {
+        id: expect.any(String),
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        hideFormulas: true,
       },
     });
   });

@@ -157,6 +157,9 @@ function entityKeyForOp(op: EngineOp): string {
     case "setFreezePane":
     case "clearFreezePane":
       return `freeze:${op.sheetName}`;
+    case "setSheetProtection":
+    case "clearSheetProtection":
+      return `sheet-protection:${op.kind === "setSheetProtection" ? op.protection.sheetName : op.sheetName}`;
     case "setFilter":
     case "clearFilter":
       return `filter:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
@@ -171,6 +174,10 @@ function entityKeyForOp(op: EngineOp): string {
       return `conditional-format:${op.format.id}`;
     case "deleteConditionalFormat":
       return `conditional-format:${op.id}`;
+    case "upsertRangeProtection":
+      return `range-protection:${op.protection.id}`;
+    case "deleteRangeProtection":
+      return `range-protection:${op.id}`;
     case "upsertCommentThread":
       return `comment:${op.thread.sheetName}!${op.thread.address}`;
     case "deleteCommentThread":
@@ -240,12 +247,14 @@ function sheetDeleteBarrierForOp(
     case "updateColumnMetadata":
     case "setFreezePane":
     case "clearFreezePane":
+    case "clearSheetProtection":
     case "setFilter":
     case "clearFilter":
     case "setSort":
     case "clearSort":
     case "clearDataValidation":
     case "deleteConditionalFormat":
+    case "deleteRangeProtection":
     case "deleteCommentThread":
     case "deleteNote":
     case "setCellValue":
@@ -264,8 +273,12 @@ function sheetDeleteBarrierForOp(
       return undefined;
     case "setDataValidation":
       return latestSheetDeletes.get(op.validation.range.sheetName);
+    case "setSheetProtection":
+      return latestSheetDeletes.get(op.protection.sheetName);
     case "upsertConditionalFormat":
       return latestSheetDeletes.get(op.format.range.sheetName);
+    case "upsertRangeProtection":
+      return latestSheetDeletes.get(op.protection.range.sheetName);
     case "upsertCommentThread":
       return latestSheetDeletes.get(op.thread.sheetName);
     case "upsertNote":

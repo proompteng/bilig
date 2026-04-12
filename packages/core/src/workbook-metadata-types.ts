@@ -11,6 +11,8 @@ import type {
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookNoteSnapshot,
+  WorkbookRangeProtectionSnapshot,
+  WorkbookSheetProtectionSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookTableSnapshot,
@@ -99,6 +101,8 @@ export interface WorkbookDataValidationRecord extends WorkbookDataValidationSnap
 export interface WorkbookConditionalFormatRecord extends WorkbookConditionalFormatSnapshot {
   style: CellStylePatch;
 }
+export interface WorkbookSheetProtectionRecord extends WorkbookSheetProtectionSnapshot {}
+export interface WorkbookRangeProtectionRecord extends WorkbookRangeProtectionSnapshot {}
 export interface WorkbookCommentEntryRecord extends WorkbookCommentEntrySnapshot {}
 export interface WorkbookCommentThreadRecord extends WorkbookCommentThreadSnapshot {
   comments: WorkbookCommentEntryRecord[];
@@ -116,10 +120,12 @@ export interface WorkbookMetadataRecord {
   calculationSettings: WorkbookCalculationSettingsRecord;
   volatileContext: WorkbookVolatileContextRecord;
   freezePanes: Map<string, WorkbookFreezePaneRecord>;
+  sheetProtections: Map<string, WorkbookSheetProtectionRecord>;
   filters: Map<string, WorkbookFilterRecord>;
   sorts: Map<string, WorkbookSortRecord>;
   dataValidations: Map<string, WorkbookDataValidationRecord>;
   conditionalFormats: Map<string, WorkbookConditionalFormatRecord>;
+  rangeProtections: Map<string, WorkbookRangeProtectionRecord>;
   commentThreads: Map<string, WorkbookCommentThreadRecord>;
   notes: Map<string, WorkbookNoteRecord>;
 }
@@ -136,10 +142,12 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     calculationSettings: { mode: "automatic", compatibilityMode: "excel-modern" },
     volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
+    sheetProtections: new Map(),
     filters: new Map(),
     sorts: new Map(),
     dataValidations: new Map(),
     conditionalFormats: new Map(),
+    rangeProtections: new Map(),
     commentThreads: new Map(),
     notes: new Map(),
   };

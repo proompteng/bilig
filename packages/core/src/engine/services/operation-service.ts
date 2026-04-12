@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { formatAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
@@ -99,6 +99,53 @@ function collectTrackedDependents(
     });
   });
   return [...candidates];
+}
+
+function normalizeRange(range: CellRangeRef): CellRangeRef & {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  const startRow = Math.min(start.row, end.row);
+  const endRow = Math.max(start.row, end.row);
+  const startCol = Math.min(start.col, end.col);
+  const endCol = Math.max(start.col, end.col);
+  return {
+    ...range,
+    startAddress: formatAddress(startRow, startCol),
+    endAddress: formatAddress(endRow, endCol),
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+  };
+}
+
+function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
+  const a = normalizeRange(left);
+  const b = normalizeRange(right);
+  return !(
+    a.sheetName !== b.sheetName ||
+    a.endRow < b.startRow ||
+    b.endRow < a.startRow ||
+    a.endCol < b.startCol ||
+    b.endCol < a.startCol
+  );
+}
+
+function cellRange(sheetName: string, address: string): CellRangeRef {
+  return {
+    sheetName,
+    startAddress: address,
+    endAddress: address,
+  };
+}
+
+function throwProtectionBlocked(message: string): never {
+  throw new Error(`Workbook protection blocks this change: ${message}`);
 }
 
 export function createEngineOperationService(args: {
@@ -214,6 +261,185 @@ export function createEngineOperationService(args: {
     sheetDeleteVersions.set(sheetName, order);
   };
 
+  const sheetHasProtection = (sheetName: string): boolean =>
+    args.state.workbook.getSheetProtection(sheetName) !== undefined ||
+    args.state.workbook.listRangeProtections(sheetName).length > 0;
+
+  const rangeIsProtected = (range: CellRangeRef): boolean => {
+    if (args.state.workbook.getSheetProtection(range.sheetName)) {
+      return true;
+    }
+    return args.state.workbook
+      .listRangeProtections(range.sheetName)
+      .some((protection) => rangesIntersect(protection.range, range));
+  };
+
+  const assertProtectionAllowsOp = (op: EngineOp): void => {
+    switch (op.kind) {
+      case "setSheetProtection":
+      case "clearSheetProtection":
+      case "upsertRangeProtection":
+      case "deleteRangeProtection":
+      case "upsertWorkbook":
+      case "setWorkbookMetadata":
+      case "setCalculationSettings":
+      case "setVolatileContext":
+      case "upsertDefinedName":
+      case "deleteDefinedName":
+      case "upsertCellStyle":
+      case "upsertCellNumberFormat":
+        return;
+      case "upsertSheet":
+        return;
+      case "renameSheet":
+      case "deleteSheet":
+        if (sheetHasProtection(op.kind === "renameSheet" ? op.oldName : op.name)) {
+          throwProtectionBlocked(
+            `sheet ${op.kind === "renameSheet" ? op.oldName : op.name} is protected`,
+          );
+        }
+        return;
+      case "insertRows":
+      case "deleteRows":
+      case "moveRows":
+      case "insertColumns":
+      case "deleteColumns":
+      case "moveColumns":
+      case "updateRowMetadata":
+      case "updateColumnMetadata":
+      case "setFreezePane":
+      case "clearFreezePane":
+        if (sheetHasProtection(op.sheetName)) {
+          throwProtectionBlocked(`sheet ${op.sheetName} is protected`);
+        }
+        return;
+      case "setFilter":
+      case "clearFilter":
+      case "setSort":
+      case "clearSort":
+      case "setStyleRange":
+      case "setFormatRange":
+        if (rangeIsProtected(op.range)) {
+          throwProtectionBlocked(
+            `range ${op.range.sheetName}!${op.range.startAddress}:${op.range.endAddress} is protected`,
+          );
+        }
+        return;
+      case "setDataValidation":
+        if (rangeIsProtected(op.validation.range)) {
+          throwProtectionBlocked(
+            `range ${op.validation.range.sheetName}!${op.validation.range.startAddress}:${op.validation.range.endAddress} is protected`,
+          );
+        }
+        return;
+      case "clearDataValidation":
+        if (rangeIsProtected(op.range)) {
+          throwProtectionBlocked(
+            `range ${op.range.sheetName}!${op.range.startAddress}:${op.range.endAddress} is protected`,
+          );
+        }
+        return;
+      case "upsertConditionalFormat":
+        if (rangeIsProtected(op.format.range)) {
+          throwProtectionBlocked(
+            `range ${op.format.range.sheetName}!${op.format.range.startAddress}:${op.format.range.endAddress} is protected`,
+          );
+        }
+        return;
+      case "deleteConditionalFormat": {
+        const existing = args.state.workbook.getConditionalFormat(op.id);
+        if (existing && rangeIsProtected(existing.range)) {
+          throwProtectionBlocked(`conditional format ${op.id} targets a protected range`);
+        }
+        return;
+      }
+      case "upsertCommentThread":
+        if (rangeIsProtected(cellRange(op.thread.sheetName, op.thread.address))) {
+          throwProtectionBlocked(`cell ${op.thread.sheetName}!${op.thread.address} is protected`);
+        }
+        return;
+      case "deleteCommentThread":
+        if (rangeIsProtected(cellRange(op.sheetName, op.address))) {
+          throwProtectionBlocked(`cell ${op.sheetName}!${op.address} is protected`);
+        }
+        return;
+      case "upsertNote":
+        if (rangeIsProtected(cellRange(op.note.sheetName, op.note.address))) {
+          throwProtectionBlocked(`cell ${op.note.sheetName}!${op.note.address} is protected`);
+        }
+        return;
+      case "deleteNote":
+        if (rangeIsProtected(cellRange(op.sheetName, op.address))) {
+          throwProtectionBlocked(`cell ${op.sheetName}!${op.address} is protected`);
+        }
+        return;
+      case "setCellValue":
+      case "setCellFormula":
+      case "setCellFormat":
+      case "clearCell":
+        if (rangeIsProtected(cellRange(op.sheetName, op.address))) {
+          throwProtectionBlocked(`cell ${op.sheetName}!${op.address} is protected`);
+        }
+        return;
+      case "upsertTable":
+        if (
+          rangeIsProtected({
+            sheetName: op.table.sheetName,
+            startAddress: op.table.startAddress,
+            endAddress: op.table.endAddress,
+          })
+        ) {
+          throwProtectionBlocked(`table ${op.table.name} overlaps a protected range`);
+        }
+        return;
+      case "deleteTable": {
+        const existing = args.state.workbook.getTable(op.name);
+        if (
+          existing &&
+          rangeIsProtected({
+            sheetName: existing.sheetName,
+            startAddress: existing.startAddress,
+            endAddress: existing.endAddress,
+          })
+        ) {
+          throwProtectionBlocked(`table ${op.name} overlaps a protected range`);
+        }
+        return;
+      }
+      case "upsertSpillRange":
+      case "deleteSpillRange":
+        if (rangeIsProtected(cellRange(op.sheetName, op.address))) {
+          throwProtectionBlocked(`cell ${op.sheetName}!${op.address} is protected`);
+        }
+        return;
+      case "upsertPivotTable":
+        if (
+          sheetHasProtection(op.sheetName) ||
+          rangeIsProtected(op.source) ||
+          rangeIsProtected(cellRange(op.sheetName, op.address))
+        ) {
+          throwProtectionBlocked(`pivot ${op.name} touches protected workbook state`);
+        }
+        return;
+      case "deletePivotTable": {
+        const existing = args.state.workbook.getPivot(op.sheetName, op.address);
+        if (
+          existing &&
+          (sheetHasProtection(existing.sheetName) ||
+            rangeIsProtected(existing.source) ||
+            rangeIsProtected(cellRange(existing.sheetName, existing.address)))
+        ) {
+          throwProtectionBlocked(
+            `pivot at ${op.sheetName}!${op.address} touches protected workbook state`,
+          );
+        }
+        return;
+      }
+      default:
+        return assertNever(op);
+    }
+  };
+
   const pruneCellIfOrphaned = (cellIndex: number): void => {
     if (args.collectFormulaDependents(makeCellEntity(cellIndex)).length > 0) {
       return;
@@ -251,6 +477,9 @@ export function createEngineOperationService(args: {
       case "setFreezePane":
       case "clearFreezePane":
         return `freeze:${op.sheetName}`;
+      case "setSheetProtection":
+      case "clearSheetProtection":
+        return `sheet-protection:${op.kind === "setSheetProtection" ? op.protection.sheetName : op.sheetName}`;
       case "setFilter":
       case "clearFilter":
         return `filter:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
@@ -265,6 +494,10 @@ export function createEngineOperationService(args: {
         return `conditional-format:${op.format.id}`;
       case "deleteConditionalFormat":
         return `conditional-format:${op.id}`;
+      case "upsertRangeProtection":
+        return `range-protection:${op.protection.id}`;
+      case "deleteRangeProtection":
+        return `range-protection:${op.id}`;
       case "upsertCommentThread":
         return `comment:${op.thread.sheetName}!${op.thread.address}`;
       case "deleteCommentThread":
@@ -367,12 +600,14 @@ export function createEngineOperationService(args: {
       case "moveColumns":
       case "setFreezePane":
       case "clearFreezePane":
+      case "clearSheetProtection":
       case "setFilter":
       case "clearFilter":
       case "setSort":
       case "clearSort":
       case "clearDataValidation":
       case "deleteConditionalFormat":
+      case "deleteRangeProtection":
       case "deleteCommentThread":
       case "deleteNote":
       case "setCellFormat":
@@ -395,8 +630,12 @@ export function createEngineOperationService(args: {
         return sheetDeleteVersions.get(op.oldName);
       case "setDataValidation":
         return sheetDeleteVersions.get(op.validation.range.sheetName);
+      case "setSheetProtection":
+        return sheetDeleteVersions.get(op.protection.sheetName);
       case "upsertConditionalFormat":
         return sheetDeleteVersions.get(op.format.range.sheetName);
+      case "upsertRangeProtection":
+        return sheetDeleteVersions.get(op.protection.range.sheetName);
       case "upsertCommentThread":
         return sheetDeleteVersions.get(op.thread.sheetName);
       case "upsertNote":
@@ -531,6 +770,9 @@ export function createEngineOperationService(args: {
         if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
           return;
         }
+        if (!isRestore && source !== "history") {
+          assertProtectionAllowsOp(op);
+        }
 
         switch (op.kind) {
           case "upsertWorkbook":
@@ -664,6 +906,16 @@ export function createEngineOperationService(args: {
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;
+          case "setSheetProtection":
+            args.state.workbook.setSheetProtection(op.protection);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "clearSheetProtection":
+            args.state.workbook.clearSheetProtection(op.sheetName);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
           case "setFilter":
             args.state.workbook.setFilter(op.sheetName, op.range);
             structuralInvalidation = true;
@@ -701,6 +953,16 @@ export function createEngineOperationService(args: {
             break;
           case "deleteConditionalFormat":
             args.state.workbook.deleteConditionalFormat(op.id);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "upsertRangeProtection":
+            args.state.workbook.setRangeProtection(op.protection);
+            structuralInvalidation = true;
+            setEntityVersionForOp(op, order);
+            break;
+          case "deleteRangeProtection":
+            args.state.workbook.deleteRangeProtection(op.id);
             structuralInvalidation = true;
             setEntityVersionForOp(op, order);
             break;

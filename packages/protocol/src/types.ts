@@ -518,6 +518,17 @@ export interface WorkbookConditionalFormatSnapshot {
   priority?: number;
 }
 
+export interface WorkbookSheetProtectionSnapshot {
+  sheetName: string;
+  hideFormulas?: boolean;
+}
+
+export interface WorkbookRangeProtectionSnapshot {
+  id: string;
+  range: CellRangeRef;
+  hideFormulas?: boolean;
+}
+
 export interface WorkbookCommentEntrySnapshot {
   id: string;
   body: string;
@@ -562,10 +573,12 @@ export interface SheetMetadataSnapshot {
   styleRanges?: SheetStyleRangeSnapshot[];
   formatRanges?: SheetFormatRangeSnapshot[];
   freezePane?: WorkbookFreezePaneSnapshot;
+  sheetProtection?: WorkbookSheetProtectionSnapshot;
   filters?: CellRangeRef[];
   sorts?: WorkbookSortSnapshot[];
   validations?: WorkbookDataValidationSnapshot[];
   conditionalFormats?: WorkbookConditionalFormatSnapshot[];
+  protectedRanges?: WorkbookRangeProtectionSnapshot[];
   commentThreads?: WorkbookCommentThreadSnapshot[];
   notes?: WorkbookNoteSnapshot[];
 }

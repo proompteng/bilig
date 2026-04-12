@@ -13,6 +13,8 @@ import {
   type WorkbookDataValidationRecord,
   normalizeWorkbookObjectName,
   type WorkbookNoteRecord,
+  type WorkbookRangeProtectionRecord,
+  type WorkbookSheetProtectionRecord,
   pivotKey,
   type WorkbookAxisMetadataRecord,
   type WorkbookDefinedNameRecord,
@@ -250,6 +252,25 @@ export function cloneConditionalFormatRecord(
   return cloned;
 }
 
+export function cloneSheetProtectionRecord(
+  record: WorkbookSheetProtectionRecord,
+): WorkbookSheetProtectionRecord {
+  return {
+    sheetName: record.sheetName,
+    ...(record.hideFormulas !== undefined ? { hideFormulas: record.hideFormulas } : {}),
+  };
+}
+
+export function cloneRangeProtectionRecord(
+  record: WorkbookRangeProtectionRecord,
+): WorkbookRangeProtectionRecord {
+  return {
+    id: record.id,
+    range: { ...record.range },
+    ...(record.hideFormulas !== undefined ? { hideFormulas: record.hideFormulas } : {}),
+  };
+}
+
 export function cloneCommentEntryRecord(
   record: WorkbookCommentEntryRecord,
 ): WorkbookCommentEntryRecord {
@@ -302,6 +323,14 @@ export function conditionalFormatKey(id: string): string {
   const normalized = id.trim();
   if (normalized.length === 0) {
     throw new Error("Conditional format id must be non-empty");
+  }
+  return normalized;
+}
+
+export function rangeProtectionKey(id: string): string {
+  const normalized = id.trim();
+  if (normalized.length === 0) {
+    throw new Error("Range protection id must be non-empty");
   }
   return normalized;
 }
@@ -386,6 +415,9 @@ function recordKey(record: unknown): string {
   if (isAxisMetadataRecord(record)) {
     return axisMetadataKey(record.sheetName, record.start, record.count);
   }
+  if (isSheetProtectionRecord(record)) {
+    return record.sheetName;
+  }
   if (isFilterRecord(record)) {
     return filterKey(record.sheetName, record.range);
   }
@@ -394,6 +426,9 @@ function recordKey(record: unknown): string {
   }
   if (isConditionalFormatRecord(record)) {
     return conditionalFormatKey(record.id);
+  }
+  if (isRangeProtectionRecord(record)) {
+    return rangeProtectionKey(record.id);
   }
   if (isDataValidationRecord(record)) {
     return dataValidationKey(record.range.sheetName, record.range);
@@ -449,6 +484,20 @@ function isFilterRecord(record: unknown): record is WorkbookFilterRecord {
   );
 }
 
+function isSheetProtectionRecord(record: unknown): record is WorkbookSheetProtectionRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    !("rows" in record) &&
+    !("cols" in record) &&
+    !("range" in record) &&
+    !("startAddress" in record) &&
+    !("address" in record) &&
+    !("start" in record)
+  );
+}
+
 function isSortRecord(record: unknown): record is WorkbookSortRecord {
   return (
     typeof record === "object" &&
@@ -484,6 +533,17 @@ function isConditionalFormatRecord(record: unknown): record is WorkbookCondition
     "range" in record &&
     "rule" in record &&
     "style" in record
+  );
+}
+
+function isRangeProtectionRecord(record: unknown): record is WorkbookRangeProtectionRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    "range" in record &&
+    !("rule" in record) &&
+    !("style" in record)
   );
 }
 

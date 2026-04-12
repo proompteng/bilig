@@ -17,6 +17,8 @@ import type {
   WorkbookDataValidationRuleSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookNoteSnapshot,
+  WorkbookRangeProtectionSnapshot,
+  WorkbookSheetProtectionSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationMode,
   WorkbookDefinedNameValueSnapshot,
@@ -190,6 +192,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   insertColumns: 32,
   deleteColumns: 33,
   moveColumns: 34,
+  setSheetProtection: 46,
+  clearSheetProtection: 47,
   setDataValidation: 38,
   clearDataValidation: 39,
   upsertCommentThread: 40,
@@ -198,6 +202,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   deleteNote: 43,
   upsertConditionalFormat: 44,
   deleteConditionalFormat: 45,
+  upsertRangeProtection: 48,
+  deleteRangeProtection: 49,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -1465,6 +1471,50 @@ function decodeConditionalFormat(reader: BinaryReader): WorkbookConditionalForma
   return format;
 }
 
+function encodeSheetProtection(
+  writer: BinaryWriter,
+  protection: WorkbookSheetProtectionSnapshot,
+): void {
+  writer.string(protection.sheetName);
+  writer.bool(protection.hideFormulas !== undefined);
+  if (protection.hideFormulas !== undefined) {
+    writer.bool(protection.hideFormulas);
+  }
+}
+
+function decodeSheetProtection(reader: BinaryReader): WorkbookSheetProtectionSnapshot {
+  const protection: WorkbookSheetProtectionSnapshot = {
+    sheetName: reader.string(),
+  };
+  if (reader.bool()) {
+    protection.hideFormulas = reader.bool();
+  }
+  return protection;
+}
+
+function encodeRangeProtection(
+  writer: BinaryWriter,
+  protection: WorkbookRangeProtectionSnapshot,
+): void {
+  writer.string(protection.id);
+  encodeCellRangeRef(writer, protection.range);
+  writer.bool(protection.hideFormulas !== undefined);
+  if (protection.hideFormulas !== undefined) {
+    writer.bool(protection.hideFormulas);
+  }
+}
+
+function decodeRangeProtection(reader: BinaryReader): WorkbookRangeProtectionSnapshot {
+  const protection: WorkbookRangeProtectionSnapshot = {
+    id: reader.string(),
+    range: decodeCellRangeRef(reader),
+  };
+  if (reader.bool()) {
+    protection.hideFormulas = reader.bool();
+  }
+  return protection;
+}
+
 function encodeCommentEntry(
   writer: BinaryWriter,
   entry: WorkbookCommentThreadSnapshot["comments"][number],
@@ -1625,6 +1675,12 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "clearFreezePane":
       writer.string(op.sheetName);
       return;
+    case "setSheetProtection":
+      encodeSheetProtection(writer, op.protection);
+      return;
+    case "clearSheetProtection":
+      writer.string(op.sheetName);
+      return;
     case "setFilter":
     case "clearFilter":
       writer.string(op.sheetName);
@@ -1651,6 +1707,13 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       encodeConditionalFormat(writer, op.format);
       return;
     case "deleteConditionalFormat":
+      writer.string(op.id);
+      writer.string(op.sheetName);
+      return;
+    case "upsertRangeProtection":
+      encodeRangeProtection(writer, op.protection);
+      return;
+    case "deleteRangeProtection":
       writer.string(op.id);
       writer.string(op.sheetName);
       return;
@@ -1842,6 +1905,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       };
     case 8:
       return { kind: "clearFreezePane", sheetName: reader.string() };
+    case 46:
+      return {
+        kind: "setSheetProtection",
+        protection: decodeSheetProtection(reader),
+      };
+    case 47:
+      return { kind: "clearSheetProtection", sheetName: reader.string() };
     case 9:
       return {
         kind: "setFilter",
@@ -1893,6 +1963,17 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     case 45:
       return {
         kind: "deleteConditionalFormat",
+        id: reader.string(),
+        sheetName: reader.string(),
+      };
+    case 48:
+      return {
+        kind: "upsertRangeProtection",
+        protection: decodeRangeProtection(reader),
+      };
+    case 49:
+      return {
+        kind: "deleteRangeProtection",
         id: reader.string(),
         sheetName: reader.string(),
       };

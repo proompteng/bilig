@@ -620,4 +620,60 @@ describe("workbook agent apply", () => {
 
     expect(engine.getConditionalFormats("Sheet1")).toEqual([]);
   });
+
+  it("captures undo for protection commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "setSheetProtection",
+          protection: {
+            sheetName: "Sheet1",
+            hideFormulas: true,
+          },
+        },
+        {
+          kind: "upsertRangeProtection",
+          protection: {
+            id: "protect-a1",
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "B2",
+            },
+            hideFormulas: true,
+          },
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getSheetProtection("Sheet1")).toEqual({
+      sheetName: "Sheet1",
+      hideFormulas: true,
+    });
+    expect(engine.getRangeProtections("Sheet1")).toEqual([
+      {
+        id: "protect-a1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "B2",
+        },
+        hideFormulas: true,
+      },
+    ]);
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getSheetProtection("Sheet1")).toBeUndefined();
+    expect(engine.getRangeProtections("Sheet1")).toEqual([]);
+  });
 });

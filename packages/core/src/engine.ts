@@ -23,6 +23,8 @@ import type {
   WorkbookFreezePaneSnapshot,
   WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
+  WorkbookRangeProtectionSnapshot,
+  WorkbookSheetProtectionSnapshot,
   WorkbookSortSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
@@ -62,6 +64,8 @@ import {
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
   type WorkbookPropertyRecord,
+  type WorkbookRangeProtectionRecord,
+  type WorkbookSheetProtectionRecord,
   type WorkbookSortRecord,
   type WorkbookSpillRecord,
   type WorkbookTableRecord,
@@ -767,6 +771,30 @@ export class SpreadsheetEngine {
     return this.workbook.getFreezePane(sheetName);
   }
 
+  setSheetProtection(protection: WorkbookSheetProtectionSnapshot): void {
+    const existing = this.workbook.getSheetProtection(protection.sheetName);
+    const normalized: WorkbookSheetProtectionSnapshot = {
+      sheetName: protection.sheetName,
+      ...(protection.hideFormulas !== undefined ? { hideFormulas: protection.hideFormulas } : {}),
+    };
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setSheetProtection", protection: normalized }]);
+  }
+
+  clearSheetProtection(sheetName: string): boolean {
+    if (!this.workbook.getSheetProtection(sheetName)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "clearSheetProtection", sheetName }]);
+    return true;
+  }
+
+  getSheetProtection(sheetName: string): WorkbookSheetProtectionRecord | undefined {
+    return this.workbook.getSheetProtection(sheetName);
+  }
+
   setFilter(sheetName: string, range: CellRangeRef): void {
     const existing = this.workbook.getFilter(sheetName, range);
     if (existing) {
@@ -883,6 +911,38 @@ export class SpreadsheetEngine {
 
   getConditionalFormats(sheetName: string): WorkbookConditionalFormatRecord[] {
     return this.workbook.listConditionalFormats(sheetName);
+  }
+
+  setRangeProtection(protection: WorkbookRangeProtectionSnapshot): void {
+    const normalized: WorkbookRangeProtectionSnapshot = {
+      id: protection.id.trim(),
+      range: canonicalWorkbookRangeRef(protection.range),
+      ...(protection.hideFormulas !== undefined ? { hideFormulas: protection.hideFormulas } : {}),
+    };
+    const existing = this.workbook.getRangeProtection(normalized.id);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertRangeProtection", protection: normalized }]);
+  }
+
+  deleteRangeProtection(id: string): boolean {
+    const existing = this.workbook.getRangeProtection(id);
+    if (!existing) {
+      return false;
+    }
+    this.executeLocalTransaction([
+      { kind: "deleteRangeProtection", id: existing.id, sheetName: existing.range.sheetName },
+    ]);
+    return true;
+  }
+
+  getRangeProtection(id: string): WorkbookRangeProtectionRecord | undefined {
+    return this.workbook.getRangeProtection(id);
+  }
+
+  getRangeProtections(sheetName: string): WorkbookRangeProtectionRecord[] {
+    return this.workbook.listRangeProtections(sheetName);
   }
 
   setCommentThread(thread: WorkbookCommentThreadSnapshot): void {

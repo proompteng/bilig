@@ -125,6 +125,13 @@ describe("binary protocol", () => {
               keys: [{ keyAddress: "C1", direction: "desc" }],
             },
             {
+              kind: "setSheetProtection",
+              protection: {
+                sheetName: "Sheet1",
+                hideFormulas: true,
+              },
+            },
+            {
               kind: "setDataValidation",
               validation: {
                 range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
@@ -171,6 +178,14 @@ describe("binary protocol", () => {
                 },
                 stopIfTrue: true,
                 priority: 1,
+              },
+            },
+            {
+              kind: "upsertRangeProtection",
+              protection: {
+                id: "protect-a1",
+                range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+                hideFormulas: true,
               },
             },
             { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
@@ -226,6 +241,13 @@ describe("binary protocol", () => {
         keys: [{ keyAddress: "C1", direction: "desc" }],
       },
       {
+        kind: "setSheetProtection",
+        protection: {
+          sheetName: "Sheet1",
+          hideFormulas: true,
+        },
+      },
+      {
         kind: "setDataValidation",
         validation: {
           range: { sheetName: "Sheet1", startAddress: "D2", endAddress: "D10" },
@@ -272,6 +294,14 @@ describe("binary protocol", () => {
           },
           stopIfTrue: true,
           priority: 1,
+        },
+      },
+      {
+        kind: "upsertRangeProtection",
+        protection: {
+          id: "protect-a1",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+          hideFormulas: true,
         },
       },
       { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
@@ -451,6 +481,59 @@ describe("binary protocol", () => {
 
     expect(decoded.batch.ops).toEqual([
       { kind: "deleteConditionalFormat", id: "cf-1", sheetName: "Sheet1" },
+    ]);
+  });
+
+  it("roundtrips sheet and range protection ops", () => {
+    const decoded = decodeFrame(
+      encodeFrame({
+        kind: "appendBatch",
+        documentId: "book-7",
+        cursor: 14,
+        batch: {
+          id: "replica:7",
+          replicaId: "replica",
+          clock: { counter: 7 },
+          ops: [
+            {
+              kind: "setSheetProtection",
+              protection: { sheetName: "Sheet1", hideFormulas: true },
+            },
+            { kind: "clearSheetProtection", sheetName: "Sheet1" },
+            {
+              kind: "upsertRangeProtection",
+              protection: {
+                id: "protect-a1",
+                range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+                hideFormulas: true,
+              },
+            },
+            { kind: "deleteRangeProtection", id: "protect-a1", sheetName: "Sheet1" },
+          ],
+        },
+      }),
+    );
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      {
+        kind: "setSheetProtection",
+        protection: { sheetName: "Sheet1", hideFormulas: true },
+      },
+      { kind: "clearSheetProtection", sheetName: "Sheet1" },
+      {
+        kind: "upsertRangeProtection",
+        protection: {
+          id: "protect-a1",
+          range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+          hideFormulas: true,
+        },
+      },
+      { kind: "deleteRangeProtection", id: "protect-a1", sheetName: "Sheet1" },
     ]);
   });
 

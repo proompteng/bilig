@@ -15,6 +15,8 @@ import {
   type WorkbookDataValidationSnapshot,
   type WorkbookDefinedNameValueSnapshot,
   type WorkbookNoteSnapshot,
+  type WorkbookRangeProtectionSnapshot,
+  type WorkbookSheetProtectionSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
@@ -43,6 +45,8 @@ import {
   type WorkbookMetadataRecord,
   type WorkbookPivotRecord,
   type WorkbookPropertyRecord,
+  type WorkbookRangeProtectionRecord,
+  type WorkbookSheetProtectionRecord,
   type WorkbookSortKeyRecord,
   type WorkbookSortRecord,
   type WorkbookSpillRecord,
@@ -103,6 +107,8 @@ export type {
   WorkbookMetadataRecord,
   WorkbookPivotRecord,
   WorkbookPropertyRecord,
+  WorkbookRangeProtectionRecord,
+  WorkbookSheetProtectionRecord,
   WorkbookSortKeyRecord,
   WorkbookSortRecord,
   WorkbookSpillRecord,
@@ -700,6 +706,18 @@ export class WorkbookStore {
     return runWorkbookMetadataEffect(this.metadataService.clearFreezePane(sheetName));
   }
 
+  setSheetProtection(record: WorkbookSheetProtectionSnapshot): WorkbookSheetProtectionRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setSheetProtection(record));
+  }
+
+  getSheetProtection(sheetName: string): WorkbookSheetProtectionRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getSheetProtection(sheetName));
+  }
+
+  clearSheetProtection(sheetName: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.clearSheetProtection(sheetName));
+  }
+
   setFilter(sheetName: string, range: CellRangeRef): WorkbookFilterRecord {
     return runWorkbookMetadataEffect(this.metadataService.setFilter(sheetName, range));
   }
@@ -769,6 +787,22 @@ export class WorkbookStore {
 
   listConditionalFormats(sheetName: string): WorkbookConditionalFormatRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listConditionalFormats(sheetName));
+  }
+
+  setRangeProtection(record: WorkbookRangeProtectionSnapshot): WorkbookRangeProtectionRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setRangeProtection(record));
+  }
+
+  getRangeProtection(id: string): WorkbookRangeProtectionRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getRangeProtection(id));
+  }
+
+  deleteRangeProtection(id: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.deleteRangeProtection(id));
+  }
+
+  listRangeProtections(sheetName: string): WorkbookRangeProtectionRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listRangeProtections(sheetName));
   }
 
   setCommentThread(record: WorkbookCommentThreadSnapshot): WorkbookCommentThreadRecord {

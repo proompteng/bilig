@@ -312,6 +312,25 @@ export function createEngineStructureService(args: {
         },
       });
     });
+    args.state.workbook.listRangeProtections(sheetName).forEach((protection) => {
+      const range = rewriteRangeForStructuralTransform(
+        protection.range.startAddress,
+        protection.range.endAddress,
+        transform,
+      );
+      args.state.workbook.deleteRangeProtection(protection.id);
+      if (!range) {
+        return;
+      }
+      args.state.workbook.setRangeProtection({
+        ...protection,
+        range: {
+          ...protection.range,
+          startAddress: range.startAddress,
+          endAddress: range.endAddress,
+        },
+      });
+    });
     args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
       const nextAddress = rewriteAddressForStructuralTransform(thread.address, transform);
       args.state.workbook.deleteCommentThread(sheetName, thread.address);

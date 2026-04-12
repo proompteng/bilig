@@ -8,6 +8,8 @@ import type {
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookNoteSnapshot,
+  WorkbookRangeProtectionSnapshot,
+  WorkbookSheetProtectionSnapshot,
   WorkbookPivotSnapshot,
   WorkbookTableSnapshot,
   WorkbookVolatileContextSnapshot,
@@ -23,6 +25,8 @@ import {
   cloneNoteRecord,
   clonePivotRecord,
   clonePropertyRecord,
+  cloneRangeProtectionRecord,
+  cloneSheetProtectionRecord,
   cloneSortKeyRecord,
   cloneSortRecord,
   cloneSpillRecord,
@@ -33,6 +37,7 @@ import {
   deleteRecordsBySheet,
   filterKey,
   noteKey,
+  rangeProtectionKey,
   rekeyRecords,
   sortKey,
   spillKey,
@@ -44,6 +49,8 @@ import {
   type WorkbookConditionalFormatRecord,
   normalizeDefinedName,
   type WorkbookNoteRecord,
+  type WorkbookRangeProtectionRecord,
+  type WorkbookSheetProtectionRecord,
   pivotKey,
   type WorkbookCalculationSettingsRecord,
   type WorkbookDataValidationRecord,
@@ -159,6 +166,15 @@ export interface WorkbookMetadataService {
     sheetName: string,
   ) => Effect.Effect<WorkbookFreezePaneRecord | undefined, WorkbookMetadataError>;
   readonly clearFreezePane: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly setSheetProtection: (
+    record: WorkbookSheetProtectionSnapshot,
+  ) => Effect.Effect<WorkbookSheetProtectionRecord, WorkbookMetadataError>;
+  readonly getSheetProtection: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookSheetProtectionRecord | undefined, WorkbookMetadataError>;
+  readonly clearSheetProtection: (
+    sheetName: string,
+  ) => Effect.Effect<boolean, WorkbookMetadataError>;
   readonly setFilter: (
     sheetName: string,
     range: CellRangeRef,
@@ -214,6 +230,16 @@ export interface WorkbookMetadataService {
   readonly listConditionalFormats: (
     sheetName: string,
   ) => Effect.Effect<WorkbookConditionalFormatRecord[], WorkbookMetadataError>;
+  readonly setRangeProtection: (
+    record: WorkbookRangeProtectionSnapshot,
+  ) => Effect.Effect<WorkbookRangeProtectionRecord, WorkbookMetadataError>;
+  readonly getRangeProtection: (
+    id: string,
+  ) => Effect.Effect<WorkbookRangeProtectionRecord | undefined, WorkbookMetadataError>;
+  readonly deleteRangeProtection: (id: string) => Effect.Effect<boolean, WorkbookMetadataError>;
+  readonly listRangeProtections: (
+    sheetName: string,
+  ) => Effect.Effect<WorkbookRangeProtectionRecord[], WorkbookMetadataError>;
   readonly setCommentThread: (
     record: WorkbookCommentThreadSnapshot,
   ) => Effect.Effect<WorkbookCommentThreadRecord, WorkbookMetadataError>;
@@ -319,6 +345,11 @@ export function createWorkbookMetadataService(
       }
       return cloned;
     });
+    rekeyRecords(metadata.sheetProtections, (record) =>
+      record.sheetName === oldSheetName
+        ? { ...cloneSheetProtectionRecord(record), sheetName: newSheetName }
+        : cloneSheetProtectionRecord(record),
+    );
     rekeyRecords(metadata.conditionalFormats, (record) =>
       record.range.sheetName === oldSheetName
         ? {
@@ -329,6 +360,17 @@ export function createWorkbookMetadataService(
             },
           }
         : cloneConditionalFormatRecord(record),
+    );
+    rekeyRecords(metadata.rangeProtections, (record) =>
+      record.range.sheetName === oldSheetName
+        ? {
+            ...cloneRangeProtectionRecord(record),
+            range: {
+              ...record.range,
+              sheetName: newSheetName,
+            },
+          }
+        : cloneRangeProtectionRecord(record),
     );
     rekeyRecords(metadata.commentThreads, (record) =>
       record.sheetName === oldSheetName
@@ -374,11 +416,13 @@ export function createWorkbookMetadataService(
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.sorts, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.dataValidations, sheetName, (record) => record.range.sheetName);
+    metadata.sheetProtections.delete(sheetName);
     deleteRecordsBySheet(
       metadata.conditionalFormats,
       sheetName,
       (record) => record.range.sheetName,
     );
+    deleteRecordsBySheet(metadata.rangeProtections, sheetName, (record) => record.range.sheetName);
     deleteRecordsBySheet(metadata.commentThreads, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(metadata.notes, sheetName, (record) => record.sheetName);
     metadata.freezePanes.delete(sheetName);
@@ -394,10 +438,12 @@ export function createWorkbookMetadataService(
     metadata.rowMetadata.clear();
     metadata.columnMetadata.clear();
     metadata.freezePanes.clear();
+    metadata.sheetProtections.clear();
     metadata.filters.clear();
     metadata.sorts.clear();
     metadata.dataValidations.clear();
     metadata.conditionalFormats.clear();
+    metadata.rangeProtections.clear();
     metadata.commentThreads.clear();
     metadata.notes.clear();
     metadata.calculationSettings = defaults.calculationSettings;
@@ -680,6 +726,46 @@ export function createWorkbookMetadataService(
           }),
       });
     },
+    setSheetProtection(record) {
+      return Effect.try({
+        try: () => {
+          const stored: WorkbookSheetProtectionRecord = cloneSheetProtectionRecord({
+            sheetName: record.sheetName,
+            ...(record.hideFormulas !== undefined ? { hideFormulas: record.hideFormulas } : {}),
+          });
+          metadata.sheetProtections.set(record.sheetName, stored);
+          return cloneSheetProtectionRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set sheet protection metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getSheetProtection(sheetName) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.sheetProtections.get(sheetName);
+          return record ? cloneSheetProtectionRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get sheet protection metadata", cause),
+            cause,
+          }),
+      });
+    },
+    clearSheetProtection(sheetName) {
+      return Effect.try({
+        try: () => metadata.sheetProtections.delete(sheetName),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to clear sheet protection metadata", cause),
+            cause,
+          }),
+      });
+    },
     setFilter(sheetName, range) {
       return Effect.try({
         try: () => {
@@ -948,6 +1034,62 @@ export function createWorkbookMetadataService(
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage("Failed to list conditional format metadata", cause),
+            cause,
+          }),
+      });
+    },
+    setRangeProtection(record) {
+      return Effect.try({
+        try: () => {
+          const id = rangeProtectionKey(record.id);
+          const stored: WorkbookRangeProtectionRecord = cloneRangeProtectionRecord({
+            id,
+            range: canonicalWorkbookRangeRef(record.range),
+            ...(record.hideFormulas !== undefined ? { hideFormulas: record.hideFormulas } : {}),
+          });
+          metadata.rangeProtections.set(id, stored);
+          return cloneRangeProtectionRecord(stored);
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to set range protection metadata", cause),
+            cause,
+          }),
+      });
+    },
+    getRangeProtection(id) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.rangeProtections.get(rangeProtectionKey(id));
+          return record ? cloneRangeProtectionRecord(record) : undefined;
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to get range protection metadata", cause),
+            cause,
+          }),
+      });
+    },
+    deleteRangeProtection(id) {
+      return Effect.try({
+        try: () => metadata.rangeProtections.delete(rangeProtectionKey(id)),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to delete range protection metadata", cause),
+            cause,
+          }),
+      });
+    },
+    listRangeProtections(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.rangeProtections.values()]
+            .filter((record) => record.range.sheetName === sheetName)
+            .toSorted((left, right) => left.id.localeCompare(right.id))
+            .map(cloneRangeProtectionRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage("Failed to list range protection metadata", cause),
             cause,
           }),
       });
