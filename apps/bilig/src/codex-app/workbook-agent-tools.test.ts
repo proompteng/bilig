@@ -734,6 +734,55 @@ describe("workbook agent tools", () => {
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"numberFormats": [');
   });
 
+  it("reads discontiguous selector results as ordered range sets", async () => {
+    const engine = await createEngine();
+    engine.setCellValue("Sheet1", "A1", "Revenue");
+    engine.setCellValue("Sheet1", "B1", "Margin");
+    engine.setCellValue("Sheet1", "A2", 10);
+    engine.setCellValue("Sheet1", "B2", 2);
+    engine.setCellValue("Sheet1", "A3", 12);
+    engine.setCellValue("Sheet1", "B3", 3);
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-row-query",
+        tool: "read_range",
+        arguments: {
+          selector: {
+            kind: "rowQuery",
+            sheet: "Sheet1",
+            predicate: {
+              column: "Revenue",
+              op: "gte",
+              value: 10,
+            },
+          },
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"rangeCount": 2');
+    expect(text).toContain('"startAddress": "A2"');
+    expect(text).toContain('"endAddress": "D3"');
+  });
+
   it("lists named ranges and tables from the authoritative runtime", async () => {
     const engine = await createEngine();
     engine.setDefinedName("Inputs", {

@@ -3,6 +3,7 @@ import type { CellRangeRef } from "@bilig/protocol";
 import type { WorkbookAgentUiContext } from "@bilig/contracts";
 import { z } from "zod";
 import {
+  resolveWorkbookSelector,
   resolveWorkbookSelectorToSingleRange,
   workbookSemanticSelectorSchema,
   type ResolvedWorkbookSelector,
@@ -152,6 +153,50 @@ export const workbookSemanticSelectorJsonSchema = {
         revision: { type: "number" },
       },
     },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sheet", "predicate"],
+      properties: {
+        kind: { type: "string", const: "rowQuery" },
+        sheet: { type: "string" },
+        predicate: {
+          type: "object",
+          additionalProperties: false,
+          required: ["column", "op", "value"],
+          properties: {
+            column: { type: "string" },
+            op: {
+              type: "string",
+              enum: ["eq", "neq", "contains", "startsWith", "gt", "gte", "lt", "lte"],
+            },
+            value: {
+              oneOf: [
+                { type: "string" },
+                { type: "number" },
+                { type: "boolean" },
+                { type: "null" },
+              ],
+            },
+          },
+        },
+        revision: { type: "number" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sheet", "headers"],
+      properties: {
+        kind: { type: "string", const: "columnQuery" },
+        sheet: { type: "string" },
+        headers: {
+          type: "array",
+          items: { type: "string" },
+        },
+        revision: { type: "number" },
+      },
+    },
   ],
 };
 
@@ -205,22 +250,28 @@ export function resolveReadRangeRequest(input: {
   args: ReadRangeToolArgs;
   uiContext: WorkbookAgentUiContext | null;
 }): {
-  readonly range: CellRangeRef;
+  readonly ranges: readonly CellRangeRef[];
   readonly resolution: ResolvedWorkbookSelector | null;
 } {
   if ("selector" in input.args) {
-    return resolveSelectorRange({
+    const resolution = resolveWorkbookSelector({
       runtime: input.runtime,
       selector: input.args.selector,
       uiContext: input.uiContext,
     });
+    return {
+      ranges: resolution.derivedA1Ranges.map((range) => normalizeRange(range)),
+      resolution,
+    };
   }
   return {
-    range: normalizeRange({
-      sheetName: input.args.sheetName,
-      startAddress: input.args.startAddress,
-      endAddress: input.args.endAddress,
-    }),
+    ranges: [
+      normalizeRange({
+        sheetName: input.args.sheetName,
+        startAddress: input.args.startAddress,
+        endAddress: input.args.endAddress,
+      }),
+    ],
     resolution: null,
   };
 }

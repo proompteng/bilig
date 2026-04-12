@@ -400,6 +400,10 @@ function countRangeCells(range: CellRangeRef): number {
   return (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
 }
 
+function countTotalRangeCells(ranges: readonly CellRangeRef[]): number {
+  return ranges.reduce((sum, range) => sum + countRangeCells(range), 0);
+}
+
 function ensureRangeLimit(range: CellRangeRef, limit: number): void {
   const count = countRangeCells(range);
   if (count > limit) {
@@ -930,10 +934,25 @@ export async function handleWorkbookAgentToolCall(
               args,
               uiContext: context.uiContext,
             });
-            ensureRangeLimit(resolved.range, MAX_READ_RANGE_CELLS);
+            const totalCells = countTotalRangeCells(resolved.ranges);
+            if (totalCells > MAX_READ_RANGE_CELLS) {
+              throw new Error(
+                `Resolved selector spans ${String(totalCells)} cells; tool limit is ${String(MAX_READ_RANGE_CELLS)} cells per call`,
+              );
+            }
+            const inspectedRanges = resolved.ranges.map((range) =>
+              inspectWorkbookRange(runtime, range),
+            );
+            if (inspectedRanges.length === 1) {
+              return {
+                resolvedSelector: serializeSelectorResolution(resolved.resolution),
+                ...inspectedRanges[0],
+              };
+            }
             return {
               resolvedSelector: serializeSelectorResolution(resolved.resolution),
-              ...inspectWorkbookRange(runtime, resolved.range),
+              rangeCount: inspectedRanges.length,
+              ranges: inspectedRanges,
             };
           },
         );

@@ -430,6 +430,8 @@ function definedNameValueFromSelector(
     case "a1Range":
     case "currentRegion":
     case "currentSelection":
+    case "columnQuery":
+    case "rowQuery":
     case "table":
     case "visibleRows":
       break;

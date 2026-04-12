@@ -1,8 +1,9 @@
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type {
-  CellRangeRef,
-  WorkbookDefinedNameSnapshot,
-  WorkbookTableSnapshot,
+import {
+  ValueTag,
+  type CellRangeRef,
+  type WorkbookDefinedNameSnapshot,
+  type WorkbookTableSnapshot,
 } from "@bilig/protocol";
 import type { WorkbookAgentUiContext } from "@bilig/contracts";
 import { z } from "zod";
@@ -63,6 +64,24 @@ const visibleRowsSelectorSchema = z.object({
   ...selectorRevisionShape,
 });
 
+const rowQuerySelectorSchema = z.object({
+  kind: z.literal("rowQuery"),
+  sheet: z.string().trim().min(1),
+  predicate: z.object({
+    column: z.string().trim().min(1),
+    op: z.enum(["eq", "neq", "contains", "startsWith", "gt", "gte", "lt", "lte"]),
+    value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  }),
+  ...selectorRevisionShape,
+});
+
+const columnQuerySelectorSchema = z.object({
+  kind: z.literal("columnQuery"),
+  sheet: z.string().trim().min(1),
+  headers: z.array(z.string().trim().min(1)).min(1),
+  ...selectorRevisionShape,
+});
+
 export const workbookSemanticSelectorSchema = z.discriminatedUnion("kind", [
   a1RangeSelectorSchema,
   namedRangeSelectorSchema,
@@ -71,6 +90,8 @@ export const workbookSemanticSelectorSchema = z.discriminatedUnion("kind", [
   currentSelectionSelectorSchema,
   currentRegionSelectorSchema,
   visibleRowsSelectorSchema,
+  rowQuerySelectorSchema,
+  columnQuerySelectorSchema,
 ]);
 
 export type WorkbookSemanticSelector = z.infer<typeof workbookSemanticSelectorSchema>;
@@ -227,6 +248,132 @@ function getSheetUsedRange(
 
 function createPopulatedCellKey(row: number, col: number): string {
   return `${String(row)}:${String(col)}`;
+}
+
+function cellComparableValue(
+  runtime: WorkbookRuntime,
+  sheetName: string,
+  address: string,
+): string | number | boolean | null {
+  const cell = runtime.engine.getCell(sheetName, address);
+  if (cell.input !== undefined) {
+    return cell.input;
+  }
+  switch (cell.value.tag) {
+    case ValueTag.Number:
+    case ValueTag.Boolean:
+    case ValueTag.String:
+      return cell.value.value ?? null;
+    case ValueTag.Empty:
+    case ValueTag.Error:
+      return null;
+    default:
+      const exhaustive: never = cell.value;
+      return exhaustive;
+  }
+}
+
+function compareSelectorValue(
+  left: string | number | boolean | null,
+  op: z.infer<typeof rowQuerySelectorSchema>["predicate"]["op"],
+  right: string | number | boolean | null,
+): boolean {
+  switch (op) {
+    case "eq":
+      return left === right;
+    case "neq":
+      return left !== right;
+    case "contains":
+      return String(left ?? "")
+        .toUpperCase()
+        .includes(String(right ?? "").toUpperCase());
+    case "startsWith":
+      return String(left ?? "")
+        .toUpperCase()
+        .startsWith(String(right ?? "").toUpperCase());
+    case "gt":
+      return typeof left === "number" && typeof right === "number" && left > right;
+    case "gte":
+      return typeof left === "number" && typeof right === "number" && left >= right;
+    case "lt":
+      return typeof left === "number" && typeof right === "number" && left < right;
+    case "lte":
+      return typeof left === "number" && typeof right === "number" && left <= right;
+  }
+}
+
+function resolveHeaderColumnMap(
+  runtime: WorkbookRuntime,
+  sheetName: string,
+): {
+  readonly usedRange: { startRow: number; endRow: number; startCol: number; endCol: number };
+  readonly headerColumnMap: ReadonlyMap<string, number>;
+} {
+  const usedRange = getSheetUsedRange(runtime, sheetName);
+  if (!usedRange) {
+    throwResolutionError("selector_not_found", `Sheet ${sheetName} has no populated cells`);
+  }
+  const headerColumnMap = new Map<string, number>();
+  for (let col = usedRange.startCol; col <= usedRange.endCol; col += 1) {
+    const value = cellComparableValue(runtime, sheetName, formatAddress(usedRange.startRow, col));
+    const normalized = String(value ?? "")
+      .trim()
+      .toUpperCase();
+    if (normalized.length > 0 && !headerColumnMap.has(normalized)) {
+      headerColumnMap.set(normalized, col);
+    }
+  }
+  return {
+    usedRange,
+    headerColumnMap,
+  };
+}
+
+function resolveRowQueryRanges(
+  runtime: WorkbookRuntime,
+  selector: z.infer<typeof rowQuerySelectorSchema>,
+): readonly CellRangeRef[] {
+  const { usedRange, headerColumnMap } = resolveHeaderColumnMap(runtime, selector.sheet);
+  const predicateColumn = headerColumnMap.get(selector.predicate.column.trim().toUpperCase());
+  if (predicateColumn === undefined) {
+    throwResolutionError(
+      "selector_not_found",
+      `Column ${selector.predicate.column} does not exist on sheet ${selector.sheet}`,
+    );
+  }
+  const ranges: CellRangeRef[] = [];
+  for (let row = usedRange.startRow + 1; row <= usedRange.endRow; row += 1) {
+    const value = cellComparableValue(runtime, selector.sheet, formatAddress(row, predicateColumn));
+    if (!compareSelectorValue(value, selector.predicate.op, selector.predicate.value)) {
+      continue;
+    }
+    ranges.push(createRangeRef(selector.sheet, row, usedRange.startCol, row, usedRange.endCol));
+  }
+  if (ranges.length === 0) {
+    throwResolutionError(
+      "selector_not_found",
+      `No rows matched ${selector.predicate.column} ${selector.predicate.op} ${String(selector.predicate.value)}`,
+    );
+  }
+  return ranges;
+}
+
+function resolveColumnQueryRanges(
+  runtime: WorkbookRuntime,
+  selector: z.infer<typeof columnQuerySelectorSchema>,
+): readonly CellRangeRef[] {
+  const { usedRange, headerColumnMap } = resolveHeaderColumnMap(runtime, selector.sheet);
+  const ranges = selector.headers.map((header) => {
+    const column = headerColumnMap.get(header.trim().toUpperCase());
+    if (column === undefined) {
+      throwResolutionError(
+        "selector_not_found",
+        `Column ${header} does not exist on sheet ${selector.sheet}`,
+      );
+    }
+    return createRangeRef(selector.sheet, usedRange.startRow, column, usedRange.endRow, column);
+  });
+  return ranges;
 }
 
 function resolveCurrentRegion(
@@ -596,6 +743,26 @@ export function resolveWorkbookSelector(
           resolveUiVisibleRows(input.runtime, input.uiContext, input.selector.sheet),
         ],
         displayLabel: `Visible rows on ${input.selector.sheet ?? input.uiContext?.selection.sheetName ?? "current sheet"}`,
+        table: null,
+        namedRange: null,
+      };
+    case "rowQuery":
+      return {
+        selector: input.selector,
+        resolvedRevision: input.runtime.headRevision,
+        objectType: "range",
+        derivedA1Ranges: resolveRowQueryRanges(input.runtime, input.selector),
+        displayLabel: `Rows on ${input.selector.sheet} where ${input.selector.predicate.column} ${input.selector.predicate.op} ${String(input.selector.predicate.value)}`,
+        table: null,
+        namedRange: null,
+      };
+    case "columnQuery":
+      return {
+        selector: input.selector,
+        resolvedRevision: input.runtime.headRevision,
+        objectType: "range",
+        derivedA1Ranges: resolveColumnQueryRanges(input.runtime, input.selector),
+        displayLabel: `Columns on ${input.selector.sheet}: ${input.selector.headers.join(", ")}`,
         table: null,
         namedRange: null,
       };

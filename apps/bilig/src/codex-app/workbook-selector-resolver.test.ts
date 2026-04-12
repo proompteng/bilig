@@ -182,4 +182,56 @@ describe("workbook selector resolver", () => {
       }),
     ).toThrowError(WorkbookSelectorResolutionError);
   });
+
+  it("resolves rowQuery and columnQuery selectors against sheet headers", async () => {
+    const runtime = await createRuntime();
+
+    const rowQuery = resolveWorkbookSelector({
+      runtime,
+      selector: {
+        kind: "rowQuery",
+        sheet: "Sheet1",
+        predicate: {
+          column: "Revenue",
+          op: "gte",
+          value: 10,
+        },
+      },
+      uiContext: null,
+    });
+    expect(rowQuery.derivedA1Ranges).toEqual([
+      {
+        sheetName: "Sheet1",
+        startAddress: "A2",
+        endAddress: "D2",
+      },
+      {
+        sheetName: "Sheet1",
+        startAddress: "A3",
+        endAddress: "D3",
+      },
+    ]);
+
+    const columnQuery = resolveWorkbookSelector({
+      runtime,
+      selector: {
+        kind: "columnQuery",
+        sheet: "Sheet1",
+        headers: ["Revenue", "Margin"],
+      },
+      uiContext: null,
+    });
+    expect(columnQuery.derivedA1Ranges).toEqual([
+      {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A5",
+      },
+      {
+        sheetName: "Sheet1",
+        startAddress: "B1",
+        endAddress: "B5",
+      },
+    ]);
+  });
 });
