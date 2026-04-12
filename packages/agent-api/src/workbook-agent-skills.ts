@@ -19,7 +19,12 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Read the workbook structure and explain what each sheet appears to do.",
     prompt:
       "Summarize this workbook, explain what each sheet appears to do, and call out any obvious hotspots or risks. Prefer the built-in durable workflow when it matches.",
-    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.startWorkflow, WORKBOOK_AGENT_TOOL_NAMES.readWorkbook],
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
+      WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
+      WORKBOOK_AGENT_TOOL_NAMES.listTables,
+      WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
+    ],
   },
   {
     id: "inspect-selection",
@@ -54,7 +59,12 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Search workbook structure, formulas, inputs, and visible values for a concept.",
     prompt:
       "Search this workbook for the concept I mention, use workbook search before broader explanation, and cite the strongest matching cells or sheets.",
-    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook, WORKBOOK_AGENT_TOOL_NAMES.inspectCell],
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook,
+      WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
+      WORKBOOK_AGENT_TOOL_NAMES.listTables,
+      WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
+    ],
   },
   {
     id: "trace-dependencies",
@@ -97,10 +107,12 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "edit",
     description: "Use the current selection to stage a spreadsheet-native workbook change set.",
     prompt:
-      "Use the current selection context to stage the right spreadsheet edit as one coherent workbook change set.",
+      "Use the current selection context or semantic selectors such as named ranges and table columns to stage the right spreadsheet edit as one coherent workbook change set.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.getContext,
       WORKBOOK_AGENT_TOOL_NAMES.readSelection,
+      WORKBOOK_AGENT_TOOL_NAMES.listTables,
+      WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
       WORKBOOK_AGENT_TOOL_NAMES.writeRange,
       WORKBOOK_AGENT_TOOL_NAMES.formatRange,
     ],
@@ -111,10 +123,12 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "edit",
     description: "Reorganize sheet structure with semantic copy, move, fill, and sheet tools.",
     prompt:
-      "Restructure or clean up this sheet using semantic range and sheet tools. Prefer the built-in durable workflows for create-sheet, rename-current-sheet, row/column hide or unhide, and current-sheet header, number-format, whitespace, or formula fill-down cleanup when they match, otherwise stage one coherent workbook change set.",
+      "Restructure or clean up this sheet using semantic selectors, range tools, and sheet tools. Prefer named ranges, tables, and table-column selectors over hard-coded coordinates when they exist. Prefer the built-in durable workflows for create-sheet, rename-current-sheet, row/column hide or unhide, and current-sheet header, number-format, whitespace, or formula fill-down cleanup when they match, otherwise stage one coherent workbook change set.",
     toolNames: [
       WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
       WORKBOOK_AGENT_TOOL_NAMES.readRange,
+      WORKBOOK_AGENT_TOOL_NAMES.listTables,
+      WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
       WORKBOOK_AGENT_TOOL_NAMES.fillRange,
       WORKBOOK_AGENT_TOOL_NAMES.copyRange,
       WORKBOOK_AGENT_TOOL_NAMES.moveRange,
