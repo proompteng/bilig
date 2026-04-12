@@ -20,6 +20,14 @@ describe("workbook agent tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.getConditionalFormats).toBe("get_conditional_formats");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getComments).toBe("get_comments");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getProtectionStatus).toBe("get_protection_status");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.scanBrokenReferences).toBe("scan_broken_references");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.scanHiddenRowsAffectingResults).toBe(
+      "scan_hidden_rows_affecting_results",
+    );
+    expect(WORKBOOK_AGENT_TOOL_NAMES.scanInconsistentFormulas).toBe("scan_inconsistent_formulas");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.scanUsedRangeBloat).toBe("scan_used_range_bloat");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.scanPerformanceHotspots).toBe("scan_performance_hotspots");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.verifyInvariants).toBe("verify_invariants");
     expect(WORKBOOK_AGENT_TOOL_NAMES.setFormula).toBe("set_formula");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.getColumnMetadata).toBe("get_column_metadata");
@@ -89,6 +97,24 @@ describe("workbook agent tool names", () => {
     );
     expect(normalizeWorkbookAgentToolName("bilig.get_protection_status")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getProtectionStatus,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_scan_broken_references")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.scanBrokenReferences,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.scan_hidden_rows_affecting_results")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.scanHiddenRowsAffectingResults,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_scan_inconsistent_formulas")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.scanInconsistentFormulas,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.scan_used_range_bloat")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.scanUsedRangeBloat,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig_scan_performance_hotspots")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.scanPerformanceHotspots,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.verify_invariants")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.verifyInvariants,
     );
     expect(normalizeWorkbookAgentToolName("bilig.get_comments")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.getComments,
@@ -191,6 +217,12 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("get_conditional_formats")).toBe(true);
     expect(isWorkbookAgentToolName("get_comments")).toBe(true);
     expect(isWorkbookAgentToolName("get_protection_status")).toBe(true);
+    expect(isWorkbookAgentToolName("scan_broken_references")).toBe(true);
+    expect(isWorkbookAgentToolName("scan_hidden_rows_affecting_results")).toBe(true);
+    expect(isWorkbookAgentToolName("scan_inconsistent_formulas")).toBe(true);
+    expect(isWorkbookAgentToolName("scan_used_range_bloat")).toBe(true);
+    expect(isWorkbookAgentToolName("scan_performance_hotspots")).toBe(true);
+    expect(isWorkbookAgentToolName("verify_invariants")).toBe(true);
     expect(isWorkbookAgentToolName("get_row_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("get_column_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("create_named_range")).toBe(true);

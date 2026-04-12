@@ -40,6 +40,10 @@ import {
   workbookAgentAnnotationToolSpecs,
 } from "./workbook-agent-annotation-tools.js";
 import {
+  handleWorkbookAgentAuditToolCall,
+  workbookAgentAuditToolSpecs,
+} from "./workbook-agent-audit-tools.js";
+import {
   handleWorkbookAgentConditionalFormatToolCall,
   workbookAgentConditionalFormatToolSpecs,
 } from "./workbook-agent-conditional-format-tools.js";
@@ -668,6 +672,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         },
       },
     },
+    ...workbookAgentAuditToolSpecs,
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook,
       description:
@@ -927,6 +932,10 @@ export async function handleWorkbookAgentToolCall(
     const sheetReadToolResult = await handleWorkbookAgentSheetReadToolCall(context, request);
     if (sheetReadToolResult) {
       return sheetReadToolResult;
+    }
+    const auditToolResult = await handleWorkbookAgentAuditToolCall(context, request);
+    if (auditToolResult) {
+      return auditToolResult;
     }
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
