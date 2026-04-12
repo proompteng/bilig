@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "formulaBreadth": {
     "officeListed": {
-      "production": 487,
+      "production": 475,
       "total": 508,
-      "percent": 95.9
+      "percent": 93.5
     },
     "tracked": {
-      "production": 487,
+      "production": 475,
       "total": 525,
-      "percent": 92.8
+      "percent": 90.5
     },
     "missingOfficeFunctions": [
       "ACCRINT",
@@ -19,6 +19,7 @@
       "ARABIC",
       "AVEDEV",
       "COMPLEX",
+      "CONCATENATE",
       "DEVSQ",
       "IMABS",
       "IMAGINARY",
@@ -45,8 +46,19 @@
       "IMSUB",
       "IMSUM",
       "IMTAN",
+      "MDETERM",
+      "MINVERSE",
+      "MMULT",
       "MULTINOMIAL",
-      "ROMAN"
+      "PERCENTOF",
+      "PROPER",
+      "REGEXEXTRACT",
+      "REGEXREPLACE",
+      "REGEXTEST",
+      "ROMAN",
+      "SUMX2MY2",
+      "SUMX2PY2",
+      "SUMXMY2"
     ]
   },
   "canonical": {
