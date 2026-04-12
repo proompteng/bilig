@@ -1005,7 +1005,6 @@ describe("sync-server workbook agent", () => {
             summary: "Normalize shared workbook",
             scope: "workbook",
             riskClass: "high",
-            approvalMode: "explicit",
             baseRevision: 4,
             createdAtUnixMs: 10,
             context: null,
@@ -1365,7 +1364,6 @@ describe("sync-server workbook agent", () => {
             summary: "Format Sheet1!A1",
             scope: "selection",
             riskClass: "low",
-            approvalMode: "auto",
             baseRevision: 4,
             createdAtUnixMs: 10,
             context: {

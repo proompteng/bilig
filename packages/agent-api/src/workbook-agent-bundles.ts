@@ -161,7 +161,6 @@ export type WorkbookAgentCommand =
 
 export type WorkbookAgentRiskClass = "low" | "medium" | "high";
 export type WorkbookAgentBundleScope = "selection" | "sheet" | "workbook";
-export type WorkbookAgentApprovalMode = "auto" | "preview" | "explicit";
 export type WorkbookAgentAppliedBy = "user" | "auto";
 export type WorkbookAgentAcceptedScope = "full" | "partial";
 export type WorkbookAgentSharedReviewStatus = "pending" | "approved" | "rejected";
@@ -211,7 +210,6 @@ export interface WorkbookAgentCommandBundle {
   summary: string;
   scope: WorkbookAgentBundleScope;
   riskClass: WorkbookAgentRiskClass;
-  approvalMode: WorkbookAgentApprovalMode;
   baseRevision: number;
   createdAtUnixMs: number;
   context: WorkbookAgentContextRef | null;
@@ -247,7 +245,6 @@ export interface WorkbookAgentExecutionRecord {
   summary: string;
   scope: WorkbookAgentBundleScope;
   riskClass: WorkbookAgentRiskClass;
-  approvalMode: WorkbookAgentApprovalMode;
   acceptedScope: WorkbookAgentAcceptedScope;
   appliedBy: WorkbookAgentAppliedBy;
   baseRevision: number;
@@ -291,10 +288,6 @@ function isWriteCellInput(value: unknown): value is WorkbookAgentWriteCellInput 
 
 function isCommandArray(value: unknown): value is WorkbookAgentCommand[] {
   return Array.isArray(value) && value.every((entry) => isWorkbookAgentCommand(entry));
-}
-
-function isApprovalMode(value: unknown): value is WorkbookAgentApprovalMode {
-  return value === "auto" || value === "preview" || value === "explicit";
 }
 
 function isAppliedBy(value: unknown): value is WorkbookAgentAppliedBy {
@@ -701,19 +694,6 @@ function deriveWorkbookAgentBundleScope(
   return "sheet";
 }
 
-function deriveWorkbookAgentApprovalMode(
-  riskClass: WorkbookAgentRiskClass,
-  scope: WorkbookAgentBundleScope,
-): WorkbookAgentApprovalMode {
-  if (riskClass === "low" && scope === "selection") {
-    return "auto";
-  }
-  if (riskClass === "high") {
-    return "explicit";
-  }
-  return "preview";
-}
-
 function estimateWorkbookAgentAffectedCells(
   commands: readonly WorkbookAgentCommand[],
 ): number | null {
@@ -753,7 +733,6 @@ export function createWorkbookAgentCommandBundle(input: {
     summary: summarizeCommands(commands),
     scope,
     riskClass,
-    approvalMode: deriveWorkbookAgentApprovalMode(riskClass, scope),
     baseRevision: input.baseRevision,
     createdAtUnixMs: input.now,
     context: input.context ? structuredClone(input.context) : null,
@@ -941,7 +920,6 @@ export function buildWorkbookAgentExecutionRecord(input: {
     summary: input.bundle.summary,
     scope: input.bundle.scope,
     riskClass: input.bundle.riskClass,
-    approvalMode: input.bundle.approvalMode,
     acceptedScope: input.acceptedScope,
     appliedBy: input.appliedBy,
     baseRevision: input.bundle.baseRevision,
@@ -1008,7 +986,6 @@ export function isWorkbookAgentCommandBundle(value: unknown): value is WorkbookA
     (value["riskClass"] === "low" ||
       value["riskClass"] === "medium" ||
       value["riskClass"] === "high") &&
-    isApprovalMode(value["approvalMode"]) &&
     typeof value["baseRevision"] === "number" &&
     typeof value["createdAtUnixMs"] === "number" &&
     (value["context"] === null || isWorkbookAgentContextRef(value["context"])) &&
@@ -1043,7 +1020,6 @@ export function isWorkbookAgentExecutionRecord(
     (value["riskClass"] === "low" ||
       value["riskClass"] === "medium" ||
       value["riskClass"] === "high") &&
-    isApprovalMode(value["approvalMode"]) &&
     isAcceptedScope(value["acceptedScope"]) &&
     isAppliedBy(value["appliedBy"]) &&
     typeof value["baseRevision"] === "number" &&

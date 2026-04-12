@@ -1170,7 +1170,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       isMutatingWorkflowTemplate(workflowTemplate)
     ) {
       throw createWorkbookAgentServiceError({
-        code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
+        code: "WORKBOOK_AGENT_REVIEW_ITEM_EXISTS",
         message:
           "Finish the current workbook review item before starting another mutating workflow.",
         statusCode: 409,

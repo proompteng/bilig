@@ -51,7 +51,6 @@ function createExecutionRecord() {
     summary: "Write cells in Sheet1!C3",
     scope: "sheet" as const,
     riskClass: "medium" as const,
-    approvalMode: "preview" as const,
     acceptedScope: "partial" as const,
     appliedBy: "user" as const,
     baseRevision: 3,
@@ -91,7 +90,7 @@ describe("workbook-agent-run-store", () => {
     const insertQuery = queryable.calls.find((call) =>
       call.text.includes("INSERT INTO workbook_agent_run"),
     );
-    expect(insertQuery?.values?.[12]).toBe("partial");
+    expect(insertQuery?.values?.[11]).toBe("partial");
   });
 
   it("loads partial execution records from stored rows", async () => {
@@ -112,7 +111,6 @@ describe("workbook-agent-run-store", () => {
                 summary: record.summary,
                 scope: record.scope,
                 riskClass: record.riskClass,
-                approvalMode: record.approvalMode,
                 acceptedScope: record.acceptedScope,
                 appliedBy: record.appliedBy,
                 baseRevision: record.baseRevision,
@@ -171,7 +169,6 @@ describe("workbook-agent-run-store", () => {
                 summary: record.summary,
                 scope: record.scope,
                 riskClass: record.riskClass,
-                approvalMode: record.approvalMode,
                 acceptedScope: record.acceptedScope,
                 appliedBy: record.appliedBy,
                 baseRevision: record.baseRevision,

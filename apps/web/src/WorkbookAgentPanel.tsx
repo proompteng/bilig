@@ -344,10 +344,14 @@ function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
   return null;
 }
 
-function isAppliedPreviewSystemEntry(entry: WorkbookAgentTimelineEntry): boolean {
+function isAppliedExecutionSystemEntry(entry: WorkbookAgentTimelineEntry): boolean {
   return (
     entry.kind === "system" &&
-    (entry.text?.startsWith("Applied preview bundle at revision r") ?? false)
+    (entry.text?.startsWith("Applied workbook change set at revision r") === true ||
+      entry.text?.startsWith("Applied automatically workbook change set at revision r") === true ||
+      entry.text?.startsWith("Applied automatically selected workbook change set at revision r") ===
+        true ||
+      entry.text?.startsWith("Applied selected workbook change set at revision r") === true)
   );
 }
 
@@ -705,7 +709,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     );
   }
 
-  if (isAppliedPreviewSystemEntry(entry)) {
+  if (isAppliedExecutionSystemEntry(entry)) {
     return null;
   }
 
@@ -1117,7 +1121,7 @@ export function WorkbookAgentPanel(props: {
     props.showAssistantProgress && props.activeResponseTurnId
       ? visibleEntries.findLastIndex(
           (entry) =>
-            entry.turnId === props.activeResponseTurnId && !isAppliedPreviewSystemEntry(entry),
+            entry.turnId === props.activeResponseTurnId && !isAppliedExecutionSystemEntry(entry),
         )
       : -1;
 

@@ -16,7 +16,6 @@ function createBundle(
     summary: "Write cells in prepaid expenses!A1:I10",
     scope: "sheet",
     riskClass: "medium",
-    approvalMode: "preview",
     baseRevision: 0,
     createdAtUnixMs: 1,
     context: null,

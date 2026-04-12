@@ -92,12 +92,6 @@ export function toWorkbookAgentCommandBundle(
     summary: reviewItem.summary,
     scope: reviewItem.scope,
     riskClass: reviewItem.riskClass,
-    approvalMode:
-      reviewItem.reviewMode === "ownerReview"
-        ? reviewItem.status === "approved"
-          ? "explicit"
-          : "explicit"
-        : "preview",
     baseRevision: reviewItem.baseRevision,
     createdAtUnixMs: reviewItem.createdAtUnixMs,
     context: reviewItem.context,

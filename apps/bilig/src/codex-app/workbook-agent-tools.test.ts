@@ -141,7 +141,6 @@ function createBundle(
     summary: "Stage workbook changes",
     scope: "selection",
     riskClass: "low",
-    approvalMode: "auto",
     baseRevision: 1,
     createdAtUnixMs: 1,
     context: null,

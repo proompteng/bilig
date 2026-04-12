@@ -116,7 +116,7 @@ export async function buildWorkbookAgentPreview(input: {
   bundle: WorkbookAgentCommandBundle;
 }): Promise<WorkbookAgentPreviewSummary> {
   if (!isWorkbookAgentCommandBundle(input.bundle)) {
-    throw new Error("Invalid workbook agent preview bundle");
+    throw new Error("Invalid workbook agent command bundle");
   }
   const previewEngine = new SpreadsheetEngine({
     workbookName: input.snapshot.workbook.name,

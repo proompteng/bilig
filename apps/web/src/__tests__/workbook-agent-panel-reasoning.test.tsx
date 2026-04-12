@@ -172,7 +172,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     const panel = renderPanel({
       id: "system-apply-1",
       kind: "system",
-      text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
+      text: "Prepared workbook review item: Write cells in Sheet1!B2",
       citations: [
         {
           kind: "range",
@@ -191,7 +191,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     await panel.render();
 
     expect(panel.host.textContent).toContain(
-      "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
+      "Prepared workbook review item: Write cells in Sheet1!B2",
     );
     expect(panel.host.textContent).toContain("Target Sheet1!B2");
     expect(panel.host.textContent).not.toContain("Target Sheet1!B2 · r7");
@@ -219,7 +219,6 @@ describe("WorkbookAgentPanel reasoning", () => {
           summary: "Write cells in Sheet1!B2",
           scope: "selection",
           riskClass: "low",
-          approvalMode: "auto",
           acceptedScope: "full",
           appliedBy: "auto",
           baseRevision: 6,

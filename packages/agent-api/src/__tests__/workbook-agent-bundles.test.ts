@@ -37,7 +37,7 @@ const rangeSelectionContext: WorkbookAgentContextRef = {
 };
 
 describe("workbook agent bundle semantics", () => {
-  it("marks selection-only formatting bundles as auto-apply", () => {
+  it("marks selection-only formatting bundles as low-risk selection work", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,
       documentId: "doc-1",
@@ -64,7 +64,6 @@ describe("workbook agent bundle semantics", () => {
 
     expect(bundle.riskClass).toBe("low");
     expect(bundle.scope).toBe("selection");
-    expect(bundle.approvalMode).toBe("auto");
   });
 
   it("treats a multi-cell selected range as selection-scoped when the command matches it", () => {
@@ -91,10 +90,9 @@ describe("workbook agent bundle semantics", () => {
     });
 
     expect(bundle.scope).toBe("selection");
-    expect(bundle.approvalMode).toBe("auto");
   });
 
-  it("marks workbook-structure bundles as explicit approval", () => {
+  it("marks workbook-structure bundles as workbook-scoped structural work", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,
       documentId: "doc-1",
@@ -112,7 +110,6 @@ describe("workbook agent bundle semantics", () => {
 
     expect(bundle.riskClass).toBe("high");
     expect(bundle.scope).toBe("workbook");
-    expect(bundle.approvalMode).toBe("explicit");
   });
 
   it("marks sheet deletion as workbook-scoped structural work", () => {
@@ -136,14 +133,13 @@ describe("workbook agent bundle semantics", () => {
         summary: "Delete sheet Imports",
         riskClass: "high",
         scope: "workbook",
-        approvalMode: "explicit",
         estimatedAffectedCells: null,
         affectedRanges: [],
       }),
     );
   });
 
-  it("marks non-structural content edits as preview-required", () => {
+  it("marks non-structural content edits as sheet-scoped work", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,
       documentId: "doc-1",
@@ -174,10 +170,9 @@ describe("workbook agent bundle semantics", () => {
 
     expect(bundle.riskClass).toBe("medium");
     expect(bundle.scope).toBe("sheet");
-    expect(bundle.approvalMode).toBe("preview");
   });
 
-  it("marks row metadata edits as sheet-scoped preview bundles", () => {
+  it("marks row metadata edits as sheet-scoped changes", () => {
     const bundle = appendWorkbookAgentCommandToBundle({
       previousBundle: null,
       documentId: "doc-1",
@@ -201,7 +196,6 @@ describe("workbook agent bundle semantics", () => {
         summary: "Hide rows 2-3 in Sheet1",
         riskClass: "medium",
         scope: "sheet",
-        approvalMode: "preview",
         estimatedAffectedCells: null,
         affectedRanges: [
           {
@@ -238,7 +232,6 @@ describe("workbook agent bundle semantics", () => {
         summary: "Insert rows 2-3 in Sheet1",
         riskClass: "high",
         scope: "workbook",
-        approvalMode: "explicit",
         estimatedAffectedCells: null,
         affectedRanges: [
           {
@@ -278,7 +271,6 @@ describe("workbook agent bundle semantics", () => {
         summary: "Sort Sheet1!A1:B3 by B1 desc",
         riskClass: "medium",
         scope: "sheet",
-        approvalMode: "preview",
         estimatedAffectedCells: 6,
         affectedRanges: [
           {

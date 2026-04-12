@@ -19,7 +19,6 @@ interface WorkbookAgentRunRow extends QueryResultRow {
   readonly summary?: unknown;
   readonly scope?: unknown;
   readonly riskClass?: unknown;
-  readonly approvalMode?: unknown;
   readonly acceptedScope?: unknown;
   readonly appliedBy?: unknown;
   readonly baseRevision?: unknown;
@@ -67,9 +66,6 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
     typeof row.summary !== "string" ||
     (row.scope !== "selection" && row.scope !== "sheet" && row.scope !== "workbook") ||
     (row.riskClass !== "low" && row.riskClass !== "medium" && row.riskClass !== "high") ||
-    (row.approvalMode !== "auto" &&
-      row.approvalMode !== "preview" &&
-      row.approvalMode !== "explicit") ||
     (row.acceptedScope !== "full" && row.acceptedScope !== "partial") ||
     (row.appliedBy !== "user" && row.appliedBy !== "auto") ||
     baseRevision === null ||
@@ -102,7 +98,6 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
     summary: row.summary,
     scope: row.scope,
     riskClass: row.riskClass,
-    approvalMode: row.approvalMode,
     acceptedScope: row.acceptedScope,
     appliedBy: row.appliedBy,
     baseRevision,
@@ -129,7 +124,6 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
       summary TEXT NOT NULL,
       scope TEXT NOT NULL,
       risk_class TEXT NOT NULL,
-      approval_mode TEXT NOT NULL DEFAULT 'preview',
       accepted_scope TEXT NOT NULL DEFAULT 'full',
       applied_by TEXT NOT NULL DEFAULT 'user',
       base_revision BIGINT NOT NULL,
@@ -144,11 +138,11 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
   await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`);
   await db.query(`
     ALTER TABLE workbook_agent_run
-      ADD COLUMN IF NOT EXISTS approval_mode TEXT NOT NULL DEFAULT 'preview';
+      ADD COLUMN IF NOT EXISTS accepted_scope TEXT NOT NULL DEFAULT 'full';
   `);
   await db.query(`
     ALTER TABLE workbook_agent_run
-      ADD COLUMN IF NOT EXISTS accepted_scope TEXT NOT NULL DEFAULT 'full';
+      DROP COLUMN IF EXISTS approval_mode;
   `);
   await db.query(`
     ALTER TABLE workbook_agent_run
@@ -178,7 +172,6 @@ export async function appendWorkbookAgentRun(
         summary,
         scope,
         risk_class,
-        approval_mode,
         accepted_scope,
         applied_by,
         base_revision,
@@ -190,7 +183,7 @@ export async function appendWorkbookAgentRun(
         preview_json
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb, $20::jsonb, $21::jsonb
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19::jsonb, $20::jsonb
       )
       ON CONFLICT (id)
       DO UPDATE SET
@@ -204,7 +197,6 @@ export async function appendWorkbookAgentRun(
         summary = EXCLUDED.summary,
         scope = EXCLUDED.scope,
         risk_class = EXCLUDED.risk_class,
-        approval_mode = EXCLUDED.approval_mode,
         accepted_scope = EXCLUDED.accepted_scope,
         applied_by = EXCLUDED.applied_by,
         base_revision = EXCLUDED.base_revision,
@@ -227,7 +219,6 @@ export async function appendWorkbookAgentRun(
       record.summary,
       record.scope,
       record.riskClass,
-      record.approvalMode,
       record.acceptedScope,
       record.appliedBy,
       record.baseRevision,
@@ -263,7 +254,6 @@ export async function listWorkbookAgentRuns(
         summary AS "summary",
         scope AS "scope",
         risk_class AS "riskClass",
-        approval_mode AS "approvalMode",
         accepted_scope AS "acceptedScope",
         applied_by AS "appliedBy",
         base_revision AS "baseRevision",
@@ -309,7 +299,6 @@ export async function listWorkbookAgentThreadRuns(
         run.summary AS "summary",
         run.scope AS "scope",
         run.risk_class AS "riskClass",
-        run.approval_mode AS "approvalMode",
         run.accepted_scope AS "acceptedScope",
         run.applied_by AS "appliedBy",
         run.base_revision AS "baseRevision",

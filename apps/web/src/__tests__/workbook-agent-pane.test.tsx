@@ -449,7 +449,7 @@ describe("workbook agent pane", () => {
                     id: "system-apply:run-1",
                     kind: "system",
                     turnId: "turn-1",
-                    text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
+                    text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -491,7 +491,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.textContent).not.toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).not.toContain("Applied workbook change set at revision r7");
     expect(host.textContent).not.toContain("Sheet1!B2");
     expect(host.textContent).not.toContain("r7");
 
@@ -595,13 +595,13 @@ describe("workbook agent pane", () => {
               scope: "shared",
               entryCount: 4,
               reviewQueueItemCount: 1,
-              latestEntryText: "Applied preview bundle at revision r7",
+              latestEntryText: "Applied workbook change set at revision r7",
             }),
             createThreadSummary({
               threadId: "thr-private",
               scope: "private",
               entryCount: 2,
-              latestEntryText: "Preview bundle staged",
+              latestEntryText: "Review item queued",
             }),
           ]),
           {
@@ -627,7 +627,7 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Shared");
     expect(host.textContent).toContain("Review");
     expect(host.textContent).toContain("4 items");
-    expect(host.textContent).toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).toContain("Applied workbook change set at revision r7");
 
     await act(async () => {
       root.unmount();
@@ -2091,7 +2091,6 @@ describe("workbook agent pane", () => {
                 summary: "Format Sheet1!A1",
                 scope: "selection",
                 riskClass: "low",
-                approvalMode: "auto",
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
@@ -2154,7 +2153,6 @@ describe("workbook agent pane", () => {
                   summary: "Format Sheet1!A1",
                   scope: "selection",
                   riskClass: "low",
-                  approvalMode: "auto",
                   acceptedScope: "full",
                   appliedBy: "auto",
                   baseRevision: 3,
@@ -2267,7 +2265,6 @@ describe("workbook agent pane", () => {
                 summary: "Format Sheet1!A1",
                 scope: "selection",
                 riskClass: "low",
-                approvalMode: "auto",
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
@@ -2388,7 +2385,6 @@ describe("workbook agent pane", () => {
                 summary: "Normalize Sheet1!A1:A20",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "explicit",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
@@ -2516,7 +2512,6 @@ describe("workbook agent pane", () => {
                 summary: "Normalize Sheet1!A1:A20",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "explicit",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
@@ -2583,7 +2578,6 @@ describe("workbook agent pane", () => {
                 summary: "Normalize Sheet1!A1:A20",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "explicit",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
@@ -2717,7 +2711,6 @@ describe("workbook agent pane", () => {
                 summary: "Normalize Sheet1!A1:A20",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "explicit",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
@@ -2766,7 +2759,6 @@ describe("workbook agent pane", () => {
                 summary: "Normalize Sheet1!A1:A20",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "explicit",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
@@ -2922,7 +2914,6 @@ describe("workbook agent pane", () => {
                 summary: "Write cells in Sheet1!B2 and 1 more change",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "preview",
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
@@ -2985,7 +2976,6 @@ describe("workbook agent pane", () => {
                 summary: "Write cells in Sheet1!B2",
                 scope: "sheet",
                 riskClass: "medium",
-                approvalMode: "preview",
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
@@ -3031,7 +3021,6 @@ describe("workbook agent pane", () => {
                   summary: "Write cells in Sheet1!C3",
                   scope: "sheet",
                   riskClass: "medium",
-                  approvalMode: "preview",
                   acceptedScope: "partial",
                   appliedBy: "user",
                   baseRevision: 3,

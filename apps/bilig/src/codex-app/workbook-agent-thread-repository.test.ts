@@ -185,7 +185,6 @@ describe("WorkbookAgentThreadRepository", () => {
       summary: "Write cells in Sheet1!B2",
       scope: "sheet",
       riskClass: "medium",
-      approvalMode: "preview",
       acceptedScope: "full",
       appliedBy: "user",
       baseRevision: 3,
