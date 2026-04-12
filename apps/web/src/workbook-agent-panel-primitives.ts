@@ -64,7 +64,7 @@ export const agentPanelScrollAreaThumbClass = cva(
   "relative flex-1 rounded-full bg-[var(--wb-border-strong)]",
 );
 
-export const agentPanelTimelineListClass = cva("flex min-w-0 flex-col");
+export const agentPanelTimelineListClass = cva("flex min-w-0 flex-col gap-2");
 
 export const agentPanelDisclosureFrameClass = cva("space-y-2 overflow-hidden transition-colors", {
   variants: {
