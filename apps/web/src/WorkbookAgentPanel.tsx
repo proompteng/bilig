@@ -1,12 +1,12 @@
-import { Fragment, type CSSProperties, useEffect, useRef, useState } from "react";
+import { Fragment, type CSSProperties, useEffect, useRef } from "react";
 import { Button } from "@base-ui/react/button";
-import { Collapsible } from "@base-ui/react/collapsible";
+import { ScrollArea } from "@base-ui/react/scroll-area";
+import { ArrowUp, Square } from "lucide-react";
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   describeWorkbookAgentCommand,
   normalizeWorkbookAgentToolName,
 } from "@bilig/agent-api";
-import { ChevronRight } from "lucide-react";
 import { cva } from "class-variance-authority";
 import type {
   WorkbookAgentCommandBundle,
@@ -18,10 +18,8 @@ import type {
 import type {
   WorkbookAgentSessionSnapshot,
   WorkbookAgentTimelineCitation,
-  WorkbookAgentThreadScope,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
-  WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import { cn } from "./cn.js";
@@ -32,25 +30,37 @@ import {
   workbookPillClass,
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
+import { WorkbookAgentDisclosureRow } from "./workbook-agent-panel-disclosure-row.js";
 import {
+  agentPanelBodyMutedTextClass,
+  agentPanelBodyTextClass,
+  agentPanelComposerActionsClass,
   agentPanelComposerFrameClass,
   agentPanelComposerSendButtonClass,
   agentPanelComposerTextareaClass,
+  agentPanelEyebrowTextClass,
   agentPanelFooterClass,
-  agentPanelSegmentedButtonClass,
-  agentPanelSegmentedGroupClass,
+  agentPanelLabelTextClass,
+  agentPanelMetaTextClass,
+  agentPanelScrollAreaContentClass,
+  agentPanelScrollAreaRootClass,
+  agentPanelScrollAreaScrollbarClass,
+  agentPanelScrollAreaThumbClass,
+  agentPanelScrollAreaViewportClass,
+  agentPanelTimelineListClass,
   agentPanelThreadButtonClass,
   agentPanelThreadListClass,
-  agentPanelToolbarRowClass,
 } from "./workbook-agent-panel-primitives.js";
 import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
-import { WorkbookAgentProgressRow } from "./workbook-agent-progress-row.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
-import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
-import { PreviewRangeList, WorkflowRunRow } from "./workbook-agent-panel-history.js";
+import {
+  AssistantProgressRow,
+  PreviewRangeList,
+  WorkflowRunRow,
+} from "./workbook-agent-panel-history.js";
 
 const toolStatusPillClass = cva(
-  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
+  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] leading-none font-semibold uppercase tracking-[0.04em]",
   {
     variants: {
       status: {
@@ -125,20 +135,20 @@ function ThreadSummaryStrip(props: {
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-[var(--wb-text)]">
+                <span className={cn(agentPanelLabelTextClass(), "font-semibold")}>
                   {threadSummary.scope === "shared" ? "Shared" : "Private"}
                 </span>
-                <span className="text-[11px] text-[var(--wb-text-subtle)]">
+                <span className={agentPanelMetaTextClass()}>
                   {threadSummary.scope === "shared"
                     ? formatWorkbookCollaboratorLabel(threadSummary.ownerUserId)
                     : "Just you"}
                 </span>
-                <span className="text-[11px] text-[var(--wb-text-muted)]">
+                <span className={agentPanelMetaTextClass()}>
                   {formatThreadEntryCount(threadSummary.entryCount)}
                 </span>
               </div>
               {latestActivity ? (
-                <div className="mt-0.5 truncate text-[11px] text-[var(--wb-text-muted)]">
+                <div className={cn(agentPanelMetaTextClass(), "mt-0.5 truncate")}>
                   {latestActivity}
                 </div>
               ) : null}
@@ -155,45 +165,15 @@ function ThreadSummaryStrip(props: {
   );
 }
 
-function ThreadScopeControls(props: {
-  readonly threadScope: WorkbookAgentThreadScope;
-  readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
-}) {
-  return (
-    <div className={agentPanelSegmentedGroupClass()}>
-      {(["private", "shared"] as const).map((scope) => {
-        const isActive = props.threadScope === scope;
-        return (
-          <Button
-            key={scope}
-            aria-pressed={isActive}
-            className={agentPanelSegmentedButtonClass({ active: isActive })}
-            data-testid={`workbook-agent-scope-${scope}`}
-            type="button"
-            onClick={() => {
-              props.onSelectThreadScope(scope);
-            }}
-          >
-            {scope === "shared" ? "Shared" : "Private"}
-          </Button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["toolStatus"] }) {
-  const label =
-    props.status === "completed" ? "Done" : props.status === "failed" ? "Failed" : "Running";
+  if (props.status === "completed") {
+    return null;
+  }
+  const label = props.status === "failed" ? "Failed" : "Running";
   return (
     <span
       className={toolStatusPillClass({
-        status:
-          props.status === "completed"
-            ? "completed"
-            : props.status === "failed"
-              ? "failed"
-              : "running",
+        status: props.status === "failed" ? "failed" : "running",
       })}
     >
       {label}
@@ -303,54 +283,102 @@ function summarizeReasoningText(text: string | null): string | null {
   return normalized.length <= 88 ? normalized : `${normalized.slice(0, 85)}...`;
 }
 
+function summarizePlainText(text: string | null, maxLength = 88): string | null {
+  if (!text) {
+    return null;
+  }
+  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  if (normalized.length === 0) {
+    return null;
+  }
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
+  const parsed = safeParseToolOutput(entry.outputText);
+  if (isRecord(parsed)) {
+    if (typeof parsed["summary"] === "string") {
+      return summarizePlainText(parsed["summary"], 96);
+    }
+    const workflowRun = isRecord(parsed["workflowRun"]) ? parsed["workflowRun"] : null;
+    if (typeof workflowRun?.["summary"] === "string") {
+      return summarizePlainText(workflowRun["summary"], 96);
+    }
+    const selection = isRecord(parsed["selection"]) ? parsed["selection"] : null;
+    if (typeof selection?.["sheetName"] === "string" && typeof selection["address"] === "string") {
+      const selectionRange = isRecord(selection["range"]) ? selection["range"] : null;
+      const startAddress =
+        typeof selectionRange?.["startAddress"] === "string"
+          ? selectionRange["startAddress"]
+          : selection["address"];
+      const endAddress =
+        typeof selectionRange?.["endAddress"] === "string"
+          ? selectionRange["endAddress"]
+          : selection["address"];
+      return `${selection["sheetName"]}!${startAddress}${startAddress === endAddress ? "" : `:${endAddress}`}`;
+    }
+    const range = isRecord(parsed["range"]) ? parsed["range"] : null;
+    if (
+      typeof range?.["sheetName"] === "string" &&
+      typeof range["startAddress"] === "string" &&
+      typeof range["endAddress"] === "string"
+    ) {
+      const startAddress = range["startAddress"];
+      const endAddress = range["endAddress"];
+      return `${range["sheetName"]}!${startAddress}${startAddress === endAddress ? "" : `:${endAddress}`}`;
+    }
+    if (typeof parsed["sheetCount"] === "number") {
+      return `${String(parsed["sheetCount"])} ${parsed["sheetCount"] === 1 ? "sheet" : "sheets"}`;
+    }
+    if (typeof parsed["changeCount"] === "number") {
+      return `${String(parsed["changeCount"])} ${parsed["changeCount"] === 1 ? "change" : "changes"}`;
+    }
+  }
+  const outputText = entry.outputText?.trim() ?? "";
+  if (outputText.length > 0 && !outputText.startsWith("{") && !outputText.startsWith("[")) {
+    return summarizePlainText(outputText, 96);
+  }
+  const argumentsText = entry.argumentsText?.trim() ?? "";
+  if (argumentsText.length > 0 && !argumentsText.startsWith("{") && !argumentsText.startsWith("[")) {
+    return summarizePlainText(argumentsText, 96);
+  }
+  return null;
+}
+
+function isAppliedPreviewSystemEntry(entry: WorkbookAgentTimelineEntry): boolean {
+  return (
+    entry.kind === "system" &&
+    (entry.text?.startsWith("Applied preview bundle at revision r") ?? false)
+  );
+}
+
 function ReasoningEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
   const bodyText = props.entry.kind === "plan" ? props.entry.text : null;
   if (!bodyText?.trim().length) {
     return null;
   }
-  const [open, setOpen] = useState(false);
   const summary = summarizeReasoningText(bodyText);
 
   return (
-    <Collapsible.Root
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
+    <WorkbookAgentDisclosureRow
+      id={props.entry.id}
+      label="Thought"
+      labelClassName="font-semibold"
+      panelTestId={`workbook-agent-reasoning-panel-${props.entry.id}`}
+      summary={summary ?? "No reasoning details available."}
+      triggerLabel={{
+        expanded: "Collapse reasoning",
+        collapsed: "Expand reasoning",
       }}
+      triggerTestId={`workbook-agent-reasoning-toggle-${props.entry.id}`}
     >
-      <div className="px-1 py-1">
-        <Collapsible.Trigger
-          aria-label={open ? "Collapse reasoning" : "Expand reasoning"}
-          className="flex w-full items-center gap-2 rounded-[var(--wb-radius-control)] px-1 py-1 text-left outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
-          data-testid={`workbook-agent-reasoning-toggle-${props.entry.id}`}
-          type="button"
-        >
-          <ChevronRight
-            className={cn(
-              "h-4 w-4 shrink-0 text-[var(--wb-text-subtle)] transition-transform",
-              open && "rotate-90",
-            )}
-          />
-          <span className="shrink-0 text-[11px] font-semibold text-[var(--wb-text-muted)]">
-            Thought
-          </span>
-          <span className="min-w-0 truncate text-[11px] text-[var(--wb-text-subtle)]">
-            {summary ?? "No reasoning details available."}
-          </span>
-        </Collapsible.Trigger>
-        <Collapsible.Panel
-          className="overflow-hidden pt-1"
-          data-testid={`workbook-agent-reasoning-panel-${props.entry.id}`}
-        >
-          <div className="pl-7 pr-2 pb-2">
-            <div className="text-[12px] leading-5 text-[var(--wb-text-muted)]">
-              <WorkbookAgentMarkdown markdown={bodyText} />
-            </div>
-            <TimelineCitationList citations={props.entry.citations} />
-          </div>
-        </Collapsible.Panel>
+      <div className={agentPanelBodyMutedTextClass()}>
+        <WorkbookAgentMarkdown markdown={bodyText} />
       </div>
-    </Collapsible.Root>
+      <TimelineCitationList citations={props.entry.citations} />
+    </WorkbookAgentDisclosureRow>
   );
 }
 
@@ -372,12 +400,12 @@ function StructuredToolOutput(props: {
     const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
+        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
           <div>
             {readNumber(summary?.["issueCount"], issues.length)} issues ·{" "}
             {readNumber(summary?.["scannedFormulaCells"])} formulas
           </div>
-          <div className="text-right text-[10px] text-[var(--wb-text-subtle)]">
+          <div className={cn(agentPanelEyebrowTextClass(), "text-right")}>
             {readNumber(summary?.["errorCount"])} errors · {readNumber(summary?.["cycleCount"])}{" "}
             cycles · {readNumber(summary?.["unsupportedCount"])} JS-only
           </div>
@@ -390,14 +418,14 @@ function StructuredToolOutput(props: {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] font-semibold text-[var(--wb-text)]">
+                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
                     {readString(issue["sheetName"])}!{readString(issue["address"])}
                   </div>
-                  <div className="mt-1 break-all text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                  <div className={cn(agentPanelMetaTextClass(), "mt-1 break-all")}>
                     {readString(issue["formula"])}
                   </div>
                 </div>
-                <div className="text-right text-[10px] text-[var(--wb-text-subtle)]">
+                <div className={cn(agentPanelEyebrowTextClass(), "text-right")}>
                   {readString(issue["valueText"]) || "(empty)"}
                 </div>
               </div>
@@ -427,9 +455,9 @@ function StructuredToolOutput(props: {
     const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
+        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
           <div className="truncate">“{readString(parsed["query"])}”</div>
-          <div className="text-[10px] text-[var(--wb-text-subtle)]">
+          <div className={agentPanelEyebrowTextClass()}>
             {readNumber(
               isRecord(parsed["summary"]) ? parsed["summary"]["matchCount"] : undefined,
               matches.length,
@@ -445,16 +473,16 @@ function StructuredToolOutput(props: {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] font-semibold text-[var(--wb-text)]">
+                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
                     {readString(match["kind"]) === "sheet"
                       ? `Sheet ${readString(match["sheetName"])}`
                       : `${readString(match["sheetName"])}!${readString(match["address"])}`}
                   </div>
-                  <div className="mt-1 break-all text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                  <div className={cn(agentPanelMetaTextClass(), "mt-1 break-all")}>
                     {readString(match["snippet"])}
                   </div>
                 </div>
-                <div className="text-[10px] text-[var(--wb-text-subtle)]">
+                <div className={agentPanelEyebrowTextClass()}>
                   score {readNumber(match["score"])}
                 </div>
               </div>
@@ -485,11 +513,11 @@ function StructuredToolOutput(props: {
     const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
+        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
           <div>
             {readString(root?.["sheetName"])}!{readString(root?.["address"])}
           </div>
-          <div className="text-[10px] text-[var(--wb-text-subtle)]">
+          <div className={agentPanelEyebrowTextClass()}>
             {readString(parsed["direction"], "both")} · {readNumber(parsed["depth"])} hops
           </div>
         </div>
@@ -499,12 +527,12 @@ function StructuredToolOutput(props: {
               key={`trace-layer-${readNumber(layer["depth"])}`}
               className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
             >
-              <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+              <div className={agentPanelEyebrowTextClass()}>
                 Hop {readNumber(layer["depth"])}
               </div>
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <div>
-                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">Precedents</div>
+                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>Precedents</div>
                   <div className="mt-1 flex flex-col gap-1">
                     {Array.isArray(layer["precedents"]) && layer["precedents"].length > 0 ? (
                       layer["precedents"]
@@ -512,7 +540,7 @@ function StructuredToolOutput(props: {
                         .map((node) => (
                           <div
                             key={`precedent:${readString(node["sheetName"])}:${readString(node["address"])}`}
-                            className="text-[11px] leading-5 text-[var(--wb-text-subtle)]"
+                            className={agentPanelMetaTextClass()}
                           >
                             {readString(node["sheetName"])}!{readString(node["address"])}{" "}
                             <span className="text-[var(--wb-text-muted)]">
@@ -521,12 +549,12 @@ function StructuredToolOutput(props: {
                           </div>
                         ))
                     ) : (
-                      <div className="text-[11px] text-[var(--wb-text-subtle)]">None</div>
+                      <div className={agentPanelMetaTextClass()}>None</div>
                     )}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">Dependents</div>
+                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>Dependents</div>
                   <div className="mt-1 flex flex-col gap-1">
                     {Array.isArray(layer["dependents"]) && layer["dependents"].length > 0 ? (
                       layer["dependents"]
@@ -534,7 +562,7 @@ function StructuredToolOutput(props: {
                         .map((node) => (
                           <div
                             key={`dependent:${readString(node["sheetName"])}:${readString(node["address"])}`}
-                            className="text-[11px] leading-5 text-[var(--wb-text-subtle)]"
+                            className={agentPanelMetaTextClass()}
                           >
                             {readString(node["sheetName"])}!{readString(node["address"])}{" "}
                             <span className="text-[var(--wb-text-muted)]">
@@ -543,7 +571,7 @@ function StructuredToolOutput(props: {
                           </div>
                         ))
                     ) : (
-                      <div className="text-[11px] text-[var(--wb-text-subtle)]">None</div>
+                      <div className={agentPanelMetaTextClass()}>None</div>
                     )}
                   </div>
                 </div>
@@ -562,8 +590,13 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   const { entry } = props;
   if (entry.kind === "user") {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex justify-end px-3 py-3">
+        <div
+          className={cn(
+            agentPanelBodyTextClass(),
+            "max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+          )}
+        >
           <WorkbookAgentMarkdown markdown={entry.text ?? ""} />
           <TimelineCitationList citations={entry.citations} />
         </div>
@@ -572,14 +605,14 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   if (entry.kind === "assistant") {
+    if (entry.phase === "progress") {
+      return null;
+    }
     if (!entry.text?.trim().length) {
       return null;
     }
-    if (entry.phase === "progress") {
-      return <WorkbookAgentProgressRow />;
-    }
     return (
-      <div className="px-1 py-1 text-[13px] leading-5 text-[var(--wb-text)]">
+      <div className={cn(agentPanelBodyTextClass(), "px-3 py-3")}>
         <WorkbookAgentMarkdown markdown={entry.text} />
         <TimelineCitationList citations={entry.citations} />
       </div>
@@ -591,79 +624,86 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   if (entry.kind === "tool") {
-    const [open, setOpen] = useState(false);
     const displayName = renderToolDisplayName(entry.toolName);
+    const summary = summarizeToolEntry(entry);
     const hasStructuredOutput = supportsStructuredToolOutput(entry.toolName);
     const parsedOutput = safeParseToolOutput(entry.outputText);
     const hasDetails =
       (entry.argumentsText?.trim().length ?? 0) > 0 || (entry.outputText?.trim().length ?? 0) > 0;
-    return (
-      <Collapsible.Root
-        open={open}
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-        }}
-      >
-        <div className="px-1 py-1.5">
-          <Collapsible.Trigger
-            aria-label={open ? `Collapse ${displayName}` : `Expand ${displayName}`}
-            className="flex w-full items-center justify-between gap-3 rounded-[var(--wb-radius-control)] px-2 py-1.5 text-left outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
-            data-testid={`workbook-agent-tool-toggle-${entry.id}`}
-            type="button"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <ChevronRight
-                className={cn(
-                  "h-4 w-4 shrink-0 text-[var(--wb-text-subtle)] transition-transform",
-                  open && "rotate-90",
-                )}
-              />
-              <div className="min-w-0 text-[11px] font-medium text-[var(--wb-text-muted)]">
+    if (!hasDetails) {
+      return (
+        <div className="px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex flex-1 items-center gap-2.5">
+              <div className={cn(agentPanelLabelTextClass(), "min-w-0")}>
                 {displayName}
               </div>
+              {summary ? (
+                <div className={cn(agentPanelMetaTextClass(), "min-w-0 flex-1 truncate")}>
+                  {summary}
+                </div>
+              ) : null}
             </div>
             <ToolStatusPill status={entry.toolStatus} />
-          </Collapsible.Trigger>
-          {hasDetails ? (
-            <Collapsible.Panel
-              className="overflow-hidden pt-1"
-              data-testid={`workbook-agent-tool-panel-${entry.id}`}
-            >
-              <div className="pl-6 pr-1 pb-1">
-                {entry.argumentsText?.trim().length ? (
-                  <div className="mt-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                      Arguments
-                    </div>
-                    <pre className="mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
-                      {entry.argumentsText}
-                    </pre>
-                  </div>
-                ) : null}
-                {entry.outputText?.trim().length ? (
-                  <div className="mt-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                      Output
-                    </div>
-                    {hasStructuredOutput && parsedOutput !== null ? (
-                      <StructuredToolOutput
-                        toolName={entry.toolName}
-                        outputText={entry.outputText}
-                      />
-                    ) : (
-                      <pre className="mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
-                        {entry.outputText}
-                      </pre>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </Collapsible.Panel>
-          ) : null}
+          </div>
           <TimelineCitationList citations={entry.citations} />
         </div>
-      </Collapsible.Root>
+      );
+    }
+    return (
+      <WorkbookAgentDisclosureRow
+        badge={<ToolStatusPill status={entry.toolStatus} />}
+        id={entry.id}
+        label={displayName}
+        panelTestId={`workbook-agent-tool-panel-${entry.id}`}
+        summary={summary}
+        triggerLabel={{
+          expanded: `Collapse ${displayName}`,
+          collapsed: `Expand ${displayName}`,
+        }}
+        triggerTestId={`workbook-agent-tool-toggle-${entry.id}`}
+      >
+        {entry.argumentsText?.trim().length ? (
+          <div>
+            <div className={agentPanelEyebrowTextClass()}>
+              Arguments
+            </div>
+            <pre
+              className={cn(
+                agentPanelMetaTextClass(),
+                "mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+              )}
+            >
+              {entry.argumentsText}
+            </pre>
+          </div>
+        ) : null}
+        {entry.outputText?.trim().length ? (
+          <div className={entry.argumentsText?.trim().length ? "mt-2" : undefined}>
+            <div className={agentPanelEyebrowTextClass()}>
+              Output
+            </div>
+            {hasStructuredOutput && parsedOutput !== null ? (
+              <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
+            ) : (
+              <pre
+                className={cn(
+                  agentPanelMetaTextClass(),
+                  "mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+                )}
+              >
+                {entry.outputText}
+              </pre>
+            )}
+          </div>
+        ) : null}
+        <TimelineCitationList citations={entry.citations} />
+      </WorkbookAgentDisclosureRow>
     );
+  }
+
+  if (isAppliedPreviewSystemEntry(entry)) {
+    return null;
   }
 
   if (isReasoningPlaceholderEntry(entry)) {
@@ -671,8 +711,8 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   return (
-    <div className="px-1 py-1.5">
-      <div className="text-[11px] leading-5 text-[var(--wb-text-muted)]">{entry.text}</div>
+    <div className="px-3 py-2.5">
+      <div className={agentPanelMetaTextClass()}>{entry.text}</div>
       <TimelineCitationList citations={entry.citations} />
     </div>
   );
@@ -686,7 +726,7 @@ function TimelineCitationList(props: {
     return null;
   }
   return (
-    <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+    <div className={cn(agentPanelMetaTextClass(), "mt-1")}>
       {segments.map((segment, index) => (
         <Fragment key={segment}>
           {index > 0 ? <span aria-hidden="true"> · </span> : null}
@@ -789,24 +829,17 @@ function PendingBundleCard(props: {
         "border-[var(--wb-border-strong)] px-3 py-3",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[13px] font-semibold text-[var(--wb-text)]">
-            {props.bundle.summary}
-          </div>
-        </div>
-        <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
-          {props.bundle.riskClass}
-        </span>
+      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
+        {props.bundle.summary}
       </div>
       <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+          <div className={agentPanelEyebrowTextClass()}>
             {String(selectedCount)}/{String(props.bundle.commands.length)}
           </div>
           {!hasFullSelection ? (
             <Button
-              className="text-[11px] font-medium text-[var(--wb-accent)] transition-colors hover:brightness-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+              className="text-[12px] leading-5 font-medium text-[var(--wb-accent)] transition-colors hover:brightness-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
               type="button"
               onClick={props.onSelectAll}
             >
@@ -839,7 +872,7 @@ function PendingBundleCard(props: {
                   }}
                 />
                 <div className="min-w-0">
-                  <div className="text-[11px] leading-5 text-[var(--wb-text)]">{commandLabel}</div>
+                  <div className={agentPanelLabelTextClass()}>{commandLabel}</div>
                 </div>
               </div>
             );
@@ -851,7 +884,8 @@ function PendingBundleCard(props: {
         <div
           className={cn(
             workbookInsetClass(),
-            "mt-2 border-transparent px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]",
+            agentPanelMetaTextClass(),
+            "mt-2 border-transparent px-2 py-2",
           )}
         >
           {props.preview.structuralChanges.join(" · ")}
@@ -861,7 +895,8 @@ function PendingBundleCard(props: {
         <div
           className={cn(
             workbookAlertClass({ tone: "warning" }),
-            "mt-2 border-[var(--wb-border-strong)] text-[11px] leading-5",
+            agentPanelMetaTextClass(),
+            "mt-2 border-[var(--wb-border-strong)]",
           )}
         >
           Only {sharedApprovalOwnerLabel} can approve medium/high-risk changes on this shared
@@ -872,7 +907,8 @@ function PendingBundleCard(props: {
         <div
           className={cn(
             workbookInsetClass(),
-            "mt-2 border-transparent px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]",
+            agentPanelMetaTextClass(),
+            "mt-2 border-transparent px-2 py-2",
           )}
         >
           {recommendationSummary}
@@ -887,7 +923,8 @@ function PendingBundleCard(props: {
             workbookAlertClass({
               tone: props.sharedReviewStatus === "rejected" ? "danger" : "warning",
             }),
-            "mt-2 border-[var(--wb-border-strong)] text-[11px] leading-5",
+            agentPanelMetaTextClass(),
+            "mt-2 border-[var(--wb-border-strong)]",
           )}
         >
           {props.sharedReviewStatus === "pending"
@@ -951,9 +988,9 @@ function PendingBundleCard(props: {
             {props.preview.cellDiffs.map((diff) => (
               <div
                 key={`${diff.sheetName}:${diff.address}`}
-                className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-t border-[var(--wb-border)] px-2 py-2 text-[11px] leading-5 first:border-t-0"
+                className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-t border-[var(--wb-border)] px-2 py-2 first:border-t-0"
               >
-                <div className="col-span-2 font-medium text-[var(--wb-text)]">
+                <div className={cn(agentPanelLabelTextClass(), "col-span-2")}>
                   {diff.sheetName}!{diff.address}
                 </div>
                 <div className="col-span-2 mt-1 flex flex-wrap gap-1">
@@ -963,10 +1000,10 @@ function PendingBundleCard(props: {
                     </span>
                   ))}
                 </div>
-                <div className="text-[var(--wb-text-subtle)]">
+                <div className={agentPanelMetaTextClass()}>
                   {(diff.beforeFormula ?? String(diff.beforeInput ?? "")) || "(empty)"}
                 </div>
-                <div className="text-[var(--wb-text)]">
+                <div className={agentPanelLabelTextClass()}>
                   {(diff.afterFormula ?? String(diff.afterInput ?? "")) || "(empty)"}
                 </div>
               </div>
@@ -998,9 +1035,10 @@ function PendingBundleCard(props: {
 
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
-  readonly currentContext: WorkbookAgentUiContext | null;
-  readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
+  readonly optimisticEntries: readonly WorkbookAgentTimelineEntry[];
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
+  readonly activeResponseTurnId: string | null;
+  readonly showAssistantProgress: boolean;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
@@ -1015,8 +1053,6 @@ export function WorkbookAgentPanel(props: {
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
   readonly cancellingWorkflowRunId: string | null;
-  readonly isStartingWorkflow: boolean;
-  readonly threadScope: WorkbookAgentThreadScope;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
   readonly isLoading: boolean;
@@ -1027,49 +1063,13 @@ export function WorkbookAgentPanel(props: {
   readonly onReviewPendingBundle: (decision: "approved" | "rejected") => void;
   readonly onInterrupt: () => void;
   readonly onSelectAllPendingCommands: () => void;
-  readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
   readonly onSelectThread: (threadId: string) => void;
-  readonly onStartNewThread: () => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onCancelWorkflowRun: (runId: string) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
-  readonly onStartWorkflow: (
-    template:
-      | "summarizeWorkbook"
-      | "summarizeCurrentSheet"
-      | "describeRecentChanges"
-      | "findFormulaIssues"
-      | "highlightFormulaIssues"
-      | "repairFormulaIssues"
-      | "highlightCurrentSheetOutliers"
-      | "styleCurrentSheetHeaders"
-      | "normalizeCurrentSheetHeaders"
-      | "normalizeCurrentSheetNumberFormats"
-      | "normalizeCurrentSheetWhitespace"
-      | "fillCurrentSheetFormulasDown"
-      | "traceSelectionDependencies"
-      | "explainSelectionCell"
-      | "createCurrentSheetRollup"
-      | "createCurrentSheetReviewTab",
-  ) => void;
-  readonly onStartNamedWorkflow: (
-    template: Extract<
-      WorkbookAgentWorkflowRun["workflowTemplate"],
-      "createSheet" | "renameCurrentSheet"
-    >,
-    name: string,
-  ) => void;
-  readonly onStartSearchWorkflow: (query: string) => void;
-  readonly onStartStructuralWorkflow: (
-    template: Extract<
-      WorkbookAgentWorkflowRun["workflowTemplate"],
-      "hideCurrentRow" | "hideCurrentColumn" | "unhideCurrentRow" | "unhideCurrentColumn"
-    >,
-  ) => void;
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const visibleEntries = [...(props.optimisticEntries ?? []), ...(props.snapshot?.entries ?? [])];
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -1077,9 +1077,19 @@ export function WorkbookAgentPanel(props: {
       return;
     }
     node.scrollTop = node.scrollHeight;
-  }, [props.snapshot?.status, visibleEntries.length]);
+  }, [props.optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status]);
 
   const isRunning = props.snapshot?.status === "inProgress";
+  const visibleEntries = [...props.optimisticEntries, ...(props.snapshot?.entries ?? [])];
+  const progressAnchorIndex =
+    props.showAssistantProgress && props.activeResponseTurnId
+      ? visibleEntries.findLastIndex(
+          (entry) =>
+            entry.turnId === props.activeResponseTurnId &&
+            !isAppliedPreviewSystemEntry(entry) &&
+            !isReasoningPlaceholderEntry(entry),
+        )
+      : -1;
 
   return (
     <div
@@ -1088,65 +1098,66 @@ export function WorkbookAgentPanel(props: {
       id="workbook-agent-panel"
       style={agentPanelThemeStyle}
     >
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[var(--wb-app-bg)] px-2.5 py-2.5"
-      >
-        <ThreadSummaryStrip
-          activeThreadId={props.activeThreadId}
-          threadSummaries={props.threadSummaries}
-          onSelectThread={props.onSelectThread}
-        />
-        {props.pendingBundle ? (
-          <div className="mb-3">
-            <PendingBundleCard
-              bundle={props.pendingBundle}
-              preview={props.preview}
-              sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
-              sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}
-              sharedReviewStatus={props.sharedReviewStatus}
-              sharedReviewDecidedByUserId={props.sharedReviewDecidedByUserId}
-              sharedReviewRecommendations={props.sharedReviewRecommendations}
-              currentUserSharedRecommendation={props.currentUserSharedRecommendation}
-              canFinalizeSharedBundle={props.canFinalizeSharedBundle}
-              canRecommendSharedBundle={props.canRecommendSharedBundle}
-              selectedCommandIndexes={props.selectedCommandIndexes}
-              isApplyingBundle={props.isApplyingBundle}
-              onApply={props.onApplyPendingBundle}
-              onDismiss={props.onDismissPendingBundle}
-              onReview={props.onReviewPendingBundle}
-              onSelectAll={props.onSelectAllPendingCommands}
-              onToggleCommand={props.onTogglePendingCommand}
-            />
-          </div>
-        ) : null}
-        {props.isLoading ? null : visibleEntries.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {visibleEntries.map((entry) => (
-              <WorkbookAgentEntryRow key={entry.id} entry={entry} />
-            ))}
-            {props.workflowRuns.length > 0 ? (
-              <div className="pt-2">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                  Workflows
-                </div>
+      <ScrollArea.Root className={agentPanelScrollAreaRootClass()}>
+        <ScrollArea.Viewport
+          ref={scrollRef}
+          className={agentPanelScrollAreaViewportClass()}
+          data-testid="workbook-agent-panel-scroll-viewport"
+        >
+          <ScrollArea.Content className={agentPanelScrollAreaContentClass()}>
+            <div className="bg-[var(--wb-app-bg)] px-2.5 py-2.5">
+              <ThreadSummaryStrip
+                activeThreadId={props.activeThreadId}
+                threadSummaries={props.threadSummaries}
+                onSelectThread={props.onSelectThread}
+              />
+              {props.isLoading ? null : visibleEntries.length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  {props.workflowRuns.slice(0, 5).map((run) => (
-                    <WorkflowRunRow
-                      key={run.runId}
-                      isCancelling={props.cancellingWorkflowRunId === run.runId}
-                      run={run}
-                      onCancel={() => {
-                        props.onCancelWorkflowRun(run.runId);
-                      }}
-                    />
-                  ))}
+                  <div className={agentPanelTimelineListClass()}>
+                    {visibleEntries.map((entry, index) => (
+                      <Fragment key={entry.id}>
+                        <WorkbookAgentEntryRow entry={entry} />
+                        {props.showAssistantProgress && progressAnchorIndex === index ? (
+                          <AssistantProgressRow />
+                        ) : null}
+                      </Fragment>
+                    ))}
+                    {props.showAssistantProgress && progressAnchorIndex < 0 ? (
+                      <AssistantProgressRow />
+                    ) : null}
+                  </div>
+                  {props.workflowRuns.length > 0 ? (
+                    <div className="pt-1">
+                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>
+                        Workflows
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {props.workflowRuns.slice(0, 5).map((run) => (
+                          <WorkflowRunRow
+                            key={run.runId}
+                            isCancelling={props.cancellingWorkflowRunId === run.runId}
+                            run={run}
+                            onCancel={() => {
+                              props.onCancelWorkflowRun(run.runId);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+              ) : null}
+            </div>
+          </ScrollArea.Content>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar
+          className={agentPanelScrollAreaScrollbarClass()}
+          keepMounted
+          orientation="vertical"
+        >
+          <ScrollArea.Thumb className={agentPanelScrollAreaThumbClass()} />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
       <div className={agentPanelFooterClass()}>
         {props.pendingBundle ? (
           <div className="mb-3">
@@ -1171,20 +1182,6 @@ export function WorkbookAgentPanel(props: {
             />
           </div>
         ) : null}
-        <div className={agentPanelToolbarRowClass()}>
-          <ThreadScopeControls
-            threadScope={props.threadScope}
-            onSelectThreadScope={props.onSelectThreadScope}
-          />
-          <WorkflowActionStrip
-            disabled={props.isLoading || isRunning}
-            isStartingWorkflow={props.isStartingWorkflow}
-            onStartWorkflow={props.onStartWorkflow}
-            onStartNamedWorkflow={props.onStartNamedWorkflow}
-            onStartSearchWorkflow={props.onStartSearchWorkflow}
-            onStartStructuralWorkflow={props.onStartStructuralWorkflow}
-          />
-        </div>
         <form
           className="mt-2"
           onSubmit={(event) => {
@@ -1216,22 +1213,24 @@ export function WorkbookAgentPanel(props: {
                 props.onSubmit();
               }}
             />
-            <Button
-              aria-label={isRunning ? "Stop" : "Send message"}
-              className={agentPanelComposerSendButtonClass()}
-              data-testid="workbook-agent-send"
-              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
-              type="button"
-              onClick={() => {
-                if (isRunning) {
-                  props.onInterrupt();
-                  return;
-                }
-                props.onSubmit();
-              }}
-            >
-              {isRunning ? <StopIcon /> : <SendArrowIcon />}
-            </Button>
+            <div className={agentPanelComposerActionsClass()}>
+              <Button
+                aria-label={isRunning ? "Stop" : "Send message"}
+                className={agentPanelComposerSendButtonClass()}
+                data-testid="workbook-agent-send"
+                disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+                type="button"
+                onClick={() => {
+                  if (isRunning) {
+                    props.onInterrupt();
+                    return;
+                  }
+                  props.onSubmit();
+                }}
+              >
+                {isRunning ? <StopIcon /> : <SendArrowIcon />}
+              </Button>
+            </div>
           </div>
         </form>
       </div>
@@ -1240,19 +1239,9 @@ export function WorkbookAgentPanel(props: {
 }
 
 function SendArrowIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 16 16">
-      <path
-        d="M8 12V4M8 4L4.75 7.25M8 4l3.25 3.25"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.6"
-      />
-    </svg>
-  );
+  return <ArrowUp aria-hidden="true" className="size-5" strokeWidth={1.9} />;
 }
 
 function StopIcon() {
-  return <div aria-hidden="true" className="h-3.5 w-3.5 rounded-[3px] bg-current" />;
+  return <Square aria-hidden="true" className="size-4 fill-current" strokeWidth={0} />;
 }

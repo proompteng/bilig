@@ -10,6 +10,26 @@ export const agentPanelFooterClass = cva(
 
 export const agentPanelToolbarRowClass = cva("flex flex-wrap items-center justify-between gap-2");
 
+export const agentPanelEyebrowTextClass = cva(
+  "text-[10px] leading-4 font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]",
+);
+
+export const agentPanelLabelTextClass = cva(
+  "text-[12px] leading-5 font-medium text-[var(--wb-text)]",
+);
+
+export const agentPanelMetaTextClass = cva(
+  "text-[12px] leading-5 text-[var(--wb-text-subtle)]",
+);
+
+export const agentPanelBodyTextClass = cva(
+  "text-[13px] leading-6 text-[var(--wb-text)]",
+);
+
+export const agentPanelBodyMutedTextClass = cva(
+  "text-[13px] leading-6 text-[var(--wb-text-muted)]",
+);
+
 export const agentPanelSectionClass = cva(
   "rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2",
 );
@@ -17,13 +37,13 @@ export const agentPanelSectionClass = cva(
 export const agentPanelSectionHeaderClass = cva("flex items-center justify-between gap-2");
 
 export const agentPanelSectionTitleClass = cva(
-  "text-[11px] font-semibold tracking-[0.01em] text-[var(--wb-text)]",
+  "text-[12px] leading-5 font-semibold text-[var(--wb-text)]",
 );
 
-export const agentPanelSectionHintClass = cva("text-[11px] text-[var(--wb-text-muted)]");
+export const agentPanelSectionHintClass = cva("text-[12px] leading-5 text-[var(--wb-text-muted)]");
 
 export const agentPanelFieldClass = cva(
-  "min-w-0 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 text-[12px] text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-border-strong)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-surface-muted)]",
+  "min-w-0 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 text-[13px] leading-6 text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-border-strong)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-surface-muted)]",
   {
     variants: {
       multiline: {
@@ -57,15 +77,17 @@ export const agentPanelActionButtonClass = cva(
 export const agentPanelToggleButtonClass = cva("min-w-[4.5rem]");
 
 export const agentPanelComposerFrameClass = cva(
-  "relative rounded-[calc(var(--wb-radius-control)+2px)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:border-[var(--wb-border-strong)] focus-within:bg-[var(--wb-surface)]",
+  "rounded-[calc(var(--wb-radius-control)+2px)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:border-[var(--wb-border-strong)] focus-within:bg-[var(--wb-surface)]",
 );
 
 export const agentPanelComposerTextareaClass = cva(
-  "min-h-24 w-full resize-none border-0 bg-transparent px-1 py-1 pr-14 text-[13px] leading-5 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] outline-none",
+  "block min-h-24 w-full resize-none border-0 bg-transparent px-3 pt-2 pb-1.5 text-[13px] leading-6 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] outline-none",
 );
 
+export const agentPanelComposerActionsClass = cva("flex items-center justify-end px-3 pb-3");
+
 export const agentPanelComposerSendButtonClass = cva(
-  "absolute right-2 bottom-2 inline-flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-surface-muted)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-subtle)] disabled:text-[var(--wb-text-subtle)] disabled:shadow-none disabled:opacity-70",
+  "inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-surface-muted)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-subtle)] disabled:text-[var(--wb-text-subtle)] disabled:shadow-none disabled:opacity-70",
 );
 
 export const agentPanelSegmentedGroupClass = cva(
@@ -73,7 +95,7 @@ export const agentPanelSegmentedGroupClass = cva(
 );
 
 export const agentPanelSegmentedButtonClass = cva(
-  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
+  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] px-2.5 text-[12px] leading-5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
   {
     variants: {
       active: {
@@ -89,7 +111,7 @@ export const agentPanelSegmentedButtonClass = cva(
 );
 
 export const agentPanelInlineButtonClass = cva(
-  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
+  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] leading-5 font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
 );
 
 export const agentPanelThreadListClass = cva("mt-2 flex flex-col gap-1.5");
@@ -110,6 +132,78 @@ export const agentPanelThreadButtonClass = cva(
   },
 );
 
+export const agentPanelScrollAreaRootClass = cva("relative min-h-0 flex-1 overflow-hidden");
+
+export const agentPanelScrollAreaViewportClass = cva("h-full w-full");
+
+export const agentPanelScrollAreaContentClass = cva("min-h-full min-w-0");
+
+export const agentPanelScrollAreaScrollbarClass = cva(
+  "flex touch-none select-none p-0.5 transition-opacity data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:h-2.5",
+);
+
+export const agentPanelScrollAreaThumbClass = cva(
+  "relative flex-1 rounded-full bg-[var(--wb-border-strong)]",
+);
+
+export const agentPanelTimelineListClass = cva("flex flex-col");
+
 export const agentPanelToolsPanelClass = cva(
   "mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-2",
 );
+
+export const agentPanelDisclosureFrameClass = cva(
+  "overflow-hidden transition-colors",
+  {
+    variants: {
+      open: {
+        true: "",
+        false: "",
+      },
+    },
+    defaultVariants: {
+      open: false,
+    },
+  },
+);
+
+export const agentPanelDisclosureTriggerClass = cva(
+  "flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors hover:bg-[var(--wb-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-inset",
+);
+
+export const agentPanelDisclosureChevronClass = cva(
+  "size-4 shrink-0 text-[var(--wb-text-subtle)] transition-transform",
+  {
+    variants: {
+      open: {
+        true: "rotate-90",
+        false: "",
+      },
+    },
+    defaultVariants: {
+      open: false,
+    },
+  },
+);
+
+export const agentPanelDisclosureContentClass = cva(
+  "min-w-0 flex flex-1 items-center gap-1.5",
+);
+
+export const agentPanelDisclosureLabelClass = cva(
+  "shrink-0 text-[12px] leading-5 font-medium text-[var(--wb-text)]",
+);
+
+export const agentPanelDisclosureSummaryClass = cva(
+  "min-w-0 flex-1 truncate text-[12px] leading-5 text-[var(--wb-text-subtle)]",
+);
+
+export const agentPanelDisclosureBadgeClass = cva("shrink-0 self-center leading-none");
+
+export const agentPanelDisclosurePanelClass = cva(
+  "overflow-hidden",
+);
+
+export const agentPanelDisclosureViewportClass = cva("h-44 w-full");
+
+export const agentPanelDisclosureBodyClass = cva("px-3 py-3");

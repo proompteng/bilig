@@ -3,11 +3,47 @@ import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import { cn } from "./cn.js";
 import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
 import {
+  agentPanelBodyTextClass,
+  agentPanelLabelTextClass,
+  agentPanelMetaTextClass,
+} from "./workbook-agent-panel-primitives.js";
+import {
   workbookButtonClass,
   workbookInsetClass,
   workbookPillClass,
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
+
+const THINKING_LABEL = "Thinking";
+
+export function AssistantProgressRow() {
+  return (
+    <div
+      aria-label="Assistant is thinking"
+      className="px-3 pb-3"
+      data-testid="workbook-agent-progress-row"
+      role="status"
+    >
+      <div
+        className={cn(
+          agentPanelBodyTextClass(),
+          "inline-flex items-center text-[var(--wb-text-subtle)]",
+        )}
+      >
+        {THINKING_LABEL.split("").map((character, index) => (
+          <span
+            key={`${character}-${String(index)}`}
+            aria-hidden="true"
+            className="inline-block animate-pulse"
+            style={{ animationDelay: `${index * 90}ms` }}
+          >
+            {character}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function PreviewRangeList(props: { readonly ranges: readonly WorkbookAgentPreviewRange[] }) {
   if (props.ranges.length === 0) {
@@ -38,17 +74,17 @@ export function ExecutionRecordRow(props: {
     <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-[var(--wb-text)]">
+          <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
             {props.record.summary}
           </div>
-          <div className="text-[11px] text-[var(--wb-text-subtle)]">
+          <div className={agentPanelMetaTextClass()}>
             r{String(props.record.appliedRevision)}
           </div>
         </div>
         <span className={workbookPillClass({ tone: "neutral" })}>{props.record.scope}</span>
       </div>
       {(props.record.planText ?? props.record.goalText).trim().length > 0 ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+        <div className={cn(agentPanelMetaTextClass(), "mt-2")}>
           {props.record.planText ?? props.record.goalText}
         </div>
       ) : null}
@@ -135,8 +171,8 @@ export function WorkflowRunRow(props: {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-[var(--wb-text)]">{props.run.title}</div>
-          <div className="text-[11px] text-[var(--wb-text-subtle)]">{props.run.summary}</div>
+          <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>{props.run.title}</div>
+          <div className={agentPanelMetaTextClass()}>{props.run.summary}</div>
         </div>
         <span
           className={workbookPillClass({
@@ -152,12 +188,12 @@ export function WorkflowRunRow(props: {
           {props.run.steps.map((step) => (
             <div key={step.stepId} className={cn(workbookInsetClass(), "px-3 py-2")}>
               <div className="flex items-start justify-between gap-2">
-                <div className="text-[11px] font-medium text-[var(--wb-text)]">{step.label}</div>
+                <div className={agentPanelLabelTextClass()}>{step.label}</div>
                 <span className={workbookPillClass({ tone: workflowStepTone(step.status) })}>
                   {workflowStepLabel(step.status)}
                 </span>
               </div>
-              <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+              <div className={cn(agentPanelMetaTextClass(), "mt-1")}>
                 {step.summary}
               </div>
             </div>
@@ -166,7 +202,7 @@ export function WorkflowRunRow(props: {
       ) : null}
       {props.run.artifact ? (
         <div className={cn(workbookInsetClass(), "mt-2 px-3 py-2")}>
-          <div className="text-[11px] font-medium text-[var(--wb-text)]">
+          <div className={agentPanelLabelTextClass()}>
             {props.run.artifact.title}
           </div>
           <WorkbookAgentMarkdown
@@ -180,7 +216,8 @@ export function WorkflowRunRow(props: {
       {props.run.errorMessage ? (
         <div
           className={cn(
-            "mt-2 text-[11px] leading-5",
+            agentPanelMetaTextClass(),
+            "mt-2",
             props.run.status === "cancelled"
               ? "text-[var(--wb-text-subtle)]"
               : "text-[var(--wb-danger-text)]",

@@ -95,16 +95,6 @@ function createDefaultWorkflowContext() {
   };
 }
 
-function expectWorkflowStartBody(
-  init: RequestInit | undefined,
-  expected: Record<string, unknown>,
-): void {
-  expect(requestBody(init)).toEqual({
-    ...expected,
-    context: createDefaultWorkflowContext(),
-  });
-}
-
 function createSnapshot(overrides: Record<string, unknown> = {}) {
   const overrideEntries = Array.isArray(overrides["entries"])
     ? overrides["entries"].map((entry) =>
@@ -121,7 +111,6 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     documentId: "doc-1",
     threadId: "thr-1",
     scope: "private",
-    executionPolicy: "autoApplyAll",
     status: "idle",
     activeTurnId: null,
     lastError: null,
@@ -271,18 +260,6 @@ function AgentHarness(props: {
   );
 }
 
-async function openWorkflowMenu(host: HTMLElement): Promise<void> {
-  const toggle = host.querySelector("[data-testid='workbook-agent-workflow-toggle']");
-  expect(toggle instanceof HTMLButtonElement).toBe(true);
-
-  await act(async () => {
-    if (!(toggle instanceof HTMLButtonElement)) {
-      throw new Error("Workflow menu toggle not found");
-    }
-    toggle.click();
-  });
-}
-
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   window.sessionStorage.clear();
@@ -404,7 +381,8 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness zero={zero.zero} zeroEnabled />);
     });
 
-    expect(host.textContent).toContain("Shared");
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
     expect(host.textContent).toContain("Workflows");
     expect(host.textContent).toContain("Summarize Workbook");
     expect(host.textContent).toContain("Workbook Summary");
@@ -420,7 +398,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("renders cited system timeline entries in the assistant rail", async () => {
+  it("hides applied preview system timeline entries from the assistant rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -447,7 +425,7 @@ describe("workbook agent pane", () => {
                     id: "system-apply:run-1",
                     kind: "system",
                     turnId: "turn-1",
-                    text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
+                    text: "Applied preview bundle at revision r7: Write cells in Sheet1!B2",
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -489,9 +467,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.textContent).toContain("Applied workbook change set at revision r7");
-    expect(host.textContent).toContain("Sheet1!B2");
-    expect(host.textContent).toContain("r7");
+    expect(host.textContent).not.toContain("Applied preview bundle at revision r7");
+    expect(host.textContent).not.toContain("Sheet1!B2");
+    expect(host.textContent).not.toContain("r7");
 
     await act(async () => {
       root.unmount();
@@ -579,1825 +557,6 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("starts built-in workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "findFormulaIssues",
-                  title: "Find Formula Issues",
-                  summary: "Found 2 formula issues across 3 scanned formula cells.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "scan-formula-cells",
-                      label: "Scan formula cells",
-                      status: "completed",
-                      summary: "Scanned 3 formula cells and found 2 issues.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "draft-issue-report",
-                      label: "Draft issue report",
-                      status: "completed",
-                      summary: "Prepared the durable formula issue report for the thread.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Formula Issues",
-                    text: "## Formula Issues",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-findFormulaIssues']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Workflow button not found");
-      }
-      button.click();
-    });
-
-    const createThreadCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads") && requestMethod(requestInit) === "POST",
-    );
-    expect(requestBody(createThreadCall?.[1])).toEqual({
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-      scope: "private",
-    });
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-2/workflows");
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "findFormulaIssues",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Find Formula Issues");
-    expect(host.textContent).toContain("Formula Issues");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts highlight-formula workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-highlight-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "highlightFormulaIssues",
-                  title: "Highlight Formula Issues",
-                  summary: "Staged highlight formatting for 2 formula issues on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "scan-formula-cells",
-                      label: "Scan formula cells",
-                      status: "completed",
-                      summary: "Scanned 3 formula cells on Sheet1 and found 2 issues.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "stage-issue-highlights",
-                      label: "Stage issue highlights",
-                      status: "completed",
-                      summary:
-                        "Prepared 2 semantic formatting commands to highlight the detected formula issues.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Formula Issue Highlights",
-                    text: "## Highlighted Formula Issues",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-highlightFormulaIssues']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Highlight workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "highlightFormulaIssues",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Highlight Formula Issues");
-    expect(host.textContent).toContain("Formula Issue Highlights");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts repair-formula workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-repair-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "repairFormulaIssues",
-                  title: "Repair Formula Issues",
-                  summary: "Staged 1 formula repair on Sheet1 from nearby healthy formulas.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "scan-formula-cells",
-                      label: "Scan formula cells",
-                      status: "completed",
-                      summary: "Scanned 2 formula cells on Sheet1 and found 1 issue.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "stage-formula-repairs",
-                      label: "Stage formula repairs",
-                      status: "completed",
-                      summary: "Prepared 1 semantic write command for the repair preview bundle.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Formula Repair Preview",
-                    text: "## Formula Repair Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-repairFormulaIssues']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Repair workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "repairFormulaIssues",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Repair Formula Issues");
-    expect(host.textContent).toContain("Formula Repair Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts header-normalization workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-header-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "normalizeCurrentSheetHeaders",
-                  title: "Normalize Current Sheet Headers",
-                  summary: "Staged normalized headers for 2 cells on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-header-row",
-                      label: "Inspect header row",
-                      status: "completed",
-                      summary: "Loaded the used range and current header row from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "stage-header-normalization",
-                      label: "Stage header normalization",
-                      status: "completed",
-                      summary:
-                        "Prepared the semantic write preview that normalizes 2 header cells.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Header Normalization Preview",
-                    text: "## Header Normalization Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetHeaders']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Header normalization workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "normalizeCurrentSheetHeaders",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Normalize Current Sheet Headers");
-    expect(host.textContent).toContain("Header Normalization Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts number-format-normalization workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-number-format-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "normalizeCurrentSheetNumberFormats",
-                  title: "Normalize Current Sheet Number Formats",
-                  summary: "Staged normalized number formats for 3 columns on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-number-columns",
-                      label: "Inspect numeric columns",
-                      status: "completed",
-                      summary: "Loaded numeric cells and header labels from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Number Format Normalization Preview",
-                    text: "## Number Format Normalization Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetNumberFormats']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Number format workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "normalizeCurrentSheetNumberFormats",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Normalize Current Sheet Number Formats");
-    expect(host.textContent).toContain("Number Format Normalization Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts whitespace-normalization workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-whitespace-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "normalizeCurrentSheetWhitespace",
-                  title: "Normalize Current Sheet Whitespace",
-                  summary: "Staged normalized whitespace for 3 text cells on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-text-cells",
-                      label: "Inspect text cells",
-                      status: "completed",
-                      summary: "Loaded the used range and string cells from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Whitespace Normalization Preview",
-                    text: "## Whitespace Normalization Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-normalizeCurrentSheetWhitespace']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Whitespace workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "normalizeCurrentSheetWhitespace",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Normalize Current Sheet Whitespace");
-    expect(host.textContent).toContain("Whitespace Normalization Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts formula fill-down workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-fill-formulas-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "fillCurrentSheetFormulasDown",
-                  title: "Fill Current Sheet Formulas Down",
-                  summary: "Staged formula fill-down for 1 column on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-formula-columns",
-                      label: "Inspect formula columns",
-                      status: "completed",
-                      summary: "Loaded formula cells and blank fill gaps from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Formula Fill-Down Preview",
-                    text: "## Formula Fill-Down Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-fillCurrentSheetFormulasDown']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Formula fill-down workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "fillCurrentSheetFormulasDown",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Fill Current Sheet Formulas Down");
-    expect(host.textContent).toContain("Formula Fill-Down Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts header-style workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-style-headers-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "styleCurrentSheetHeaders",
-                  title: "Style Current Sheet Headers",
-                  summary: "Staged a consistent header style preview for Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-header-row",
-                      label: "Inspect header row",
-                      status: "completed",
-                      summary: "Loaded the used range and header row from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Header Style Preview",
-                    text: "## Header Style Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-styleCurrentSheetHeaders']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Header style workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "styleCurrentSheetHeaders",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Style Current Sheet Headers");
-    expect(host.textContent).toContain("Header Style Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts current-sheet review-tab workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-review-tab-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "createCurrentSheetReviewTab",
-                  title: "Create Current Sheet Review Tab",
-                  summary: "Staged a review-tab preview for Sheet1 into Sheet1 Review.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-source-sheet",
-                      label: "Inspect source sheet",
-                      status: "completed",
-                      summary: "Loaded the used range from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Current Sheet Review Tab Preview",
-                    text: "## Current Sheet Review Tab Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-createCurrentSheetReviewTab']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Review-tab workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "createCurrentSheetReviewTab",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Create Current Sheet Review Tab");
-    expect(host.textContent).toContain("Current Sheet Review Tab Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts current-sheet rollup workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-rollup-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "createCurrentSheetRollup",
-                  title: "Create Current Sheet Rollup",
-                  summary: "Staged a rollup preview for Sheet1 into Sheet1 Rollup.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-source-sheet",
-                      label: "Inspect source sheet",
-                      status: "completed",
-                      summary: "Loaded the used range and numeric columns from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Current Sheet Rollup Preview",
-                    text: "## Current Sheet Rollup Preview",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-createCurrentSheetRollup']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Rollup workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "createCurrentSheetRollup",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Create Current Sheet Rollup");
-    expect(host.textContent).toContain("Current Sheet Rollup Preview");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts outlier-highlight workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads")) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2")) {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-2" })), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-outlier-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "highlightCurrentSheetOutliers",
-                  title: "Highlight Current Sheet Outliers",
-                  summary:
-                    "Staged outlier highlights for 1 cell across 1 numeric column on Sheet1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-numeric-columns",
-                      label: "Inspect numeric columns",
-                      status: "completed",
-                      summary: "Loaded numeric cells and header labels from Sheet1.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "stage-outlier-highlights",
-                      label: "Stage outlier highlights",
-                      status: "completed",
-                      summary:
-                        "Prepared 1 semantic formatting command to highlight numeric outliers on Sheet1.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Current Sheet Outlier Highlights",
-                    text: "## Highlighted Numeric Outliers",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-highlightCurrentSheetOutliers']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Outlier workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows") &&
-        requestMethod(requestInit) === "POST",
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "highlightCurrentSheetOutliers",
-      sheetName: "Sheet1",
-    });
-    expect(host.textContent).toContain("Highlight Current Sheet Outliers");
-    expect(host.textContent).toContain("Current Sheet Outlier Highlights");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("cancels running workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    sessionStorage.setItem("bilig:workbook-agent:doc-1", JSON.stringify({ threadId: "thr-1" }));
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1/workflows/wf-running-1/cancel")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              threadId: "thr-1",
-              workflowRuns: [
-                {
-                  runId: "wf-running-1",
-                  threadId: "thr-1",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "summarizeWorkbook",
-                  title: "Summarize Workbook",
-                  summary: "Cancelled workflow: Summarize Workbook",
-                  status: "cancelled",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 4,
-                  completedAtUnixMs: 4,
-                  errorMessage: "Cancelled by alex@example.com.",
-                  steps: [
-                    {
-                      stepId: "inspect-workbook",
-                      label: "Inspect workbook structure",
-                      status: "cancelled",
-                      summary: "Workflow cancelled before this step completed.",
-                      updatedAtUnixMs: 4,
-                    },
-                  ],
-                  artifact: null,
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-
-      return new Response(
-        JSON.stringify(
-          createSnapshot({
-            threadId: "thr-1",
-            workflowRuns: [
-              {
-                runId: "wf-running-1",
-                threadId: "thr-1",
-                startedByUserId: "alex@example.com",
-                workflowTemplate: "summarizeWorkbook",
-                title: "Summarize Workbook",
-                summary: "Running workbook summary workflow.",
-                status: "running",
-                createdAtUnixMs: 1,
-                updatedAtUnixMs: 2,
-                completedAtUnixMs: null,
-                errorMessage: null,
-                steps: [
-                  {
-                    stepId: "inspect-workbook",
-                    label: "Inspect workbook structure",
-                    status: "running",
-                    summary: "Reading durable workbook structure and layout metadata.",
-                    updatedAtUnixMs: 2,
-                  },
-                  {
-                    stepId: "draft-summary",
-                    label: "Draft summary artifact",
-                    status: "pending",
-                    summary: "Waiting to assemble the durable workbook summary artifact.",
-                    updatedAtUnixMs: 2,
-                  },
-                ],
-                artifact: null,
-              },
-            ],
-          }),
-        ),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      );
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-cancel-workflow-wf-running-1']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-    expect(host.textContent).toContain("Running");
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Cancel workflow button not found");
-      }
-      button.click();
-    });
-
-    const cancelCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-1/workflows/wf-running-1/cancel"),
-    );
-    expect(cancelCall?.[0]).toBe(
-      "/v2/documents/doc-1/chat/threads/thr-1/workflows/wf-running-1/cancel",
-    );
-    expect(requestMethod(cancelCall?.[1])).toBe("POST");
-    expect(host.textContent).toContain("Cancelled");
-    expect(host.textContent).toContain("Cancelled by alex@example.com.");
-    expect(
-      host.querySelector("[data-testid='workbook-agent-cancel-workflow-wf-running-1']"),
-    ).toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts dependency trace workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-2",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "traceSelectionDependencies",
-                  title: "Trace Selection Dependencies",
-                  summary: "Traced 1 precedent and 1 dependent from Sheet1!B1.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-selection",
-                      label: "Inspect current selection",
-                      status: "completed",
-                      summary: "Loaded workbook context for Sheet1!B1.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "trace-links",
-                      label: "Trace workbook links",
-                      status: "completed",
-                      summary: "Traced 1 precedent and 1 dependent.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "draft-trace-report",
-                      label: "Draft trace report",
-                      status: "completed",
-                      summary: "Prepared the durable dependency trace report for the thread.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Dependency Trace",
-                    text: "## Dependency Trace\n\nRoot: Sheet1!B1",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-traceSelectionDependencies']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "traceSelectionDependencies",
-    });
-    expect(host.textContent).toContain("Trace Selection Dependencies");
-    expect(host.textContent).toContain("Dependency Trace");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts current-sheet summary workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-sheet-1",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "summarizeCurrentSheet",
-                  title: "Summarize Current Sheet",
-                  summary: "Summarized Sheet1 with 12 populated cells and 1 table.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-current-sheet",
-                      label: "Inspect current sheet",
-                      status: "completed",
-                      summary:
-                        "Read durable metadata for Sheet1, including used range, tables, pivots, spills, and axis metadata.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "draft-sheet-summary",
-                      label: "Draft current sheet summary",
-                      status: "completed",
-                      summary:
-                        "Prepared the durable current-sheet summary artifact for the thread.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Current Sheet Summary",
-                    text: "## Current Sheet Summary\n\nSheet: Sheet1",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-summarizeCurrentSheet']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "summarizeCurrentSheet",
-    });
-    expect(host.textContent).toContain("Summarize Current Sheet");
-    expect(host.textContent).toContain("Current Sheet Summary");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("starts current-cell explanation workflows through the durable thread workflow route", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-2/workflows")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-2",
-              threadId: "thr-2",
-              workflowRuns: [
-                {
-                  runId: "wf-3",
-                  threadId: "thr-2",
-                  startedByUserId: "alex@example.com",
-                  workflowTemplate: "explainSelectionCell",
-                  title: "Explain Current Cell",
-                  summary: "Explained Sheet1!A1, including direct precedents and dependents.",
-                  status: "completed",
-                  createdAtUnixMs: 1,
-                  updatedAtUnixMs: 2,
-                  completedAtUnixMs: 2,
-                  errorMessage: null,
-                  steps: [
-                    {
-                      stepId: "inspect-selection",
-                      label: "Inspect current selection",
-                      status: "completed",
-                      summary: "Loaded workbook context for Sheet1!A1.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "explain-cell",
-                      label: "Explain current cell",
-                      status: "completed",
-                      summary: "Read the current value and workbook links for Sheet1!A1.",
-                      updatedAtUnixMs: 1,
-                    },
-                    {
-                      stepId: "draft-explanation",
-                      label: "Draft explanation artifact",
-                      status: "completed",
-                      summary:
-                        "Prepared the durable current-cell explanation artifact for the thread.",
-                      updatedAtUnixMs: 2,
-                    },
-                  ],
-                  artifact: {
-                    kind: "markdown",
-                    title: "Current Cell",
-                    text: "## Current Cell\n\nCell: Sheet1!A1",
-                  },
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    const button = document.querySelector(
-      "[data-testid='workbook-agent-workflow-start-explainSelectionCell']",
-    );
-    expect(button instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Workflow button not found");
-      }
-      button.click();
-    });
-
-    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-2/workflows"),
-    );
-    expectWorkflowStartBody(workflowCall?.[1], {
-      workflowTemplate: "explainSelectionCell",
-    });
-    expect(host.textContent).toContain("Explain Current Cell");
-    expect(host.textContent).toContain("Current Cell");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("does not expose workbook search controls in the tools dropdown", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    await openWorkflowMenu(host);
-
-    expect(
-      document.querySelector("[data-testid='workbook-agent-workflow-search-input']"),
-    ).toBeNull();
-    expect(
-      document.querySelector("[data-testid='workbook-agent-workflow-start-searchWorkbookQuery']"),
-    ).toBeNull();
-    expect(host.textContent).not.toContain("Search workbook");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
   it("loads durable thread summaries into the assistant rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -2412,7 +571,7 @@ describe("workbook agent pane", () => {
               scope: "shared",
               entryCount: 4,
               hasPendingBundle: true,
-              latestEntryText: "Applied workbook change set at revision r7",
+              latestEntryText: "Applied preview bundle at revision r7",
             }),
             createThreadSummary({
               threadId: "thr-private",
@@ -2444,7 +603,7 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Shared");
     expect(host.textContent).toContain("Pending");
     expect(host.textContent).toContain("4 items");
-    expect(host.textContent).toContain("Applied workbook change set at revision r7");
+    expect(host.textContent).toContain("Applied preview bundle at revision r7");
 
     await act(async () => {
       root.unmount();
@@ -2512,11 +671,8 @@ describe("workbook agent pane", () => {
 
     expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-2/events");
     expect(host.querySelector("[data-testid='workbook-agent-thread-thr-2']")).toBeNull();
-    expect(
-      host
-        .querySelector("[data-testid='workbook-agent-scope-shared']")
-        ?.getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
     expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/chat/threads/thr-2");
 
     await act(async () => {
@@ -2588,154 +744,15 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("starts a shared thread when the shared scope is selected", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-shared",
-              threadId: "thr-shared",
-              entries: [],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      if (url.endsWith("/turns")) {
-        return new Response(
-          JSON.stringify(
-            createSnapshot({
-              sessionId: "agent-session-shared",
-              threadId: "thr-shared",
-              status: "inProgress",
-              activeTurnId: "turn-1",
-              entries: [
-                {
-                  id: "optimistic-user:turn-1",
-                  kind: "user",
-                  turnId: "turn-1",
-                  text: "Share this thread",
-                  phase: null,
-                  toolName: null,
-                  toolStatus: null,
-                  argumentsText: null,
-                  outputText: null,
-                  success: null,
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
-    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
-        throw new Error("Shared scope button not found");
-      }
-      sharedScopeButton.click();
-    });
-
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
-
-    await act(async () => {
-      if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
-      }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
-      }
-      Reflect.apply(valueSetter, input, ["Share this thread"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          key: "Enter",
-        }),
-      );
-    });
-
-    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-shared/events");
-    const sessionCall = fetchSpy.mock.calls.find(
-      ([requestInput, requestInit]) =>
-        requestUrl(requestInput).endsWith("/chat/threads") &&
-        typeof requestBody(requestInit) === "object" &&
-        requestBody(requestInit) !== null &&
-        "scope" in requestBody(requestInit) &&
-        requestBody(requestInit)["scope"] === "shared",
-    );
-    expect(requestBody(sessionCall?.[1])).toEqual({
-      scope: "shared",
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-    });
-    expect(
-      fetchSpy.mock.calls.some(([requestInput]) =>
-        requestUrl(requestInput).endsWith("/chat/threads/thr-shared/turns"),
-      ),
-    ).toBe(true);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("keeps separate drafts for new private and shared threads", async () => {
+  it("does not render thread scope controls", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
-        if (url.endsWith("/chat/threads")) {
+        if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
           return new Response(JSON.stringify([]), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -2753,74 +770,8 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    const privateScopeButton = host.querySelector("[data-testid='workbook-agent-scope-private']");
-    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
-    expect(privateScopeButton instanceof HTMLButtonElement).toBe(true);
-    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (
-        !(input instanceof HTMLTextAreaElement) ||
-        !(sharedScopeButton instanceof HTMLButtonElement) ||
-        !(privateScopeButton instanceof HTMLButtonElement)
-      ) {
-        throw new Error("Agent controls not found");
-      }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
-      }
-      Reflect.apply(valueSetter, input, ["Private draft"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      sharedScopeButton.click();
-    });
-
-    const sharedInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(sharedInput instanceof HTMLTextAreaElement ? sharedInput.value : null).toBe("");
-
-    await act(async () => {
-      if (
-        !(sharedInput instanceof HTMLTextAreaElement) ||
-        !(sharedScopeButton instanceof HTMLButtonElement) ||
-        !(privateScopeButton instanceof HTMLButtonElement)
-      ) {
-        throw new Error("Agent controls not found");
-      }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
-      }
-      Reflect.apply(valueSetter, sharedInput, ["Shared draft"]);
-      sharedInput.dispatchEvent(new Event("input", { bubbles: true }));
-      privateScopeButton.click();
-    });
-
-    const restoredPrivateInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(
-      restoredPrivateInput instanceof HTMLTextAreaElement ? restoredPrivateInput.value : null,
-    ).toBe("Private draft");
-
-    await act(async () => {
-      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
-        throw new Error("Shared scope button not found");
-      }
-      sharedScopeButton.click();
-    });
-
-    const restoredSharedInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(
-      restoredSharedInput instanceof HTMLTextAreaElement ? restoredSharedInput.value : null,
-    ).toBe("Shared draft");
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -2854,22 +805,10 @@ describe("workbook agent pane", () => {
     });
 
     const input = host.querySelector("[data-testid='workbook-agent-input']");
-    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
     expect(input instanceof HTMLTextAreaElement).toBe(true);
-    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
 
     await act(async () => {
-      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
-        throw new Error("Agent controls not found");
-      }
-      sharedScopeButton.click();
-    });
-
-    const sharedInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(sharedInput instanceof HTMLTextAreaElement).toBe(true);
-
-    await act(async () => {
-      if (!(sharedInput instanceof HTMLTextAreaElement)) {
+      if (!(input instanceof HTMLTextAreaElement)) {
         throw new Error("Agent input not found");
       }
       const valueDescriptor = Object.getOwnPropertyDescriptor(
@@ -2880,8 +819,8 @@ describe("workbook agent pane", () => {
       if (typeof valueSetter !== "function") {
         throw new Error("Textarea value setter not found");
       }
-      Reflect.apply(valueSetter, sharedInput, ["Persisted shared draft"]);
-      sharedInput.dispatchEvent(new Event("input", { bubbles: true }));
+      Reflect.apply(valueSetter, input, ["Persisted draft"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     await act(async () => {
@@ -2893,22 +832,8 @@ describe("workbook agent pane", () => {
       remountRoot.render(<AgentHarness />);
     });
 
-    const remountedSharedScopeButton = host.querySelector(
-      "[data-testid='workbook-agent-scope-shared']",
-    );
-    expect(remountedSharedScopeButton instanceof HTMLButtonElement).toBe(true);
-
-    await act(async () => {
-      if (!(remountedSharedScopeButton instanceof HTMLButtonElement)) {
-        throw new Error("Shared scope button not found");
-      }
-      remountedSharedScopeButton.click();
-    });
-
     const restoredInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe(
-      "Persisted shared draft",
-    );
+    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe("Persisted draft");
 
     await act(async () => {
       remountRoot.unmount();
@@ -2996,111 +921,9 @@ describe("workbook agent pane", () => {
       requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
+    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
-    expect(host.textContent).toContain("Thinking");
-    expect(host.textContent).toContain("Reading selection");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("shows immediate non-spinner progress before the turn request resolves", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    let resolveTurnResponse: ((response: Response) => void) | null = null;
-    const turnResponse = new Promise<Response>((resolve) => {
-      resolveTurnResponse = resolve;
-    });
-    const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify(createSnapshot({ entries: [] })), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        );
-      }
-      if (url.endsWith("/chat/threads/thr-1/turns")) {
-        return turnResponse;
-      }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
-
-    await act(async () => {
-      if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
-      }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
-      }
-      Reflect.apply(valueSetter, input, ["yo"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          key: "Enter",
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain("yo");
-    expect(host.textContent).toContain("Thinking");
-    expect(host.textContent).toContain("Reading selection");
-    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
-
-    await act(async () => {
-      resolveTurnResponse?.(
-        new Response(
-          JSON.stringify(
-            createSnapshot({
-              status: "inProgress",
-              activeTurnId: "turn-1",
-              entries: [
-                {
-                  id: "optimistic-user:turn-1",
-                  kind: "user",
-                  turnId: "turn-1",
-                  text: "yo",
-                  phase: null,
-                  toolName: null,
-                  toolStatus: null,
-                  argumentsText: null,
-                  outputText: null,
-                  success: null,
-                },
-              ],
-            }),
-          ),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        ),
-      );
-      await turnResponse;
-    });
 
     await act(async () => {
       root.unmount();
@@ -3195,8 +1018,115 @@ describe("workbook agent pane", () => {
       requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
     );
     expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
+    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not inject a synthetic progress row before the turn request resolves", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    let resolveTurnResponse: ((response: Response) => void) | null = null;
+    const turnResponse = new Promise<Response>((resolve) => {
+      resolveTurnResponse = resolve;
+    });
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+        return new Response(JSON.stringify(createSnapshot()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/chat/threads/thr-1/turns")) {
+        return await turnResponse;
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["yo"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("yo");
+    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).toBeNull();
+
+    await act(async () => {
+      resolveTurnResponse?.(
+        new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "inProgress",
+              activeTurnId: "turn-3",
+              entries: [
+                {
+                  id: "optimistic-user:turn-3",
+                  kind: "user",
+                  turnId: "turn-3",
+                  text: "yo",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
     expect(host.textContent).toContain("Thinking");
-    expect(host.textContent).toContain("Reading selection");
 
     await act(async () => {
       root.unmount();
@@ -3399,6 +1329,9 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
+    expect(
+      host.querySelector("[data-testid='workbook-agent-panel-scroll-viewport']"),
+    ).not.toBeNull();
     expect(host.textContent).toContain("Search Workbook");
     expect(host.textContent).toContain("Find Formula Issues");
     expect(host.textContent).not.toContain("Gross Margin");
@@ -3505,8 +1438,86 @@ describe("workbook agent pane", () => {
       readToggle.click();
     });
 
+    const readPanelViewport = host.querySelector(
+      "[data-testid='workbook-agent-tool-panel-tool-read-viewport']",
+    );
+    expect(readPanelViewport instanceof HTMLDivElement).toBe(true);
+    expect(readPanelViewport?.className).toContain("h-44");
     expect(host.textContent).toContain('"documentId":"bilig-demo"');
     expect(host.textContent).toContain('"sheetCount":2');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("summarizes attached selection ranges in tool rows", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              createSnapshot({
+                entries: [
+                  {
+                    id: "tool-context",
+                    kind: "tool",
+                    turnId: "turn-1",
+                    text: null,
+                    phase: null,
+                    toolName: "get_context",
+                    toolStatus: "completed",
+                    argumentsText: "{}",
+                    outputText: JSON.stringify({
+                      selection: {
+                        sheetName: "Sheet1",
+                        address: "E20",
+                        range: {
+                          startAddress: "C11",
+                          endAddress: "F20",
+                        },
+                      },
+                      visibleRange: {
+                        sheetName: "Sheet1",
+                        startAddress: "A1",
+                        endAddress: "J20",
+                      },
+                    }),
+                    success: true,
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Get Context");
+    expect(host.textContent).toContain("Sheet1!C11:F20");
+    expect(host.textContent).not.toContain("Sheet1!E20");
 
     await act(async () => {
       root.unmount();
@@ -3635,6 +1646,89 @@ describe("workbook agent pane", () => {
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
       "Updated Sheet1",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps the thinking row visible while tool activity is still streaming", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+          return new Response(
+            JSON.stringify(
+              createSnapshot({
+                status: "inProgress",
+                activeTurnId: "turn-1",
+                entries: [
+                  {
+                    id: "optimistic-user:turn-1",
+                    kind: "user",
+                    turnId: "turn-1",
+                    text: "Build the prepaid template",
+                    phase: null,
+                    toolName: null,
+                    toolStatus: null,
+                    argumentsText: null,
+                    outputText: null,
+                    success: null,
+                    citations: [],
+                  },
+                  {
+                    id: "tool-1",
+                    kind: "tool",
+                    turnId: "turn-1",
+                    text: "",
+                    phase: null,
+                    toolName: "bilig_read_workbook",
+                    toolStatus: "completed",
+                    argumentsText: null,
+                    outputText: null,
+                    success: true,
+                    citations: [],
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Read Workbook");
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
+    expect(host.textContent).toContain("Thinking");
 
     await act(async () => {
       root.unmount();

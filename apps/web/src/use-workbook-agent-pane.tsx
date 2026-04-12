@@ -12,7 +12,6 @@ import {
 import {
   WorkbookAgentSessionSnapshotSchema,
   WorkbookAgentStreamEventSchema,
-  type WorkbookAgentTimelineEntry,
   WorkbookAgentThreadScopeSchema,
   WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
@@ -20,6 +19,7 @@ import {
   type WorkbookAgentStreamEvent,
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
+  type WorkbookAgentTimelineEntry,
   type WorkbookAgentUiContext,
   type WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
@@ -42,122 +42,6 @@ import {
   type StoredWorkbookAgentThreadRef,
 } from "./workbook-agent-pane-storage.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
-
-type RailWorkflowTemplate =
-  | "summarizeWorkbook"
-  | "summarizeCurrentSheet"
-  | "describeRecentChanges"
-  | "findFormulaIssues"
-  | "highlightFormulaIssues"
-  | "repairFormulaIssues"
-  | "highlightCurrentSheetOutliers"
-  | "styleCurrentSheetHeaders"
-  | "normalizeCurrentSheetHeaders"
-  | "normalizeCurrentSheetNumberFormats"
-  | "normalizeCurrentSheetWhitespace"
-  | "fillCurrentSheetFormulasDown"
-  | "traceSelectionDependencies"
-  | "explainSelectionCell"
-  | "searchWorkbookQuery"
-  | "createCurrentSheetRollup"
-  | "createCurrentSheetReviewTab"
-  | "createSheet"
-  | "renameCurrentSheet"
-  | "hideCurrentRow"
-  | "hideCurrentColumn"
-  | "unhideCurrentRow"
-  | "unhideCurrentColumn";
-
-type WorkbookAgentWorkflowStartRequest =
-  | {
-      readonly workflowTemplate: Exclude<
-        RailWorkflowTemplate,
-        | "findFormulaIssues"
-        | "highlightFormulaIssues"
-        | "repairFormulaIssues"
-        | "highlightCurrentSheetOutliers"
-        | "styleCurrentSheetHeaders"
-        | "normalizeCurrentSheetHeaders"
-        | "normalizeCurrentSheetNumberFormats"
-        | "normalizeCurrentSheetWhitespace"
-        | "fillCurrentSheetFormulasDown"
-        | "searchWorkbookQuery"
-        | "createCurrentSheetRollup"
-        | "createCurrentSheetReviewTab"
-        | "createSheet"
-        | "renameCurrentSheet"
-        | "unhideCurrentRow"
-        | "unhideCurrentColumn"
-      >;
-    }
-  | {
-      readonly workflowTemplate: "findFormulaIssues";
-      readonly sheetName?: string;
-      readonly limit?: number;
-    }
-  | {
-      readonly workflowTemplate: "highlightFormulaIssues";
-      readonly sheetName?: string;
-      readonly limit?: number;
-    }
-  | {
-      readonly workflowTemplate: "repairFormulaIssues";
-      readonly sheetName?: string;
-      readonly limit?: number;
-    }
-  | {
-      readonly workflowTemplate: "highlightCurrentSheetOutliers";
-      readonly sheetName?: string;
-      readonly limit?: number;
-    }
-  | {
-      readonly workflowTemplate: "styleCurrentSheetHeaders";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "normalizeCurrentSheetHeaders";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "normalizeCurrentSheetNumberFormats";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "normalizeCurrentSheetWhitespace";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "fillCurrentSheetFormulasDown";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "searchWorkbookQuery";
-      readonly query: string;
-      readonly sheetName?: string;
-      readonly limit?: number;
-    }
-  | {
-      readonly workflowTemplate: "createCurrentSheetRollup";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "createCurrentSheetReviewTab";
-      readonly sheetName?: string;
-    }
-  | {
-      readonly workflowTemplate: "createSheet";
-      readonly name: string;
-    }
-  | {
-      readonly workflowTemplate: "renameCurrentSheet";
-      readonly name: string;
-    }
-  | {
-      readonly workflowTemplate: "unhideCurrentRow";
-    }
-  | {
-      readonly workflowTemplate: "unhideCurrentColumn";
-    };
 
 interface WorkbookAgentLiveSession {
   threadId: string;
@@ -232,24 +116,6 @@ function normalizeWorkbookAgentErrorMessage(error: string): string {
   return error;
 }
 
-function hasVisibleAssistantActivity(snapshot: WorkbookAgentSessionSnapshot | null): boolean {
-  if (!snapshot) {
-    return false;
-  }
-  return snapshot.entries.some((entry) => {
-    if (entry.kind === "assistant" && entry.text?.trim().length) {
-      return true;
-    }
-    if (entry.kind === "plan" && entry.text?.trim().length) {
-      return true;
-    }
-    if (entry.kind === "tool" && entry.toolStatus !== null) {
-      return true;
-    }
-    return false;
-  });
-}
-
 export function useWorkbookAgentPane(input: {
   readonly currentUserId: string;
   readonly documentId: string;
@@ -275,7 +141,6 @@ export function useWorkbookAgentPane(input: {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
-  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
   const [pendingUserPrompt, setPendingUserPrompt] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
@@ -318,43 +183,6 @@ export function useWorkbookAgentPane(input: {
     [zero],
   );
   const usesLiveThreadSummaries = zeroEnabled && Boolean(zero);
-  const optimisticEntries = useMemo<readonly WorkbookAgentTimelineEntry[]>(() => {
-    const entries: WorkbookAgentTimelineEntry[] = [];
-    if (pendingUserPrompt?.trim().length) {
-      entries.push({
-        id: "optimistic-user:pending",
-        kind: "user",
-        turnId: null,
-        text: pendingUserPrompt,
-        phase: null,
-        toolName: null,
-        toolStatus: null,
-        argumentsText: null,
-        outputText: null,
-        success: null,
-        citations: [],
-      });
-    }
-    if (
-      (pendingUserPrompt?.trim().length || snapshot?.status === "inProgress") &&
-      !hasVisibleAssistantActivity(snapshot)
-    ) {
-      entries.push({
-        id: "assistant-progress:pending",
-        kind: "assistant",
-        turnId: snapshot?.activeTurnId ?? null,
-        text: "Thinking",
-        phase: "progress",
-        toolName: null,
-        toolStatus: null,
-        argumentsText: null,
-        outputText: null,
-        success: null,
-        citations: [],
-      });
-    }
-    return entries;
-  }, [pendingUserPrompt, snapshot]);
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -498,6 +326,31 @@ export function useWorkbookAgentPane(input: {
   const currentUserSharedRecommendation =
     sharedReviewRecommendations.find((recommendation) => recommendation.userId === currentUserId)
       ?.decision ?? null;
+  const optimisticEntries = useMemo<readonly WorkbookAgentTimelineEntry[]>(() => {
+    const entries: WorkbookAgentTimelineEntry[] = [];
+    const activeTurnId = snapshot?.activeTurnId ?? null;
+    const showOptimisticUser =
+      pendingUserPrompt !== null &&
+      !snapshot?.entries.some((entry) => entry.kind === "user" && entry.text === pendingUserPrompt);
+    if (showOptimisticUser) {
+      entries.push({
+        id: "optimistic-user:local",
+        kind: "user",
+        turnId: activeTurnId,
+        text: pendingUserPrompt,
+        phase: null,
+        toolName: null,
+        toolStatus: null,
+        argumentsText: null,
+        outputText: null,
+        success: null,
+        citations: [],
+      });
+    }
+    return entries;
+  }, [pendingUserPrompt, snapshot]);
+  const showAssistantProgress = snapshot?.status === "inProgress";
+  const activeResponseTurnId = showAssistantProgress ? (snapshot?.activeTurnId ?? null) : null;
   const canFinalizeSharedBundle =
     sharedReviewOwnerUserId !== null &&
     sharedReviewOwnerUserId === currentUserId &&
@@ -922,8 +775,8 @@ export function useWorkbookAgentPane(input: {
     clearStoredSession(documentId);
     recoveringStreamRef.current = false;
     sessionRef.current = null;
-    setPendingUserPrompt(null);
     setSnapshot(null);
+    setPendingUserPrompt(null);
     setPreview(null);
     setSelectedCommandIndexes([]);
     setError(null);
@@ -994,8 +847,8 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      setPendingUserPrompt(null);
       persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      setPendingUserPrompt(null);
     } catch (nextError) {
       setPendingUserPrompt(null);
       setDraft(prompt);
@@ -1125,45 +978,6 @@ export function useWorkbookAgentPane(input: {
     [documentId, ensureSession, persistSessionSnapshot],
   );
 
-  const startWorkflow = useCallback(
-    async (workflowRequest: WorkbookAgentWorkflowStartRequest) => {
-      try {
-        setError(null);
-        setIsStartingWorkflow(true);
-        const activeSession = await ensureSession();
-        const workflowBody: Record<string, unknown> = {
-          ...workflowRequest,
-          context: getContextRef.current(),
-        };
-        const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/workflows`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify(workflowBody),
-          },
-        );
-        const payload = (await response.json()) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            resolvePayloadMessage(
-              payload,
-              `Workbook agent request failed with status ${response.status}`,
-            ),
-          );
-        }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
-      } catch (nextError) {
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
-      } finally {
-        setIsStartingWorkflow(false);
-      }
-    },
-    [documentId, ensureSession, persistSessionSnapshot],
-  );
-
   const cancelWorkflowRun = useCallback(
     async (runId: string) => {
       const activeSession = sessionRef.current;
@@ -1208,16 +1022,15 @@ export function useWorkbookAgentPane(input: {
     () => (
       <WorkbookAgentPanel
         activeThreadId={snapshot?.threadId ?? sessionRef.current?.threadId ?? null}
-        currentContext={currentContext}
+        activeResponseTurnId={activeResponseTurnId}
         draft={draft}
         executionRecords={executionRecords}
         cancellingWorkflowRunId={cancellingWorkflowRunId}
         isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
-        isStartingWorkflow={isStartingWorkflow}
-        optimisticEntries={optimisticEntries}
         pendingBundle={pendingBundle}
         preview={preview}
+        showAssistantProgress={showAssistantProgress}
         sharedApprovalOwnerUserId={
           sharedApplyRequiresOwnerApproval ? (activeThreadSummary?.ownerUserId ?? null) : null
         }
@@ -1228,9 +1041,9 @@ export function useWorkbookAgentPane(input: {
         currentUserSharedRecommendation={currentUserSharedRecommendation}
         canFinalizeSharedBundle={canFinalizeSharedBundle}
         canRecommendSharedBundle={canRecommendSharedBundle}
+        optimisticEntries={optimisticEntries}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
-        threadScope={threadScope}
         threadSummaries={threadSummaries}
         workflowRuns={workflowRuns}
         onApplyPendingBundle={() => {
@@ -1247,7 +1060,6 @@ export function useWorkbookAgentPane(input: {
           void interrupt();
         }}
         onSelectAllPendingCommands={selectAllPendingCommands}
-        onSelectThreadScope={setThreadScope}
         onTogglePendingCommand={togglePendingCommand}
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
@@ -1255,48 +1067,9 @@ export function useWorkbookAgentPane(input: {
         onCancelWorkflowRun={(runId) => {
           void cancelWorkflowRun(runId);
         }}
-        onStartWorkflow={(workflowTemplate) => {
-          if (
-            (workflowTemplate === "findFormulaIssues" ||
-              workflowTemplate === "highlightFormulaIssues" ||
-              workflowTemplate === "repairFormulaIssues" ||
-              workflowTemplate === "highlightCurrentSheetOutliers" ||
-              workflowTemplate === "styleCurrentSheetHeaders" ||
-              workflowTemplate === "normalizeCurrentSheetHeaders" ||
-              workflowTemplate === "normalizeCurrentSheetNumberFormats" ||
-              workflowTemplate === "normalizeCurrentSheetWhitespace" ||
-              workflowTemplate === "fillCurrentSheetFormulasDown" ||
-              workflowTemplate === "createCurrentSheetRollup" ||
-              workflowTemplate === "createCurrentSheetReviewTab") &&
-            currentContext?.selection.sheetName
-          ) {
-            void startWorkflow({
-              workflowTemplate,
-              sheetName: currentContext.selection.sheetName,
-            });
-            return;
-          }
-          void startWorkflow({ workflowTemplate });
-        }}
-        onStartNamedWorkflow={(workflowTemplate, name) => {
-          void startWorkflow({
-            workflowTemplate,
-            name,
-          });
-        }}
-        onStartSearchWorkflow={(query) => {
-          void startWorkflow({
-            workflowTemplate: "searchWorkbookQuery",
-            query,
-          });
-        }}
-        onStartStructuralWorkflow={(workflowTemplate) => {
-          void startWorkflow({ workflowTemplate });
-        }}
         onSelectThread={(threadId) => {
           void selectThread(threadId);
         }}
-        onStartNewThread={startNewThread}
         onSubmit={() => {
           void sendPrompt();
         }}
@@ -1306,25 +1079,23 @@ export function useWorkbookAgentPane(input: {
       applyPendingBundle,
       cancelWorkflowRun,
       cancellingWorkflowRunId,
-      currentContext,
       dismissPendingBundle,
       draft,
       executionRecords,
       interrupt,
       isApplyingBundle,
       isLoading,
-      isStartingWorkflow,
       normalizedCommandIndexes,
       optimisticEntries,
       pendingBundle,
       preview,
       activeThreadSummary?.ownerUserId,
+      activeResponseTurnId,
       canFinalizeSharedBundle,
       canRecommendSharedBundle,
       currentUserSharedRecommendation,
       replayExecutionRecord,
       reviewPendingBundle,
-      startWorkflow,
       sendPrompt,
       selectThread,
       snapshot,
@@ -1333,10 +1104,8 @@ export function useWorkbookAgentPane(input: {
       sharedReviewRecommendations,
       sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
+      showAssistantProgress,
       selectAllPendingCommands,
-      setThreadScope,
-      startNewThread,
-      threadScope,
       threadSummaries,
       workflowRuns,
       togglePendingCommand,

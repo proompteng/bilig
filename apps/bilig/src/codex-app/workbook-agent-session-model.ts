@@ -14,12 +14,6 @@ const workbookAgentUiContextSchema = z.object({
   selection: z.object({
     sheetName: z.string().min(1),
     address: z.string().min(1),
-    range: z
-      .object({
-        startAddress: z.string().min(1),
-        endAddress: z.string().min(1),
-      })
-      .optional(),
   }),
   viewport: z.object({
     rowStart: z.number().int().nonnegative(),
@@ -33,7 +27,6 @@ export const createSessionBodySchema = z.object({
   sessionId: z.string().min(1).optional(),
   threadId: z.string().min(1).optional(),
   scope: z.enum(["private", "shared"]).optional(),
-  executionPolicy: z.enum(["autoApplySafe", "autoApplyAll", "ownerReview"]).optional(),
   context: workbookAgentUiContextSchema.optional(),
 });
 
@@ -166,8 +159,8 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Range and cell reads expose formatting metadata, including fill/background, font, alignment, borders, and number format when present.",
     "Use the workflow tool only for built-in multi-step or durable tasks.",
     "Use direct structural sheet tools for one-step sheet edits that should happen immediately.",
-    "Execute workbook changes directly when the session policy permits.",
-    "When the session policy routes changes for review, prepare one coherent workbook review item for the workbook panel.",
+    "Other workbook writes should stage one coherent preview bundle per turn.",
+    "After staging a preview bundle, summarize it and tell the user to review and apply it from the rail.",
     "Do not use non-workbook tools or invent unsupported capabilities.",
   ].join(" ");
 }
