@@ -16,6 +16,11 @@ export async function routeWorkbookAgentCodexNotification(input: {
   notification: CodexServerNotification;
   listSessions: () => readonly WorkbookAgentSessionState[];
   tryGetSessionByThreadId: (threadId: string) => WorkbookAgentSessionState | null;
+  finalizeCompletedTurn?: (
+    sessionState: WorkbookAgentSessionState,
+    turnId: string,
+    turnStatus: "completed" | "failed",
+  ) => Promise<void>;
   persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
   emitSnapshot: (threadId: string) => void;
   emit: (threadId: string, event: WorkbookAgentStreamEvent) => void;
@@ -74,11 +79,28 @@ export async function routeWorkbookAgentCodexNotification(input: {
       }
       sessionState.snapshot.activeTurnId = null;
       sessionState.snapshot.status =
-        input.notification.params.turn.status === "failed" ? "failed" : "idle";
-      sessionState.snapshot.lastError = input.notification.params.turn.error?.message ?? null;
+        input.notification.params.turn.status === "failed" || sessionState.snapshot.lastError
+          ? "failed"
+          : "idle";
+      if (input.notification.params.turn.error?.message) {
+        sessionState.snapshot.lastError = input.notification.params.turn.error.message;
+      }
+      await input.finalizeCompletedTurn?.(
+        sessionState,
+        input.notification.params.turn.id,
+        input.notification.params.turn.status === "failed" ? "failed" : "completed",
+      );
+      sessionState.snapshot.status =
+        input.notification.params.turn.status === "failed" || sessionState.snapshot.lastError
+          ? "failed"
+          : "idle";
+      if (input.notification.params.turn.error?.message) {
+        sessionState.snapshot.lastError = input.notification.params.turn.error.message;
+      }
       sessionState.promptByTurn.delete(input.notification.params.turn.id);
       sessionState.turnActorUserIdByTurn.delete(input.notification.params.turn.id);
       sessionState.turnContextByTurn.delete(input.notification.params.turn.id);
+      sessionState.stagedPrivateBundleByTurn.delete(input.notification.params.turn.id);
       await input.persistSessionState(sessionState);
       input.emitSnapshot(sessionState.threadId);
       return;
@@ -132,6 +154,7 @@ export async function routeWorkbookAgentCodexNotification(input: {
       const message = normalizeCodexNotificationErrorMessage(input.notification);
       await Promise.all(
         input.listSessions().map(async (sessionState) => {
+          sessionState.stagedPrivateBundleByTurn.clear();
           sessionState.snapshot.lastError = message;
           sessionState.snapshot.status = "failed";
           sessionState.snapshot.entries = upsertEntry(

@@ -33,6 +33,7 @@ export interface WorkbookAgentSessionState {
   executionPolicy: WorkbookAgentExecutionPolicy;
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
+  stagedPrivateBundleByTurn: Map<string, WorkbookAgentCommandBundle>;
   optimisticUserEntryIdByTurn: Map<string, string>;
   promptByTurn: Map<string, string>;
   turnActorUserIdByTurn: Map<string, string>;

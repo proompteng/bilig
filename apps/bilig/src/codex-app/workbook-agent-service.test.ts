@@ -2748,9 +2748,45 @@ describe("workbook agent service", () => {
       const output = result?.contentItems.find((item) => item.type === "inputText");
       expect(output?.type).toBe("inputText");
       const text = output && "text" in output ? output.text : "";
-      expect(text).toContain('"applied": true');
-      expect(text).toContain('"staged": false');
-      expect(text).toContain('"revision": 7');
+      expect(text).toContain('"queuedForTurnApply": true');
+      expect(text).toContain('"reviewQueued": false');
+
+      const queuedSnapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+      expect(queuedSnapshot.pendingBundle).toBeNull();
+      expect(queuedSnapshot.executionRecords).toEqual([]);
+
+      fakeCodex.emit({
+        method: "turn/completed",
+        params: {
+          threadId: "thr-test",
+          turn: {
+            id: "turn-1",
+            status: "completed",
+            items: [],
+            error: null,
+          },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(
+          service.getSnapshot({
+            documentId: "doc-1",
+            sessionId: "agent-session-1",
+            session: {
+              userID: "alex@example.com",
+              roles: ["editor"],
+            },
+          }).executionRecords,
+        ).toHaveLength(1);
+      });
 
       const snapshot = service.getSnapshot({
         documentId: "doc-1",

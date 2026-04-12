@@ -22,7 +22,12 @@ export function createWorkbookAgentDynamicToolHandler(input: {
     sessionState: WorkbookAgentSessionState,
     turnId: string,
   ) => WorkbookAgentSessionState["snapshot"]["context"];
-  stagePendingBundle: (
+  stageReviewBundle: (
+    sessionState: WorkbookAgentSessionState,
+    turnId: string,
+    bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
+  ) => void;
+  queuePrivateTurnBundle: (
     sessionState: WorkbookAgentSessionState,
     turnId: string,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
@@ -61,11 +66,16 @@ export function createWorkbookAgentDynamicToolHandler(input: {
         uiContext: requestContext,
         zeroSyncService: input.zeroSyncService,
         stageCommand: async (command) => {
+          const previousBundle =
+            sessionState.scope === "private"
+              ? (sessionState.stagedPrivateBundleByTurn.get(request.turnId) ??
+                sessionState.snapshot.pendingBundle)
+              : sessionState.snapshot.pendingBundle;
           const baseRevision = await input.zeroSyncService.getWorkbookHeadRevision(
             sessionState.documentId,
           );
           const bundle = appendWorkbookAgentCommandToBundle({
-            previousBundle: sessionState.snapshot.pendingBundle,
+            previousBundle,
             documentId: sessionState.documentId,
             threadId: sessionState.threadId,
             turnId: request.turnId,
@@ -77,6 +87,17 @@ export function createWorkbookAgentDynamicToolHandler(input: {
             command,
             now: input.now(),
           });
+          if (
+            sessionState.scope === "private" &&
+            input.shouldApplyToolBundleImmediately(sessionState, bundle)
+          ) {
+            input.queuePrivateTurnBundle(sessionState, request.turnId, bundle);
+            return {
+              bundle,
+              executionRecord: null,
+              disposition: "queuedForTurnApply",
+            };
+          }
           if (input.shouldApplyToolBundleImmediately(sessionState, bundle)) {
             const executionRecord = await input.applyToolBundleAutomatically({
               sessionState,
@@ -88,10 +109,14 @@ export function createWorkbookAgentDynamicToolHandler(input: {
               executionRecord,
             };
           }
-          input.stagePendingBundle(sessionState, request.turnId, bundle);
+          input.stageReviewBundle(sessionState, request.turnId, bundle);
           await input.persistSessionState(sessionState);
           input.emitSnapshot(sessionState.threadId);
-          return bundle;
+          return {
+            bundle,
+            executionRecord: null,
+            disposition: "reviewQueued",
+          };
         },
         startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
           const previousRunIds = new Set(

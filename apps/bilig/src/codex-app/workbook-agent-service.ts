@@ -18,7 +18,6 @@ import {
   decodeWorkbookAgentPreviewSummary,
   describeWorkbookAgentBundle,
   isWorkbookAgentBundleAutoApplyEligible,
-  isWorkbookAgentExecutionRecord,
   requiresWorkbookAgentOwnerReview,
   resolveWorkbookAgentBundleExecutionPolicyInput,
   splitWorkbookAgentCommandBundle,
@@ -427,7 +426,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     });
   }
 
-  private stagePendingBundle(
+  private stageReviewBundle(
     sessionState: WorkbookAgentSessionState,
     turnId: string,
     bundle: WorkbookAgentCommandBundle,
@@ -442,6 +441,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         createBundleRangeCitations(bundle),
       ),
     );
+  }
+
+  private queuePrivateTurnBundle(
+    sessionState: WorkbookAgentSessionState,
+    turnId: string,
+    bundle: WorkbookAgentCommandBundle,
+  ): void {
+    sessionState.stagedPrivateBundleByTurn.set(turnId, bundle);
   }
 
   private shouldApplyToolBundleImmediately(
@@ -483,7 +490,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     appliedBy: WorkbookAgentAppliedBy;
     commandIndexes?: readonly number[] | null | undefined;
     preview: WorkbookAgentPreviewSummary;
-  }): Promise<WorkbookAgentSessionSnapshot> {
+  }): Promise<WorkbookAgentExecutionRecord> {
     const selection = splitWorkbookAgentCommandBundle({
       bundle: input.pendingBundle,
       acceptedCommandIndexes: input.commandIndexes,
@@ -626,9 +633,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ),
     );
     this.touch(input.sessionState);
-    await this.persistSessionState(input.sessionState);
-    this.emitSnapshot(input.sessionState.threadId);
-    return cloneSnapshot(input.sessionState.snapshot);
+    return executionRecord;
   }
 
   private async applyToolBundleAutomatically(input: {
@@ -641,19 +646,63 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionState.documentId,
       input.bundle,
     );
-    const appliedSnapshot = await this.applyPendingBundleForSessionState({
+    const executionRecord = await this.applyPendingBundleForSessionState({
       sessionState: input.sessionState,
       pendingBundle: input.bundle,
       actorUserId: input.actorUserId,
       appliedBy: "auto",
       preview,
     });
-    for (const record of appliedSnapshot.executionRecords) {
-      if (isWorkbookAgentExecutionRecord(record) && record.bundleId === input.bundle.id) {
-        return record;
-      }
+    await this.persistSessionState(input.sessionState);
+    this.emitSnapshot(input.sessionState.threadId);
+    return executionRecord.bundleId === input.bundle.id ? executionRecord : null;
+  }
+
+  private async finalizePrivateTurnBundle(input: {
+    sessionState: WorkbookAgentSessionState;
+    turnId: string;
+    turnStatus: "completed" | "failed";
+  }): Promise<void> {
+    const queuedBundle = input.sessionState.stagedPrivateBundleByTurn.get(input.turnId);
+    if (!queuedBundle) {
+      return;
     }
-    return null;
+    input.sessionState.stagedPrivateBundleByTurn.delete(input.turnId);
+    if (input.turnStatus !== "completed") {
+      return;
+    }
+    const actorUserId = this.resolveTurnActorUserId(input.sessionState, input.turnId);
+    try {
+      const preview = await this.buildAuthoritativePreview(
+        input.sessionState.documentId,
+        queuedBundle,
+      );
+      await this.applyPendingBundleForSessionState({
+        sessionState: input.sessionState,
+        pendingBundle: queuedBundle,
+        actorUserId,
+        appliedBy: "auto",
+        preview,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.stageReviewBundle(
+        input.sessionState,
+        input.turnId,
+        attachSharedReviewState(queuedBundle, input.sessionState),
+      );
+      input.sessionState.snapshot.lastError = message;
+      input.sessionState.snapshot.entries = upsertEntry(
+        input.sessionState.snapshot.entries,
+        createSystemEntry(
+          `system-review-fallback:${queuedBundle.id}:${this.now()}`,
+          input.turnId,
+          `Prepared workbook review item after turn apply failed: ${queuedBundle.summary}`,
+          createBundleRangeCitations(queuedBundle),
+        ),
+      );
+      input.sessionState.snapshot.status = "failed";
+    }
   }
 
   getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot {
@@ -913,6 +962,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       executionPolicy: resolvedExecutionPolicy,
       threadId,
       snapshot,
+      stagedPrivateBundleByTurn: new Map(),
       optimisticUserEntryIdByTurn: new Map(),
       promptByTurn: new Map(),
       turnActorUserIdByTurn: new Map(),
@@ -959,7 +1009,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.threadToSessionId.set(threadId, sessionId);
     this.evictIfNeeded();
     await this.persistSessionState(sessionState);
-    return cloneSnapshot(snapshot);
+    return cloneSnapshot(sessionState.snapshot);
   }
 
   async updateContext(input: {
@@ -1209,7 +1259,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    return await this.applyPendingBundleForSessionState({
+    await this.applyPendingBundleForSessionState({
       sessionState,
       pendingBundle,
       actorUserId: input.session.userID,
@@ -1217,6 +1267,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       commandIndexes: input.commandIndexes,
       preview,
     });
+    await this.persistSessionState(sessionState);
+    this.emitSnapshot(sessionState.threadId);
+    return cloneSnapshot(sessionState.snapshot);
   }
 
   async reviewPendingBundle(input: {
@@ -1379,13 +1432,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (this.shouldApplyToolBundleImmediately(sessionState, replayedBundle)) {
       sessionState.snapshot.pendingBundle = replayedBundle;
       const preview = await this.buildAuthoritativePreview(input.documentId, replayedBundle);
-      return await this.applyPendingBundleForSessionState({
+      await this.applyPendingBundleForSessionState({
         sessionState,
         pendingBundle: replayedBundle,
         actorUserId: input.session.userID,
         appliedBy: "auto",
         preview,
       });
+      await this.persistSessionState(sessionState);
+      this.emitSnapshot(sessionState.threadId);
+      return cloneSnapshot(sessionState.snapshot);
     }
     sessionState.snapshot.pendingBundle = replayedBundle;
     sessionState.snapshot.entries = upsertEntry(
@@ -1479,12 +1535,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
               this.resolveTurnActorUserId(sessionState, turnId),
             resolveTurnContext: (sessionState, turnId) =>
               this.resolveTurnContext(sessionState, turnId),
-            stagePendingBundle: (sessionState, turnId, bundle) =>
-              this.stagePendingBundle(
+            stageReviewBundle: (sessionState, turnId, bundle) =>
+              this.stageReviewBundle(
                 sessionState,
                 turnId,
                 attachSharedReviewState(bundle, sessionState),
               ),
+            queuePrivateTurnBundle: (sessionState, turnId, bundle) =>
+              this.queuePrivateTurnBundle(sessionState, turnId, bundle),
             shouldApplyToolBundleImmediately: (sessionState, bundle) =>
               this.shouldApplyToolBundleImmediately(sessionState, bundle),
             applyToolBundleAutomatically: (args) => this.applyToolBundleAutomatically(args),
@@ -1500,6 +1558,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           notification,
           listSessions: () => [...this.sessions.values()],
           tryGetSessionByThreadId: (threadId) => this.tryGetSessionByThreadId(threadId),
+          finalizeCompletedTurn: async (sessionState, turnId, turnStatus) =>
+            await this.finalizePrivateTurnBundle({
+              sessionState,
+              turnId,
+              turnStatus,
+            }),
           persistSessionState: (sessionState) => this.persistSessionState(sessionState),
           emitSnapshot: (threadId) => this.emitSnapshot(threadId),
           emit: (threadId, event) => this.emit(threadId, event),

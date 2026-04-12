@@ -454,6 +454,7 @@ export interface WorkbookAgentToolContext {
 export interface WorkbookAgentStageCommandResult {
   readonly bundle: WorkbookAgentCommandBundle;
   readonly executionRecord: WorkbookAgentExecutionRecord | null;
+  readonly disposition?: "queuedForTurnApply" | "reviewQueued";
 }
 
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
@@ -831,7 +832,9 @@ async function stageCommandResult(
 ): Promise<CodexDynamicToolCallResult> {
   const result = await context.stageCommand(command);
   const normalized: WorkbookAgentStageCommandResult =
-    "bundle" in result ? result : { bundle: result, executionRecord: null };
+    "bundle" in result
+      ? result
+      : { bundle: result, executionRecord: null, disposition: "reviewQueued" };
   const bundle = normalized.bundle;
   if (normalized.executionRecord) {
     return textToolResult(
@@ -844,6 +847,22 @@ async function stageCommandResult(
         revision: normalized.executionRecord.appliedRevision,
         scope: normalized.executionRecord.scope,
         riskClass: normalized.executionRecord.riskClass,
+        estimatedAffectedCells: bundle.estimatedAffectedCells,
+        affectedRanges: bundle.affectedRanges,
+      }),
+    );
+  }
+  if (normalized.disposition === "queuedForTurnApply") {
+    return textToolResult(
+      stringifyJson({
+        applied: false,
+        staged: true,
+        reviewQueued: false,
+        queuedForTurnApply: true,
+        bundleId: bundle.id,
+        summary: `Queued workbook change set for turn apply: ${bundle.summary}`,
+        scope: bundle.scope,
+        riskClass: bundle.riskClass,
         estimatedAffectedCells: bundle.estimatedAffectedCells,
         affectedRanges: bundle.affectedRanges,
       }),
