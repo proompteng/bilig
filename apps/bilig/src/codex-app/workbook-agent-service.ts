@@ -9,6 +9,7 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
   WorkbookAgentPreviewSummary,
+  WorkbookAgentReviewQueueItem,
   WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
 import {
@@ -21,6 +22,8 @@ import {
   requiresWorkbookAgentOwnerReview,
   resolveWorkbookAgentBundleExecutionPolicyInput,
   splitWorkbookAgentCommandBundle,
+  toWorkbookAgentCommandBundle,
+  toWorkbookAgentReviewQueueItem,
 } from "@bilig/agent-api";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
@@ -403,6 +406,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       emitSnapshot: (threadId) => this.emitSnapshot(threadId),
       shouldApplyBundleImmediately: (sessionState, bundle) =>
         this.shouldApplyToolBundleImmediately(sessionState, bundle),
+      stageReviewBundle: (sessionState, turnId, bundle) =>
+        this.stageReviewBundle(sessionState, turnId, attachSharedReviewState(bundle, sessionState)),
       applyCommandBundleAutomatically: (args) => this.applyToolBundleAutomatically(args),
       incrementCounter: (counter) => {
         this.counters[counter] += 1;
@@ -419,9 +424,22 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       executionPolicy: sessionState.executionPolicy,
       context: sessionState.durable.context,
       entries: sessionState.durable.entries,
-      pendingBundle: sessionState.durable.pendingBundle,
+      reviewQueueItems: sessionState.durable.reviewQueueItems,
       updatedAtUnixMs: this.now(),
     });
+  }
+
+  private getCurrentReviewItem(
+    sessionState: WorkbookAgentThreadState,
+  ): WorkbookAgentReviewQueueItem | null {
+    return sessionState.durable.reviewQueueItems[0] ?? null;
+  }
+
+  private replaceCurrentReviewItem(
+    sessionState: WorkbookAgentThreadState,
+    reviewItem: WorkbookAgentReviewQueueItem | null,
+  ): void {
+    sessionState.durable.reviewQueueItems = reviewItem ? [reviewItem] : [];
   }
 
   private stageReviewBundle(
@@ -429,7 +447,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     turnId: string,
     bundle: WorkbookAgentCommandBundle,
   ): void {
-    sessionState.durable.pendingBundle = bundle;
+    this.replaceCurrentReviewItem(
+      sessionState,
+      toWorkbookAgentReviewQueueItem({
+        bundle,
+        reviewMode: needsSharedOwnerReview(sessionState, bundle) ? "ownerReview" : "manual",
+        sharedReview: bundle.sharedReview ?? null,
+      }),
+    );
     sessionState.durable.entries = upsertEntry(
       sessionState.durable.entries,
       createSystemEntry(
@@ -600,22 +625,30 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         (record) => record.id !== executionRecord.id,
       ),
     ];
-    input.sessionState.durable.pendingBundle =
+    this.replaceCurrentReviewItem(
+      input.sessionState,
       selection.remainingBundle === null
         ? null
-        : attachSharedReviewState(
-            createWorkbookAgentCommandBundle({
-              documentId: selection.remainingBundle.documentId,
-              threadId: selection.remainingBundle.threadId,
-              turnId: selection.remainingBundle.turnId,
-              goalText: selection.remainingBundle.goalText,
-              baseRevision: result.revision,
-              context: selection.remainingBundle.context,
-              commands: selection.remainingBundle.commands,
-              now: this.now(),
-            }),
-            input.sessionState,
-          );
+        : toWorkbookAgentReviewQueueItem({
+            bundle: attachSharedReviewState(
+              createWorkbookAgentCommandBundle({
+                documentId: selection.remainingBundle.documentId,
+                threadId: selection.remainingBundle.threadId,
+                turnId: selection.remainingBundle.turnId,
+                goalText: selection.remainingBundle.goalText,
+                baseRevision: result.revision,
+                context: selection.remainingBundle.context,
+                commands: selection.remainingBundle.commands,
+                now: this.now(),
+              }),
+              input.sessionState,
+            ),
+            reviewMode:
+              input.sessionState.scope === "shared" && selection.remainingBundle.riskClass !== "low"
+                ? "ownerReview"
+                : "manual",
+          }),
+    );
     input.sessionState.durable.entries = upsertEntry(
       input.sessionState.durable.entries,
       createSystemEntry(
@@ -639,7 +672,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     actorUserId: string;
     bundle: WorkbookAgentCommandBundle;
   }): Promise<WorkbookAgentExecutionRecord | null> {
-    input.sessionState.durable.pendingBundle = input.bundle;
+    this.replaceCurrentReviewItem(
+      input.sessionState,
+      toWorkbookAgentReviewQueueItem({
+        bundle: input.bundle,
+        reviewMode: "manual",
+      }),
+    );
     const preview = await this.buildAuthoritativePreview(
       input.sessionState.documentId,
       input.bundle,
@@ -743,14 +782,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           0,
         ),
         pendingBundleCount: sessions.filter(
-          (sessionState) => sessionState.durable.pendingBundle !== null,
+          (sessionState) => sessionState.durable.reviewQueueItems.length > 0,
         ).length,
         sharedPendingReviewCount: sessions.filter((sessionState) => {
-          const pendingBundle = sessionState.durable.pendingBundle;
+          const pendingReviewItem = this.getCurrentReviewItem(sessionState);
           return (
-            pendingBundle !== null &&
-            sessionState.scope === "shared" &&
-            normalizeSharedReviewState(pendingBundle, sessionState)?.status === "pending"
+            pendingReviewItem !== null &&
+            pendingReviewItem.reviewMode === "ownerReview" &&
+            pendingReviewItem.status === "pending"
           );
         }).length,
       },
@@ -911,7 +950,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       durable: {
         context: parsed.context ?? durableThreadState?.context ?? null,
         entries: mergeTimelineEntries(codexEntries, durableThreadState?.entries ?? []),
-        pendingBundle: durableThreadState?.pendingBundle ?? null,
+        reviewQueueItems: [...(durableThreadState?.reviewQueueItems ?? [])],
         executionRecords,
         workflowRuns,
       },
@@ -937,14 +976,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     };
     const canApplyBootstrapBundle =
       resolvedScope === "private" &&
-      sessionState.durable.pendingBundle !== null &&
+      sessionState.durable.reviewQueueItems.length > 0 &&
       this.isRolloutAllowed(input.documentId, input.session.userID) &&
       (sessionState.executionPolicy === "autoApplyAll" ||
         (sessionState.executionPolicy === "autoApplySafe" &&
           this.featureFlags.autoApplyLowRiskEnabled &&
-          sessionState.durable.pendingBundle.riskClass === "low"));
-    if (canApplyBootstrapBundle && sessionState.durable.pendingBundle) {
-      const queuedBundle = sessionState.durable.pendingBundle;
+          (this.getCurrentReviewItem(sessionState)?.riskClass ?? "high") === "low"));
+    const bootstrapReviewItem = this.getCurrentReviewItem(sessionState);
+    if (canApplyBootstrapBundle && bootstrapReviewItem) {
+      const queuedBundle = toWorkbookAgentCommandBundle(bootstrapReviewItem);
       const currentRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
       const migratedBundle =
         queuedBundle.baseRevision === currentRevision
@@ -961,7 +1001,23 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
               now: queuedBundle.createdAtUnixMs,
               sharedReview: queuedBundle.sharedReview ?? null,
             });
-      sessionState.durable.pendingBundle = migratedBundle;
+      this.replaceCurrentReviewItem(
+        sessionState,
+        toWorkbookAgentReviewQueueItem({
+          bundle: migratedBundle,
+          reviewMode: bootstrapReviewItem.reviewMode,
+          sharedReview:
+            bootstrapReviewItem.reviewMode === "ownerReview"
+              ? {
+                  ownerUserId: bootstrapReviewItem.ownerUserId ?? input.session.userID,
+                  status: bootstrapReviewItem.status,
+                  decidedByUserId: bootstrapReviewItem.decidedByUserId,
+                  decidedAtUnixMs: bootstrapReviewItem.decidedAtUnixMs,
+                  recommendations: [...bootstrapReviewItem.recommendations],
+                }
+              : null,
+        }),
+      );
       const preview = await this.buildAuthoritativePreview(input.documentId, migratedBundle);
       await this.applyPendingBundleForSessionState({
         sessionState,
@@ -1109,7 +1165,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     const workflowTemplate = parsed.workflowTemplate;
     this.assertWorkflowFamilyEnabled(workflowTemplate);
-    if (sessionState.durable.pendingBundle && isMutatingWorkflowTemplate(workflowTemplate)) {
+    if (
+      sessionState.durable.reviewQueueItems.length > 0 &&
+      isMutatingWorkflowTemplate(workflowTemplate)
+    ) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PENDING_BUNDLE_EXISTS",
         message:
@@ -1206,8 +1265,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.threadId,
       input.session.userID,
     );
-    const pendingBundle = sessionState.durable.pendingBundle;
-    if (!pendingBundle || pendingBundle.id !== input.bundleId) {
+    const reviewItem = this.getCurrentReviewItem(sessionState);
+    if (!reviewItem || reviewItem.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook agent change set was not found.",
@@ -1226,7 +1285,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     await this.applyPendingBundleForSessionState({
       sessionState,
-      pendingBundle,
+      pendingBundle: toWorkbookAgentCommandBundle(reviewItem),
       actorUserId: input.session.userID,
       appliedBy: input.appliedBy,
       commandIndexes: input.commandIndexes,
@@ -1250,8 +1309,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.threadId,
       input.session.userID,
     );
-    const pendingBundle = sessionState.durable.pendingBundle;
-    if (!pendingBundle || pendingBundle.id !== input.bundleId) {
+    const reviewItem = this.getCurrentReviewItem(sessionState);
+    if (!reviewItem || reviewItem.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook review item was not found.",
@@ -1259,7 +1318,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    if (!needsSharedOwnerReview(sessionState, pendingBundle)) {
+    if (reviewItem.reviewMode !== "ownerReview") {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_SHARED_REVIEW_NOT_REQUIRED",
         message: "Shared review is only required for medium/high-risk bundles.",
@@ -1269,7 +1328,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     const now = this.now();
     const sharedReview =
-      normalizeSharedReviewState(pendingBundle, sessionState) ??
+      normalizeSharedReviewState(toWorkbookAgentCommandBundle(reviewItem), sessionState) ??
       createPendingSharedReviewState(sessionState.storageActorUserId);
     const isOwnerReviewer = sessionState.storageActorUserId === input.session.userID;
     const nextSharedReview: WorkbookAgentSharedReviewState = isOwnerReviewer
@@ -1292,10 +1351,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             },
           ].toSorted((left, right) => left.userId.localeCompare(right.userId)),
         };
-    const reviewedBundle: WorkbookAgentCommandBundle = {
-      ...pendingBundle,
+    const reviewedBundle = {
+      ...toWorkbookAgentCommandBundle(reviewItem),
       sharedReview: nextSharedReview,
-    };
+    } satisfies WorkbookAgentCommandBundle;
     if (isOwnerReviewer) {
       if (parsed.decision === "approved") {
         this.counters.sharedReviewApprovedCount += 1;
@@ -1307,7 +1366,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     } else {
       this.counters.sharedRecommendationRejectedCount += 1;
     }
-    sessionState.durable.pendingBundle = reviewedBundle;
+    this.replaceCurrentReviewItem(
+      sessionState,
+      toWorkbookAgentReviewQueueItem({
+        bundle: reviewedBundle,
+        reviewMode: "ownerReview",
+        sharedReview: nextSharedReview,
+      }),
+    );
     sessionState.durable.entries = upsertEntry(
       sessionState.durable.entries,
       createSystemEntry(
@@ -1336,8 +1402,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.threadId,
       input.session.userID,
     );
-    const pendingBundle = sessionState.durable.pendingBundle;
-    if (!pendingBundle || pendingBundle.id !== input.bundleId) {
+    const reviewItem = this.getCurrentReviewItem(sessionState);
+    if (!reviewItem || reviewItem.id !== input.bundleId) {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
         message: "Workbook review item was not found.",
@@ -1345,14 +1411,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    sessionState.durable.pendingBundle = null;
+    this.replaceCurrentReviewItem(sessionState, null);
     sessionState.durable.entries = upsertEntry(
       sessionState.durable.entries,
       createSystemEntry(
-        `system-dismiss:${pendingBundle.id}:${this.now()}`,
-        pendingBundle.turnId,
-        `Cleared workbook review item: ${pendingBundle.summary}`,
-        createBundleRangeCitations(pendingBundle),
+        `system-dismiss:${reviewItem.id}:${this.now()}`,
+        reviewItem.turnId,
+        `Cleared workbook review item: ${reviewItem.summary}`,
+        createBundleRangeCitations(toWorkbookAgentCommandBundle(reviewItem)),
       ),
     );
     this.touch(sessionState);
@@ -1395,7 +1461,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       now: this.now(),
     });
     if (this.shouldApplyToolBundleImmediately(sessionState, replayedBundle)) {
-      sessionState.durable.pendingBundle = replayedBundle;
+      this.replaceCurrentReviewItem(
+        sessionState,
+        toWorkbookAgentReviewQueueItem({
+          bundle: replayedBundle,
+          reviewMode: "manual",
+        }),
+      );
       const preview = await this.buildAuthoritativePreview(input.documentId, replayedBundle);
       await this.applyPendingBundleForSessionState({
         sessionState,
@@ -1408,7 +1480,14 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       this.emitSnapshot(sessionState.threadId);
       return buildSnapshot(sessionState);
     }
-    sessionState.durable.pendingBundle = replayedBundle;
+    this.replaceCurrentReviewItem(
+      sessionState,
+      toWorkbookAgentReviewQueueItem({
+        bundle: replayedBundle,
+        reviewMode: needsSharedOwnerReview(sessionState, replayedBundle) ? "ownerReview" : "manual",
+        sharedReview: replayedBundle.sharedReview ?? null,
+      }),
+    );
     sessionState.durable.entries = upsertEntry(
       sessionState.durable.entries,
       createSystemEntry(

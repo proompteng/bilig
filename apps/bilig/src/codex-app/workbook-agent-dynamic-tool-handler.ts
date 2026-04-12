@@ -1,5 +1,6 @@
 import {
   appendWorkbookAgentCommandToBundle,
+  toWorkbookAgentCommandBundle,
   type CodexDynamicToolCallRequest,
   type CodexDynamicToolCallResult,
   type WorkbookAgentExecutionRecord,
@@ -66,11 +67,14 @@ export function createWorkbookAgentDynamicToolHandler(input: {
         uiContext: requestContext,
         zeroSyncService: input.zeroSyncService,
         stageCommand: async (command) => {
+          const currentReviewBundle = sessionState.durable.reviewQueueItems[0]
+            ? toWorkbookAgentCommandBundle(sessionState.durable.reviewQueueItems[0])
+            : null;
           const previousBundle =
             sessionState.scope === "private"
               ? (sessionState.live.stagedPrivateBundleByTurn.get(request.turnId) ??
-                sessionState.durable.pendingBundle)
-              : sessionState.durable.pendingBundle;
+                currentReviewBundle)
+              : currentReviewBundle;
           const baseRevision = await input.zeroSyncService.getWorkbookHeadRevision(
             sessionState.documentId,
           );

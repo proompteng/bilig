@@ -3,9 +3,11 @@ import {
   isWorkbookAgentExecutionRecord,
   normalizeWorkbookAgentCommandIndexes,
   projectWorkbookAgentBundle,
+  toWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentExecutionRecord,
   type WorkbookAgentPreviewSummary,
+  type WorkbookAgentReviewQueueItem,
 } from "@bilig/agent-api";
 import {
   WorkbookAgentThreadSnapshotSchema,
@@ -45,8 +47,9 @@ import {
   readCachedWorkbookAgentPreview,
 } from "./workbook-agent-preview-cache.js";
 import {
-  decodeWorkbookAgentReviewItem,
+  decodeWorkbookAgentReviewItems,
   resolveWorkbookAgentReviewOwnerUserId,
+  resolvePrimaryWorkbookAgentReviewItem,
 } from "./workbook-agent-review-state.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
@@ -270,10 +273,18 @@ export function useWorkbookAgentPane(input: {
     enabled: enabled && zeroEnabled && Boolean(zero) && activeThreadId !== null,
   });
 
-  const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(() => {
-    return decodeWorkbookAgentReviewItem(snapshot?.pendingBundle);
-  }, [snapshot?.pendingBundle]);
-  const pendingCommandCount = pendingBundle?.commands.length ?? 0;
+  const reviewQueueItems = useMemo<WorkbookAgentReviewQueueItem[]>(() => {
+    return decodeWorkbookAgentReviewItems(snapshot?.reviewQueueItems);
+  }, [snapshot?.reviewQueueItems]);
+  const primaryReviewItem = useMemo(
+    () => resolvePrimaryWorkbookAgentReviewItem(reviewQueueItems),
+    [reviewQueueItems],
+  );
+  const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(
+    () => (primaryReviewItem ? toWorkbookAgentCommandBundle(primaryReviewItem) : null),
+    [primaryReviewItem],
+  );
+  const pendingCommandCount = primaryReviewItem?.commands.length ?? 0;
 
   const normalizedCommandIndexes = useMemo(
     () =>
@@ -342,25 +353,22 @@ export function useWorkbookAgentPane(input: {
   );
   const sharedApplyRequiresOwnerApproval =
     snapshot?.scope === "shared" &&
-    pendingBundle?.riskClass !== undefined &&
-    pendingBundle.riskClass !== "low" &&
+    primaryReviewItem?.riskClass !== undefined &&
+    primaryReviewItem.riskClass !== "low" &&
     activeThreadSummary !== null &&
     activeThreadSummary.ownerUserId !== currentUserId;
   const sharedReviewOwnerUserId = resolveWorkbookAgentReviewOwnerUserId({
-    reviewItem: pendingBundle,
+    reviewItem: primaryReviewItem,
     sessionScope: snapshot?.scope ?? "private",
     activeThreadOwnerUserId: activeThreadSummary?.ownerUserId ?? null,
   });
   const sharedReviewStatus =
-    sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.status ?? "pending") : null;
+    sharedReviewOwnerUserId !== null ? (primaryReviewItem?.status ?? "pending") : null;
   const sharedReviewDecidedByUserId =
-    sharedReviewOwnerUserId !== null
-      ? (pendingBundle?.sharedReview?.decidedByUserId ?? null)
-      : null;
+    sharedReviewOwnerUserId !== null ? (primaryReviewItem?.decidedByUserId ?? null) : null;
   const sharedReviewRecommendations = useMemo(
-    () =>
-      sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.recommendations ?? []) : [],
-    [pendingBundle?.sharedReview?.recommendations, sharedReviewOwnerUserId],
+    () => (sharedReviewOwnerUserId !== null ? (primaryReviewItem?.recommendations ?? []) : []),
+    [primaryReviewItem?.recommendations, sharedReviewOwnerUserId],
   );
   const currentUserSharedRecommendation =
     sharedReviewRecommendations.find((recommendation) => recommendation.userId === currentUserId)

@@ -1,11 +1,8 @@
-import { createWorkbookAgentCommandBundle, describeWorkbookAgentBundle } from "@bilig/agent-api";
+import { createWorkbookAgentCommandBundle } from "@bilig/agent-api";
 import type { WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
-import {
-  attachSharedReviewState,
-  createBundleRangeCitations,
-} from "./workbook-agent-bundle-state.js";
+import { attachSharedReviewState } from "./workbook-agent-bundle-state.js";
 import {
   cancelWorkflowSteps,
   completeWorkflowSteps,
@@ -41,6 +38,11 @@ export class WorkbookAgentWorkflowRuntime {
         sessionState: WorkbookAgentThreadState,
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
       ) => boolean;
+      stageReviewBundle: (
+        sessionState: WorkbookAgentSessionState,
+        turnId: string,
+        bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
+      ) => void;
       applyCommandBundleAutomatically: (input: {
         sessionState: WorkbookAgentThreadState;
         actorUserId: string;
@@ -250,16 +252,7 @@ export class WorkbookAgentWorkflowRuntime {
             completedSummary = `Applied workflow: ${executionRecord.summary}`;
           }
         } else {
-          input.sessionState.durable.pendingBundle = workflowBundle;
-          input.sessionState.durable.entries = upsertEntry(
-            input.sessionState.durable.entries,
-            createSystemEntry(
-              `system-preview:${workflowBundle.id}`,
-              input.workflowTurnId,
-              describeWorkbookAgentBundle(workflowBundle),
-              createBundleRangeCitations(workflowBundle),
-            ),
-          );
+          this.options.stageReviewBundle(input.sessionState, input.workflowTurnId, workflowBundle);
         }
       }
       const completedRun: WorkbookAgentWorkflowRun = {

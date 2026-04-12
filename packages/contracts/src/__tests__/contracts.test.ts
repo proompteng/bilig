@@ -53,12 +53,12 @@ describe("@bilig/contracts", () => {
       ownerUserId: "alex@example.com",
       updatedAtUnixMs: 42,
       entryCount: 3,
-      hasPendingBundle: true,
+      reviewQueueItemCount: 1,
       latestEntryText: "Preview bundle staged",
     });
 
     expect(decoded.ownerUserId).toBe("alex@example.com");
-    expect(decoded.hasPendingBundle).toBe(true);
+    expect(decoded.reviewQueueItemCount).toBe(1);
   });
 
   it("decodes workbook agent timeline entries with citations", () => {

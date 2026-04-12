@@ -1,9 +1,9 @@
 import {
   isWorkbookAgentCommand,
-  isWorkbookAgentCommandBundle,
+  isWorkbookAgentReviewQueueItem,
   normalizeWorkbookAgentToolName,
-  type WorkbookAgentCommandBundle,
-  type WorkbookAgentSharedReviewState,
+  type WorkbookAgentContextRef,
+  type WorkbookAgentReviewQueueItem,
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentExecutionPolicy,
@@ -25,7 +25,7 @@ export interface WorkbookAgentThreadStateRecord {
   readonly executionPolicy: WorkbookAgentExecutionPolicy;
   readonly context: WorkbookAgentUiContext | null;
   readonly entries: readonly WorkbookAgentTimelineEntry[];
-  readonly pendingBundle: WorkbookAgentCommandBundle | null;
+  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[];
   readonly updatedAtUnixMs: number;
 }
 
@@ -38,7 +38,6 @@ interface WorkbookChatThreadRow extends QueryResultRow {
   readonly contextJson?: unknown;
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
-  readonly hasPendingBundle?: unknown;
   readonly latestEntryText?: unknown;
 }
 
@@ -68,8 +67,8 @@ interface WorkbookChatToolCallRow extends QueryResultRow {
   readonly sortOrder?: unknown;
 }
 
-interface WorkbookPendingBundleRow extends QueryResultRow {
-  readonly bundleId?: unknown;
+interface WorkbookReviewQueueItemRow extends QueryResultRow {
+  readonly reviewItemId?: unknown;
   readonly workbookId?: unknown;
   readonly threadId?: unknown;
   readonly actorUserId?: unknown;
@@ -78,14 +77,18 @@ interface WorkbookPendingBundleRow extends QueryResultRow {
   readonly summary?: unknown;
   readonly scope?: unknown;
   readonly riskClass?: unknown;
-  readonly approvalMode?: unknown;
+  readonly reviewMode?: unknown;
+  readonly ownerUserId?: unknown;
+  readonly status?: unknown;
+  readonly decidedByUserId?: unknown;
+  readonly decidedAtUnixMs?: unknown;
   readonly baseRevision?: unknown;
   readonly createdAtUnixMs?: unknown;
   readonly contextJson?: unknown;
   readonly commandsJson?: unknown;
   readonly affectedRangesJson?: unknown;
   readonly estimatedAffectedCells?: unknown;
-  readonly sharedReviewJson?: unknown;
+  readonly recommendationsJson?: unknown;
 }
 
 interface WorkbookChatThreadSummaryRow extends QueryResultRow {
@@ -94,7 +97,7 @@ interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly ownerUserId?: unknown;
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
-  readonly hasPendingBundle?: unknown;
+  readonly reviewQueueItemCount?: unknown;
   readonly latestEntryText?: unknown;
 }
 
@@ -161,7 +164,7 @@ function isWorkbookAgentUiContext(value: unknown): value is WorkbookAgentUiConte
 
 function toBundleContextRef(
   context: WorkbookAgentUiContext | null,
-): WorkbookAgentCommandBundle["context"] {
+): WorkbookAgentContextRef | null {
   return context
     ? {
         selection: {
@@ -302,15 +305,21 @@ function hasToolCallState(entry: WorkbookAgentTimelineEntry): boolean {
   );
 }
 
-function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCommandBundle | null {
+function normalizeReviewQueueItem(
+  row: WorkbookReviewQueueItemRow,
+): WorkbookAgentReviewQueueItem | null {
   const baseRevision = parseNumericValue(row.baseRevision);
   const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
+  const decidedAtUnixMs =
+    row.decidedAtUnixMs === null || row.decidedAtUnixMs === undefined
+      ? null
+      : parseNumericValue(row.decidedAtUnixMs);
   const estimatedAffectedCells =
     row.estimatedAffectedCells === null || row.estimatedAffectedCells === undefined
       ? null
       : parseNumericValue(row.estimatedAffectedCells);
   if (
-    typeof row.bundleId !== "string" ||
+    typeof row.reviewItemId !== "string" ||
     typeof row.workbookId !== "string" ||
     typeof row.threadId !== "string" ||
     typeof row.turnId !== "string" ||
@@ -318,19 +327,25 @@ function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCom
     typeof row.summary !== "string" ||
     (row.scope !== "selection" && row.scope !== "sheet" && row.scope !== "workbook") ||
     (row.riskClass !== "low" && row.riskClass !== "medium" && row.riskClass !== "high") ||
-    (row.approvalMode !== "auto" &&
-      row.approvalMode !== "preview" &&
-      row.approvalMode !== "explicit") ||
+    (row.reviewMode !== "manual" && row.reviewMode !== "ownerReview") ||
+    (row.ownerUserId !== null &&
+      row.ownerUserId !== undefined &&
+      typeof row.ownerUserId !== "string") ||
+    (row.status !== "pending" && row.status !== "approved" && row.status !== "rejected") ||
+    (row.decidedByUserId !== null &&
+      row.decidedByUserId !== undefined &&
+      typeof row.decidedByUserId !== "string") ||
     baseRevision === null ||
     createdAtUnixMs === null ||
     !Array.isArray(row.commandsJson) ||
     !row.commandsJson.every((entry) => isWorkbookAgentCommand(entry)) ||
-    !Array.isArray(row.affectedRangesJson)
+    !Array.isArray(row.affectedRangesJson) ||
+    !Array.isArray(row.recommendationsJson)
   ) {
     return null;
   }
-  const bundle = {
-    id: row.bundleId,
+  const reviewItem = {
+    id: row.reviewItemId,
     documentId: row.workbookId,
     threadId: row.threadId,
     turnId: row.turnId,
@@ -338,71 +353,20 @@ function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCom
     summary: row.summary,
     scope: row.scope,
     riskClass: row.riskClass,
-    approvalMode: row.approvalMode,
+    reviewMode: row.reviewMode,
+    ownerUserId: typeof row.ownerUserId === "string" ? row.ownerUserId : null,
+    status: row.status,
+    decidedByUserId: typeof row.decidedByUserId === "string" ? row.decidedByUserId : null,
+    decidedAtUnixMs,
+    recommendations: [...row.recommendationsJson],
     baseRevision,
     createdAtUnixMs,
     context: toBundleContextRef(isWorkbookAgentUiContext(row.contextJson) ? row.contextJson : null),
     commands: [...row.commandsJson],
     affectedRanges: [...row.affectedRangesJson],
     estimatedAffectedCells,
-    sharedReview: normalizeSharedReviewState(row.sharedReviewJson),
-  } satisfies WorkbookAgentCommandBundle;
-  return isWorkbookAgentCommandBundle(bundle) ? bundle : null;
-}
-
-function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReviewState {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "ownerUserId" in value &&
-    typeof value.ownerUserId === "string" &&
-    "status" in value &&
-    (value.status === "pending" || value.status === "approved" || value.status === "rejected") &&
-    "decidedByUserId" in value &&
-    (value.decidedByUserId === null || typeof value.decidedByUserId === "string") &&
-    "decidedAtUnixMs" in value &&
-    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number") &&
-    "recommendations" in value &&
-    Array.isArray(value.recommendations) &&
-    value.recommendations.every(
-      (recommendation) =>
-        typeof recommendation === "object" &&
-        recommendation !== null &&
-        "userId" in recommendation &&
-        typeof recommendation.userId === "string" &&
-        "decision" in recommendation &&
-        (recommendation.decision === "approved" || recommendation.decision === "rejected") &&
-        "decidedAtUnixMs" in recommendation &&
-        typeof recommendation.decidedAtUnixMs === "number",
-    )
-  );
-}
-
-function normalizeSharedReviewState(value: unknown): WorkbookAgentSharedReviewState | null {
-  if (isSharedReviewState(value)) {
-    return value;
-  }
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "ownerUserId" in value &&
-    typeof value.ownerUserId === "string" &&
-    "status" in value &&
-    (value.status === "pending" || value.status === "approved" || value.status === "rejected") &&
-    "decidedByUserId" in value &&
-    (value.decidedByUserId === null || typeof value.decidedByUserId === "string") &&
-    "decidedAtUnixMs" in value &&
-    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number")
-  ) {
-    return {
-      ownerUserId: value.ownerUserId,
-      status: value.status,
-      decidedByUserId: value.decidedByUserId,
-      decidedAtUnixMs: value.decidedAtUnixMs,
-      recommendations: [],
-    };
-  }
-  return null;
+  } satisfies WorkbookAgentReviewQueueItem;
+  return isWorkbookAgentReviewQueueItem(reviewItem) ? reviewItem : null;
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {
@@ -517,12 +481,101 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       ADD COLUMN IF NOT EXISTS shared_review_json JSONB;
   `);
   await db.query(`
+    CREATE TABLE IF NOT EXISTS workbook_review_queue_item (
+      workbook_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      review_item_id TEXT NOT NULL,
+      turn_id TEXT NOT NULL,
+      goal_text TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      risk_class TEXT NOT NULL,
+      review_mode TEXT NOT NULL,
+      owner_user_id TEXT,
+      status TEXT NOT NULL,
+      decided_by_user_id TEXT,
+      decided_at_unix_ms BIGINT,
+      base_revision BIGINT NOT NULL,
+      created_at_unix_ms BIGINT NOT NULL,
+      context_json JSONB,
+      commands_json JSONB NOT NULL,
+      affected_ranges_json JSONB NOT NULL,
+      estimated_affected_cells BIGINT,
+      recommendations_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      PRIMARY KEY (workbook_id, thread_id, actor_user_id, review_item_id)
+    )
+  `);
+  await db.query(`
+    INSERT INTO workbook_review_queue_item (
+      workbook_id,
+      thread_id,
+      actor_user_id,
+      review_item_id,
+      turn_id,
+      goal_text,
+      summary,
+      scope,
+      risk_class,
+      review_mode,
+      owner_user_id,
+      status,
+      decided_by_user_id,
+      decided_at_unix_ms,
+      base_revision,
+      created_at_unix_ms,
+      context_json,
+      commands_json,
+      affected_ranges_json,
+      estimated_affected_cells,
+      recommendations_json
+    )
+    SELECT
+      workbook_id,
+      thread_id,
+      actor_user_id,
+      bundle_id,
+      turn_id,
+      goal_text,
+      summary,
+      scope,
+      risk_class,
+      CASE
+        WHEN shared_review_json IS NOT NULL THEN 'ownerReview'
+        ELSE 'manual'
+      END,
+      shared_review_json ->> 'ownerUserId',
+      COALESCE(shared_review_json ->> 'status', 'pending'),
+      shared_review_json ->> 'decidedByUserId',
+      NULLIF(shared_review_json ->> 'decidedAtUnixMs', '')::BIGINT,
+      base_revision,
+      created_at_unix_ms,
+      context_json,
+      commands_json,
+      affected_ranges_json,
+      estimated_affected_cells,
+      COALESCE(shared_review_json -> 'recommendations', '[]'::jsonb)
+    FROM workbook_pending_bundle AS legacy
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM workbook_review_queue_item AS review_item
+      WHERE review_item.workbook_id = legacy.workbook_id
+        AND review_item.thread_id = legacy.thread_id
+        AND review_item.actor_user_id = legacy.actor_user_id
+        AND review_item.review_item_id = legacy.bundle_id
+    )
+  `);
+  await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
   `);
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_tool_call_thread_order_idx
       ON workbook_chat_tool_call (workbook_id, thread_id, actor_user_id, sort_order ASC)
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS workbook_review_queue_item_thread_created_idx
+      ON workbook_review_queue_item (workbook_id, thread_id, actor_user_id, created_at_unix_ms ASC)
   `);
 }
 
@@ -531,13 +584,14 @@ function normalizeThreadSummary(
 ): WorkbookAgentThreadSummary | null {
   const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
   const entryCount = parseNumericValue(row.entryCount);
+  const reviewQueueItemCount = parseNumericValue(row.reviewQueueItemCount);
   if (
     typeof row.threadId !== "string" ||
     (row.scope !== "private" && row.scope !== "shared") ||
     typeof row.ownerUserId !== "string" ||
     updatedAtUnixMs === null ||
     entryCount === null ||
-    typeof row.hasPendingBundle !== "boolean" ||
+    reviewQueueItemCount === null ||
     (row.latestEntryText !== null &&
       row.latestEntryText !== undefined &&
       typeof row.latestEntryText !== "string")
@@ -550,7 +604,7 @@ function normalizeThreadSummary(
     ownerUserId: row.ownerUserId,
     updatedAtUnixMs,
     entryCount,
-    hasPendingBundle: row.hasPendingBundle,
+    reviewQueueItemCount,
     latestEntryText: typeof row.latestEntryText === "string" ? row.latestEntryText : null,
   };
 }
@@ -604,7 +658,7 @@ export async function saveWorkbookAgentThreadState(
       record.executionPolicy,
       JSON.stringify(record.context),
       persistedEntries.length,
-      record.pendingBundle !== null,
+      record.reviewQueueItems.length > 0,
       latestEntryText,
       record.updatedAtUnixMs,
     ],
@@ -726,77 +780,70 @@ export async function saveWorkbookAgentThreadState(
       );
     }),
   );
-  if (record.pendingBundle) {
-    await db.query(
-      `
-        INSERT INTO workbook_pending_bundle (
-          workbook_id,
-          thread_id,
-          actor_user_id,
-          bundle_id,
-          turn_id,
-          goal_text,
-          summary,
-          scope,
-          risk_class,
-          approval_mode,
-          base_revision,
-          created_at_unix_ms,
-          context_json,
-          commands_json,
-          affected_ranges_json,
-          estimated_affected_cells,
-          shared_review_json
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16, $17::jsonb
-        )
-        ON CONFLICT (workbook_id, thread_id, actor_user_id)
-        DO UPDATE SET
-          bundle_id = EXCLUDED.bundle_id,
-          turn_id = EXCLUDED.turn_id,
-          goal_text = EXCLUDED.goal_text,
-          summary = EXCLUDED.summary,
-          scope = EXCLUDED.scope,
-          risk_class = EXCLUDED.risk_class,
-          approval_mode = EXCLUDED.approval_mode,
-          base_revision = EXCLUDED.base_revision,
-          created_at_unix_ms = EXCLUDED.created_at_unix_ms,
-          context_json = EXCLUDED.context_json,
-          commands_json = EXCLUDED.commands_json,
-          affected_ranges_json = EXCLUDED.affected_ranges_json,
-          estimated_affected_cells = EXCLUDED.estimated_affected_cells,
-          shared_review_json = EXCLUDED.shared_review_json
-      `,
-      [
-        record.documentId,
-        record.threadId,
-        record.actorUserId,
-        record.pendingBundle.id,
-        record.pendingBundle.turnId,
-        record.pendingBundle.goalText,
-        record.pendingBundle.summary,
-        record.pendingBundle.scope,
-        record.pendingBundle.riskClass,
-        record.pendingBundle.approvalMode,
-        record.pendingBundle.baseRevision,
-        record.pendingBundle.createdAtUnixMs,
-        JSON.stringify(record.pendingBundle.context),
-        JSON.stringify(record.pendingBundle.commands),
-        JSON.stringify(record.pendingBundle.affectedRanges),
-        record.pendingBundle.estimatedAffectedCells,
-        JSON.stringify(record.pendingBundle.sharedReview ?? null),
-      ],
-    );
-  } else {
-    await db.query(
-      `
-        DELETE FROM workbook_pending_bundle
-        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
-      `,
-      [record.documentId, record.threadId, record.actorUserId],
-    );
-  }
+  await db.query(
+    `
+      DELETE FROM workbook_review_queue_item
+      WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
+    `,
+    [record.documentId, record.threadId, record.actorUserId],
+  );
+  await Promise.all(
+    record.reviewQueueItems.map(async (reviewItem) => {
+      await db.query(
+        `
+          INSERT INTO workbook_review_queue_item (
+            workbook_id,
+            thread_id,
+            actor_user_id,
+            review_item_id,
+            turn_id,
+            goal_text,
+            summary,
+            scope,
+            risk_class,
+            review_mode,
+            owner_user_id,
+            status,
+            decided_by_user_id,
+            decided_at_unix_ms,
+            base_revision,
+            created_at_unix_ms,
+            context_json,
+            commands_json,
+            affected_ranges_json,
+            estimated_affected_cells,
+            recommendations_json
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21::jsonb
+          )
+        `,
+        [
+          record.documentId,
+          record.threadId,
+          record.actorUserId,
+          reviewItem.id,
+          reviewItem.turnId,
+          reviewItem.goalText,
+          reviewItem.summary,
+          reviewItem.scope,
+          reviewItem.riskClass,
+          reviewItem.reviewMode,
+          reviewItem.ownerUserId,
+          reviewItem.status,
+          reviewItem.decidedByUserId,
+          reviewItem.decidedAtUnixMs,
+          reviewItem.baseRevision,
+          reviewItem.createdAtUnixMs,
+          JSON.stringify(reviewItem.context),
+          JSON.stringify(reviewItem.commands),
+          JSON.stringify(reviewItem.affectedRanges),
+          reviewItem.estimatedAffectedCells,
+          JSON.stringify(reviewItem.recommendations),
+        ],
+      );
+    }),
+  );
 }
 
 export async function loadWorkbookAgentThreadState(
@@ -846,7 +893,7 @@ export async function loadWorkbookAgentThreadState(
   ) {
     return null;
   }
-  const [itemResult, toolCallResult, pendingBundleResult] = await Promise.all([
+  const [itemResult, toolCallResult, reviewQueueItemResult] = await Promise.all([
     db.query<WorkbookChatItemRow>(
       `
         SELECT
@@ -885,10 +932,10 @@ export async function loadWorkbookAgentThreadState(
       `,
       [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
-    db.query<WorkbookPendingBundleRow>(
+    db.query<WorkbookReviewQueueItemRow>(
       `
         SELECT
-          bundle_id AS "bundleId",
+          review_item_id AS "reviewItemId",
           workbook_id AS "workbookId",
           thread_id AS "threadId",
           actor_user_id AS "actorUserId",
@@ -897,16 +944,21 @@ export async function loadWorkbookAgentThreadState(
           summary AS "summary",
           scope AS "scope",
           risk_class AS "riskClass",
-          approval_mode AS "approvalMode",
+          review_mode AS "reviewMode",
+          owner_user_id AS "ownerUserId",
+          status AS "status",
+          decided_by_user_id AS "decidedByUserId",
+          decided_at_unix_ms AS "decidedAtUnixMs",
           base_revision AS "baseRevision",
           created_at_unix_ms AS "createdAtUnixMs",
           context_json AS "contextJson",
           commands_json AS "commandsJson",
           affected_ranges_json AS "affectedRangesJson",
           estimated_affected_cells AS "estimatedAffectedCells",
-          shared_review_json AS "sharedReviewJson"
-        FROM workbook_pending_bundle
+          recommendations_json AS "recommendationsJson"
+        FROM workbook_review_queue_item
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
+        ORDER BY created_at_unix_ms ASC, review_item_id ASC
       `,
       [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
@@ -925,7 +977,10 @@ export async function loadWorkbookAgentThreadState(
       }),
     )
     .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null);
-  const pendingBundle = normalizePendingBundle(pendingBundleResult.rows[0] ?? {});
+  const reviewQueueItems = reviewQueueItemResult.rows.flatMap((row) => {
+    const normalized = normalizeReviewQueueItem(row);
+    return normalized ? [normalized] : [];
+  });
   return {
     documentId: thread.workbookId,
     threadId: thread.threadId,
@@ -934,7 +989,7 @@ export async function loadWorkbookAgentThreadState(
     executionPolicy,
     context: isWorkbookAgentUiContext(thread.contextJson) ? thread.contextJson : null,
     entries,
-    pendingBundle,
+    reviewQueueItems,
     updatedAtUnixMs,
   };
 }
@@ -954,7 +1009,7 @@ export async function listWorkbookAgentThreadSummaries(
         thread.actor_user_id AS "ownerUserId",
         thread.updated_at_unix_ms AS "updatedAtUnixMs",
         COALESCE(item_counts.entry_count, 0) AS "entryCount",
-        pending.bundle_id IS NOT NULL AS "hasPendingBundle",
+        COALESCE(review_counts.review_queue_item_count, 0) AS "reviewQueueItemCount",
         latest_item.text AS "latestEntryText"
       FROM (
         SELECT ranked.workbook_id, ranked.thread_id, ranked.actor_user_id, ranked.scope, ranked.updated_at_unix_ms
@@ -985,10 +1040,14 @@ export async function listWorkbookAgentThreadSummaries(
         ON item_counts.workbook_id = thread.workbook_id
        AND item_counts.thread_id = thread.thread_id
        AND item_counts.actor_user_id = thread.actor_user_id
-      LEFT JOIN workbook_pending_bundle AS pending
-        ON pending.workbook_id = thread.workbook_id
-       AND pending.thread_id = thread.thread_id
-       AND pending.actor_user_id = thread.actor_user_id
+      LEFT JOIN (
+        SELECT workbook_id, thread_id, actor_user_id, COUNT(*)::integer AS review_queue_item_count
+        FROM workbook_review_queue_item
+        GROUP BY workbook_id, thread_id, actor_user_id
+      ) AS review_counts
+        ON review_counts.workbook_id = thread.workbook_id
+       AND review_counts.thread_id = thread.thread_id
+       AND review_counts.actor_user_id = thread.actor_user_id
       LEFT JOIN LATERAL (
         SELECT text
         FROM workbook_chat_item

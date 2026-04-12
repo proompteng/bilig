@@ -412,7 +412,7 @@ export function cloneSnapshot(snapshot: WorkbookAgentThreadSnapshot): WorkbookAg
     ...snapshot,
     entries: snapshot.entries.map((entry) => ({ ...entry })),
     ...(snapshot.context ? { context: structuredClone(snapshot.context) } : { context: null }),
-    pendingBundle: snapshot.pendingBundle ? structuredClone(snapshot.pendingBundle) : null,
+    reviewQueueItems: snapshot.reviewQueueItems.map((item) => structuredClone(item)),
     executionRecords: snapshot.executionRecords.map((record) => structuredClone(record)),
     workflowRuns: snapshot.workflowRuns.map((run) => structuredClone(run)),
   };

@@ -100,7 +100,7 @@ function renderPanel(entry: {
                   citations: entry.citations ?? [],
                 },
               ],
-              pendingBundle: null,
+              reviewQueueItems: [],
               executionRecords: entry.executionRecords ?? [],
               workflowRuns: [],
             }}

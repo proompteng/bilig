@@ -3,6 +3,7 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentContextRef,
   WorkbookAgentExecutionRecord,
+  WorkbookAgentReviewQueueItem,
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentExecutionPolicy,
@@ -11,11 +12,10 @@ import type {
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
-
 export interface WorkbookAgentThreadDurableState {
   context: WorkbookAgentUiContext | null;
   entries: WorkbookAgentTimelineEntry[];
-  pendingBundle: WorkbookAgentCommandBundle | null;
+  reviewQueueItems: WorkbookAgentReviewQueueItem[];
   executionRecords: WorkbookAgentExecutionRecord[];
   workflowRuns: WorkbookAgentWorkflowRun[];
 }
@@ -123,9 +123,7 @@ export function buildSnapshot(sessionState: WorkbookAgentThreadState): WorkbookA
     lastError: sessionState.live.lastError,
     context: sessionState.durable.context ? structuredClone(sessionState.durable.context) : null,
     entries: sessionState.durable.entries.map((entry) => ({ ...entry })),
-    pendingBundle: sessionState.durable.pendingBundle
-      ? structuredClone(sessionState.durable.pendingBundle)
-      : null,
+    reviewQueueItems: sessionState.durable.reviewQueueItems.map((item) => structuredClone(item)),
     executionRecords: sessionState.durable.executionRecords.map((record) =>
       structuredClone(record),
     ),

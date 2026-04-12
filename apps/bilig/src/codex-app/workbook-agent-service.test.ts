@@ -1,7 +1,11 @@
 import {
   isWorkbookAgentCommandBundle,
   isWorkbookAgentExecutionRecord,
+  isWorkbookAgentReviewQueueItem,
+  toWorkbookAgentCommandBundle,
+  toWorkbookAgentReviewQueueItem,
   type CodexServerNotification,
+  type WorkbookAgentCommandBundle,
   type CodexTurn,
 } from "@bilig/agent-api";
 import { SpreadsheetEngine } from "@bilig/core";
@@ -106,6 +110,24 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
     },
     ...overrides,
   };
+}
+
+function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
+  return toWorkbookAgentReviewQueueItem({
+    bundle,
+    reviewMode: bundle.sharedReview ? "ownerReview" : "manual",
+    ...(bundle.sharedReview ? { sharedReview: bundle.sharedReview } : {}),
+  });
+}
+
+function getPrimaryReviewBundle(snapshot: {
+  reviewQueueItems: readonly unknown[];
+}): WorkbookAgentCommandBundle | null {
+  const [reviewItem] = snapshot.reviewQueueItems;
+  if (!isWorkbookAgentReviewQueueItem(reviewItem)) {
+    return null;
+  }
+  return toWorkbookAgentCommandBundle(reviewItem);
 }
 
 async function createWorkbookRuntimeStub(documentId = "doc-1"): Promise<WorkbookRuntime> {
@@ -304,7 +326,7 @@ describe("workbook agent service", () => {
       });
 
       expect(snapshot.threadId).toBe("thr-test");
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([]);
 
       const events: unknown[] = [];
@@ -799,30 +821,33 @@ describe("workbook agent service", () => {
             executionPolicy: "autoApplySafe",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-auto-1",
-              documentId: "doc-1",
-              threadId: "thr-test",
-              turnId: "turn-1",
-              goalText: "Apply low-risk cleanup",
-              summary: "Write cells in Sheet1!B2",
-              scope: "selection",
-              riskClass: "low",
-              approvalMode: "auto",
-              baseRevision: 1,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "writeRange",
-                  sheetName: "Sheet1",
-                  startAddress: "B2",
-                  values: [[42]],
-                },
-              ],
-              affectedRanges: [],
-              estimatedAffectedCells: 1,
-            },
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-auto-1",
+                documentId: "doc-1",
+                threadId: "thr-test",
+                turnId: "turn-1",
+                goalText: "Apply low-risk cleanup",
+                summary: "Write cells in Sheet1!B2",
+                scope: "selection",
+                riskClass: "low",
+                approvalMode: "auto",
+                baseRevision: 1,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "writeRange",
+                    sheetName: "Sheet1",
+                    startAddress: "B2",
+                    values: [[42]],
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 1,
+                sharedReview: null,
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -883,30 +908,33 @@ describe("workbook agent service", () => {
             executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-auto-1",
-              documentId: "doc-1",
-              threadId: "thr-test",
-              turnId: "turn-1",
-              goalText: "Apply low-risk cleanup",
-              summary: "Write cells in Sheet1!B2",
-              scope: "selection",
-              riskClass: "low",
-              approvalMode: "auto",
-              baseRevision: 1,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "writeRange",
-                  sheetName: "Sheet1",
-                  startAddress: "B2",
-                  values: [[42]],
-                },
-              ],
-              affectedRanges: [],
-              estimatedAffectedCells: 1,
-            },
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-auto-1",
+                documentId: "doc-1",
+                threadId: "thr-test",
+                turnId: "turn-1",
+                goalText: "Apply low-risk cleanup",
+                summary: "Write cells in Sheet1!B2",
+                scope: "selection",
+                riskClass: "low",
+                approvalMode: "auto",
+                baseRevision: 1,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "writeRange",
+                    sheetName: "Sheet1",
+                    startAddress: "B2",
+                    values: [[42]],
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 1,
+                sharedReview: null,
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -1320,7 +1348,7 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
           appliedBy: "auto",
@@ -1460,7 +1488,7 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
           appliedBy: "auto",
@@ -1607,7 +1635,7 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
           appliedBy: "auto",
@@ -2216,7 +2244,7 @@ describe("workbook agent service", () => {
           }),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(applyAgentCommandBundle).toHaveBeenCalledWith(
         "doc-1",
         expect.objectContaining({
@@ -2350,7 +2378,7 @@ describe("workbook agent service", () => {
           }),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(applyAgentCommandBundle).toHaveBeenCalledWith(
         "doc-1",
         expect.objectContaining({
@@ -2496,7 +2524,7 @@ describe("workbook agent service", () => {
           ]),
         }),
       );
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
           appliedBy: "auto",
@@ -2729,7 +2757,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
       });
-      expect(queuedSnapshot.pendingBundle).toBeNull();
+      expect(queuedSnapshot.reviewQueueItems).toEqual([]);
       expect(queuedSnapshot.executionRecords).toEqual([]);
 
       fakeCodex.emit({
@@ -2766,7 +2794,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
       });
-      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.reviewQueueItems).toEqual([]);
       expect(snapshot.executionRecords).toEqual([
         expect.objectContaining({
           summary: "Create sheet Prepaid Expenses",
@@ -2836,7 +2864,7 @@ describe("workbook agent service", () => {
         },
       },
       entries: [],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 100,
     };
     const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
@@ -3113,44 +3141,47 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-existing",
-              documentId: "doc-1",
-              threadId: "thr-existing",
-              turnId: "turn-1",
-              goalText: "Normalize the imported range",
-              summary: "Normalize Sheet1!A1:A20",
-              scope: "sheet",
-              riskClass: "medium",
-              approvalMode: "preview",
-              baseRevision: 4,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "formatRange",
-                  range: {
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-existing",
+                documentId: "doc-1",
+                threadId: "thr-existing",
+                turnId: "turn-1",
+                goalText: "Normalize the imported range",
+                summary: "Normalize Sheet1!A1:A20",
+                scope: "sheet",
+                riskClass: "medium",
+                approvalMode: "preview",
+                baseRevision: 4,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "formatRange",
+                    range: {
+                      sheetName: "Sheet1",
+                      startAddress: "A1",
+                      endAddress: "A20",
+                    },
+                    patch: {
+                      font: {
+                        bold: true,
+                      },
+                    },
+                  },
+                ],
+                affectedRanges: [
+                  {
                     sheetName: "Sheet1",
                     startAddress: "A1",
                     endAddress: "A20",
+                    role: "target",
                   },
-                  patch: {
-                    font: {
-                      bold: true,
-                    },
-                  },
-                },
-              ],
-              affectedRanges: [
-                {
-                  sheetName: "Sheet1",
-                  startAddress: "A1",
-                  endAddress: "A20",
-                  role: "target",
-                },
-              ],
-              estimatedAffectedCells: 20,
-            },
+                ],
+                estimatedAffectedCells: 20,
+                sharedReview: null,
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -3542,14 +3573,16 @@ describe("workbook agent service", () => {
         },
       });
 
-      const pending = service.getSnapshot({
-        documentId: "doc-1",
-        threadId: "thr-test",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-      }).pendingBundle;
+      const pending = getPrimaryReviewBundle(
+        service.getSnapshot({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+        }),
+      );
 
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
@@ -3675,14 +3708,16 @@ describe("workbook agent service", () => {
         },
       });
 
-      const pending = service.getSnapshot({
-        documentId: "doc-1",
-        threadId: "thr-test",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-      }).pendingBundle;
+      const pending = getPrimaryReviewBundle(
+        service.getSnapshot({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+        }),
+      );
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
       }
@@ -3709,11 +3744,12 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
       });
-      expect(isWorkbookAgentCommandBundle(afterFailure.pendingBundle)).toBe(true);
-      if (!isWorkbookAgentCommandBundle(afterFailure.pendingBundle)) {
+      const afterFailureBundle = getPrimaryReviewBundle(afterFailure);
+      expect(isWorkbookAgentCommandBundle(afterFailureBundle)).toBe(true);
+      if (!isWorkbookAgentCommandBundle(afterFailureBundle)) {
         throw new Error("Expected the pending bundle to remain staged");
       }
-      expect(afterFailure.pendingBundle.id).toBe(pending.id);
+      expect(afterFailureBundle.id).toBe(pending.id);
       expect(afterFailure.executionRecords).toEqual([]);
     } finally {
       await service.close();
@@ -3810,14 +3846,16 @@ describe("workbook agent service", () => {
         },
       });
 
-      const pending = service.getSnapshot({
-        documentId: "doc-1",
-        threadId: "thr-test",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
-      }).pendingBundle;
+      const pending = getPrimaryReviewBundle(
+        service.getSnapshot({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+        }),
+      );
       if (!isWorkbookAgentCommandBundle(pending)) {
         throw new Error("Expected a staged pending bundle");
       }
@@ -3896,7 +3934,7 @@ describe("workbook agent service", () => {
           ],
         }),
       );
-      expect(applied.pendingBundle).toEqual(
+      expect(getPrimaryReviewBundle(applied)).toEqual(
         expect.objectContaining({
           baseRevision: 7,
           summary: "Write cells in Sheet1!B2",
@@ -3910,10 +3948,11 @@ describe("workbook agent service", () => {
           ],
         }),
       );
-      if (!isWorkbookAgentCommandBundle(applied.pendingBundle)) {
+      const remainingBundle = getPrimaryReviewBundle(applied);
+      if (!isWorkbookAgentCommandBundle(remainingBundle)) {
         throw new Error("Expected the remaining staged bundle to stay pending");
       }
-      expect(applied.pendingBundle.id).not.toBe(pending.id);
+      expect(remainingBundle.id).not.toBe(pending.id);
       expect(appendWorkbookAgentRun).toHaveBeenCalledWith(
         expect.objectContaining({
           acceptedScope: "partial",
@@ -3945,49 +3984,51 @@ describe("workbook agent service", () => {
         },
       },
       entries: [],
-      pendingBundle: {
-        id: "bundle-legacy-1",
-        documentId: "doc-1",
-        threadId: "thr-test",
-        turnId: "turn-1",
-        goalText: "Update workbook from assistant request",
-        summary: "Write cells in Sheet1!B2",
-        scope: "sheet",
-        riskClass: "medium",
-        approvalMode: "preview",
-        baseRevision: 1,
-        createdAtUnixMs: 100,
-        context: {
-          selection: {
-            sheetName: "Sheet1",
-            address: "A1",
+      reviewQueueItems: [
+        createReviewQueueItem({
+          id: "bundle-legacy-1",
+          documentId: "doc-1",
+          threadId: "thr-test",
+          turnId: "turn-1",
+          goalText: "Update workbook from assistant request",
+          summary: "Write cells in Sheet1!B2",
+          scope: "sheet",
+          riskClass: "medium",
+          approvalMode: "preview",
+          baseRevision: 1,
+          createdAtUnixMs: 100,
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
           },
-          viewport: {
-            rowStart: 0,
-            rowEnd: 20,
-            colStart: 0,
-            colEnd: 10,
-          },
-        },
-        commands: [
-          {
-            kind: "writeRange",
-            sheetName: "Sheet1",
-            startAddress: "B2",
-            values: [[42]],
-          },
-        ],
-        affectedRanges: [
-          {
-            sheetName: "Sheet1",
-            startAddress: "B2",
-            endAddress: "B2",
-            role: "target",
-          },
-        ],
-        estimatedAffectedCells: 1,
-        sharedReview: null,
-      },
+          commands: [
+            {
+              kind: "writeRange",
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              values: [[42]],
+            },
+          ],
+          affectedRanges: [
+            {
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              endAddress: "B2",
+              role: "target",
+            },
+          ],
+          estimatedAffectedCells: 1,
+          sharedReview: null,
+        }),
+      ],
       updatedAtUnixMs: 100,
     };
     const engine = new SpreadsheetEngine({
@@ -4078,7 +4119,7 @@ describe("workbook agent service", () => {
           }),
         ]),
       );
-      expect(resumed.pendingBundle).toBeNull();
+      expect(resumed.reviewQueueItems).toEqual([]);
       expect(resumed.executionRecords).toEqual([
         expect.objectContaining({
           summary: "Write cells in Sheet1!B2",
@@ -4108,7 +4149,7 @@ describe("workbook agent service", () => {
       if (!savedThreadState) {
         throw new Error("Expected durable thread state to be saved");
       }
-      expect(savedThreadState.pendingBundle).toBeNull();
+      expect(savedThreadState.reviewQueueItems).toEqual([]);
     } finally {
       await serviceB.close();
     }
@@ -4213,7 +4254,7 @@ describe("workbook agent service", () => {
             executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
-            pendingBundle: null,
+            reviewQueueItems: [],
             updatedAtUnixMs: 100,
           };
         },
@@ -4249,7 +4290,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      expect(replayed.pendingBundle).toBeNull();
+      expect(replayed.reviewQueueItems).toEqual([]);
       expect(replayed.executionRecords[0]).toEqual(
         expect.objectContaining({
           summary: "Write cells in Sheet1!B2",
@@ -4308,7 +4349,7 @@ describe("workbook agent service", () => {
           citations: [],
         },
       ],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 100,
     };
     const service = createWorkbookAgentService(
@@ -4386,7 +4427,7 @@ describe("workbook agent service", () => {
         },
       },
       entries: [],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 100,
     };
     const saveWorkbookAgentThreadState = vi.fn(async (record: WorkbookAgentThreadStateRecord) => {
@@ -4518,7 +4559,7 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: null,
+            reviewQueueItems: [],
             updatedAtUnixMs: 100,
           };
         },
@@ -4571,28 +4612,31 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-shared-1",
-              documentId: "doc-1",
-              threadId: "thr-shared",
-              turnId: "turn-1",
-              goalText: "Build a workbook-wide summary",
-              summary: "Create summary sheet and rewrite rollups",
-              scope: "workbook",
-              riskClass: "high",
-              approvalMode: "explicit",
-              baseRevision: 4,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "createSheet",
-                  name: "Summary",
-                },
-              ],
-              affectedRanges: [],
-              estimatedAffectedCells: 0,
-            },
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-shared-1",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-1",
+                goalText: "Build a workbook-wide summary",
+                summary: "Create summary sheet and rewrite rollups",
+                scope: "workbook",
+                riskClass: "high",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "createSheet",
+                    name: "Summary",
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 0,
+                sharedReview: null,
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -4655,37 +4699,40 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-shared-low",
-              documentId: "doc-1",
-              threadId: "thr-shared",
-              turnId: "turn-1",
-              goalText: "Fix one visible cell",
-              summary: "Write cells in Sheet1!B2",
-              scope: "selection",
-              riskClass: "low",
-              approvalMode: "auto",
-              baseRevision: 4,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "writeRange",
-                  sheetName: "Sheet1",
-                  startAddress: "B2",
-                  values: [[42]],
-                },
-              ],
-              affectedRanges: [
-                {
-                  sheetName: "Sheet1",
-                  startAddress: "B2",
-                  endAddress: "B2",
-                  role: "target",
-                },
-              ],
-              estimatedAffectedCells: 1,
-            },
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-shared-low",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-1",
+                goalText: "Fix one visible cell",
+                summary: "Write cells in Sheet1!B2",
+                scope: "selection",
+                riskClass: "low",
+                approvalMode: "auto",
+                baseRevision: 4,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "writeRange",
+                    sheetName: "Sheet1",
+                    startAddress: "B2",
+                    values: [[42]],
+                  },
+                ],
+                affectedRanges: [
+                  {
+                    sheetName: "Sheet1",
+                    startAddress: "B2",
+                    endAddress: "B2",
+                    role: "target",
+                  },
+                ],
+                estimatedAffectedCells: 1,
+                sharedReview: null,
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -4721,7 +4768,7 @@ describe("workbook agent service", () => {
       });
 
       expect(applyAgentCommandBundle).toHaveBeenCalled();
-      expect(applied.pendingBundle).toBeNull();
+      expect(applied.reviewQueueItems).toEqual([]);
     } finally {
       await service.close();
     }
@@ -4746,35 +4793,37 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-shared-review",
-              documentId: "doc-1",
-              threadId: "thr-shared",
-              turnId: "turn-1",
-              goalText: "Normalize the workbook",
-              summary: "Normalize shared workbook structure",
-              scope: "workbook",
-              riskClass: "high",
-              approvalMode: "explicit",
-              baseRevision: 4,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "createSheet",
-                  name: "Summary",
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-shared-review",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-1",
+                goalText: "Normalize the workbook",
+                summary: "Normalize shared workbook structure",
+                scope: "workbook",
+                riskClass: "high",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "createSheet",
+                    name: "Summary",
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 0,
+                sharedReview: {
+                  ownerUserId: "alex@example.com",
+                  status: "pending",
+                  decidedByUserId: null,
+                  decidedAtUnixMs: null,
+                  recommendations: [],
                 },
-              ],
-              affectedRanges: [],
-              estimatedAffectedCells: 0,
-              sharedReview: {
-                ownerUserId: "alex@example.com",
-                status: "pending",
-                decidedByUserId: null,
-                decidedAtUnixMs: null,
-                recommendations: [],
-              },
-            },
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -4826,7 +4875,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      expect(reviewed.pendingBundle).toEqual(
+      expect(getPrimaryReviewBundle(reviewed)).toEqual(
         expect.objectContaining({
           sharedReview: expect.objectContaining({
             status: "approved",
@@ -4850,7 +4899,7 @@ describe("workbook agent service", () => {
 
       expect(applyAgentCommandBundle).toHaveBeenCalled();
       expect(appendWorkbookAgentRun).toHaveBeenCalled();
-      expect(applied.pendingBundle).toBeNull();
+      expect(applied.reviewQueueItems).toEqual([]);
     } finally {
       await service.close();
     }
@@ -4868,35 +4917,37 @@ describe("workbook agent service", () => {
             executionPolicy: "ownerReview",
             context: null,
             entries: [],
-            pendingBundle: {
-              id: "bundle-shared-review",
-              documentId: "doc-1",
-              threadId: "thr-shared",
-              turnId: "turn-1",
-              goalText: "Normalize the workbook",
-              summary: "Normalize shared workbook structure",
-              scope: "workbook",
-              riskClass: "high",
-              approvalMode: "explicit",
-              baseRevision: 4,
-              createdAtUnixMs: 100,
-              context: null,
-              commands: [
-                {
-                  kind: "createSheet",
-                  name: "Summary",
+            reviewQueueItems: [
+              createReviewQueueItem({
+                id: "bundle-shared-review",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-1",
+                goalText: "Normalize the workbook",
+                summary: "Normalize shared workbook structure",
+                scope: "workbook",
+                riskClass: "high",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 100,
+                context: null,
+                commands: [
+                  {
+                    kind: "createSheet",
+                    name: "Summary",
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 0,
+                sharedReview: {
+                  ownerUserId: "alex@example.com",
+                  status: "pending",
+                  decidedByUserId: null,
+                  decidedAtUnixMs: null,
+                  recommendations: [],
                 },
-              ],
-              affectedRanges: [],
-              estimatedAffectedCells: 0,
-              sharedReview: {
-                ownerUserId: "alex@example.com",
-                status: "pending",
-                decidedByUserId: null,
-                decidedAtUnixMs: null,
-                recommendations: [],
-              },
-            },
+              }),
+            ],
             updatedAtUnixMs: 100,
           };
         },
@@ -4932,7 +4983,7 @@ describe("workbook agent service", () => {
         },
       });
 
-      expect(reviewed.pendingBundle).toEqual(
+      expect(getPrimaryReviewBundle(reviewed)).toEqual(
         expect.objectContaining({
           sharedReview: expect.objectContaining({
             status: "pending",
@@ -5015,7 +5066,7 @@ describe("workbook agent service", () => {
             executionPolicy: "autoApplyAll",
             context: null,
             entries: [],
-            pendingBundle: null,
+            reviewQueueItems: [],
             updatedAtUnixMs: 100,
           };
         },

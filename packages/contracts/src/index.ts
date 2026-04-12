@@ -154,7 +154,7 @@ export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   ownerUserId: Schema.String,
   updatedAtUnixMs: Schema.Number,
   entryCount: Schema.Number,
-  hasPendingBundle: Schema.Boolean,
+  reviewQueueItemCount: Schema.Number,
   latestEntryText: Schema.Union(Schema.String, Schema.Null),
 });
 export type WorkbookAgentThreadSummary = Schema.Schema.Type<
@@ -256,7 +256,7 @@ export const WorkbookAgentThreadSnapshotSchema = Schema.Struct({
   lastError: Schema.Union(Schema.String, Schema.Null),
   context: Schema.Union(WorkbookAgentUiContextSchema, Schema.Null),
   entries: Schema.Array(WorkbookAgentTimelineEntrySchema),
-  pendingBundle: Schema.Union(Schema.Unknown, Schema.Null),
+  reviewQueueItems: Schema.Array(Schema.Unknown),
   executionRecords: Schema.Array(Schema.Unknown),
   workflowRuns: Schema.Array(WorkbookAgentWorkflowRunSchema),
 });

@@ -64,7 +64,7 @@ describe("WorkbookAgentThreadRepository", () => {
         viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
       },
       entries: [createSystemEntry("entry-1", null, "hello")],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 123,
     });
 
@@ -86,7 +86,7 @@ describe("WorkbookAgentThreadRepository", () => {
         viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
       },
       entries: [createSystemEntry("entry-1", null, "hello")],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 123,
     });
   });
@@ -118,7 +118,7 @@ describe("WorkbookAgentThreadRepository", () => {
       executionPolicy: "ownerReview",
       context: null,
       entries: [createSystemEntry("entry-1", null, "first")],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 100,
     });
     const secondSave = store.saveThreadState({
@@ -129,7 +129,7 @@ describe("WorkbookAgentThreadRepository", () => {
       executionPolicy: "ownerReview",
       context: null,
       entries: [createSystemEntry("entry-2", null, "second")],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 200,
     });
 
@@ -161,7 +161,7 @@ describe("WorkbookAgentThreadRepository", () => {
         createSystemEntry("entry-1", null, "first"),
         createSystemEntry("entry-1", null, "second"),
       ],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 123,
     });
 
@@ -226,7 +226,7 @@ describe("WorkbookAgentThreadRepository", () => {
       executionPolicy: "autoApplyAll" as const,
       context: null,
       entries: [],
-      pendingBundle: null,
+      reviewQueueItems: [],
       updatedAtUnixMs: 100,
     }));
     const listWorkbookAgentThreadRuns = vi.fn(async () => [executionRecord]);
@@ -261,7 +261,7 @@ describe("WorkbookAgentThreadRepository", () => {
         executionPolicy: "autoApplyAll",
         context: null,
         entries: [],
-        pendingBundle: null,
+        reviewQueueItems: [],
         updatedAtUnixMs: 100,
       },
       executionRecords: [executionRecord],

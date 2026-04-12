@@ -1,4 +1,4 @@
-import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
+import type { WorkbookAgentExecutionRecord, WorkbookAgentReviewQueueItem } from "@bilig/agent-api";
 import type {
   WorkbookAgentExecutionPolicy,
   WorkbookAgentTimelineEntry,
@@ -24,7 +24,7 @@ export interface WorkbookAgentPersistedThreadInput {
   readonly executionPolicy: WorkbookAgentExecutionPolicy;
   readonly context: WorkbookAgentUiContext | null;
   readonly entries: readonly WorkbookAgentTimelineEntry[];
-  readonly pendingBundle: WorkbookAgentCommandBundle | null;
+  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[];
   readonly updatedAtUnixMs: number;
 }
 
@@ -79,7 +79,7 @@ export class WorkbookAgentThreadRepository {
           executionPolicy: input.executionPolicy,
           context: input.context,
           entries,
-          pendingBundle: input.pendingBundle,
+          reviewQueueItems: input.reviewQueueItems,
           updatedAtUnixMs: input.updatedAtUnixMs,
         });
         return undefined;

@@ -3,6 +3,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
+import {
+  isWorkbookAgentCommandBundle,
+  toWorkbookAgentReviewQueueItem,
+  type WorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { clearWorkbookAgentPreviewCache } from "../workbook-agent-preview-cache.js";
 import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
@@ -96,7 +101,18 @@ function createDefaultWorkflowContext() {
   };
 }
 
+function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
+  return toWorkbookAgentReviewQueueItem({
+    bundle,
+    reviewMode: bundle.sharedReview ? "ownerReview" : "manual",
+    ...(bundle.sharedReview ? { sharedReview: bundle.sharedReview } : {}),
+  });
+}
+
 function createSnapshot(overrides: Record<string, unknown> = {}) {
+  const pendingBundleOverride = overrides["pendingBundle"];
+  const reviewQueueItemsOverride = overrides["reviewQueueItems"];
+  const { pendingBundle: _pendingBundle, ...restOverrides } = overrides;
   const overrideEntries = Array.isArray(overrides["entries"])
     ? overrides["entries"].map((entry) =>
         typeof entry === "object" && entry !== null && !("citations" in entry)
@@ -131,10 +147,14 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
         citations: [],
       },
     ],
-    pendingBundle: null,
+    reviewQueueItems: Array.isArray(reviewQueueItemsOverride)
+      ? reviewQueueItemsOverride
+      : isWorkbookAgentCommandBundle(pendingBundleOverride)
+        ? [createReviewQueueItem(pendingBundleOverride)]
+        : [],
     executionRecords: [],
     workflowRuns: [],
-    ...overrides,
+    ...restOverrides,
     ...(overrideEntries ? { entries: overrideEntries } : {}),
   };
 }
@@ -158,15 +178,22 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
 }
 
 function createThreadSummary(overrides: Record<string, unknown> = {}) {
+  const legacyHasPendingBundle = overrides["hasPendingBundle"];
+  const { hasPendingBundle: _hasPendingBundle, ...restOverrides } = overrides;
   return {
     threadId: "thr-1",
     scope: "private",
     ownerUserId: "alex@example.com",
     updatedAtUnixMs: 100,
     entryCount: 1,
-    hasPendingBundle: false,
+    reviewQueueItemCount:
+      typeof restOverrides["reviewQueueItemCount"] === "number"
+        ? restOverrides["reviewQueueItemCount"]
+        : legacyHasPendingBundle === true
+          ? 1
+          : 0,
     latestEntryText: null,
-    ...overrides,
+    ...restOverrides,
   };
 }
 
@@ -573,7 +600,7 @@ describe("workbook agent pane", () => {
               threadId: "thr-shared",
               scope: "shared",
               entryCount: 4,
-              hasPendingBundle: true,
+              reviewQueueItemCount: 1,
               latestEntryText: "Applied preview bundle at revision r7",
             }),
             createThreadSummary({
@@ -2119,7 +2146,7 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              pendingBundle: null,
+              reviewQueueItems: [],
               executionRecords: [
                 {
                   id: "run-1",
@@ -2345,7 +2372,7 @@ describe("workbook agent pane", () => {
               scope: "shared",
               ownerUserId: "alex@example.com",
               entryCount: 3,
-              hasPendingBundle: true,
+              reviewQueueItemCount: 1,
               latestEntryText: "Preview bundle staged",
             }),
           ]),
@@ -2473,7 +2500,7 @@ describe("workbook agent pane", () => {
               scope: "shared",
               ownerUserId: "alex@example.com",
               entryCount: 3,
-              hasPendingBundle: true,
+              reviewQueueItemCount: 1,
               latestEntryText: "Preview bundle staged",
             }),
           ]),
@@ -2672,7 +2699,7 @@ describe("workbook agent pane", () => {
               scope: "shared",
               ownerUserId: "alex@example.com",
               entryCount: 3,
-              hasPendingBundle: true,
+              reviewQueueItemCount: 1,
               latestEntryText: "Preview bundle staged",
             }),
           ]),

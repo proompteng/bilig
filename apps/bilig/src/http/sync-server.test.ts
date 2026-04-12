@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkbookAgentThreadSnapshot } from "@bilig/contracts";
+import { toWorkbookAgentReviewQueueItem, type WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import { Effect } from "effect";
 import type { DocumentControlService } from "@bilig/runtime-kernel";
 import type { ZeroSyncService } from "../zero/service.js";
@@ -259,11 +260,19 @@ function createAgentSessionSnapshot(
       },
     },
     entries: [],
-    pendingBundle: null,
+    reviewQueueItems: [],
     executionRecords: [],
     workflowRuns: [],
     ...overrides,
   };
+}
+
+function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
+  return toWorkbookAgentReviewQueueItem({
+    bundle,
+    reviewMode: bundle.sharedReview ? "ownerReview" : "manual",
+    ...(bundle.sharedReview ? { sharedReview: bundle.sharedReview } : {}),
+  });
 }
 
 function createPreviewSummary(overrides: Record<string, unknown> = {}) {
@@ -481,7 +490,7 @@ describe("sync-server workbook agent", () => {
         ownerUserId: "alex@example.com",
         updatedAtUnixMs: 200,
         entryCount: 3,
-        hasPendingBundle: false,
+        reviewQueueItemCount: 0,
         latestEntryText: "Applied shared cleanup at revision r7",
       },
       {
@@ -490,7 +499,7 @@ describe("sync-server workbook agent", () => {
         ownerUserId: "alex@example.com",
         updatedAtUnixMs: 100,
         entryCount: 1,
-        hasPendingBundle: true,
+        reviewQueueItemCount: 1,
         latestEntryText: "Preview bundle staged",
       },
     ]);
@@ -522,7 +531,7 @@ describe("sync-server workbook agent", () => {
           ownerUserId: "alex@example.com",
           updatedAtUnixMs: 200,
           entryCount: 3,
-          hasPendingBundle: false,
+          reviewQueueItemCount: 0,
           latestEntryText: "Applied shared cleanup at revision r7",
         },
         {
@@ -531,7 +540,7 @@ describe("sync-server workbook agent", () => {
           ownerUserId: "alex@example.com",
           updatedAtUnixMs: 100,
           entryCount: 1,
-          hasPendingBundle: true,
+          reviewQueueItemCount: 1,
           latestEntryText: "Preview bundle staged",
         },
       ]);
@@ -986,30 +995,32 @@ describe("sync-server workbook agent", () => {
     const reviewPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
-        pendingBundle: {
-          id: "bundle-1",
-          documentId: "doc-1",
-          threadId: "thr-2",
-          turnId: "turn-1",
-          goalText: "Normalize shared workbook",
-          summary: "Normalize shared workbook",
-          scope: "workbook",
-          riskClass: "high",
-          approvalMode: "explicit",
-          baseRevision: 4,
-          createdAtUnixMs: 10,
-          context: null,
-          commands: [],
-          affectedRanges: [],
-          estimatedAffectedCells: 0,
-          sharedReview: {
-            ownerUserId: "alex@example.com",
-            status: "approved",
-            decidedByUserId: "alex@example.com",
-            decidedAtUnixMs: 12,
-            recommendations: [],
-          },
-        },
+        reviewQueueItems: [
+          createReviewQueueItem({
+            id: "bundle-1",
+            documentId: "doc-1",
+            threadId: "thr-2",
+            turnId: "turn-1",
+            goalText: "Normalize shared workbook",
+            summary: "Normalize shared workbook",
+            scope: "workbook",
+            riskClass: "high",
+            approvalMode: "explicit",
+            baseRevision: 4,
+            createdAtUnixMs: 10,
+            context: null,
+            commands: [],
+            affectedRanges: [],
+            estimatedAffectedCells: 0,
+            sharedReview: {
+              ownerUserId: "alex@example.com",
+              status: "approved",
+              decidedByUserId: "alex@example.com",
+              decidedAtUnixMs: 12,
+              recommendations: [],
+            },
+          }),
+        ],
       }),
     );
 
@@ -1043,11 +1054,13 @@ describe("sync-server workbook agent", () => {
       );
       expect(response.json()).toEqual(
         expect.objectContaining({
-          pendingBundle: expect.objectContaining({
-            sharedReview: expect.objectContaining({
+          reviewQueueItems: [
+            expect.objectContaining({
+              reviewMode: "ownerReview",
               status: "approved",
+              decidedByUserId: "alex@example.com",
             }),
-          }),
+          ],
         }),
       );
     } finally {
@@ -1177,6 +1190,46 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("applies staged workbook bundles through the monolith route", async () => {
+    const applyPendingBundle = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        reviewQueueItems: [],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        applyPendingBundle,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
+        payload: {
+          commandIndexes: [1],
+          preview: createPreviewSummary(),
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(applyPendingBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          bundleId: "bundle-1",
+          appliedBy: "user",
+          commandIndexes: [1],
+          preview: createPreviewSummary(),
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("applies staged workbook bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
@@ -1186,7 +1239,7 @@ describe("sync-server workbook agent", () => {
     const applyPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
-        pendingBundle: null,
+        reviewQueueItems: [],
       }),
     );
 
@@ -1333,6 +1386,95 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("replays prior execution records through the monolith route", async () => {
+    const replayExecutionRecord = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        reviewQueueItems: [
+          createReviewQueueItem({
+            id: "bundle-replay-1",
+            documentId: "doc-1",
+            threadId: "thr-1",
+            turnId: "replay:run-1:10",
+            goalText: "Reapply formatting",
+            summary: "Format Sheet1!A1",
+            scope: "selection",
+            riskClass: "low",
+            approvalMode: "auto",
+            baseRevision: 4,
+            createdAtUnixMs: 10,
+            context: {
+              selection: {
+                sheetName: "Sheet1",
+                address: "A1",
+              },
+              viewport: {
+                rowStart: 0,
+                rowEnd: 10,
+                colStart: 0,
+                colEnd: 5,
+              },
+            },
+            commands: [
+              {
+                kind: "formatRange",
+                range: {
+                  sheetName: "Sheet1",
+                  startAddress: "A1",
+                  endAddress: "A1",
+                },
+                patch: {
+                  font: {
+                    bold: true,
+                  },
+                },
+              },
+            ],
+            affectedRanges: [
+              {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A1",
+                role: "target",
+              },
+            ],
+            estimatedAffectedCells: 1,
+            sharedReview: null,
+          }),
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        replayExecutionRecord,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/runs/run-1/replay",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(replayExecutionRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          recordId: "run-1",
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          reviewQueueItems: [expect.objectContaining({ id: "bundle-replay-1" })],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("replays prior execution records through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
@@ -1342,55 +1484,58 @@ describe("sync-server workbook agent", () => {
     const replayExecutionRecord = vi.fn(async () =>
       createAgentSessionSnapshot({
         threadId: "thr-2",
-        pendingBundle: {
-          id: "bundle-replay-1",
-          documentId: "doc-1",
-          threadId: "thr-2",
-          turnId: "replay:run-1:10",
-          goalText: "Reapply formatting",
-          summary: "Format Sheet1!A1",
-          scope: "selection",
-          riskClass: "low",
-          approvalMode: "auto",
-          baseRevision: 4,
-          createdAtUnixMs: 10,
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "A1",
+        reviewQueueItems: [
+          createReviewQueueItem({
+            id: "bundle-replay-1",
+            documentId: "doc-1",
+            threadId: "thr-2",
+            turnId: "replay:run-1:10",
+            goalText: "Reapply formatting",
+            summary: "Format Sheet1!A1",
+            scope: "selection",
+            riskClass: "low",
+            approvalMode: "auto",
+            baseRevision: 4,
+            createdAtUnixMs: 10,
+            context: {
+              selection: {
+                sheetName: "Sheet1",
+                address: "A1",
+              },
+              viewport: {
+                rowStart: 0,
+                rowEnd: 10,
+                colStart: 0,
+                colEnd: 5,
+              },
             },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 10,
-              colStart: 0,
-              colEnd: 5,
-            },
-          },
-          commands: [
-            {
-              kind: "formatRange",
-              range: {
+            commands: [
+              {
+                kind: "formatRange",
+                range: {
+                  sheetName: "Sheet1",
+                  startAddress: "A1",
+                  endAddress: "A1",
+                },
+                patch: {
+                  font: {
+                    bold: true,
+                  },
+                },
+              },
+            ],
+            affectedRanges: [
+              {
                 sheetName: "Sheet1",
                 startAddress: "A1",
                 endAddress: "A1",
+                role: "target",
               },
-              patch: {
-                font: {
-                  bold: true,
-                },
-              },
-            },
-          ],
-          affectedRanges: [
-            {
-              sheetName: "Sheet1",
-              startAddress: "A1",
-              endAddress: "A1",
-              role: "target",
-            },
-          ],
-          estimatedAffectedCells: 1,
-        },
+            ],
+            estimatedAffectedCells: 1,
+            sharedReview: null,
+          }),
+        ],
       }),
     );
 
@@ -1426,9 +1571,7 @@ describe("sync-server workbook agent", () => {
       );
       expect(response.json()).toEqual(
         expect.objectContaining({
-          pendingBundle: expect.objectContaining({
-            id: "bundle-replay-1",
-          }),
+          reviewQueueItems: [expect.objectContaining({ id: "bundle-replay-1" })],
         }),
       );
     } finally {

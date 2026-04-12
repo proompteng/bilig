@@ -152,7 +152,7 @@ function ThreadSummaryStrip(props: {
                 </div>
               ) : null}
             </div>
-            {threadSummary.hasPendingBundle ? (
+            {threadSummary.reviewQueueItemCount > 0 ? (
               <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
                 Review
               </span>

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  decodeWorkbookAgentReviewItem,
+  decodeWorkbookAgentReviewItems,
+  resolvePrimaryWorkbookAgentReviewItem,
   resolveWorkbookAgentReviewOwnerUserId,
 } from "../workbook-agent-review-state.js";
+import { toWorkbookAgentReviewQueueItem, type WorkbookAgentCommandBundle } from "@bilig/agent-api";
 
 function createSnapshot(overrides: Record<string, unknown> = {}) {
   return {
@@ -16,41 +18,70 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     lastError: null,
     context: null,
     entries: [],
-    pendingBundle: null,
+    reviewQueueItems: [],
     executionRecords: [],
     workflowRuns: [],
     ...overrides,
   };
 }
 
+function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
+  return toWorkbookAgentReviewQueueItem({
+    bundle,
+    reviewMode: bundle.sharedReview ? "ownerReview" : "manual",
+    ...(bundle.sharedReview ? { sharedReview: bundle.sharedReview } : {}),
+  });
+}
+
 describe("workbook agent review state", () => {
   it("decodes the current review item from the session snapshot", () => {
     const snapshot = createSnapshot({
-      pendingBundle: {
-        id: "bundle-1",
-        documentId: "doc-1",
-        threadId: "thr-1",
-        turnId: "turn-1",
-        goalText: "Bold the current cell",
-        summary: "Format Sheet1!A1",
-        scope: "selection",
-        riskClass: "low",
-        approvalMode: "auto",
-        baseRevision: 1,
-        createdAtUnixMs: 1,
-        context: null,
-        commands: [],
-        affectedRanges: [],
-        estimatedAffectedCells: 1,
-      },
+      reviewQueueItems: [
+        createReviewQueueItem({
+          id: "bundle-1",
+          documentId: "doc-1",
+          threadId: "thr-1",
+          turnId: "turn-1",
+          goalText: "Bold the current cell",
+          summary: "Format Sheet1!A1",
+          scope: "selection",
+          riskClass: "low",
+          approvalMode: "auto",
+          baseRevision: 1,
+          createdAtUnixMs: 1,
+          context: null,
+          commands: [],
+          affectedRanges: [],
+          estimatedAffectedCells: 1,
+          sharedReview: null,
+        }),
+      ],
     });
 
-    expect(decodeWorkbookAgentReviewItem(snapshot.pendingBundle)?.id).toBe("bundle-1");
+    expect(
+      resolvePrimaryWorkbookAgentReviewItem(
+        decodeWorkbookAgentReviewItems(snapshot.reviewQueueItems),
+      )?.id,
+    ).toBe("bundle-1");
   });
 
   it("derives owner review state for shared high-risk work", () => {
-    const reviewItem = {
+    const reviewItem = createReviewQueueItem({
+      id: "bundle-1",
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Normalize the workbook",
+      summary: "Normalize shared workbook structure",
+      scope: "workbook",
       riskClass: "high",
+      approvalMode: "explicit",
+      baseRevision: 1,
+      createdAtUnixMs: 1,
+      context: null,
+      commands: [],
+      affectedRanges: [],
+      estimatedAffectedCells: 0,
       sharedReview: {
         ownerUserId: "alex@example.com",
         status: "pending",
@@ -58,7 +89,7 @@ describe("workbook agent review state", () => {
         decidedAtUnixMs: null,
         recommendations: [],
       },
-    } as const;
+    });
 
     expect(
       resolveWorkbookAgentReviewOwnerUserId({
