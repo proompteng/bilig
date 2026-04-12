@@ -109,9 +109,7 @@ export function mergeTimelineEntries(
   return merged;
 }
 
-export function resolveDefaultExecutionPolicy(
-  scope: "private" | "shared",
-): WorkbookAgentExecutionPolicy {
+function resolveDefaultExecutionPolicy(scope: "private" | "shared"): WorkbookAgentExecutionPolicy {
   return scope === "shared" ? "ownerReview" : "autoApplyAll";
 }
 
