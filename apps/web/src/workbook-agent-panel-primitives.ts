@@ -69,7 +69,7 @@ export const agentPanelTimelineListClass = cva("flex min-w-0 flex-col gap-2");
 export const agentPanelDisclosureFrameClass = cva("space-y-2 overflow-hidden transition-colors", {
   variants: {
     open: {
-      true: "bg-[var(--wb-surface-subtle)]",
+      true: "bg-[var(--wb-surface-muted)]",
       false: "",
     },
   },
