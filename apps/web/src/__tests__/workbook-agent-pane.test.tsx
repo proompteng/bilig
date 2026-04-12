@@ -605,7 +605,7 @@ describe("workbook agent pane", () => {
     expect(host.querySelector("[data-testid='workbook-agent-thread-thr-shared']")).not.toBeNull();
     expect(host.querySelector("[data-testid='workbook-agent-thread-thr-private']")).not.toBeNull();
     expect(host.textContent).toContain("Shared");
-    expect(host.textContent).toContain("Pending");
+    expect(host.textContent).toContain("Review");
     expect(host.textContent).toContain("4 items");
     expect(host.textContent).toContain("Applied preview bundle at revision r7");
 
@@ -3123,9 +3123,10 @@ describe("workbook agent pane", () => {
       }),
     );
     expect(host.textContent).toContain("Write cells in Sheet1!B2");
-    expect(host.textContent).not.toContain("Write cells in Sheet1!C3");
-    expect(host.textContent).not.toContain("Executions");
-    expect(host.textContent).not.toContain("Replay");
+    expect(host.textContent).toContain("1/1");
+    expect(host.textContent).toContain("Recent changes");
+    expect(host.textContent).toContain("Write cells in Sheet1!C3");
+    expect(host.textContent).toContain("Run again");
 
     await act(async () => {
       root.unmount();

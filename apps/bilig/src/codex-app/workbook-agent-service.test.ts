@@ -108,6 +108,30 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function createWorkbookRuntimeStub(documentId = "doc-1"): Promise<WorkbookRuntime> {
+  const engine = new SpreadsheetEngine({
+    workbookName: documentId,
+    replicaId: `server:${documentId}:test`,
+  });
+  await engine.ready();
+  engine.createSheet("Sheet1");
+  engine.setCellValue("Sheet1", "A1", 42);
+  return {
+    documentId,
+    engine,
+    projection: buildWorkbookSourceProjectionFromEngine(documentId, engine, {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "alex@example.com",
+      updatedBy: "alex@example.com",
+      updatedAt: "2026-04-10T00:00:00.000Z",
+    }),
+    headRevision: 1,
+    calculatedRevision: 1,
+    ownerUserId: "alex@example.com",
+  };
+}
+
 function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncService {
   return {
     enabled: true,
@@ -119,8 +143,11 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async handleMutate() {
       throw new Error("not used");
     },
-    async inspectWorkbook<T>(_documentId: string, _task: (runtime: never) => T | Promise<T>) {
-      throw new Error("not used");
+    async inspectWorkbook<T>(
+      documentId: string,
+      task: (runtime: WorkbookRuntime) => T | Promise<T>,
+    ) {
+      return await task(await createWorkbookRuntimeStub(documentId));
     },
     async applyServerMutator() {},
     async applyAgentCommandBundle() {
@@ -3081,7 +3108,7 @@ describe("workbook agent service", () => {
             threadId: "thr-existing",
             actorUserId: "alex@example.com",
             scope: "private",
-            executionPolicy: "autoApplyAll",
+            executionPolicy: "autoApplySafe",
             context: null,
             entries: [],
             pendingBundle: {

@@ -116,7 +116,7 @@ export function normalizeExecutionPolicy(input: {
   if (input.scope === "shared") {
     return "ownerReview";
   }
-  return "autoApplyAll";
+  return input.requestedPolicy ?? "autoApplyAll";
 }
 
 export function toContextRef(
