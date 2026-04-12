@@ -734,6 +734,197 @@ describe("workbook agent tools", () => {
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"numberFormats": [');
   });
 
+  it("lists named ranges and tables from the authoritative runtime", async () => {
+    const engine = await createEngine();
+    engine.setDefinedName("Inputs", {
+      kind: "range-ref",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B1",
+    });
+    engine.setTable({
+      name: "RevenueTable",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Revenue", "Margin"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const namedRangesResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-list-named-ranges",
+        tool: "list_named_ranges",
+        arguments: {},
+      },
+    );
+
+    expect(namedRangesResponse.success).toBe(true);
+    const namedRangesText = namedRangesResponse.contentItems[0];
+    expect(namedRangesText?.type).toBe("inputText");
+    expect(namedRangesText && "text" in namedRangesText ? namedRangesText.text : "").toContain(
+      '"name": "Inputs"',
+    );
+    expect(namedRangesText && "text" in namedRangesText ? namedRangesText.text : "").toContain(
+      '"startAddress": "A1"',
+    );
+
+    const tablesResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-list-tables",
+        tool: "list_tables",
+        arguments: {},
+      },
+    );
+
+    expect(tablesResponse.success).toBe(true);
+    const tablesText = tablesResponse.contentItems[0];
+    expect(tablesText?.type).toBe("inputText");
+    expect(tablesText && "text" in tablesText ? tablesText.text : "").toContain(
+      '"name": "RevenueTable"',
+    );
+    expect(tablesText && "text" in tablesText ? tablesText.text : "").toContain('"columnNames": [');
+  });
+
+  it("resolves selectors for read and mutation tools before staging commands", async () => {
+    const engine = await createEngine();
+    engine.setDefinedName("Inputs", {
+      kind: "range-ref",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B1",
+    });
+    engine.setTable({
+      name: "RevenueTable",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Revenue", "Margin"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const readResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A2",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 5,
+            colStart: 0,
+            colEnd: 3,
+          },
+        },
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-selector-read-range",
+        tool: "read_range",
+        arguments: {
+          selector: {
+            kind: "namedRange",
+            name: "Inputs",
+          },
+        },
+      },
+    );
+
+    expect(readResponse.success).toBe(true);
+    const readText = readResponse.contentItems[0];
+    expect(readText?.type).toBe("inputText");
+    expect(readText && "text" in readText ? readText.text : "").toContain(
+      '"displayLabel": "Inputs"',
+    );
+    expect(readText && "text" in readText ? readText.text : "").toContain('"startAddress": "A1"');
+
+    const formatResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-selector-format-range",
+        tool: "format_range",
+        arguments: {
+          selector: {
+            kind: "tableColumn",
+            table: "RevenueTable",
+            column: "Margin",
+          },
+          patch: {
+            font: {
+              bold: true,
+            },
+          },
+        },
+      },
+    );
+
+    expect(formatResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "formatRange",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B3",
+      },
+      patch: {
+        font: {
+          bold: true,
+        },
+      },
+    });
+  });
+
   it("writes rectangular ranges through renderCommit with normalized formulas", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

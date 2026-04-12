@@ -9,6 +9,8 @@ describe("workbook agent tool names", () => {
   it("uses clean unprefixed canonical tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.readWorkbook).toBe("read_workbook");
     expect(WORKBOOK_AGENT_TOOL_NAMES.startWorkflow).toBe("start_workflow");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges).toBe("list_named_ranges");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createSheet).toBe("create_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.deleteSheet).toBe("delete_sheet");
     expect(WORKBOOK_AGENT_TOOL_NAMES.insertRows).toBe("insert_rows");
@@ -26,6 +28,12 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig_start_workflow")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_list_named_ranges")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.list_tables")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listTables,
+    );
     expect(normalizeWorkbookAgentToolName("bilig_insert_rows")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.insertRows,
     );
@@ -42,5 +50,7 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("insert_rows")).toBe(true);
     expect(isWorkbookAgentToolName("set_filter")).toBe(true);
     expect(isWorkbookAgentToolName("search_workbook")).toBe(true);
+    expect(isWorkbookAgentToolName("list_named_ranges")).toBe(true);
+    expect(isWorkbookAgentToolName("list_tables")).toBe(true);
   });
 });

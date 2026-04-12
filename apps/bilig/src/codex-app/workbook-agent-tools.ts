@@ -15,12 +15,7 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
-import {
-  clearRangeArgsSchema,
-  rangeMutationArgsSchema,
-  setRangeNumberFormatArgsSchema,
-  setRangeStyleArgsSchema,
-} from "@bilig/zero-sync";
+import { setRangeNumberFormatArgsSchema, setRangeStyleArgsSchema } from "@bilig/zero-sync";
 import type {
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
@@ -41,27 +36,32 @@ import {
   inspectWorkbookRange,
 } from "./workbook-agent-inspection.js";
 import {
+  cellRangeRefJsonSchema,
+  cellRangeRefSchema,
+  rangeOrSelectorJsonSchema,
+  rangeOrSelectorSchema,
+  readRangeToolArgsSchema,
+  resolveRangeOrSelectorRequest,
+  resolveReadRangeRequest,
+  resolveTransferRangeRequest,
+  resolveWriteRangeRequest,
+  transferRangeToolArgsSchema,
+  workbookSemanticSelectorJsonSchema,
+  writeRangeToolArgsSchema,
+} from "./workbook-agent-selector-tooling.js";
+import {
+  listWorkbookNamedRanges,
+  listWorkbookTables,
+  type ResolvedWorkbookSelector,
+  workbookSemanticSelectorSchema,
+} from "./workbook-selector-resolver.js";
+import {
   parseWorkbookAgentStructuralToolCommand,
   workbookAgentStructuralToolSpecs,
 } from "./workbook-agent-structural-tools.js";
 
 const MAX_MUTATION_RANGE_CELLS = 400;
 const MAX_READ_RANGE_CELLS = 4000;
-
-const writeCellInputSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-  z.object({ value: z.union([z.string(), z.number(), z.boolean(), z.null()]) }),
-  z.object({ formula: z.string().min(1) }),
-]);
-
-const readRangeToolArgsSchema = z.object({
-  sheetName: z.string().min(1),
-  startAddress: z.string().min(1),
-  endAddress: z.string().min(1),
-});
 
 const inspectCellToolArgsSchema = z.object({
   sheetName: z.string().min(1).optional(),
@@ -178,19 +178,16 @@ const traceDependenciesToolArgsSchema = z.object({
   depth: z.number().int().positive().max(4).optional(),
 });
 
-const writeRangeToolArgsSchema = z.object({
-  sheetName: z.string().min(1),
-  startAddress: z.string().min(1),
-  values: z.array(z.array(writeCellInputSchema).min(1)).min(1),
-});
-
-const clearRangeToolArgsSchema = clearRangeArgsSchema.pick({ range: true });
-const transferRangeToolArgsSchema = rangeMutationArgsSchema.pick({ source: true, target: true });
+const clearRangeToolArgsSchema = rangeOrSelectorSchema;
 const formatRangeToolArgsSchema = z
   .object({
-    range: clearRangeToolArgsSchema.shape.range,
+    range: cellRangeRefSchema.optional(),
+    selector: workbookSemanticSelectorSchema.optional(),
     patch: setRangeStyleArgsSchema.shape.patch.optional(),
     numberFormat: setRangeNumberFormatArgsSchema.shape.format.optional(),
+  })
+  .refine((value) => (value.range ? 1 : 0) + (value.selector ? 1 : 0) === 1, {
+    message: "Provide exactly one of range or selector",
   })
   .refine((value) => value.patch !== undefined || value.numberFormat !== undefined, {
     message: "patch or numberFormat is required",
@@ -215,6 +212,20 @@ function textToolResult(text: string, success = true): CodexDynamicToolCallResul
 
 function stringifyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function serializeSelectorResolution(resolution: ResolvedWorkbookSelector | null) {
+  if (!resolution) {
+    return null;
+  }
+  return {
+    objectType: resolution.objectType,
+    displayLabel: resolution.displayLabel,
+    resolvedRevision: resolution.resolvedRevision,
+    derivedA1Ranges: resolution.derivedA1Ranges,
+    table: resolution.table,
+    namedRange: resolution.namedRange,
+  };
 }
 
 function summarizeWorkbookChangeRecord(
@@ -457,6 +468,10 @@ export interface WorkbookAgentStageCommandResult {
   readonly disposition?: "queuedForTurnApply" | "reviewQueued";
 }
 
+const rangeTargetJsonSchema = {
+  oneOf: [cellRangeRefJsonSchema, workbookSemanticSelectorJsonSchema],
+};
+
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
   return [
     {
@@ -480,17 +495,37 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
+      name: WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
       description:
-        "Read a rectangular cell range, including inputs, formulas, style ids, number-format ids, referenced formatting records, and sheet-state metadata for that window.",
+        "List workbook named ranges and named references, including resolved cell ranges and structured references.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
-        required: ["sheetName", "startAddress", "endAddress"],
+        properties: {},
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.listTables,
+      description:
+        "List workbook tables with sheet location, range, header/totals settings, and column names.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
+      description:
+        "Read a rectangular cell range or selector target, including inputs, formulas, style ids, number-format ids, referenced formatting records, and sheet-state metadata for that window.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
         properties: {
           sheetName: { type: "string" },
           startAddress: { type: "string" },
           endAddress: { type: "string" },
+          selector: workbookSemanticSelectorJsonSchema,
         },
       },
     },
@@ -632,14 +667,15 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.writeRange,
       description:
-        "Write a rectangular matrix of spreadsheet inputs starting at a top-left address. Use primitives for literals, {formula} for formulas, and null to clear a cell.",
+        "Write a rectangular matrix of spreadsheet inputs starting at a top-left address or selector target. Use primitives for literals, {formula} for formulas, and null to clear a cell.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
-        required: ["sheetName", "startAddress", "values"],
+        required: ["values"],
         properties: {
           sheetName: { type: "string" },
           startAddress: { type: "string" },
+          selector: workbookSemanticSelectorJsonSchema,
           values: {
             type: "array",
             items: {
@@ -682,44 +718,19 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.clearRange,
-      description: "Clear a rectangular range of cells.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["range"],
-        properties: {
-          range: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
-        },
-      },
+      description: "Clear a rectangular range of cells or a selector-resolved workbook region.",
+      inputSchema: rangeOrSelectorJsonSchema,
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.formatRange,
       description:
-        "Apply style and/or number-format changes to a range. Use patch for style properties and numberFormat for number formatting.",
+        "Apply style and/or number-format changes to a range or selector target. Use patch for style properties and numberFormat for number formatting.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
-        required: ["range"],
         properties: {
-          range: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
+          range: cellRangeRefJsonSchema,
+          selector: workbookSemanticSelectorJsonSchema,
           patch: { type: "object" },
           numberFormat: {
             oneOf: [{ type: "string" }, { type: "object" }],
@@ -729,94 +740,43 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.fillRange,
-      description: "Fill a target range from a source range using spreadsheet fill semantics.",
+      description:
+        "Fill a target range from a source range using spreadsheet fill semantics. Source and target may be concrete ranges or semantic selectors.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
         required: ["source", "target"],
         properties: {
-          source: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
-          target: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
+          source: rangeTargetJsonSchema,
+          target: rangeTargetJsonSchema,
         },
       },
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.copyRange,
-      description: "Copy a source range into a target range.",
+      description:
+        "Copy a source range into a target range. Source and target may be concrete ranges or semantic selectors.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
         required: ["source", "target"],
         properties: {
-          source: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
-          target: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
+          source: rangeTargetJsonSchema,
+          target: rangeTargetJsonSchema,
         },
       },
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.moveRange,
-      description: "Move a source range into a target range.",
+      description:
+        "Move a source range into a target range. Source and target may be concrete ranges or semantic selectors.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
         required: ["source", "target"],
         properties: {
-          source: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
-          target: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sheetName", "startAddress", "endAddress"],
-            properties: {
-              sheetName: { type: "string" },
-              startAddress: { type: "string" },
-              endAddress: { type: "string" },
-            },
-          },
+          source: rangeTargetJsonSchema,
+          target: rangeTargetJsonSchema,
         },
       },
     },
@@ -928,17 +888,44 @@ export async function handleWorkbookAgentToolCall(
         );
         return textToolResult(stringifyJson(summary));
       }
+      case WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges: {
+        const namedRanges = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => ({
+            documentId: context.documentId,
+            namedRangeCount: runtime.engine.getDefinedNames().length,
+            namedRanges: listWorkbookNamedRanges(runtime),
+          }),
+        );
+        return textToolResult(stringifyJson(namedRanges));
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.listTables: {
+        const tables = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => ({
+            documentId: context.documentId,
+            tableCount: runtime.engine.getTables().length,
+            tables: listWorkbookTables(runtime),
+          }),
+        );
+        return textToolResult(stringifyJson(tables));
+      }
       case WORKBOOK_AGENT_TOOL_NAMES.readRange: {
         const args = readRangeToolArgsSchema.parse(request.arguments);
-        const range = {
-          sheetName: args.sheetName,
-          startAddress: args.startAddress,
-          endAddress: args.endAddress,
-        };
-        ensureRangeLimit(range, MAX_READ_RANGE_CELLS);
         const result = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
-          (runtime) => inspectWorkbookRange(runtime, range),
+          (runtime) => {
+            const resolved = resolveReadRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            });
+            ensureRangeLimit(resolved.range, MAX_READ_RANGE_CELLS);
+            return {
+              resolvedSelector: serializeSelectorResolution(resolved.resolution),
+              ...inspectWorkbookRange(runtime, resolved.range),
+            };
+          },
         );
         return textToolResult(stringifyJson(result));
       }
@@ -1032,28 +1019,32 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.writeRange: {
         const args = writeRangeToolArgsSchema.parse(request.arguments);
-        const start = parseCellAddress(args.startAddress, args.sheetName);
-        const maxWidth = args.values.reduce(
-          (width, rowValues) => Math.max(width, rowValues.length),
-          0,
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveWriteRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
         );
-        const endAddress = formatAddress(
-          start.row + args.values.length - 1,
-          start.col + maxWidth - 1,
-        );
+        const values = args.values;
+        const start = parseCellAddress(resolved.startAddress, resolved.sheetName);
+        const maxWidth = values.reduce((width, rowValues) => Math.max(width, rowValues.length), 0);
+        const endAddress = formatAddress(start.row + values.length - 1, start.col + maxWidth - 1);
         ensureRangeLimit(
           {
-            sheetName: args.sheetName,
-            startAddress: args.startAddress,
+            sheetName: resolved.sheetName,
+            startAddress: resolved.startAddress,
             endAddress,
           },
           MAX_MUTATION_RANGE_CELLS,
         );
         return await stageCommandResult(context, {
           kind: "writeRange",
-          sheetName: args.sheetName,
-          startAddress: args.startAddress,
-          values: args.values.map((rowValues) =>
+          sheetName: resolved.sheetName,
+          startAddress: resolved.startAddress,
+          values: values.map((rowValues) =>
             rowValues.map((cellInput) => {
               if (
                 cellInput === null ||
@@ -1077,18 +1068,39 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.clearRange: {
         const args = clearRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "clearRange",
-          range: args.range,
+          range: resolved.range,
         });
       }
       case WORKBOOK_AGENT_TOOL_NAMES.formatRange: {
         const args = formatRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args: {
+                ...(args.range ? { range: args.range } : {}),
+                ...(args.selector ? { selector: args.selector } : {}),
+              },
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
         const formatCommand: Extract<WorkbookAgentCommand, { kind: "formatRange" }> = {
           kind: "formatRange",
-          range: args.range,
+          range: resolved.range,
         };
         if (args.patch !== undefined) {
           formatCommand.patch = normalizeStylePatch(args.patch);
@@ -1100,32 +1112,59 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.fillRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
-        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveTransferRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(resolved.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "fillRange",
-          source: args.source,
-          target: args.target,
+          source: resolved.source,
+          target: resolved.target,
         });
       }
       case WORKBOOK_AGENT_TOOL_NAMES.copyRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
-        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveTransferRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(resolved.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "copyRange",
-          source: args.source,
-          target: args.target,
+          source: resolved.source,
+          target: resolved.target,
         });
       }
       case WORKBOOK_AGENT_TOOL_NAMES.moveRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
-        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveTransferRangeRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(resolved.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "moveRange",
-          source: args.source,
-          target: args.target,
+          source: resolved.source,
+          target: resolved.target,
         });
       }
       default:
