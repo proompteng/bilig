@@ -82,7 +82,7 @@ export function determineRuntimeReleaseVersion(options: {
   return incrementPatch(publishedVersion);
 }
 
-export function compareStableSemver(left: string, right: string): number {
+function compareStableSemver(left: string, right: string): number {
   const leftVersion = parseStableSemver(left);
   const rightVersion = parseStableSemver(right);
 
@@ -95,7 +95,7 @@ export function compareStableSemver(left: string, right: string): number {
   return leftVersion.patch - rightVersion.patch;
 }
 
-export function incrementPatch(version: string): string {
+function incrementPatch(version: string): string {
   const parsed = parseStableSemver(version);
   return `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
 }

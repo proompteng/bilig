@@ -1,4 +1,4 @@
-import type { WorkbookAgentExecutionRecord, WorkbookAgentPreviewRange } from "@bilig/agent-api";
+import type { WorkbookAgentPreviewRange } from "@bilig/agent-api";
 import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import { cn } from "./cn.js";
 import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
@@ -67,40 +67,6 @@ export function PreviewRangeList(props: { readonly ranges: readonly WorkbookAgen
           {range.startAddress === range.endAddress ? "" : `:${range.endAddress}`}
         </span>
       ))}
-    </div>
-  );
-}
-
-export function ExecutionRecordRow(props: {
-  readonly record: WorkbookAgentExecutionRecord;
-  readonly onReplay: () => void;
-}) {
-  return (
-    <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-            {props.record.summary}
-          </div>
-          <div className={agentPanelMetaTextClass()}>r{String(props.record.appliedRevision)}</div>
-        </div>
-        <span className={workbookPillClass({ tone: "neutral" })}>{props.record.scope}</span>
-      </div>
-      {(props.record.planText ?? props.record.goalText).trim().length > 0 ? (
-        <div className={cn(agentPanelMetaTextClass(), "mt-2")}>
-          {props.record.planText ?? props.record.goalText}
-        </div>
-      ) : null}
-      <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />
-      <div className="mt-3 flex items-center justify-end">
-        <button
-          className={workbookButtonClass({ tone: "neutral" })}
-          type="button"
-          onClick={props.onReplay}
-        >
-          Replay
-        </button>
-      </div>
     </div>
   );
 }

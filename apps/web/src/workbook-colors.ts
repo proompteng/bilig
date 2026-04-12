@@ -151,11 +151,3 @@ export function normalizeCustomColorInput(value: string): string | null {
 export function toDisplayHexColor(value: string): string {
   return value.toUpperCase();
 }
-
-export function getQuickColorRows(
-  swatches: readonly (readonly ColorSwatch[])[],
-): readonly (readonly ColorSwatch[])[] {
-  return [swatches[0], swatches[2], swatches[4], swatches[6]].filter(
-    (row): row is readonly ColorSwatch[] => Array.isArray(row) && row.length > 0,
-  );
-}

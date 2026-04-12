@@ -1,14 +1,8 @@
 import { cva } from "class-variance-authority";
 
-export const agentPanelHeaderClass = cva(
-  "border-b border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-3 py-2.5",
-);
-
 export const agentPanelFooterClass = cva(
   "border-t border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-3 py-2.5",
 );
-
-export const agentPanelToolbarRowClass = cva("flex flex-wrap items-center justify-between gap-2");
 
 export const agentPanelEyebrowTextClass = cva(
   "text-[10px] leading-4 font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]",
@@ -26,52 +20,6 @@ export const agentPanelBodyMutedTextClass = cva(
   "text-[13px] leading-6 text-[var(--wb-text-muted)]",
 );
 
-export const agentPanelSectionClass = cva(
-  "rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2",
-);
-
-export const agentPanelSectionHeaderClass = cva("flex items-center justify-between gap-2");
-
-export const agentPanelSectionTitleClass = cva(
-  "text-[12px] leading-5 font-semibold text-[var(--wb-text)]",
-);
-
-export const agentPanelSectionHintClass = cva("text-[12px] leading-5 text-[var(--wb-text-muted)]");
-
-export const agentPanelFieldClass = cva(
-  "min-w-0 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 text-[13px] leading-6 text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-border-strong)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-surface-muted)]",
-  {
-    variants: {
-      multiline: {
-        false: "",
-        true: "px-3 py-3 leading-5",
-      },
-    },
-    defaultVariants: {
-      multiline: false,
-    },
-  },
-);
-
-export const agentPanelActionGridClass = cva("grid grid-cols-2 gap-2");
-
-export const agentPanelActionButtonClass = cva(
-  "h-auto w-full justify-center px-3 py-2 text-center leading-4 whitespace-normal",
-  {
-    variants: {
-      emphasis: {
-        subtle: "",
-        strong: "",
-      },
-    },
-    defaultVariants: {
-      emphasis: "subtle",
-    },
-  },
-);
-
-export const agentPanelToggleButtonClass = cva("min-w-[4.5rem]");
-
 export const agentPanelComposerFrameClass = cva(
   "relative rounded-[calc(var(--wb-radius-control)+2px)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:border-[var(--wb-border-strong)] focus-within:bg-[var(--wb-surface)]",
 );
@@ -82,30 +30,6 @@ export const agentPanelComposerTextareaClass = cva(
 
 export const agentPanelComposerSendButtonClass = cva(
   "absolute right-3 bottom-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-surface-muted)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-subtle)] disabled:text-[var(--wb-text-subtle)] disabled:shadow-none disabled:opacity-70",
-);
-
-export const agentPanelSegmentedGroupClass = cva(
-  "inline-flex items-center gap-1 rounded-[calc(var(--wb-radius-control)+2px)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-1",
-);
-
-export const agentPanelSegmentedButtonClass = cva(
-  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] px-2.5 text-[12px] leading-5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
-  {
-    variants: {
-      active: {
-        true: "border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)]",
-        false:
-          "border border-transparent bg-transparent text-[var(--wb-text-subtle)] hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)]",
-      },
-    },
-    defaultVariants: {
-      active: false,
-    },
-  },
-);
-
-export const agentPanelInlineButtonClass = cva(
-  "inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] leading-5 font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-surface-muted)] focus-visible:ring-offset-1",
 );
 
 export const agentPanelThreadListClass = cva("mt-2 flex flex-col gap-1.5");
@@ -141,10 +65,6 @@ export const agentPanelScrollAreaThumbClass = cva(
 );
 
 export const agentPanelTimelineListClass = cva("flex min-w-0 flex-col");
-
-export const agentPanelToolsPanelClass = cva(
-  "mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-2",
-);
 
 export const agentPanelDisclosureFrameClass = cva("overflow-hidden transition-colors", {
   variants: {

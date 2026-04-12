@@ -4,7 +4,6 @@ import {
   type CodexThreadItem,
 } from "@bilig/agent-api";
 import type {
-  WorkbookAgentThreadSnapshot,
   WorkbookAgentTextEntryKind,
   WorkbookAgentTimelineCitation,
   WorkbookAgentTimelineEntry,
@@ -405,17 +404,6 @@ export function mapThreadItemToEntry(
   }
 
   return createSystemEntry(item.id, turnId, `Codex emitted ${item.type}.`);
-}
-
-export function cloneSnapshot(snapshot: WorkbookAgentThreadSnapshot): WorkbookAgentThreadSnapshot {
-  return {
-    ...snapshot,
-    entries: snapshot.entries.map((entry) => ({ ...entry })),
-    ...(snapshot.context ? { context: structuredClone(snapshot.context) } : { context: null }),
-    reviewQueueItems: snapshot.reviewQueueItems.map((item) => structuredClone(item)),
-    executionRecords: snapshot.executionRecords.map((record) => structuredClone(record)),
-    workflowRuns: snapshot.workflowRuns.map((run) => structuredClone(run)),
-  };
 }
 
 export function buildEntriesFromThread(thread: CodexThread): WorkbookAgentTimelineEntry[] {

@@ -52,7 +52,7 @@ export function normalizeSheetNameKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
@@ -218,47 +218,6 @@ export function parseSelectionTarget(
   } catch {
     return null;
   }
-}
-
-export function parseSelectionRangeLabel(
-  label: string,
-  sheetName: string,
-): { sheetName: string; startAddress: string; endAddress: string } {
-  const trimmed = label.trim().toUpperCase();
-  if (trimmed === "ALL") {
-    return {
-      sheetName,
-      startAddress: "A1",
-      endAddress: formatAddress(MAX_ROWS - 1, MAX_COLS - 1),
-    };
-  }
-
-  const rowSelection = /^(\d+):(\d+)$/.exec(trimmed);
-  if (rowSelection) {
-    const startRow = Math.min(Number(rowSelection[1]) - 1, Number(rowSelection[2]) - 1);
-    const endRow = Math.max(Number(rowSelection[1]) - 1, Number(rowSelection[2]) - 1);
-    return {
-      sheetName,
-      startAddress: formatAddress(startRow, 0),
-      endAddress: formatAddress(endRow, MAX_COLS - 1),
-    };
-  }
-
-  const columnSelection = /^([A-Z]+):([A-Z]+)$/.exec(trimmed);
-  if (columnSelection) {
-    const startColumn = parseCellAddress(`${columnSelection[1]}1`, sheetName).col;
-    const endColumn = parseCellAddress(`${columnSelection[2]}1`, sheetName).col;
-    return {
-      sheetName,
-      startAddress: formatAddress(0, Math.min(startColumn, endColumn)),
-      endAddress: formatAddress(MAX_ROWS - 1, Math.max(startColumn, endColumn)),
-    };
-  }
-
-  const [startAddress = label, endAddress = startAddress] = trimmed.includes(":")
-    ? trimmed.split(":")
-    : [trimmed, trimmed];
-  return { sheetName, startAddress, endAddress };
 }
 
 export function getNormalizedRangeBounds(range: CellRangeRef): {

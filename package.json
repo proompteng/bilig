@@ -82,20 +82,13 @@
   },
   "devDependencies": {
     "@bilig/test-fuzz": "workspace:*",
-    "@effect/platform": "0.96.0",
-    "@effect/platform-node": "0.106.0",
     "@playwright/test": "1.58.2",
     "@types/node": "25.5.0",
     "@types/pg": "^8.20.0",
     "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
     "@types/react-reconciler": "^0.33.0",
-    "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "4.1.2",
-    "@xstate/react": "6.1.0",
-    "assemblyscript": "0.28.12",
     "dependency-cruiser": "^17.3.10",
-    "effect": "3.21.0",
     "fast-check": "4.6.0",
     "jsdom": "29.0.1",
     "knip": "^6.3.1",
@@ -108,8 +101,7 @@
     "typescript": "6.0.2",
     "vite": "8.0.3",
     "vitest": "4.1.2",
-    "xlsx": "^0.18.5",
-    "xstate": "5.30.0"
+    "xlsx": "^0.18.5"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm hooks:pre-commit",

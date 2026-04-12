@@ -5,7 +5,7 @@ import type {
 } from "./workbook-metadata-types.js";
 import { axisMetadataKey, deleteRecordsBySheet } from "./workbook-store-records.js";
 
-export function makeAxisEntrySnapshot(
+function makeAxisEntrySnapshot(
   entry: WorkbookAxisEntryRecord,
   index: number,
 ): WorkbookAxisEntrySnapshot {

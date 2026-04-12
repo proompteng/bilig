@@ -18,8 +18,8 @@ import {
   type WorkerEngine,
 } from "./worker-runtime-support.js";
 
-export const PRODUCT_COLUMN_WIDTH = 104;
-export const PRODUCT_ROW_HEIGHT = 22;
+const PRODUCT_COLUMN_WIDTH = 104;
+const PRODUCT_ROW_HEIGHT = 22;
 export const DEFAULT_STYLE_ID = "style-0";
 export const MIN_COLUMN_WIDTH = 44;
 export const MAX_COLUMN_WIDTH = 480;

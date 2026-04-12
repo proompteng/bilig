@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "rules": {
+    "types": "off"
+  },
+  "ignoreIssues": {
+    "packages/grid/src/useViewport.ts": ["duplicates"],
+    "packages/wasm-kernel/assembly/**/*.ts": ["exports", "enumMembers"]
+  },
+  "workspaces": {
+    ".": {
+      "entry": ["e2e/tests/prod-smoke.pw.ts", "scripts/bench-worker-runtime.ts"]
+    },
+    "packages/wasm-kernel": {
+      "entry": ["assembly/index.ts"],
+      "project": ["assembly/**/*.ts"],
+      "ignoreDependencies": ["assemblyscript"]
+    }
+  }
+}

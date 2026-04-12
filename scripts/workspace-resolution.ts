@@ -59,7 +59,7 @@ export function scanWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceRe
   return Object.fromEntries(sortedEntries(entries));
 }
 
-export function readWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceResolutionMap {
+function readWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceResolutionMap {
   const workspaceResolutionPath = join(rootDir, "workspace-resolution.generated.json");
   if (!existsSync(workspaceResolutionPath)) {
     throw new Error(
@@ -94,7 +94,7 @@ export function readWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceRe
   return Object.fromEntries(sortedEntries(entries));
 }
 
-export function createWorkspaceAliasMap(
+function createWorkspaceAliasMap(
   rootDir = workspaceRootDir,
   resolution = readWorkspaceResolution(rootDir),
 ): Record<string, string> {

@@ -2,7 +2,6 @@ import { ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
 
 export const enum CellFlags {
-  Dirty = 1 << 0,
   HasFormula = 1 << 1,
   JsOnly = 1 << 2,
   InCycle = 1 << 3,
