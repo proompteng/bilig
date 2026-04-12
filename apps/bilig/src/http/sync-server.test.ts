@@ -244,7 +244,6 @@ function createAgentSessionSnapshot(
     threadId: "thr-1",
     executionPolicy: "autoApplyAll",
     scope: "private",
-    executionPolicy: "autoApplyAll",
     status: "idle",
     activeTurnId: null,
     lastError: null,

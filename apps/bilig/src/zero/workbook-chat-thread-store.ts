@@ -830,14 +830,11 @@ export async function loadWorkbookAgentThreadState(
   );
   const thread = threadResult.rows[0];
   const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs);
-  const executionPolicy =
-    thread?.executionPolicy === "autoApplySafe" ||
-    thread?.executionPolicy === "autoApplyAll" ||
-    thread?.executionPolicy === "ownerReview"
-      ? thread.executionPolicy
-      : thread?.scope === "private" || thread?.scope === "shared"
-        ? defaultExecutionPolicyForScope(thread.scope)
-        : null;
+  const executionPolicy = isExecutionPolicy(thread?.executionPolicy)
+    ? thread.executionPolicy
+    : thread?.scope === "private" || thread?.scope === "shared"
+      ? defaultExecutionPolicyForScope(thread.scope)
+      : null;
   if (
     !thread ||
     typeof thread.workbookId !== "string" ||

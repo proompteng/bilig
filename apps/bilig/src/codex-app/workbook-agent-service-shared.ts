@@ -109,10 +109,6 @@ export function mergeTimelineEntries(
   return merged;
 }
 
-function resolveDefaultExecutionPolicy(scope: "private" | "shared"): WorkbookAgentExecutionPolicy {
-  return scope === "shared" ? "ownerReview" : "autoApplyAll";
-}
-
 export function normalizeExecutionPolicy(input: {
   scope: "private" | "shared";
   requestedPolicy?: WorkbookAgentExecutionPolicy | null;

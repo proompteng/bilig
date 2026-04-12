@@ -148,15 +148,6 @@ export type WorkbookAgentSessionStatus = Schema.Schema.Type<
 export const WorkbookAgentThreadScopeSchema = Schema.Literal("private", "shared");
 export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentThreadScopeSchema>;
 
-export const WorkbookAgentExecutionPolicySchema = Schema.Literal(
-  "autoApplySafe",
-  "autoApplyAll",
-  "ownerReview",
-);
-export type WorkbookAgentExecutionPolicy = Schema.Schema.Type<
-  typeof WorkbookAgentExecutionPolicySchema
->;
-
 export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
