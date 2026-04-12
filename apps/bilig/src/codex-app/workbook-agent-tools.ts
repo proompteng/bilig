@@ -20,6 +20,7 @@ import {
   rangeMutationArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  structuralAxisMutationArgsSchema,
   updateColumnMetadataArgsSchema,
   updateRowMetadataArgsSchema,
 } from "@bilig/zero-sync";
@@ -189,6 +190,12 @@ const sheetMutationToolArgsSchema = z.object({
 const renameSheetToolArgsSchema = z.object({
   currentName: z.string().trim().min(1),
   nextName: z.string().trim().min(1),
+});
+
+const structuralAxisToolArgsSchema = z.object({
+  sheetName: structuralAxisMutationArgsSchema.shape.sheetName,
+  start: structuralAxisMutationArgsSchema.shape.start,
+  count: structuralAxisMutationArgsSchema.shape.count,
 });
 
 const rowMetadataToolArgsSchema = z
@@ -876,6 +883,62 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
+      name: WORKBOOK_AGENT_TOOL_NAMES.insertRows,
+      description: "Insert one or more rows at a zero-based row index on a sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "start", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          start: { type: "number" },
+          count: { type: "number" },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.deleteRows,
+      description: "Delete one or more rows at a zero-based row index on a sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "start", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          start: { type: "number" },
+          count: { type: "number" },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.insertColumns,
+      description: "Insert one or more columns at a zero-based column index on a sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "start", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          start: { type: "number" },
+          count: { type: "number" },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.deleteColumns,
+      description: "Delete one or more columns at a zero-based column index on a sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "start", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          start: { type: "number" },
+          count: { type: "number" },
+        },
+      },
+    },
+    {
       name: WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata,
       description:
         "Hide, unhide, resize, or reset row metadata across a bounded row span on one sheet.",
@@ -1213,6 +1276,42 @@ export async function handleWorkbookAgentToolCall(
           kind: "renameSheet",
           currentName: args.currentName,
           nextName: args.nextName,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.insertRows: {
+        const args = structuralAxisToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "insertRows",
+          sheetName: args.sheetName,
+          start: args.start,
+          count: args.count,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.deleteRows: {
+        const args = structuralAxisToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "deleteRows",
+          sheetName: args.sheetName,
+          start: args.start,
+          count: args.count,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.insertColumns: {
+        const args = structuralAxisToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "insertColumns",
+          sheetName: args.sheetName,
+          start: args.start,
+          count: args.count,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.deleteColumns: {
+        const args = structuralAxisToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "deleteColumns",
+          sheetName: args.sheetName,
+          start: args.start,
+          count: args.count,
         });
       }
       case WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata: {

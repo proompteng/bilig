@@ -153,4 +153,59 @@ describe("workbook agent apply", () => {
       "prepaid expenses",
     );
   });
+
+  it("captures undo for row and column structural commands", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Header");
+    engine.setCellValue("Sheet1", "A2", "Value");
+    engine.setCellValue("Sheet1", "B1", "Extra");
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: "insertRows",
+          sheetName: "Sheet1",
+          start: 1,
+          count: 1,
+        },
+        {
+          kind: "deleteColumns",
+          sheetName: "Sheet1",
+          start: 1,
+          count: 1,
+        },
+      ],
+    });
+
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle);
+
+    expect(engine.getCell("Sheet1", "A3").value).toMatchObject({
+      tag: ValueTag.String,
+      value: "Value",
+    });
+    expect(engine.getCell("Sheet1", "B1").value).toEqual({
+      tag: ValueTag.Empty,
+    });
+    expect(undoBundle).toEqual(
+      expect.objectContaining({
+        kind: "engineOps",
+      }),
+    );
+    if (!undoBundle || undoBundle.kind !== "engineOps") {
+      throw new Error("Expected engineOps undo bundle");
+    }
+
+    engine.applyOps(undoBundle.ops, { trusted: true });
+
+    expect(engine.getCell("Sheet1", "A2").value).toMatchObject({
+      tag: ValueTag.String,
+      value: "Value",
+    });
+    expect(engine.getCell("Sheet1", "B1").value).toMatchObject({
+      tag: ValueTag.String,
+      value: "Extra",
+    });
+  });
 });

@@ -254,6 +254,22 @@ function applyWorkbookAgentCommandWithUndoCapture(
       return engine.captureUndoOps(() => {
         engine.renameSheet(command.currentName, command.nextName);
       }).undoOps;
+    case "insertRows":
+      return engine.captureUndoOps(() => {
+        engine.insertRows(command.sheetName, command.start, command.count);
+      }).undoOps;
+    case "deleteRows":
+      return engine.captureUndoOps(() => {
+        engine.deleteRows(command.sheetName, command.start, command.count);
+      }).undoOps;
+    case "insertColumns":
+      return engine.captureUndoOps(() => {
+        engine.insertColumns(command.sheetName, command.start, command.count);
+      }).undoOps;
+    case "deleteColumns":
+      return engine.captureUndoOps(() => {
+        engine.deleteColumns(command.sheetName, command.start, command.count);
+      }).undoOps;
     case "updateRowMetadata": {
       const resolved = resolveRowMetadataCommandState(engine, command);
       return engine.captureUndoOps(() => {

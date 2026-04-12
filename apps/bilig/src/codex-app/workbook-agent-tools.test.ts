@@ -884,6 +884,86 @@ describe("workbook agent tools", () => {
     });
   });
 
+  it("stages structural row insertion commands", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-insert-rows",
+        tool: "insert_rows",
+        arguments: {
+          sheetName: "Sheet1",
+          start: 1,
+          count: 2,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "insertRows",
+      sheetName: "Sheet1",
+      start: 1,
+      count: 2,
+    });
+  });
+
+  it("stages structural column deletion commands", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-delete-columns",
+        tool: "delete_columns",
+        arguments: {
+          sheetName: "Sheet1",
+          start: 0,
+          count: 1,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "deleteColumns",
+      sheetName: "Sheet1",
+      start: 0,
+      count: 1,
+    });
+  });
+
   it("starts built-in durable workflows from the semantic tool surface", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

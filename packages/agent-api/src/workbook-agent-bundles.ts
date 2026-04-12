@@ -80,6 +80,30 @@ export type WorkbookAgentCommand =
       nextName: string;
     }
   | {
+      kind: "insertRows";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "deleteRows";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "insertColumns";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "deleteColumns";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
       kind: "updateRowMetadata";
       sheetName: string;
       startRow: number;
@@ -694,6 +718,14 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
       return `Create sheet ${command.name}`;
     case "renameSheet":
       return `Rename sheet ${command.currentName} to ${command.nextName}`;
+    case "insertRows":
+      return `Insert ${formatRowSpanLabel(command.start, command.count)} in ${command.sheetName}`;
+    case "deleteRows":
+      return `Delete ${formatRowSpanLabel(command.start, command.count)} in ${command.sheetName}`;
+    case "insertColumns":
+      return `Insert ${formatColumnSpanLabel(command.start, command.count)} in ${command.sheetName}`;
+    case "deleteColumns":
+      return `Delete ${formatColumnSpanLabel(command.start, command.count)} in ${command.sheetName}`;
     case "updateRowMetadata":
       return describeAxisMetadataCommand({
         axis: "row",
@@ -775,7 +807,15 @@ function deriveWorkbookAgentRiskClass(
   context: WorkbookAgentContextRef | null,
 ): WorkbookAgentRiskClass {
   if (
-    commands.some((command) => command.kind === "createSheet" || command.kind === "renameSheet")
+    commands.some(
+      (command) =>
+        command.kind === "createSheet" ||
+        command.kind === "renameSheet" ||
+        command.kind === "insertRows" ||
+        command.kind === "deleteRows" ||
+        command.kind === "insertColumns" ||
+        command.kind === "deleteColumns",
+    )
   ) {
     return "high";
   }
@@ -794,7 +834,15 @@ function deriveWorkbookAgentBundleScope(
   context: WorkbookAgentContextRef | null,
 ): WorkbookAgentBundleScope {
   if (
-    commands.some((command) => command.kind === "createSheet" || command.kind === "renameSheet")
+    commands.some(
+      (command) =>
+        command.kind === "createSheet" ||
+        command.kind === "renameSheet" ||
+        command.kind === "insertRows" ||
+        command.kind === "deleteRows" ||
+        command.kind === "insertColumns" ||
+        command.kind === "deleteColumns",
+    )
   ) {
     return "workbook";
   }
@@ -1109,6 +1157,17 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
         typeof value["nextName"] === "string" &&
         value["nextName"].trim().length > 0
       );
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns":
+      return (
+        typeof value["sheetName"] === "string" &&
+        Number.isInteger(value["start"]) &&
+        Number(value["start"]) >= 0 &&
+        Number.isInteger(value["count"]) &&
+        Number(value["count"]) > 0
+      );
     case "updateRowMetadata": {
       const hasHeight = value["height"] !== undefined;
       const hasHidden = value["hidden"] !== undefined;
@@ -1275,6 +1334,10 @@ export function estimateWorkbookAgentCommandAffectedCells(
       return countRangeCells(command.target);
     case "createSheet":
     case "renameSheet":
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns":
     case "updateRowMetadata":
     case "updateColumnMetadata":
       return null;
@@ -1320,6 +1383,26 @@ export function deriveWorkbookAgentCommandPreviewRanges(
     case "createSheet":
     case "renameSheet":
       return [];
+    case "insertRows":
+    case "deleteRows":
+      return [
+        {
+          sheetName: command.sheetName,
+          startAddress: formatAddress(command.start, 0),
+          endAddress: formatAddress(command.start + command.count - 1, 0),
+          role: "target",
+        },
+      ];
+    case "insertColumns":
+    case "deleteColumns":
+      return [
+        {
+          sheetName: command.sheetName,
+          startAddress: formatAddress(0, command.start),
+          endAddress: formatAddress(0, command.start + command.count - 1),
+          role: "target",
+        },
+      ];
     case "updateRowMetadata":
       return [
         {
@@ -1413,6 +1496,18 @@ export function applyWorkbookAgentCommand(
           newName: command.nextName,
         },
       ]);
+      return;
+    case "insertRows":
+      engine.insertRows(command.sheetName, command.start, command.count);
+      return;
+    case "deleteRows":
+      engine.deleteRows(command.sheetName, command.start, command.count);
+      return;
+    case "insertColumns":
+      engine.insertColumns(command.sheetName, command.start, command.count);
+      return;
+    case "deleteColumns":
+      engine.deleteColumns(command.sheetName, command.start, command.count);
       return;
     case "updateRowMetadata": {
       const resolved = resolveRowMetadataCommandState(engine, command);

@@ -187,6 +187,43 @@ describe("workbook agent bundle semantics", () => {
     );
   });
 
+  it("marks row insertion as workbook-scoped structural work", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Insert summary rows",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "insertRows",
+        sheetName: "Sheet1",
+        start: 1,
+        count: 2,
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Insert rows 2-3 in Sheet1",
+        riskClass: "high",
+        scope: "workbook",
+        approvalMode: "explicit",
+        estimatedAffectedCells: null,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A2",
+            endAddress: "A3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
   it("projects a scoped subset as its own preview/apply bundle", () => {
     const staged = appendWorkbookAgentCommandToBundle({
       previousBundle: appendWorkbookAgentCommandToBundle({
