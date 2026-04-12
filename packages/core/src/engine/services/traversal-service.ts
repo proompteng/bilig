@@ -1,6 +1,11 @@
 import { Effect } from "effect";
 import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
-import { entityPayload, isRangeEntity } from "../../entity-ids.js";
+import {
+  entityPayload,
+  isExactLookupColumnEntity,
+  isRangeEntity,
+  isSortedLookupColumnEntity,
+} from "../../entity-ids.js";
 import { growUint32 } from "../../engine-buffer-utils.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
 import { EngineTraversalError } from "../errors.js";
@@ -42,14 +47,20 @@ export function createEngineTraversalService(args: {
   readonly reverseState: {
     reverseCellEdges: Array<EdgeSlice | undefined>;
     reverseRangeEdges: Array<EdgeSlice | undefined>;
+    reverseExactLookupColumnEdges: Map<number, EdgeSlice>;
+    reverseSortedLookupColumnEdges: Map<number, EdgeSlice>;
   };
 }): EngineTraversalService {
   let topoFormulaBuffer: U32 = new Uint32Array(128);
   let topoEntityQueue: U32 = new Uint32Array(128);
   let topoFormulaSeenEpoch = 1;
   let topoRangeSeenEpoch = 1;
+  let topoExactLookupSeenEpoch = 1;
+  let topoSortedLookupSeenEpoch = 1;
   let topoFormulaSeen: U32 = new Uint32Array(128);
   let topoRangeSeen: U32 = new Uint32Array(128);
+  const topoExactLookupSeen = new Map<number, number>();
+  const topoSortedLookupSeen = new Map<number, number>();
 
   const ensureTraversalScratchCapacity = (
     cellSize: number,
@@ -70,9 +81,37 @@ export function createEngineTraversalService(args: {
     }
   };
 
+  const ensureEntityQueueCapacity = (size: number): void => {
+    if (size <= topoEntityQueue.length) {
+      return;
+    }
+    let capacity = topoEntityQueue.length;
+    while (capacity < size) {
+      capacity *= 2;
+    }
+    topoEntityQueue = growUint32(topoEntityQueue, capacity);
+  };
+
+  const ensureFormulaBufferCapacity = (size: number): void => {
+    if (size <= topoFormulaBuffer.length) {
+      return;
+    }
+    let capacity = topoFormulaBuffer.length;
+    while (capacity < size) {
+      capacity *= 2;
+    }
+    topoFormulaBuffer = growUint32(topoFormulaBuffer, capacity);
+  };
+
   const getReverseEdgeSlice = (entityId: number): EdgeSlice | undefined => {
     if (isRangeEntity(entityId)) {
       return args.reverseState.reverseRangeEdges[entityPayload(entityId)];
+    }
+    if (isExactLookupColumnEntity(entityId)) {
+      return args.reverseState.reverseExactLookupColumnEdges.get(entityPayload(entityId));
+    }
+    if (isSortedLookupColumnEntity(entityId)) {
+      return args.reverseState.reverseSortedLookupColumnEdges.get(entityPayload(entityId));
     }
     return args.reverseState.reverseCellEdges[entityPayload(entityId)];
   };
@@ -123,6 +162,16 @@ export function createEngineTraversalService(args: {
       topoRangeSeenEpoch = 1;
       topoRangeSeen.fill(0);
     }
+    topoExactLookupSeenEpoch += 1;
+    if (topoExactLookupSeenEpoch === 0xffff_ffff) {
+      topoExactLookupSeenEpoch = 1;
+      topoExactLookupSeen.clear();
+    }
+    topoSortedLookupSeenEpoch += 1;
+    if (topoSortedLookupSeenEpoch === 0xffff_ffff) {
+      topoSortedLookupSeenEpoch = 1;
+      topoSortedLookupSeen.clear();
+    }
 
     let entityQueueLength = 1;
     let formulaCount = 0;
@@ -133,24 +182,45 @@ export function createEngineTraversalService(args: {
       const dependents = getEntityDependentsNow(currentEntity);
       for (let index = 0; index < dependents.length; index += 1) {
         const dependent = dependents[index]!;
+        if (
+          !(
+            isRangeEntity(dependent) ||
+            isExactLookupColumnEntity(dependent) ||
+            isSortedLookupColumnEntity(dependent)
+          )
+        ) {
+          const formulaCellIndex = entityPayload(dependent);
+          if (topoFormulaSeen[formulaCellIndex] === topoFormulaSeenEpoch) {
+            continue;
+          }
+          topoFormulaSeen[formulaCellIndex] = topoFormulaSeenEpoch;
+          ensureFormulaBufferCapacity(formulaCount + 1);
+          topoFormulaBuffer[formulaCount] = formulaCellIndex;
+          formulaCount += 1;
+          continue;
+        }
         if (isRangeEntity(dependent)) {
           const rangeIndex = entityPayload(dependent);
           if (topoRangeSeen[rangeIndex] === topoRangeSeenEpoch) {
             continue;
           }
           topoRangeSeen[rangeIndex] = topoRangeSeenEpoch;
-          topoEntityQueue[entityQueueLength] = dependent;
-          entityQueueLength += 1;
-          continue;
+        } else if (isExactLookupColumnEntity(dependent)) {
+          const lookupColumnPayload = entityPayload(dependent);
+          if (topoExactLookupSeen.get(lookupColumnPayload) === topoExactLookupSeenEpoch) {
+            continue;
+          }
+          topoExactLookupSeen.set(lookupColumnPayload, topoExactLookupSeenEpoch);
+        } else {
+          const lookupColumnPayload = entityPayload(dependent);
+          if (topoSortedLookupSeen.get(lookupColumnPayload) === topoSortedLookupSeenEpoch) {
+            continue;
+          }
+          topoSortedLookupSeen.set(lookupColumnPayload, topoSortedLookupSeenEpoch);
         }
-
-        const formulaCellIndex = entityPayload(dependent);
-        if (topoFormulaSeen[formulaCellIndex] === topoFormulaSeenEpoch) {
-          continue;
-        }
-        topoFormulaSeen[formulaCellIndex] = topoFormulaSeenEpoch;
-        topoFormulaBuffer[formulaCount] = formulaCellIndex;
-        formulaCount += 1;
+        ensureEntityQueueCapacity(entityQueueLength + 1);
+        topoEntityQueue[entityQueueLength] = dependent;
+        entityQueueLength += 1;
       }
     }
 

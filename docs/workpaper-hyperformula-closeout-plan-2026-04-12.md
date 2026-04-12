@@ -13,6 +13,9 @@ It is intentionally narrower than:
 
 - `/Users/gregkonush/github.com/bilig2/docs/workpaper-performance-acceleration-plan.md`
 - `/Users/gregkonush/github.com/bilig2/docs/workpaper-engine-leadership-program.md`
+- `/Users/gregkonush/github.com/bilig2/docs/workpaper-ultra-performance-engine-architecture-2026-04-12.md`
+- `/Users/gregkonush/github.com/bilig2/docs/workpaper-ultra-performance-engine-delivery-2026-04-12.md`
+- `/Users/gregkonush/github.com/bilig2/docs/workpaper-hyperformula-prior-art-audit-2026-04-12.md`
 
 Those documents describe the broader performance and leadership program. This document describes
 the last-mile engineering plan after the `ef63195` tranche landed.
@@ -85,6 +88,145 @@ Current classification:
   - `single-formula-edit-recalc` because it oscillates across reruns even after the
     dependency-equivalent rewrite optimization
 
+## HyperFormula Audit Findings
+
+The local HyperFormula checkout confirms that the remaining gaps are architectural, not cosmetic.
+
+Reviewed files:
+
+- `/Users/gregkonush/github.com/hyperformula/src/BuildEngineFactory.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/Operations.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/SearchStrategy.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnBinarySearch.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/AdvancedFind.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/interpreter/plugin/LookupPlugin.ts`
+- `/Users/gregkonush/github.com/hyperformula/docs/guide/performance.md`
+
+### 1. Search is chosen once, at engine construction
+
+HyperFormula does not let lookup policy emerge inside the evaluator. It constructs a single
+`columnSearch` subsystem up front and threads it through graph build, operations, interpreter, and
+evaluator in:
+
+- `/Users/gregkonush/github.com/hyperformula/src/BuildEngineFactory.ts:76`
+- `/Users/gregkonush/github.com/hyperformula/src/BuildEngineFactory.ts:77`
+- `/Users/gregkonush/github.com/hyperformula/src/BuildEngineFactory.ts:107`
+- `/Users/gregkonush/github.com/hyperformula/src/BuildEngineFactory.ts:116`
+
+The actual strategy switch is tiny:
+
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/SearchStrategy.ts:56`
+
+This matters because our remaining lookup gaps should be solved by moving more work into a durable
+engine-owned search layer, not by adding another evaluator-only shortcut.
+
+### 2. `useColumnIndex` is mainly an exact-match accelerator
+
+HyperFormula’s `ColumnIndex` first tries indexed lookup and then falls back to the binary-search
+strategy when the index does not answer:
+
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:110`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:115`
+
+The actual indexed path is exact-key to row-list lookup scoped to the requested range:
+
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:119`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:132`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:138`
+
+Implication:
+
+- `lookup-with-column-index` is an exact-match index problem
+- `lookup-approximate-sorted` is not primarily an index problem
+
+That means the closeout plan must separate:
+
+1. persistent exact-match descriptors
+2. direct sorted-search descriptors
+
+Treating both as one “lookup index” phase is too blurry.
+
+### 3. Index maintenance happens on mutation paths
+
+HyperFormula updates search state as workbook mutations occur:
+
+- cell writes and formula replacement:
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:648`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:663`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:681`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:695`
+- structural edits:
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:790`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:792`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:855`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:856`
+- move/remove paths:
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:355`
+  - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:358`
+
+Even the fine-grained hooks are explicit:
+
+- `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:995`
+- `/Users/gregkonush/github.com/hyperformula/src/Operations.ts:1008`
+
+Implication:
+
+- our remaining lookup overhead should be attacked by mutation-owned invalidation and maintenance
+- evaluator-time “is this descriptor still valid?” checks should be minimized or eliminated
+
+### 4. Their lazy maintenance is narrow, not generic
+
+HyperFormula’s `ColumnIndex` stores a version per value bucket and replays only relevant row
+transformations before lookup:
+
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:215`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:221`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:225`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:273`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts:303`
+
+That is much narrower than a generic refresh step on every lookup call.
+
+Implication:
+
+- if we keep descriptor validation, it must be tied to narrow invalidation generations
+- broad sheet/column refresh checks in the hot path are the wrong shape
+
+### 5. Fresh-sheet build is a one-pass graph-and-index build
+
+HyperFormula’s fresh build path does not simulate incremental mutation. `GraphBuilder` parses each
+cell once, creates vertices, and indexes literal values immediately while building the graph:
+
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts:78`
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts:91`
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts:102`
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts:121`
+- `/Users/gregkonush/github.com/hyperformula/src/GraphBuilder.ts:122`
+
+Implication:
+
+- `build-mixed-content` should be solved by a real fresh-sheet bulk bind pipeline
+- trying to win that benchmark by shaving incremental mutation helpers is the wrong approach
+
+### 6. Sorted approximate lookup is a direct search-floor problem
+
+When lookup is ordered and not wildcard-based, HyperFormula routes through the general search
+strategy. The binary-search fallback is implemented below the plugin layer:
+
+- `/Users/gregkonush/github.com/hyperformula/src/interpreter/plugin/LookupPlugin.ts:200`
+- `/Users/gregkonush/github.com/hyperformula/src/interpreter/plugin/LookupPlugin.ts:279`
+- `/Users/gregkonush/github.com/hyperformula/src/interpreter/plugin/LookupPlugin.ts:299`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/AdvancedFind.ts:44`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/AdvancedFind.ts:52`
+- `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnBinarySearch.ts:13`
+
+Implication:
+
+- `lookup-approximate-sorted` should be treated as a direct sorted-search path problem
+- the target is a cheaper engine-level ordered-search descriptor, not “better column indexing”
+
 ## What The Current Data Means
 
 ### 1. Lookup math is no longer the main problem
@@ -97,6 +239,7 @@ That means additional lookup work should focus on:
 
 - removing remaining validation and refresh overhead from prepared descriptors
 - explicit invalidation instead of repeated revalidation
+- mutation-owned descriptor maintenance
 - avoiding generic local mutation overhead on local-only engines
 
 It does not mean writing another custom exact-match algorithm from scratch.
@@ -193,18 +336,18 @@ Files:
 - `/Users/gregkonush/github.com/bilig2/packages/core/src/events.ts`
 - `/Users/gregkonush/github.com/bilig2/packages/core/src/engine/services/mutation-service.ts`
 
-### Phase 2: Make lookup descriptors explicitly invalidated
+### Phase 2A: Make exact-match lookup descriptors explicitly invalidated
 
-Current prepared lookup paths are good but still not cheap enough.
+Current prepared exact lookup paths are good but still not cheap enough.
 
 Design:
 
-- introduce a persistent lookup-descriptor registry keyed by:
+- introduce a persistent exact-match descriptor registry keyed by:
   - sheet id
   - column
   - row start
   - row end
-  - lookup mode family
+  - exact-match mode family
 - descriptors are built once and invalidated directly by writes to the same column/range span
 - formula evaluation consumes descriptors directly with no refresh check in the hot path
 
@@ -216,8 +359,26 @@ This is the correct follow-on to the existing prepared lookup work in:
 Expected workloads improved:
 
 - `lookup-with-column-index`
-- `lookup-approximate-sorted`
 - `lookup-no-column-index` secondarily through cheaper exact direct paths
+
+### Phase 2B: Build a dedicated sorted-search descriptor path
+
+This phase exists because the HyperFormula audit shows approximate sorted lookup is fundamentally a
+search-floor problem, not an index problem.
+
+Design:
+
+- add a dedicated ordered-search descriptor for monotonic numeric/text columns
+- maintain it from mutation paths alongside the exact-match descriptor path
+- use it for:
+  - ascending approximate `MATCH`
+  - descending approximate `MATCH`
+  - other future direct sorted-search families
+- avoid generic evaluator fallback and avoid broad descriptor refresh checks in the hot path
+
+Expected workloads improved:
+
+- `lookup-approximate-sorted`
 
 ### Phase 3: Build a true fresh-sheet bulk formula bind path
 
@@ -295,17 +456,19 @@ Files:
 The next pass should run in this order:
 
 1. local-only mutation fast path
-2. persistent invalidated lookup descriptors
-3. fresh-sheet bulk formula bind
-4. dependency-equivalent rewrite reuse
-5. chain-tail cleanup
+2. persistent invalidated exact-match descriptors
+3. dedicated sorted-search descriptors
+4. fresh-sheet bulk formula bind
+5. dependency-equivalent rewrite reuse
+6. chain-tail cleanup
 
 This order is deliberate:
 
-- phases 1 and 2 attack the remaining red lookup workloads
-- phase 3 closes the fresh-sheet mixed-content gap
-- phase 4 stabilizes formula-edit wins without compromising the other work
-- phase 5 is the final outlier cleanup pass
+- phase 1 attacks the shared local mutation overhead behind several red workloads
+- phases 2 and 3 separately target the two remaining lookup deficit families
+- phase 4 closes the fresh-sheet mixed-content gap
+- phase 5 stabilizes formula-edit wins without compromising the other work
+- phase 6 is the final outlier cleanup pass
 
 ## Measurement Plan
 
@@ -352,4 +515,4 @@ The next concrete implementation step is:
 3. rerun the competitive suite before touching lookup structures again
 
 If phase 1 does not materially reduce the indexed and approximate lookup gaps, then phase 2 becomes
-the primary path. If it does, phase 2 can be smaller and more surgical.
+the primary path. If it does, phases 2A and 2B can stay smaller and more surgical.

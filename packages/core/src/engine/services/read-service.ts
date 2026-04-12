@@ -7,11 +7,18 @@ import type {
 } from "@bilig/protocol";
 import { parseCellAddress } from "@bilig/formula";
 import { CellFlags } from "../../cell-store.js";
-import { entityPayload, isRangeEntity, makeCellEntity } from "../../entity-ids.js";
+import {
+  entityPayload,
+  isExactLookupColumnEntity,
+  isRangeEntity,
+  isSortedLookupColumnEntity,
+  makeCellEntity,
+} from "../../entity-ids.js";
 import { normalizeRange } from "../../engine-range-utils.js";
 import { emptyValue } from "../../engine-value-utils.js";
 import { WorkbookStore } from "../../workbook-store.js";
 import type { EngineRuntimeState } from "../runtime-state.js";
+import type { EngineRuntimeColumnStoreService } from "./runtime-column-store-service.js";
 
 export interface EngineReadService {
   readonly exportSheetCsv: (sheetName: string) => Effect.Effect<string>;
@@ -25,18 +32,13 @@ export interface EngineReadService {
     sheetName: string,
     address: string,
   ) => Effect.Effect<DependencySnapshot>;
-  readonly getDependents: (
-    sheetName: string,
-    address: string,
-  ) => Effect.Effect<DependencySnapshot>;
-  readonly explainCell: (
-    sheetName: string,
-    address: string,
-  ) => Effect.Effect<ExplainCellSnapshot>;
+  readonly getDependents: (sheetName: string, address: string) => Effect.Effect<DependencySnapshot>;
+  readonly explainCell: (sheetName: string, address: string) => Effect.Effect<ExplainCellSnapshot>;
 }
 
 export function createEngineReadService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas">;
+  readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
     fn: (dependencyCellIndex: number) => void,
@@ -53,7 +55,11 @@ export function createEngineReadService(args: {
     const snapshot: CellSnapshot = {
       sheetName,
       address,
-      value: args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id)),
+      value: args.runtimeColumnStore.readCellValue(
+        sheetName,
+        args.state.workbook.cellStore.rows[cellIndex]!,
+        args.state.workbook.cellStore.cols[cellIndex]!,
+      ),
       flags: args.state.workbook.cellStore.flags[cellIndex]!,
       version: args.state.workbook.cellStore.versions[cellIndex] ?? 0,
     };
@@ -95,7 +101,11 @@ export function createEngineReadService(args: {
     if (cellIndex === undefined) {
       const parsed = parseCellAddress(address, sheetName);
       const styleId = args.state.workbook.getStyleId(sheetName, parsed.row, parsed.col);
-      const numberFormatId = args.state.workbook.getRangeFormatId(sheetName, parsed.row, parsed.col);
+      const numberFormatId = args.state.workbook.getRangeFormatId(
+        sheetName,
+        parsed.row,
+        parsed.col,
+      );
       const formatRecord = args.state.workbook.getCellNumberFormat(numberFormatId);
       return {
         sheetName,
@@ -114,30 +124,27 @@ export function createEngineReadService(args: {
   };
 
   const getCellValue = (sheetName: string, address: string): CellValue => {
-    const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return emptyValue();
-    }
-    return args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id));
+    const parsed = parseCellAddress(address, sheetName);
+    return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col);
   };
 
   const readRangeValueMatrix = (range: import("@bilig/protocol").CellRangeRef): CellValue[][] => {
     const bounds = normalizeRange(range);
     const width = bounds.endCol - bounds.startCol + 1;
     const height = bounds.endRow - bounds.startRow + 1;
+    const flatValues = args.runtimeColumnStore.readRangeValues({
+      sheetName: range.sheetName,
+      rowStart: bounds.startRow,
+      rowEnd: bounds.endRow,
+      colStart: bounds.startCol,
+      colEnd: bounds.endCol,
+    });
     const rows = Array.from<CellValue[]>({ length: height });
-    const sheet = args.state.workbook.getSheet(range.sheetName);
 
     for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-      const row = bounds.startRow + rowOffset;
       const values = Array.from<CellValue>({ length: width });
       for (let colOffset = 0; colOffset < width; colOffset += 1) {
-        const col = bounds.startCol + colOffset;
-        const cellIndex = sheet?.grid.get(row, col) ?? -1;
-        values[colOffset] =
-          cellIndex === -1
-            ? emptyValue()
-            : args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id));
+        values[colOffset] = flatValues[rowOffset * width + colOffset] ?? emptyValue();
       }
       rows[rowOffset] = values;
     }
@@ -158,13 +165,26 @@ export function createEngineReadService(args: {
     const dependents = args.getEntityDependents(makeCellEntity(cellIndex));
     for (let index = 0; index < dependents.length; index += 1) {
       const dependent = dependents[index]!;
-      if (isRangeEntity(dependent)) {
-        const rangeDependents = args.getEntityDependents(dependent);
-        for (let rangeIndex = 0; rangeIndex < rangeDependents.length; rangeIndex += 1) {
-          const formulaEntity = rangeDependents[rangeIndex]!;
-          if (!isRangeEntity(formulaEntity)) {
-            directDependents.add(entityPayload(formulaEntity));
+      if (
+        isRangeEntity(dependent) ||
+        isExactLookupColumnEntity(dependent) ||
+        isSortedLookupColumnEntity(dependent)
+      ) {
+        const syntheticDependents = args.getEntityDependents(dependent);
+        for (
+          let syntheticIndex = 0;
+          syntheticIndex < syntheticDependents.length;
+          syntheticIndex += 1
+        ) {
+          const formulaEntity = syntheticDependents[syntheticIndex]!;
+          if (
+            isRangeEntity(formulaEntity) ||
+            isExactLookupColumnEntity(formulaEntity) ||
+            isSortedLookupColumnEntity(formulaEntity)
+          ) {
+            continue;
           }
+          directDependents.add(entityPayload(formulaEntity));
         }
         continue;
       }

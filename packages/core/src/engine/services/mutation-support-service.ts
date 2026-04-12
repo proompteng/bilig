@@ -849,6 +849,23 @@ export function createEngineMutationSupportService(args: {
     markExplicitChangedNow,
     composeMutationRootsNow,
     composeEventChangesNow(recalculated, explicitChangedCount) {
+      if (explicitChangedCount === 0) {
+        return recalculated;
+      }
+      if (explicitChangedCount === 1 && recalculated.length === 0) {
+        args.getChangedUnion()[0] = args.getExplicitChangedBuffer()[0]!;
+        return args.getChangedUnion().subarray(0, 1);
+      }
+      if (explicitChangedCount === 1 && recalculated.length === 1) {
+        const explicitCellIndex = args.getExplicitChangedBuffer()[0]!;
+        const recalculatedCellIndex = recalculated[0]!;
+        args.getChangedUnion()[0] = explicitCellIndex;
+        if (explicitCellIndex === recalculatedCellIndex) {
+          return args.getChangedUnion().subarray(0, 1);
+        }
+        args.getChangedUnion()[1] = recalculatedCellIndex;
+        return args.getChangedUnion().subarray(0, 2);
+      }
       args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
       if (args.getChangedUnionEpoch() === 0xffff_ffff) {
         args.setChangedUnionEpoch(1);

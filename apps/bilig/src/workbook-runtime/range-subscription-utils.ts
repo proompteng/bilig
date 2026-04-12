@@ -1,5 +1,4 @@
 import { SpreadsheetEngine } from "@bilig/core";
-import { formatAddress } from "@bilig/formula";
 import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
 
 export interface RangeBounds {
@@ -73,26 +72,20 @@ export function cellCountForRange(range: CellRangeRef): number {
 }
 
 function collectChangedAddressesInRange(
-  engine: SpreadsheetEngine,
   range: CellRangeRef,
   bounds: RangeBounds,
-  changedCellIndices: readonly number[] | Uint32Array,
+  changedCells: EngineEvent["changedCells"],
 ): string[] {
-  const sheet = engine.workbook.getSheet(range.sheetName);
-  if (!sheet) {
-    return [];
-  }
-  const targetSheetId = sheet.id;
-  const changedAddresses = Array.from<string>({ length: changedCellIndices.length });
+  const changedAddresses = Array.from<string>({ length: changedCells.length });
   let changedAddressCount = 0;
 
-  for (let index = 0; index < changedCellIndices.length; index += 1) {
-    const cellIndex = changedCellIndices[index]!;
-    if (engine.workbook.cellStore.sheetIds[cellIndex] !== targetSheetId) {
+  for (let index = 0; index < changedCells.length; index += 1) {
+    const change = changedCells[index]!;
+    if (change.sheetName !== range.sheetName) {
       continue;
     }
-    const row = engine.workbook.cellStore.rows[cellIndex]!;
-    const col = engine.workbook.cellStore.cols[cellIndex]!;
+    const row = change.address.row;
+    const col = change.address.col;
     if (
       col < bounds.startCol ||
       col > bounds.endCol ||
@@ -101,7 +94,7 @@ function collectChangedAddressesInRange(
     ) {
       continue;
     }
-    changedAddresses[changedAddressCount] = formatAddress(row, col);
+    changedAddresses[changedAddressCount] = change.a1;
     changedAddressCount += 1;
   }
 
@@ -126,7 +119,7 @@ function collectAddressesForIntersection(
 }
 
 export function collectChangedAddressesForEvent(
-  engine: SpreadsheetEngine,
+  _engine: SpreadsheetEngine,
   range: CellRangeRef,
   bounds: RangeBounds,
   event: EngineEvent,
@@ -136,7 +129,7 @@ export function collectChangedAddressesForEvent(
   }
 
   const changedAddresses = new Set(
-    collectChangedAddressesInRange(engine, range, bounds, event.changedCellIndices),
+    collectChangedAddressesInRange(range, bounds, event.changedCells),
   );
   for (let index = 0; index < event.invalidatedRanges.length; index += 1) {
     const invalidatedRange = event.invalidatedRanges[index]!;

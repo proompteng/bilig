@@ -127,6 +127,8 @@ export class SpreadsheetEngine {
   private readonly reverseDefinedNameEdges = new Map<string, Set<number>>();
   private readonly reverseTableEdges = new Map<string, Set<number>>();
   private readonly reverseSpillEdges = new Map<string, Set<number>>();
+  private readonly reverseExactLookupColumnEdges = new Map<number, EdgeSlice>();
+  private readonly reverseSortedLookupColumnEdges = new Map<number, EdgeSlice>();
   private readonly pivotOutputOwners = new Map<number, string>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly selectionListeners = new Set<() => void>();
@@ -219,6 +221,8 @@ export class SpreadsheetEngine {
           reverseDefinedNameEdges: this.reverseDefinedNameEdges,
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
+          reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
+          reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
         pivotOutputOwners: this.pivotOutputOwners,
         setWasmProgramSyncPending: (next) => {
@@ -250,6 +254,8 @@ export class SpreadsheetEngine {
           reverseDefinedNameEdges: this.reverseDefinedNameEdges,
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
+          reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
+          reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
         getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
         setDependencyBuildEpoch: (next) => {
@@ -346,6 +352,8 @@ export class SpreadsheetEngine {
         reverseState: {
           reverseCellEdges: this.reverseCellEdges,
           reverseRangeEdges: this.reverseRangeEdges,
+          reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
+          reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
       },
       cellToCsvValue: (cell) => cellToCsvValue(cell),

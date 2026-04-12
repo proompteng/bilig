@@ -92,10 +92,24 @@ export interface AxisInvalidation {
   endIndex: number;
 }
 
+export interface EngineChangedCell {
+  kind: "cell";
+  cellIndex: number;
+  address: {
+    sheet: number;
+    row: number;
+    col: number;
+  };
+  sheetName: string;
+  a1: string;
+  newValue: CellValue;
+}
+
 export interface EngineEvent {
   kind: "batch";
   invalidation: "cells" | "full";
   changedCellIndices: Uint32Array | number[];
+  changedCells: readonly EngineChangedCell[];
   invalidatedRanges: CellRangeRef[];
   invalidatedRows: AxisInvalidation[];
   invalidatedColumns: AxisInvalidation[];

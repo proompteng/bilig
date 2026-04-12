@@ -95,6 +95,7 @@ describe("worker transport", () => {
         kind: "batch",
         invalidation: "cells",
         changedCellIndices: Uint32Array.from([1, 2]),
+        changedCells: [],
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],

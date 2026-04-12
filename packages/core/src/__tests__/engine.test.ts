@@ -9,12 +9,21 @@ type RuntimeFormulaWithDependencies = {
 };
 
 type RuntimeFormulaWithCompiled = {
+  formulaSlotId: number;
+  planId: number;
   compiled: {
+    mode: number;
+    deps: string[];
+    jsPlan: unknown[];
+  };
+  plan: {
     id: number;
-    depsPtr: number;
-    depsLen: number;
-    programOffset: number;
-    programLength: number;
+    source: string;
+    compiled: {
+      mode: number;
+      deps: string[];
+      jsPlan: unknown[];
+    };
   };
   dependencyEntities: { ptr: number; len: number };
   runtimeProgram: Uint32Array;
@@ -23,6 +32,42 @@ type RuntimeFormulaWithCompiled = {
 type RuntimeFormulaWithRanges = {
   rangeDependencies: Uint32Array;
   runtimeProgram: Uint32Array;
+};
+
+type RuntimeFormulaWithDirectLookup = {
+  directLookup:
+    | {
+        kind: "exact";
+        operandCellIndex: number;
+        prepared: { sheetName: string; rowStart: number; rowEnd: number; col: number };
+        searchMode: 1 | -1;
+      }
+    | {
+        kind: "exact-uniform-numeric";
+        operandCellIndex: number;
+        sheetName: string;
+        rowStart: number;
+        rowEnd: number;
+        col: number;
+        length: number;
+        searchMode: 1 | -1;
+      }
+    | {
+        kind: "approximate";
+        operandCellIndex: number;
+        prepared: { sheetName: string; rowStart: number; rowEnd: number; col: number };
+        matchMode: 1 | -1;
+      }
+    | {
+        kind: "approximate-uniform-numeric";
+        operandCellIndex: number;
+        sheetName: string;
+        rowStart: number;
+        rowEnd: number;
+        col: number;
+        length: number;
+        matchMode: 1 | -1;
+      };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,12 +100,19 @@ function isRuntimeFormulaWithDependencies(value: unknown): value is RuntimeFormu
 function isRuntimeFormulaWithCompiled(value: unknown): value is RuntimeFormulaWithCompiled {
   return (
     isRecord(value) &&
+    typeof value.formulaSlotId === "number" &&
+    typeof value.planId === "number" &&
     isRecord(value.compiled) &&
-    typeof value.compiled.id === "number" &&
-    typeof value.compiled.depsPtr === "number" &&
-    typeof value.compiled.depsLen === "number" &&
-    typeof value.compiled.programOffset === "number" &&
-    typeof value.compiled.programLength === "number" &&
+    typeof value.compiled.mode === "number" &&
+    Array.isArray(value.compiled.deps) &&
+    Array.isArray(value.compiled.jsPlan) &&
+    isRecord(value.plan) &&
+    typeof value.plan.id === "number" &&
+    typeof value.plan.source === "string" &&
+    isRecord(value.plan.compiled) &&
+    typeof value.plan.compiled.mode === "number" &&
+    Array.isArray(value.plan.compiled.deps) &&
+    Array.isArray(value.plan.compiled.jsPlan) &&
     isRecord(value.dependencyEntities) &&
     typeof value.dependencyEntities.ptr === "number" &&
     typeof value.dependencyEntities.len === "number" &&
@@ -74,6 +126,58 @@ function isRuntimeFormulaWithRanges(value: unknown): value is RuntimeFormulaWith
     value.rangeDependencies instanceof Uint32Array &&
     value.runtimeProgram instanceof Uint32Array
   );
+}
+
+function isRuntimeFormulaWithDirectLookup(value: unknown): value is RuntimeFormulaWithDirectLookup {
+  if (!isRecord(value) || !("directLookup" in value) || !isRecord(value.directLookup)) {
+    return false;
+  }
+  const directLookup = value.directLookup;
+  const prepared = directLookup.prepared;
+  if (typeof directLookup.operandCellIndex !== "number") {
+    return false;
+  }
+  if (directLookup.kind === "exact") {
+    return (
+      isRecord(prepared) &&
+      typeof prepared.sheetName === "string" &&
+      typeof prepared.rowStart === "number" &&
+      typeof prepared.rowEnd === "number" &&
+      typeof prepared.col === "number" &&
+      (directLookup.searchMode === 1 || directLookup.searchMode === -1)
+    );
+  }
+  if (directLookup.kind === "exact-uniform-numeric") {
+    return (
+      typeof directLookup.sheetName === "string" &&
+      typeof directLookup.rowStart === "number" &&
+      typeof directLookup.rowEnd === "number" &&
+      typeof directLookup.col === "number" &&
+      typeof directLookup.length === "number" &&
+      (directLookup.searchMode === 1 || directLookup.searchMode === -1)
+    );
+  }
+  if (directLookup.kind === "approximate") {
+    return (
+      isRecord(prepared) &&
+      typeof prepared.sheetName === "string" &&
+      typeof prepared.rowStart === "number" &&
+      typeof prepared.rowEnd === "number" &&
+      typeof prepared.col === "number" &&
+      (directLookup.matchMode === 1 || directLookup.matchMode === -1)
+    );
+  }
+  if (directLookup.kind === "approximate-uniform-numeric") {
+    return (
+      typeof directLookup.sheetName === "string" &&
+      typeof directLookup.rowStart === "number" &&
+      typeof directLookup.rowEnd === "number" &&
+      typeof directLookup.col === "number" &&
+      typeof directLookup.length === "number" &&
+      (directLookup.matchMode === 1 || directLookup.matchMode === -1)
+    );
+  }
+  return false;
 }
 
 function seedPivotSource(engine: SpreadsheetEngine): void {
@@ -2701,14 +2805,29 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "C1", 1);
     engine.setCellValue("Sheet1", "C2", 3);
     engine.setCellValue("Sheet1", "C3", 5);
+    engine.setCellValue("Sheet1", "D1", 4);
 
-    engine.setCellFormula("Sheet1", "D1", "MATCH(4,C1:C3,1)");
-    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
-    expect(engine.explainCell("Sheet1", "D1").mode).toBe(FormulaMode.JsOnly);
+    engine.setCellFormula("Sheet1", "E1", "MATCH(D1,C1:C3,1)");
+    const formulaCellIndex = engine.workbook.getCellIndex("Sheet1", "E1");
+    const operandCellIndex = engine.workbook.getCellIndex("Sheet1", "D1");
+    const runtimeFormula =
+      formulaCellIndex === undefined ? undefined : readRuntimeFormula(engine, formulaCellIndex);
+    expect(isRuntimeFormulaWithDirectLookup(runtimeFormula)).toBe(true);
+    expect(runtimeFormula?.directLookup.kind).toBe("approximate-uniform-numeric");
+    expect(runtimeFormula?.directLookup.operandCellIndex).toBe(operandCellIndex);
+    expect(runtimeFormula?.directLookup).toMatchObject({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 2,
+      length: 3,
+    });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "C2", 4);
-    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
   });
 
@@ -2722,6 +2841,20 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "D1", 2);
 
     engine.setCellFormula("Sheet1", "E1", "=MATCH(D1,A1:A3,0)");
+    const formulaCellIndex = engine.workbook.getCellIndex("Sheet1", "E1");
+    const operandCellIndex = engine.workbook.getCellIndex("Sheet1", "D1");
+    const runtimeFormula =
+      formulaCellIndex === undefined ? undefined : readRuntimeFormula(engine, formulaCellIndex);
+    expect(isRuntimeFormulaWithDirectLookup(runtimeFormula)).toBe(true);
+    expect(runtimeFormula?.directLookup.kind).toBe("exact-uniform-numeric");
+    expect(runtimeFormula?.directLookup.operandCellIndex).toBe(operandCellIndex);
+    expect(runtimeFormula?.directLookup).toMatchObject({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+      length: 3,
+    });
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 1, wasmFormulaCount: 0 });
@@ -4960,16 +5093,31 @@ describe("SpreadsheetEngine", () => {
     engine.createSheet("Sheet1");
     engine.setCellValue("Sheet1", "A1", 12);
 
-    const changed: number[][] = [];
+    const changed: Array<{ indices: number[]; cells: EngineEvent["changedCells"] }> = [];
     const unsubscribe = engine.subscribe((event) => {
-      changed.push(Array.from(event.changedCellIndices));
+      changed.push({
+        indices: Array.from(event.changedCellIndices),
+        cells: event.changedCells,
+      });
     });
 
     engine.setCellFormat("Sheet1", "A1", "currency-usd");
 
     const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
     expect(a1Index).toBeDefined();
-    expect(changed.at(-1)).toEqual([a1Index!]);
+    expect(sheetId).toBeDefined();
+    expect(changed.at(-1)?.indices).toEqual([a1Index!]);
+    expect(changed.at(-1)?.cells).toEqual([
+      {
+        kind: "cell",
+        cellIndex: a1Index!,
+        address: { sheet: sheetId!, row: 0, col: 0 },
+        sheetName: "Sheet1",
+        a1: "A1",
+        newValue: { tag: ValueTag.Number, value: 12 },
+      },
+    ]);
 
     unsubscribe();
   });
@@ -5019,11 +5167,16 @@ describe("SpreadsheetEngine", () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
 
-    const events: Array<{ invalidation: "cells" | "full"; changedCellIndices: number[] }> = [];
+    const events: Array<{
+      invalidation: "cells" | "full";
+      changedCellIndices: number[];
+      changedCells: number;
+    }> = [];
     const unsubscribe = engine.subscribe((event) => {
       events.push({
         invalidation: event.invalidation,
         changedCellIndices: Array.from(event.changedCellIndices),
+        changedCells: event.changedCells.length,
       });
     });
 
@@ -5043,6 +5196,7 @@ describe("SpreadsheetEngine", () => {
     expect(events.at(-1)).toEqual({
       invalidation: "full",
       changedCellIndices: [],
+      changedCells: 0,
     });
     unsubscribe();
   });
@@ -5344,7 +5498,7 @@ describe("SpreadsheetEngine", () => {
     expect(explanation.inCycle).toBe(false);
   });
 
-  it("stores runtime formula metadata with real formula ids and dependency slices", async () => {
+  it("stores runtime formula slot and compiled plan metadata separately", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -5360,11 +5514,65 @@ describe("SpreadsheetEngine", () => {
     expect(formulaId).toBeGreaterThan(0);
     expect(isRuntimeFormulaWithCompiled(runtimeFormula)).toBe(true);
     expect(runtimeFormula).toBeDefined();
-    expect(runtimeFormula?.compiled.id).toBe(formulaId);
-    expect(runtimeFormula?.compiled.depsPtr).toBe(runtimeFormula?.dependencyEntities.ptr);
-    expect(runtimeFormula?.compiled.depsLen).toBe(runtimeFormula?.dependencyEntities.len);
-    expect(runtimeFormula?.compiled.programOffset).toBe(0);
-    expect(runtimeFormula?.compiled.programLength).toBe(runtimeFormula?.runtimeProgram.length);
+    expect(runtimeFormula?.formulaSlotId).toBe(formulaId);
+    expect(runtimeFormula?.planId).toBe(runtimeFormula?.plan.id);
+    expect(runtimeFormula?.compiled).toBe(runtimeFormula?.plan.compiled);
+    expect(runtimeFormula?.dependencyEntities.ptr).toBeGreaterThanOrEqual(0);
+    expect(runtimeFormula?.runtimeProgram.length).toBeGreaterThan(0);
+  });
+
+  it("reuses one compiled plan for identical formula sources while keeping distinct slots", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "shared-plan-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "1+2");
+    engine.setCellFormula("Sheet1", "B1", "1+2");
+
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    expect(a1Index).toBeDefined();
+    expect(b1Index).toBeDefined();
+
+    const leftFormula = readRuntimeFormula(engine, a1Index!);
+    const rightFormula = readRuntimeFormula(engine, b1Index!);
+
+    expect(isRuntimeFormulaWithCompiled(leftFormula)).toBe(true);
+    expect(isRuntimeFormulaWithCompiled(rightFormula)).toBe(true);
+    expect(leftFormula?.formulaSlotId).not.toBe(rightFormula?.formulaSlotId);
+    expect(leftFormula?.planId).toBe(rightFormula?.planId);
+    expect(leftFormula?.compiled).toBe(rightFormula?.compiled);
+  });
+
+  it("replaces direct lookup range dependencies with lookup-column subscribers and formula-cell deps only", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "lookup-subscriber-spec",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 20);
+    engine.setCellValue("Sheet1", "A3", 30);
+    engine.setCellValue("Sheet1", "D1", 20);
+    engine.setCellFormula("Sheet1", "E1", "XMATCH(D1,A1:A3,0)");
+
+    const cellIndex = engine.workbook.getCellIndex("Sheet1", "E1");
+    expect(cellIndex).toBeDefined();
+    const runtimeFormula = readRuntimeFormula(engine, cellIndex!);
+
+    expect(isRuntimeFormulaWithRanges(runtimeFormula)).toBe(true);
+    expect(runtimeFormula?.rangeDependencies).toHaveLength(0);
+    expect(runtimeFormula?.dependencyIndices).toEqual(
+      Uint32Array.of(engine.workbook.getCellIndex("Sheet1", "D1")!),
+    );
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getDependencies("Sheet1", "A2").directDependents).toContain("Sheet1!E1");
+
+    engine.setCellValue("Sheet1", "A2", 25);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
   });
 
   it("patches runtime cell and range operands from packed symbolic binding buffers", async () => {
@@ -5641,6 +5849,10 @@ describe("SpreadsheetEngine", () => {
       invalidation: "cells",
     });
     expect(events[0]?.changedCellIndices.length).toBeGreaterThan(0);
+    expect(events[0]?.changedCells.map((change) => `${change.sheetName}!${change.a1}`)).toEqual([
+      "Sheet1!A1",
+      "Sheet1!B1",
+    ]);
   });
 
   it("applies coordinate-native cell mutations with formula recomputation and undo compatibility", async () => {

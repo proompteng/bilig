@@ -1,8 +1,8 @@
-import type { EngineEvent } from "@bilig/protocol";
+import type { EngineChangedCell, EngineEvent } from "@bilig/protocol";
 
 export interface TrackedEngineEvent {
   invalidation: EngineEvent["invalidation"];
-  changedCellIndices: Uint32Array;
+  changedCells: readonly EngineChangedCell[];
   changedInputCount: number;
   explicitChangedCount?: number;
   hasInvalidatedRanges: boolean;
@@ -20,7 +20,11 @@ function readExplicitChangedCount(event: EngineEvent): number | undefined {
 export function captureTrackedEngineEvent(event: EngineEvent): TrackedEngineEvent {
   return {
     invalidation: event.invalidation,
-    changedCellIndices: Uint32Array.from(event.changedCellIndices),
+    changedCells: event.changedCells.map((change) => ({
+      ...change,
+      address: { ...change.address },
+      newValue: { ...change.newValue },
+    })),
     changedInputCount: event.metrics.changedInputCount,
     explicitChangedCount: readExplicitChangedCount(event),
     hasInvalidatedRanges: event.invalidatedRanges.length > 0,

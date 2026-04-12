@@ -7,6 +7,7 @@ function batchEvent(changedCellIndices: Uint32Array = new Uint32Array()): Engine
     kind: "batch",
     invalidation: "cells",
     changedCellIndices,
+    changedCells: [],
     invalidatedRanges: [],
     invalidatedRows: [],
     invalidatedColumns: [],

@@ -6,15 +6,18 @@ import {
   type EngineCellStateService,
 } from "./services/cell-state-service.js";
 import { createEngineEventService, type EngineEventService } from "./services/event-service.js";
+import { createEngineChangeSetEmitterService } from "./services/change-set-emitter-service.js";
 import {
   createEngineFormulaEvaluationService,
   type EngineFormulaEvaluationService,
 } from "./services/formula-evaluation-service.js";
-import { createEngineLookupService } from "./services/lookup-service.js";
+import { createExactColumnIndexService } from "./services/exact-column-index-service.js";
+import { createSortedColumnSearchService } from "./services/sorted-column-search-service.js";
 import {
   createEngineFormulaBindingService,
   type EngineFormulaBindingService,
 } from "./services/formula-binding-service.js";
+import { createEngineCompiledPlanService } from "./services/compiled-plan-service.js";
 import {
   createEngineFormulaGraphService,
   type EngineFormulaGraphService,
@@ -40,6 +43,11 @@ import {
   type EngineOperationService,
 } from "./services/operation-service.js";
 import { createEnginePivotService, type EnginePivotService } from "./services/pivot-service.js";
+import {
+  createEngineDirtyFrontierSchedulerService,
+  type EngineDirtyFrontierSchedulerService,
+} from "./services/dirty-frontier-scheduler-service.js";
+import { createEngineRuntimeColumnStoreService } from "./services/runtime-column-store-service.js";
 import {
   createEngineReplicaSyncService,
   type EngineReplicaSyncService,
@@ -133,6 +141,9 @@ type EngineMutationSupportRuntimeConfig = Omit<
 
 type EngineFormulaBindingRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaBindingService>[0],
+  | "compiledPlans"
+  | "exactLookup"
+  | "sortedLookup"
   | "ensureCellTracked"
   | "ensureCellTrackedByCoords"
   | "markFormulaChanged"
@@ -156,6 +167,7 @@ type EngineRecalcRuntimeConfig = Omit<
   | "markExplicitChanged"
   | "composeMutationRoots"
   | "composeEventChanges"
+  | "captureChangedCells"
   | "unionChangedSets"
   | "composeChangedRootsAndOrdered"
   | "emptyChangedSet"
@@ -163,7 +175,7 @@ type EngineRecalcRuntimeConfig = Omit<
   | "getPendingKernelSync"
   | "getWasmBatch"
   | "getChangedInputBuffer"
-  | "getEntityDependents"
+  | "dirtyScheduler"
   | "materializeSpill"
   | "clearOwnedSpill"
   | "evaluateUnsupportedFormula"
@@ -216,6 +228,7 @@ type EngineOperationRuntimeConfig = Omit<
   | "markExplicitChanged"
   | "composeMutationRoots"
   | "composeEventChanges"
+  | "captureChangedCells"
   | "getChangedInputBuffer"
   | "ensureCellTracked"
   | "resetMaterializedCellScratch"
@@ -258,7 +271,11 @@ export function createEngineServiceRuntime(args: {
 }): EngineServiceRuntime {
   const scratch = createEngineRuntimeScratchService();
   const traversal = createEngineTraversalService(args.traversal);
-  const lookup = createEngineLookupService({ state: args.state });
+  const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state });
+  const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state });
+  const compiledPlans = createEngineCompiledPlanService();
+  const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore });
+  const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore });
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
     forEachFormulaDependencyCell: (cellIndex, fn) =>
@@ -269,6 +286,7 @@ export function createEngineServiceRuntime(args: {
   let operations: EngineOperationService | undefined;
   let pivot: EnginePivotService | undefined;
   let recalc: EngineRecalcService | undefined;
+  let dirtyScheduler: EngineDirtyFrontierSchedulerService | undefined;
   const selection = createEngineSelectionService(args.state);
   const support = createEngineMutationSupportService({
     ...args.mutationSupport,
@@ -362,7 +380,9 @@ export function createEngineServiceRuntime(args: {
   });
   const evaluation = createEngineFormulaEvaluationService({
     state: args.state,
-    lookup,
+    runtimeColumnStore,
+    exactLookup,
+    sortedLookup,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
     clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
     resolvePivotData: (sheetName, address, dataField, filters) =>
@@ -372,7 +392,9 @@ export function createEngineServiceRuntime(args: {
   });
   binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
-    lookup,
+    compiledPlans,
+    exactLookup,
+    sortedLookup,
     ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
     ensureCellTrackedByCoords: (sheetId, row, col) =>
       support.ensureCellTrackedByCoordsNow(sheetId, row, col),
@@ -386,6 +408,7 @@ export function createEngineServiceRuntime(args: {
   });
   const read = createEngineReadService({
     state: args.state,
+    runtimeColumnStore,
     forEachFormulaDependencyCell: (cellIndex, fn) =>
       traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
@@ -432,6 +455,10 @@ export function createEngineServiceRuntime(args: {
     },
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
+  dirtyScheduler = createEngineDirtyFrontierSchedulerService({
+    state: args.state,
+    getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
+  });
   recalc = createEngineRecalcService({
     ...args.recalc,
     beginMutationCollection: () => support.beginMutationCollectionNow(),
@@ -442,6 +469,8 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) =>
       support.composeEventChangesNow(recalculated, explicitChangedCount),
+    captureChangedCells: (changedCellIndices) =>
+      changeSetEmitter.captureChangedCells(changedCellIndices),
     unionChangedSets: (...sets) => support.unionChangedSetsNow(...sets),
     composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
       support.composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount),
@@ -450,13 +479,13 @@ export function createEngineServiceRuntime(args: {
     getPendingKernelSync: () => scratch.getPendingKernelSyncNow(),
     getWasmBatch: () => scratch.getWasmBatchNow(),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    dirtyScheduler,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
     clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
     evaluateUnsupportedFormula: (cellIndex) =>
       runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivotRecord) =>
       requireService(pivot, "pivot").materializePivotNow(pivotRecord),
-    getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
   });
   operations = createEngineOperationService({
     ...args.operation,
@@ -502,6 +531,8 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) =>
       support.composeEventChangesNow(recalculated, explicitChangedCount),
+    captureChangedCells: (changedCellIndices) =>
+      changeSetEmitter.captureChangedCells(changedCellIndices),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
     estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
     ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),

@@ -1,5 +1,11 @@
 import type { CellStore } from "./cell-store.js";
-import { entityPayload, isRangeEntity, makeCellEntity } from "./entity-ids.js";
+import {
+  entityPayload,
+  isExactLookupColumnEntity,
+  isRangeEntity,
+  isSortedLookupColumnEntity,
+  makeCellEntity,
+} from "./entity-ids.js";
 
 type U32 = Uint32Array;
 
@@ -16,8 +22,12 @@ export interface SchedulerResult {
 export class RecalcScheduler {
   private cellEpoch = 1;
   private rangeEpoch = 1;
+  private exactLookupEpoch = 1;
+  private sortedLookupEpoch = 1;
   private visitedCells: U32 = new Uint32Array(64);
   private visitedRanges: U32 = new Uint32Array(64);
+  private visitedExactLookupColumns = new Map<number, number>();
+  private visitedSortedLookupColumns = new Map<number, number>();
   private entityQueue: U32 = new Uint32Array(128);
   private dirtyFormulaIds: U32 = new Uint32Array(128);
   private rankCounts: U32 = new Uint32Array(128);
@@ -34,6 +44,16 @@ export class RecalcScheduler {
     this.ensureRangeCapacity(rangeCount + 1);
     this.cellEpoch += 1;
     this.rangeEpoch += 1;
+    this.exactLookupEpoch += 1;
+    this.sortedLookupEpoch += 1;
+    if (this.exactLookupEpoch === 0xffff_ffff) {
+      this.exactLookupEpoch = 1;
+      this.visitedExactLookupColumns.clear();
+    }
+    if (this.sortedLookupEpoch === 0xffff_ffff) {
+      this.sortedLookupEpoch = 1;
+      this.visitedSortedLookupColumns.clear();
+    }
 
     let queueLength = 0;
     let dirtyLength = 0;
@@ -49,10 +69,12 @@ export class RecalcScheduler {
       if (this.visitedCells[cellIndex] === this.cellEpoch) {
         continue;
       }
+      this.ensureEntityQueueCapacity(queueLength + 1);
       this.visitedCells[cellIndex] = this.cellEpoch;
       this.entityQueue[queueLength] = entityId;
       queueLength += 1;
       if (hasFormula(cellIndex)) {
+        this.ensureDirtyCapacity(dirtyLength + 1);
         this.dirtyFormulaIds[dirtyLength] = cellIndex;
         dirtyLength += 1;
         const rank = cellStore.topoRanks[cellIndex] ?? 0;
@@ -80,6 +102,29 @@ export class RecalcScheduler {
             continue;
           }
           this.visitedRanges[rangeIndex] = this.rangeEpoch;
+          this.ensureEntityQueueCapacity(queueLength + 1);
+          this.entityQueue[queueLength] = dependent;
+          queueLength += 1;
+          continue;
+        }
+        if (isExactLookupColumnEntity(dependent)) {
+          const lookupColumnPayload = entityPayload(dependent);
+          if (this.visitedExactLookupColumns.get(lookupColumnPayload) === this.exactLookupEpoch) {
+            continue;
+          }
+          this.visitedExactLookupColumns.set(lookupColumnPayload, this.exactLookupEpoch);
+          this.ensureEntityQueueCapacity(queueLength + 1);
+          this.entityQueue[queueLength] = dependent;
+          queueLength += 1;
+          continue;
+        }
+        if (isSortedLookupColumnEntity(dependent)) {
+          const lookupColumnPayload = entityPayload(dependent);
+          if (this.visitedSortedLookupColumns.get(lookupColumnPayload) === this.sortedLookupEpoch) {
+            continue;
+          }
+          this.visitedSortedLookupColumns.set(lookupColumnPayload, this.sortedLookupEpoch);
+          this.ensureEntityQueueCapacity(queueLength + 1);
           this.entityQueue[queueLength] = dependent;
           queueLength += 1;
           continue;
@@ -90,11 +135,13 @@ export class RecalcScheduler {
           continue;
         }
         this.visitedCells[cellIndex] = this.cellEpoch;
+        this.ensureEntityQueueCapacity(queueLength + 1);
         this.entityQueue[queueLength] = dependent;
         queueLength += 1;
         if (!hasFormula(cellIndex)) {
           continue;
         }
+        this.ensureDirtyCapacity(dirtyLength + 1);
         this.dirtyFormulaIds[dirtyLength] = cellIndex;
         dirtyLength += 1;
         const rank = cellStore.topoRanks[cellIndex] ?? 0;
@@ -178,6 +225,28 @@ export class RecalcScheduler {
       capacity *= 2;
     }
     this.visitedRanges = grow(this.visitedRanges, capacity);
+  }
+
+  private ensureEntityQueueCapacity(size: number): void {
+    if (size <= this.entityQueue.length) {
+      return;
+    }
+    let capacity = this.entityQueue.length;
+    while (capacity < size) {
+      capacity *= 2;
+    }
+    this.entityQueue = grow(this.entityQueue, capacity);
+  }
+
+  private ensureDirtyCapacity(size: number): void {
+    if (size <= this.dirtyFormulaIds.length) {
+      return;
+    }
+    let capacity = this.dirtyFormulaIds.length;
+    while (capacity < size) {
+      capacity *= 2;
+    }
+    this.dirtyFormulaIds = grow(this.dirtyFormulaIds, capacity);
   }
 
   private ensureRankCapacity(rankCountSize: number, dirtySize: number): void {

@@ -216,6 +216,9 @@ export function createEngineOperationService(args: {
   readonly markExplicitChanged: (cellIndex: number, count: number) => number;
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32;
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32;
+  readonly captureChangedCells: (
+    changedCellIndices: readonly number[] | U32,
+  ) => readonly import("@bilig/protocol").EngineChangedCell[];
   readonly getChangedInputBuffer: () => U32;
   readonly ensureCellTracked: (sheetName: string, address: string) => number;
   readonly estimatePotentialNewCells: (ops: readonly EngineOp[]) => number;
@@ -1136,6 +1139,7 @@ export function createEngineOperationService(args: {
               op.value,
               args.state.strings,
             );
+            args.state.workbook.notifyCellValueWritten(cellIndex);
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
               ~(
@@ -1383,6 +1387,7 @@ export function createEngineOperationService(args: {
         kind: "batch",
         invalidation: isRestore || sheetDeleted || structuralInvalidation ? "full" : "cells",
         changedCellIndices: changed,
+        changedCells: args.captureChangedCells(changed),
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,
@@ -1457,6 +1462,7 @@ export function createEngineOperationService(args: {
                   mutation.value,
                   args.state.strings,
                 );
+                args.state.workbook.notifyCellValueWritten(existingIndex);
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
                 if (!isRestore) {
                   explicitChangedCount = args.markExplicitChanged(
@@ -1497,6 +1503,7 @@ export function createEngineOperationService(args: {
                 mutation.value,
                 args.state.strings,
               );
+              args.state.workbook.notifyCellValueWritten(cellIndex);
               args.state.workbook.cellStore.flags[cellIndex] =
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
                 ~(
@@ -1683,6 +1690,7 @@ export function createEngineOperationService(args: {
         kind: "batch",
         invalidation: isRestore ? "full" : "cells",
         changedCellIndices: changed,
+        changedCells: args.captureChangedCells(changed),
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],

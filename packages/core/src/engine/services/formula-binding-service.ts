@@ -10,7 +10,17 @@ import {
 import { FormulaMode, ErrorCode, Opcode } from "@bilig/protocol";
 import { CellFlags } from "../../cell-store.js";
 import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
-import { isRangeEntity, makeCellEntity, makeRangeEntity, entityPayload } from "../../entity-ids.js";
+import { resolveRuntimeDirectLookupBinding } from "../direct-vector-lookup.js";
+import {
+  entityPayload,
+  isExactLookupColumnEntity,
+  isRangeEntity,
+  isSortedLookupColumnEntity,
+  makeCellEntity,
+  makeExactLookupColumnEntity,
+  makeRangeEntity,
+  makeSortedLookupColumnEntity,
+} from "../../entity-ids.js";
 import { growUint32 } from "../../engine-buffer-utils.js";
 import {
   resolveMetadataReferencesInAst,
@@ -22,13 +32,16 @@ import { normalizeDefinedName } from "../../workbook-store.js";
 import {
   type EngineRuntimeState,
   type MaterializedDependencies,
+  type RuntimeDirectLookupDescriptor,
   type RuntimeFormula,
   UNRESOLVED_WASM_OPERAND,
   type U32,
 } from "../runtime-state.js";
 import { EngineFormulaBindingError } from "../errors.js";
 import type { Uint32Arena, Float64Arena } from "@bilig/formula";
-import type { EngineLookupService } from "./lookup-service.js";
+import type { EngineCompiledPlanService } from "./compiled-plan-service.js";
+import type { ExactColumnIndexService } from "./exact-column-index-service.js";
+import type { SortedColumnSearchService } from "./sorted-column-search-service.js";
 
 export interface EngineFormulaBindingService {
   readonly bindFormula: (
@@ -126,6 +139,39 @@ function collectTrackedDependents(
     });
   });
   return [...candidates];
+}
+
+function directLookupColumnInfo(directLookup: RuntimeDirectLookupDescriptor): {
+  sheetName: string;
+  col: number;
+  isExact: boolean;
+} {
+  switch (directLookup.kind) {
+    case "exact":
+      return {
+        sheetName: directLookup.prepared.sheetName,
+        col: directLookup.prepared.col,
+        isExact: true,
+      };
+    case "exact-uniform-numeric":
+      return {
+        sheetName: directLookup.sheetName,
+        col: directLookup.col,
+        isExact: true,
+      };
+    case "approximate":
+      return {
+        sheetName: directLookup.prepared.sheetName,
+        col: directLookup.prepared.col,
+        isExact: false,
+      };
+    case "approximate-uniform-numeric":
+      return {
+        sheetName: directLookup.sheetName,
+        col: directLookup.col,
+        isExact: false,
+      };
+  }
 }
 
 function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
@@ -352,6 +398,93 @@ function collectDirectApproximateLookupCandidates(
   }
 }
 
+function buildDirectLookupDescriptor(args: {
+  readonly compiled: ParsedCompiledFormula;
+  readonly ownerSheetName: string;
+  readonly workbook: Pick<EngineRuntimeState, "workbook">["workbook"];
+  readonly ensureCellTracked: (sheetName: string, address: string) => number;
+  readonly exactLookup: Pick<ExactColumnIndexService, "prepareVectorLookup">;
+  readonly sortedLookup: Pick<SortedColumnSearchService, "prepareVectorLookup">;
+}): RuntimeDirectLookupDescriptor | undefined {
+  const binding = resolveRuntimeDirectLookupBinding(args.compiled.jsPlan, args.ownerSheetName);
+  if (!binding) {
+    return undefined;
+  }
+  if (
+    !args.workbook.getSheet(binding.lookupSheetName) ||
+    !args.workbook.getSheet(binding.operandSheetName)
+  ) {
+    return undefined;
+  }
+  const operandCellIndex = args.ensureCellTracked(binding.operandSheetName, binding.operandAddress);
+  if (binding.kind === "exact") {
+    const prepared = args.exactLookup.prepareVectorLookup({
+      sheetName: binding.lookupSheetName,
+      rowStart: binding.rowStart,
+      rowEnd: binding.rowEnd,
+      col: binding.col,
+    });
+    if (
+      prepared.comparableKind === "numeric" &&
+      prepared.uniformStart !== undefined &&
+      prepared.uniformStep !== undefined
+    ) {
+      return {
+        kind: "exact-uniform-numeric",
+        operandCellIndex,
+        sheetName: binding.lookupSheetName,
+        rowStart: binding.rowStart,
+        rowEnd: binding.rowEnd,
+        col: binding.col,
+        length: prepared.length,
+        columnVersion: prepared.columnVersion,
+        sheetColumnVersions: prepared.sheetColumnVersions,
+        start: prepared.uniformStart,
+        step: prepared.uniformStep,
+        searchMode: binding.searchMode,
+      };
+    }
+    return {
+      kind: "exact",
+      operandCellIndex,
+      prepared,
+      searchMode: binding.searchMode,
+    };
+  }
+  const prepared = args.sortedLookup.prepareVectorLookup({
+    sheetName: binding.lookupSheetName,
+    rowStart: binding.rowStart,
+    rowEnd: binding.rowEnd,
+    col: binding.col,
+  });
+  if (
+    prepared.comparableKind === "numeric" &&
+    prepared.uniformStart !== undefined &&
+    prepared.uniformStep !== undefined
+  ) {
+    return {
+      kind: "approximate-uniform-numeric",
+      operandCellIndex,
+      sheetName: binding.lookupSheetName,
+      rowStart: binding.rowStart,
+      rowEnd: binding.rowEnd,
+      col: binding.col,
+      length: prepared.length,
+      columnVersion: prepared.columnVersion,
+      sheetColumnVersions: prepared.sheetColumnVersions,
+      start: prepared.uniformStart,
+      step: prepared.uniformStep,
+      matchMode: binding.matchMode,
+    };
+  }
+  return {
+    kind: "approximate",
+    operandCellIndex,
+    prepared,
+    matchMode: binding.matchMode,
+  };
+}
+
 const PUSH_CELL_OPCODE = Number(Opcode.PushCell);
 const PUSH_RANGE_OPCODE = Number(Opcode.PushRange);
 const PUSH_STRING_OPCODE = Number(Opcode.PushString);
@@ -361,9 +494,11 @@ export function createEngineFormulaBindingService(args: {
     EngineRuntimeState,
     "workbook" | "strings" | "formulas" | "ranges" | "useColumnIndex"
   >;
-  readonly lookup: Pick<
-    EngineLookupService,
-    "primeExactColumnIndex" | "primeApproximateColumnIndex"
+  readonly compiledPlans: EngineCompiledPlanService;
+  readonly exactLookup: Pick<ExactColumnIndexService, "primeColumnIndex" | "prepareVectorLookup">;
+  readonly sortedLookup: Pick<
+    SortedColumnSearchService,
+    "primeColumnIndex" | "prepareVectorLookup"
   >;
   readonly edgeArena: EdgeArena;
   readonly programArena: Uint32Arena;
@@ -375,6 +510,8 @@ export function createEngineFormulaBindingService(args: {
     reverseDefinedNameEdges: Map<string, Set<number>>;
     reverseTableEdges: Map<string, Set<number>>;
     reverseSpillEdges: Map<string, Set<number>>;
+    reverseExactLookupColumnEdges: Map<number, EdgeSlice>;
+    reverseSortedLookupColumnEdges: Map<number, EdgeSlice>;
   };
   readonly ensureCellTracked: (sheetName: string, address: string) => number;
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number;
@@ -453,12 +590,34 @@ export function createEngineFormulaBindingService(args: {
       args.reverseState.reverseRangeEdges[entityPayload(entityId)] = empty ? undefined : slice;
       return;
     }
+    if (isExactLookupColumnEntity(entityId)) {
+      if (empty) {
+        args.reverseState.reverseExactLookupColumnEdges.delete(entityPayload(entityId));
+      } else {
+        args.reverseState.reverseExactLookupColumnEdges.set(entityPayload(entityId), slice);
+      }
+      return;
+    }
+    if (isSortedLookupColumnEntity(entityId)) {
+      if (empty) {
+        args.reverseState.reverseSortedLookupColumnEdges.delete(entityPayload(entityId));
+      } else {
+        args.reverseState.reverseSortedLookupColumnEdges.set(entityPayload(entityId), slice);
+      }
+      return;
+    }
     args.reverseState.reverseCellEdges[entityPayload(entityId)] = empty ? undefined : slice;
   };
 
   const getReverseEdgeSlice = (entityId: number): EdgeSlice | undefined => {
     if (isRangeEntity(entityId)) {
       return args.reverseState.reverseRangeEdges[entityPayload(entityId)];
+    }
+    if (isExactLookupColumnEntity(entityId)) {
+      return args.reverseState.reverseExactLookupColumnEdges.get(entityPayload(entityId));
+    }
+    if (isSortedLookupColumnEntity(entityId)) {
+      return args.reverseState.reverseSortedLookupColumnEdges.get(entityPayload(entityId));
     }
     return args.reverseState.reverseCellEdges[entityPayload(entityId)];
   };
@@ -574,6 +733,7 @@ export function createEngineFormulaBindingService(args: {
   const materializeDependencies = (
     currentSheetName: string,
     compiled: ParsedCompiledFormula,
+    directLookupBinding: ReturnType<typeof resolveRuntimeDirectLookupBinding> | undefined,
   ): MaterializedDependencies => {
     const deps = compiled.deps;
     const parsedCellDeps = compiled.parsedDeps;
@@ -660,6 +820,36 @@ export function createEngineFormulaBindingService(args: {
       if (dep.includes(":")) {
         const range = parseRangeAddress(dep, currentSheetName);
         const sheetName = range.sheetName ?? currentSheetName;
+        const isDirectLookupColumn =
+          directLookupBinding !== undefined &&
+          range.kind === "cells" &&
+          range.start.col === range.end.col &&
+          sheetName === directLookupBinding.lookupSheetName &&
+          range.start.col === directLookupBinding.col &&
+          range.start.row === directLookupBinding.rowStart &&
+          range.end.row === directLookupBinding.rowEnd;
+        if (isDirectLookupColumn) {
+          const sheet = args.state.workbook.getSheet(sheetName);
+          if (sheet) {
+            for (let row = range.start.row; row <= range.end.row; row += 1) {
+              const cellIndex = sheet.grid.get(row, range.start.col);
+              if (cellIndex === -1) {
+                continue;
+              }
+              if ((args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) === 0) {
+                continue;
+              }
+              if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
+                args.getDependencyBuildSeen()[cellIndex] = epoch;
+                args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex;
+                dependencyIndexCount += 1;
+              }
+              args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex);
+              dependencyEntityCount += 1;
+            }
+          }
+          continue;
+        }
         const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
         if (range.sheetName && !args.state.workbook.getSheet(sheetName)) {
           continue;
@@ -753,6 +943,40 @@ export function createEngineFormulaBindingService(args: {
           cellIndex,
         );
       });
+      const existingDirectLookup = existing.directLookup;
+      if (existingDirectLookup) {
+        const lookupInfo = directLookupColumnInfo(existingDirectLookup);
+        const lookupSheet = args.state.workbook.getSheet(lookupInfo.sheetName);
+        if (lookupSheet) {
+          const lookupEntity = lookupInfo.isExact
+            ? makeExactLookupColumnEntity(lookupSheet.id, lookupInfo.col)
+            : makeSortedLookupColumnEntity(lookupSheet.id, lookupInfo.col);
+          removeReverseEdge(lookupEntity, formulaEntity);
+          if (
+            existingDirectLookup.kind === "exact" ||
+            existingDirectLookup.kind === "approximate" ||
+            existingDirectLookup.kind === "exact-uniform-numeric" ||
+            existingDirectLookup.kind === "approximate-uniform-numeric"
+          ) {
+            const rowStart =
+              existingDirectLookup.kind === "exact" || existingDirectLookup.kind === "approximate"
+                ? existingDirectLookup.prepared.rowStart
+                : existingDirectLookup.rowStart;
+            const rowEnd =
+              existingDirectLookup.kind === "exact" || existingDirectLookup.kind === "approximate"
+                ? existingDirectLookup.prepared.rowEnd
+                : existingDirectLookup.rowEnd;
+            for (let row = rowStart; row <= rowEnd; row += 1) {
+              const memberCellIndex = args.ensureCellTrackedByCoords(
+                lookupSheet.id,
+                row,
+                lookupInfo.col,
+              );
+              removeReverseEdge(makeCellEntity(memberCellIndex), lookupEntity);
+            }
+          }
+        }
+      }
       for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
         const rangeIndex = existing.rangeDependencies[index]!;
         const released = args.state.ranges.release(rangeIndex);
@@ -768,6 +992,7 @@ export function createEngineFormulaBindingService(args: {
         setReverseEdgeSlice(rangeEntity, args.edgeArena.empty());
       }
       args.edgeArena.free(existing.dependencyEntities);
+      args.compiledPlans.release(existing.planId);
     }
     args.state.formulas.delete(cellIndex);
     args.state.workbook.cellStore.flags[cellIndex] =
@@ -785,13 +1010,14 @@ export function createEngineFormulaBindingService(args: {
 
   const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
     const compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
+    const directLookupBinding = resolveRuntimeDirectLookupBinding(compiled.jsPlan, ownerSheetName);
     const indexedExactLookupCandidates = args.state.useColumnIndex
       ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
       : [];
     const directApproximateLookupCandidates = collectDirectApproximateLookupCandidates(
       compiled.optimizedAst,
     );
-    const dependencies = materializeDependencies(ownerSheetName, compiled);
+    const dependencies = materializeDependencies(ownerSheetName, compiled, directLookupBinding);
     const existing = args.state.formulas.get(cellIndex);
     const topologyChanged =
       existing === undefined ||
@@ -876,14 +1102,22 @@ export function createEngineFormulaBindingService(args: {
       args.edgeArena.empty(),
       dependencies.dependencyEntities,
     );
+    const directLookup = buildDirectLookupDescriptor({
+      compiled,
+      ownerSheetName,
+      workbook: args.state.workbook,
+      ensureCellTracked: args.ensureCellTracked,
+      exactLookup: args.exactLookup,
+      sortedLookup: args.sortedLookup,
+    });
+    const plan = args.compiledPlans.intern(source, compiled);
     const runtimeFormula: RuntimeFormula = {
       cellIndex,
+      formulaSlotId: 0,
+      planId: plan.id,
       source,
-      compiled: {
-        ...compiled,
-        depsPtr: dependencyEntities.ptr,
-        depsLen: dependencyEntities.len,
-      },
+      compiled: plan.compiled,
+      plan,
       dependencyIndices: dependencies.dependencyIndices,
       dependencyEntities,
       rangeDependencies: dependencies.rangeDependencies,
@@ -895,9 +1129,10 @@ export function createEngineFormulaBindingService(args: {
       constNumberLength: compiled.constants.length,
       rangeListOffset: 0,
       rangeListLength: dependencies.rangeDependencies.length,
+      directLookup,
     };
-    const formulaId = args.state.formulas.set(cellIndex, runtimeFormula);
-    runtimeFormula.compiled.id = formulaId;
+    const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula);
+    runtimeFormula.formulaSlotId = formulaSlotId;
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
         ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
@@ -942,13 +1177,39 @@ export function createEngineFormulaBindingService(args: {
         cellIndex,
       );
     });
+    if (directLookup) {
+      const lookupInfo = directLookupColumnInfo(directLookup);
+      const lookupSheet = args.state.workbook.getSheet(lookupInfo.sheetName);
+      if (lookupSheet) {
+        const lookupEntity = lookupInfo.isExact
+          ? makeExactLookupColumnEntity(lookupSheet.id, lookupInfo.col)
+          : makeSortedLookupColumnEntity(lookupSheet.id, lookupInfo.col);
+        const rowStart =
+          directLookup.kind === "exact" || directLookup.kind === "approximate"
+            ? directLookup.prepared.rowStart
+            : directLookup.rowStart;
+        const rowEnd =
+          directLookup.kind === "exact" || directLookup.kind === "approximate"
+            ? directLookup.prepared.rowEnd
+            : directLookup.rowEnd;
+        for (let row = rowStart; row <= rowEnd; row += 1) {
+          const memberCellIndex = args.ensureCellTrackedByCoords(
+            lookupSheet.id,
+            row,
+            lookupInfo.col,
+          );
+          appendReverseEdge(makeCellEntity(memberCellIndex), lookupEntity);
+        }
+        appendReverseEdge(lookupEntity, formulaEntity);
+      }
+    }
     args.scheduleWasmProgramSync();
 
     indexedExactLookupCandidates.forEach((candidate) => {
       if (candidate.startCol !== candidate.endCol) {
         return;
       }
-      args.lookup.primeExactColumnIndex({
+      args.exactLookup.primeColumnIndex({
         sheetName: candidate.sheetName ?? ownerSheetName,
         rowStart: candidate.startRow,
         rowEnd: candidate.endRow,
@@ -959,7 +1220,7 @@ export function createEngineFormulaBindingService(args: {
       if (candidate.startCol !== candidate.endCol) {
         return;
       }
-      args.lookup.primeApproximateColumnIndex({
+      args.sortedLookup.primeColumnIndex({
         sheetName: candidate.sheetName ?? ownerSheetName,
         rowStart: candidate.startRow,
         rowEnd: candidate.endRow,
@@ -1145,7 +1406,11 @@ export function createEngineFormulaBindingService(args: {
             cellIndex,
             source: formula.source,
             dependencyIndices: [...formula.dependencyIndices],
+            planId: formula.planId,
           }));
+          pending.forEach(({ planId }) => {
+            args.compiledPlans.release(planId);
+          });
           args.state.formulas.clear();
           args.state.ranges.reset();
           args.edgeArena.reset();
@@ -1157,6 +1422,8 @@ export function createEngineFormulaBindingService(args: {
           args.reverseState.reverseDefinedNameEdges.clear();
           args.reverseState.reverseTableEdges.clear();
           args.reverseState.reverseSpillEdges.clear();
+          args.reverseState.reverseExactLookupColumnEdges.clear();
+          args.reverseState.reverseSortedLookupColumnEdges.clear();
 
           const activeCellIndices: number[] = [];
           pending.forEach(({ cellIndex, source }) => {

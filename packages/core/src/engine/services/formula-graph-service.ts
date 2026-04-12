@@ -204,14 +204,6 @@ export function createEngineFormulaGraphService(args: {
       formula.constNumberLength = constantSlice.length;
       formula.rangeListOffset = rangeSlice.offset;
       formula.rangeListLength = rangeSlice.length;
-      formula.compiled.programOffset = programSlice.offset;
-      formula.compiled.programLength = programSlice.length;
-      formula.compiled.constNumberOffset = constantSlice.offset;
-      formula.compiled.constNumberLength = constantSlice.length;
-      formula.compiled.rangeListOffset = rangeSlice.offset;
-      formula.compiled.rangeListLength = rangeSlice.length;
-      formula.compiled.depsPtr = formula.dependencyEntities.ptr;
-      formula.compiled.depsLen = formula.dependencyEntities.len;
 
       args.getWasmProgramTargets()[formulaIndex] = formula.cellIndex;
       args.getWasmProgramOffsets()[formulaIndex] = programSlice.offset;

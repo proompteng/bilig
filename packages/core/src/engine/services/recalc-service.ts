@@ -11,6 +11,7 @@ import type {
 import { EngineRecalcError } from "../errors.js";
 import type { WorkbookPivotRecord } from "../../workbook-store.js";
 import { parseCellAddress, utcDateToExcelSerial } from "@bilig/formula";
+import type { EngineDirtyFrontierSchedulerService } from "./dirty-frontier-scheduler-service.js";
 
 export interface DirtyRegion {
   readonly sheetName: string;
@@ -82,7 +83,6 @@ export function createEngineRecalcService(args: {
     EngineRuntimeState,
     | "workbook"
     | "strings"
-    | "scheduler"
     | "wasm"
     | "formulas"
     | "ranges"
@@ -99,6 +99,9 @@ export function createEngineRecalcService(args: {
   readonly markExplicitChanged: (cellIndex: number, count: number) => number;
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32;
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32;
+  readonly captureChangedCells: (
+    changedCellIndices: readonly number[] | U32,
+  ) => readonly import("@bilig/protocol").EngineChangedCell[];
   readonly unionChangedSets: (...sets: Array<readonly number[] | U32>) => U32;
   readonly composeChangedRootsAndOrdered: (
     changedRoots: readonly number[] | U32,
@@ -113,6 +116,7 @@ export function createEngineRecalcService(args: {
   readonly now: () => Date;
   readonly random: () => number;
   readonly performanceNow: () => number;
+  readonly dirtyScheduler: EngineDirtyFrontierSchedulerService;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: { values: import("@bilig/protocol").CellValue[]; rows: number; cols: number },
@@ -120,7 +124,6 @@ export function createEngineRecalcService(args: {
   readonly clearOwnedSpill: (cellIndex: number) => number[];
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[];
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[];
-  readonly getEntityDependents: (entityId: number) => Uint32Array;
 }): EngineRecalcService {
   const shouldRefreshPivot = (
     pivot: WorkbookPivotRecord,
@@ -227,18 +230,17 @@ export function createEngineRecalcService(args: {
       }
       const batchIndices = wasmBatch.subarray(0, batchCount);
       args.state.wasm.evalBatch(batchIndices);
-      args.state.wasm.syncToStore(args.state.workbook.cellStore, batchIndices, args.state.strings);
+      args.state.wasm.syncToStore(
+        args.state.workbook.cellStore,
+        batchIndices,
+        args.state.strings,
+        (cellIndex) => args.state.workbook.notifyCellValueWritten(cellIndex),
+      );
       return batchCount;
     };
 
     while (passRoots.length > 0) {
-      const scheduled = args.state.scheduler.collectDirty(
-        passRoots,
-        { getDependents: (entityId) => args.getEntityDependents(entityId) },
-        args.state.workbook.cellStore,
-        (cellIndex) => args.state.formulas.has(cellIndex),
-        args.state.ranges.size,
-      );
+      const scheduled = args.dirtyScheduler.collectDirty(passRoots);
       const ordered = scheduled.orderedFormulaCellIndices;
       const orderedCount = scheduled.orderedFormulaCount;
       totalOrderedCount += orderedCount;
@@ -305,6 +307,7 @@ export function createEngineRecalcService(args: {
           args.state.workbook.cellStore,
           batchIndices,
           args.state.strings,
+          (changedCellIndex) => args.state.workbook.notifyCellValueWritten(changedCellIndex),
         );
         const spill = args.state.wasm.readSpill(cellIndex, args.state.strings);
         const spillMaterialization = spill
@@ -494,6 +497,7 @@ export function createEngineRecalcService(args: {
             kind: "batch",
             invalidation: "cells",
             changedCellIndices: changed,
+            changedCells: args.captureChangedCells(changed),
             invalidatedRanges: [],
             invalidatedRows: [],
             invalidatedColumns: [],
@@ -554,6 +558,7 @@ export function createEngineRecalcService(args: {
             kind: "batch",
             invalidation: "cells",
             changedCellIndices: changed,
+            changedCells: args.captureChangedCells(changed),
             invalidatedRanges: [],
             invalidatedRows: [],
             invalidatedColumns: [],

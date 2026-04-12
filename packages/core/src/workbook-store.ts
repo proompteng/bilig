@@ -171,7 +171,7 @@ export class WorkbookStore {
   constructor(workbookName = "Workbook") {
     this.workbookName = workbookName;
     this.cellStore.onSetValue = (index) => {
-      this.bumpColumnVersionByCellIndex(index);
+      this.notifyCellValueWritten(index);
     };
     this.ensureDefaultStyle();
     this.ensureDefaultNumberFormat();
@@ -322,6 +322,10 @@ export class WorkbookStore {
         });
       });
     }
+  }
+
+  notifyCellValueWritten(cellIndex: number): void {
+    this.bumpColumnVersionByCellIndex(cellIndex);
   }
 
   private bumpColumnVersionByCellIndex(cellIndex: number): void {

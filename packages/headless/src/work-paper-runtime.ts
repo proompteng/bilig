@@ -66,6 +66,7 @@ import type {
   WorkPaperAxisSwapMapping,
   WorkPaperCellAddress,
   WorkPaperCellRange,
+  WorkPaperCellChange,
   WorkPaperCellType,
   WorkPaperCellValueDetailedType,
   WorkPaperCellValueType,
@@ -3121,22 +3122,7 @@ export class WorkPaper {
       return null;
     }
 
-    const cellStore = this.engine.workbook.cellStore;
-    const strings = this.engine.strings;
     const nextVisibility = beforeVisibility;
-    const sheetNames = new Map<number, string>();
-    const ensureSheetName = (sheetId: number): string | null => {
-      const cached = sheetNames.get(sheetId);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const sheet = this.engine.workbook.getSheetById(sheetId);
-      if (!sheet) {
-        return null;
-      }
-      sheetNames.set(sheetId, sheet.name);
-      return sheet.name;
-    };
     const ensureMutableSheet = (sheetId: number, sheetName: string): SheetStateSnapshot => {
       const existing = nextVisibility.get(sheetId);
       if (existing) {
@@ -3151,109 +3137,44 @@ export class WorkPaper {
       nextVisibility.set(sheetId, created);
       return created;
     };
-
-    const collectDirectChanges = (
-      changedCellIndices: Uint32Array,
-      seen: Set<number> | null,
-    ): { changes: WorkPaperChange[]; isSorted: boolean } | null => {
-      const changes: WorkPaperChange[] = [];
-      let previousSheetId = -1;
-      let previousRow = -1;
-      let previousCol = -1;
-      let isSorted = true;
-      for (let index = 0; index < changedCellIndices.length; index += 1) {
-        const cellIndex = changedCellIndices[index]!;
-        const sheetId = cellStore.sheetIds[cellIndex];
-        const row = cellStore.rows[cellIndex];
-        const col = cellStore.cols[cellIndex];
-        if (sheetId === undefined || row === undefined || col === undefined) {
-          return null;
-        }
-        if (seen) {
-          const logicalCellKey = makeCellKey(sheetId, row, col);
-          if (seen.has(logicalCellKey)) {
-            continue;
-          }
-          seen.add(logicalCellKey);
-        }
-        const sheetName = ensureSheetName(sheetId);
-        if (!sheetName) {
-          return null;
-        }
-        const cellKey = makeCellKey(sheetId, row, col);
-        const address = formatAddress(row, col);
-        const beforeValue = beforeVisibility.get(sheetId)?.cells.get(cellKey) ?? emptyValue();
-        const afterValue = cellStore.getValue(cellIndex, (id) => strings.get(id));
-        if (valuesEqual(beforeValue, afterValue)) {
-          continue;
-        }
-        if (
-          previousSheetId > sheetId ||
-          (previousSheetId === sheetId &&
-            (previousRow > row || (previousRow === row && previousCol > col)))
-        ) {
-          isSorted = false;
-        }
-        previousSheetId = sheetId;
-        previousRow = row;
-        previousCol = col;
-        const sheet = ensureMutableSheet(sheetId, sheetName);
-        if (afterValue.tag === ValueTag.Empty) {
-          sheet.cells.delete(cellKey);
-        } else {
-          sheet.cells.set(cellKey, afterValue);
-        }
-        changes.push({
+    const latestChangesByKey = new Map<number, WorkPaperCellChange>();
+    for (const event of events) {
+      for (let index = 0; index < event.changedCells.length; index += 1) {
+        const change = event.changedCells[index]!;
+        const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col);
+        latestChangesByKey.delete(cellKey);
+        latestChangesByKey.set(cellKey, {
           kind: "cell",
-          address: { sheet: sheetId, row, col },
-          sheetName,
-          a1: address,
-          newValue: afterValue,
+          address: { ...change.address },
+          sheetName: change.sheetName,
+          a1: change.a1,
+          newValue: change.newValue,
         });
       }
-      return { changes, isSorted };
-    };
-
+    }
+    for (const change of latestChangesByKey.values()) {
+      const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col);
+      const sheet = ensureMutableSheet(change.address.sheet, change.sheetName);
+      if (change.newValue.tag === ValueTag.Empty) {
+        sheet.cells.delete(cellKey);
+      } else {
+        sheet.cells.set(cellKey, change.newValue);
+      }
+    }
+    const directChanges = [...latestChangesByKey.values()];
     if (events.length === 1) {
       const event = events[0]!;
-      const direct = collectDirectChanges(event.changedCellIndices, new Set<number>());
-      if (direct === null) {
-        return null;
-      }
       return {
-        changes: direct.isSorted
-          ? direct.changes
-          : orderWorkPaperCellChanges(
-              direct.changes,
-              this.listSheetRecords(),
-              event.explicitChangedCount,
-            ),
+        changes: orderWorkPaperCellChanges(
+          directChanges,
+          this.listSheetRecords(),
+          event.explicitChangedCount,
+        ),
         nextVisibility,
       };
     }
-
-    const latestCellIndicesByKey = new Map<number, number>();
-    for (const event of events) {
-      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-        const cellIndex = event.changedCellIndices[index]!;
-        const sheetId = cellStore.sheetIds[cellIndex];
-        const row = cellStore.rows[cellIndex];
-        const col = cellStore.cols[cellIndex];
-        if (sheetId === undefined || row === undefined || col === undefined) {
-          return null;
-        }
-        latestCellIndicesByKey.set(makeCellKey(sheetId, row, col), cellIndex);
-      }
-    }
-    const direct = collectDirectChanges(Uint32Array.from(latestCellIndicesByKey.values()), null);
-    if (direct === null) {
-      return null;
-    }
-
     return {
-      changes: direct.isSorted
-        ? direct.changes
-        : orderWorkPaperCellChanges(direct.changes, this.listSheetRecords()),
+      changes: orderWorkPaperCellChanges(directChanges, this.listSheetRecords()),
       nextVisibility,
     };
   }
@@ -3586,6 +3507,8 @@ export class WorkPaper {
   }
 
   private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
+    const existingCellIndex =
+      this.engine.workbook.getSheetById(address.sheet)?.grid.get(address.row, address.col) ?? -1;
     const mutation: EngineCellMutationRef["mutation"] =
       content === null
         ? { kind: "clearCell", row: address.row, col: address.col }
@@ -3604,7 +3527,7 @@ export class WorkPaper {
             };
     this.engine.applyCellMutationsAtWithOptions([{ sheetId: address.sheet, mutation }], {
       captureUndo: true,
-      potentialNewCells: content === null ? 0 : 1,
+      potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
       source: "local",
       returnUndoOps: false,
       reuseRefs: true,

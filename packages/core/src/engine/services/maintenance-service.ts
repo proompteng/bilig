@@ -70,6 +70,8 @@ export function createEngineMaintenanceService(args: {
     reverseDefinedNameEdges: Map<string, Set<number>>;
     reverseTableEdges: Map<string, Set<number>>;
     reverseSpillEdges: Map<string, Set<number>>;
+    reverseExactLookupColumnEdges: Map<number, EdgeSlice>;
+    reverseSortedLookupColumnEdges: Map<number, EdgeSlice>;
   };
   readonly pivotOutputOwners: Map<number, string>;
   readonly captureSheetCellState: (sheetName: string) => EngineOp[];
@@ -109,6 +111,8 @@ export function createEngineMaintenanceService(args: {
     args.reverseState.reverseDefinedNameEdges.clear();
     args.reverseState.reverseTableEdges.clear();
     args.reverseState.reverseSpillEdges.clear();
+    args.reverseState.reverseExactLookupColumnEdges.clear();
+    args.reverseState.reverseSortedLookupColumnEdges.clear();
     args.pivotOutputOwners.clear();
     args.state.ranges.reset();
     args.edgeArena.reset();

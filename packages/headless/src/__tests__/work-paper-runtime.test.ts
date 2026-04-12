@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 
 import { WorkPaperEvaluationSuspendedError, WorkPaper, WorkPaperCellAddress } from "../index.js";
@@ -7,6 +7,12 @@ const TEST_LANGUAGE_CODE = "xHF";
 
 function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
   return { sheet, row, col };
+}
+
+function hasCaptureVisibilitySnapshot(
+  value: unknown,
+): value is WorkPaper & { captureVisibilitySnapshot: () => unknown } {
+  return typeof Reflect.get(value, "captureVisibilitySnapshot") === "function";
 }
 
 afterEach(() => {
@@ -100,6 +106,33 @@ describe("WorkPaper", () => {
       tag: ValueTag.Number,
       value: 64,
     });
+  });
+
+  it("uses engine-emitted changed-cell payloads for ordinary value edits", () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[1, "=A1*2"]],
+    });
+    const sheetId = workbook.getSheetId("Bench")!;
+    expect(hasCaptureVisibilitySnapshot(workbook)).toBe(true);
+    if (!hasCaptureVisibilitySnapshot(workbook)) {
+      throw new Error("Expected work paper runtime to expose captureVisibilitySnapshot in tests");
+    }
+    const captureVisibilitySnapshot = vi
+      .spyOn(workbook, "captureVisibilitySnapshot")
+      .mockImplementation(() => {
+        throw new Error("ordinary value edits should not rebuild visibility snapshots");
+      });
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 7);
+
+    expect(
+      changes.map((change) => (change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "")),
+    ).toEqual(["Bench!A1", "Bench!B1"]);
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 14,
+    });
+    captureVisibilitySnapshot.mockRestore();
   });
 
   it("supports sheet-scoped named expressions and restores public formulas", () => {

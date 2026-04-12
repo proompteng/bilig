@@ -5,7 +5,7 @@ import type {
   SyncState,
   WorkbookPivotSnapshot,
 } from "@bilig/protocol";
-import { compileFormula } from "@bilig/formula";
+import type { CompiledFormula } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import type {
   OpOrder,
@@ -67,10 +67,19 @@ export interface EngineReplicaSnapshot {
   sheetDeleteVersions: Array<{ sheetName: string; order: OpOrder }>;
 }
 
-export interface TransactionRecord {
-  ops: EngineOp[];
-  potentialNewCells?: number;
-}
+export type TransactionRecord =
+  | {
+      kind: "ops";
+      ops: EngineOp[];
+      potentialNewCells?: number;
+      preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[];
+    }
+  | {
+      kind: "single-op";
+      op: EngineOp;
+      potentialNewCells?: number;
+      preparedCellAddress?: PreparedCellAddress | null;
+    };
 
 export interface TransactionLogEntry {
   forward: TransactionRecord;
@@ -82,10 +91,97 @@ export interface PreparedCellAddress {
   readonly col: number;
 }
 
+export interface PreparedExactVectorLookup {
+  sheetName: string;
+  rowStart: number;
+  rowEnd: number;
+  col: number;
+  length: number;
+  columnVersion: number;
+  sheetColumnVersions: Uint32Array;
+  comparableKind: "numeric" | "text" | "mixed";
+  uniformStart: number | undefined;
+  uniformStep: number | undefined;
+  firstPositions: Map<string, number>;
+  lastPositions: Map<string, number>;
+  firstNumericPositions: Map<number, number> | undefined;
+  lastNumericPositions: Map<number, number> | undefined;
+  firstTextPositions: Map<string, number> | undefined;
+  lastTextPositions: Map<string, number> | undefined;
+}
+
+export interface PreparedApproximateVectorLookup {
+  sheetName: string;
+  rowStart: number;
+  rowEnd: number;
+  col: number;
+  length: number;
+  columnVersion: number;
+  sheetColumnVersions: Uint32Array;
+  comparableKind: "numeric" | "text" | undefined;
+  uniformStart: number | undefined;
+  uniformStep: number | undefined;
+  sortedAscending: boolean;
+  sortedDescending: boolean;
+  numericValues: Float64Array | undefined;
+  textValues: string[] | undefined;
+}
+
+export type RuntimeDirectLookupDescriptor =
+  | {
+      kind: "exact";
+      operandCellIndex: number;
+      prepared: PreparedExactVectorLookup;
+      searchMode: 1 | -1;
+    }
+  | {
+      kind: "exact-uniform-numeric";
+      operandCellIndex: number;
+      sheetName: string;
+      rowStart: number;
+      rowEnd: number;
+      col: number;
+      length: number;
+      columnVersion: number;
+      sheetColumnVersions: Uint32Array;
+      start: number;
+      step: number;
+      searchMode: 1 | -1;
+    }
+  | {
+      kind: "approximate";
+      operandCellIndex: number;
+      prepared: PreparedApproximateVectorLookup;
+      matchMode: 1 | -1;
+    }
+  | {
+      kind: "approximate-uniform-numeric";
+      operandCellIndex: number;
+      sheetName: string;
+      rowStart: number;
+      rowEnd: number;
+      col: number;
+      length: number;
+      columnVersion: number;
+      sheetColumnVersions: Uint32Array;
+      start: number;
+      step: number;
+      matchMode: 1 | -1;
+    };
+
+export interface CompiledPlanRecord {
+  readonly id: number;
+  readonly source: string;
+  readonly compiled: CompiledFormula;
+}
+
 export interface RuntimeFormula {
   cellIndex: number;
+  formulaSlotId: number;
+  planId: number;
   source: string;
-  compiled: ReturnType<typeof compileFormula>;
+  compiled: CompiledFormula;
+  plan: CompiledPlanRecord;
   dependencyIndices: Uint32Array;
   dependencyEntities: EdgeSlice;
   rangeDependencies: Uint32Array;
@@ -97,6 +193,7 @@ export interface RuntimeFormula {
   constNumberLength: number;
   rangeListOffset: number;
   rangeListLength: number;
+  directLookup: RuntimeDirectLookupDescriptor | undefined;
 }
 
 export type U32 = Uint32Array;

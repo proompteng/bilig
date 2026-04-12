@@ -37,11 +37,33 @@ describe("range-subscription-utils", () => {
     if (b2 === undefined || c3 === undefined) {
       throw new Error("Expected seeded cells to exist");
     }
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+    if (sheetId === undefined) {
+      throw new Error("Expected seeded sheet to exist");
+    }
 
     const event: EngineEvent = {
       kind: "batch",
       invalidation: "cells",
       changedCellIndices: [b2, c3],
+      changedCells: [
+        {
+          kind: "cell",
+          cellIndex: b2,
+          address: { sheet: sheetId, row: 1, col: 1 },
+          sheetName: "Sheet1",
+          a1: "B2",
+          newValue: { tag: ValueTag.Number, value: 11 },
+        },
+        {
+          kind: "cell",
+          cellIndex: c3,
+          address: { sheet: sheetId, row: 2, col: 2 },
+          sheetName: "Sheet1",
+          a1: "C3",
+          newValue: { tag: ValueTag.Number, value: 14 },
+        },
+      ],
       invalidatedRanges: [
         { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
         { sheetName: "Sheet1", startAddress: "D4", endAddress: "E5" },

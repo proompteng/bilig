@@ -286,7 +286,12 @@ export class WasmKernelFacade {
     );
   }
 
-  syncToStore(store: CellStore, changedCellIndices: Uint32Array, strings: StringPool): void {
+  syncToStore(
+    store: CellStore,
+    changedCellIndices: Uint32Array,
+    strings: StringPool,
+    onCellValueWritten?: (cellIndex: number) => void,
+  ): void {
     if (!this.kernel) return;
 
     const newStrings = this.kernel.readOutputStrings();
@@ -319,6 +324,7 @@ export class WasmKernelFacade {
           storeErrors[cellIndex] !== nextError
         ) {
           storeVersions[cellIndex] = (storeVersions[cellIndex] ?? 0) + 1;
+          onCellValueWritten?.(cellIndex);
         }
 
         storeTags[cellIndex] = nextTag;
@@ -355,6 +361,7 @@ export class WasmKernelFacade {
         storeErrors[cellIndex] !== nextError
       ) {
         storeVersions[cellIndex] = (storeVersions[cellIndex] ?? 0) + 1;
+        onCellValueWritten?.(cellIndex);
       }
 
       storeTags[cellIndex] = nextTag;

@@ -3,6 +3,9 @@ import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { StringPool } from "../string-pool.js";
 import { WorkbookStore } from "../workbook-store.js";
 import { createEngineLookupService } from "../engine/services/lookup-service.js";
+import { createExactColumnIndexService } from "../engine/services/exact-column-index-service.js";
+import { createSortedColumnSearchService } from "../engine/services/sorted-column-search-service.js";
+import { createEngineRuntimeColumnStoreService } from "../engine/services/runtime-column-store-service.js";
 
 function setStoredCellValue(
   workbook: WorkbookStore,
@@ -32,12 +35,18 @@ describe("createEngineLookupService", () => {
     });
     setStoredCellValue(workbook, strings, "Sheet1", "A3", { tag: ValueTag.String, value: "pear" });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     lookup.primeExactColumnIndex({
       sheetName: "Sheet1",
@@ -117,12 +126,18 @@ describe("createEngineLookupService", () => {
       code: ErrorCode.Div0,
     });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     expect(
       lookup.findExactVectorMatch({
@@ -201,12 +216,18 @@ describe("createEngineLookupService", () => {
       });
     });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     lookup.primeApproximateColumnIndex({
       sheetName: "Sheet1",
@@ -262,12 +283,18 @@ describe("createEngineLookupService", () => {
     });
     setStoredCellValue(workbook, strings, "Sheet1", "A3", { tag: ValueTag.Number, value: 3 });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     expect(
       lookup.findApproximateVectorMatch({
@@ -296,12 +323,18 @@ describe("createEngineLookupService", () => {
       });
     });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     expect(
       lookup.findApproximateVectorMatch({
@@ -336,12 +369,18 @@ describe("createEngineLookupService", () => {
       });
     });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     expect(
       lookup.findApproximateVectorMatch({
@@ -376,12 +415,18 @@ describe("createEngineLookupService", () => {
       });
     });
 
-    const lookup = createEngineLookupService({
-      state: {
-        workbook,
-        strings,
-      },
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
     });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+    const lookup = createEngineLookupService({ exact, sorted });
 
     expect(
       lookup.findApproximateVectorMatch({

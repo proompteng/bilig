@@ -39,7 +39,7 @@ export function loadLiteralSheetIntoEmptySheet(
         workbook.cellKeyToIndex.set(makeCellKey(sheetId, rowIndex, colIndex), cellIndex);
         sheet.grid.set(rowIndex, colIndex, cellIndex);
         writeLiteralCell(cellStore, strings, cellIndex, raw);
-        sheet.columnVersions[colIndex] = (sheet.columnVersions[colIndex] ?? 0) + 1;
+        workbook.notifyCellValueWritten(cellIndex);
       });
     });
   } finally {

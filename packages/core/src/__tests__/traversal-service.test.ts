@@ -143,4 +143,33 @@ describe("EngineTraversalService", () => {
       ),
     ).toThrow("sheet boom");
   });
+
+  it("collects exact and sorted lookup subscribers on the same column without entity collisions", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "traversal-lookup-collision",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 20);
+    engine.setCellValue("Sheet1", "A3", 30);
+    engine.setCellValue("Sheet1", "D1", 20);
+    engine.setCellValue("Sheet1", "D2", 25);
+    engine.setCellFormula("Sheet1", "E1", "XMATCH(D1,A1:A3,0)");
+    engine.setCellFormula("Sheet1", "F1", "MATCH(D2,A1:A3,1)");
+
+    const a2Index = engine.workbook.getCellIndex("Sheet1", "A2");
+    expect(a2Index).toBeDefined();
+
+    const dependents = Effect.runSync(
+      getTraversalService(engine).collectFormulaDependents(makeCellEntity(a2Index!)),
+    );
+    const dependentAddresses = [...dependents].map((cellIndex) =>
+      engine.workbook.getQualifiedAddress(cellIndex),
+    );
+
+    expect(dependentAddresses).toContain("Sheet1!E1");
+    expect(dependentAddresses).toContain("Sheet1!F1");
+  });
 });
