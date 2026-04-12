@@ -187,7 +187,7 @@ describe("workbook-workflow-run-store", () => {
       runId: "workflow-structural-1",
       workflowTemplate: "hideCurrentRow" as const,
       title: "Hide Current Row",
-      summary: "Staged a structural preview bundle to hide row 7 on Sheet2.",
+      summary: "Staged a structural change set to hide row 7 on Sheet2.",
       steps: [
         {
           stepId: "resolve-current-row",

@@ -297,7 +297,7 @@ describe("workbook agent service", () => {
         "review and apply it from the rail",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
-        "stage one coherent preview bundle per turn",
+        "stage one coherent change set per turn",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain(
         "summarizeWorkbook",
@@ -1227,7 +1227,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages formula-highlight preview bundles from durable workflows", async () => {
+  it("stages formula-highlight change sets from durable workflows", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
@@ -1366,7 +1366,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages formula-repair preview bundles from durable workflows", async () => {
+  it("stages formula-repair change sets from durable workflows", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
@@ -1499,7 +1499,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages header-normalization preview bundles from durable workflows", async () => {
+  it("stages header-normalization change sets from durable workflows", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
@@ -2382,7 +2382,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("stages outlier-highlight preview bundles from durable workflows", async () => {
+  it("stages outlier-highlight change sets from durable workflows", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
@@ -3560,7 +3560,7 @@ describe("workbook agent service", () => {
       );
 
       if (!isWorkbookAgentCommandBundle(pending)) {
-        throw new Error("Expected a staged pending bundle");
+        throw new Error("Expected a staged review item");
       }
 
       await service.reviewReviewItem({
@@ -3636,7 +3636,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("keeps the pending bundle when authoritative apply rejects a stale preview", async () => {
+  it("keeps the review item when authoritative apply rejects a stale preview", async () => {
     const fakeCodex = new FakeCodexTransport();
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
     const service = createWorkbookAgentService(
@@ -3644,8 +3644,7 @@ describe("workbook agent service", () => {
         applyAgentCommandBundle: vi.fn(async () => {
           throw createWorkbookAgentServiceError({
             code: "WORKBOOK_AGENT_PREVIEW_STALE",
-            message:
-              "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+            message: "Workbook changed after preview. Replay the plan to stage a fresh change set.",
             statusCode: 409,
             retryable: true,
           });
@@ -3708,7 +3707,7 @@ describe("workbook agent service", () => {
         }),
       );
       if (!isWorkbookAgentCommandBundle(pending)) {
-        throw new Error("Expected a staged pending bundle");
+        throw new Error("Expected a staged review item");
       }
 
       await service.reviewReviewItem({
@@ -3736,7 +3735,7 @@ describe("workbook agent service", () => {
           appliedBy: "user",
           preview: createPreviewSummary(),
         }),
-      ).rejects.toThrow("Replay the plan to stage a fresh preview bundle.");
+      ).rejects.toThrow("Replay the plan to stage a fresh change set.");
 
       const afterFailure = service.getSnapshot({
         documentId: "doc-1",
@@ -3749,7 +3748,7 @@ describe("workbook agent service", () => {
       const afterFailureBundle = getPrimaryReviewBundle(afterFailure);
       expect(isWorkbookAgentCommandBundle(afterFailureBundle)).toBe(true);
       if (!isWorkbookAgentCommandBundle(afterFailureBundle)) {
-        throw new Error("Expected the pending bundle to remain staged");
+        throw new Error("Expected the review item to remain staged");
       }
       expect(afterFailureBundle.id).toBe(pending.id);
       expect(afterFailure.executionRecords).toEqual([]);
@@ -3860,7 +3859,7 @@ describe("workbook agent service", () => {
         }),
       );
       if (!isWorkbookAgentCommandBundle(pending)) {
-        throw new Error("Expected a staged pending bundle");
+        throw new Error("Expected a staged review item");
       }
 
       await service.reviewReviewItem({
@@ -3980,7 +3979,7 @@ describe("workbook agent service", () => {
     }
   });
 
-  it("recovers durable pending bundle state after the service restarts", async () => {
+  it("recovers durable review item state after the service restarts", async () => {
     let durableThreadState: WorkbookAgentThreadStateRecord | null = {
       documentId: "doc-1",
       threadId: "thr-test",

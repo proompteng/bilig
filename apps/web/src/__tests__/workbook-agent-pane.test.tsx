@@ -110,9 +110,9 @@ function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
 }
 
 function createSnapshot(overrides: Record<string, unknown> = {}) {
-  const pendingBundleOverride = overrides["pendingBundle"];
+  const reviewBundleOverride = overrides["reviewBundle"];
   const reviewQueueItemsOverride = overrides["reviewQueueItems"];
-  const { pendingBundle: _pendingBundle, ...restOverrides } = overrides;
+  const { reviewBundle: _reviewBundle, ...restOverrides } = overrides;
   const overrideEntries = Array.isArray(overrides["entries"])
     ? overrides["entries"].map((entry) =>
         typeof entry === "object" && entry !== null && !("citations" in entry)
@@ -149,8 +149,8 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     ],
     reviewQueueItems: Array.isArray(reviewQueueItemsOverride)
       ? reviewQueueItemsOverride
-      : isWorkbookAgentCommandBundle(pendingBundleOverride)
-        ? [createReviewQueueItem(pendingBundleOverride)]
+      : isWorkbookAgentCommandBundle(reviewBundleOverride)
+        ? [createReviewQueueItem(reviewBundleOverride)]
         : [],
     executionRecords: [],
     workflowRuns: [],
@@ -236,7 +236,9 @@ function createMockZeroAgentHarness(input: {
 
 function AgentHarness(props: {
   readonly currentUserId?: string;
-  readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
+  readonly previewCommandBundle?: Parameters<
+    typeof useWorkbookAgentPane
+  >[0]["previewCommandBundle"];
   readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]["zero"];
   readonly zeroEnabled?: boolean;
 }) {
@@ -256,7 +258,7 @@ function AgentHarness(props: {
         colEnd: 5,
       },
     }),
-    previewBundle: props.previewBundle ?? vi.fn(async () => createPreviewSummary()),
+    previewCommandBundle: props.previewCommandBundle ?? vi.fn(async () => createPreviewSummary()),
     ...(props.zero ? { zero: props.zero } : {}),
     ...(props.zeroEnabled !== undefined ? { zeroEnabled: props.zeroEnabled } : {}),
   });
@@ -2082,7 +2084,7 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-1",
                 documentId: "doc-1",
                 threadId: "thr-1",
@@ -2206,7 +2208,7 @@ describe("workbook agent pane", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AgentHarness previewBundle={previewBundle} />);
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
     });
 
     await act(async () => {
@@ -2227,7 +2229,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("does not auto-apply low-risk preview bundles on shared threads", async () => {
+  it("does not auto-apply low-risk review items on shared threads", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -2256,7 +2258,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-1",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2318,7 +2320,7 @@ describe("workbook agent pane", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AgentHarness previewBundle={previewBundle} />);
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
     });
 
     await act(async () => {
@@ -2364,7 +2366,7 @@ describe("workbook agent pane", () => {
               ownerUserId: "alex@example.com",
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Preview bundle staged",
+              latestEntryText: "Review item queued",
             }),
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -2376,7 +2378,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-2",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2445,7 +2447,9 @@ describe("workbook agent pane", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AgentHarness currentUserId="casey@example.com" previewBundle={previewBundle} />);
+      root.render(
+        <AgentHarness currentUserId="casey@example.com" previewCommandBundle={previewBundle} />,
+      );
     });
 
     await act(async () => {
@@ -2491,7 +2495,7 @@ describe("workbook agent pane", () => {
               ownerUserId: "alex@example.com",
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Preview bundle staged",
+              latestEntryText: "Review item queued",
             }),
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -2503,7 +2507,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-owner",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2569,7 +2573,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-owner",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2623,7 +2627,7 @@ describe("workbook agent pane", () => {
       root.render(
         <AgentHarness
           currentUserId="alex@example.com"
-          previewBundle={vi.fn(async () => preview)}
+          previewCommandBundle={vi.fn(async () => preview)}
         />,
       );
     });
@@ -2690,7 +2694,7 @@ describe("workbook agent pane", () => {
               ownerUserId: "alex@example.com",
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Preview bundle staged",
+              latestEntryText: "Review item queued",
             }),
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -2702,7 +2706,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-collab",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2750,7 +2754,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               threadId: "thr-shared",
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-shared-collab",
                 documentId: "doc-1",
                 threadId: "thr-shared",
@@ -2808,7 +2812,10 @@ describe("workbook agent pane", () => {
 
     await act(async () => {
       root.render(
-        <AgentHarness currentUserId="casey@example.com" previewBundle={async () => preview} />,
+        <AgentHarness
+          currentUserId="casey@example.com"
+          previewCommandBundle={async () => preview}
+        />,
       );
     });
 
@@ -2906,7 +2913,7 @@ describe("workbook agent pane", () => {
           JSON.stringify(
             createSnapshot({
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-1",
                 documentId: "doc-1",
                 threadId: "thr-1",
@@ -2969,7 +2976,7 @@ describe("workbook agent pane", () => {
           JSON.stringify(
             createSnapshot({
               scope: "shared",
-              pendingBundle: {
+              reviewBundle: {
                 id: "bundle-2",
                 documentId: "doc-1",
                 threadId: "thr-1",
@@ -3069,7 +3076,7 @@ describe("workbook agent pane", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AgentHarness previewBundle={previewBundle} />);
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
     });
 
     expect(previewBundle).toHaveBeenCalledTimes(1);

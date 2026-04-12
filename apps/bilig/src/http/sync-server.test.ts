@@ -500,7 +500,7 @@ describe("sync-server workbook agent", () => {
         updatedAtUnixMs: 100,
         entryCount: 1,
         reviewQueueItemCount: 1,
-        latestEntryText: "Preview bundle staged",
+        latestEntryText: "Review item queued",
       },
     ]);
 
@@ -541,7 +541,7 @@ describe("sync-server workbook agent", () => {
           updatedAtUnixMs: 100,
           entryCount: 1,
           reviewQueueItemCount: 1,
-          latestEntryText: "Preview bundle staged",
+          latestEntryText: "Review item queued",
         },
       ]);
     } finally {
@@ -1253,7 +1253,7 @@ describe("sync-server workbook agent", () => {
     const applyReviewItem = vi.fn(async () => {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PREVIEW_STALE",
-        message: "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+        message: "Workbook changed after preview. Replay the plan to stage a fresh review item.",
         statusCode: 409,
         retryable: true,
       });
@@ -1288,8 +1288,7 @@ describe("sync-server workbook agent", () => {
       expect(response.json()).toEqual(
         expect.objectContaining({
           error: "WORKBOOK_AGENT_PREVIEW_STALE",
-          message:
-            "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+          message: "Workbook changed after preview. Replay the plan to stage a fresh review item.",
           retryable: true,
         }),
       );

@@ -25,9 +25,9 @@ import { useWorkbookShellLayout } from "./use-workbook-shell-layout.js";
 type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]["zero"];
 
 type WorkbookAgentContextGetter = Parameters<typeof useWorkbookAgentPane>[0]["getContext"];
-type WorkbookAgentPreviewBundle = (
+type WorkbookAgentPreviewCommandBundle = (
   bundle: WorkbookAgentCommandBundle,
-) => ReturnType<Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"]>;
+) => ReturnType<Parameters<typeof useWorkbookAgentPane>[0]["previewCommandBundle"]>;
 
 export function useWorkbookAppPanels(input: {
   documentId: string;
@@ -44,7 +44,7 @@ export function useWorkbookAppPanels(input: {
   changesPanel: ReactNode;
   selectAddress: (sheetName: string, address: string) => void;
   getAgentContext: WorkbookAgentContextGetter;
-  previewAgentBundle: WorkbookAgentPreviewBundle;
+  previewAgentCommandBundle: WorkbookAgentPreviewCommandBundle;
 }) {
   const {
     changeCount,
@@ -53,7 +53,7 @@ export function useWorkbookAppPanels(input: {
     documentId,
     getAgentContext,
     presenceClientId,
-    previewAgentBundle,
+    previewAgentCommandBundle,
     remoteSyncAvailable,
     replicaId,
     runtimeReady,
@@ -87,7 +87,7 @@ export function useWorkbookAppPanels(input: {
     documentId,
     enabled: runtimeReady,
     getContext: getAgentContext,
-    previewBundle: previewAgentBundle,
+    previewCommandBundle: previewAgentCommandBundle,
     zero,
     zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   });

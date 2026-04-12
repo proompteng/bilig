@@ -63,7 +63,7 @@ function renderPanel(entry: {
             onSelectThread={() => {}}
             onSubmit={() => {}}
             onToggleReviewCommand={() => {}}
-            reviewBundle={null}
+            activeReviewBundle={null}
             preview={null}
             selectedCommandIndexes={[]}
             showAssistantProgress={false}

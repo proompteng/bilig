@@ -54,7 +54,7 @@ describe("@bilig/contracts", () => {
       updatedAtUnixMs: 42,
       entryCount: 3,
       reviewQueueItemCount: 1,
-      latestEntryText: "Preview bundle staged",
+      latestEntryText: "Review item queued",
     });
 
     expect(decoded.ownerUserId).toBe("alex@example.com");
@@ -66,7 +66,7 @@ describe("@bilig/contracts", () => {
       id: "system-1",
       kind: "system",
       turnId: "turn-1",
-      text: "Applied preview bundle at revision r7",
+      text: "Applied workbook change set at revision r7",
       phase: null,
       toolName: null,
       toolStatus: null,
@@ -456,7 +456,7 @@ describe("@bilig/contracts", () => {
       startedByUserId: "alex@example.com",
       workflowTemplate: "createSheet",
       title: "Create Sheet",
-      summary: "Staged a structural preview bundle to create Forecast.",
+      summary: "Staged a structural review item to create Forecast.",
       status: "completed",
       createdAtUnixMs: 100,
       updatedAtUnixMs: 120,

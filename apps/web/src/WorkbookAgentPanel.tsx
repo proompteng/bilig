@@ -764,7 +764,7 @@ function summarizeTimelineCitations(
 }
 
 function ReviewItemCard(props: {
-  readonly reviewBundle: WorkbookAgentCommandBundle;
+  readonly activeReviewBundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
   readonly sharedReviewOwnerUserId: string | null;
@@ -783,7 +783,7 @@ function ReviewItemCard(props: {
   readonly onToggleCommand: (commandIndex: number) => void;
 }) {
   const selectedCount = props.selectedCommandIndexes.length;
-  const hasFullSelection = selectedCount === props.reviewBundle.commands.length;
+  const hasFullSelection = selectedCount === props.activeReviewBundle.commands.length;
   const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId
     ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId)
     : null;
@@ -829,12 +829,12 @@ function ReviewItemCard(props: {
       )}
     >
       <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-        {props.reviewBundle.summary}
+        {props.activeReviewBundle.summary}
       </div>
       <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className={agentPanelEyebrowTextClass()}>
-            {String(selectedCount)}/{String(props.reviewBundle.commands.length)}
+            {String(selectedCount)}/{String(props.activeReviewBundle.commands.length)}
           </div>
           {!hasFullSelection ? (
             <Button
@@ -847,12 +847,12 @@ function ReviewItemCard(props: {
           ) : null}
         </div>
         <div className="mt-2 flex flex-col gap-2">
-          {props.reviewBundle.commands.map((command, index) => {
+          {props.activeReviewBundle.commands.map((command, index) => {
             const checked = props.selectedCommandIndexes.includes(index);
             const commandLabel = describeWorkbookAgentCommand(command);
             return (
               <div
-                key={`${props.reviewBundle.id}:${JSON.stringify(command)}`}
+                key={`${props.activeReviewBundle.id}:${JSON.stringify(command)}`}
                 className={cn(
                   "flex items-start gap-3 rounded-[var(--wb-radius-control)] border px-3 py-2 transition-colors",
                   checked
@@ -878,7 +878,7 @@ function ReviewItemCard(props: {
           })}
         </div>
       </div>
-      <PreviewRangeList ranges={props.preview?.ranges ?? props.reviewBundle.affectedRanges} />
+      <PreviewRangeList ranges={props.preview?.ranges ?? props.activeReviewBundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
         <div
           className={cn(
@@ -1073,7 +1073,7 @@ export function WorkbookAgentPanel(props: {
   readonly snapshot: WorkbookAgentThreadSnapshot | null;
   readonly activeResponseTurnId: string | null;
   readonly showAssistantProgress: boolean;
-  readonly reviewBundle: WorkbookAgentCommandBundle | null;
+  readonly activeReviewBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
   readonly sharedReviewOwnerUserId: string | null;
@@ -1207,10 +1207,10 @@ export function WorkbookAgentPanel(props: {
         </ScrollArea.Scrollbar>
       </ScrollArea.Root>
       <div className={agentPanelFooterClass()}>
-        {props.reviewBundle ? (
+        {props.activeReviewBundle ? (
           <div className="mb-3">
             <ReviewItemCard
-              reviewBundle={props.reviewBundle}
+              activeReviewBundle={props.activeReviewBundle}
               preview={props.preview}
               sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
               sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}

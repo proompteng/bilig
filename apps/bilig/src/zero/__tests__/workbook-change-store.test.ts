@@ -144,7 +144,7 @@ describe("workbook-change-store", () => {
                 actorUserId: "alex@example.com",
                 clientMutationId: null,
                 eventKind: "applyAgentCommandBundle",
-                summary: "Applied preview bundle at revision r12",
+                summary: "Applied workbook change set at revision r12",
                 sheetId: 4,
                 sheetName: "Sheet1",
                 anchorAddress: "B2",
@@ -181,13 +181,15 @@ describe("workbook-change-store", () => {
           : null,
     ]);
 
-    await expect(listWorkbookChanges(queryable, { documentId: "doc-1", limit: 2 })).resolves.toEqual([
+    await expect(
+      listWorkbookChanges(queryable, { documentId: "doc-1", limit: 2 }),
+    ).resolves.toEqual([
       {
         revision: 12,
         actorUserId: "alex@example.com",
         clientMutationId: null,
         eventKind: "applyAgentCommandBundle",
-        summary: "Applied preview bundle at revision r12",
+        summary: "Applied workbook change set at revision r12",
         sheetId: 4,
         sheetName: "Sheet1",
         anchorAddress: "B2",

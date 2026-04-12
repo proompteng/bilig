@@ -41,8 +41,8 @@ The current workbook agent implementation is structurally split.
 
 Primary issues:
 
-- `executionPolicy` exists, but private-thread behavior still passes through preview-oriented bundle staging
-- `pendingBundle` is still the main mutation carrier for too many flows
+- shared-thread policy is still stricter than the target product model for low-risk work
+- some live pane and panel code still uses review-bundle naming instead of execution/review-item naming
 - prompt and UI language still reflect internal implementation concepts instead of a clean product model
 - the agent tool surface is strong for reads and basic writes, but incomplete for high-value spreadsheet operations
 - workbook state access is still not rich enough for serious autonomous editing across tables, validation, analytics objects, and collaboration objects
@@ -60,20 +60,22 @@ As of `main` on April 12, 2026, the platform has improved storage and routing fo
 What is already true:
 
 - durable thread snapshots use `reviewQueueItems`
-- private-thread tool turns can auto-apply at turn completion
+- private-thread tool turns auto-apply at turn completion
+- private-thread replay executes directly or fails fast instead of staging manual review items
 - shared-thread owner review is modeled explicitly in stored review items
 - execution records are persisted
+- live HTTP review routes are review-item-native
+- `pendingBundle` is absent from live runtime behavior and durable writes
+- `approvalMode` is absent from live runtime behavior and durable writes
 
 What is still structurally wrong:
 
-- the public HTTP API is still bundle-named
-- the web pane still reconstructs a local `pendingBundle`
-- the panel still renders a pending-bundle review surface
-- `approvalMode` still exists in live bundle and execution-record types
-- the database still creates and migrates through `workbook_pending_bundle`
+- shared-thread sessions still route all work through `ownerReview` by default
+- some live pane and panel identifiers still use preview/review bundle naming
+- tests and docs still carry preview-era wording in places
 - the product still lacks the selector-first tool model from this document
 
-That means the system still tells a preview-era story even though the stored state is already moving toward a review-queue/execution-history model.
+That means the runtime is now execution-first for private work, but the broader platform and language cleanup is not complete yet.
 
 ## Hard Migration Program
 

@@ -44,7 +44,7 @@ function renderHarness(host: HTMLElement) {
           colEnd: 8,
         },
       }),
-      previewAgentBundle: vi.fn(),
+      previewAgentCommandBundle: vi.fn(),
     });
 
     return (
@@ -117,7 +117,7 @@ describe("useWorkbookAppPanels", () => {
     document.body.innerHTML = "";
   });
 
-  it("opens the assistant rail when a staged preview bundle appears", async () => {
+  it("opens the assistant rail when a review item appears", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -140,7 +140,7 @@ describe("useWorkbookAppPanels", () => {
     await harness.unmount();
   });
 
-  it("switches from the changes rail to the assistant rail when a preview bundle is staged", async () => {
+  it("switches from the changes rail to the assistant rail when a review item is staged", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;

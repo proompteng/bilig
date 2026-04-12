@@ -652,7 +652,7 @@ export function useWorkerWorkbookAppState(input: {
       },
     });
 
-  const previewAgentBundle = useCallback(
+  const previewAgentCommandBundle = useCallback(
     async (bundle: WorkbookAgentCommandBundle) => {
       if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
         throw new Error("Workbook runtime is not ready for agent preview");
@@ -710,7 +710,7 @@ export function useWorkerWorkbookAppState(input: {
     changesPanel,
     selectAddress,
     getAgentContext,
-    previewAgentBundle,
+    previewAgentCommandBundle,
   });
 
   const { ribbon, statusModeLabel } = useWorkbookToolbar({
