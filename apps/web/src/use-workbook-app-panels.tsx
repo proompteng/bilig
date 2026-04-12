@@ -237,7 +237,7 @@ export function useWorkbookAppPanels(input: {
             <Button
               className={cn(
                 workbookHeaderActionButtonClass({ active: false }),
-                "mb-2 ml-auto shrink-0",
+                "ml-auto shrink-0 self-center",
               )}
               data-testid="workbook-agent-new-thread"
               type="button"
