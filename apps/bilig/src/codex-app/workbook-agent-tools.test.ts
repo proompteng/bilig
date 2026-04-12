@@ -925,6 +925,96 @@ describe("workbook agent tools", () => {
     });
   });
 
+  it("resolves selectors for structural range tools before staging commands", async () => {
+    const engine = await createEngine();
+    engine.setTable({
+      name: "RevenueTable",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Revenue", "Margin"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const setFilterResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-selector-set-filter",
+        tool: "set_filter",
+        arguments: {
+          selector: {
+            kind: "table",
+            table: "RevenueTable",
+          },
+        },
+      },
+    );
+
+    expect(setFilterResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "setFilter",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B3",
+      },
+    });
+
+    const setSortResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-selector-set-sort",
+        tool: "set_sort",
+        arguments: {
+          selector: {
+            kind: "tableColumn",
+            table: "RevenueTable",
+            column: "Margin",
+          },
+          keys: [{ keyAddress: "B2", direction: "desc" }],
+        },
+      },
+    );
+
+    expect(setSortResponse.success).toBe(true);
+    expect(stageCommand).toHaveBeenLastCalledWith({
+      kind: "setSort",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B2",
+        endAddress: "B3",
+      },
+      keys: [{ keyAddress: "B2", direction: "desc" }],
+    });
+  });
+
   it("writes rectangular ranges through renderCommit with normalized formulas", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

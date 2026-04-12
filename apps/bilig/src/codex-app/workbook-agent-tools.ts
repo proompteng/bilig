@@ -57,6 +57,7 @@ import {
 } from "./workbook-selector-resolver.js";
 import {
   parseWorkbookAgentStructuralToolCommand,
+  sortToolArgsSchema,
   workbookAgentStructuralToolSpecs,
 } from "./workbook-agent-structural-tools.js";
 
@@ -1165,6 +1166,81 @@ export async function handleWorkbookAgentToolCall(
           kind: "moveRange",
           source: resolved.source,
           target: resolved.target,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.setFilter: {
+        const args = rangeOrSelectorSchema.parse(request.arguments);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
+        return await stageCommandResult(context, {
+          kind: "setFilter",
+          range: resolved.range,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.clearFilter: {
+        const args = rangeOrSelectorSchema.parse(request.arguments);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
+        return await stageCommandResult(context, {
+          kind: "clearFilter",
+          range: resolved.range,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.setSort: {
+        const args = sortToolArgsSchema.parse(request.arguments);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args: {
+                ...(args.range ? { range: args.range } : {}),
+                ...(args.selector ? { selector: args.selector } : {}),
+              },
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
+        return await stageCommandResult(context, {
+          kind: "setSort",
+          range: resolved.range,
+          keys: args.keys.map((key) => ({
+            keyAddress: key.keyAddress,
+            direction: key.direction,
+          })),
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.clearSort: {
+        const args = rangeOrSelectorSchema.parse(request.arguments);
+        const resolved = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            resolveRangeOrSelectorRequest({
+              runtime,
+              args,
+              uiContext: context.uiContext,
+            }),
+        );
+        ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS);
+        return await stageCommandResult(context, {
+          kind: "clearSort",
+          range: resolved.range,
         });
       }
       default:

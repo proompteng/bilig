@@ -1,5 +1,3 @@
-import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { CellRangeRef } from "@bilig/protocol";
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   normalizeWorkbookAgentToolName,
@@ -14,6 +12,11 @@ import {
   updateRowMetadataArgsSchema,
 } from "@bilig/zero-sync";
 import { z } from "zod";
+import {
+  cellRangeRefJsonSchema,
+  workbookSemanticSelectorJsonSchema,
+} from "./workbook-agent-selector-tooling.js";
+import { workbookSemanticSelectorSchema } from "./workbook-selector-resolver.js";
 
 const sheetMutationToolArgsSchema = z.object({
   name: z.string().trim().min(1),
@@ -60,7 +63,7 @@ const columnMetadataToolArgsSchema = z
     message: "width or hidden is required",
   });
 
-const rangeToolArgsSchema = z.object({
+export const rangeToolArgsSchema = z.object({
   range: z.object({
     sheetName: z.string().min(1),
     startAddress: z.string().min(1),
@@ -68,30 +71,22 @@ const rangeToolArgsSchema = z.object({
   }),
 });
 
-const sortToolArgsSchema = rangeToolArgsSchema.extend({
-  keys: z
-    .array(
-      z.object({
-        keyAddress: z.string().trim().min(1),
-        direction: z.enum(["asc", "desc"]),
-      }),
-    )
-    .min(1),
-});
-
-function normalizeRange(range: CellRangeRef): CellRangeRef {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
-  const startRow = Math.min(start.row, end.row);
-  const endRow = Math.max(start.row, end.row);
-  const startCol = Math.min(start.col, end.col);
-  const endCol = Math.max(start.col, end.col);
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-  };
-}
+export const sortToolArgsSchema = z
+  .object({
+    range: rangeToolArgsSchema.shape.range.optional(),
+    selector: workbookSemanticSelectorSchema.optional(),
+    keys: z
+      .array(
+        z.object({
+          keyAddress: z.string().trim().min(1),
+          direction: z.enum(["asc", "desc"]),
+        }),
+      )
+      .min(1),
+  })
+  .refine((value) => (value.range ? 1 : 0) + (value.selector ? 1 : 0) === 1, {
+    message: "Provide exactly one of range or selector",
+  });
 
 export const workbookAgentStructuralToolSpecs = [
   {
@@ -208,18 +203,9 @@ export const workbookAgentStructuralToolSpecs = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["range"],
       properties: {
-        range: {
-          type: "object",
-          additionalProperties: false,
-          required: ["sheetName", "startAddress", "endAddress"],
-          properties: {
-            sheetName: { type: "string" },
-            startAddress: { type: "string" },
-            endAddress: { type: "string" },
-          },
-        },
+        range: cellRangeRefJsonSchema,
+        selector: workbookSemanticSelectorJsonSchema,
       },
     },
   },
@@ -229,18 +215,9 @@ export const workbookAgentStructuralToolSpecs = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["range"],
       properties: {
-        range: {
-          type: "object",
-          additionalProperties: false,
-          required: ["sheetName", "startAddress", "endAddress"],
-          properties: {
-            sheetName: { type: "string" },
-            startAddress: { type: "string" },
-            endAddress: { type: "string" },
-          },
-        },
+        range: cellRangeRefJsonSchema,
+        selector: workbookSemanticSelectorJsonSchema,
       },
     },
   },
@@ -250,18 +227,10 @@ export const workbookAgentStructuralToolSpecs = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["range", "keys"],
+      required: ["keys"],
       properties: {
-        range: {
-          type: "object",
-          additionalProperties: false,
-          required: ["sheetName", "startAddress", "endAddress"],
-          properties: {
-            sheetName: { type: "string" },
-            startAddress: { type: "string" },
-            endAddress: { type: "string" },
-          },
-        },
+        range: cellRangeRefJsonSchema,
+        selector: workbookSemanticSelectorJsonSchema,
         keys: {
           type: "array",
           minItems: 1,
@@ -284,18 +253,9 @@ export const workbookAgentStructuralToolSpecs = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["range"],
       properties: {
-        range: {
-          type: "object",
-          additionalProperties: false,
-          required: ["sheetName", "startAddress", "endAddress"],
-          properties: {
-            sheetName: { type: "string" },
-            startAddress: { type: "string" },
-            endAddress: { type: "string" },
-          },
-        },
+        range: cellRangeRefJsonSchema,
+        selector: workbookSemanticSelectorJsonSchema,
       },
     },
   },
@@ -412,38 +372,6 @@ export function parseWorkbookAgentStructuralToolCommand(
         sheetName: args.sheetName,
         rows: Math.max(0, Math.round(args.rows)),
         cols: Math.max(0, Math.round(args.cols)),
-      };
-    }
-    case WORKBOOK_AGENT_TOOL_NAMES.setFilter: {
-      const args = rangeToolArgsSchema.parse(request.arguments);
-      return {
-        kind: "setFilter",
-        range: normalizeRange(args.range),
-      };
-    }
-    case WORKBOOK_AGENT_TOOL_NAMES.clearFilter: {
-      const args = rangeToolArgsSchema.parse(request.arguments);
-      return {
-        kind: "clearFilter",
-        range: normalizeRange(args.range),
-      };
-    }
-    case WORKBOOK_AGENT_TOOL_NAMES.setSort: {
-      const args = sortToolArgsSchema.parse(request.arguments);
-      return {
-        kind: "setSort",
-        range: normalizeRange(args.range),
-        keys: args.keys.map((key) => ({
-          keyAddress: key.keyAddress,
-          direction: key.direction,
-        })),
-      };
-    }
-    case WORKBOOK_AGENT_TOOL_NAMES.clearSort: {
-      const args = rangeToolArgsSchema.parse(request.arguments);
-      return {
-        kind: "clearSort",
-        range: normalizeRange(args.range),
       };
     }
     case WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata: {
