@@ -8,6 +8,7 @@ export interface UpsertWorkbookPresenceInput {
   readonly documentId: string;
   readonly sessionId: string;
   readonly userId: string;
+  readonly presenceClientId?: string | null;
   readonly sheetId?: number | null;
   readonly sheetName?: string | null;
   readonly address?: string | null;
@@ -17,13 +18,14 @@ export interface UpsertWorkbookPresenceInput {
 export async function ensureWorkbookPresenceSchema(db: Queryable): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS presence_coarse (
-      workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      sheet_id INTEGER,
-      sheet_name TEXT,
-      address TEXT,
-      selection_json JSONB,
+        workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        presence_client_id TEXT,
+        sheet_id INTEGER,
+        sheet_name TEXT,
+        address TEXT,
+        selection_json JSONB,
       updated_at BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, session_id)
     );
@@ -34,6 +36,7 @@ export async function ensureWorkbookPresenceSchema(db: Queryable): Promise<void>
   await db.query(
     `CREATE INDEX IF NOT EXISTS presence_coarse_updated_idx ON presence_coarse(updated_at);`,
   );
+  await db.query(`ALTER TABLE presence_coarse ADD COLUMN IF NOT EXISTS presence_client_id TEXT;`);
 }
 
 export async function resolveWorkbookPresenceSheetRef(
@@ -54,16 +57,18 @@ export async function upsertWorkbookPresence(
         workbook_id,
         session_id,
         user_id,
+        presence_client_id,
         sheet_id,
         sheet_name,
         address,
         selection_json,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (workbook_id, session_id)
       DO UPDATE SET
         user_id = EXCLUDED.user_id,
+        presence_client_id = EXCLUDED.presence_client_id,
         sheet_id = EXCLUDED.sheet_id,
         sheet_name = EXCLUDED.sheet_name,
         address = EXCLUDED.address,
@@ -74,6 +79,7 @@ export async function upsertWorkbookPresence(
       input.documentId,
       input.sessionId,
       input.userId,
+      input.presenceClientId ?? null,
       sheetRef.sheetId,
       sheetRef.sheetName,
       input.address ?? null,

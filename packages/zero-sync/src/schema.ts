@@ -123,6 +123,7 @@ const presenceCoarse = table("presence_coarse")
     workbookId: string().from("workbook_id"),
     sessionId: string().from("session_id"),
     userId: string().from("user_id"),
+    presenceClientId: string().from("presence_client_id").optional(),
     sheetId: number().from("sheet_id").optional(),
     sheetName: string().from("sheet_name").optional(),
     address: string().optional(),

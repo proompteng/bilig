@@ -21,6 +21,7 @@ function renderHarness(host: HTMLElement) {
     const panels = useWorkbookAppPanels({
       documentId: "doc-1",
       currentUserId: "alex@example.com",
+      presenceClientId: "presence:self",
       replicaId: "replica-1",
       selection: {
         sheetName: "Sheet1",

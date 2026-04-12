@@ -5,6 +5,7 @@ export const WORKBOOK_PRESENCE_STALE_TICK_MS = 5_000;
 export interface WorkbookPresenceCoarseRow {
   readonly sessionId: string;
   readonly userId: string;
+  readonly presenceClientId: string | null;
   readonly sheetId: number | null;
   readonly sheetName: string | null;
   readonly address: string | null;
@@ -33,6 +34,7 @@ function normalizeWorkbookPresenceCoarseRow(value: unknown): WorkbookPresenceCoa
   }
   const sessionId = value["sessionId"];
   const userId = value["userId"];
+  const presenceClientId = value["presenceClientId"];
   const sheetId = value["sheetId"];
   const sheetName = value["sheetName"];
   const address = value["address"];
@@ -47,6 +49,7 @@ function normalizeWorkbookPresenceCoarseRow(value: unknown): WorkbookPresenceCoa
   return {
     sessionId,
     userId,
+    presenceClientId: typeof presenceClientId === "string" ? presenceClientId : null,
     sheetId: typeof sheetId === "number" ? sheetId : null,
     sheetName: typeof sheetName === "string" ? sheetName : null,
     address: typeof address === "string" ? address : null,
@@ -110,6 +113,7 @@ function hashToneIndex(value: string): number {
 export function selectActiveWorkbookCollaborators(input: {
   readonly rows: readonly WorkbookPresenceCoarseRow[];
   readonly currentUserId: string;
+  readonly currentPresenceClientId: string;
   readonly currentSessionId: string;
   readonly knownSheetNames: readonly string[];
   readonly now: number;
@@ -119,6 +123,7 @@ export function selectActiveWorkbookCollaborators(input: {
   const knownSheets = new Set(input.knownSheetNames);
   return input.rows
     .filter((row) => row.userId !== input.currentUserId)
+    .filter((row) => row.presenceClientId !== input.currentPresenceClientId)
     .filter((row) => row.sessionId !== input.currentSessionId)
     .filter((row) => row.updatedAt >= input.now - staleAfterMs)
     .filter((row) => typeof row.sheetName === "string" && knownSheets.has(row.sheetName))

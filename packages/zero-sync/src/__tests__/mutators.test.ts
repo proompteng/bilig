@@ -10,6 +10,7 @@ describe("zero sync mutator schemas", () => {
     const result = updatePresenceArgsSchema.safeParse({
       documentId: "doc-1",
       sessionId: "session-1",
+      presenceClientId: "presence:self",
       sheetName: "Sheet1",
       address: "B2",
       selection: {

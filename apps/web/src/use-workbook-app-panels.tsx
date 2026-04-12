@@ -32,6 +32,7 @@ type WorkbookAgentPreviewBundle = (
 export function useWorkbookAppPanels(input: {
   documentId: string;
   currentUserId: string;
+  presenceClientId: string;
   replicaId: string;
   selection: WorkerRuntimeSelection;
   sheetNames: readonly string[];
@@ -52,6 +53,7 @@ export function useWorkbookAppPanels(input: {
     currentUserId,
     documentId,
     getAgentContext,
+    presenceClientId,
     previewAgentBundle,
     remoteSyncAvailable,
     replicaId,
@@ -67,6 +69,7 @@ export function useWorkbookAppPanels(input: {
   const collaborators = useWorkbookPresence({
     documentId,
     currentUserId,
+    currentPresenceClientId: presenceClientId,
     sessionId: `${documentId}:${replicaId}`,
     selection,
     sheetNames,

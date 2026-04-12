@@ -62,6 +62,7 @@ function createMockZeroPresenceHarness(initialValue: unknown): MockZeroPresenceH
 function PresenceHarness(props: {
   documentId: string;
   currentUserId: string;
+  presenceClientId: string;
   sessionId: string;
   selection: { sheetName: string; address: string };
   sheetNames: readonly string[];
@@ -72,6 +73,7 @@ function PresenceHarness(props: {
   const collaborators = useWorkbookPresence({
     documentId: props.documentId,
     currentUserId: props.currentUserId,
+    currentPresenceClientId: props.presenceClientId,
     sessionId: props.sessionId,
     selection: props.selection,
     sheetNames: props.sheetNames,
@@ -93,6 +95,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:other",
         userId: "amy.smith@example.com",
+        presenceClientId: "presence:other",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "B7",
@@ -102,6 +105,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:self",
         userId: "me@example.com",
+        presenceClientId: "presence:self",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "A1",
@@ -119,6 +123,7 @@ describe("workbook presence", () => {
         <PresenceHarness
           documentId="doc-1"
           currentUserId="me@example.com"
+          presenceClientId="presence:self"
           enabled
           selection={{ sheetName: "Sheet1", address: "A1" }}
           sessionId="doc-1:browser:self"
@@ -134,6 +139,7 @@ describe("workbook presence", () => {
       args: {
         documentId: "doc-1",
         sessionId: "doc-1:browser:self",
+        presenceClientId: "presence:self",
         sheetName: "Sheet1",
         address: "A1",
         selection: {
@@ -163,6 +169,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:stale-self",
         userId: "guest:facefeed",
+        presenceClientId: "presence:self",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "E35",
@@ -172,6 +179,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:self",
         userId: "guest:facefeed",
+        presenceClientId: "presence:self",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "A1",
@@ -181,6 +189,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:other",
         userId: "guest:deadbeef",
+        presenceClientId: "presence:other",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "B7",
@@ -197,6 +206,7 @@ describe("workbook presence", () => {
         <PresenceHarness
           documentId="doc-1"
           currentUserId="guest:facefeed"
+          presenceClientId="presence:self"
           enabled
           selection={{ sheetName: "Sheet1", address: "A1" }}
           sessionId="doc-1:browser:self"
@@ -217,6 +227,59 @@ describe("workbook presence", () => {
     });
   });
 
+  it("does not render refreshed guest rows from the same browser presence client", async () => {
+    const presence = createMockZeroPresenceHarness([
+      {
+        sessionId: "doc-1:browser:stale-guest",
+        userId: "guest:ec9c",
+        presenceClientId: "presence:self",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "B19",
+        selectionJson: { sheetName: "Sheet1", address: "B19" },
+        updatedAt: Date.now(),
+      },
+      {
+        sessionId: "doc-1:browser:other",
+        userId: "guest:cab7",
+        presenceClientId: "presence:other",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        address: "E35",
+        selectionJson: { sheetName: "Sheet1", address: "E35" },
+        updatedAt: Date.now(),
+      },
+    ]);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <PresenceHarness
+          documentId="doc-1"
+          currentUserId="guest:fresh"
+          presenceClientId="presence:self"
+          enabled
+          selection={{ sheetName: "Sheet1", address: "A1" }}
+          sessionId="doc-1:browser:self"
+          sheetNames={["Sheet1"]}
+          zero={presence.zero}
+          onJump={() => {}}
+        />,
+      );
+    });
+
+    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]?.textContent).toContain("Guest CAB7");
+    expect(host.textContent).not.toContain("Guest EC9C");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("drops stale collaborators and keeps publishing heartbeat updates", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-06T12:00:00.000Z"));
@@ -225,6 +288,7 @@ describe("workbook presence", () => {
       {
         sessionId: "doc-1:browser:other",
         userId: "guest:deadbeef",
+        presenceClientId: "presence:other",
         sheetId: 1,
         sheetName: "Sheet1",
         address: "C9",
@@ -241,6 +305,7 @@ describe("workbook presence", () => {
         <PresenceHarness
           documentId="doc-1"
           currentUserId="guest:self"
+          presenceClientId="presence:self"
           enabled
           selection={{ sheetName: "Sheet1", address: "A1" }}
           sessionId="doc-1:browser:self"
@@ -266,6 +331,7 @@ describe("workbook presence", () => {
         {
           sessionId: "doc-1:browser:other",
           userId: "guest:deadbeef",
+          presenceClientId: "presence:other",
           sheetId: 1,
           sheetName: "Missing",
           address: "C9",
@@ -275,6 +341,7 @@ describe("workbook presence", () => {
         {
           sessionId: "doc-1:browser:other-2",
           userId: "guest:facefeed",
+          presenceClientId: "presence:other-2",
           sheetId: 1,
           sheetName: "Sheet1",
           address: "D4",

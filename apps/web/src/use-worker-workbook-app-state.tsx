@@ -53,6 +53,7 @@ import { useWorkbookEditorConflict } from "./use-workbook-editor-conflict.js";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
 import { registerRuntimeDisposalHandlers } from "./runtime-disposal-handlers.js";
 import { useWorkbookLocalPersistenceHandoff } from "./use-workbook-local-persistence-handoff.js";
+import { loadOrCreateWorkbookPresenceClientId } from "./workbook-presence-client.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -103,6 +104,7 @@ export function useWorkerWorkbookAppState(input: {
     [zero],
   );
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
+  const presenceClientId = useMemo(() => loadOrCreateWorkbookPresenceClientId(), []);
   const initialSelection = useMemo(() => loadPersistedSelection(documentId), [documentId]);
   const perfSession = useMemo(() => createWorkbookPerfSession({ documentId }), [documentId]);
 
@@ -702,6 +704,7 @@ export function useWorkerWorkbookAppState(input: {
   } = useWorkbookAppPanels({
     currentUserId: runtimeConfig.currentUserId,
     documentId,
+    presenceClientId,
     replicaId,
     selection,
     sheetNames,

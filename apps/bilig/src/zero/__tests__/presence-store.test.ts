@@ -94,6 +94,7 @@ describe("presence-store", () => {
       documentId: "doc-1",
       sessionId: "doc-1:browser:test",
       userId: "alex@example.com",
+      presenceClientId: "presence:self",
       sheetName: "Sheet1",
       address: "B2",
       selection: { sheetName: "Sheet1", address: "B2" },
@@ -103,16 +104,17 @@ describe("presence-store", () => {
 
     const query = latestQuery(queryable);
     expect(query.text).toContain("INSERT INTO presence_coarse");
-    expect(query.values?.slice(0, 7)).toEqual([
+    expect(query.values?.slice(0, 8)).toEqual([
       "doc-1",
       "doc-1:browser:test",
       "alex@example.com",
+      "presence:self",
       3,
       "Sheet1",
       "B2",
       JSON.stringify({ sheetName: "Sheet1", address: "B2" }),
     ]);
-    expect(typeof query.values?.[7]).toBe("number");
+    expect(typeof query.values?.[8]).toBe("number");
   });
 
   it("routes workbook.updatePresence through the server mutator path", async () => {
@@ -133,6 +135,7 @@ describe("presence-store", () => {
       {
         documentId: "doc-1",
         sessionId: "doc-1:browser:test",
+        presenceClientId: "presence:self",
         sheetName: "Sheet1",
         address: "C4",
         selection: { sheetName: "Sheet1", address: "C4" },
@@ -146,10 +149,11 @@ describe("presence-store", () => {
 
     const query = latestQuery(queryable);
     expect(query.text).toContain("INSERT INTO presence_coarse");
-    expect(query.values?.slice(0, 7)).toEqual([
+    expect(query.values?.slice(0, 8)).toEqual([
       "doc-1",
       "doc-1:browser:test",
       "sam@example.com",
+      "presence:self",
       5,
       "Sheet1",
       "C4",
@@ -177,6 +181,7 @@ describe("presence-store", () => {
       {
         documentId: "doc-1",
         sessionId: "doc-1:browser:test",
+        presenceClientId: "presence:self",
         sheetName: "Sheet1",
         address: "A1",
         selection: { sheetName: "Sheet1", address: "A1" },

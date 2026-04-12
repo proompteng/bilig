@@ -47,13 +47,23 @@ function observeZeroMutationResult(result: unknown): void {
 export function useWorkbookPresence(input: {
   readonly documentId: string;
   readonly currentUserId: string;
+  readonly currentPresenceClientId: string;
   readonly sessionId: string;
   readonly selection: WorkerRuntimeSelection;
   readonly sheetNames: readonly string[];
   readonly zero: ZeroPresenceSource;
   readonly enabled: boolean;
 }): readonly WorkbookCollaboratorPresence[] {
-  const { currentUserId, documentId, enabled, selection, sessionId, sheetNames, zero } = input;
+  const {
+    currentPresenceClientId,
+    currentUserId,
+    documentId,
+    enabled,
+    selection,
+    sessionId,
+    sheetNames,
+    zero,
+  } = input;
   const [presenceRows, setPresenceRows] = useState(
     [] as readonly ReturnType<typeof normalizeWorkbookPresenceRows>[number][],
   );
@@ -71,13 +81,14 @@ export function useWorkbookPresence(input: {
         mutators.workbook.updatePresence({
           documentId,
           sessionId,
+          presenceClientId: currentPresenceClientId,
           sheetName: latestSelectionRef.current.sheetName,
           address: latestSelectionRef.current.address,
           selection: latestSelectionRef.current,
         }),
       ),
     );
-  }, [documentId, enabled, sessionId, zero]);
+  }, [currentPresenceClientId, documentId, enabled, sessionId, zero]);
 
   useEffect(() => {
     if (!enabled) {
@@ -137,11 +148,12 @@ export function useWorkbookPresence(input: {
     () =>
       selectActiveWorkbookCollaborators({
         rows: presenceRows,
+        currentPresenceClientId,
         currentUserId,
         currentSessionId: sessionId,
         knownSheetNames: sheetNames,
         now,
       }),
-    [currentUserId, now, presenceRows, sessionId, sheetNames],
+    [currentPresenceClientId, currentUserId, now, presenceRows, sessionId, sheetNames],
   );
 }

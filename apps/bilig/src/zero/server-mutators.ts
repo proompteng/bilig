@@ -869,6 +869,7 @@ export async function handleServerMutator(
         documentId: parsed.documentId,
         sessionId: parsed.sessionId,
         userId: session?.userID ?? "system",
+        presenceClientId: parsed.presenceClientId ?? null,
         sheetId: parsed.sheetId ?? null,
         sheetName: parsed.sheetName ?? null,
         address: parsed.address ?? null,
