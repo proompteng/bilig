@@ -186,7 +186,7 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
 
 async function waitForWorkflowStatus(
   service: WorkbookAgentService,
-  sessionId: string,
+  threadId: string,
   userId: string,
   status: "running" | "completed" | "failed" | "cancelled",
 ): Promise<ReturnType<WorkbookAgentService["getSnapshot"]>> {
@@ -194,7 +194,7 @@ async function waitForWorkflowStatus(
     expect(
       service.getSnapshot({
         documentId: "doc-1",
-        sessionId,
+        threadId,
         session: {
           userID: userId,
           roles: ["editor"],
@@ -204,7 +204,7 @@ async function waitForWorkflowStatus(
   });
   return service.getSnapshot({
     documentId: "doc-1",
-    sessionId,
+    threadId,
     session: {
       userID: userId,
       roles: ["editor"],
@@ -232,9 +232,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       expect(capturedOptions.current?.args).toEqual([
@@ -302,9 +300,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       expect(snapshot.threadId).toBe("thr-test");
@@ -318,7 +314,7 @@ describe("workbook agent service", () => {
 
       const inProgress = await service.startTurn({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -367,31 +363,34 @@ describe("workbook agent service", () => {
         },
       });
 
-      const finalSnapshot = service.getSnapshot({
-        documentId: "doc-1",
-        sessionId: "agent-session-1",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
+      await vi.waitFor(() => {
+        const finalSnapshot = service.getSnapshot({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+        });
+        expect(finalSnapshot.status).toBe("idle");
+        expect(finalSnapshot.entries).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: "msg-1",
+              kind: "assistant",
+              text: "Checking Sheet1",
+            }),
+          ]),
+        );
       });
-
-      expect(finalSnapshot.status).toBe("idle");
-      expect(finalSnapshot.entries).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: "msg-1",
-            kind: "assistant",
-            text: "Checking Sheet1",
-          }),
-        ]),
-      );
-      expect(events).toContainEqual({
-        type: "entryTextDelta",
-        turnId: "turn-1",
-        entryKind: "assistant",
-        itemId: "msg-1",
-        delta: "Checking Sheet1",
+      await vi.waitFor(() => {
+        expect(events).toContainEqual({
+          type: "entryTextDelta",
+          turnId: "turn-1",
+          entryKind: "assistant",
+          itemId: "msg-1",
+          delta: "Checking Sheet1",
+        });
       });
 
       unsubscribe();
@@ -415,9 +414,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const events: unknown[] = [];
@@ -427,7 +424,7 @@ describe("workbook agent service", () => {
 
       await service.startTurn({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -449,7 +446,7 @@ describe("workbook agent service", () => {
 
       const streamingSnapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -500,30 +497,33 @@ describe("workbook agent service", () => {
         },
       });
 
-      const finalSnapshot = service.getSnapshot({
-        documentId: "doc-1",
-        sessionId: "agent-session-1",
-        session: {
-          userID: "alex@example.com",
-          roles: ["editor"],
-        },
+      await vi.waitFor(() => {
+        const finalSnapshot = service.getSnapshot({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+        });
+        expect(finalSnapshot.entries).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: "reasoning-1",
+              kind: "reasoning",
+              text: "Examining version issues\nConfirming whether staged changes must be cleared first.",
+            }),
+          ]),
+        );
       });
-
-      expect(finalSnapshot.entries).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: "reasoning-1",
-            kind: "reasoning",
-            text: "Examining version issues\nConfirming whether staged changes must be cleared first.",
-          }),
-        ]),
-      );
-      expect(events).toContainEqual({
-        type: "entryTextDelta",
-        turnId: "turn-1",
-        entryKind: "reasoning",
-        itemId: "reasoning-1",
-        delta: "Examining version issues",
+      await vi.waitFor(() => {
+        expect(events).toContainEqual({
+          type: "entryTextDelta",
+          turnId: "turn-1",
+          entryKind: "reasoning",
+          itemId: "reasoning-1",
+          delta: "Examining version issues",
+        });
       });
 
       unsubscribe();
@@ -549,9 +549,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-a",
-        },
+        body: {},
       });
       const sessionB = await service.createSession({
         documentId: "doc-1",
@@ -559,14 +557,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-b",
-        },
+        body: {},
       });
 
       await service.startTurn({
         documentId: "doc-1",
-        sessionId: sessionA.sessionId,
+        threadId: sessionA.threadId,
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -579,7 +575,7 @@ describe("workbook agent service", () => {
       await expect(
         service.startTurn({
           documentId: "doc-1",
-          sessionId: sessionB.sessionId,
+          threadId: sessionB.threadId,
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -623,9 +619,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-a",
-        },
+        body: {},
       });
       const sessionB = await service.createSession({
         documentId: "doc-1",
@@ -633,14 +627,12 @@ describe("workbook agent service", () => {
           userID: "casey@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-b",
-        },
+        body: {},
       });
 
       const firstStartPromise = service.startTurn({
         documentId: "doc-1",
-        sessionId: sessionA.sessionId,
+        threadId: sessionA.threadId,
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -655,7 +647,7 @@ describe("workbook agent service", () => {
       await expect(
         service.startTurn({
           documentId: "doc-1",
-          sessionId: sessionB.sessionId,
+          threadId: sessionB.threadId,
           session: {
             userID: "casey@example.com",
             roles: ["editor"],
@@ -704,7 +696,7 @@ describe("workbook agent service", () => {
             roles: ["editor"],
           },
           body: {
-            sessionId: "agent-session-shared",
+            threadId: "thr-shared",
             scope: "shared",
           },
         }),
@@ -737,7 +729,7 @@ describe("workbook agent service", () => {
             roles: ["editor"],
           },
           body: {
-            sessionId: "agent-session-shared",
+            threadId: "thr-shared",
             scope: "shared",
           },
         }),
@@ -768,15 +760,13 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       await expect(
         service.startWorkflow({
           documentId: "doc-1",
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -854,7 +844,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
           threadId: "thr-test",
         },
       });
@@ -862,7 +851,7 @@ describe("workbook agent service", () => {
       await expect(
         service.applyPendingBundle({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           bundleId: "bundle-auto-1",
           session: {
             userID: "alex@example.com",
@@ -939,7 +928,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
           threadId: "thr-test",
         },
       });
@@ -947,7 +935,7 @@ describe("workbook agent service", () => {
       await expect(
         service.startWorkflow({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -965,7 +953,7 @@ describe("workbook agent service", () => {
       await expect(
         service.applyPendingBundle({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           bundleId: "bundle-auto-1",
           session: {
             userID: "alex@example.com",
@@ -1002,9 +990,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const snapshot = service.getObservabilitySnapshot();
@@ -1069,14 +1055,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1089,7 +1073,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1177,14 +1161,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1198,7 +1180,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1296,14 +1278,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1317,7 +1297,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1438,14 +1418,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1459,7 +1437,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1574,7 +1552,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           context: {
             selection: {
               sheetName: "Imports",
@@ -1592,7 +1570,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1606,7 +1584,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1720,7 +1698,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           context: {
             selection: {
               sheetName: "Revenue",
@@ -1738,7 +1716,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1751,7 +1729,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1844,7 +1822,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -1863,7 +1841,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1876,7 +1854,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -1966,7 +1944,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -1985,7 +1963,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -1998,7 +1976,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2088,14 +2066,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2110,7 +2086,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2205,14 +2181,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2226,7 +2200,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2330,7 +2304,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           context: {
             selection: {
               sheetName: "Revenue",
@@ -2348,7 +2322,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2362,7 +2336,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2467,7 +2441,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           context: {
             selection: {
               sheetName: "Revenue",
@@ -2485,7 +2459,7 @@ describe("workbook agent service", () => {
 
       const runningSnapshot = await service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2499,7 +2473,7 @@ describe("workbook agent service", () => {
       expect(runningSnapshot.workflowRuns[0]?.status).toBe("running");
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2618,9 +2592,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const result = await capturedOptions.current?.handleDynamicToolCall({
@@ -2636,7 +2608,7 @@ describe("workbook agent service", () => {
       expect(result?.success).toBe(true);
       const snapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "completed",
       );
@@ -2729,9 +2701,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const result = await capturedOptions.current?.handleDynamicToolCall({
@@ -2753,7 +2723,7 @@ describe("workbook agent service", () => {
 
       const queuedSnapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2779,7 +2749,7 @@ describe("workbook agent service", () => {
         expect(
           service.getSnapshot({
             documentId: "doc-1",
-            sessionId: "agent-session-1",
+            threadId: "thr-test",
             session: {
               userID: "alex@example.com",
               roles: ["editor"],
@@ -2790,7 +2760,7 @@ describe("workbook agent service", () => {
 
       const snapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2916,7 +2886,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared",
           threadId: "thr-shared",
         },
       });
@@ -2928,14 +2897,13 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-casey",
           threadId: "thr-shared",
         },
       });
 
       await service.startTurn({
         documentId: "doc-1",
-        sessionId: caseySnapshot.sessionId,
+        threadId: caseySnapshot.threadId,
         session: {
           userID: "casey@example.com",
           roles: ["editor"],
@@ -2959,7 +2927,7 @@ describe("workbook agent service", () => {
 
       await service.updateContext({
         documentId: "doc-1",
-        sessionId: caseySnapshot.sessionId,
+        threadId: caseySnapshot.threadId,
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -2993,7 +2961,7 @@ describe("workbook agent service", () => {
       expect(result?.success).toBe(true);
       const snapshot = await waitForWorkflowStatus(
         service,
-        caseySnapshot.sessionId,
+        caseySnapshot.threadId,
         "casey@example.com",
         "completed",
       );
@@ -3090,14 +3058,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const firstWorkflow = service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3112,7 +3078,7 @@ describe("workbook agent service", () => {
       await expect(
         service.startWorkflow({
           documentId: "doc-1",
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -3128,7 +3094,7 @@ describe("workbook agent service", () => {
 
       releaseInspection();
       await firstWorkflow;
-      await waitForWorkflowStatus(service, "agent-session-1", "alex@example.com", "completed");
+      await waitForWorkflowStatus(service, "thr-test", "alex@example.com", "completed");
     } finally {
       releaseInspection();
       await service.close();
@@ -3203,7 +3169,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
           threadId: "thr-existing",
         },
       });
@@ -3211,7 +3176,7 @@ describe("workbook agent service", () => {
       await expect(
         service.startWorkflow({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           session: {
             userID: "alex@example.com",
             roles: ["editor"],
@@ -3296,14 +3261,12 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       const workflowPromise = service.startWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3318,7 +3281,7 @@ describe("workbook agent service", () => {
       expect(queuedSnapshot.workflowRuns[0]?.status).toBe("running");
       const runningSnapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3331,7 +3294,7 @@ describe("workbook agent service", () => {
 
       const cancelledSnapshot = await service.cancelWorkflow({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         runId: runningRunId,
         session: {
           userID: "alex@example.com",
@@ -3357,7 +3320,7 @@ describe("workbook agent service", () => {
       releaseInspection();
       const finalSnapshot = await waitForWorkflowStatus(
         service,
-        "agent-session-1",
+        "thr-test",
         "alex@example.com",
         "cancelled",
       );
@@ -3415,9 +3378,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       fakeCodex.emit({
@@ -3432,7 +3393,7 @@ describe("workbook agent service", () => {
 
       const snapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3470,9 +3431,7 @@ describe("workbook agent service", () => {
           userID: "alex@example.com",
           roles: ["editor"],
         },
-        body: {
-          sessionId: "agent-session-1",
-        },
+        body: {},
       });
 
       fakeCodex.emit({
@@ -3482,7 +3441,7 @@ describe("workbook agent service", () => {
 
       const snapshot = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3554,7 +3513,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3585,7 +3544,7 @@ describe("workbook agent service", () => {
 
       const pending = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3598,7 +3557,7 @@ describe("workbook agent service", () => {
 
       const applied = await service.applyPendingBundle({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         bundleId: pending.id,
         session: {
           userID: "alex@example.com",
@@ -3687,7 +3646,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3718,7 +3677,7 @@ describe("workbook agent service", () => {
 
       const pending = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3731,7 +3690,7 @@ describe("workbook agent service", () => {
       await expect(
         service.applyPendingBundle({
           documentId: "doc-1",
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           bundleId: pending.id,
           session: {
             userID: "alex@example.com",
@@ -3744,7 +3703,7 @@ describe("workbook agent service", () => {
 
       const afterFailure = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3811,7 +3770,7 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
+          threadId: "thr-test",
           executionPolicy: "ownerReview",
           context: {
             selection: {
@@ -3853,7 +3812,7 @@ describe("workbook agent service", () => {
 
       const pending = service.getSnapshot({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         session: {
           userID: "alex@example.com",
           roles: ["editor"],
@@ -3865,7 +3824,7 @@ describe("workbook agent service", () => {
 
       const applied = await service.applyPendingBundle({
         documentId: "doc-1",
-        sessionId: "agent-session-1",
+        threadId: "thr-test",
         bundleId: pending.id,
         session: {
           userID: "alex@example.com",
@@ -4099,7 +4058,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-2",
           threadId: "thr-test",
         },
       });
@@ -4277,14 +4235,13 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-1",
           threadId: "thr-test",
         },
       });
 
       const replayed = await service.replayExecutionRecord({
         documentId: "doc-1",
-        sessionId: snapshot.sessionId,
+        threadId: snapshot.threadId,
         recordId: "run-1",
         session: {
           userID: "alex@example.com",
@@ -4374,7 +4331,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-durable-only",
           threadId: "thr-durable-only",
         },
       });
@@ -4455,7 +4411,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared",
           threadId: "thr-shared",
         },
       });
@@ -4467,7 +4422,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-casey",
           threadId: "thr-shared",
           context: {
             selection: {
@@ -4485,7 +4439,7 @@ describe("workbook agent service", () => {
       });
 
       expect(alexSnapshot.scope).toBe("shared");
-      expect(caseySnapshot.sessionId).toBe("agent-session-shared");
+      expect(caseySnapshot.threadId).toBe("thr-shared");
       expect(caseySnapshot.scope).toBe("shared");
       expect(caseySnapshot.context).toEqual(
         expect.objectContaining({
@@ -4497,7 +4451,7 @@ describe("workbook agent service", () => {
 
       await service.startTurn({
         documentId: "doc-1",
-        sessionId: caseySnapshot.sessionId,
+        threadId: caseySnapshot.threadId,
         session: {
           userID: "casey@example.com",
           roles: ["editor"],
@@ -4583,7 +4537,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared",
           threadId: "thr-shared",
         },
       });
@@ -4658,7 +4611,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared",
           threadId: "thr-shared",
         },
       });
@@ -4666,7 +4618,7 @@ describe("workbook agent service", () => {
       await expect(
         service.applyPendingBundle({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           bundleId: "bundle-shared-1",
           session: {
             userID: "casey@example.com",
@@ -4752,14 +4704,13 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared-low",
           threadId: "thr-shared",
         },
       });
 
       const applied = await service.applyPendingBundle({
         documentId: "doc-1",
-        sessionId: snapshot.sessionId,
+        threadId: snapshot.threadId,
         bundleId: "bundle-shared-low",
         session: {
           userID: "casey@example.com",
@@ -4842,7 +4793,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared-owner",
           threadId: "thr-shared",
         },
       });
@@ -4850,7 +4800,7 @@ describe("workbook agent service", () => {
       await expect(
         service.applyPendingBundle({
           documentId: "doc-1",
-          sessionId: snapshot.sessionId,
+          threadId: snapshot.threadId,
           bundleId: "bundle-shared-review",
           session: {
             userID: "alex@example.com",
@@ -4865,7 +4815,7 @@ describe("workbook agent service", () => {
 
       const reviewed = await service.reviewPendingBundle({
         documentId: "doc-1",
-        sessionId: snapshot.sessionId,
+        threadId: snapshot.threadId,
         bundleId: "bundle-shared-review",
         session: {
           userID: "alex@example.com",
@@ -4888,7 +4838,7 @@ describe("workbook agent service", () => {
 
       const applied = await service.applyPendingBundle({
         documentId: "doc-1",
-        sessionId: snapshot.sessionId,
+        threadId: snapshot.threadId,
         bundleId: "bundle-shared-review",
         session: {
           userID: "alex@example.com",
@@ -4965,14 +4915,13 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-shared-collab",
           threadId: "thr-shared",
         },
       });
 
       const reviewed = await service.reviewPendingBundle({
         documentId: "doc-1",
-        sessionId: snapshot.sessionId,
+        threadId: snapshot.threadId,
         bundleId: "bundle-shared-review",
         session: {
           userID: "pat@example.com",
@@ -5085,7 +5034,6 @@ describe("workbook agent service", () => {
           roles: ["editor"],
         },
         body: {
-          sessionId: "agent-session-private",
           threadId: "thr-private",
         },
       });

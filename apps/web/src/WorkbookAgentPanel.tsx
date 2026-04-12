@@ -16,7 +16,7 @@ import type {
   WorkbookAgentSharedReviewRecommendation,
 } from "@bilig/agent-api";
 import type {
-  WorkbookAgentSessionSnapshot,
+  WorkbookAgentThreadSnapshot,
   WorkbookAgentTimelineCitation,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
@@ -153,7 +153,9 @@ function ThreadSummaryStrip(props: {
               ) : null}
             </div>
             {threadSummary.hasPendingBundle ? (
-              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>Review</span>
+              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
+                Review
+              </span>
             ) : null}
           </Button>
         );
@@ -1062,7 +1064,7 @@ function ExecutionRecordRow(props: {
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
   readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
-  readonly snapshot: WorkbookAgentSessionSnapshot | null;
+  readonly snapshot: WorkbookAgentThreadSnapshot | null;
   readonly activeResponseTurnId: string | null;
   readonly showAssistantProgress: boolean;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
@@ -1154,9 +1156,7 @@ export function WorkbookAgentPanel(props: {
                   </div>
                   {props.executionRecords.length > 0 ? (
                     <div className="pt-1">
-                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>
-                        Recent changes
-                      </div>
+                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>Recent changes</div>
                       <div className="flex flex-col gap-2">
                         {props.executionRecords.slice(0, 5).map((record) => (
                           <ExecutionRecordRow

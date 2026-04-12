@@ -435,7 +435,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.startTurn({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             session,
             body: request.body ?? {},
           });
@@ -459,7 +459,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.updateContext({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             session,
             body: request.body ?? {},
           });
@@ -483,7 +483,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.startWorkflow({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             session,
             body: request.body ?? {},
           });
@@ -506,7 +506,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.cancelWorkflow({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             runId: request.params.runId,
             session,
           });
@@ -529,7 +529,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.interruptTurn({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             session,
           });
         },
@@ -562,7 +562,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
               : undefined;
           return await service.applyPendingBundle({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             bundleId: request.params.bundleId,
             session,
             appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
@@ -594,7 +594,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.reviewPendingBundle({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             bundleId: request.params.bundleId,
             session,
             body: request.body ?? {},
@@ -618,7 +618,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.dismissPendingBundle({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             bundleId: request.params.bundleId,
             session,
           });
@@ -641,7 +641,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         async (service, session, sessionSnapshot) => {
           return await service.replayExecutionRecord({
             documentId: request.params.documentId,
-            sessionId: sessionSnapshot.sessionId,
+            threadId: sessionSnapshot.threadId,
             recordId: request.params.recordId,
             session,
           });

@@ -16,7 +16,7 @@ type WorkbookAgentThreadPersistenceSource = Pick<
   | "listWorkbookThreadWorkflowRuns"
 >;
 
-export interface WorkbookAgentPersistedSessionInput {
+export interface WorkbookAgentPersistedThreadInput {
   readonly documentId: string;
   readonly threadId: string;
   readonly actorUserId: string;
@@ -28,7 +28,7 @@ export interface WorkbookAgentPersistedSessionInput {
   readonly updatedAtUnixMs: number;
 }
 
-export interface WorkbookAgentLoadedThreadSession {
+export interface WorkbookAgentLoadedThreadState {
   readonly threadState: WorkbookAgentThreadStateRecord | null;
   readonly executionRecords: WorkbookAgentExecutionRecord[];
   readonly workflowRuns: WorkbookAgentWorkflowRun[];
@@ -59,12 +59,12 @@ function dedupeTimelineEntries(
   return deduped;
 }
 
-export class WorkbookAgentSessionStore {
+export class WorkbookAgentThreadRepository {
   private readonly pendingSaves = new Map<string, Promise<void>>();
 
   constructor(private readonly source: WorkbookAgentThreadPersistenceSource) {}
 
-  async saveSessionSnapshot(input: WorkbookAgentPersistedSessionInput): Promise<void> {
+  async saveThreadState(input: WorkbookAgentPersistedThreadInput): Promise<void> {
     const key = persistenceKey(input);
     const entries = dedupeTimelineEntries(input.entries);
     const previous = this.pendingSaves.get(key) ?? Promise.resolve();
@@ -94,11 +94,11 @@ export class WorkbookAgentSessionStore {
     }
   }
 
-  async loadThreadSession(input: {
+  async loadThreadState(input: {
     documentId: string;
     actorUserId: string;
     threadId: string;
-  }): Promise<WorkbookAgentLoadedThreadSession> {
+  }): Promise<WorkbookAgentLoadedThreadState> {
     const [threadState, executionRecords, workflowRuns] = await Promise.all([
       this.source.loadWorkbookAgentThreadState(input.documentId, input.actorUserId, input.threadId),
       this.source.listWorkbookAgentThreadRuns(input.documentId, input.actorUserId, input.threadId),

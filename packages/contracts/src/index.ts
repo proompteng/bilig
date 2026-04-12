@@ -246,8 +246,7 @@ export const WorkbookAgentWorkflowRunSchema = Schema.Struct({
 });
 export type WorkbookAgentWorkflowRun = Schema.Schema.Type<typeof WorkbookAgentWorkflowRunSchema>;
 
-export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
-  sessionId: Schema.String,
+export const WorkbookAgentThreadSnapshotSchema = Schema.Struct({
   documentId: Schema.String,
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
@@ -261,14 +260,14 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   executionRecords: Schema.Array(Schema.Unknown),
   workflowRuns: Schema.Array(WorkbookAgentWorkflowRunSchema),
 });
-export type WorkbookAgentSessionSnapshot = Schema.Schema.Type<
-  typeof WorkbookAgentSessionSnapshotSchema
+export type WorkbookAgentThreadSnapshot = Schema.Schema.Type<
+  typeof WorkbookAgentThreadSnapshotSchema
 >;
 
 export const WorkbookAgentStreamEventSchema = Schema.Union(
   Schema.Struct({
     type: Schema.Literal("snapshot"),
-    snapshot: WorkbookAgentSessionSnapshotSchema,
+    snapshot: WorkbookAgentThreadSnapshotSchema,
   }),
   Schema.Struct({
     type: Schema.Literal("entryTextDelta"),

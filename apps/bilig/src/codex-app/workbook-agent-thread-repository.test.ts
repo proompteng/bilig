@@ -3,7 +3,7 @@ import type { WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 import type { WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
 import { createSystemEntry } from "./workbook-agent-session-model.js";
-import { WorkbookAgentSessionStore } from "./workbook-agent-session-store.js";
+import { WorkbookAgentThreadRepository } from "./workbook-agent-thread-repository.js";
 
 function createPersistenceSource(
   overrides: Partial<
@@ -37,16 +37,16 @@ function createPersistenceSource(
   };
 }
 
-describe("WorkbookAgentSessionStore", () => {
+describe("WorkbookAgentThreadRepository", () => {
   it("persists the canonical thread snapshot through ZeroSync", async () => {
     const saveWorkbookAgentThreadState = vi.fn(async () => {});
-    const store = new WorkbookAgentSessionStore(
+    const store = new WorkbookAgentThreadRepository(
       createPersistenceSource({
         saveWorkbookAgentThreadState,
       }),
     );
 
-    await store.saveSessionSnapshot({
+    await store.saveThreadState({
       documentId: "doc-1",
       threadId: "thr-1",
       actorUserId: "alex@example.com",
@@ -104,13 +104,13 @@ describe("WorkbookAgentSessionStore", () => {
       }
       await firstSaveBlocked;
     });
-    const store = new WorkbookAgentSessionStore(
+    const store = new WorkbookAgentThreadRepository(
       createPersistenceSource({
         saveWorkbookAgentThreadState,
       }),
     );
 
-    const firstSave = store.saveSessionSnapshot({
+    const firstSave = store.saveThreadState({
       documentId: "doc-1",
       threadId: "thr-1",
       actorUserId: "alex@example.com",
@@ -121,7 +121,7 @@ describe("WorkbookAgentSessionStore", () => {
       pendingBundle: null,
       updatedAtUnixMs: 100,
     });
-    const secondSave = store.saveSessionSnapshot({
+    const secondSave = store.saveThreadState({
       documentId: "doc-1",
       threadId: "thr-1",
       actorUserId: "alex@example.com",
@@ -144,13 +144,13 @@ describe("WorkbookAgentSessionStore", () => {
 
   it("dedupes duplicate entry ids before persisting", async () => {
     const saveWorkbookAgentThreadState = vi.fn(async () => {});
-    const store = new WorkbookAgentSessionStore(
+    const store = new WorkbookAgentThreadRepository(
       createPersistenceSource({
         saveWorkbookAgentThreadState,
       }),
     );
 
-    await store.saveSessionSnapshot({
+    await store.saveThreadState({
       documentId: "doc-1",
       threadId: "thr-1",
       actorUserId: "alex@example.com",
@@ -231,7 +231,7 @@ describe("WorkbookAgentSessionStore", () => {
     }));
     const listWorkbookAgentThreadRuns = vi.fn(async () => [executionRecord]);
     const listWorkbookThreadWorkflowRuns = vi.fn(async () => [workflowRun]);
-    const store = new WorkbookAgentSessionStore(
+    const store = new WorkbookAgentThreadRepository(
       createPersistenceSource({
         loadWorkbookAgentThreadState,
         listWorkbookAgentThreadRuns,
@@ -239,7 +239,7 @@ describe("WorkbookAgentSessionStore", () => {
       }),
     );
 
-    const loaded = await store.loadThreadSession({
+    const loaded = await store.loadThreadState({
       documentId: "doc-1",
       actorUserId: "alex@example.com",
       threadId: "thr-1",

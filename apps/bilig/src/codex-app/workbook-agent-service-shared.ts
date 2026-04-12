@@ -6,39 +6,41 @@ import type {
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentExecutionPolicy,
-  WorkbookAgentSessionSnapshot,
+  WorkbookAgentThreadSnapshot,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 
-export type MutableWorkbookAgentSessionSnapshot = {
-  -readonly [Key in Exclude<
-    keyof WorkbookAgentSessionSnapshot,
-    "entries" | "pendingBundle" | "executionRecords" | "workflowRuns"
-  >]: WorkbookAgentSessionSnapshot[Key];
-} & {
+export interface WorkbookAgentThreadDurableState {
+  context: WorkbookAgentUiContext | null;
   entries: WorkbookAgentTimelineEntry[];
   pendingBundle: WorkbookAgentCommandBundle | null;
   executionRecords: WorkbookAgentExecutionRecord[];
   workflowRuns: WorkbookAgentWorkflowRun[];
-};
+}
 
-export interface WorkbookAgentSessionState {
-  readonly sessionId: string;
-  readonly documentId: string;
-  readonly userId: string;
-  readonly storageActorUserId: string;
-  scope: "private" | "shared";
-  executionPolicy: WorkbookAgentExecutionPolicy;
-  threadId: string;
-  snapshot: MutableWorkbookAgentSessionSnapshot;
+export interface WorkbookAgentThreadLiveState {
+  activeTurnId: string | null;
+  status: WorkbookAgentThreadSnapshot["status"];
+  lastError: string | null;
   stagedPrivateBundleByTurn: Map<string, WorkbookAgentCommandBundle>;
   optimisticUserEntryIdByTurn: Map<string, string>;
   promptByTurn: Map<string, string>;
   turnActorUserIdByTurn: Map<string, string>;
   turnContextByTurn: Map<string, WorkbookAgentUiContext | null>;
   lastAccessedAt: number;
+}
+
+export interface WorkbookAgentThreadState {
+  readonly documentId: string;
+  readonly userId: string;
+  readonly storageActorUserId: string;
+  scope: "private" | "shared";
+  executionPolicy: WorkbookAgentExecutionPolicy;
+  threadId: string;
+  durable: WorkbookAgentThreadDurableState;
+  live: WorkbookAgentThreadLiveState;
 }
 
 export interface WorkbookAgentWorkflowInput {
@@ -49,7 +51,7 @@ export interface WorkbookAgentWorkflowInput {
 }
 
 export interface QueuedWorkbookAgentWorkflowRun {
-  readonly sessionState: WorkbookAgentSessionState;
+  readonly sessionState: WorkbookAgentThreadState;
   readonly documentId: string;
   readonly runId: string;
   readonly workflowTurnId: string;
@@ -108,6 +110,27 @@ export function mergeTimelineEntries(
     merged[existingIndex] = entry;
   }
   return merged;
+}
+
+export function buildSnapshot(sessionState: WorkbookAgentThreadState): WorkbookAgentThreadSnapshot {
+  return {
+    documentId: sessionState.documentId,
+    threadId: sessionState.threadId,
+    scope: sessionState.scope,
+    executionPolicy: sessionState.executionPolicy,
+    status: sessionState.live.status,
+    activeTurnId: sessionState.live.activeTurnId,
+    lastError: sessionState.live.lastError,
+    context: sessionState.durable.context ? structuredClone(sessionState.durable.context) : null,
+    entries: sessionState.durable.entries.map((entry) => ({ ...entry })),
+    pendingBundle: sessionState.durable.pendingBundle
+      ? structuredClone(sessionState.durable.pendingBundle)
+      : null,
+    executionRecords: sessionState.durable.executionRecords.map((record) =>
+      structuredClone(record),
+    ),
+    workflowRuns: sessionState.durable.workflowRuns.map((run) => structuredClone(run)),
+  };
 }
 
 export function normalizeExecutionPolicy(input: {

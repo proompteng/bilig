@@ -6,7 +6,7 @@ import {
   mapThreadItemToEntry,
 } from "./workbook-agent-session-model.js";
 import {
-  type WorkbookAgentSessionState,
+  type WorkbookAgentThreadState,
   normalizeCodexNotificationErrorMessage,
   removeEntry,
   upsertEntry,
@@ -14,32 +14,32 @@ import {
 
 export async function routeWorkbookAgentCodexNotification(input: {
   notification: CodexServerNotification;
-  listSessions: () => readonly WorkbookAgentSessionState[];
-  tryGetSessionByThreadId: (threadId: string) => WorkbookAgentSessionState | null;
+  listSessions: () => readonly WorkbookAgentThreadState[];
+  tryGetSessionByThreadId: (threadId: string) => WorkbookAgentThreadState | null;
   finalizeCompletedTurn?: (
-    sessionState: WorkbookAgentSessionState,
+    sessionState: WorkbookAgentThreadState,
     turnId: string,
     turnStatus: "completed" | "failed",
   ) => Promise<void>;
-  persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
+  persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>;
   emitSnapshot: (threadId: string) => void;
   emit: (threadId: string, event: WorkbookAgentStreamEvent) => void;
   now: () => number;
 }): Promise<void> {
-  function appendTextDelta(params: {
+  async function appendTextDelta(params: {
     threadId: string;
     turnId: string;
     itemId: string;
     delta: string;
     entryKind: WorkbookAgentTextEntryKind;
-  }): void {
+  }): Promise<void> {
     const sessionState = input.tryGetSessionByThreadId(params.threadId);
     if (!sessionState) {
       return;
     }
-    const existing = sessionState.snapshot.entries.find((entry) => entry.id === params.itemId);
-    sessionState.snapshot.entries = upsertEntry(
-      sessionState.snapshot.entries,
+    const existing = sessionState.durable.entries.find((entry) => entry.id === params.itemId);
+    sessionState.durable.entries = upsertEntry(
+      sessionState.durable.entries,
       createTextTimelineEntry({
         id: params.itemId,
         kind: params.entryKind,
@@ -49,6 +49,7 @@ export async function routeWorkbookAgentCodexNotification(input: {
         citations: existing?.citations ?? [],
       }),
     );
+    await input.persistSessionState(sessionState);
     input.emit(sessionState.threadId, {
       type: "entryTextDelta",
       entryKind: params.entryKind,
@@ -66,9 +67,9 @@ export async function routeWorkbookAgentCodexNotification(input: {
       if (!sessionState) {
         return;
       }
-      sessionState.snapshot.activeTurnId = input.notification.params.turn.id;
-      sessionState.snapshot.status = "inProgress";
-      sessionState.snapshot.lastError = null;
+      sessionState.live.activeTurnId = input.notification.params.turn.id;
+      sessionState.live.status = "inProgress";
+      sessionState.live.lastError = null;
       input.emitSnapshot(sessionState.threadId);
       return;
     }
@@ -77,30 +78,30 @@ export async function routeWorkbookAgentCodexNotification(input: {
       if (!sessionState) {
         return;
       }
-      sessionState.snapshot.activeTurnId = null;
-      sessionState.snapshot.status =
-        input.notification.params.turn.status === "failed" || sessionState.snapshot.lastError
+      sessionState.live.activeTurnId = null;
+      sessionState.live.status =
+        input.notification.params.turn.status === "failed" || sessionState.live.lastError
           ? "failed"
           : "idle";
       if (input.notification.params.turn.error?.message) {
-        sessionState.snapshot.lastError = input.notification.params.turn.error.message;
+        sessionState.live.lastError = input.notification.params.turn.error.message;
       }
       await input.finalizeCompletedTurn?.(
         sessionState,
         input.notification.params.turn.id,
         input.notification.params.turn.status === "failed" ? "failed" : "completed",
       );
-      sessionState.snapshot.status =
-        input.notification.params.turn.status === "failed" || sessionState.snapshot.lastError
+      sessionState.live.status =
+        input.notification.params.turn.status === "failed" || sessionState.live.lastError
           ? "failed"
           : "idle";
       if (input.notification.params.turn.error?.message) {
-        sessionState.snapshot.lastError = input.notification.params.turn.error.message;
+        sessionState.live.lastError = input.notification.params.turn.error.message;
       }
-      sessionState.promptByTurn.delete(input.notification.params.turn.id);
-      sessionState.turnActorUserIdByTurn.delete(input.notification.params.turn.id);
-      sessionState.turnContextByTurn.delete(input.notification.params.turn.id);
-      sessionState.stagedPrivateBundleByTurn.delete(input.notification.params.turn.id);
+      sessionState.live.promptByTurn.delete(input.notification.params.turn.id);
+      sessionState.live.turnActorUserIdByTurn.delete(input.notification.params.turn.id);
+      sessionState.live.turnContextByTurn.delete(input.notification.params.turn.id);
+      sessionState.live.stagedPrivateBundleByTurn.delete(input.notification.params.turn.id);
       await input.persistSessionState(sessionState);
       input.emitSnapshot(sessionState.threadId);
       return;
@@ -111,18 +112,18 @@ export async function routeWorkbookAgentCodexNotification(input: {
       if (!sessionState) {
         return;
       }
-      const optimisticUserEntryId = sessionState.optimisticUserEntryIdByTurn.get(
+      const optimisticUserEntryId = sessionState.live.optimisticUserEntryIdByTurn.get(
         input.notification.params.turnId,
       );
       if (input.notification.params.item.type === "userMessage" && optimisticUserEntryId) {
-        sessionState.snapshot.entries = removeEntry(
-          sessionState.snapshot.entries,
+        sessionState.durable.entries = removeEntry(
+          sessionState.durable.entries,
           optimisticUserEntryId,
         );
-        sessionState.optimisticUserEntryIdByTurn.delete(input.notification.params.turnId);
+        sessionState.live.optimisticUserEntryIdByTurn.delete(input.notification.params.turnId);
       }
-      sessionState.snapshot.entries = upsertEntry(
-        sessionState.snapshot.entries,
+      sessionState.durable.entries = upsertEntry(
+        sessionState.durable.entries,
         mapThreadItemToEntry(input.notification.params.item, input.notification.params.turnId),
       );
       await input.persistSessionState(sessionState);
@@ -130,21 +131,21 @@ export async function routeWorkbookAgentCodexNotification(input: {
       return;
     }
     case "item/agentMessage/delta": {
-      appendTextDelta({
+      await appendTextDelta({
         ...input.notification.params,
         entryKind: "assistant",
       });
       return;
     }
     case "item/plan/delta": {
-      appendTextDelta({
+      await appendTextDelta({
         ...input.notification.params,
         entryKind: "plan",
       });
       return;
     }
     case "item/reasoning/delta": {
-      appendTextDelta({
+      await appendTextDelta({
         ...input.notification.params,
         entryKind: "reasoning",
       });
@@ -154,14 +155,14 @@ export async function routeWorkbookAgentCodexNotification(input: {
       const message = normalizeCodexNotificationErrorMessage(input.notification);
       await Promise.all(
         input.listSessions().map(async (sessionState) => {
-          sessionState.stagedPrivateBundleByTurn.clear();
-          sessionState.snapshot.lastError = message;
-          sessionState.snapshot.status = "failed";
-          sessionState.snapshot.entries = upsertEntry(
-            sessionState.snapshot.entries,
+          sessionState.live.stagedPrivateBundleByTurn.clear();
+          sessionState.live.lastError = message;
+          sessionState.live.status = "failed";
+          sessionState.durable.entries = upsertEntry(
+            sessionState.durable.entries,
             createSystemEntry(
               `system-error:${input.now()}`,
-              sessionState.snapshot.activeTurnId,
+              sessionState.live.activeTurnId,
               message,
             ),
           );

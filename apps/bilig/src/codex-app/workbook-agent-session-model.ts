@@ -4,7 +4,7 @@ import {
   type CodexThreadItem,
 } from "@bilig/agent-api";
 import type {
-  WorkbookAgentSessionSnapshot,
+  WorkbookAgentThreadSnapshot,
   WorkbookAgentTextEntryKind,
   WorkbookAgentTimelineCitation,
   WorkbookAgentTimelineEntry,
@@ -25,7 +25,6 @@ const workbookAgentUiContextSchema = z.object({
 });
 
 export const createSessionBodySchema = z.object({
-  sessionId: z.string().min(1).optional(),
   threadId: z.string().min(1).optional(),
   scope: z.enum(["private", "shared"]).optional(),
   executionPolicy: z.enum(["autoApplySafe", "autoApplyAll", "ownerReview"]).optional(),
@@ -408,15 +407,7 @@ export function mapThreadItemToEntry(
   return createSystemEntry(item.id, turnId, `Codex emitted ${item.type}.`);
 }
 
-type MutableWorkbookAgentSessionSnapshot = {
-  -readonly [Key in keyof WorkbookAgentSessionSnapshot]: Key extends "entries"
-    ? WorkbookAgentTimelineEntry[]
-    : WorkbookAgentSessionSnapshot[Key];
-};
-
-export function cloneSnapshot(
-  snapshot: MutableWorkbookAgentSessionSnapshot,
-): WorkbookAgentSessionSnapshot {
+export function cloneSnapshot(snapshot: WorkbookAgentThreadSnapshot): WorkbookAgentThreadSnapshot {
   return {
     ...snapshot,
     entries: snapshot.entries.map((entry) => ({ ...entry })),

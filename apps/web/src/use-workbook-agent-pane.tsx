@@ -8,12 +8,12 @@ import {
   type WorkbookAgentPreviewSummary,
 } from "@bilig/agent-api";
 import {
-  WorkbookAgentSessionSnapshotSchema,
+  WorkbookAgentThreadSnapshotSchema,
   WorkbookAgentStreamEventSchema,
   WorkbookAgentThreadScopeSchema,
   WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
-  type WorkbookAgentSessionSnapshot,
+  type WorkbookAgentThreadSnapshot,
   type WorkbookAgentStreamEvent,
   type WorkbookAgentTimelineEntry,
   type WorkbookAgentThreadScope,
@@ -111,9 +111,9 @@ function createTextEntryFromDelta(
 }
 
 function updateSnapshotFromDelta(
-  snapshot: WorkbookAgentSessionSnapshot | null,
+  snapshot: WorkbookAgentThreadSnapshot | null,
   event: Extract<WorkbookAgentStreamEvent, { type: "entryTextDelta" }>,
-): WorkbookAgentSessionSnapshot | null {
+): WorkbookAgentThreadSnapshot | null {
   if (!snapshot) {
     return snapshot;
   }
@@ -168,7 +168,7 @@ export function useWorkbookAgentPane(input: {
     zero,
     zeroEnabled = false,
   } = input;
-  const [snapshot, setSnapshot] = useState<WorkbookAgentSessionSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<WorkbookAgentThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -407,7 +407,7 @@ export function useWorkbookAgentPane(input: {
   }, []);
 
   const persistSessionSnapshot = useCallback(
-    (nextSnapshot: WorkbookAgentSessionSnapshot) => {
+    (nextSnapshot: WorkbookAgentThreadSnapshot) => {
       setSnapshot(nextSnapshot);
       setThreadScope(nextSnapshot.scope);
       persistStoredSession(documentId, {
@@ -439,7 +439,7 @@ export function useWorkbookAgentPane(input: {
             setError(null);
             return;
           }
-          setSnapshot((current: WorkbookAgentSessionSnapshot | null) =>
+          setSnapshot((current: WorkbookAgentThreadSnapshot | null) =>
             updateSnapshotFromDelta(current, event),
           );
           if (event.type === "entryTextDelta" && event.entryKind === "assistant") {
@@ -477,7 +477,7 @@ export function useWorkbookAgentPane(input: {
                 ),
               );
             }
-            const nextSnapshot = decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+            const nextSnapshot = decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload);
             persistSessionSnapshot(nextSnapshot);
             connectStream(nextSnapshot.threadId);
           } catch (nextError) {
@@ -511,7 +511,7 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      return decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+      return decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload);
     },
     [documentId],
   );
@@ -528,7 +528,7 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      return decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+      return decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload);
     },
     [documentId],
   );
@@ -642,7 +642,7 @@ export function useWorkbookAgentPane(input: {
             ),
           );
         }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
         perfSession.markFirstAgentApplyVisible?.();
         setError(null);
       } catch (nextError) {
@@ -862,7 +862,7 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
       setPendingUserPrompt(null);
     } catch (nextError) {
       setPendingUserPrompt(null);
@@ -892,7 +892,7 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      setSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      setSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
@@ -923,7 +923,7 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -956,7 +956,7 @@ export function useWorkbookAgentPane(input: {
             ),
           );
         }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
         setError(null);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -984,7 +984,7 @@ export function useWorkbookAgentPane(input: {
             ),
           );
         }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
         setError(null);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -1017,7 +1017,7 @@ export function useWorkbookAgentPane(input: {
             ),
           );
         }
-        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentThreadSnapshotSchema, payload));
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
       } finally {

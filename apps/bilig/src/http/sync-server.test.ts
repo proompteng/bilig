@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
+import type { WorkbookAgentThreadSnapshot } from "@bilig/contracts";
 import { Effect } from "effect";
 import type { DocumentControlService } from "@bilig/runtime-kernel";
 import type { ZeroSyncService } from "../zero/service.js";
@@ -236,10 +236,9 @@ function createDocumentServiceStub(
 }
 
 function createAgentSessionSnapshot(
-  overrides: Partial<WorkbookAgentSessionSnapshot> = {},
-): WorkbookAgentSessionSnapshot {
+  overrides: Partial<WorkbookAgentThreadSnapshot> = {},
+): WorkbookAgentThreadSnapshot {
   return {
-    sessionId: "agent-session-1",
     documentId: "doc-1",
     threadId: "thr-1",
     executionPolicy: "autoApplyAll",
@@ -544,7 +543,6 @@ describe("sync-server workbook agent", () => {
   it("creates or resumes workbook chat threads through the public route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-thread",
         threadId: "thr-shared",
         scope: "shared",
       }),
@@ -589,7 +587,6 @@ describe("sync-server workbook agent", () => {
       );
       expect(response.json()).toEqual(
         expect.objectContaining({
-          sessionId: "agent-session-thread",
           threadId: "thr-shared",
           scope: "shared",
         }),
@@ -602,7 +599,6 @@ describe("sync-server workbook agent", () => {
   it("loads workbook chat thread snapshots through a thread-specific route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-thread",
         threadId: "thr-shared",
         scope: "shared",
       }),
@@ -632,7 +628,6 @@ describe("sync-server workbook agent", () => {
       );
       expect(response.json()).toEqual(
         expect.objectContaining({
-          sessionId: "agent-session-thread",
           threadId: "thr-shared",
           scope: "shared",
         }),
@@ -645,13 +640,11 @@ describe("sync-server workbook agent", () => {
   it("starts workbook chat turns through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const startTurn = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         status: "inProgress",
         activeTurnId: "turn-1",
@@ -699,7 +692,7 @@ describe("sync-server workbook agent", () => {
       expect(startTurn).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           body: expect.objectContaining({
             prompt: "Summarize this thread",
           }),
@@ -713,13 +706,11 @@ describe("sync-server workbook agent", () => {
   it("starts workbook chat workflows through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const startWorkflow = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         workflowRuns: [
           {
@@ -789,7 +780,7 @@ describe("sync-server workbook agent", () => {
       expect(startWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           body: {
             workflowTemplate: "describeRecentChanges",
           },
@@ -814,13 +805,11 @@ describe("sync-server workbook agent", () => {
   it("cancels workbook chat workflows through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const cancelWorkflow = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         workflowRuns: [
           {
@@ -876,7 +865,7 @@ describe("sync-server workbook agent", () => {
       expect(cancelWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           runId: "wf-running-2",
         }),
       );
@@ -899,7 +888,6 @@ describe("sync-server workbook agent", () => {
   it("passes query input through workbook search workflows", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-search",
         threadId: "thr-search",
       }),
     );
@@ -976,7 +964,7 @@ describe("sync-server workbook agent", () => {
       expect(startWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-search",
+          threadId: "thr-search",
           body: {
             workflowTemplate: "searchWorkbookQuery",
             query: "revenue",
@@ -992,13 +980,11 @@ describe("sync-server workbook agent", () => {
   it("reviews workbook agent bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const reviewPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         pendingBundle: {
           id: "bundle-1",
@@ -1048,7 +1034,7 @@ describe("sync-server workbook agent", () => {
       expect(reviewPendingBundle).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           bundleId: "bundle-1",
           body: {
             decision: "approved",
@@ -1072,13 +1058,11 @@ describe("sync-server workbook agent", () => {
   it("updates workbook agent context through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const updateContext = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
@@ -1123,7 +1107,7 @@ describe("sync-server workbook agent", () => {
       expect(updateContext).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           body: {
             context: {
               selection: {
@@ -1148,13 +1132,11 @@ describe("sync-server workbook agent", () => {
   it("interrupts workbook agent turns through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const interruptTurn = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         status: "idle",
         activeTurnId: null,
@@ -1187,7 +1169,7 @@ describe("sync-server workbook agent", () => {
       expect(interruptTurn).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
         }),
       );
     } finally {
@@ -1198,13 +1180,11 @@ describe("sync-server workbook agent", () => {
   it("applies staged workbook bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const applyPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         pendingBundle: null,
       }),
@@ -1240,7 +1220,7 @@ describe("sync-server workbook agent", () => {
       expect(applyPendingBundle).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           bundleId: "bundle-1",
           appliedBy: "user",
           commandIndexes: [1],
@@ -1255,7 +1235,6 @@ describe("sync-server workbook agent", () => {
   it("returns a structured conflict envelope when agent apply rejects a stale preview", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-stale",
         threadId: "thr-stale",
       }),
     );
@@ -1310,13 +1289,11 @@ describe("sync-server workbook agent", () => {
   it("dismisses staged workbook bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const dismissPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
@@ -1347,7 +1324,7 @@ describe("sync-server workbook agent", () => {
       expect(dismissPendingBundle).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           bundleId: "bundle-1",
         }),
       );
@@ -1359,13 +1336,11 @@ describe("sync-server workbook agent", () => {
   it("replays prior execution records through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
       }),
     );
     const replayExecutionRecord = vi.fn(async () =>
       createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
         threadId: "thr-2",
         pendingBundle: {
           id: "bundle-replay-1",
@@ -1445,7 +1420,7 @@ describe("sync-server workbook agent", () => {
       expect(replayExecutionRecord).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-2",
+          threadId: "thr-2",
           recordId: "run-1",
         }),
       );

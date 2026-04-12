@@ -4,53 +4,53 @@ import {
   type CodexDynamicToolCallResult,
   type WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
-import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
+import type { WorkbookAgentThreadSnapshot } from "@bilig/contracts";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
 import {
   handleWorkbookAgentToolCall,
   type WorkbookAgentStartWorkflowRequest,
 } from "./workbook-agent-tools.js";
-import { type WorkbookAgentSessionState, toContextRef } from "./workbook-agent-service-shared.js";
+import { type WorkbookAgentThreadState, toContextRef } from "./workbook-agent-service-shared.js";
 
 export function createWorkbookAgentDynamicToolHandler(input: {
   zeroSyncService: ZeroSyncService;
   now: () => number;
-  getSessionByThreadId: (threadId: string) => WorkbookAgentSessionState;
-  resolveTurnActorUserId: (sessionState: WorkbookAgentSessionState, turnId: string) => string;
+  getSessionByThreadId: (threadId: string) => WorkbookAgentThreadState;
+  resolveTurnActorUserId: (sessionState: WorkbookAgentThreadState, turnId: string) => string;
   resolveTurnContext: (
-    sessionState: WorkbookAgentSessionState,
+    sessionState: WorkbookAgentThreadState,
     turnId: string,
-  ) => WorkbookAgentSessionState["snapshot"]["context"];
+  ) => WorkbookAgentThreadState["durable"]["context"];
   stageReviewBundle: (
-    sessionState: WorkbookAgentSessionState,
+    sessionState: WorkbookAgentThreadState,
     turnId: string,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
   ) => void;
   queuePrivateTurnBundle: (
-    sessionState: WorkbookAgentSessionState,
+    sessionState: WorkbookAgentThreadState,
     turnId: string,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
   ) => void;
   shouldApplyToolBundleImmediately: (
-    sessionState: WorkbookAgentSessionState,
+    sessionState: WorkbookAgentThreadState,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
   ) => boolean;
   applyToolBundleAutomatically: (input: {
-    sessionState: WorkbookAgentSessionState;
+    sessionState: WorkbookAgentThreadState;
     actorUserId: string;
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>;
   }) => Promise<WorkbookAgentExecutionRecord | null>;
-  persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
+  persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>;
   emitSnapshot: (threadId: string) => void;
   startWorkflow: (input: {
     documentId: string;
-    sessionId: string;
+    threadId: string;
     session: SessionIdentity;
     body: WorkbookAgentStartWorkflowRequest & {
-      context?: WorkbookAgentSessionState["snapshot"]["context"];
+      context?: WorkbookAgentThreadState["durable"]["context"];
     };
-  }) => Promise<WorkbookAgentSessionSnapshot>;
+  }) => Promise<WorkbookAgentThreadSnapshot>;
 }): (request: CodexDynamicToolCallRequest) => Promise<CodexDynamicToolCallResult> {
   return async (request: CodexDynamicToolCallRequest) => {
     const sessionState = input.getSessionByThreadId(request.threadId);
@@ -68,9 +68,9 @@ export function createWorkbookAgentDynamicToolHandler(input: {
         stageCommand: async (command) => {
           const previousBundle =
             sessionState.scope === "private"
-              ? (sessionState.stagedPrivateBundleByTurn.get(request.turnId) ??
-                sessionState.snapshot.pendingBundle)
-              : sessionState.snapshot.pendingBundle;
+              ? (sessionState.live.stagedPrivateBundleByTurn.get(request.turnId) ??
+                sessionState.durable.pendingBundle)
+              : sessionState.durable.pendingBundle;
           const baseRevision = await input.zeroSyncService.getWorkbookHeadRevision(
             sessionState.documentId,
           );
@@ -80,7 +80,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
             threadId: sessionState.threadId,
             turnId: request.turnId,
             goalText:
-              sessionState.promptByTurn.get(request.turnId) ??
+              sessionState.live.promptByTurn.get(request.turnId) ??
               "Update workbook from assistant request",
             baseRevision,
             context: toContextRef(requestContext),
@@ -119,12 +119,10 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           };
         },
         startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
-          const previousRunIds = new Set(
-            sessionState.snapshot.workflowRuns.map((run) => run.runId),
-          );
+          const previousRunIds = new Set(sessionState.durable.workflowRuns.map((run) => run.runId));
           const nextSnapshot = await input.startWorkflow({
             documentId: sessionState.documentId,
-            sessionId: sessionState.sessionId,
+            threadId: sessionState.threadId,
             session: {
               userID: requestActorUserId,
               roles: ["editor"],

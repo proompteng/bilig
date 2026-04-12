@@ -152,6 +152,33 @@ describe("EngineMutationService", () => {
     ]);
   });
 
+  it("preserves undo history for workbook and sheet render commits", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "before-render-commit" });
+    await engine.ready();
+
+    engine.renderCommit([
+      { kind: "upsertWorkbook", name: "after-render-commit" },
+      { kind: "upsertSheet", name: "Sheet1", order: 0 },
+      { kind: "upsertCell", sheetName: "Sheet1", addr: "A1", value: 7 },
+    ]);
+
+    expect(engine.exportSnapshot()).toMatchObject({
+      workbook: { name: "after-render-commit" },
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: [{ address: "A1", value: 7 }],
+        },
+      ],
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toMatchObject({
+      workbook: { name: "before-render-commit" },
+      sheets: [],
+    });
+  });
+
   it("captures sheet metadata and cells when building delete-sheet undo ops", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "undo-sheet" });
     await engine.ready();

@@ -19,7 +19,7 @@ import { isWorkflowAbortError, throwIfWorkflowCancelled } from "./workbook-agent
 import { createSystemEntry } from "./workbook-agent-session-model.js";
 import {
   type QueuedWorkbookAgentWorkflowRun,
-  type WorkbookAgentSessionState,
+  type WorkbookAgentThreadState,
   type WorkbookAgentWorkflowInput,
   toContextRef,
   upsertEntry,
@@ -34,15 +34,15 @@ export class WorkbookAgentWorkflowRuntime {
     private readonly options: {
       zeroSyncService: ZeroSyncService;
       now: () => number;
-      touch: (sessionState: WorkbookAgentSessionState) => void;
-      persistSessionState: (sessionState: WorkbookAgentSessionState) => Promise<void>;
+      touch: (sessionState: WorkbookAgentThreadState) => void;
+      persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>;
       emitSnapshot: (threadId: string) => void;
       shouldApplyBundleImmediately: (
-        sessionState: WorkbookAgentSessionState,
+        sessionState: WorkbookAgentThreadState,
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>,
       ) => boolean;
       applyCommandBundleAutomatically: (input: {
-        sessionState: WorkbookAgentSessionState;
+        sessionState: WorkbookAgentThreadState;
         actorUserId: string;
         bundle: ReturnType<typeof createWorkbookAgentCommandBundle>;
       }) => Promise<WorkbookAgentExecutionRecord | null>;
@@ -57,7 +57,7 @@ export class WorkbookAgentWorkflowRuntime {
   ) {}
 
   async startWorkflow(input: {
-    sessionState: WorkbookAgentSessionState;
+    sessionState: WorkbookAgentThreadState;
     documentId: string;
     actorUserId: string;
     workflowTemplate: WorkbookAgentWorkflowRun["workflowTemplate"];
@@ -81,12 +81,12 @@ export class WorkbookAgentWorkflowRuntime {
       now,
       steps: createRunningWorkflowSteps(input.workflowTemplate, now, input.workflowInput),
     });
-    input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-      input.sessionState.snapshot.workflowRuns,
+    input.sessionState.durable.workflowRuns = upsertWorkflowRun(
+      input.sessionState.durable.workflowRuns,
       runningRun,
     );
-    input.sessionState.snapshot.entries = upsertEntry(
-      input.sessionState.snapshot.entries,
+    input.sessionState.durable.entries = upsertEntry(
+      input.sessionState.durable.entries,
       createSystemEntry(
         `system-workflow-start:${runId}`,
         input.workflowTurnId,
@@ -111,7 +111,7 @@ export class WorkbookAgentWorkflowRuntime {
   }
 
   async cancelRunningWorkflow(input: {
-    sessionState: WorkbookAgentSessionState;
+    sessionState: WorkbookAgentThreadState;
     documentId: string;
     runId: string;
     runningWorkflow: WorkbookAgentWorkflowRun;
@@ -128,15 +128,15 @@ export class WorkbookAgentWorkflowRuntime {
       steps: cancelWorkflowSteps(input.runningWorkflow.steps, now),
       artifact: null,
     };
-    input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-      input.sessionState.snapshot.workflowRuns,
+    input.sessionState.durable.workflowRuns = upsertWorkflowRun(
+      input.sessionState.durable.workflowRuns,
       cancelledRun,
     );
-    input.sessionState.snapshot.entries = upsertEntry(
-      input.sessionState.snapshot.entries,
+    input.sessionState.durable.entries = upsertEntry(
+      input.sessionState.durable.entries,
       createSystemEntry(
         `system-workflow-cancel:${input.runId}:${now}`,
-        input.sessionState.snapshot.activeTurnId,
+        input.sessionState.live.activeTurnId,
         `Cancelled workflow: ${input.runningWorkflow.title}`,
       ),
     );
@@ -175,7 +175,7 @@ export class WorkbookAgentWorkflowRuntime {
   }
 
   private async executeQueuedWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): Promise<void> {
-    const currentRun = input.sessionState.snapshot.workflowRuns.find(
+    const currentRun = input.sessionState.durable.workflowRuns.find(
       (run) => run.runId === input.runId,
     );
     if (!currentRun || currentRun.status !== "running") {
@@ -189,13 +189,13 @@ export class WorkbookAgentWorkflowRuntime {
         documentId: input.documentId,
         zeroSyncService: this.options.zeroSyncService,
         workflowTemplate: input.workflowTemplate,
-        context: input.sessionState.snapshot.context,
+        context: input.sessionState.durable.context,
         workflowInput: input.workflowInput,
         signal: abortController.signal,
       });
       throwIfWorkflowCancelled(abortController.signal);
 
-      const latestRun = input.sessionState.snapshot.workflowRuns.find(
+      const latestRun = input.sessionState.durable.workflowRuns.find(
         (run) => run.runId === input.runId,
       );
       if (latestRun?.status === "cancelled") {
@@ -230,7 +230,7 @@ export class WorkbookAgentWorkflowRuntime {
             turnId: input.workflowTurnId,
             goalText: result.goalText ?? result.title,
             baseRevision,
-            context: toContextRef(input.sessionState.snapshot.context),
+            context: toContextRef(input.sessionState.durable.context),
             commands: result.commands,
             now: completedAtUnixMs,
           }),
@@ -250,9 +250,9 @@ export class WorkbookAgentWorkflowRuntime {
             completedSummary = `Applied workflow: ${executionRecord.summary}`;
           }
         } else {
-          input.sessionState.snapshot.pendingBundle = workflowBundle;
-          input.sessionState.snapshot.entries = upsertEntry(
-            input.sessionState.snapshot.entries,
+          input.sessionState.durable.pendingBundle = workflowBundle;
+          input.sessionState.durable.entries = upsertEntry(
+            input.sessionState.durable.entries,
             createSystemEntry(
               `system-preview:${workflowBundle.id}`,
               input.workflowTurnId,
@@ -266,12 +266,12 @@ export class WorkbookAgentWorkflowRuntime {
         ...completedRunBase,
         summary: completedSummary,
       };
-      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-        input.sessionState.snapshot.workflowRuns,
+      input.sessionState.durable.workflowRuns = upsertWorkflowRun(
+        input.sessionState.durable.workflowRuns,
         completedRun,
       );
-      input.sessionState.snapshot.entries = upsertEntry(
-        input.sessionState.snapshot.entries,
+      input.sessionState.durable.entries = upsertEntry(
+        input.sessionState.durable.entries,
         createSystemEntry(
           `system-workflow-complete:${input.runId}`,
           input.workflowTurnId,
@@ -289,7 +289,7 @@ export class WorkbookAgentWorkflowRuntime {
       if (isWorkflowAbortError(error)) {
         return;
       }
-      const latestRun = input.sessionState.snapshot.workflowRuns.find(
+      const latestRun = input.sessionState.durable.workflowRuns.find(
         (run) => run.runId === input.runId,
       );
       if (latestRun?.status === "cancelled") {
@@ -313,12 +313,12 @@ export class WorkbookAgentWorkflowRuntime {
         ),
         artifact: null,
       };
-      input.sessionState.snapshot.workflowRuns = upsertWorkflowRun(
-        input.sessionState.snapshot.workflowRuns,
+      input.sessionState.durable.workflowRuns = upsertWorkflowRun(
+        input.sessionState.durable.workflowRuns,
         failedRun,
       );
-      input.sessionState.snapshot.entries = upsertEntry(
-        input.sessionState.snapshot.entries,
+      input.sessionState.durable.entries = upsertEntry(
+        input.sessionState.durable.entries,
         createSystemEntry(
           `system-workflow-failed:${input.runId}`,
           input.workflowTurnId,

@@ -108,7 +108,6 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
       )
     : undefined;
   return {
-    sessionId: "agent-session-1",
     documentId: "doc-1",
     threadId: "thr-1",
     scope: "private",
@@ -639,7 +638,6 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              sessionId: "agent-session-2",
               threadId: "thr-2",
               scope: "shared",
               entries: [],
@@ -727,7 +725,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -943,7 +940,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1038,7 +1034,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1146,7 +1141,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1250,7 +1244,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1380,7 +1373,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1464,7 +1456,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1605,7 +1596,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1667,7 +1657,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1768,7 +1757,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1917,7 +1905,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -1930,7 +1917,6 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              sessionId: resumeCount === 1 ? "agent-session-1" : "agent-session-2",
               threadId: "thr-1",
             }),
           ),
@@ -1993,7 +1979,6 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              sessionId: "agent-session-2",
               threadId: "thr-1",
             }),
           ),
@@ -2036,7 +2021,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
@@ -2251,7 +2235,6 @@ describe("workbook agent pane", () => {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              sessionId: "agent-session-shared",
               threadId: "thr-shared",
               scope: "shared",
               pendingBundle: {
@@ -2846,7 +2829,6 @@ describe("workbook agent pane", () => {
     window.sessionStorage.setItem(
       "bilig:workbook-agent:doc-1",
       JSON.stringify({
-        sessionId: "agent-session-1",
         threadId: "thr-1",
       }),
     );
