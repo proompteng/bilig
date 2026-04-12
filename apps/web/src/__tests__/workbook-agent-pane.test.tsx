@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
+import { clearWorkbookAgentPreviewCache } from "../workbook-agent-preview-cache.js";
 import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
 
 async function flushToasts(): Promise<void> {
@@ -263,12 +264,14 @@ function AgentHarness(props: {
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   window.sessionStorage.clear();
+  clearWorkbookAgentPreviewCache();
 });
 
 afterEach(() => {
   toast.dismiss();
   vi.restoreAllMocks();
   window.sessionStorage.clear();
+  clearWorkbookAgentPreviewCache();
   document.body.innerHTML = "";
 });
 
@@ -1920,7 +1923,7 @@ describe("workbook agent pane", () => {
     });
   });
 
-  it("auto-applies low-risk preview bundles after the local preview resolves", async () => {
+  it("keeps restored private review items stable on load", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -2105,14 +2108,8 @@ describe("workbook agent pane", () => {
     const applyCall = fetchSpy.mock.calls.find(([input]) =>
       requestUrl(input).endsWith("/bundles/bundle-1/apply"),
     );
-    expect(applyCall).toBeTruthy();
-    expect(applyCall?.[1]?.body).toBe(
-      JSON.stringify({
-        appliedBy: "auto",
-        commandIndexes: [0],
-        preview,
-      }),
-    );
+    expect(applyCall).toBeUndefined();
+    expect(host.textContent).toContain("Apply");
     expect(host.textContent).not.toContain("Executions");
     expect(host.textContent).not.toContain("Replay");
 
@@ -2355,9 +2352,9 @@ describe("workbook agent pane", () => {
     }
     expect(applyButton.disabled).toBe(true);
     expect(host.textContent).toContain(
-      "Only Alex can approve medium/high-risk changes on this shared thread.",
+      "Owner review routes medium/high-risk changes to Alex on this shared thread.",
     );
-    expect(host.textContent).toContain("Awaiting Alex's approval before this shared bundle");
+    expect(host.textContent).toContain("Owner review is in progress with Alex.");
 
     await act(async () => {
       root.unmount();
@@ -2713,7 +2710,7 @@ describe("workbook agent pane", () => {
 
     const approveButton = host.querySelector("[data-testid='workbook-agent-review-approve']");
     expect(approveButton instanceof HTMLButtonElement).toBe(true);
-    expect(host.textContent).toContain("Awaiting Alex's approval before this shared bundle");
+    expect(host.textContent).toContain("Owner review is in progress with Alex.");
 
     await act(async () => {
       if (!(approveButton instanceof HTMLButtonElement)) {

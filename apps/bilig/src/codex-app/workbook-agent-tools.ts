@@ -1,7 +1,5 @@
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
-  formatErrorCode,
-  ValueTag,
   type CellRangeRef,
   type CellNumberFormatInput,
   type CellNumberFormatPreset,
@@ -13,7 +11,6 @@ import type {
   CodexDynamicToolCallRequest,
   CodexDynamicToolCallResult,
   CodexDynamicToolSpec,
-  JsonValue,
   WorkbookAgentCommand,
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
@@ -40,6 +37,11 @@ import {
   summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
+import {
+  inspectWorkbookCell,
+  inspectWorkbookContext,
+  inspectWorkbookRange,
+} from "./workbook-agent-inspection.js";
 
 const MAX_MUTATION_RANGE_CELLS = 400;
 const MAX_READ_RANGE_CELLS = 4000;
@@ -467,99 +469,6 @@ function viewportToRange(sheetName: string, viewport: WorkbookViewport): CellRan
   };
 }
 
-function serializeCellValue(value: {
-  tag: ValueTag;
-  value?: number | boolean | string;
-  code?: number;
-}): JsonValue {
-  switch (value.tag) {
-    case ValueTag.Empty:
-      return null;
-    case ValueTag.Number:
-    case ValueTag.Boolean:
-    case ValueTag.String:
-      return value.value ?? null;
-    case ValueTag.Error:
-      return typeof value.code === "number" ? formatErrorCode(value.code) : "#ERROR!";
-    default:
-      return null;
-  }
-}
-
-function workbookToolContextText(context: WorkbookAgentUiContext | null): string {
-  if (!context) {
-    return "No browser view context is attached to this chat session yet.";
-  }
-  const visibleRange = viewportToRange(context.selection.sheetName, context.viewport);
-  return stringifyJson({
-    selection: context.selection,
-    visibleRange: {
-      sheetName: visibleRange.sheetName,
-      startAddress: visibleRange.startAddress,
-      endAddress: visibleRange.endAddress,
-    },
-  });
-}
-
-async function inspectWorkbookRange(
-  context: WorkbookAgentToolContext,
-  range: CellRangeRef,
-): Promise<CodexDynamicToolCallResult> {
-  const normalizedRange = normalizeRange(range);
-  ensureRangeLimit(normalizedRange, MAX_READ_RANGE_CELLS);
-  const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
-    const rows: JsonValue[] = [];
-    for (let row = normalizedRange.startRow; row <= normalizedRange.endRow; row += 1) {
-      const rowEntries: JsonValue[] = [];
-      for (let col = normalizedRange.startCol; col <= normalizedRange.endCol; col += 1) {
-        const cell = runtime.engine.getCell(normalizedRange.sheetName, formatAddress(row, col));
-        rowEntries.push({
-          address: cell.address,
-          value: serializeCellValue(cell.value),
-          ...(cell.formula !== undefined ? { formula: `=${cell.formula}` } : {}),
-          ...(cell.format !== undefined ? { format: cell.format } : {}),
-        });
-      }
-      rows.push(rowEntries);
-    }
-    return {
-      range: {
-        sheetName: normalizedRange.sheetName,
-        startAddress: normalizedRange.startAddress,
-        endAddress: normalizedRange.endAddress,
-      },
-      rows,
-    };
-  });
-  return textToolResult(stringifyJson(result));
-}
-
-async function inspectWorkbookCell(
-  context: WorkbookAgentToolContext,
-  target: {
-    sheetName: string;
-    address: string;
-  },
-): Promise<CodexDynamicToolCallResult> {
-  const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
-    const cell = runtime.engine.explainCell(target.sheetName, target.address);
-    return {
-      sheetName: cell.sheetName,
-      address: cell.address,
-      value: serializeCellValue(cell.value),
-      formula: cell.formula !== undefined ? `=${cell.formula}` : null,
-      format: cell.format ?? null,
-      version: cell.version,
-      inCycle: cell.inCycle,
-      mode: cell.mode ?? null,
-      topoRank: cell.topoRank ?? null,
-      directPrecedents: [...cell.directPrecedents],
-      directDependents: [...cell.directDependents],
-    };
-  });
-  return textToolResult(stringifyJson(result));
-}
-
 export interface WorkbookAgentToolContext {
   readonly documentId: string;
   readonly session: SessionIdentity;
@@ -583,7 +492,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.getContext,
       description:
-        "Read the current browser workbook context, including the active cell selection and visible viewport.",
+        "Read the current browser workbook context, including selection geometry, the visible viewport, freeze panes, and hidden or resized axes in view.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -603,7 +512,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
       description:
-        "Read a rectangular cell range. Use this before editing a region you have not inspected yet.",
+        "Read a rectangular cell range, including inputs, formulas, style ids, number-format ids, referenced formatting records, and sheet-state metadata for that window.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -617,7 +526,8 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     },
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readSelection,
-      description: "Read the currently selected range from the attached browser workbook context.",
+      description:
+        "Read the currently selected range from the attached browser workbook context with values, formulas, formatting catalogs, and local sheet-state metadata.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -627,7 +537,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange,
       description:
-        "Read the currently visible viewport range from the attached browser workbook context.",
+        "Read the currently visible viewport range from the attached browser workbook context with values, formulas, formatting catalogs, and local sheet-state metadata.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -693,7 +603,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
       description:
-        "Explain one cell, including its current value, formula, version, cycle status, and direct precedents/dependents. Defaults to the current selection when no address is provided.",
+        "Explain one cell, including input, current value, formula, display format, style record, number-format record, version, cycle status, and direct precedents/dependents. Defaults to the current selection when no address is provided.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -1075,7 +985,10 @@ export async function handleWorkbookAgentToolCall(
   try {
     switch (normalizeWorkbookAgentToolName(request.tool)) {
       case WORKBOOK_AGENT_TOOL_NAMES.getContext: {
-        return textToolResult(workbookToolContextText(context.uiContext));
+        const text = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) =>
+          inspectWorkbookContext(runtime, context.uiContext),
+        );
+        return textToolResult(text);
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readWorkbook: {
         const summary = await context.zeroSyncService.inspectWorkbook(
@@ -1090,17 +1003,35 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readRange: {
         const args = readRangeToolArgsSchema.parse(request.arguments);
-        return await inspectWorkbookRange(context, {
+        const range = {
           sheetName: args.sheetName,
           startAddress: args.startAddress,
           endAddress: args.endAddress,
-        });
+        };
+        ensureRangeLimit(range, MAX_READ_RANGE_CELLS);
+        const result = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => inspectWorkbookRange(runtime, range),
+        );
+        return textToolResult(stringifyJson(result));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readSelection: {
-        return await inspectWorkbookRange(context, resolveSelectionRange(context.uiContext));
+        const range = resolveSelectionRange(context.uiContext);
+        ensureRangeLimit(range, MAX_READ_RANGE_CELLS);
+        const result = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => inspectWorkbookRange(runtime, range),
+        );
+        return textToolResult(stringifyJson(result));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange: {
-        return await inspectWorkbookRange(context, resolveVisibleRange(context.uiContext));
+        const range = resolveVisibleRange(context.uiContext);
+        ensureRangeLimit(range, MAX_READ_RANGE_CELLS);
+        const result = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => inspectWorkbookRange(runtime, range),
+        );
+        return textToolResult(stringifyJson(result));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges: {
         const args = readRecentChangesToolArgsSchema.parse(request.arguments);
@@ -1125,7 +1056,11 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments);
-        return await inspectWorkbookCell(context, resolveInspectionTarget(context.uiContext, args));
+        const result = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) => inspectWorkbookCell(runtime, resolveInspectionTarget(context.uiContext, args)),
+        );
+        return textToolResult(stringifyJson(result));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues: {
         const args = formulaIssueToolArgsSchema.parse(request.arguments);

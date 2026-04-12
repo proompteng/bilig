@@ -5,6 +5,7 @@
     "outDir": "dist",
     "paths": {
       "@bilig/binary-protocol": ["../binary-protocol/src/index.ts"],
+      "@bilig/contracts": ["../contracts/src/index.ts"],
       "@bilig/core": ["../core/src/index.ts"],
       "@bilig/formula": ["../formula/src/index.ts"],
       "@bilig/protocol": ["../protocol/src/index.ts"]
@@ -13,6 +14,9 @@
   "references": [
     {
       "path": "../binary-protocol"
+    },
+    {
+      "path": "../contracts"
     },
     {
       "path": "../core"

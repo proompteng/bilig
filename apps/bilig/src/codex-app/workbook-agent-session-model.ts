@@ -27,6 +27,7 @@ export const createSessionBodySchema = z.object({
   sessionId: z.string().min(1).optional(),
   threadId: z.string().min(1).optional(),
   scope: z.enum(["private", "shared"]).optional(),
+  executionPolicy: z.enum(["autoApplySafe", "autoApplyAll", "ownerReview"]).optional(),
   context: workbookAgentUiContextSchema.optional(),
 });
 

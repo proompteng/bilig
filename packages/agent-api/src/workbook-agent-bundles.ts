@@ -963,6 +963,14 @@ export function projectWorkbookAgentBundle(input: {
   if (selectedIndexes.length === 0) {
     return null;
   }
+  if (selectedIndexes.length === input.bundle.commands.length) {
+    return {
+      ...structuredClone(input.bundle),
+      ...(input.bundleId ? { id: input.bundleId } : {}),
+      ...(input.baseRevision !== undefined ? { baseRevision: input.baseRevision } : {}),
+      ...(input.now !== undefined ? { createdAtUnixMs: input.now } : {}),
+    };
+  }
   return createWorkbookAgentCommandBundle({
     ...(input.bundleId ? { bundleId: input.bundleId } : {}),
     documentId: input.bundle.documentId,

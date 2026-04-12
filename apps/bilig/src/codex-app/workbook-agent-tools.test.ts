@@ -19,6 +19,24 @@ async function createEngine(): Promise<SpreadsheetEngine> {
   engine.setCellFormula("Sheet1", "B1", "SUM(A1:A1)");
   engine.setCellFormula("Sheet1", "C1", "1/0");
   engine.setCellFormula("Sheet1", "D1", "LEN(A1:A2)");
+  engine.setRangeStyle(
+    { sheetName: "Sheet1", startAddress: "A1", endAddress: "B1" },
+    {
+      fill: { backgroundColor: "#fef3c7" },
+      font: { bold: true },
+    },
+  );
+  engine.setRangeNumberFormat(
+    { sheetName: "Sheet1", startAddress: "A1", endAddress: "B1" },
+    {
+      kind: "currency",
+      currency: "USD",
+      decimals: 2,
+      useGrouping: true,
+      negativeStyle: "minus",
+      zeroStyle: "zero",
+    },
+  );
   engine.createSheet("Ops Search");
   engine.setCellValue("Ops Search", "A1", "Northwind Import");
   return engine;
@@ -313,10 +331,66 @@ describe("workbook agent tools", () => {
     expect(textItem?.type).toBe("inputText");
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "B2"');
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "D5"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"styleId"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"sheetState"');
+  });
+
+  it("reads workbook context with selection geometry and sheet state", async () => {
+    const engine = await createEngine();
+    engine.updateRowMetadata("Sheet1", 1, 2, 28, true);
+    engine.updateColumnMetadata("Sheet1", 2, 1, 140, true);
+    engine.setFreezePane("Sheet1", 1, 0);
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B2",
+            range: {
+              startAddress: "B2",
+              endAddress: "D5",
+            },
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 5,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-context",
+        tool: "bilig_get_context",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"kind": "range"');
+    expect(text).toContain('"cellCount": 12');
+    expect(text).toContain('"freezePane": {');
+    expect(text).toContain('"hiddenRows"');
+    expect(text).toContain('"hiddenColumns"');
   });
 
   it("reads the visible viewport through the attached browser context", async () => {
     const engine = await createEngine();
+    engine.setFreezePane("Sheet1", 1, 0);
     const { zeroSyncService } = createZeroSyncHarness(engine);
 
     const response = await handleWorkbookAgentToolCall(
@@ -355,6 +429,7 @@ describe("workbook agent tools", () => {
     expect(textItem?.type).toBe("inputText");
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "A1"');
     expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "B2"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"freezePane": {');
   });
 
   it("inspects one cell with formula lineage and runtime metadata", async () => {
@@ -400,6 +475,9 @@ describe("workbook agent tools", () => {
     expect(text).toContain('"formula": "=SUM(A1:A1)"');
     expect(text).toContain('"directPrecedents": [');
     expect(text).toContain("Sheet1!A1");
+    expect(text).toContain('"style": {');
+    expect(text).toContain('"backgroundColor": "#fef3c7"');
+    expect(text).toContain('"numberFormat": {');
   });
 
   it("scans formula issues through the warm local runtime", async () => {
@@ -650,6 +728,11 @@ describe("workbook agent tools", () => {
     expect(textItem && "text" in textItem ? textItem.text : "").toContain(
       '"formula": "=SUM(A1:A1)"',
     );
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"styles": [');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain(
+      '"backgroundColor": "#fef3c7"',
+    );
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"numberFormats": [');
   });
 
   it("writes rectangular ranges through renderCommit with normalized formulas", async () => {

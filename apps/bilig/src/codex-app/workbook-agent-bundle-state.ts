@@ -3,6 +3,7 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
+import { requiresWorkbookAgentOwnerReview } from "@bilig/agent-api";
 
 interface WorkbookAgentBundleSessionStateRef {
   readonly scope: "private" | "shared";
@@ -36,7 +37,10 @@ export function needsSharedOwnerReview(
   sessionState: WorkbookAgentBundleSessionStateRef,
   bundle: Pick<WorkbookAgentCommandBundle, "riskClass">,
 ): boolean {
-  return sessionState.scope === "shared" && bundle.riskClass !== "low";
+  return requiresWorkbookAgentOwnerReview({
+    scope: sessionState.scope,
+    riskClass: bundle.riskClass,
+  });
 }
 
 export function createPendingSharedReviewState(

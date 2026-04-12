@@ -23,6 +23,8 @@ export type MutableWorkbookAgentSessionSnapshot = {
   workflowRuns: WorkbookAgentWorkflowRun[];
 };
 
+type WorkbookAgentExecutionPolicy = "autoApplySafe" | "autoApplyAll" | "ownerReview";
+
 export interface WorkbookAgentSessionState {
   readonly sessionId: string;
   readonly documentId: string;
@@ -105,6 +107,22 @@ export function mergeTimelineEntries(
     merged[existingIndex] = entry;
   }
   return merged;
+}
+
+export function resolveDefaultExecutionPolicy(
+  scope: "private" | "shared",
+): WorkbookAgentExecutionPolicy {
+  return scope === "shared" ? "ownerReview" : "autoApplyAll";
+}
+
+export function normalizeExecutionPolicy(input: {
+  scope: "private" | "shared";
+  requestedPolicy?: WorkbookAgentExecutionPolicy | null;
+}): WorkbookAgentExecutionPolicy {
+  if (input.scope === "shared") {
+    return "ownerReview";
+  }
+  return input.requestedPolicy ?? resolveDefaultExecutionPolicy(input.scope);
 }
 
 export function toContextRef(

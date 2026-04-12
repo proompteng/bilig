@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  isFullWorkbookAgentCommandSelection,
-  isWorkbookAgentCommandBundle,
   isWorkbookAgentExecutionRecord,
   normalizeWorkbookAgentCommandIndexes,
   projectWorkbookAgentBundle,
@@ -41,6 +39,15 @@ import {
   persistStoredSession,
   type StoredWorkbookAgentThreadRef,
 } from "./workbook-agent-pane-storage.js";
+import {
+  createWorkbookAgentPreviewRequestKey,
+  loadWorkbookAgentPreview,
+  readCachedWorkbookAgentPreview,
+} from "./workbook-agent-preview-cache.js";
+import {
+  decodeWorkbookAgentReviewItem,
+  resolveWorkbookAgentReviewOwnerUserId,
+} from "./workbook-agent-review-state.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
 interface WorkbookAgentLiveSession {
@@ -144,12 +151,12 @@ export function useWorkbookAgentPane(input: {
   const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
   const [pendingUserPrompt, setPendingUserPrompt] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
-  const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
+  const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[] | null>(null);
   const [fetchedThreadSummaries, setFetchedThreadSummaries] = useState<
     readonly WorkbookAgentThreadSummary[]
   >([]);
   const [threadScope, setThreadScope] = useState<WorkbookAgentThreadScope>("private");
-  const autoApplyBundleIdRef = useRef<string | null>(null);
+  const previewRequestKeyRef = useRef<string | null>(null);
   const sessionRef = useRef<WorkbookAgentLiveSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const recoveringStreamRef = useRef(false);
@@ -239,8 +246,7 @@ export function useWorkbookAgentPane(input: {
   });
 
   const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(() => {
-    const candidate = snapshot?.pendingBundle;
-    return candidate && isWorkbookAgentCommandBundle(candidate) ? candidate : null;
+    return decodeWorkbookAgentReviewItem(snapshot?.pendingBundle);
   }, [snapshot?.pendingBundle]);
   const pendingCommandCount = pendingBundle?.commands.length ?? 0;
 
@@ -263,6 +269,15 @@ export function useWorkbookAgentPane(input: {
         : null,
     [normalizedCommandIndexes, pendingBundle],
   );
+  const previewRequestKey = useMemo(() => {
+    if (!pendingBundle || !selectedPendingBundle) {
+      return null;
+    }
+    return createWorkbookAgentPreviewRequestKey({
+      bundle: pendingBundle,
+      commandIndexes: normalizedCommandIndexes,
+    });
+  }, [normalizedCommandIndexes, pendingBundle, selectedPendingBundle]);
 
   const executionRecords = useMemo<WorkbookAgentExecutionRecord[]>(() => {
     const candidates = snapshot?.executionRecords ?? [];
@@ -306,12 +321,11 @@ export function useWorkbookAgentPane(input: {
     pendingBundle.riskClass !== "low" &&
     activeThreadSummary !== null &&
     activeThreadSummary.ownerUserId !== currentUserId;
-  const sharedReviewOwnerUserId =
-    snapshot?.scope === "shared" &&
-    pendingBundle?.riskClass !== undefined &&
-    pendingBundle.riskClass !== "low"
-      ? (pendingBundle.sharedReview?.ownerUserId ?? activeThreadSummary?.ownerUserId ?? null)
-      : null;
+  const sharedReviewOwnerUserId = resolveWorkbookAgentReviewOwnerUserId({
+    reviewItem: pendingBundle,
+    sessionScope: snapshot?.scope ?? "private",
+    activeThreadOwnerUserId: activeThreadSummary?.ownerUserId ?? null,
+  });
   const sharedReviewStatus =
     sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.status ?? "pending") : null;
   const sharedReviewDecidedByUserId =
@@ -516,24 +530,32 @@ export function useWorkbookAgentPane(input: {
   }, [connectStream, createSession, persistSessionSnapshot, threadScope]);
 
   useEffect(() => {
-    autoApplyBundleIdRef.current = null;
-  }, [pendingBundle?.id]);
-
-  useEffect(() => {
-    setSelectedCommandIndexes(
-      Array.from({ length: pendingCommandCount }, (_unused, index) => index),
-    );
+    setSelectedCommandIndexes((current) => (current === null ? current : null));
   }, [pendingBundle?.id, pendingCommandCount]);
 
   useEffect(() => {
-    if (!enabled || selectedPendingBundle === null) {
+    if (!enabled || selectedPendingBundle === null || previewRequestKey === null) {
+      previewRequestKeyRef.current = null;
       setPreview(null);
       return;
     }
+    const cachedPreview = readCachedWorkbookAgentPreview(previewRequestKey);
+    if (cachedPreview) {
+      previewRequestKeyRef.current = previewRequestKey;
+      setPreview(cachedPreview);
+      return;
+    }
+    if (previewRequestKeyRef.current === previewRequestKey) {
+      return;
+    }
+    previewRequestKeyRef.current = previewRequestKey;
     let cancelled = false;
     void (async () => {
       try {
-        const nextPreview = await previewBundle(selectedPendingBundle);
+        const nextPreview = await loadWorkbookAgentPreview({
+          requestKey: previewRequestKey,
+          load: () => previewBundle(selectedPendingBundle),
+        });
         if (!cancelled) {
           setPreview(nextPreview);
         }
@@ -547,7 +569,7 @@ export function useWorkbookAgentPane(input: {
     return () => {
       cancelled = true;
     };
-  }, [enabled, previewBundle, selectedPendingBundle]);
+  }, [enabled, previewBundle, previewRequestKey, selectedPendingBundle]);
 
   useEffect(() => {
     if (!preview) {
@@ -617,41 +639,11 @@ export function useWorkbookAgentPane(input: {
     ],
   );
 
-  useEffect(() => {
-    if (
-      !enabled ||
-      snapshot?.scope === "shared" ||
-      !pendingBundle ||
-      !selectedPendingBundle ||
-      !preview ||
-      pendingBundle.approvalMode !== "auto" ||
-      !isFullWorkbookAgentCommandSelection({
-        bundle: pendingBundle,
-        commandIndexes: normalizedCommandIndexes,
-      }) ||
-      isApplyingBundle ||
-      autoApplyBundleIdRef.current === pendingBundle.id
-    ) {
-      return;
-    }
-    autoApplyBundleIdRef.current = pendingBundle.id;
-    void applyPendingBundle("auto");
-  }, [
-    applyPendingBundle,
-    enabled,
-    isApplyingBundle,
-    normalizedCommandIndexes,
-    pendingBundle,
-    preview,
-    snapshot?.scope,
-    selectedPendingBundle,
-  ]);
-
   const togglePendingCommand = useCallback(
     (commandIndex: number) => {
       setSelectedCommandIndexes((current) => {
         if (!pendingBundle || commandIndex < 0 || commandIndex >= pendingBundle.commands.length) {
-          return current;
+        return current;
         }
         const selected = new Set(normalizeWorkbookAgentCommandIndexes(pendingBundle, current));
         if (selected.has(commandIndex)) {
@@ -668,9 +660,7 @@ export function useWorkbookAgentPane(input: {
   );
 
   const selectAllPendingCommands = useCallback(() => {
-    setSelectedCommandIndexes(
-      pendingBundle ? pendingBundle.commands.map((_command, index) => index) : [],
-    );
+    setSelectedCommandIndexes(pendingBundle ? null : []);
   }, [pendingBundle]);
 
   useEffect(() => {

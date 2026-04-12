@@ -812,16 +812,12 @@ function PendingBundleCard(props: {
         ? "Applying…"
         : "Apply"
       : props.sharedReviewStatus === "pending"
-        ? "Awaiting approval"
+        ? "Owner review"
         : props.sharedReviewStatus === "rejected"
-          ? "Rejected"
-          : props.bundle.approvalMode === "explicit"
-            ? props.isApplyingBundle
-              ? "Applying…"
-              : "Approve"
-            : props.isApplyingBundle
-              ? "Applying…"
-              : "Apply";
+          ? "Returned"
+          : props.isApplyingBundle
+            ? "Applying…"
+            : "Apply";
   return (
     <div
       className={cn(
@@ -899,7 +895,7 @@ function PendingBundleCard(props: {
             "mt-2 border-[var(--wb-border-strong)]",
           )}
         >
-          Only {sharedApprovalOwnerLabel} can approve medium/high-risk changes on this shared
+          Owner review routes medium/high-risk changes to {sharedApprovalOwnerLabel} on this shared
           thread.
         </div>
       ) : null}
@@ -928,10 +924,10 @@ function PendingBundleCard(props: {
           )}
         >
           {props.sharedReviewStatus === "pending"
-            ? `Awaiting ${sharedReviewOwnerLabel}'s approval before this shared bundle can be applied.`
+            ? `Owner review is in progress with ${sharedReviewOwnerLabel}.`
             : props.sharedReviewStatus === "approved"
               ? `Approved by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`
-              : `Rejected by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`}
+              : `Returned by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`}
         </div>
       ) : null}
       {props.canFinalizeSharedBundle && props.sharedReviewStatus !== null ? (
@@ -1035,7 +1031,7 @@ function PendingBundleCard(props: {
 
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
-  readonly optimisticEntries: readonly WorkbookAgentTimelineEntry[];
+  readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly activeResponseTurnId: string | null;
   readonly showAssistantProgress: boolean;
@@ -1071,16 +1067,18 @@ export function WorkbookAgentPanel(props: {
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  const optimisticEntries = props.optimisticEntries ?? [];
+
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) {
       return;
     }
     node.scrollTop = node.scrollHeight;
-  }, [props.optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status]);
+  }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status]);
 
   const isRunning = props.snapshot?.status === "inProgress";
-  const visibleEntries = [...props.optimisticEntries, ...(props.snapshot?.entries ?? [])];
+  const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])];
   const progressAnchorIndex =
     props.showAssistantProgress && props.activeResponseTurnId
       ? visibleEntries.findLastIndex(

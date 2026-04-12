@@ -16,7 +16,10 @@ import {
   createWorkbookAgentCommandBundle,
   decodeWorkbookAgentPreviewSummary,
   describeWorkbookAgentBundle,
+  isWorkbookAgentBundleAutoApplyEligible,
   isWorkbookAgentExecutionRecord,
+  requiresWorkbookAgentOwnerReview,
+  resolveWorkbookAgentBundleExecutionPolicyInput,
   splitWorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
 import type { SessionIdentity } from "../http/session.js";
@@ -444,16 +447,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState: WorkbookAgentSessionState,
     bundle: WorkbookAgentCommandBundle,
   ): boolean {
-    if (sessionState.scope === "shared" || sessionState.executionPolicy === "ownerReview") {
-      return false;
-    }
     if (!this.isRolloutAllowed(sessionState.documentId, sessionState.storageActorUserId)) {
       return false;
     }
-    if (sessionState.executionPolicy === "autoApplyAll") {
-      return true;
-    }
-    return bundle.riskClass === "low";
+    return isWorkbookAgentBundleAutoApplyEligible(
+      resolveWorkbookAgentBundleExecutionPolicyInput({
+        scope: sessionState.scope,
+        executionPolicy: sessionState.executionPolicy,
+        bundle,
+      }),
+    );
   }
 
   private async buildAuthoritativePreview(documentId: string, bundle: WorkbookAgentCommandBundle) {
@@ -1033,7 +1036,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       });
     }
     if (input.appliedBy === "auto") {
-      if (sessionState.executionPolicy === "ownerReview") {
+      if (
+        !isWorkbookAgentBundleAutoApplyEligible(
+          resolveWorkbookAgentBundleExecutionPolicyInput({
+            scope: sessionState.scope,
+            executionPolicy: sessionState.executionPolicy,
+            bundle: selection.acceptedBundle,
+          }),
+        )
+      ) {
         throw createWorkbookAgentServiceError({
           code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
           message: "This session routes workbook edits through the review queue.",
@@ -1052,17 +1063,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           retryable: false,
         });
       }
-      if (
-        sessionState.executionPolicy === "autoApplySafe" &&
-        selection.acceptedBundle.riskClass !== "low"
-      ) {
-        throw createWorkbookAgentServiceError({
-          code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
-          message: "This change set is routed to review under the current session policy.",
-          statusCode: 409,
-          retryable: false,
-        });
-      }
       this.assertRolloutAllowed({
         documentId: input.documentId,
         userId: input.session.userID,
@@ -1071,8 +1071,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       });
     }
     if (
-      sessionState.scope === "shared" &&
-      pendingBundle.riskClass !== "low" &&
+      requiresWorkbookAgentOwnerReview({
+        scope: sessionState.scope,
+        riskClass: pendingBundle.riskClass,
+      }) &&
       sessionState.storageActorUserId !== input.session.userID
     ) {
       throw createWorkbookAgentServiceError({
@@ -1084,8 +1086,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     const sharedReview = normalizeSharedReviewState(pendingBundle, sessionState);
     if (
-      sessionState.scope === "shared" &&
-      pendingBundle.riskClass !== "low" &&
+      requiresWorkbookAgentOwnerReview({
+        scope: sessionState.scope,
+        riskClass: pendingBundle.riskClass,
+      }) &&
       sharedReview?.status !== "approved"
     ) {
       throw createWorkbookAgentServiceError({
