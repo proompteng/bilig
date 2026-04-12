@@ -5,7 +5,6 @@ const DRAFT_STORAGE_KEY_PREFIX = "bilig:workbook-agent-drafts:";
 
 export interface StoredWorkbookAgentThreadRef {
   threadId: string;
-  sessionId?: string;
 }
 
 function storageKey(documentId: string): string {
@@ -21,11 +20,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isStoredWorkbookAgentSession(value: unknown): value is StoredWorkbookAgentThreadRef {
-  return (
-    isRecord(value) &&
-    (value["sessionId"] === undefined || typeof value["sessionId"] === "string") &&
-    typeof value["threadId"] === "string"
-  );
+  return isRecord(value) && typeof value["threadId"] === "string";
 }
 
 export function loadStoredSession(documentId: string): StoredWorkbookAgentThreadRef | null {

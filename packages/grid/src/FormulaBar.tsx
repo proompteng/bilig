@@ -18,6 +18,7 @@ import { NameBox } from "./NameBox.js";
 interface FormulaBarProps {
   sheetName: string;
   address: string;
+  selectionLabel?: string;
   value: string;
   resolvedValue: string;
   isEditing: boolean;
@@ -32,6 +33,7 @@ interface FormulaBarProps {
 export function FormulaBar({
   sheetName,
   address,
+  selectionLabel,
   value,
   resolvedValue,
   isEditing,
@@ -91,6 +93,7 @@ export function FormulaBar({
   const activeSuggestion = showAutocomplete
     ? (assistState.suggestions[highlightedSuggestionIndex] ?? assistState.suggestions[0] ?? null)
     : null;
+  const selectionStatus = `${sheetName}!${selectionLabel ?? address}`;
 
   const commitSuggestion = (suggestion: FormulaSuggestion) => {
     if (assistState.tokenStart === null || assistState.tokenEnd === null) {
@@ -255,6 +258,9 @@ export function FormulaBar({
           </div>
         ) : null}
       </div>
+      <span className="sr-only" data-testid="status-selection">
+        {selectionStatus}
+      </span>
       <span className="sr-only" data-testid="formula-resolved-value">
         {resolvedValue || "∅"}
       </span>

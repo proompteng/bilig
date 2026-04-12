@@ -167,13 +167,19 @@ export function useWorkerWorkbookAppState(input: {
   });
 
   useEffect(() => {
+    const previousSelection = selectionRef.current;
     selectionRef.current = selection;
-    selectionRangeRef.current = {
-      sheetName: selection.sheetName,
-      startAddress: selection.address,
-      endAddress: selection.address,
-    };
-    agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection);
+    if (
+      previousSelection.sheetName !== selection.sheetName ||
+      previousSelection.address !== selection.address
+    ) {
+      selectionRangeRef.current = {
+        sheetName: selection.sheetName,
+        startAddress: selection.address,
+        endAddress: selection.address,
+      };
+      agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection);
+    }
   }, [selection]);
 
   useEffect(() => {

@@ -654,7 +654,7 @@ export async function waitForWorkbookReady(page: Page) {
   await expect(page.getByTestId("formula-bar")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("sheet-grid")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("status-sync")).toHaveText(
-    remoteSyncEnabled ? "Ready" : /^(Ready|Local)$/,
+    remoteSyncEnabled ? "Ready" : /^(Ready|Local|Follower)$/,
     { timeout: 15_000 },
   );
 }

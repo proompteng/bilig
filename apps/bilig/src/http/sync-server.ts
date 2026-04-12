@@ -100,6 +100,43 @@ function shouldServeSpaFallback(method: string, url: string): boolean {
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function loadWorkbookAgentThreadSession(
+  service: WorkbookAgentService,
+  documentId: string,
+  threadId: string,
+  session: ReturnType<typeof resolveSessionIdentity>,
+) {
+  return await service.createSession({
+    documentId,
+    session,
+    body: {
+      threadId,
+    },
+  });
+}
+
+function readWorkbookAgentThreadRouteParams(request: FastifyRequest): {
+  documentId: string;
+  threadId: string;
+} {
+  const params: unknown = request.params;
+  if (
+    !isRecord(params) ||
+    typeof params["documentId"] !== "string" ||
+    typeof params["threadId"] !== "string"
+  ) {
+    throw new Error("Expected workbook agent thread route params");
+  }
+  return {
+    documentId: params["documentId"],
+    threadId: params["threadId"],
+  };
+}
+
 export function createSyncServer(options: SyncServerOptions = {}) {
   const runtimeConfig = resolveServerRuntimeConfig(process.env);
   const webRuntimeConfig = resolveWebRuntimeConfig(process.env);
@@ -147,6 +184,27 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }
       throw error;
     }
+  };
+
+  const handleWorkbookAgentThreadRequest = async <T>(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    task: (
+      service: WorkbookAgentService,
+      session: ReturnType<typeof resolveSessionIdentity>,
+      sessionSnapshot: Awaited<ReturnType<WorkbookAgentService["createSession"]>>,
+    ) => Promise<T>,
+  ): Promise<T | ReturnType<typeof createErrorEnvelope>> => {
+    return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+      const { documentId, threadId } = readWorkbookAgentThreadRouteParams(request);
+      const sessionSnapshot = await loadWorkbookAgentThreadSession(
+        service,
+        documentId,
+        threadId,
+        session,
+      );
+      return await task(service, session, sessionSnapshot);
+    });
   };
 
   app.addHook("onClose", async () => {
@@ -308,42 +366,6 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
-  app.post(
-    "/v2/documents/:documentId/agent/sessions",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.get(
-    "/v2/documents/:documentId/agent/threads",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.listThreads({
-          documentId: request.params.documentId,
-          session,
-        });
-      });
-    },
-  );
-
   app.get(
     "/v2/documents/:documentId/chat/threads",
     async (
@@ -356,25 +378,6 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         return await service.listThreads({
           documentId: request.params.documentId,
           session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: request.body ?? {},
         });
       });
     },
@@ -394,26 +397,6 @@ export function createSyncServer(options: SyncServerOptions = {}) {
           documentId: request.params.documentId,
           session,
           body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.get(
-    "/v2/documents/:documentId/agent/threads/:threadId",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
         });
       });
     },
@@ -427,43 +410,13 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/turns",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            ...request.body,
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.startTurn({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (_service, _session, snapshot) => {
+          return snapshot;
+        },
+      );
     },
   );
 
@@ -476,69 +429,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            ...request.body,
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.startTurn({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/context",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.updateContext({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/context",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.updateContext({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.startTurn({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            session,
+            body: request.body ?? {},
+          });
+        },
+      );
     },
   );
 
@@ -551,107 +453,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.updateContext({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/turns",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.startTurn({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/workflows",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.startWorkflow({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/workflows/:runId/cancel",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string; runId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.cancelWorkflow({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          runId: request.params.runId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/workflows",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.startWorkflow({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.updateContext({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            session,
+            body: request.body ?? {},
+          });
+        },
+      );
     },
   );
 
@@ -664,47 +477,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.startWorkflow({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/workflows/:runId/cancel",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; runId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.cancelWorkflow({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          runId: request.params.runId,
-          session,
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.startWorkflow({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            session,
+            body: request.body ?? {},
+          });
+        },
+      );
     },
   );
 
@@ -716,64 +500,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.cancelWorkflow({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          runId: request.params.runId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/interrupt",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.interruptTurn({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/interrupt",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.interruptTurn({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.cancelWorkflow({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            runId: request.params.runId,
+            session,
+          });
+        },
+      );
     },
   );
 
@@ -785,122 +523,17 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.interruptTurn({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/bundles/:bundleId/apply",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string; bundleId: string };
-        Body: {
-          appliedBy?: "user" | "auto";
-          commandIndexes?: number[];
-          preview?: unknown;
-        };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const commandIndexes =
-          request.body &&
-          typeof request.body === "object" &&
-          Array.isArray(request.body.commandIndexes)
-            ? request.body.commandIndexes
-            : undefined;
-        return await service.applyPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
-          ...(commandIndexes ? { commandIndexes } : {}),
-          preview:
-            request.body && typeof request.body === "object" && "preview" in request.body
-              ? (request.body.preview ?? null)
-              : null,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/bundles/:bundleId/review",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string; bundleId: string };
-        Body: {
-          decision?: "approved" | "rejected";
-        };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.reviewPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/apply",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
-        Body: {
-          appliedBy?: "user" | "auto";
-          commandIndexes?: number[];
-          preview?: unknown;
-        };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        const commandIndexes =
-          request.body &&
-          typeof request.body === "object" &&
-          Array.isArray(request.body.commandIndexes)
-            ? request.body.commandIndexes
-            : undefined;
-        return await service.applyPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
-          ...(commandIndexes ? { commandIndexes } : {}),
-          preview:
-            request.body && typeof request.body === "object" && "preview" in request.body
-              ? (request.body.preview ?? null)
-              : null,
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.interruptTurn({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            session,
+          });
+        },
+      );
     },
   );
 
@@ -917,63 +550,30 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        const commandIndexes =
-          request.body &&
-          typeof request.body === "object" &&
-          Array.isArray(request.body.commandIndexes)
-            ? request.body.commandIndexes
-            : undefined;
-        return await service.applyPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
-          ...(commandIndexes ? { commandIndexes } : {}),
-          preview:
-            request.body && typeof request.body === "object" && "preview" in request.body
-              ? (request.body.preview ?? null)
-              : null,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/review",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
-        Body: {
-          decision?: "approved" | "rejected";
-        };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.reviewPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          body: request.body ?? {},
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          const commandIndexes =
+            request.body &&
+            typeof request.body === "object" &&
+            Array.isArray(request.body.commandIndexes)
+              ? request.body.commandIndexes
+              : undefined;
+          return await service.applyPendingBundle({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            bundleId: request.params.bundleId,
+            session,
+            appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
+            ...(commandIndexes ? { commandIndexes } : {}),
+            preview:
+              request.body && typeof request.body === "object" && "preview" in request.body
+                ? (request.body.preview ?? null)
+                : null,
+          });
+        },
+      );
     },
   );
 
@@ -988,67 +588,19 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.reviewPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-          body: request.body ?? {},
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/bundles/:bundleId/dismiss",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string; bundleId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.dismissPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/dismiss",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; bundleId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.dismissPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.reviewPendingBundle({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            bundleId: request.params.bundleId,
+            session,
+            body: request.body ?? {},
+          });
+        },
+      );
     },
   );
 
@@ -1060,66 +612,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.dismissPendingBundle({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          bundleId: request.params.bundleId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/runs/:recordId/replay",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string; recordId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        return await service.replayExecutionRecord({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          recordId: request.params.recordId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.post(
-    "/v2/documents/:documentId/agent/threads/:threadId/runs/:recordId/replay",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; recordId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.replayExecutionRecord({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          recordId: request.params.recordId,
-          session,
-        });
-      });
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.dismissPendingBundle({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            bundleId: request.params.bundleId,
+            session,
+          });
+        },
+      );
     },
   );
 
@@ -1131,87 +635,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-        const sessionSnapshot = await service.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-        return await service.replayExecutionRecord({
-          documentId: request.params.documentId,
-          sessionId: sessionSnapshot.sessionId,
-          recordId: request.params.recordId,
-          session,
-        });
-      });
-    },
-  );
-
-  app.get(
-    "/v2/documents/:documentId/agent/threads/:threadId/events",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>;
-      try {
-        sessionSnapshot = await workbookAgentService.createSession({
-          documentId: request.params.documentId,
-          session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-      } catch (error) {
-        if (isWorkbookAgentServiceError(error)) {
-          reply.code(error.statusCode);
-          return createErrorEnvelope(error.code, error.message, error.retryable);
-        }
-        throw error;
-      }
-
-      reply.hijack();
-      const raw = reply.raw;
-      raw.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        connection: "keep-alive",
-      });
-
-      const writeEvent = (event: WorkbookAgentStreamEvent) => {
-        raw.write(`data: ${JSON.stringify(event)}\n\n`);
-      };
-
-      writeEvent({
-        type: "snapshot",
-        snapshot: sessionSnapshot,
-      });
-
-      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
-        writeEvent(event);
-      });
-      const keepalive = setInterval(() => {
-        raw.write(":keepalive\n\n");
-      }, 15_000);
-
-      request.raw.on("close", () => {
-        clearInterval(keepalive);
-        unsubscribe();
-      });
-      return reply;
+      return await handleWorkbookAgentThreadRequest(
+        request,
+        reply,
+        async (service, session, sessionSnapshot) => {
+          return await service.replayExecutionRecord({
+            documentId: request.params.documentId,
+            sessionId: sessionSnapshot.sessionId,
+            recordId: request.params.recordId,
+            session,
+          });
+        },
+      );
     },
   );
 
@@ -1234,77 +669,12 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       const session = resolveSessionIdentity(request, reply);
       let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>;
       try {
-        sessionSnapshot = await workbookAgentService.createSession({
-          documentId: request.params.documentId,
+        sessionSnapshot = await loadWorkbookAgentThreadSession(
+          workbookAgentService,
+          request.params.documentId,
+          request.params.threadId,
           session,
-          body: {
-            threadId: request.params.threadId,
-          },
-        });
-      } catch (error) {
-        if (isWorkbookAgentServiceError(error)) {
-          reply.code(error.statusCode);
-          return createErrorEnvelope(error.code, error.message, error.retryable);
-        }
-        throw error;
-      }
-
-      reply.hijack();
-      const raw = reply.raw;
-      raw.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        connection: "keep-alive",
-      });
-
-      const writeEvent = (event: WorkbookAgentStreamEvent) => {
-        raw.write(`data: ${JSON.stringify(event)}\n\n`);
-      };
-
-      writeEvent({
-        type: "snapshot",
-        snapshot: sessionSnapshot,
-      });
-
-      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
-        writeEvent(event);
-      });
-      const keepalive = setInterval(() => {
-        raw.write(":keepalive\n\n");
-      }, 15_000);
-
-      request.raw.on("close", () => {
-        clearInterval(keepalive);
-        unsubscribe();
-      });
-      return reply;
-    },
-  );
-
-  app.get(
-    "/v2/documents/:documentId/agent/sessions/:sessionId/events",
-    async (
-      request: FastifyRequest<{
-        Params: { documentId: string; sessionId: string };
-      }>,
-      reply: FastifyReply,
-    ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
         );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      let sessionSnapshot: ReturnType<typeof workbookAgentService.getSnapshot>;
-      try {
-        sessionSnapshot = workbookAgentService.getSnapshot({
-          documentId: request.params.documentId,
-          sessionId: request.params.sessionId,
-          session,
-        });
       } catch (error) {
         if (isWorkbookAgentServiceError(error)) {
           reply.code(error.statusCode);

@@ -3144,7 +3144,7 @@ describe("workbook agent service", () => {
             threadId: "thr-existing",
             actorUserId: "alex@example.com",
             scope: "private",
-            executionPolicy: "autoApplySafe",
+            executionPolicy: "ownerReview",
             context: null,
             entries: [],
             pendingBundle: {

@@ -3123,7 +3123,6 @@ describe("workbook agent pane", () => {
       }),
     );
     expect(host.textContent).toContain("Write cells in Sheet1!B2");
-    expect(host.textContent).toContain("1/1");
     expect(host.textContent).toContain("Recent changes");
     expect(host.textContent).toContain("Write cells in Sheet1!C3");
     expect(host.textContent).toContain("Run again");

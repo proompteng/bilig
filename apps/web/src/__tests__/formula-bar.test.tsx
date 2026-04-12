@@ -104,4 +104,25 @@ describe("FormulaBar", () => {
       root.unmount();
     });
   });
+
+  it("publishes the canonical selection label for status consumers", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={false} initialValue="" />);
+    });
+
+    const selectionStatus = host.querySelector("[data-testid='status-selection']");
+    expect(selectionStatus?.textContent).toBe("Sheet1!B2");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

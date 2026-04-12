@@ -10,6 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { parseCellAddress } from "@bilig/formula";
 import {
   createRectangleSelectionFromRange,
   createGridSelection,
@@ -171,6 +172,14 @@ export function useWorkbookGridInteractions(
     setIsRangeMoveDragging,
     visibleRegion,
   } = renderState;
+  const activeSelectionCell = useMemo<Item>(
+    () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
+    [gridSelection.current, selectedCell.col, selectedCell.row],
+  );
+  const externalSelectedCell = useMemo<Item>(() => {
+    const parsed = parseCellAddress(selectedAddr, sheetName);
+    return [parsed.col, parsed.row];
+  }, [selectedAddr, sheetName]);
   const wasEditingOverlayRef = useRef(false);
   const ignoreNextPointerSelectionRef = useRef(false);
   const pendingPointerCellRef = useRef<Item | null>(null);
@@ -245,16 +254,16 @@ export function useWorkbookGridInteractions(
       if (
         !sheetChanged &&
         currentCell &&
-        currentCell[0] === selectedCell.col &&
-        currentCell[1] === selectedCell.row
+        currentCell[0] === externalSelectedCell[0] &&
+        currentCell[1] === externalSelectedCell[1]
       ) {
         return current;
       }
       clearGridPendingPointerActivation(interactionState);
       dragGeometryRef.current = null;
-      return createGridSelection(selectedCell.col, selectedCell.row);
+      return createGridSelection(externalSelectedCell[0], externalSelectedCell[1]);
     });
-  }, [interactionState, selectedCell.col, selectedCell.row, setGridSelection, sheetName]);
+  }, [externalSelectedCell, interactionState, setGridSelection, sheetName]);
   useEffect(() => {
     if (wasEditingOverlayRef.current && !isEditingCell) {
       window.requestAnimationFrame(() => {
@@ -362,7 +371,7 @@ export function useWorkbookGridInteractions(
     sheetName,
     suppressNextNativePasteRef,
     toggleSelectedBooleanCell: () => {
-      toggleBooleanCellAt(selectedCell.col, selectedCell.row);
+      toggleBooleanCellAt(activeSelectionCell[0], activeSelectionCell[1]);
     },
   });
   const contextMenu = useWorkbookGridContextMenu({
@@ -380,7 +389,7 @@ export function useWorkbookGridInteractions(
     onDeleteColumns,
     onSetFreezePane,
     resolveHeaderSelectionAtPointer,
-    selectedCell: [selectedCell.col, selectedCell.row],
+    selectedCell: activeSelectionCell,
     setGridSelection,
     visibleRegion,
   });
@@ -388,20 +397,12 @@ export function useWorkbookGridInteractions(
     return openWorkbookGridHeaderContextMenuFromKeyboard({
       hostBounds: hostRef.current?.getBoundingClientRect(),
       gridSelection,
-      selectedCell: [selectedCell.col, selectedCell.row],
+      selectedCell: activeSelectionCell,
       getCellScreenBounds,
       gridMetrics,
       openContextMenuForTarget: contextMenu.openContextMenuForTarget,
     });
-  }, [
-    contextMenu,
-    getCellScreenBounds,
-    gridMetrics,
-    gridSelection,
-    hostRef,
-    selectedCell.col,
-    selectedCell.row,
-  ]);
+  }, [contextMenu, getCellScreenBounds, gridMetrics, gridSelection, hostRef, activeSelectionCell]);
 
   const handleFillHandlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -572,8 +573,9 @@ export function useWorkbookGridInteractions(
         defaultColumnWidth: gridMetrics.columnWidth,
         defaultRowHeight: gridMetrics.rowHeight,
         gridMetrics,
-        selectedCell: [selectedCell.col, selectedCell.row],
-        selectedCellBounds: getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null,
+        selectedCell: activeSelectionCell,
+        selectedCellBounds:
+          getCellScreenBounds(activeSelectionCell[0], activeSelectionCell[1]) ?? null,
         selectionRange,
         hasColumnSelection: gridSelection.columns.length > 0,
         hasRowSelection: gridSelection.rows.length > 0,
@@ -591,8 +593,7 @@ export function useWorkbookGridInteractions(
       isRangeMoveDragging,
       rowHeights,
       resolvePointerGeometry,
-      selectedCell.col,
-      selectedCell.row,
+      activeSelectionCell,
       selectionRange,
       setHoverState,
       visibleRegion,
@@ -749,7 +750,7 @@ export function useWorkbookGridInteractions(
         onSelect,
         resolvePointerCell,
         resolvePointerGeometry,
-        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCell: activeSelectionCell,
         setGridSelection,
         visibleRegion,
       });
@@ -900,7 +901,7 @@ export function useWorkbookGridInteractions(
         resolveHeaderSelectionAtPointer,
         resolvePointerCell,
         resolvePointerGeometry,
-        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCell: activeSelectionCell,
         setGridSelection,
         visibleRegion,
       });
@@ -937,7 +938,7 @@ export function useWorkbookGridInteractions(
         onSelect,
         resolveHeaderSelectionForPointerDrag,
         resolvePointerCell,
-        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCell: activeSelectionCell,
         setGridSelection,
         visibleRegion,
       });

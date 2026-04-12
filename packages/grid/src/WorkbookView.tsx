@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
@@ -181,8 +181,26 @@ export function WorkbookView({
     startX: number;
     startWidth: number;
   } | null>(null);
+  const previousSheetNameRef = useRef(sheetName);
   const [isResizingSideRail, setIsResizingSideRail] = useState(false);
+  const [selectionLabel, setSelectionLabel] = useState(selectedAddr);
   const resolvedSideRailWidth = clampSideRailWidth(sideRailWidth ?? 344);
+
+  useEffect(() => {
+    if (previousSheetNameRef.current === sheetName) {
+      return;
+    }
+    previousSheetNameRef.current = sheetName;
+    setSelectionLabel(selectedAddr);
+  }, [selectedAddr, sheetName]);
+
+  const handleSelectionLabelChange = useCallback(
+    (label: string) => {
+      setSelectionLabel(label);
+      onSelectionLabelChange?.(label);
+    },
+    [onSelectionLabelChange],
+  );
 
   const handleSideRailPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -226,6 +244,7 @@ export function WorkbookView({
             onChange={onEditorChange}
             onCommit={() => onCommitEdit()}
             resolvedValue={resolvedValue}
+            selectionLabel={selectionLabel}
             sheetName={sheetName}
             value={editorValue}
           />
@@ -244,7 +263,7 @@ export function WorkbookView({
             onMoveRange={onMoveRange}
             onPaste={onPaste}
             onToggleBooleanCell={onToggleBooleanCell}
-            onSelectionLabelChange={onSelectionLabelChange}
+            onSelectionLabelChange={handleSelectionLabelChange}
             onSelectionRangeChange={onSelectionRangeChange}
             onSelect={onSelect}
             subscribeViewport={subscribeViewport}

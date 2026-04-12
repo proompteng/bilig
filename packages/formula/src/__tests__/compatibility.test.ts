@@ -11,6 +11,7 @@ import {
   isWasmCompatibilityStatus,
   wasmCompatibilityStatuses,
 } from "../compatibility.js";
+import { formulaInventorySummary } from "../generated/formula-inventory.js";
 import {
   canonicalFormulaFixtures,
   canonicalFormulaSmokeSuite,
@@ -44,16 +45,18 @@ describe("formula compatibility registry", () => {
       .map((entry) => entry.id)
       .toSorted();
 
-    expect(snapshot.formulaBreadth.officeListed).toEqual({
-      production: 487,
-      total: 508,
-      percent: 95.9,
-    });
-    expect(snapshot.formulaBreadth.tracked).toEqual({
-      production: 487,
-      total: 525,
-      percent: 92.8,
-    });
+    expect(snapshot.formulaBreadth.officeListed).toEqual(
+      createRatioRecord(
+        formulaInventorySummary.registeredInCodebase,
+        formulaInventorySummary.officeListed,
+      ),
+    );
+    expect(snapshot.formulaBreadth.tracked).toEqual(
+      createRatioRecord(
+        formulaInventorySummary.registeredInCodebase,
+        formulaInventorySummary.total,
+      ),
+    );
     expect(snapshot.canonical.summary).toEqual({
       production: canonicalProductionEntries.length,
       total: canonicalRegistryEntries.length,
@@ -220,6 +223,14 @@ function isRatio(value: unknown): value is { percent: number; production: number
     typeof value["production"] === "number" &&
     typeof value["total"] === "number"
   );
+}
+
+function createRatioRecord(production: number, total: number) {
+  return {
+    production,
+    total,
+    percent: total === 0 ? 100 : Number(((production / total) * 100).toFixed(1)),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

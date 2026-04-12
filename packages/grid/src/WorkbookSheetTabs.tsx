@@ -27,7 +27,7 @@ const sheetIndicatorClass = cva(
 );
 
 const sheetTabClass = cva(
-  "inline-flex h-8 shrink-0 items-center justify-center border-b-2 border-transparent px-3 text-[12px] font-medium whitespace-nowrap text-[var(--color-mauve-600)] outline-none transition-[color] hover:text-[var(--color-mauve-900)] focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-md border-b-2 border-transparent px-3 text-[12px] font-medium whitespace-nowrap text-[var(--color-mauve-600)] outline-none transition-[color] hover:text-[var(--color-mauve-900)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]",
   {
     variants: {
       active: {

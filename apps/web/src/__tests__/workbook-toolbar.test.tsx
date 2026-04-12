@@ -278,7 +278,7 @@ describe("WorkbookToolbar", () => {
     const structureTrigger = host.querySelector("[aria-label='Structure']");
 
     expect(historyGroup?.className).toContain("h-8");
-    expect(undoButton?.className).toContain("h-7");
+    expect(undoButton?.className).toContain("h-8");
     expect(numberFormatTrigger?.className).toContain("h-8");
     expect(fontSizeTrigger?.className).toContain("h-8");
     expect(structureTrigger?.className).toContain("h-8");

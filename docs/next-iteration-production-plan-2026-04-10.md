@@ -194,10 +194,9 @@ The next iteration must not strand the product between a session-scoped chat mod
 
 That means:
 
-- the existing `/agent/sessions` routes may remain temporarily as a compatibility facade
 - the durable thread/run model becomes the source of truth as soon as the persistence layer exists
 - browser code must migrate to durable thread identifiers, not accumulate a second unofficial state path
-- once the web shell no longer depends on session-scoped state, the old route semantics should collapse into aliases or be deleted
+- once the web shell no longer depends on session-scoped state, the old route semantics must be deleted instead of preserved as aliases
 
 ---
 
@@ -694,11 +693,10 @@ This tranche is largely landed. Durable thread tables, thread-centric routes, re
 
 Concrete migration shape:
 
-1. Keep `POST /v2/documents/:documentId/agent/sessions` and related session routes alive.
-2. Those handlers now hydrate or create durable thread state first, then return a live session handle.
-3. Keep SSE for active-turn deltas, but continue serving the initial snapshot from durable thread state rather than from in-memory-only session state.
-4. The browser now centers on a selected durable thread id, with any live session handle treated as transient.
-5. Continue collapsing legacy session behavior into thin compatibility wrappers now that thread-centric routes are the primary browser surface.
+1. Expose only `/v2/documents/:documentId/chat/threads/*` as the public workbook-agent surface.
+2. Keep SSE for active-turn deltas, but continue serving the initial snapshot from durable thread state rather than from in-memory-only session state.
+3. The browser now centers on a selected durable thread id, with any live session handle treated as transient.
+4. Remove the old session-route semantics entirely once the thread-centric surface is live.
 
 ### Result
 
@@ -801,7 +799,7 @@ Performance, correctness, and resilience gates are green for workbook + collabor
 
 ### Recommended API shape
 
-Keep the current endpoints working, but evolve toward durable thread-centric routes:
+Use durable thread-centric routes as the only supported public workbook-agent surface:
 
 - `POST /v2/documents/:documentId/chat/threads`
 - `POST /v2/documents/:documentId/chat/threads/:threadId/turns`
@@ -815,7 +813,7 @@ The important shift is not path naming. The important shift is that the backing 
 
 Compatibility rule:
 
-- during migration, the existing `/agent/sessions/*` endpoints should delegate to the same durable thread/run records as the new routes
+- any remaining session concepts are internal execution handles, not public HTTP contracts
 - they should not remain a second independently authoritative storage path
 
 ---
@@ -924,7 +922,7 @@ The release is ready only when all of the following are true:
 
 - feature flags can disable shared chat, workflow runner, and auto-apply independently
 - canary rollout is clean before broad exposure
-- legacy `/agent/sessions` behavior is either a thin compatibility layer over durable threads or removed
+- legacy `/agent/sessions` behavior is removed from the public HTTP surface
 
 ---
 

@@ -27,6 +27,10 @@ export const formulaInputClass = cva(
   "h-full min-w-0 flex-1 border-0 bg-transparent px-3 text-[12px] leading-none text-[var(--color-mauve-950)] outline-none placeholder:text-[var(--color-mauve-500)]",
 );
 
+export const formulaStandaloneInputClass = cva(
+  "box-border h-8 w-full rounded-md border border-[var(--color-mauve-200)] bg-white px-2.5 text-[12px] font-medium leading-none text-[var(--color-mauve-950)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--color-mauve-500)] focus-visible:border-[var(--color-mauve-400)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)]/40",
+);
+
 export const formulaPopupClass = cva(
   "overflow-hidden rounded-xl border border-[var(--color-mauve-200)] bg-white shadow-[0_14px_32px_rgba(15,23,42,0.14)]",
 );

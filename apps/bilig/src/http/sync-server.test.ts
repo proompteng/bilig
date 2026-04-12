@@ -364,7 +364,7 @@ describe("sync-server snapshots", () => {
     const { app } = createSyncServer({
       logger: false,
       documentService: createDocumentServiceStub({
-        getLatestSnapshot(documentId) {
+        getLatestSnapshot(documentId: string) {
           expect(documentId).toBe("doc-1");
           return Effect.succeed(null);
         },
@@ -474,7 +474,7 @@ describe("sync-server authoritative events", () => {
 });
 
 describe("sync-server workbook agent", () => {
-  it("lists durable workbook agent threads through the monolith route", async () => {
+  it("lists durable workbook chat threads through the public route", async () => {
     const listThreads = vi.fn(async () => [
       {
         threadId: "thr-2",
@@ -506,7 +506,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "GET",
-        url: "/v2/documents/doc-1/agent/threads",
+        url: "/v2/documents/doc-1/chat/threads",
       });
 
       expect(response.statusCode).toBe(200);
@@ -541,118 +541,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("creates workbook agent sessions through the monolith route", async () => {
-    const createSession = vi.fn(async () => createAgentSessionSnapshot());
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        createSession,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions",
-        payload: {
-          sessionId: "agent-session-1",
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "A1",
-            },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 10,
-              colStart: 0,
-              colEnd: 5,
-            },
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers["cache-control"]).toBe("no-store");
-      expect(createSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          body: expect.objectContaining({
-            sessionId: "agent-session-1",
-          }),
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          sessionId: "agent-session-1",
-          threadId: "thr-1",
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("creates or resumes workbook agent threads through the durable thread route", async () => {
-    const createSession = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        sessionId: "agent-session-thread",
-        threadId: "thr-shared",
-        scope: "shared",
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        createSession,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/threads",
-        payload: {
-          threadId: "thr-shared",
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "B2",
-            },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 10,
-              colStart: 0,
-              colEnd: 5,
-            },
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers["cache-control"]).toBe("no-store");
-      expect(createSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          body: expect.objectContaining({
-            threadId: "thr-shared",
-          }),
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          sessionId: "agent-session-thread",
-          threadId: "thr-shared",
-          scope: "shared",
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("creates or resumes workbook chat threads through the durable chat route", async () => {
+  it("creates or resumes workbook chat threads through the public route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-thread",
@@ -710,50 +599,6 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("loads workbook agent thread snapshots through a thread-specific route", async () => {
-    const createSession = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        sessionId: "agent-session-thread",
-        threadId: "thr-shared",
-        scope: "shared",
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        createSession,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v2/documents/doc-1/agent/threads/thr-shared",
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers["cache-control"]).toBe("no-store");
-      expect(createSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          body: {
-            threadId: "thr-shared",
-          },
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          sessionId: "agent-session-thread",
-          threadId: "thr-shared",
-          scope: "shared",
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
   it("loads workbook chat thread snapshots through a thread-specific route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
@@ -797,108 +642,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("starts workbook agent turns through a durable thread route", async () => {
-    const createSession = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
-        threadId: "thr-2",
-      }),
-    );
-    const startTurn = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        sessionId: "agent-session-2",
-        threadId: "thr-2",
-        status: "inProgress",
-        activeTurnId: "turn-1",
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        createSession,
-        startTurn,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/turns",
-        payload: {
-          prompt: "Summarize this thread",
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "A1",
-            },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 10,
-              colStart: 0,
-              colEnd: 5,
-            },
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(createSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          body: expect.objectContaining({
-            threadId: "thr-2",
-            prompt: "Summarize this thread",
-            context: {
-              selection: {
-                sheetName: "Sheet1",
-                address: "A1",
-              },
-              viewport: {
-                rowStart: 0,
-                rowEnd: 10,
-                colStart: 0,
-                colEnd: 5,
-              },
-            },
-          }),
-        }),
-      );
-      expect(startTurn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-2",
-          body: {
-            prompt: "Summarize this thread",
-            context: {
-              selection: {
-                sheetName: "Sheet1",
-                address: "A1",
-              },
-              viewport: {
-                rowStart: 0,
-                rowEnd: 10,
-                colStart: 0,
-                colEnd: 5,
-              },
-            },
-          },
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          sessionId: "agent-session-2",
-          threadId: "thr-2",
-          status: "inProgress",
-          activeTurnId: "turn-1",
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("starts workbook chat turns through a durable chat thread route", async () => {
+  it("starts workbook chat turns through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -966,90 +710,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("starts workbook agent workflows through the session route", async () => {
-    const startWorkflow = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        workflowRuns: [
-          {
-            runId: "wf-1",
-            threadId: "thr-1",
-            startedByUserId: "alex@example.com",
-            workflowTemplate: "summarizeWorkbook",
-            title: "Summarize Workbook",
-            summary: "Summarized workbook structure across 1 sheet.",
-            status: "completed" as const,
-            createdAtUnixMs: 1,
-            updatedAtUnixMs: 2,
-            completedAtUnixMs: 2,
-            errorMessage: null,
-            steps: [
-              {
-                stepId: "inspect-workbook",
-                label: "Inspect workbook structure",
-                status: "completed" as const,
-                summary: "Read durable workbook structure across 1 sheet.",
-                updatedAtUnixMs: 1,
-              },
-              {
-                stepId: "draft-summary",
-                label: "Draft summary artifact",
-                status: "completed" as const,
-                summary: "Prepared the durable workbook summary artifact for the thread.",
-                updatedAtUnixMs: 2,
-              },
-            ],
-            artifact: {
-              kind: "markdown" as const,
-              title: "Workbook Summary",
-              text: "## Workbook Summary",
-            },
-          },
-        ],
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        startWorkflow,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows",
-        payload: {
-          workflowTemplate: "summarizeWorkbook",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(startWorkflow).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-1",
-          body: {
-            workflowTemplate: "summarizeWorkbook",
-          },
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          workflowRuns: [
-            expect.objectContaining({
-              runId: "wf-1",
-              workflowTemplate: "summarizeWorkbook",
-            }),
-          ],
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("starts workbook agent workflows through the durable thread route", async () => {
+  it("starts workbook chat workflows through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1110,7 +771,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/workflows",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/workflows",
         payload: {
           workflowTemplate: "describeRecentChanges",
         },
@@ -1150,74 +811,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("cancels workbook agent workflows through the session route", async () => {
-    const cancelWorkflow = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        workflowRuns: [
-          {
-            runId: "wf-running-1",
-            threadId: "thr-1",
-            startedByUserId: "alex@example.com",
-            workflowTemplate: "summarizeWorkbook",
-            title: "Summarize Workbook",
-            summary: "Cancelled workflow: Summarize Workbook",
-            status: "cancelled" as const,
-            createdAtUnixMs: 1,
-            updatedAtUnixMs: 3,
-            completedAtUnixMs: 3,
-            errorMessage: "Cancelled by alex@example.com.",
-            steps: [
-              {
-                stepId: "inspect-workbook",
-                label: "Inspect workbook structure",
-                status: "cancelled" as const,
-                summary: "Workflow cancelled before this step completed.",
-                updatedAtUnixMs: 3,
-              },
-            ],
-            artifact: null,
-          },
-        ],
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        cancelWorkflow,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows/wf-running-1/cancel",
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(cancelWorkflow).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-1",
-          runId: "wf-running-1",
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          workflowRuns: [
-            expect.objectContaining({
-              runId: "wf-running-1",
-              status: "cancelled",
-            }),
-          ],
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("cancels workbook agent workflows through the durable thread route", async () => {
+  it("cancels workbook chat workflows through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1267,7 +861,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/workflows/wf-running-2/cancel",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/workflows/wf-running-2/cancel",
       });
 
       expect(response.statusCode).toBe(200);
@@ -1303,6 +897,12 @@ describe("sync-server workbook agent", () => {
   });
 
   it("passes query input through workbook search workflows", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-search",
+        threadId: "thr-search",
+      }),
+    );
     const startWorkflow = vi.fn(async () =>
       createAgentSessionSnapshot({
         workflowRuns: [
@@ -1348,6 +948,7 @@ describe("sync-server workbook agent", () => {
     const { app } = createSyncServer({
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
         startWorkflow,
       }),
     });
@@ -1355,7 +956,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows",
+        url: "/v2/documents/doc-1/chat/threads/thr-search/workflows",
         payload: {
           workflowTemplate: "searchWorkbookQuery",
           query: "revenue",
@@ -1364,10 +965,18 @@ describe("sync-server workbook agent", () => {
       });
 
       expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-search",
+          },
+        }),
+      );
       expect(startWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: "doc-1",
-          sessionId: "agent-session-1",
+          sessionId: "agent-session-search",
           body: {
             workflowTemplate: "searchWorkbookQuery",
             query: "revenue",
@@ -1380,7 +989,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("reviews workbook agent bundles through the durable thread route", async () => {
+  it("reviews workbook agent bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1429,7 +1038,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/bundles/bundle-1/review",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/review",
         payload: {
           decision: "approved",
         },
@@ -1460,7 +1069,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("updates workbook agent context through a durable thread route", async () => {
+  it("updates workbook agent context through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1485,7 +1094,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/context",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/context",
         payload: {
           context: {
             selection: {
@@ -1536,7 +1145,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("interrupts workbook agent turns through a durable thread route", async () => {
+  it("interrupts workbook agent turns through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1563,7 +1172,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/interrupt",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/interrupt",
       });
 
       expect(response.statusCode).toBe(200);
@@ -1586,47 +1195,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("applies staged workbook bundles through the monolith route", async () => {
-    const applyPendingBundle = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        pendingBundle: null,
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        applyPendingBundle,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
-        payload: {
-          commandIndexes: [1],
-          preview: createPreviewSummary(),
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(applyPendingBundle).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-1",
-          bundleId: "bundle-1",
-          appliedBy: "user",
-          commandIndexes: [1],
-          preview: createPreviewSummary(),
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("applies staged workbook bundles through a durable thread route", async () => {
+  it("applies staged workbook bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1652,7 +1221,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/bundles/bundle-1/apply",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/apply",
         payload: {
           commandIndexes: [1],
           preview: createPreviewSummary(),
@@ -1684,6 +1253,12 @@ describe("sync-server workbook agent", () => {
   });
 
   it("returns a structured conflict envelope when agent apply rejects a stale preview", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-stale",
+        threadId: "thr-stale",
+      }),
+    );
     const applyPendingBundle = vi.fn(async () => {
       throw createWorkbookAgentServiceError({
         code: "WORKBOOK_AGENT_PREVIEW_STALE",
@@ -1696,6 +1271,7 @@ describe("sync-server workbook agent", () => {
     const { app } = createSyncServer({
       logger: false,
       workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
         applyPendingBundle,
       }),
     });
@@ -1703,12 +1279,20 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
+        url: "/v2/documents/doc-1/chat/threads/thr-stale/bundles/bundle-1/apply",
         payload: {
           preview: createPreviewSummary(),
         },
       });
 
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-stale",
+          },
+        }),
+      );
       expect(response.statusCode).toBe(409);
       expect(response.json()).toEqual(
         expect.objectContaining({
@@ -1723,36 +1307,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("dismisses staged workbook bundles through the monolith route", async () => {
-    const dismissPendingBundle = vi.fn(async () => createAgentSessionSnapshot());
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        dismissPendingBundle,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/dismiss",
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(dismissPendingBundle).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-1",
-          bundleId: "bundle-1",
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("dismisses staged workbook bundles through a durable thread route", async () => {
+  it("dismisses staged workbook bundles through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1777,7 +1332,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/bundles/bundle-1/dismiss",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/bundles/bundle-1/dismiss",
       });
 
       expect(response.statusCode).toBe(200);
@@ -1801,95 +1356,7 @@ describe("sync-server workbook agent", () => {
     }
   });
 
-  it("replays prior execution records through the monolith route", async () => {
-    const replayExecutionRecord = vi.fn(async () =>
-      createAgentSessionSnapshot({
-        pendingBundle: {
-          id: "bundle-replay-1",
-          documentId: "doc-1",
-          threadId: "thr-1",
-          turnId: "replay:run-1:10",
-          goalText: "Reapply formatting",
-          summary: "Format Sheet1!A1",
-          scope: "selection",
-          riskClass: "low",
-          approvalMode: "auto",
-          baseRevision: 4,
-          createdAtUnixMs: 10,
-          context: {
-            selection: {
-              sheetName: "Sheet1",
-              address: "A1",
-            },
-            viewport: {
-              rowStart: 0,
-              rowEnd: 10,
-              colStart: 0,
-              colEnd: 5,
-            },
-          },
-          commands: [
-            {
-              kind: "formatRange",
-              range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "A1",
-              },
-              patch: {
-                font: {
-                  bold: true,
-                },
-              },
-            },
-          ],
-          affectedRanges: [
-            {
-              sheetName: "Sheet1",
-              startAddress: "A1",
-              endAddress: "A1",
-              role: "target",
-            },
-          ],
-          estimatedAffectedCells: 1,
-        },
-      }),
-    );
-
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        replayExecutionRecord,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/runs/run-1/replay",
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(replayExecutionRecord).toHaveBeenCalledWith(
-        expect.objectContaining({
-          documentId: "doc-1",
-          sessionId: "agent-session-1",
-          recordId: "run-1",
-        }),
-      );
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          pendingBundle: expect.objectContaining({
-            id: "bundle-replay-1",
-          }),
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("replays prior execution records through a durable thread route", async () => {
+  it("replays prior execution records through the public thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
         sessionId: "agent-session-2",
@@ -1963,7 +1430,7 @@ describe("sync-server workbook agent", () => {
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/v2/documents/doc-1/agent/threads/thr-2/runs/run-1/replay",
+        url: "/v2/documents/doc-1/chat/threads/thr-2/runs/run-1/replay",
       });
 
       expect(response.statusCode).toBe(200);
@@ -1987,74 +1454,6 @@ describe("sync-server workbook agent", () => {
           pendingBundle: expect.objectContaining({
             id: "bundle-replay-1",
           }),
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("returns a structured not-found envelope when the agent event stream session is stale", async () => {
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        getSnapshot() {
-          throw createWorkbookAgentServiceError({
-            code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
-            message: "Workbook agent session not found",
-            statusCode: 404,
-            retryable: true,
-          });
-        },
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/events",
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          error: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
-          message: "Workbook agent session not found",
-          retryable: true,
-        }),
-      );
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("returns a structured not-found envelope when the durable thread event stream is stale", async () => {
-    const { app } = createSyncServer({
-      logger: false,
-      workbookAgentService: createWorkbookAgentServiceStub({
-        async createSession() {
-          throw createWorkbookAgentServiceError({
-            code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
-            message: "Workbook agent session not found",
-            statusCode: 404,
-            retryable: true,
-          });
-        },
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v2/documents/doc-1/agent/threads/thr-1/events",
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          error: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
-          message: "Workbook agent session not found",
-          retryable: true,
         }),
       );
     } finally {

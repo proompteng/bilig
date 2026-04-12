@@ -27,16 +27,14 @@ export const toolbarRootClass = cva(
 );
 
 export const toolbarRowClass = cva(
-  "mx-0 flex min-h-11 items-center gap-1 overflow-x-auto px-2.5 py-1.5 text-[12px] text-[var(--color-mauve-900)]",
+  "mx-0 flex h-10 items-center gap-1 overflow-x-auto px-2.5 py-0 text-[12px] text-[var(--color-mauve-900)]",
 );
 
 export const toolbarGroupClass = cva("flex flex-none items-center gap-1");
 
 export const toolbarSeparatorClass = cva("mx-1.5 h-5 w-px shrink-0 bg-[var(--color-mauve-200)]");
 
-export const toolbarSegmentedClass = cva(
-  "inline-flex h-8 items-center gap-0.5 rounded-md border border-[var(--color-mauve-200)] bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
-);
+export const toolbarSegmentedClass = cva("inline-flex h-8 items-center gap-0.5");
 
 export const toolbarIconClass = cva("h-3.5 w-3.5 shrink-0 stroke-[1.75]");
 
@@ -45,12 +43,12 @@ export const toolbarButtonClass = cva(
   {
     variants: {
       active: {
-        true: "border-[var(--color-mauve-300)] bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        true: "border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] text-[var(--wb-accent)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
         false:
           "border-transparent bg-transparent hover:border-[var(--color-mauve-200)] hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]",
       },
       embedded: {
-        true: "h-7 min-w-7 px-1",
+        true: "h-8 min-w-8 px-1.5",
         false: "h-8 min-w-8 px-1.5",
       },
     },
