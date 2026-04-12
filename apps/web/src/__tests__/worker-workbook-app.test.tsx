@@ -36,12 +36,16 @@ function getToastAction(activeToast: ToastT | null): Action {
   return activeToast.action;
 }
 
-const { useWorkerWorkbookAppState } = vi.hoisted(() => ({
+const { latestWorkbookViewProps, useWorkerWorkbookAppState } = vi.hoisted(() => ({
+  latestWorkbookViewProps: { current: null as Record<string, unknown> | null },
   useWorkerWorkbookAppState: vi.fn(),
 }));
 
 vi.mock("@bilig/grid", () => ({
-  WorkbookView: () => <div data-testid="workbook-view" />,
+  WorkbookView: (props: Record<string, unknown>) => {
+    latestWorkbookViewProps.current = props;
+    return <div data-testid="workbook-view" />;
+  },
 }));
 
 vi.mock("../use-worker-workbook-app-state.js", () => ({
@@ -316,6 +320,119 @@ describe("WorkerWorkbookApp", () => {
 
     expect(approvePersistenceTransfer).toHaveBeenCalledTimes(1);
     expect(dismissPersistenceTransferRequest).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("passes an authoritative selection-range callback into the workbook view", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      approvePersistenceTransfer: vi.fn(),
+      clearAgentError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      editorConflictBanner: null,
+      failedPendingMutation: null,
+      pendingTransferRequest: null,
+      requestPersistenceTransfer: vi.fn(),
+      retryFailedPendingMutation: vi.fn(),
+      remoteSyncAvailable: true,
+      runtimeError: null,
+      runtimeReady: true,
+      workbookReady: true,
+      zeroConfigured: true,
+      localPersistenceMode: "persistent",
+      statusModeLabel: "Live",
+      transferRequested: false,
+      workerHandle: {
+        viewportStore: {},
+      },
+      handleAgentSelectionRangeChange: vi.fn(),
+      selection: { sheetName: "Sheet1", address: "B18" },
+      selectedCell: { sheetName: "Sheet1", address: "B18" },
+      sheetNames: ["Sheet1"],
+      selectionStatus: null,
+      headerStatus: null,
+      previewRanges: [],
+      resolvedValue: "",
+      sideRail: null,
+      sideRailId: undefined,
+      sideRailWidth: undefined,
+      setSelectionLabel: vi.fn(),
+      setSideRailWidth: vi.fn(),
+      commitEditor: vi.fn(),
+      copySelectionRange: vi.fn(),
+      createSheet: vi.fn(),
+      fillSelectionRange: vi.fn(),
+      handleEditorChange: vi.fn(),
+      handleVisibleViewportChange: vi.fn(),
+      invokeColumnVisibilityMutation: vi.fn(),
+      invokeDeleteColumnsMutation: vi.fn(),
+      invokeDeleteRowsMutation: vi.fn(),
+      invokeInsertColumnsMutation: vi.fn(),
+      invokeInsertRowsMutation: vi.fn(),
+      invokeRowVisibilityMutation: vi.fn(),
+      invokeSetFreezePaneMutation: vi.fn(),
+      isEditing: false,
+      isEditingCell: false,
+      moveSelectionRange: vi.fn(),
+      pasteIntoSelection: vi.fn(),
+      renameSheet: vi.fn(),
+      reportRuntimeError: vi.fn(),
+      runtimeErrorBanner: null,
+      selectAddress: vi.fn(),
+      approveBundle: vi.fn(),
+      ribbon: null,
+      dismissPersistenceTransferRequestBanner: null,
+      subscribeViewport: vi.fn(),
+      columnWidths: {},
+      hiddenColumns: {},
+      hiddenRows: {},
+      rowHeights: {},
+      freezeRows: 0,
+      freezeCols: 0,
+      toggleBooleanCell: vi.fn(),
+      visibleEditorValue: "",
+      importPanel: null,
+      importToggle: null,
+      clearImportError: vi.fn(),
+      pendingCommandCount: 0,
+      canUndo: false,
+      canRedo: false,
+      changeCount: 0,
+      changesPanel: null,
+      redoLatestChange: vi.fn(),
+      undoLatestChange: vi.fn(),
+      startNewThread: vi.fn(),
+      requestPersistenceTransferBanner: null,
+      localPersistenceBanner: null,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: "guest:test",
+            defaultDocumentId: "doc-1",
+            persistState: true,
+            zeroCacheUrl: "http://127.0.0.1:4848",
+          }}
+          connectionState={{ name: "connected" }}
+        />,
+      );
+    });
+
+    expect(typeof latestWorkbookViewProps.current?.["onSelectionRangeChange"]).toBe("function");
 
     await act(async () => {
       root.unmount();

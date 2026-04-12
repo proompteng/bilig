@@ -97,6 +97,7 @@ export function useWorkbookGridInteractions(
     | "onSetFreezePane"
     | "onSelect"
     | "onSelectionLabelChange"
+    | "onSelectionRangeChange"
     | "onToggleBooleanCell"
   > & {
     engine: WorkbookGridSurfaceProps["engine"];
@@ -130,6 +131,7 @@ export function useWorkbookGridInteractions(
     onSetFreezePane,
     onSelect,
     onSelectionLabelChange,
+    onSelectionRangeChange,
     onToggleBooleanCell,
     sheetName,
     selectedAddr,
@@ -302,7 +304,12 @@ export function useWorkbookGridInteractions(
     },
     [engine, onToggleBooleanCell, sheetName],
   );
-  useWorkbookGridSelectionSummary({ gridSelection, selectedAddr, onSelectionLabelChange });
+  useWorkbookGridSelectionSummary({
+    gridSelection,
+    selectedAddr,
+    onSelectionLabelChange,
+    onSelectionRangeChange,
+  });
   const allowsRangeMove = Boolean(
     selectionRange &&
     gridSelection.columns.length === 0 &&

@@ -62,6 +62,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onSetFreezePane: props.onSetFreezePane,
     onSelect: props.onSelect,
     onSelectionLabelChange: props.onSelectionLabelChange,
+    onSelectionRangeChange: props.onSelectionRangeChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
     onRowHeightChange: props.onRowHeightChange,
     renderState,

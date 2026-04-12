@@ -42,6 +42,55 @@ export function rectangleToAddresses(range: Rectangle): {
   };
 }
 
+export function selectionToAddresses(
+  selection: GridSelection,
+  fallbackAddress: string,
+): {
+  startAddress: string;
+  endAddress: string;
+} {
+  const selectedColumnStart = selection.columns.first();
+  const selectedColumnEnd = selection.columns.last();
+  const selectedRowStart = selection.rows.first();
+  const selectedRowEnd = selection.rows.last();
+
+  if (
+    selectedColumnStart === 0 &&
+    selectedColumnEnd === MAX_COLS - 1 &&
+    selectedRowStart === 0 &&
+    selectedRowEnd === MAX_ROWS - 1
+  ) {
+    return {
+      startAddress: "A1",
+      endAddress: formatAddress(MAX_ROWS - 1, MAX_COLS - 1),
+    };
+  }
+
+  if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
+    return {
+      startAddress: formatAddress(0, Math.min(selectedColumnStart, selectedColumnEnd)),
+      endAddress: formatAddress(MAX_ROWS - 1, Math.max(selectedColumnStart, selectedColumnEnd)),
+    };
+  }
+
+  if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
+    return {
+      startAddress: formatAddress(Math.min(selectedRowStart, selectedRowEnd), 0),
+      endAddress: formatAddress(Math.max(selectedRowStart, selectedRowEnd), MAX_COLS - 1),
+    };
+  }
+
+  const range = selection.current?.range;
+  if (!range) {
+    return {
+      startAddress: fallbackAddress,
+      endAddress: fallbackAddress,
+    };
+  }
+
+  return rectangleToAddresses(range);
+}
+
 export function createRangeSelection(
   base: GridSelection,
   anchor: Item,

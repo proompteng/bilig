@@ -65,6 +65,9 @@ interface WorkbookViewProps {
     values: readonly (readonly string[])[],
   ): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
+  onSelectionRangeChange?:
+    | ((range: { startAddress: string; endAddress: string }) => void)
+    | undefined;
   ribbon?: React.ReactNode;
   selectionStatus?: React.ReactNode;
   headerStatus?: React.ReactNode;
@@ -137,6 +140,7 @@ export function WorkbookView({
   onToggleBooleanCell,
   onPaste,
   onSelectionLabelChange,
+  onSelectionRangeChange,
   ribbon,
   selectionStatus,
   headerStatus,
@@ -243,6 +247,7 @@ export function WorkbookView({
             onPaste={onPaste}
             onToggleBooleanCell={onToggleBooleanCell}
             onSelectionLabelChange={onSelectionLabelChange}
+            onSelectionRangeChange={onSelectionRangeChange}
             onSelect={onSelect}
             subscribeViewport={subscribeViewport}
             columnWidths={columnWidths}

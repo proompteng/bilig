@@ -27,6 +27,9 @@ export interface WorkbookGridSurfaceProps {
   isEditingCell: boolean;
   onSelect(this: void, addr: string): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
+  onSelectionRangeChange?:
+    | ((range: { startAddress: string; endAddress: string }) => void)
+    | undefined;
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void;
   onEditorChange(this: void, next: string): void;
   onCommitEdit(this: void, movement?: EditMovement): void;

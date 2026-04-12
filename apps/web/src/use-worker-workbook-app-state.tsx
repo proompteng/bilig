@@ -15,6 +15,11 @@ import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { loadPersistedSelection, persistSelection } from "./selection-persistence.js";
 import { ProjectedViewportStore } from "./projected-viewport-store.js";
 import {
+  buildWorkbookAgentContext,
+  singleCellAgentSelectionRange,
+  type WorkbookAgentSelectionRange,
+} from "./workbook-agent-context.js";
+import {
   type EditingMode,
   type ParsedEditorInput,
   type WorkbookEditorConflict,
@@ -143,9 +148,13 @@ export function useWorkerWorkbookAppState(input: {
   const zeroRef = useRef<LocalOnlyZeroSource>(zeroSource);
   const connectionStateRef = useRef(connectionState.name);
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection));
+  const agentSelectionRangeRef = useRef<WorkbookAgentSelectionRange>(
+    singleCellAgentSelectionRange(selection),
+  );
 
   useEffect(() => {
     selectionRef.current = selection;
+    agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection);
   }, [selection]);
 
   useEffect(() => {
@@ -573,15 +582,17 @@ export function useWorkerWorkbookAppState(input: {
   );
   const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState]);
   const getAgentContext = useCallback(
-    () => ({
-      selection: {
-        ...selectionRef.current,
-        range: parseSelectionRangeLabel(selectionLabel, selectionRef.current.sheetName),
-      },
-      viewport: visibleViewportRef.current,
-    }),
-    [selectionLabel],
+    () =>
+      buildWorkbookAgentContext({
+        selection: selectionRef.current,
+        selectionRange: agentSelectionRangeRef.current,
+        viewport: visibleViewportRef.current,
+      }),
+    [],
   );
+  const handleAgentSelectionRangeChange = useCallback((range: WorkbookAgentSelectionRange) => {
+    agentSelectionRangeRef.current = range;
+  }, []);
 
   const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =
     useWorkbookChangesPane({
@@ -825,6 +836,7 @@ export function useWorkerWorkbookAppState(input: {
     selectionStatus,
     sideRailId,
     dismissPersistenceTransferRequest,
+    handleAgentSelectionRangeChange,
     setSideRailWidth,
     setSelectionLabel,
     sheetNames,
