@@ -8,10 +8,16 @@ import {
 describe("workbook agent tool names", () => {
   it("uses clean unprefixed canonical tool names", () => {
     expect(WORKBOOK_AGENT_TOOL_NAMES.readWorkbook).toBe("read_workbook");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.listSheets).toBe("list_sheets");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getSheetView).toBe("get_sheet_view");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getUsedRange).toBe("get_used_range");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getCurrentRegion).toBe("get_current_region");
     expect(WORKBOOK_AGENT_TOOL_NAMES.startWorkflow).toBe("start_workflow");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges).toBe("list_named_ranges");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listTables).toBe("list_tables");
     expect(WORKBOOK_AGENT_TOOL_NAMES.listPivots).toBe("list_pivots");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata).toBe("get_row_metadata");
+    expect(WORKBOOK_AGENT_TOOL_NAMES.getColumnMetadata).toBe("get_column_metadata");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createNamedRange).toBe("create_named_range");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createTable).toBe("create_table");
     expect(WORKBOOK_AGENT_TOOL_NAMES.createPivotTable).toBe("create_pivot_table");
@@ -32,6 +38,12 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig_start_workflow")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_list_sheets")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.listSheets,
+    );
+    expect(normalizeWorkbookAgentToolName("bilig.get_used_range")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.getUsedRange,
+    );
     expect(normalizeWorkbookAgentToolName("bilig_list_named_ranges")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges,
     );
@@ -50,6 +62,9 @@ describe("workbook agent tool names", () => {
     expect(normalizeWorkbookAgentToolName("bilig.delete_pivot_table")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.deletePivotTable,
     );
+    expect(normalizeWorkbookAgentToolName("bilig_get_row_metadata")).toBe(
+      WORKBOOK_AGENT_TOOL_NAMES.getRowMetadata,
+    );
     expect(normalizeWorkbookAgentToolName("bilig_insert_rows")).toBe(
       WORKBOOK_AGENT_TOOL_NAMES.insertRows,
     );
@@ -66,9 +81,13 @@ describe("workbook agent tool names", () => {
     expect(isWorkbookAgentToolName("insert_rows")).toBe(true);
     expect(isWorkbookAgentToolName("set_filter")).toBe(true);
     expect(isWorkbookAgentToolName("search_workbook")).toBe(true);
+    expect(isWorkbookAgentToolName("list_sheets")).toBe(true);
+    expect(isWorkbookAgentToolName("get_current_region")).toBe(true);
     expect(isWorkbookAgentToolName("list_named_ranges")).toBe(true);
     expect(isWorkbookAgentToolName("list_tables")).toBe(true);
     expect(isWorkbookAgentToolName("list_pivots")).toBe(true);
+    expect(isWorkbookAgentToolName("get_row_metadata")).toBe(true);
+    expect(isWorkbookAgentToolName("get_column_metadata")).toBe(true);
     expect(isWorkbookAgentToolName("create_named_range")).toBe(true);
     expect(isWorkbookAgentToolName("create_table")).toBe(true);
     expect(isWorkbookAgentToolName("delete_pivot_table")).toBe(true);

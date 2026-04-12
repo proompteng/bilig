@@ -387,6 +387,197 @@ describe("workbook agent tools", () => {
     expect(text).toContain('"hiddenColumns"');
   });
 
+  it("lists sheets and reads sheet-level workbook view metadata", async () => {
+    const engine = await createEngine();
+    engine.setFreezePane("Sheet1", 1, 0);
+    engine.setFilter("Sheet1", { sheetName: "Sheet1", startAddress: "A1", endAddress: "D3" });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const sheetsResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-list-sheets",
+        tool: "list_sheets",
+        arguments: {},
+      },
+    );
+
+    expect(sheetsResponse.success).toBe(true);
+    const sheetsText = sheetsResponse.contentItems[0];
+    expect(sheetsText?.type).toBe("inputText");
+    expect(sheetsText && "text" in sheetsText ? sheetsText.text : "").toContain('"name": "Sheet1"');
+    expect(sheetsText && "text" in sheetsText ? sheetsText.text : "").toContain(
+      '"name": "Ops Search"',
+    );
+
+    const sheetViewResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-sheet-view",
+        tool: "get_sheet_view",
+        arguments: {
+          sheetName: "Sheet1",
+        },
+      },
+    );
+
+    expect(sheetViewResponse.success).toBe(true);
+    const sheetViewText = sheetViewResponse.contentItems[0];
+    expect(sheetViewText?.type).toBe("inputText");
+    expect(sheetViewText && "text" in sheetViewText ? sheetViewText.text : "").toContain(
+      '"freezePane": {',
+    );
+    expect(sheetViewText && "text" in sheetViewText ? sheetViewText.text : "").toContain(
+      '"filters": [',
+    );
+  });
+
+  it("reads used range, current region, and axis metadata", async () => {
+    const engine = await createEngine();
+    engine.updateRowMetadata("Sheet1", 1, 2, 28, true);
+    engine.updateColumnMetadata("Sheet1", 0, 1, 120, true);
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const usedRangeResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-used-range",
+        tool: "get_used_range",
+        arguments: {
+          sheetName: "Sheet1",
+        },
+      },
+    );
+
+    expect(usedRangeResponse.success).toBe(true);
+    const usedRangeText = usedRangeResponse.contentItems[0];
+    expect(usedRangeText?.type).toBe("inputText");
+    expect(usedRangeText && "text" in usedRangeText ? usedRangeText.text : "").toContain(
+      '"startAddress": "A1"',
+    );
+
+    const currentRegionResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-current-region",
+        tool: "get_current_region",
+        arguments: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+      },
+    );
+
+    expect(currentRegionResponse.success).toBe(true);
+    const currentRegionText = currentRegionResponse.contentItems[0];
+    expect(currentRegionText?.type).toBe("inputText");
+    expect(
+      currentRegionText && "text" in currentRegionText ? currentRegionText.text : "",
+    ).toContain('"derivedA1Ranges": [');
+
+    const rowMetadataResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-row-metadata",
+        tool: "get_row_metadata",
+        arguments: {
+          sheetName: "Sheet1",
+        },
+      },
+    );
+
+    expect(rowMetadataResponse.success).toBe(true);
+    const rowMetadataText = rowMetadataResponse.contentItems[0];
+    expect(rowMetadataText?.type).toBe("inputText");
+    expect(rowMetadataText && "text" in rowMetadataText ? rowMetadataText.text : "").toContain(
+      '"hidden": true',
+    );
+
+    const columnMetadataResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-column-metadata",
+        tool: "get_column_metadata",
+        arguments: {
+          sheetName: "Sheet1",
+        },
+      },
+    );
+
+    expect(columnMetadataResponse.success).toBe(true);
+    const columnMetadataText = columnMetadataResponse.contentItems[0];
+    expect(columnMetadataText?.type).toBe("inputText");
+    expect(
+      columnMetadataText && "text" in columnMetadataText ? columnMetadataText.text : "",
+    ).toContain('"size": 120');
+  });
+
   it("reads the visible viewport through the attached browser context", async () => {
     const engine = await createEngine();
     engine.setFreezePane("Sheet1", 1, 0);

@@ -40,6 +40,10 @@ import {
   workbookAgentObjectToolSpecs,
 } from "./workbook-agent-object-tools.js";
 import {
+  handleWorkbookAgentSheetReadToolCall,
+  workbookAgentSheetReadToolSpecs,
+} from "./workbook-agent-sheet-read-tools.js";
+import {
   cellRangeRefJsonSchema,
   cellRangeRefSchema,
   rangeOrSelectorJsonSchema,
@@ -523,6 +527,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         properties: {},
       },
     },
+    ...workbookAgentSheetReadToolSpecs,
     ...workbookAgentObjectToolSpecs,
     {
       name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
@@ -876,6 +881,10 @@ export async function handleWorkbookAgentToolCall(
 ): Promise<CodexDynamicToolCallResult> {
   try {
     const normalizedTool = normalizeWorkbookAgentToolName(request.tool);
+    const sheetReadToolResult = await handleWorkbookAgentSheetReadToolCall(context, request);
+    if (sheetReadToolResult) {
+      return sheetReadToolResult;
+    }
     const objectToolResult = await handleWorkbookAgentObjectToolCall(context, request);
     if (objectToolResult) {
       return objectToolResult;
