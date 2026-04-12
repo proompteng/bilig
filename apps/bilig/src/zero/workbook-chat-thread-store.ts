@@ -379,7 +379,6 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       execution_policy TEXT NOT NULL DEFAULT 'autoApplyAll',
       context_json JSONB,
       entry_count BIGINT NOT NULL DEFAULT 0,
-      has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE,
       latest_entry_text TEXT,
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
@@ -405,10 +404,6 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS entry_count BIGINT NOT NULL DEFAULT 0;
-  `);
-  await db.query(`
-    ALTER TABLE workbook_chat_thread
-      ADD COLUMN IF NOT EXISTS has_pending_bundle BOOLEAN NOT NULL DEFAULT FALSE;
   `);
   await db.query(`
     ALTER TABLE workbook_chat_thread
@@ -455,32 +450,6 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       ADD COLUMN IF NOT EXISTS citations_json JSONB;
   `);
   await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_pending_bundle (
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      bundle_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      goal_text TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      risk_class TEXT NOT NULL,
-      approval_mode TEXT NOT NULL,
-      base_revision BIGINT NOT NULL,
-      created_at_unix_ms BIGINT NOT NULL,
-      context_json JSONB,
-      commands_json JSONB NOT NULL,
-      affected_ranges_json JSONB NOT NULL,
-      estimated_affected_cells BIGINT,
-      shared_review_json JSONB,
-      PRIMARY KEY (workbook_id, thread_id, actor_user_id)
-    )
-  `);
-  await db.query(`
-    ALTER TABLE workbook_pending_bundle
-      ADD COLUMN IF NOT EXISTS shared_review_json JSONB;
-  `);
-  await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_review_queue_item (
       workbook_id TEXT NOT NULL,
       thread_id TEXT NOT NULL,
@@ -507,63 +476,73 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
     )
   `);
   await db.query(`
-    INSERT INTO workbook_review_queue_item (
-      workbook_id,
-      thread_id,
-      actor_user_id,
-      review_item_id,
-      turn_id,
-      goal_text,
-      summary,
-      scope,
-      risk_class,
-      review_mode,
-      owner_user_id,
-      status,
-      decided_by_user_id,
-      decided_at_unix_ms,
-      base_revision,
-      created_at_unix_ms,
-      context_json,
-      commands_json,
-      affected_ranges_json,
-      estimated_affected_cells,
-      recommendations_json
-    )
-    SELECT
-      workbook_id,
-      thread_id,
-      actor_user_id,
-      bundle_id,
-      turn_id,
-      goal_text,
-      summary,
-      scope,
-      risk_class,
-      CASE
-        WHEN shared_review_json IS NOT NULL THEN 'ownerReview'
-        ELSE 'manual'
-      END,
-      shared_review_json ->> 'ownerUserId',
-      COALESCE(shared_review_json ->> 'status', 'pending'),
-      shared_review_json ->> 'decidedByUserId',
-      NULLIF(shared_review_json ->> 'decidedAtUnixMs', '')::BIGINT,
-      base_revision,
-      created_at_unix_ms,
-      context_json,
-      commands_json,
-      affected_ranges_json,
-      estimated_affected_cells,
-      COALESCE(shared_review_json -> 'recommendations', '[]'::jsonb)
-    FROM workbook_pending_bundle AS legacy
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM workbook_review_queue_item AS review_item
-      WHERE review_item.workbook_id = legacy.workbook_id
-        AND review_item.thread_id = legacy.thread_id
-        AND review_item.actor_user_id = legacy.actor_user_id
-        AND review_item.review_item_id = legacy.bundle_id
-    )
+    DO $migration$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = current_schema()
+          AND table_name = 'workbook_pending_bundle'
+      ) THEN
+        INSERT INTO workbook_review_queue_item (
+          workbook_id,
+          thread_id,
+          actor_user_id,
+          review_item_id,
+          turn_id,
+          goal_text,
+          summary,
+          scope,
+          risk_class,
+          review_mode,
+          owner_user_id,
+          status,
+          decided_by_user_id,
+          decided_at_unix_ms,
+          base_revision,
+          created_at_unix_ms,
+          context_json,
+          commands_json,
+          affected_ranges_json,
+          estimated_affected_cells,
+          recommendations_json
+        )
+        SELECT
+          workbook_id,
+          thread_id,
+          actor_user_id,
+          bundle_id,
+          turn_id,
+          goal_text,
+          summary,
+          scope,
+          risk_class,
+          CASE
+            WHEN shared_review_json IS NOT NULL THEN 'ownerReview'
+            ELSE 'manual'
+          END,
+          shared_review_json ->> 'ownerUserId',
+          COALESCE(shared_review_json ->> 'status', 'pending'),
+          shared_review_json ->> 'decidedByUserId',
+          NULLIF(shared_review_json ->> 'decidedAtUnixMs', '')::BIGINT,
+          base_revision,
+          created_at_unix_ms,
+          context_json,
+          commands_json,
+          affected_ranges_json,
+          estimated_affected_cells,
+          COALESCE(shared_review_json -> 'recommendations', '[]'::jsonb)
+        FROM workbook_pending_bundle AS legacy
+        ON CONFLICT (workbook_id, thread_id, actor_user_id, review_item_id) DO NOTHING;
+
+        DROP TABLE workbook_pending_bundle;
+      END IF;
+    END
+    $migration$
+  `);
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      DROP COLUMN IF EXISTS has_pending_bundle;
   `);
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
@@ -635,18 +614,16 @@ export async function saveWorkbookAgentThreadState(
         execution_policy,
         context_json,
         entry_count,
-        has_pending_bundle,
         latest_entry_text,
         updated_at_unix_ms
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
       ON CONFLICT (workbook_id, thread_id, actor_user_id)
       DO UPDATE SET
         scope = EXCLUDED.scope,
         execution_policy = EXCLUDED.execution_policy,
         context_json = EXCLUDED.context_json,
         entry_count = EXCLUDED.entry_count,
-        has_pending_bundle = EXCLUDED.has_pending_bundle,
         latest_entry_text = EXCLUDED.latest_entry_text,
         updated_at_unix_ms = EXCLUDED.updated_at_unix_ms
     `,
@@ -658,7 +635,6 @@ export async function saveWorkbookAgentThreadState(
       record.executionPolicy,
       JSON.stringify(record.context),
       persistedEntries.length,
-      record.reviewQueueItems.length > 0,
       latestEntryText,
       record.updatedAtUnixMs,
     ],

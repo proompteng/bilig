@@ -159,7 +159,6 @@ const workbookChatThread = table("workbook_chat_thread")
     scope: string<"private" | "shared">(),
     updatedAtUnixMs: number().from("updated_at_unix_ms"),
     entryCount: number().from("entry_count"),
-    hasPendingBundle: boolean().from("has_pending_bundle"),
     latestEntryText: string().from("latest_entry_text").optional(),
   })
   .primaryKey("workbookId", "threadId", "ownerUserId");

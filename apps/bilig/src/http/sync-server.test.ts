@@ -164,7 +164,7 @@ function createWorkbookAgentServiceStub(
           subscriberCount: 0,
           activeTurnCount: 0,
           runningWorkflowCount: 0,
-          pendingBundleCount: 0,
+          reviewQueueSessionCount: 0,
           sharedPendingReviewCount: 0,
         },
         pool: {
@@ -1510,7 +1510,7 @@ describe("sync-server workbook agent", () => {
               subscriberCount: 4,
               activeTurnCount: 1,
               runningWorkflowCount: 1,
-              pendingBundleCount: 1,
+              reviewQueueSessionCount: 1,
               sharedPendingReviewCount: 1,
             },
             pool: {
@@ -1593,7 +1593,7 @@ describe("sync-server workbook agent", () => {
               subscriberCount: 0,
               activeTurnCount: 0,
               runningWorkflowCount: 0,
-              pendingBundleCount: 0,
+              reviewQueueSessionCount: 0,
               sharedPendingReviewCount: 0,
             },
             pool: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ensureWorkbookChatThreadSchema,
   listWorkbookAgentThreadSummaries,
   loadWorkbookAgentThreadState,
   saveWorkbookAgentThreadState,
@@ -85,10 +86,10 @@ function createThreadState() {
         citations: [],
       },
       {
-        id: "system-preview:bundle-1",
+        id: "system-review-item:review-1",
         kind: "system" as const,
         turnId: "turn-1",
-        text: "Preview bundle staged",
+        text: "Review item queued",
         phase: null,
         toolName: null,
         toolStatus: null,
@@ -106,58 +107,123 @@ function createThreadState() {
         ],
       },
     ],
-    pendingBundle: {
-      id: "bundle-1",
-      documentId: "doc-1",
-      threadId: "thr-1",
-      turnId: "turn-1",
-      goalText: "Normalize selection",
-      summary: "Write cells in Sheet1!B2",
-      scope: "selection" as const,
-      riskClass: "low" as const,
-      approvalMode: "preview" as const,
-      baseRevision: 12,
-      createdAtUnixMs: 100,
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
+    reviewQueueItems: [
+      {
+        id: "review-1",
+        documentId: "doc-1",
+        threadId: "thr-1",
+        turnId: "turn-1",
+        goalText: "Normalize selection",
+        summary: "Write cells in Sheet1!B2",
+        scope: "selection" as const,
+        riskClass: "low" as const,
+        reviewMode: "manual" as const,
+        ownerUserId: null,
+        status: "pending" as const,
+        decidedByUserId: null,
+        decidedAtUnixMs: null,
+        recommendations: [],
+        baseRevision: 12,
+        createdAtUnixMs: 100,
+        context: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 20,
+            colStart: 0,
+            colEnd: 8,
+          },
         },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 20,
-          colStart: 0,
-          colEnd: 8,
-        },
+        commands: [
+          {
+            kind: "writeRange" as const,
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            values: [[42]],
+          },
+        ],
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "B2",
+            endAddress: "B2",
+            role: "target" as const,
+          },
+        ],
+        estimatedAffectedCells: 1,
       },
-      commands: [
-        {
-          kind: "writeRange" as const,
-          sheetName: "Sheet1",
-          startAddress: "B2",
-          values: [[42]],
-        },
-      ],
-      affectedRanges: [
-        {
-          sheetName: "Sheet1",
-          startAddress: "B2",
-          endAddress: "B2",
-          role: "target" as const,
-        },
-      ],
-      estimatedAffectedCells: 1,
-      sharedReview: null,
-    },
+    ],
     updatedAtUnixMs: 1234,
   };
 }
 
+function createReviewQueueItemRow(state: ReturnType<typeof createThreadState>) {
+  return state.reviewQueueItems.map((reviewItem) => ({
+    reviewItemId: reviewItem.id,
+    workbookId: reviewItem.documentId,
+    threadId: reviewItem.threadId,
+    actorUserId: state.actorUserId,
+    turnId: reviewItem.turnId,
+    goalText: reviewItem.goalText,
+    summary: reviewItem.summary,
+    scope: reviewItem.scope,
+    riskClass: reviewItem.riskClass,
+    reviewMode: reviewItem.reviewMode,
+    ownerUserId: reviewItem.ownerUserId,
+    status: reviewItem.status,
+    decidedByUserId: reviewItem.decidedByUserId,
+    decidedAtUnixMs: reviewItem.decidedAtUnixMs,
+    baseRevision: reviewItem.baseRevision,
+    createdAtUnixMs: reviewItem.createdAtUnixMs,
+    contextJson: reviewItem.context,
+    commandsJson: reviewItem.commands,
+    affectedRangesJson: reviewItem.affectedRanges,
+    estimatedAffectedCells: reviewItem.estimatedAffectedCells,
+    recommendationsJson: reviewItem.recommendations,
+  })) satisfies QueryResultRow[];
+}
+
 describe("workbook-chat-thread-store", () => {
-  it("persists thread metadata, timeline items, and pending bundle rows", async () => {
+  it("hard-migrates legacy pending-bundle storage and drops the legacy schema", async () => {
     const queryable = new FakeQueryable();
 
-    await saveWorkbookAgentThreadState(queryable, createThreadState());
+    await ensureWorkbookChatThreadSchema(queryable);
+
+    expect(
+      queryable.calls.some((call) =>
+        call.text.includes("CREATE TABLE IF NOT EXISTS workbook_review_queue_item"),
+      ),
+    ).toBe(true);
+    expect(
+      queryable.calls.some((call) =>
+        call.text.includes("DROP COLUMN IF EXISTS has_pending_bundle"),
+      ),
+    ).toBe(true);
+    expect(
+      queryable.calls.some((call) => call.text.includes("DROP TABLE workbook_pending_bundle")),
+    ).toBe(true);
+    expect(
+      queryable.calls.some(
+        (call) =>
+          call.text.includes("FROM information_schema.tables") &&
+          call.text.includes("table_name = 'workbook_pending_bundle'"),
+      ),
+    ).toBe(true);
+    expect(
+      queryable.calls.some((call) =>
+        call.text.includes("CREATE TABLE IF NOT EXISTS workbook_pending_bundle"),
+      ),
+    ).toBe(false);
+  });
+
+  it("persists thread metadata, timeline items, and review queue rows", async () => {
+    const queryable = new FakeQueryable();
+    const state = createThreadState();
+
+    await saveWorkbookAgentThreadState(queryable, state);
 
     expect(
       queryable.calls.some((call) => call.text.includes("INSERT INTO workbook_chat_thread")),
@@ -165,13 +231,16 @@ describe("workbook-chat-thread-store", () => {
     const threadInsert = queryable.calls.find((call) =>
       call.text.includes("INSERT INTO workbook_chat_thread"),
     );
-    expect(threadInsert?.values?.[4]).toBe(createThreadState().executionPolicy);
-    expect(threadInsert?.values?.[5]).toBe(JSON.stringify(createThreadState().context));
+    expect(threadInsert?.values?.[4]).toBe(state.executionPolicy);
+    expect(threadInsert?.values?.[5]).toBe(JSON.stringify(state.context));
     expect(threadInsert?.values?.[6]).toBe(3);
-    expect(threadInsert?.values?.[7]).toBe(true);
-    expect(threadInsert?.values?.[8]).toBe("Preview bundle staged");
+    expect(threadInsert?.values?.[7]).toBe("Review item queued");
+    expect(threadInsert?.values?.[8]).toBe(state.updatedAtUnixMs);
     expect(
       queryable.calls.some((call) => call.text.includes("DELETE FROM workbook_chat_item")),
+    ).toBe(true);
+    expect(
+      queryable.calls.some((call) => call.text.includes("DELETE FROM workbook_review_queue_item")),
     ).toBe(true);
     expect(
       queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_chat_item")).length,
@@ -180,16 +249,19 @@ describe("workbook-chat-thread-store", () => {
       queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_chat_tool_call"))
         .length,
     ).toBe(1);
-    const bundleInsert = queryable.calls.find((call) =>
-      call.text.includes("INSERT INTO workbook_pending_bundle"),
+    const reviewInsert = queryable.calls.find((call) =>
+      call.text.includes("INSERT INTO workbook_review_queue_item"),
     );
-    expect(bundleInsert?.values?.[3]).toBe("bundle-1");
-    expect(bundleInsert?.values?.[7]).toBe("selection");
-    expect(bundleInsert?.values?.[16]).toBe(JSON.stringify(null));
+    expect(reviewInsert?.values?.[3]).toBe("review-1");
+    expect(reviewInsert?.values?.[9]).toBe("manual");
+    expect(reviewInsert?.values?.[20]).toBe(JSON.stringify([]));
+    expect(
+      queryable.calls.some((call) => call.text.includes("INSERT INTO workbook_pending_bundle")),
+    ).toBe(false);
     const itemInsert = queryable.calls.find(
       (call) =>
         call.text.includes("INSERT INTO workbook_chat_item") &&
-        call.values?.[3] === "system-preview:bundle-1",
+        call.values?.[3] === "system-review-item:review-1",
     );
     expect(itemInsert?.values?.[14]).toBe(
       JSON.stringify([
@@ -237,7 +309,7 @@ describe("workbook-chat-thread-store", () => {
     expect(itemInserts.every((call) => call.text.includes("ON CONFLICT"))).toBe(true);
   });
 
-  it("loads a durable thread snapshot with entries and a pending bundle", async () => {
+  it("loads a durable thread snapshot with entries and review queue items", async () => {
     const state = createThreadState();
     const queryable = new FakeQueryable([
       (text) =>
@@ -287,29 +359,7 @@ describe("workbook-chat-thread-store", () => {
               }))
           : null,
       (text) =>
-        text.includes("FROM workbook_pending_bundle")
-          ? [
-              {
-                bundleId: state.pendingBundle?.id,
-                workbookId: state.pendingBundle?.documentId,
-                threadId: state.pendingBundle?.threadId,
-                actorUserId: state.actorUserId,
-                turnId: state.pendingBundle?.turnId,
-                goalText: state.pendingBundle?.goalText,
-                summary: state.pendingBundle?.summary,
-                scope: state.pendingBundle?.scope,
-                riskClass: state.pendingBundle?.riskClass,
-                approvalMode: state.pendingBundle?.approvalMode,
-                baseRevision: state.pendingBundle?.baseRevision,
-                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
-                contextJson: state.pendingBundle?.context,
-                commandsJson: state.pendingBundle?.commands,
-                affectedRangesJson: state.pendingBundle?.affectedRanges,
-                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
-                sharedReviewJson: state.pendingBundle?.sharedReview,
-              } satisfies QueryResultRow,
-            ]
-          : null,
+        text.includes("FROM workbook_review_queue_item") ? createReviewQueueItemRow(state) : null,
     ]);
 
     const loaded = await loadWorkbookAgentThreadState(queryable, {
@@ -377,27 +427,8 @@ describe("workbook-chat-thread-store", () => {
               }))
           : null,
       (text, values) =>
-        text.includes("FROM workbook_pending_bundle") && values?.[2] === "alex@example.com"
-          ? [
-              {
-                bundleId: state.pendingBundle?.id,
-                workbookId: state.pendingBundle?.documentId,
-                threadId: state.pendingBundle?.threadId,
-                actorUserId: state.actorUserId,
-                turnId: state.pendingBundle?.turnId,
-                goalText: state.pendingBundle?.goalText,
-                summary: state.pendingBundle?.summary,
-                scope: state.pendingBundle?.scope,
-                riskClass: state.pendingBundle?.riskClass,
-                approvalMode: state.pendingBundle?.approvalMode,
-                baseRevision: state.pendingBundle?.baseRevision,
-                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
-                contextJson: state.pendingBundle?.context,
-                commandsJson: state.pendingBundle?.commands,
-                affectedRangesJson: state.pendingBundle?.affectedRanges,
-                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
-              } satisfies QueryResultRow,
-            ]
+        text.includes("FROM workbook_review_queue_item") && values?.[2] === "alex@example.com"
+          ? createReviewQueueItemRow(state)
           : null,
     ]);
 
@@ -461,29 +492,7 @@ describe("workbook-chat-thread-store", () => {
             ]
           : null,
       (text) =>
-        text.includes("FROM workbook_pending_bundle")
-          ? [
-              {
-                bundleId: state.pendingBundle?.id,
-                workbookId: state.pendingBundle?.documentId,
-                threadId: state.pendingBundle?.threadId,
-                actorUserId: state.actorUserId,
-                turnId: state.pendingBundle?.turnId,
-                goalText: state.pendingBundle?.goalText,
-                summary: state.pendingBundle?.summary,
-                scope: state.pendingBundle?.scope,
-                riskClass: state.pendingBundle?.riskClass,
-                approvalMode: state.pendingBundle?.approvalMode,
-                baseRevision: state.pendingBundle?.baseRevision,
-                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
-                contextJson: state.pendingBundle?.context,
-                commandsJson: state.pendingBundle?.commands,
-                affectedRangesJson: state.pendingBundle?.affectedRanges,
-                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
-                sharedReviewJson: state.pendingBundle?.sharedReview,
-              } satisfies QueryResultRow,
-            ]
-          : null,
+        text.includes("FROM workbook_review_queue_item") ? createReviewQueueItemRow(state) : null,
     ]);
 
     const loaded = await loadWorkbookAgentThreadState(queryable, {
@@ -506,7 +515,7 @@ describe("workbook-chat-thread-store", () => {
                 ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 200,
                 entryCount: 3,
-                hasPendingBundle: false,
+                reviewQueueItemCount: 0,
                 latestEntryText: "Applied shared cleanup at revision r7",
               } satisfies QueryResultRow,
               {
@@ -515,8 +524,8 @@ describe("workbook-chat-thread-store", () => {
                 ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 100,
                 entryCount: 1,
-                hasPendingBundle: true,
-                latestEntryText: "Preview bundle staged",
+                reviewQueueItemCount: 1,
+                latestEntryText: "Review item queued",
               } satisfies QueryResultRow,
             ]
           : null,
@@ -534,7 +543,7 @@ describe("workbook-chat-thread-store", () => {
         ownerUserId: "alex@example.com",
         updatedAtUnixMs: 200,
         entryCount: 3,
-        hasPendingBundle: false,
+        reviewQueueItemCount: 0,
         latestEntryText: "Applied shared cleanup at revision r7",
       },
       {
@@ -543,8 +552,8 @@ describe("workbook-chat-thread-store", () => {
         ownerUserId: "alex@example.com",
         updatedAtUnixMs: 100,
         entryCount: 1,
-        hasPendingBundle: true,
-        latestEntryText: "Preview bundle staged",
+        reviewQueueItemCount: 1,
+        latestEntryText: "Review item queued",
       },
     ]);
   });
@@ -560,8 +569,8 @@ describe("workbook-chat-thread-store", () => {
                 ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 300,
                 entryCount: 2,
-                hasPendingBundle: false,
-                latestEntryText: "Applied preview bundle at revision r9",
+                reviewQueueItemCount: 0,
+                latestEntryText: "Applied shared cleanup at revision r9",
               } satisfies QueryResultRow,
             ]
           : null,
@@ -579,8 +588,8 @@ describe("workbook-chat-thread-store", () => {
         ownerUserId: "alex@example.com",
         updatedAtUnixMs: 300,
         entryCount: 2,
-        hasPendingBundle: false,
-        latestEntryText: "Applied preview bundle at revision r9",
+        reviewQueueItemCount: 0,
+        latestEntryText: "Applied shared cleanup at revision r9",
       },
     ]);
     expect(queryable.calls.at(-1)?.text).toContain(

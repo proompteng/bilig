@@ -178,8 +178,6 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
 }
 
 function createThreadSummary(overrides: Record<string, unknown> = {}) {
-  const legacyHasPendingBundle = overrides["hasPendingBundle"];
-  const { hasPendingBundle: _hasPendingBundle, ...restOverrides } = overrides;
   return {
     threadId: "thr-1",
     scope: "private",
@@ -187,13 +185,9 @@ function createThreadSummary(overrides: Record<string, unknown> = {}) {
     updatedAtUnixMs: 100,
     entryCount: 1,
     reviewQueueItemCount:
-      typeof restOverrides["reviewQueueItemCount"] === "number"
-        ? restOverrides["reviewQueueItemCount"]
-        : legacyHasPendingBundle === true
-          ? 1
-          : 0,
+      typeof overrides["reviewQueueItemCount"] === "number" ? overrides["reviewQueueItemCount"] : 0,
     latestEntryText: null,
-    ...restOverrides,
+    ...overrides,
   };
 }
 

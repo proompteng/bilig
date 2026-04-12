@@ -259,7 +259,7 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
         subscriberCount: 0,
         activeTurnCount: 0,
         runningWorkflowCount: 0,
-        pendingBundleCount: 0,
+        reviewQueueSessionCount: 0,
         sharedPendingReviewCount: 0,
       },
       pool: {
@@ -330,7 +330,7 @@ export interface WorkbookAgentObservabilitySnapshot {
     readonly subscriberCount: number;
     readonly activeTurnCount: number;
     readonly runningWorkflowCount: number;
-    readonly pendingBundleCount: number;
+    readonly reviewQueueSessionCount: number;
     readonly sharedPendingReviewCount: number;
   };
   readonly pool: CodexAppServerClientPoolStats;
@@ -506,16 +506,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
   }
 
-  private async applyPendingBundleForSessionState(input: {
+  private async applyCommandBundleForSessionState(input: {
     sessionState: WorkbookAgentThreadState;
-    pendingBundle: WorkbookAgentCommandBundle;
+    commandBundle: WorkbookAgentCommandBundle;
     actorUserId: string;
     appliedBy: WorkbookAgentAppliedBy;
     commandIndexes?: readonly number[] | null | undefined;
     preview: WorkbookAgentPreviewSummary;
   }): Promise<WorkbookAgentExecutionRecord> {
     const selection = splitWorkbookAgentCommandBundle({
-      bundle: input.pendingBundle,
+      bundle: input.commandBundle,
       acceptedCommandIndexes: input.commandIndexes,
     });
     if (!selection.acceptedBundle || !selection.acceptedScope) {
@@ -572,7 +572,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (
       requiresWorkbookAgentOwnerReview({
         scope: input.sessionState.scope,
-        riskClass: input.pendingBundle.riskClass,
+        riskClass: input.commandBundle.riskClass,
       }) &&
       input.sessionState.storageActorUserId !== input.actorUserId
     ) {
@@ -583,11 +583,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    const sharedReview = normalizeSharedReviewState(input.pendingBundle, input.sessionState);
+    const sharedReview = normalizeSharedReviewState(input.commandBundle, input.sessionState);
     if (
       requiresWorkbookAgentOwnerReview({
         scope: input.sessionState.scope,
-        riskClass: input.pendingBundle.riskClass,
+        riskClass: input.commandBundle.riskClass,
       }) &&
       sharedReview?.status !== "approved"
     ) {
@@ -611,7 +611,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     const executionRecord = buildWorkbookAgentExecutionRecord({
       bundle: selection.acceptedBundle,
       actorUserId: input.actorUserId,
-      planText: this.collectPlanTextForTurn(input.sessionState, input.pendingBundle.turnId),
+      planText: this.collectPlanTextForTurn(input.sessionState, input.commandBundle.turnId),
       preview: result.preview,
       appliedRevision: result.revision,
       appliedBy: input.appliedBy,
@@ -653,7 +653,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionState.durable.entries,
       createSystemEntry(
         `system-apply:${executionRecord.id}`,
-        input.pendingBundle.turnId,
+        input.commandBundle.turnId,
         `${input.appliedBy === "auto" ? "Applied automatically" : "Applied"} ${
           selection.acceptedScope === "partial" ? "selected " : ""
         }workbook change set at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
@@ -683,9 +683,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.sessionState.documentId,
       input.bundle,
     );
-    const executionRecord = await this.applyPendingBundleForSessionState({
+    const executionRecord = await this.applyCommandBundleForSessionState({
       sessionState: input.sessionState,
-      pendingBundle: input.bundle,
+      commandBundle: input.bundle,
       actorUserId: input.actorUserId,
       appliedBy: "auto",
       preview,
@@ -714,9 +714,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         input.sessionState.documentId,
         queuedBundle,
       );
-      await this.applyPendingBundleForSessionState({
+      await this.applyCommandBundleForSessionState({
         sessionState: input.sessionState,
-        pendingBundle: queuedBundle,
+        commandBundle: queuedBundle,
         actorUserId,
         appliedBy: "auto",
         preview,
@@ -781,7 +781,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             sessionState.durable.workflowRuns.filter((run) => run.status === "running").length,
           0,
         ),
-        pendingBundleCount: sessions.filter(
+        reviewQueueSessionCount: sessions.filter(
           (sessionState) => sessionState.durable.reviewQueueItems.length > 0,
         ).length,
         sharedPendingReviewCount: sessions.filter((sessionState) => {
@@ -1019,9 +1019,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         }),
       );
       const preview = await this.buildAuthoritativePreview(input.documentId, migratedBundle);
-      await this.applyPendingBundleForSessionState({
+      await this.applyCommandBundleForSessionState({
         sessionState,
-        pendingBundle: migratedBundle,
+        commandBundle: migratedBundle,
         actorUserId: input.session.userID,
         appliedBy: "auto",
         preview,
@@ -1283,9 +1283,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
-    await this.applyPendingBundleForSessionState({
+    await this.applyCommandBundleForSessionState({
       sessionState,
-      pendingBundle: toWorkbookAgentCommandBundle(reviewItem),
+      commandBundle: toWorkbookAgentCommandBundle(reviewItem),
       actorUserId: input.session.userID,
       appliedBy: input.appliedBy,
       commandIndexes: input.commandIndexes,
@@ -1469,9 +1469,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         }),
       );
       const preview = await this.buildAuthoritativePreview(input.documentId, replayedBundle);
-      await this.applyPendingBundleForSessionState({
+      await this.applyCommandBundleForSessionState({
         sessionState,
-        pendingBundle: replayedBundle,
+        commandBundle: replayedBundle,
         actorUserId: input.session.userID,
         appliedBy: "auto",
         preview,
