@@ -12,7 +12,6 @@ import {
   dragProductColumnResize,
   getProductColumnLeft,
   getProductColumnWidth,
-  openZeroWorkbookPage,
   waitForWorkbookReady,
 } from "./web-shell-helpers.js";
 const fuzzBrowserEnabled = process.env["BILIG_FUZZ_BROWSER"] === "1";
@@ -714,7 +713,8 @@ test("web app supports product-shell column resize", async ({ page }) => {
 
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   const documentId = `playwright-invalid-formula-${Date.now()}`;
-  await openZeroWorkbookPage(page, documentId);
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`);
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
