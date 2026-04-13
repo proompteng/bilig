@@ -349,4 +349,77 @@ describe("createExactColumnIndexService", () => {
       }),
     ).toEqual({ handled: true, position: 3 });
   });
+
+  it("falls back to rebuilds when incremental literal writes invalidate comparable kinds or structure versions", () => {
+    const workbook = new WorkbookStore("exact-index-rebuild-fallbacks");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 2, 3].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+
+    const prepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    });
+
+    const pearId = strings.intern("pear");
+    setStoredCellValue(workbook, strings, "Sheet1", "A2", {
+      tag: ValueTag.String,
+      value: "pear",
+    });
+    exact.recordLiteralWrite({
+      sheetName: "Sheet1",
+      row: 1,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 2 },
+      newValue: { tag: ValueTag.String, value: "pear" },
+      newStringId: pearId,
+    });
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "PEAR" },
+        prepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    workbook.deleteRows("Sheet1", 0, 1);
+    workbook.remapSheetCells("Sheet1", "row", (index) => (index === 0 ? undefined : index - 1));
+    setStoredCellValue(workbook, strings, "Sheet1", "A2", {
+      tag: ValueTag.Number,
+      value: 30,
+    });
+
+    exact.recordLiteralWrite({
+      sheetName: "Sheet1",
+      row: 1,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 3 },
+      newValue: { tag: ValueTag.Number, value: 30 },
+    });
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 30 },
+        prepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+  });
 });

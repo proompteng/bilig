@@ -37,6 +37,9 @@ describe("core guards", () => {
 
   it("rejects malformed render commit ops", () => {
     expect(isCommitOp({ kind: "upsertCell", sheetName: "Sheet1", addr: "A1" })).toBe(false);
+    expect(isCommitOp(null)).toBe(false);
+    expect(isCommitOp({ kind: "deleteSheet", name: "Sheet1" })).toBe(true);
+    expect(isCommitOp({ kind: "unsupported" })).toBe(false);
     expect(isCommitOps([{ kind: "renameSheet", oldName: "A" }])).toBe(false);
   });
 });

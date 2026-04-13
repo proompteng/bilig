@@ -161,4 +161,42 @@ describe("createEngineRuntimeColumnStoreService", () => {
       tag: ValueTag.Empty,
     });
   });
+
+  it("materializes error cells and falls back to raw lookup text when no string id is present", () => {
+    const workbook = new WorkbookStore("runtime-column-store-errors");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    const cellIndex = workbook.ensureCell("Sheet1", "A1");
+    workbook.cellStore.tags[cellIndex] = ValueTag.Error;
+    workbook.cellStore.errors[cellIndex] = 42;
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+
+    expect(runtimeColumnStore.readCellValue("Sheet1", 0, 0)).toEqual({
+      tag: ValueTag.Error,
+      code: 42,
+    });
+    expect(
+      runtimeColumnStore.normalizeLookupText({
+        tag: ValueTag.String,
+        value: "pear",
+        stringId: 0,
+      }),
+    ).toBe("PEAR");
+
+    const slice = runtimeColumnStore.getColumnSlice({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 0,
+      col: 0,
+    });
+    slice.tags[0] = 99;
+
+    expect(runtimeColumnStore.readCellValue("Sheet1", 0, 0)).toEqual({
+      tag: ValueTag.Empty,
+    });
+  });
 });

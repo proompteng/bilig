@@ -9,10 +9,35 @@ import {
   type EngineMutationSupportService,
 } from "../engine/services/mutation-support-service.js";
 
+interface MutationSupportScratch {
+  changedInputEpoch: number;
+  changedFormulaEpoch: number;
+  changedUnionEpoch: number;
+  explicitChangedEpoch: number;
+  impactedFormulaEpoch: number;
+  materializedCellCount: number;
+  changedInputSeen: Uint32Array;
+  changedInputBuffer: Uint32Array;
+  changedFormulaSeen: Uint32Array;
+  changedFormulaBuffer: Uint32Array;
+  changedUnionSeen: Uint32Array;
+  changedUnion: Uint32Array;
+  mutationRoots: Uint32Array;
+  materializedCells: Uint32Array;
+  explicitChangedSeen: Uint32Array;
+  explicitChangedBuffer: Uint32Array;
+  impactedFormulaSeen: Uint32Array;
+  impactedFormulaBuffer: Uint32Array;
+}
+
+type StubMutationSupportService = EngineMutationSupportService & {
+  readonly __scratch: MutationSupportScratch;
+};
+
 function createStubMutationSupportService(
   overrides: Partial<Parameters<typeof createEngineMutationSupportService>[0]> = {},
-): EngineMutationSupportService {
-  const scratch = {
+): StubMutationSupportService {
+  const scratch: MutationSupportScratch = {
     changedInputEpoch: 1,
     changedFormulaEpoch: 1,
     changedUnionEpoch: 1,
@@ -156,7 +181,9 @@ function createStubMutationSupportService(
     },
   };
 
-  return createEngineMutationSupportService({ ...defaults, ...overrides });
+  return Object.assign(createEngineMutationSupportService({ ...defaults, ...overrides }), {
+    __scratch: scratch,
+  });
 }
 
 function isEngineMutationSupportService(value: unknown): value is EngineMutationSupportService {
@@ -248,6 +275,41 @@ describe("EngineMutationSupportService", () => {
 
     Effect.runSync(support.resetMaterializedCellScratch(8));
     expect(Effect.runSync(support.syncDynamicRanges(0))).toBe(0);
+  });
+
+  it("covers direct changed-set composition branches for tiny and deduplicated unions", () => {
+    const support = createStubMutationSupportService();
+
+    Effect.runSync(support.beginMutationCollection());
+    expect(Effect.runSync(support.markExplicitChanged(1, 0))).toBe(1);
+
+    const explicitEchoSecond = support.composeEventChangesNow(Uint32Array.of(2, 1), 1);
+    expect(Array.from(explicitEchoSecond)).toEqual([1, 2]);
+
+    const singleDistinct = support.composeEventChangesNow(Uint32Array.of(2), 1);
+    expect(Array.from(singleDistinct)).toEqual([1, 2]);
+
+    const doubleExplicit = support.composeEventChangesNow(Uint32Array.of(1, 1), 1);
+    expect(Array.from(doubleExplicit)).toEqual([1]);
+
+    const explicitDistinct = support.composeEventChangesNow(Uint32Array.of(2, 3), 1);
+    expect(Array.from(explicitDistinct)).toEqual([1, 2, 3]);
+
+    const duplicateRecalculated = support.composeEventChangesNow(Uint32Array.of(2, 2), 1);
+    expect(Array.from(duplicateRecalculated)).toEqual([1, 2]);
+
+    const composed = support.composeChangedRootsAndOrderedNow(
+      Uint32Array.of(4, 4, 5),
+      Uint32Array.of(5, 6, 4),
+      3,
+    );
+    expect(Array.from(composed)).toEqual([4, 5, 6]);
+
+    Effect.runSync(support.beginMutationCollection());
+    support.__scratch.explicitChangedBuffer[0] = 7;
+    support.__scratch.explicitChangedBuffer[1] = 7;
+    const duplicateExplicit = support.composeEventChangesNow(Uint32Array.of(), 2);
+    expect(Array.from(duplicateExplicit)).toEqual([7]);
   });
 
   it("materializes and clears spill children through the support service", async () => {

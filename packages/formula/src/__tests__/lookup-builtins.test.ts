@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import { getLookupBuiltin, type RangeBuiltinArgument } from "../builtins/lookup.js";
+import {
+  compileCriteriaMatcher,
+  getLookupBuiltin,
+  matchesCompiledCriteria,
+  type RangeBuiltinArgument,
+} from "../builtins/lookup.js";
 
 const num = (value: number): CellValue => ({ tag: ValueTag.Number, value });
 const text = (value: string): CellValue => ({ tag: ValueTag.String, value, stringId: 0 });
@@ -56,6 +61,30 @@ describe("lookup builtins", () => {
 
     expect(alias).toBe(COUNTIF);
     expect(alias(sample, text(">0"))).toEqual(num(2));
+  });
+
+  it("compiles and matches direct criteria helpers across wildcard, escaped, and scalar comparisons", () => {
+    const wildcard = compileCriteriaMatcher(text("ap*"));
+    expect(matchesCompiledCriteria(text("apple"), wildcard)).toBe(true);
+    expect(matchesCompiledCriteria(text("pear"), wildcard)).toBe(false);
+
+    const negatedWildcard = compileCriteriaMatcher(text("<>ap*"));
+    expect(matchesCompiledCriteria(text("apple"), negatedWildcard)).toBe(false);
+    expect(matchesCompiledCriteria(text("pear"), negatedWildcard)).toBe(true);
+
+    const escapedPattern = compileCriteriaMatcher(text("a~*b"));
+    expect(escapedPattern.operand).toMatchObject({ tag: ValueTag.String, value: "a*b" });
+    expect(matchesCompiledCriteria(text("a*b"), escapedPattern)).toBe(true);
+
+    const greaterThan = compileCriteriaMatcher(text(">2"));
+    expect(matchesCompiledCriteria(num(3), greaterThan)).toBe(true);
+    expect(matchesCompiledCriteria(num(2), greaterThan)).toBe(false);
+    expect(matchesCompiledCriteria(text("3"), greaterThan)).toBe(false);
+    expect(matchesCompiledCriteria(err(ErrorCode.Div0), greaterThan)).toBe(false);
+
+    const scalarEquality = compileCriteriaMatcher(bool(true));
+    expect(matchesCompiledCriteria(bool(true), scalarEquality)).toBe(true);
+    expect(matchesCompiledCriteria(bool(false), scalarEquality)).toBe(false);
   });
 
   it("supports database aggregation builtins on matching records", () => {

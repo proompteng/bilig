@@ -69,7 +69,50 @@ describe("resolveRuntimeDirectLookupBinding", () => {
   it("rejects unsupported operand and lookup instruction shapes", () => {
     const rejectedPlans: Array<readonly unknown[]> = [
       [],
+      [
+        null,
+        {
+          opcode: "lookup-exact-match",
+          start: "A1",
+          end: "A3",
+          startRow: 0,
+          endRow: 2,
+          startCol: 0,
+          endCol: 0,
+          searchMode: 1,
+        },
+        { opcode: "return" },
+      ],
+      [
+        { opcode: "push-unknown" },
+        {
+          opcode: "lookup-exact-match",
+          start: "A1",
+          end: "A3",
+          startRow: 0,
+          endRow: 2,
+          startCol: 0,
+          endCol: 0,
+          searchMode: 1,
+        },
+        { opcode: "return" },
+      ],
       [{ opcode: "push-number", value: 5 }, { opcode: "return" }],
+      [{ opcode: "push-cell", address: "D1" }, null, { opcode: "return" }],
+      [
+        { opcode: "push-cell", address: "D1" },
+        {
+          opcode: "lookup-exact-match",
+          start: "A1",
+          end: "A3",
+          startRow: "0",
+          endRow: 2,
+          startCol: 0,
+          endCol: 0,
+          searchMode: 1,
+        },
+        { opcode: "return" },
+      ],
       [
         { opcode: "push-number", value: 5 },
         {

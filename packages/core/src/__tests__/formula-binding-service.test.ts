@@ -123,6 +123,19 @@ describe("EngineFormulaBindingService", () => {
     expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 44 });
   });
 
+  it("runs tracked rebinding wrappers through the service surface", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-wrapper-rebinds" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const binding = getBindingService(engine);
+
+    expect(Effect.runSync(binding.rebindDefinedNameDependents([], 3))).toBe(3);
+    expect(Effect.runSync(binding.rebindTableDependents([], 5))).toBe(5);
+    expect(Effect.runSync(binding.rebindFormulasForSheet("Sheet1", 7))).toBe(7);
+    expect(Effect.runSync(binding.rebindFormulasForSheet("Sheet1", 11, []))).toBe(11);
+  });
+
   it("preserves dependency wiring across formula rewrites with the same dependencies", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "binding-same-deps-rewrite" });
     await engine.ready();
