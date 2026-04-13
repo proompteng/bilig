@@ -394,9 +394,6 @@ export class WorkbookStore {
         sheet.grid.clear(row, col);
       }
     }
-    this.cellStore.sheetIds[index] = 0;
-    this.cellStore.rows[index] = 0;
-    this.cellStore.cols[index] = 0;
     this.cellStore.flags[index] = (this.cellStore.flags[index] ?? 0) & ~CellFlags.Materialized;
     return true;
   }
