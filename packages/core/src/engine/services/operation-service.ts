@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
+import type { CellRangeRef, CellValue, EngineEvent } from "@bilig/protocol";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
 import { makeCellEntity } from "../../entity-ids.js";
 import {
@@ -12,7 +12,7 @@ import {
   type OpOrder,
 } from "../../replica-state.js";
 import { CellFlags } from "../../cell-store.js";
-import { emptyValue, writeLiteralToCellStore } from "../../engine-value-utils.js";
+import { emptyValue, literalToValue, writeLiteralToCellStore } from "../../engine-value-utils.js";
 import { spillDependencyKey, tableDependencyKey } from "../../engine-metadata-utils.js";
 import {
   makeCellKey,
@@ -148,6 +148,34 @@ function throwProtectionBlocked(message: string): never {
   throw new Error(`Workbook protection blocks this change: ${message}`);
 }
 
+function withOptionalLookupStringIds(request: {
+  sheetName: string;
+  row: number;
+  col: number;
+  oldValue: CellValue;
+  newValue: CellValue;
+  oldStringId: number | undefined;
+  newStringId: number | undefined;
+}): {
+  sheetName: string;
+  row: number;
+  col: number;
+  oldValue: CellValue;
+  newValue: CellValue;
+  oldStringId?: number;
+  newStringId?: number;
+} {
+  return {
+    sheetName: request.sheetName,
+    row: request.row,
+    col: request.col,
+    oldValue: request.oldValue,
+    newValue: request.newValue,
+    ...(request.oldStringId === undefined ? {} : { oldStringId: request.oldStringId }),
+    ...(request.newStringId === undefined ? {} : { newStringId: request.newStringId }),
+  };
+}
+
 export function createEngineOperationService(args: {
   readonly state: Pick<
     EngineRuntimeState,
@@ -236,6 +264,16 @@ export function createEngineOperationService(args: {
   readonly getBatchMutationDepth: () => number;
   readonly setBatchMutationDepth: (next: number) => void;
   readonly collectFormulaDependents: (entityId: number) => Uint32Array;
+  readonly noteExactLookupLiteralWrite: (request: {
+    sheetName: string;
+    row: number;
+    col: number;
+    oldValue: CellValue;
+    newValue: CellValue;
+    oldStringId?: number;
+    newStringId?: number;
+  }) => void;
+  readonly invalidateExactLookupColumn: (request: { sheetName: string; col: number }) => void;
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
     args.state.batchListeners.forEach((listener) => listener(batch));
@@ -501,6 +539,19 @@ export function createEngineOperationService(args: {
       default:
         return assertNever(op);
     }
+  };
+
+  const readCellValueForLookup = (
+    cellIndex: number | undefined,
+  ): { value: CellValue; stringId: number | undefined } => {
+    if (cellIndex === undefined) {
+      return { value: emptyValue(), stringId: undefined };
+    }
+    const stringId = args.state.workbook.cellStore.stringIds[cellIndex];
+    return {
+      value: args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id)),
+      stringId,
+    };
   };
 
   const pruneCellIfOrphaned = (cellIndex: number): void => {
@@ -1494,6 +1545,8 @@ export function createEngineOperationService(args: {
 
           switch (mutation.kind) {
             case "setCellValue": {
+              const sheetName = resolveSheetName(sheetId);
+              const prior = readCellValueForLookup(existingIndex);
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 writeLiteralToCellStore(
                   args.state.workbook.cellStore,
@@ -1502,6 +1555,20 @@ export function createEngineOperationService(args: {
                   args.state.strings,
                 );
                 args.state.workbook.notifyCellValueWritten(existingIndex);
+                args.noteExactLookupLiteralWrite(
+                  withOptionalLookupStringIds({
+                    sheetName,
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue: literalToValue(mutation.value, args.state.strings),
+                    oldStringId: prior.stringId,
+                    newStringId:
+                      typeof mutation.value === "string"
+                        ? args.state.workbook.cellStore.stringIds[existingIndex]
+                        : undefined,
+                  }),
+                );
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
                 if (!isRestore) {
                   explicitChangedCount = args.markExplicitChanged(
@@ -1511,7 +1578,7 @@ export function createEngineOperationService(args: {
                 }
                 if (!isRestore && args.state.trackReplicaVersions) {
                   setCellEntityVersion(
-                    resolveSheetName(sheetId),
+                    sheetName,
                     formatAddress(mutation.row, mutation.col),
                     order!,
                   );
@@ -1543,6 +1610,20 @@ export function createEngineOperationService(args: {
                 args.state.strings,
               );
               args.state.workbook.notifyCellValueWritten(cellIndex);
+              args.noteExactLookupLiteralWrite(
+                withOptionalLookupStringIds({
+                  sheetName,
+                  row: mutation.row,
+                  col: mutation.col,
+                  oldValue: prior.value,
+                  newValue: literalToValue(mutation.value, args.state.strings),
+                  oldStringId: prior.stringId,
+                  newStringId:
+                    typeof mutation.value === "string"
+                      ? args.state.workbook.cellStore.stringIds[cellIndex]
+                      : undefined,
+                }),
+              );
               args.state.workbook.cellStore.flags[cellIndex] =
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
                 ~(
@@ -1560,16 +1641,13 @@ export function createEngineOperationService(args: {
                 explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
               }
               if (!isRestore && args.state.trackReplicaVersions) {
-                setCellEntityVersion(
-                  resolveSheetName(sheetId),
-                  formatAddress(mutation.row, mutation.col),
-                  order!,
-                );
+                setCellEntityVersion(sheetName, formatAddress(mutation.row, mutation.col), order!);
               }
               break;
             }
             case "setCellFormula": {
               const sheetName = resolveSheetName(sheetId);
+              args.invalidateExactLookupColumn({ sheetName, col: mutation.col });
               if (!isRestore && existingIndex !== undefined) {
                 changedInputCount = args.markPivotRootsChanged(
                   args.clearPivotForCell(existingIndex),
@@ -1612,8 +1690,21 @@ export function createEngineOperationService(args: {
               break;
             }
             case "clearCell": {
+              const prior = readCellValueForLookup(existingIndex);
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
+                args.state.workbook.notifyCellValueWritten(existingIndex);
+                args.noteExactLookupLiteralWrite(
+                  withOptionalLookupStringIds({
+                    sheetName: resolveSheetName(sheetId),
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue: emptyValue(),
+                    oldStringId: prior.stringId,
+                    newStringId: undefined,
+                  }),
+                );
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
                 if (!isRestore) {
                   explicitChangedCount = args.markExplicitChanged(
@@ -1650,6 +1741,18 @@ export function createEngineOperationService(args: {
               );
               topologyChanged = args.removeFormula(existingIndex) || topologyChanged;
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
+              args.state.workbook.notifyCellValueWritten(existingIndex);
+              args.noteExactLookupLiteralWrite(
+                withOptionalLookupStringIds({
+                  sheetName: resolveSheetName(sheetId),
+                  row: mutation.row,
+                  col: mutation.col,
+                  oldValue: prior.value,
+                  newValue: emptyValue(),
+                  oldStringId: prior.stringId,
+                  newStringId: undefined,
+                }),
+              );
               args.state.workbook.cellStore.flags[existingIndex] =
                 (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
                 ~(

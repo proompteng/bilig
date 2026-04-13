@@ -394,7 +394,7 @@ export function createEngineRecalcService(args: {
         if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
           continue;
         }
-        if (formula.directLookup !== undefined) {
+        if (formula.directLookup !== undefined || formula.directCriteria !== undefined) {
           const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex);
           if (directLookupChanges !== undefined) {
             noteSpillChanges(directLookupChanges);

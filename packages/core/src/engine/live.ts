@@ -11,6 +11,7 @@ import {
   createEngineFormulaEvaluationService,
   type EngineFormulaEvaluationService,
 } from "./services/formula-evaluation-service.js";
+import { createCriterionRangeCacheService } from "./services/criterion-range-cache-service.js";
 import { createExactColumnIndexService } from "./services/exact-column-index-service.js";
 import { createSortedColumnSearchService } from "./services/sorted-column-search-service.js";
 import {
@@ -286,6 +287,7 @@ export function createEngineServiceRuntime(args: {
   const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state });
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state });
   const compiledPlans = createEngineCompiledPlanService();
+  const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore });
   const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore });
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore });
   const graph = createEngineFormulaGraphService({
@@ -394,6 +396,7 @@ export function createEngineServiceRuntime(args: {
   const evaluation = createEngineFormulaEvaluationService({
     state: args.state,
     runtimeColumnStore,
+    criterionCache,
     exactLookup,
     sortedLookup,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
@@ -599,6 +602,8 @@ export function createEngineServiceRuntime(args: {
       requireService(recalc, "recalc").reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
+    noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
+    invalidateExactLookupColumn: (request) => exactLookup.invalidateColumn(request),
   });
   const mutation = createEngineMutationService({
     state: args.state,

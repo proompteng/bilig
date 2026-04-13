@@ -6,8 +6,9 @@ import {
   parseCellAddress,
   parseRangeAddress,
   renameFormulaSheetReferences,
+  serializeFormula,
 } from "@bilig/formula";
-import { FormulaMode, ErrorCode, Opcode } from "@bilig/protocol";
+import { FormulaMode, ErrorCode, Opcode, ValueTag, type CellValue } from "@bilig/protocol";
 import { CellFlags } from "../../cell-store.js";
 import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
 import { resolveRuntimeDirectLookupBinding } from "../direct-vector-lookup.js";
@@ -33,6 +34,7 @@ import {
   type EngineRuntimeState,
   type MaterializedDependencies,
   type RuntimeDirectLookupDescriptor,
+  type RuntimeDirectCriteriaDescriptor,
   type RuntimeFormula,
   UNRESOLVED_WASM_OPERAND,
   type U32,
@@ -231,6 +233,66 @@ function directLookupStructureEqual(
         left.matchMode === right.matchMode
       );
   }
+}
+
+function directCriteriaOperandEqual(
+  left: RuntimeDirectCriteriaDescriptor["criteriaPairs"][number]["criterion"] | undefined,
+  right: RuntimeDirectCriteriaDescriptor["criteriaPairs"][number]["criterion"] | undefined,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right || left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "cell") {
+    return right.kind === "cell" && left.cellIndex === right.cellIndex;
+  }
+  return right.kind === "literal" && JSON.stringify(left.value) === JSON.stringify(right.value);
+}
+
+function directCriteriaStructureEqual(
+  left: RuntimeDirectCriteriaDescriptor | undefined,
+  right: RuntimeDirectCriteriaDescriptor | undefined,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  if (left.aggregateKind !== right.aggregateKind) {
+    return false;
+  }
+  const leftRange = left.aggregateRange;
+  const rightRange = right.aggregateRange;
+  if (
+    leftRange?.sheetName !== rightRange?.sheetName ||
+    leftRange?.rowStart !== rightRange?.rowStart ||
+    leftRange?.rowEnd !== rightRange?.rowEnd ||
+    leftRange?.col !== rightRange?.col ||
+    leftRange?.length !== rightRange?.length
+  ) {
+    return false;
+  }
+  if (left.criteriaPairs.length !== right.criteriaPairs.length) {
+    return false;
+  }
+  for (let index = 0; index < left.criteriaPairs.length; index += 1) {
+    const leftPair = left.criteriaPairs[index]!;
+    const rightPair = right.criteriaPairs[index]!;
+    if (
+      leftPair.range.sheetName !== rightPair.range.sheetName ||
+      leftPair.range.rowStart !== rightPair.range.rowStart ||
+      leftPair.range.rowEnd !== rightPair.range.rowEnd ||
+      leftPair.range.col !== rightPair.range.col ||
+      leftPair.range.length !== rightPair.range.length ||
+      !directCriteriaOperandEqual(leftPair.criterion, rightPair.criterion)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
@@ -463,6 +525,198 @@ function collectDirectApproximateLookupCandidates(
   }
 }
 
+function staticCellValue(node: FormulaNode | undefined): CellValue | undefined {
+  if (!node) {
+    return undefined;
+  }
+  switch (node.kind) {
+    case "BooleanLiteral":
+      return { tag: ValueTag.Boolean, value: node.value };
+    case "ErrorLiteral":
+      return { tag: ValueTag.Error, code: node.code };
+    case "NumberLiteral":
+      return { tag: ValueTag.Number, value: node.value };
+    case "StringLiteral":
+      return { tag: ValueTag.String, value: node.value, stringId: 0 };
+    case "UnaryExpr":
+      if (node.operator === "-" && node.argument.kind === "NumberLiteral") {
+        return { tag: ValueTag.Number, value: -node.argument.value };
+      }
+      return undefined;
+    case "CellRef":
+    case "CallExpr":
+    case "BinaryExpr":
+    case "ColumnRef":
+    case "InvokeExpr":
+    case "NameRef":
+    case "RangeRef":
+    case "RowRef":
+    case "SpillRef":
+    case "StructuredRef":
+      return undefined;
+  }
+}
+
+function resolveDirectCriteriaRange(
+  node: FormulaNode | undefined,
+  ownerSheetName: string,
+):
+  | {
+      sheetName: string;
+      rowStart: number;
+      rowEnd: number;
+      col: number;
+      length: number;
+    }
+  | undefined {
+  if (!node || node.kind !== "RangeRef" || node.refKind !== "cells") {
+    return undefined;
+  }
+  const parsed = parseRangeAddress(`${node.start}:${node.end}`, node.sheetName ?? ownerSheetName);
+  if (parsed.kind !== "cells" || parsed.start.col !== parsed.end.col) {
+    return undefined;
+  }
+  return {
+    sheetName: node.sheetName ?? ownerSheetName,
+    rowStart: parsed.start.row,
+    rowEnd: parsed.end.row,
+    col: parsed.start.col,
+    length: parsed.end.row - parsed.start.row + 1,
+  };
+}
+
+function buildDirectCriteriaDescriptor(args: {
+  readonly compiled: ParsedCompiledFormula;
+  readonly ownerSheetName: string;
+  readonly workbook: Pick<EngineRuntimeState, "workbook">["workbook"];
+  readonly ensureCellTracked: (sheetName: string, address: string) => number;
+}): RuntimeDirectCriteriaDescriptor | undefined {
+  const node = args.compiled.optimizedAst;
+  if (node.kind !== "CallExpr") {
+    return undefined;
+  }
+  const callee = node.callee.trim().toUpperCase();
+
+  const resolveCriterionOperand = (
+    criterionNode: FormulaNode | undefined,
+  ): RuntimeDirectCriteriaDescriptor["criteriaPairs"][number]["criterion"] | undefined => {
+    if (!criterionNode) {
+      return undefined;
+    }
+    if (criterionNode.kind === "CellRef") {
+      const sheetName = criterionNode.sheetName ?? args.ownerSheetName;
+      if (!args.workbook.getSheet(sheetName)) {
+        return undefined;
+      }
+      return {
+        kind: "cell",
+        cellIndex: args.ensureCellTracked(sheetName, criterionNode.ref),
+      };
+    }
+    const literal = staticCellValue(criterionNode);
+    return literal ? { kind: "literal", value: literal } : undefined;
+  };
+
+  const pair = (
+    rangeNode: FormulaNode | undefined,
+    criterionNode: FormulaNode | undefined,
+  ): RuntimeDirectCriteriaDescriptor["criteriaPairs"][number] | undefined => {
+    const range = resolveDirectCriteriaRange(rangeNode, args.ownerSheetName);
+    const criterion = resolveCriterionOperand(criterionNode);
+    if (!range || !criterion) {
+      return undefined;
+    }
+    return { range, criterion };
+  };
+
+  if (callee === "COUNTIF") {
+    const criteriaPair = pair(node.args[0], node.args[1]);
+    if (!criteriaPair) {
+      return undefined;
+    }
+    return {
+      aggregateKind: "count",
+      aggregateRange: undefined,
+      criteriaPairs: [criteriaPair],
+    };
+  }
+
+  if (callee === "COUNTIFS") {
+    if (node.args.length === 0 || node.args.length % 2 !== 0) {
+      return undefined;
+    }
+    const criteriaPairs: Array<RuntimeDirectCriteriaDescriptor["criteriaPairs"][number]> = [];
+    for (let index = 0; index < node.args.length; index += 2) {
+      const criteriaPair = pair(node.args[index], node.args[index + 1]);
+      if (!criteriaPair) {
+        return undefined;
+      }
+      criteriaPairs.push(criteriaPair);
+    }
+    const expectedLength = criteriaPairs[0]!.range.length;
+    if (criteriaPairs.some((current) => current.range.length !== expectedLength)) {
+      return undefined;
+    }
+    return {
+      aggregateKind: "count",
+      aggregateRange: undefined,
+      criteriaPairs,
+    };
+  }
+
+  if (callee === "SUMIF" || callee === "AVERAGEIF") {
+    const criteriaPair = pair(node.args[0], node.args[1]);
+    if (!criteriaPair) {
+      return undefined;
+    }
+    const aggregateRange = resolveDirectCriteriaRange(
+      node.args[2] ?? node.args[0],
+      args.ownerSheetName,
+    );
+    if (!aggregateRange || aggregateRange.length !== criteriaPair.range.length) {
+      return undefined;
+    }
+    return {
+      aggregateKind: callee === "SUMIF" ? "sum" : "average",
+      aggregateRange,
+      criteriaPairs: [criteriaPair],
+    };
+  }
+
+  if (
+    callee !== "SUMIFS" &&
+    callee !== "AVERAGEIFS" &&
+    callee !== "MINIFS" &&
+    callee !== "MAXIFS"
+  ) {
+    return undefined;
+  }
+  const aggregateRange = resolveDirectCriteriaRange(node.args[0], args.ownerSheetName);
+  if (!aggregateRange || node.args.length < 3 || node.args.length % 2 === 0) {
+    return undefined;
+  }
+  const criteriaPairs: Array<RuntimeDirectCriteriaDescriptor["criteriaPairs"][number]> = [];
+  for (let index = 1; index < node.args.length; index += 2) {
+    const criteriaPair = pair(node.args[index], node.args[index + 1]);
+    if (!criteriaPair || criteriaPair.range.length !== aggregateRange.length) {
+      return undefined;
+    }
+    criteriaPairs.push(criteriaPair);
+  }
+  return {
+    aggregateKind:
+      callee === "SUMIFS"
+        ? "sum"
+        : callee === "AVERAGEIFS"
+          ? "average"
+          : callee === "MINIFS"
+            ? "min"
+            : "max",
+    aggregateRange,
+    criteriaPairs,
+  };
+}
+
 function buildDirectLookupDescriptor(args: {
   readonly compiled: ParsedCompiledFormula;
   readonly ownerSheetName: string;
@@ -624,6 +878,25 @@ export function createEngineFormulaBindingService(args: {
   readonly getSymbolicRangeBindings: () => U32;
   readonly setSymbolicRangeBindings: (next: U32) => void;
 }): EngineFormulaBindingService {
+  const compiledSourceCache = new Map<string, ParsedCompiledFormula>();
+  const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>();
+
+  const normalizeLookupCompileMode = (compiled: ParsedCompiledFormula): ParsedCompiledFormula => {
+    if (compiled.mode !== FormulaMode.WasmFastPath) {
+      return compiled;
+    }
+    if (
+      !hasIndexedExactLookupCandidate(compiled.optimizedAst) &&
+      !hasDirectApproximateLookupCandidate(compiled.optimizedAst)
+    ) {
+      return compiled;
+    }
+    return {
+      ...compiled,
+      mode: FormulaMode.JsOnly,
+    };
+  };
+
   const ensureDependencyBuildCapacity = (
     cellCapacity: number,
     dependencyCapacity: number,
@@ -762,14 +1035,10 @@ export function createEngineFormulaBindingService(args: {
     currentSheetName: string,
     source: string,
   ): ReturnType<typeof compileFormula> => {
-    const compiled = compileFormula(source);
-    if (compiled.mode === FormulaMode.WasmFastPath) {
-      if (
-        hasIndexedExactLookupCandidate(compiled.optimizedAst) ||
-        hasDirectApproximateLookupCandidate(compiled.optimizedAst)
-      ) {
-        compiled.mode = FormulaMode.JsOnly;
-      }
+    let compiled = compiledSourceCache.get(source);
+    if (!compiled) {
+      compiled = normalizeLookupCompileMode(compileFormula(source) as ParsedCompiledFormula);
+      compiledSourceCache.set(source, compiled);
     }
     if (
       compiled.symbolicNames.length === 0 &&
@@ -790,19 +1059,20 @@ export function createEngineFormulaBindingService(args: {
       return compiled;
     }
 
-    const resolvedCompiled = compileFormulaAst(source, resolved.node, {
-      originalAst: compiled.ast,
-      symbolicNames: compiled.symbolicNames,
-      symbolicTables: compiled.symbolicTables,
-      symbolicSpills: compiled.symbolicSpills,
-    });
-    if (resolvedCompiled.mode === FormulaMode.WasmFastPath) {
-      if (
-        hasIndexedExactLookupCandidate(resolvedCompiled.optimizedAst) ||
-        hasDirectApproximateLookupCandidate(resolvedCompiled.optimizedAst)
-      ) {
-        resolvedCompiled.mode = FormulaMode.JsOnly;
-      }
+    const resolvedCacheKey = `${currentSheetName}\u0000${source}\u0000${serializeFormula(
+      resolved.node,
+    )}`;
+    let resolvedCompiled = resolvedCompiledCache.get(resolvedCacheKey);
+    if (!resolvedCompiled) {
+      resolvedCompiled = normalizeLookupCompileMode(
+        compileFormulaAst(source, resolved.node, {
+          originalAst: compiled.ast,
+          symbolicNames: compiled.symbolicNames,
+          symbolicTables: compiled.symbolicTables,
+          symbolicSpills: compiled.symbolicSpills,
+        }) as ParsedCompiledFormula,
+      );
+      resolvedCompiledCache.set(resolvedCacheKey, resolvedCompiled);
     }
     return resolvedCompiled;
   };
@@ -1112,7 +1382,8 @@ export function createEngineFormulaBindingService(args: {
       !stringArrayEqual(existing.compiled.symbolicNames, prepared.compiled.symbolicNames) ||
       !stringArrayEqual(existing.compiled.symbolicTables, prepared.compiled.symbolicTables) ||
       !stringArrayEqual(existing.compiled.symbolicSpills, prepared.compiled.symbolicSpills) ||
-      !directLookupStructureEqual(existing.directLookup, prepared.directLookup);
+      !directLookupStructureEqual(existing.directLookup, prepared.directLookup) ||
+      !directCriteriaStructureEqual(existing.directCriteria, prepared.directCriteria);
 
     if (existing && !topologyChanged) {
       args.compiledPlans.release(existing.planId);
@@ -1126,6 +1397,7 @@ export function createEngineFormulaBindingService(args: {
       existing.programLength = prepared.runtimeProgram.length;
       existing.constNumberLength = prepared.compiled.constants.length;
       existing.directLookup = prepared.directLookup;
+      existing.directCriteria = prepared.directCriteria;
       args.state.workbook.cellStore.flags[cellIndex] =
         ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
           ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
@@ -1196,6 +1468,7 @@ export function createEngineFormulaBindingService(args: {
       rangeListOffset: 0,
       rangeListLength: prepared.dependencies.rangeDependencies.length,
       directLookup: prepared.directLookup,
+      directCriteria: prepared.directCriteria,
     };
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula);
     runtimeFormula.formulaSlotId = formulaSlotId;
@@ -1314,11 +1587,23 @@ export function createEngineFormulaBindingService(args: {
 
   const prepareFormulaBindingNow = (cellIndex: number, ownerSheetName: string, source: string) => {
     const ownerSheetId = args.state.workbook.getSheet(ownerSheetName)?.id;
-    const compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
+    let compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
     const hasLookupInstruction = hasLookupPlanInstruction(compiled.jsPlan);
     const directLookupBinding = hasLookupInstruction
       ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, ownerSheetName)
       : undefined;
+    const directCriteria = buildDirectCriteriaDescriptor({
+      compiled,
+      ownerSheetName,
+      workbook: args.state.workbook,
+      ensureCellTracked: args.ensureCellTracked,
+    });
+    if (directCriteria && compiled.mode === FormulaMode.WasmFastPath) {
+      compiled = {
+        ...compiled,
+        mode: FormulaMode.JsOnly,
+      };
+    }
     const indexedExactLookupCandidates =
       hasLookupInstruction && args.state.useColumnIndex
         ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
@@ -1409,6 +1694,7 @@ export function createEngineFormulaBindingService(args: {
       compiled,
       dependencies,
       directLookup,
+      directCriteria,
       runtimeProgram,
       plan: args.compiledPlans.intern(source, compiled),
       indexedExactLookupCandidates,

@@ -289,4 +289,64 @@ describe("createExactColumnIndexService", () => {
       }),
     ).toEqual({ handled: false });
   });
+
+  it("updates cached exact lookups incrementally for literal writes and explicit invalidation", () => {
+    const workbook = new WorkbookStore("exact-index-incremental");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 2, 3].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+
+    const prepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    });
+
+    setStoredCellValue(workbook, strings, "Sheet1", "A3", {
+      tag: ValueTag.Number,
+      value: 30,
+    });
+    exact.recordLiteralWrite({
+      sheetName: "Sheet1",
+      row: 2,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 3 },
+      newValue: { tag: ValueTag.Number, value: 30 },
+    });
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 30 },
+        prepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+
+    exact.invalidateColumn({ sheetName: "Sheet1", col: 0 });
+
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 30 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+  });
 });

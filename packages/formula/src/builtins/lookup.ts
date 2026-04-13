@@ -511,33 +511,30 @@ export function createLookupBuiltinResolver(
   };
 }
 
-type CriteriaOperator = "=" | "<>" | ">" | ">=" | "<" | "<=";
+export type CriteriaOperator = "=" | "<>" | ">" | ">=" | "<" | "<=";
 
-function matchesCriteria(value: CellValue, criteria: CellValue): boolean {
+export interface CompiledCriteriaMatcher {
+  readonly operator: CriteriaOperator;
+  readonly operand: CellValue;
+  readonly wildcardPattern?: RegExp;
+}
+
+export function matchesCompiledCriteria(
+  value: CellValue,
+  compiled: CompiledCriteriaMatcher,
+): boolean {
   if (isError(value)) {
     return false;
   }
-  let { operator, operand } = parseCriteria(criteria);
-  if (
-    operand.tag === ValueTag.String &&
-    (operator === "=" || operator === "<>") &&
-    hasWildcardPattern(operand.value)
-  ) {
-    const matches = wildcardPatternToRegExp(operand.value).test(toStringValue(value));
-    return operator === "=" ? matches : !matches;
+  if (compiled.wildcardPattern) {
+    const matches = compiled.wildcardPattern.test(toStringValue(value));
+    return compiled.operator === "=" ? matches : !matches;
   }
-  if (operand.tag === ValueTag.String && operand.value.includes("~")) {
-    operand = {
-      tag: ValueTag.String,
-      value: unescapeCriteriaPattern(operand.value),
-      stringId: operand.stringId,
-    };
-  }
-  const comparison = compareScalars(value, operand);
+  const comparison = compareScalars(value, compiled.operand);
   if (comparison === undefined) {
     return false;
   }
-  switch (operator) {
+  switch (compiled.operator) {
     case "=":
       return comparison === 0;
     case "<>":
@@ -551,6 +548,33 @@ function matchesCriteria(value: CellValue, criteria: CellValue): boolean {
     case "<=":
       return comparison <= 0;
   }
+}
+
+export function compileCriteriaMatcher(criteria: CellValue): CompiledCriteriaMatcher {
+  let { operator, operand } = parseCriteria(criteria);
+  let wildcardPattern: RegExp | undefined;
+  if (
+    operand.tag === ValueTag.String &&
+    (operator === "=" || operator === "<>") &&
+    hasWildcardPattern(operand.value)
+  ) {
+    wildcardPattern = wildcardPatternToRegExp(operand.value);
+  } else if (operand.tag === ValueTag.String && operand.value.includes("~")) {
+    operand = {
+      tag: ValueTag.String,
+      value: unescapeCriteriaPattern(operand.value),
+      stringId: operand.stringId,
+    };
+  }
+  return {
+    operator,
+    operand,
+    ...(wildcardPattern ? { wildcardPattern } : {}),
+  };
+}
+
+function matchesCriteria(value: CellValue, criteria: CellValue): boolean {
+  return matchesCompiledCriteria(value, compileCriteriaMatcher(criteria));
 }
 
 function parseCriteria(criteria: CellValue): { operator: CriteriaOperator; operand: CellValue } {

@@ -22,8 +22,12 @@ import type {
   RuntimeFormula,
 } from "../runtime-state.js";
 import { EngineFormulaEvaluationError } from "../errors.js";
+import type { CriterionRangeCacheService } from "./criterion-range-cache-service.js";
 import type { ExactColumnIndexService } from "./exact-column-index-service.js";
-import type { EngineRuntimeColumnStoreService } from "./runtime-column-store-service.js";
+import type {
+  EngineRuntimeColumnStoreService,
+  RuntimeColumnSlice,
+} from "./runtime-column-store-service.js";
 import type { SortedColumnSearchService } from "./sorted-column-search-service.js";
 
 export interface EngineFormulaEvaluationService {
@@ -61,6 +65,25 @@ function evaluationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
 
+function decodeRuntimeTag(rawTag: number | undefined): ValueTag {
+  if (rawTag === undefined) {
+    return ValueTag.Empty;
+  }
+  switch (rawTag) {
+    case 1:
+      return ValueTag.Number;
+    case 2:
+      return ValueTag.Boolean;
+    case 3:
+      return ValueTag.String;
+    case 4:
+      return ValueTag.Error;
+    case 0:
+    default:
+      return ValueTag.Empty;
+  }
+}
+
 function referenceReplacementKey(sheetName: string, address: string): string {
   return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
 }
@@ -68,6 +91,7 @@ function referenceReplacementKey(sheetName: string, address: string): string {
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "useColumnIndex">;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
+  readonly criterionCache: CriterionRangeCacheService;
   readonly exactLookup: Pick<
     ExactColumnIndexService,
     "findVectorMatch" | "prepareVectorLookup" | "findPreparedVectorMatch"
@@ -118,6 +142,35 @@ export function createEngineFormulaEvaluationService(args: {
       normalizedStrings.set(stringId, normalized);
     }
     return normalized;
+  };
+
+  const readCellValueByIndex = (cellIndex: number): CellValue => {
+    return args.state.workbook.cellStore.getValue(cellIndex, (stringId) =>
+      stringId === 0 ? "" : args.state.strings.get(stringId),
+    );
+  };
+
+  const numericLikeValueAt = (slice: RuntimeColumnSlice, offset: number): number | undefined => {
+    const tag = decodeRuntimeTag(slice.tags[offset]);
+    switch (tag) {
+      case ValueTag.Number:
+        return slice.numbers[offset] ?? 0;
+      case ValueTag.Boolean:
+        return (slice.numbers[offset] ?? 0) !== 0 ? 1 : 0;
+      case ValueTag.Empty:
+        return 0;
+      case ValueTag.String:
+      case ValueTag.Error:
+      default:
+        return undefined;
+    }
+  };
+
+  const strictNumericAggregateCandidateAt = (
+    slice: RuntimeColumnSlice,
+    offset: number,
+  ): number | undefined => {
+    return slice.tags[offset] === ValueTag.Number ? (slice.numbers[offset] ?? 0) : undefined;
   };
 
   const refreshDirectExactLookup = (
@@ -675,6 +728,93 @@ export function createEngineFormulaEvaluationService(args: {
     return best === -1 ? directErrorResult(ErrorCode.NA) : directNumberResult(best + 1);
   };
 
+  const tryEvaluateDirectCriteriaAggregate = (formula: RuntimeFormula): CellValue | undefined => {
+    const directCriteria = formula.directCriteria;
+    if (!directCriteria) {
+      return undefined;
+    }
+
+    const resolvedPairs = directCriteria.criteriaPairs.map((pair) => ({
+      range: pair.range,
+      criteria:
+        pair.criterion.kind === "literal"
+          ? pair.criterion.value
+          : readCellValueByIndex(pair.criterion.cellIndex),
+    }));
+    const criterionError = resolvedPairs.find(
+      (pair) => pair.criteria.tag === ValueTag.Error,
+    )?.criteria;
+    if (criterionError) {
+      return criterionError;
+    }
+
+    const matches = args.criterionCache.getOrBuildMatchingRows({
+      criteriaPairs: resolvedPairs,
+    });
+    if ("tag" in matches) {
+      return matches;
+    }
+
+    if (directCriteria.aggregateKind === "count") {
+      return directNumberResult(matches.length);
+    }
+
+    const aggregateRange = directCriteria.aggregateRange;
+    if (!aggregateRange) {
+      return undefined;
+    }
+    const aggregateSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: aggregateRange.sheetName,
+      rowStart: aggregateRange.rowStart,
+      rowEnd: aggregateRange.rowEnd,
+      col: aggregateRange.col,
+    });
+
+    if (directCriteria.aggregateKind === "sum") {
+      let sum = 0;
+      for (let index = 0; index < matches.length; index += 1) {
+        sum += numericLikeValueAt(aggregateSlice, matches.rows[index]!) ?? 0;
+      }
+      return directNumberResult(sum);
+    }
+
+    if (directCriteria.aggregateKind === "average") {
+      let count = 0;
+      let sum = 0;
+      for (let index = 0; index < matches.length; index += 1) {
+        const numeric = numericLikeValueAt(aggregateSlice, matches.rows[index]!);
+        if (numeric === undefined) {
+          continue;
+        }
+        count += 1;
+        sum += numeric;
+      }
+      return count === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / count);
+    }
+
+    if (directCriteria.aggregateKind === "min") {
+      let minimum = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < matches.length; index += 1) {
+        const numeric = strictNumericAggregateCandidateAt(aggregateSlice, matches.rows[index]!);
+        if (numeric === undefined) {
+          continue;
+        }
+        minimum = Math.min(minimum, numeric);
+      }
+      return directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum);
+    }
+
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < matches.length; index += 1) {
+      const numeric = strictNumericAggregateCandidateAt(aggregateSlice, matches.rows[index]!);
+      if (numeric === undefined) {
+        continue;
+      }
+      maximum = Math.max(maximum, numeric);
+    }
+    return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
+  };
+
   const resolveStructuredReferenceNow = (
     tableName: string,
     columnName: string,
@@ -904,7 +1044,8 @@ export function createEngineFormulaEvaluationService(args: {
     if (!formula) {
       return undefined;
     }
-    const directResult = tryEvaluateDirectVectorLookup(formula);
+    const directResult =
+      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectCriteriaAggregate(formula);
     return directResult === undefined
       ? undefined
       : formula.compiled.producesSpill
@@ -921,7 +1062,8 @@ export function createEngineFormulaEvaluationService(args: {
       return [];
     }
 
-    const directResult = tryEvaluateDirectVectorLookup(formula);
+    const directResult =
+      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectCriteriaAggregate(formula);
     if (directResult !== undefined) {
       return storeFormulaResult(cellIndex, formula, directResult);
     }

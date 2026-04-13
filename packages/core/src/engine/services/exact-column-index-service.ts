@@ -41,14 +41,29 @@ export interface ExactColumnIndexService {
     searchMode: 1 | -1;
   }) => ExactVectorMatchResult;
   readonly findVectorMatch: (request: ExactVectorMatchRequest) => ExactVectorMatchResult;
+  readonly invalidateColumn: (request: { sheetName: string; col: number }) => void;
+  readonly recordLiteralWrite: (request: {
+    sheetName: string;
+    row: number;
+    col: number;
+    oldValue: CellValue;
+    newValue: CellValue;
+    oldStringId?: number;
+    newStringId?: number;
+  }) => void;
 }
 
 interface ExactColumnIndexEntry {
+  sheetName: string;
+  rowStart: number;
+  rowEnd: number;
+  col: number;
   columnVersion: number;
   structureVersion: number;
   comparableKind: "numeric" | "text" | "mixed";
   uniformStart: number | undefined;
   uniformStep: number | undefined;
+  rowLists: Map<string, number[]>;
   firstPositions: Map<string, number>;
   lastPositions: Map<string, number>;
   firstNumericPositions: Map<number, number> | undefined;
@@ -80,6 +95,10 @@ function getExactColumnCacheKey(
   rowEnd: number,
 ): string {
   return `${sheetName}\t${col}\t${rowStart}\t${rowEnd}`;
+}
+
+function columnRegistryKey(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`;
 }
 
 function normalizeExactLookupKey(
@@ -169,11 +188,80 @@ function resolveExactColumnBounds(
   };
 }
 
+function setPositionsForKey(entry: ExactColumnIndexEntry, key: string): void {
+  const rows = entry.rowLists.get(key);
+  if (!rows || rows.length === 0) {
+    entry.rowLists.delete(key);
+    entry.firstPositions.delete(key);
+    entry.lastPositions.delete(key);
+    if (key.startsWith("n:")) {
+      const numericValue = Number(key.slice(2));
+      entry.firstNumericPositions?.delete(numericValue);
+      entry.lastNumericPositions?.delete(numericValue);
+    } else if (key.startsWith("s:")) {
+      const textValue = key.slice(2);
+      entry.firstTextPositions?.delete(textValue);
+      entry.lastTextPositions?.delete(textValue);
+    }
+    return;
+  }
+  entry.firstPositions.set(key, rows[0]!);
+  entry.lastPositions.set(key, rows[rows.length - 1]!);
+  if (key.startsWith("n:")) {
+    const numericValue = Number(key.slice(2));
+    entry.firstNumericPositions?.set(numericValue, rows[0]!);
+    entry.lastNumericPositions?.set(numericValue, rows[rows.length - 1]!);
+  } else if (key.startsWith("s:")) {
+    const textValue = key.slice(2);
+    entry.firstTextPositions?.set(textValue, rows[0]!);
+    entry.lastTextPositions?.set(textValue, rows[rows.length - 1]!);
+  }
+}
+
 export function createExactColumnIndexService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings">;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
 }): ExactColumnIndexService {
   const exactColumnIndices = new Map<string, ExactColumnIndexEntry>();
+  const cacheKeysByColumn = new Map<string, Set<string>>();
+
+  const trackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
+    const registryKey = columnRegistryKey(sheetName, col);
+    const existing = cacheKeysByColumn.get(registryKey);
+    if (existing) {
+      existing.add(cacheKey);
+      return;
+    }
+    cacheKeysByColumn.set(registryKey, new Set([cacheKey]));
+  };
+
+  const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
+    const registryKey = columnRegistryKey(sheetName, col);
+    const existing = cacheKeysByColumn.get(registryKey);
+    if (!existing) {
+      return;
+    }
+    existing.delete(cacheKey);
+    if (existing.size === 0) {
+      cacheKeysByColumn.delete(registryKey);
+    }
+  };
+
+  const replaceExactColumnIndex = (
+    cacheKey: string,
+    entry: ExactColumnIndexEntry | undefined,
+  ): void => {
+    const existing = exactColumnIndices.get(cacheKey);
+    if (existing) {
+      untrackCacheKey(existing.sheetName, existing.col, cacheKey);
+      exactColumnIndices.delete(cacheKey);
+    }
+    if (!entry) {
+      return;
+    }
+    exactColumnIndices.set(cacheKey, entry);
+    trackCacheKey(entry.sheetName, entry.col, cacheKey);
+  };
 
   const keyAtOffset = (slice: RuntimeColumnSlice, offset: number): string | undefined => {
     const tag = decodeValueTag(slice.tags[offset]);
@@ -212,6 +300,7 @@ export function createExactColumnIndexService(args: {
     const lastNumericPositions = new Map<number, number>();
     const firstTextPositions = new Map<string, number>();
     const lastTextPositions = new Map<string, number>();
+    const rowLists = new Map<string, number[]>();
     const numericSequence: number[] = [];
     let sawNumeric = false;
     let sawText = false;
@@ -226,6 +315,12 @@ export function createExactColumnIndexService(args: {
         firstPositions.set(key, row);
       }
       lastPositions.set(key, row);
+      const existingRows = rowLists.get(key);
+      if (existingRows) {
+        existingRows.push(row);
+      } else {
+        rowLists.set(key, [row]);
+      }
       if (key.startsWith("n:")) {
         const numericValue = Number(key.slice(2));
         if (!firstNumericPositions.has(numericValue)) {
@@ -260,11 +355,16 @@ export function createExactColumnIndexService(args: {
         ? detectUniformNumericStep(Float64Array.from(numericSequence))
         : undefined;
     return {
+      sheetName,
+      rowStart,
+      rowEnd,
+      col,
       columnVersion: slice.columnVersion,
       structureVersion: slice.structureVersion,
       comparableKind,
       uniformStart: uniformNumericStep?.start,
       uniformStep: uniformNumericStep?.step,
+      rowLists,
       firstPositions,
       lastPositions,
       firstNumericPositions: comparableKind === "numeric" ? firstNumericPositions : undefined,
@@ -294,9 +394,68 @@ export function createExactColumnIndexService(args: {
       entry.structureVersion !== columnVersion.structureVersion
     ) {
       entry = buildExactColumnIndex(sheetName, col, rowStart, rowEnd);
-      exactColumnIndices.set(cacheKey, entry);
+      replaceExactColumnIndex(cacheKey, entry);
     }
     return entry;
+  };
+
+  const updateEntryLiteralWrite = (
+    entry: ExactColumnIndexEntry,
+    row: number,
+    oldKey: string | undefined,
+    newKey: string | undefined,
+    currentColumnVersion: number,
+    currentStructureVersion: number,
+  ): boolean => {
+    entry.columnVersion = currentColumnVersion;
+    entry.structureVersion = currentStructureVersion;
+    if (row < entry.rowStart || row > entry.rowEnd) {
+      return true;
+    }
+    if (oldKey === newKey) {
+      return true;
+    }
+    if (entry.comparableKind === "numeric") {
+      const oldNumeric = oldKey?.startsWith("n:") ?? false;
+      const newNumeric = newKey?.startsWith("n:") ?? false;
+      if ((oldKey !== undefined && !oldNumeric) || (newKey !== undefined && !newNumeric)) {
+        return false;
+      }
+      entry.uniformStart = undefined;
+      entry.uniformStep = undefined;
+    } else if (entry.comparableKind === "text") {
+      const oldText = oldKey?.startsWith("s:") ?? false;
+      const newText = newKey?.startsWith("s:") ?? false;
+      if ((oldKey !== undefined && !oldText) || (newKey !== undefined && !newText)) {
+        return false;
+      }
+    }
+    if (oldKey !== undefined) {
+      const rows = entry.rowLists.get(oldKey);
+      if (!rows) {
+        return false;
+      }
+      const rowIndex = rows.indexOf(row);
+      if (rowIndex === -1) {
+        return false;
+      }
+      rows.splice(rowIndex, 1);
+      setPositionsForKey(entry, oldKey);
+    }
+    if (newKey !== undefined) {
+      const rows = entry.rowLists.get(newKey);
+      if (rows) {
+        let insertIndex = rows.length;
+        while (insertIndex > 0 && rows[insertIndex - 1]! > row) {
+          insertIndex -= 1;
+        }
+        rows.splice(insertIndex, 0, row);
+      } else {
+        entry.rowLists.set(newKey, [row]);
+      }
+      setPositionsForKey(entry, newKey);
+    }
+    return true;
   };
 
   const prepareVectorLookup = (request: {
@@ -515,6 +674,63 @@ export function createExactColumnIndexService(args: {
         handled: true,
         position: row === undefined ? undefined : row - bounds.rowStart + 1,
       };
+    },
+    invalidateColumn(request) {
+      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col));
+      if (!cacheKeys) {
+        return;
+      }
+      for (const cacheKey of cacheKeys) {
+        replaceExactColumnIndex(cacheKey, undefined);
+      }
+    },
+    recordLiteralWrite(request) {
+      const registryKey = columnRegistryKey(request.sheetName, request.col);
+      const cacheKeys = cacheKeysByColumn.get(registryKey);
+      if (!cacheKeys || cacheKeys.size === 0) {
+        return;
+      }
+      const sheet = args.state.workbook.getSheet(request.sheetName);
+      if (!sheet) {
+        return;
+      }
+      const currentColumnVersion = sheet.columnVersions[request.col] ?? 0;
+      const currentStructureVersion = args.state.workbook.getSheetStructureVersion(
+        request.sheetName,
+      );
+      const oldKey = normalizeExactLookupKey(
+        request.oldValue,
+        (id) => args.state.strings.get(id),
+        request.oldStringId,
+      );
+      const newKey = normalizeExactLookupKey(
+        request.newValue,
+        (id) => args.state.strings.get(id),
+        request.newStringId,
+      );
+      for (const cacheKey of cacheKeys) {
+        const entry = exactColumnIndices.get(cacheKey);
+        if (!entry) {
+          untrackCacheKey(request.sheetName, request.col, cacheKey);
+          continue;
+        }
+        if (entry.structureVersion !== currentStructureVersion) {
+          replaceExactColumnIndex(cacheKey, undefined);
+          continue;
+        }
+        if (
+          !updateEntryLiteralWrite(
+            entry,
+            request.row,
+            oldKey,
+            newKey,
+            currentColumnVersion,
+            currentStructureVersion,
+          )
+        ) {
+          replaceExactColumnIndex(cacheKey, undefined);
+        }
+      }
     },
   };
 }

@@ -394,6 +394,12 @@ export class SpreadsheetEngine {
         },
         materializePivot: (pivotRecord) => this.runtime.pivot.materializePivotNow(pivotRecord),
         collectFormulaDependents: () => new Uint32Array(),
+        noteExactLookupLiteralWrite: () => {
+          return;
+        },
+        invalidateExactLookupColumn: () => {
+          return;
+        },
       },
     });
     if (!this.wasm.initSyncIfPossible()) {

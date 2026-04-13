@@ -792,6 +792,10 @@ function validateSheetWithinLimits(
   });
 }
 
+function functionPluginIds(config: WorkPaperConfig): string[] {
+  return (config.functionPlugins ?? []).map((plugin) => plugin.id).toSorted();
+}
+
 function isHistoryRecordArray(value: unknown): value is HistoryRecord[] {
   return Array.isArray(value);
 }
@@ -1028,6 +1032,8 @@ export class WorkPaper {
   private evaluationSuspended = false;
   private suspendedVisibility: VisibilitySnapshot | null = null;
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
+  private suspendedCellMutationRefs: EngineCellMutationRef[] = [];
+  private suspendedCellMutationPotentialNewCells = 0;
   private queuedEvents: QueuedEvent[] = [];
   private trackedEngineEvents: TrackedEngineEvent[] = [];
   private engineEventCaptureEnabled = true;
@@ -1419,9 +1425,41 @@ export class WorkPaper {
   }
 
   rebuildAndRecalculate(): WorkPaperChange[] {
-    return this.captureChanges(undefined, () => {
-      this.rebuildWithConfig(this.config);
-    });
+    this.assertNotDisposed();
+    if (this.shouldSuppressEvents()) {
+      try {
+        this.engine.recalculateNow();
+      } catch (error) {
+        throw new WorkPaperOperationError(this.messageOf(error, "Recalculation failed"));
+      }
+      return [];
+    }
+    const beforeVisibility = this.ensureVisibilityCache();
+    const beforeNames =
+      this.namedExpressions.size > 0
+        ? this.ensureNamedExpressionValueCache()
+        : EMPTY_NAMED_EXPRESSION_VALUES;
+    this.drainTrackedEngineEvents();
+    try {
+      this.engine.recalculateNow();
+    } catch (error) {
+      throw new WorkPaperOperationError(this.messageOf(error, "Recalculation failed"));
+    }
+    const afterVisibility = this.captureVisibilitySnapshot();
+    const afterNames =
+      this.namedExpressions.size > 0
+        ? this.captureNamedExpressionValueSnapshot()
+        : EMPTY_NAMED_EXPRESSION_VALUES;
+    this.visibilityCache = afterVisibility;
+    this.namedExpressionValueCache = afterNames;
+    const changes = [
+      ...this.computeCellChanges(beforeVisibility, afterVisibility),
+      ...this.computeNamedExpressionChanges(beforeNames, afterNames),
+    ];
+    if (changes.length > 0) {
+      this.emitter.emitDetailed({ eventName: "valuesUpdated", payload: { changes } });
+    }
+    return changes;
   }
 
   batch(batchOperations: () => void): WorkPaperChange[] {
@@ -1467,6 +1505,7 @@ export class WorkPaper {
       return;
     }
     this.evaluationSuspended = true;
+    this.flushPendingBatchOps();
     this.suspendedVisibility = this.ensureVisibilityCache();
     this.suspendedNamedValues = this.ensureNamedExpressionValueCache();
     this.drainTrackedEngineEvents();
@@ -1478,6 +1517,7 @@ export class WorkPaper {
     if (!this.evaluationSuspended) {
       return [];
     }
+    this.flushSuspendedCellMutations();
     const changes = this.computeChangesAfterMutation(
       this.suspendedVisibility ?? new Map(),
       this.suspendedNamedValues ?? new Map(),
@@ -2290,7 +2330,7 @@ export class WorkPaper {
                   col: address.col,
                   value: content,
                 };
-        this.engine.applyCellMutationsAtWithOptions([{ sheetId: address.sheet, mutation }], {
+        this.applyCellMutationRefs([{ sheetId: address.sheet, mutation }], {
           captureUndo: true,
           potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
           source: "local",
@@ -2976,6 +3016,72 @@ export class WorkPaper {
     });
   }
 
+  private applyCellMutationRefs(
+    refs: readonly EngineCellMutationRef[],
+    options: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+      source?: "local" | "restore";
+      returnUndoOps?: boolean;
+      reuseRefs?: boolean;
+    },
+  ): void {
+    if (this.evaluationSuspended && (options.source ?? "local") === "local") {
+      for (let index = 0; index < refs.length; index += 1) {
+        const ref = refs[index];
+        if (!ref) {
+          continue;
+        }
+        const mutation = ref.mutation;
+        this.suspendedCellMutationRefs.push({
+          sheetId: ref.sheetId,
+          mutation:
+            mutation.kind === "setCellValue"
+              ? {
+                  kind: "setCellValue",
+                  row: mutation.row,
+                  col: mutation.col,
+                  value: mutation.value,
+                }
+              : mutation.kind === "setCellFormula"
+                ? {
+                    kind: "setCellFormula",
+                    row: mutation.row,
+                    col: mutation.col,
+                    formula: mutation.formula,
+                  }
+                : {
+                    kind: "clearCell",
+                    row: mutation.row,
+                    col: mutation.col,
+                  },
+        });
+      }
+      this.suspendedCellMutationPotentialNewCells +=
+        options.potentialNewCells ??
+        refs.reduce((count, ref) => (ref?.mutation.kind === "clearCell" ? count : count + 1), 0);
+      return;
+    }
+    this.engine.applyCellMutationsAtWithOptions(refs, options);
+  }
+
+  private flushSuspendedCellMutations(): void {
+    if (this.suspendedCellMutationRefs.length === 0) {
+      return;
+    }
+    const refs = this.suspendedCellMutationRefs;
+    const potentialNewCells = this.suspendedCellMutationPotentialNewCells;
+    this.suspendedCellMutationRefs = [];
+    this.suspendedCellMutationPotentialNewCells = 0;
+    this.engine.applyCellMutationsAtWithOptions(refs, {
+      captureUndo: true,
+      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      source: "local",
+      returnUndoOps: false,
+      reuseRefs: true,
+    });
+  }
+
   private enqueueDeferredBatchLiteral(
     sheetId: number,
     row: number,
@@ -2985,6 +3091,7 @@ export class WorkPaper {
   ): boolean {
     if (
       this.batchDepth === 0 ||
+      this.evaluationSuspended ||
       !isDeferredBatchLiteralContent(content) ||
       isFormulaContent(content)
     ) {
@@ -3543,7 +3650,7 @@ export class WorkPaper {
     if (refs.length === 0) {
       return;
     }
-    this.engine.applyCellMutationsAtWithOptions(refs, {
+    this.applyCellMutationRefs(refs, {
       captureUndo: true,
       potentialNewCells,
       source: "local",
@@ -3587,7 +3694,7 @@ export class WorkPaper {
       if (phaseRefs.length === 0) {
         return;
       }
-      this.engine.applyCellMutationsAtWithOptions(phaseRefs, applyOptions);
+      this.applyCellMutationRefs(phaseRefs, applyOptions);
     };
     const phaseSource = options.captureUndo === false ? "restore" : "local";
 
@@ -3665,7 +3772,7 @@ export class WorkPaper {
               col: address.col,
               value: content,
             };
-    this.engine.applyCellMutationsAtWithOptions([{ sheetId: address.sheet, mutation }], {
+    this.applyCellMutationRefs([{ sheetId: address.sheet, mutation }], {
       captureUndo: true,
       potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
       source: "local",
@@ -3719,13 +3826,49 @@ export class WorkPaper {
     this.internalFunctionLookup.clear();
   }
 
+  private validateCurrentSheetsWithinLimits(nextConfig: WorkPaperConfig): void {
+    this.listSheetRecords().forEach((sheet) => {
+      const dimensions = this.getSheetDimensions(sheet.id);
+      if (
+        dimensions.height > (nextConfig.maxRows ?? MAX_ROWS) ||
+        dimensions.width > (nextConfig.maxColumns ?? MAX_COLS)
+      ) {
+        throw new WorkPaperSheetSizeLimitExceededError();
+      }
+    });
+  }
+
+  private canReuseSnapshotRebuild(nextConfig: WorkPaperConfig): boolean {
+    if (this.config.language !== nextConfig.language) {
+      return false;
+    }
+    const currentPluginIds = functionPluginIds(this.config);
+    const nextPluginIds = functionPluginIds(nextConfig);
+    if (currentPluginIds.length !== nextPluginIds.length) {
+      return false;
+    }
+    for (let index = 0; index < currentPluginIds.length; index += 1) {
+      if (currentPluginIds[index] !== nextPluginIds[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private rebuildWithConfig(nextConfig: WorkPaperConfig): void {
     validateWorkPaperConfig(nextConfig);
-    const serializedSheets = this.getAllSheetsSerialized();
-    Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
-      validateSheetWithinLimits(sheetName, sheet, nextConfig);
-    });
-    const serializedNamedExpressions = this.getAllNamedExpressionsSerialized();
+    this.validateCurrentSheetsWithinLimits(nextConfig);
+    const canReuseSnapshot = this.canReuseSnapshotRebuild(nextConfig);
+    const snapshot = canReuseSnapshot ? this.engine.exportSnapshot() : null;
+    const serializedSheets = canReuseSnapshot ? null : this.getAllSheetsSerialized();
+    if (serializedSheets) {
+      Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
+        validateSheetWithinLimits(sheetName, sheet, nextConfig);
+      });
+    }
+    const serializedNamedExpressions = canReuseSnapshot
+      ? null
+      : this.getAllNamedExpressionsSerialized();
     const suspended = this.evaluationSuspended;
     const clipboard = this.clipboard
       ? {
@@ -3736,7 +3879,9 @@ export class WorkPaper {
       : null;
 
     this.clearFunctionBindings();
-    this.namedExpressions.clear();
+    if (!canReuseSnapshot) {
+      this.namedExpressions.clear();
+    }
     this.engine = new SpreadsheetEngine({
       workbookName: "Workbook",
       useColumnIndex: this.config.useColumnIndex,
@@ -3747,19 +3892,23 @@ export class WorkPaper {
     this.captureFunctionRegistry();
 
     this.withEngineEventCaptureDisabled(() => {
-      Object.keys(serializedSheets).forEach((sheetName) => {
-        this.engine.createSheet(sheetName);
-      });
-      serializedNamedExpressions.forEach((expression) => {
-        this.upsertNamedExpressionInternal(expression, { duringInitialization: true });
-      });
-      Object.entries(serializedSheets).forEach(([sheetName, sheet]) => {
-        const sheetId = this.requireSheetId(sheetName);
-        if (tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
-          return;
-        }
-        this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
-      });
+      if (snapshot) {
+        this.engine.importSnapshot(snapshot);
+      } else {
+        Object.keys(serializedSheets!).forEach((sheetName) => {
+          this.engine.createSheet(sheetName);
+        });
+        serializedNamedExpressions!.forEach((expression) => {
+          this.upsertNamedExpressionInternal(expression, { duringInitialization: true });
+        });
+        Object.entries(serializedSheets!).forEach(([sheetName, sheet]) => {
+          const sheetId = this.requireSheetId(sheetName);
+          if (tryLoadInitialLiteralSheet(this.engine, sheetId, sheet)) {
+            return;
+          }
+          this.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true });
+        });
+      }
     });
     this.clearHistoryStacks();
     this.primeChangeTrackingCaches();

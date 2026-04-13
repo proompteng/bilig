@@ -419,6 +419,47 @@ describe("WorkPaper", () => {
     expect(events).toEqual(["suspend", "resume:1", "values:1"]);
   });
 
+  it("defers suspended cell mutations until resume and flushes them as one undoable engine batch", () => {
+    const workbook = WorkPaper.buildFromArray([[1], [2]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+    const beforeBatchId = workbook.getStats().lastMetrics.batchId;
+
+    workbook.suspendEvaluation();
+    workbook.setCellContents(cell(sheetId, 0, 1), "=A1+A2");
+    workbook.setCellContents(cell(sheetId, 0, 0), 10);
+    workbook.setCellContents(cell(sheetId, 1, 0), 20);
+
+    expect(workbook.getStats().lastMetrics.batchId).toBe(beforeBatchId);
+
+    const changes = workbook.resumeEvaluation();
+
+    expect(workbook.getStats().lastMetrics.batchId).toBe(beforeBatchId + 1);
+    expect(
+      changes.map((change) => (change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "")),
+    ).toEqual(["Sheet1!A1", "Sheet1!B1", "Sheet1!A2"]);
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 30,
+    });
+
+    const undoChanges = workbook.undo();
+
+    expect(
+      undoChanges.map((change) =>
+        change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "",
+      ),
+    ).toEqual(["Sheet1!A1", "Sheet1!B1", "Sheet1!A2"]);
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 0))).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 1))).toBeNull();
+  });
+
   it("supports custom scalar functions and clipboard translation for pasted formulas", () => {
     WorkPaper.registerFunctionPlugin({
       id: "custom-math",

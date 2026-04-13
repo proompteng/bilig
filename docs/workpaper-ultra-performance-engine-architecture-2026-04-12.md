@@ -2,7 +2,7 @@
 
 Date: `2026-04-12`
 
-Status: `design target`
+Status: `design target, revised against current benchmark reality`
 
 Related documents:
 
@@ -14,54 +14,90 @@ Related documents:
 
 ## Purpose
 
-This document describes the engine architecture that can put `WorkPaper` decisively ahead of
-HyperFormula and other current spreadsheet engines.
+This document defines the engine architecture that can beat HyperFormula across the full expanded
+competitive suite in this repo.
 
-The target is not a cosmetic micro-optimization pass. The target is to remove entire classes of
-avoidable work:
+This is not a generic “go faster” document. It is tied to the current measured losses and the
+specific ownership mistakes that still create them.
 
-- no formula-local primary lookup caches
-- no first-query setup after workbook build
-- no snapshot diffing to describe engine changes
-- no recursive dependency evaluation on the hot path
-- no object-heavy cell storage for dense or mixed-content sheets
+The target is to remove whole classes of avoidable work:
+
+- no evaluator-owned primary lookup state
+- no per-formula criteria rescans over reused ranges
+- no structural row or column edits implemented as large ordinary cell-mutation loops
+- no rebuild path that goes through public-sheet serialization when a snapshot rebuild is valid
+- no headless workbook diff reconstruction on ordinary edits
+- no WASM kernels fed by already-materialized JS objects
 
 The phrase `10x-50x` is used narrowly and honestly here.
 
-It is realistic for:
+It is realistic on the current surplus-overhead classes that still dominate the red lanes:
 
-- first-mutation setup cost
-- change-materialization overhead
-- exact lookup overhead above the raw index hit
-- approximate lookup overhead above the raw ordered search
-- range materialization overhead for vector-style formulas
+- conditional aggregation over reused ranges
+- structural insert or move transforms
+- post-write lookup maintenance overhead
+- wrong rebuild mode selection
+- repeated row-template formula compilation
 
-It is not realistic to promise `10x-50x` on an already warmed `0.05ms` lookup unless we eliminate
-whole layers of work. This architecture is designed to do exactly that.
+It is not realistic to promise `10x-50x` on already warm `0.05ms` lookup math unless entire layers
+of orchestration disappear.
+
+## Current Benchmark Reality
+
+Latest local expanded artifact: `/tmp/workpaper-expanded-current.json`
+
+Current position on that artifact:
+
+- `WorkPaper` wins `13/24` directly comparable workloads
+- `HyperFormula` wins `11/24`
+- overall geometric mean is still `1.193x` slower for `WorkPaper`
+
+The remaining red lanes are these:
+
+| Workload | WorkPaper mean | HyperFormula mean | Primary owner that must change | Real issue |
+| --- | ---: | ---: | --- | --- |
+| `build-mixed-content` | `21.340667 ms` | `16.372333 ms` | `FormulaTemplateNormalizationService` | too much per-formula bind and compile work during mixed build |
+| `build-parser-cache-row-templates` | `108.853292 ms` | `50.341541 ms` | `FormulaTemplateNormalizationService` | repeated row-shifted formulas are still compiled too expensively |
+| `rebuild-config-toggle` | `33.938125 ms` | `14.454667 ms` | `RebuildExecutionPolicy` | wrong rebuild mode and too much runtime reconstruction |
+| `partial-recompute-mixed-frontier` | `5.098167 ms` | `4.714833 ms` | `DirtyFrontierScheduler` | frontier is still slightly broader than necessary |
+| `batch-edit-multi-column` | `1.241833 ms` | `1.133042 ms` | `SuspendedBulkMutationLane` | batch mutation still pays too much general transaction machinery |
+| `batch-suspended-multi-column` | `1.061250 ms` | `0.799417 ms` | `SuspendedBulkMutationLane` | suspended edits are improved but not yet the cheapest valid path |
+| `structural-insert-rows` | `70.896209 ms` | `6.222416 ms` | `StructuralTransformService` | structural edits still behave too much like ordinary cell mutation |
+| `aggregate-overlapping-ranges` | `4.290542 ms` | `3.015083 ms` | `RangeAggregateCacheService` | overlapping ranges do not reuse enough range-owned state |
+| `conditional-aggregation-reused-ranges` | `17.697083 ms` | `1.188792 ms` | `CriterionRangeCacheService` | repeated `COUNTIF` and `SUMIFS` shapes rescan instead of reusing one shared cache |
+| `lookup-with-column-index-after-column-write` | `1.899959 ms` | `0.098500 ms` | `ExactColumnIndexService` | post-write lookup maintenance still pays broader mutation or refresh work than the raw index update |
+| `lookup-approximate-sorted-after-column-write` | `0.526209 ms` | `0.116708 ms` | `SortedColumnSearchService` | sorted descriptor maintenance and post-write query ownership are still too broad |
+
+This architecture exists to flip those exact lanes. If a subsystem does not map to a red workload,
+it is not a first-order priority.
 
 ## Design Outcome
 
-The engine should have four properties:
+The engine should have six properties:
 
-1. workbook build fully finishes interactive runtime state
-2. single-cell edits execute as store write -> index maintenance -> narrow dirty propagation ->
+1. workbook build fully finishes interactive runtime state and formula-template normalization
+2. rebuild uses the cheapest valid mode instead of one generic reconstruction path
+3. single-cell edits execute as store write -> service maintenance -> narrow dirty frontier ->
    direct change emission
-3. exact and approximate lookup are separate engine subsystems, both owned by mutation paths
-4. WASM accelerates closed numeric/vector kernels without becoming the semantic source of truth
+4. exact lookup, approximate sorted lookup, and criteria aggregation are separate mutation-owned
+   engine services
+5. structural row and column edits execute through a transformer service, not through large generic
+   cell loops
+6. WASM accelerates closed numeric and mask kernels without becoming the semantic source of truth
 
 ## Lessons From Prior Art
 
 ### HyperFormula
 
-The HyperFormula audit shows the right ownership boundaries:
+The HyperFormula audit identifies the ownership boundaries that actually matter:
 
-- search is chosen once during engine build
+- search strategy is chosen once during engine construction
 - exact indexed lookup is persistent engine-owned column state
-- approximate sorted lookup is a separate ordered-search mechanism
-- mutation paths maintain search structures
-- fresh build front-loads graph and search construction
+- approximate sorted lookup is a different engine service, not an extension of exact indexing
+- criteria functions reuse range-owned caches through `RangeVertex` and dependent-cache invalidation
+- structural row and column operations are dedicated graph and address transforms in `Operations`
 
-That architecture is recorded in:
+That audit is recorded in:
 
 - `/Users/gregkonush/github.com/bilig2/docs/workpaper-hyperformula-prior-art-audit-2026-04-12.md`
 
@@ -69,12 +105,12 @@ That architecture is recorded in:
 
 IronCalc is useful for what to copy selectively:
 
-- cache formula results directly near cell storage
+- cache formula results close to cell storage
 - deduplicate formulas structurally
 - intern strings aggressively
 - keep the persistence model plain and serializable
 
-It is not the model to copy for maximum runtime performance because it still relies on:
+It is not the runtime model to copy for maximum performance because it still relies on:
 
 - nested hash-map sheet storage
 - recursive evaluation
@@ -86,59 +122,78 @@ It is not the model to copy for maximum runtime performance because it still rel
 1. JavaScript remains the semantic source of truth for formula meaning and conformance.
 2. The hot runtime model may differ from the persistence model.
 3. Exact lookup and approximate sorted lookup must not share the same primary abstraction.
-4. Mutation code owns invalidation and maintenance of search state.
-5. The engine emits direct changed-cell payloads; outer layers do not reconstruct them by diffing.
-6. WASM only accelerates closed, deterministic kernels with proven JS parity.
+4. Criteria-function reuse must be range-owned, not formula-owned.
+5. Structural edits must not use large ordinary cell-mutation loops on the hot path.
+6. Rebuild modes must be explicit and selected by policy.
+7. The engine emits direct changed-cell payloads; outer layers do not reconstruct them by diffing.
+8. WASM only accelerates closed, deterministic kernels with proven JS parity.
+9. Public-surface rebuild and serialization paths are correctness fallbacks, not primary hot paths.
+10. No phase is complete if the benchmark win depends on permanent dual ownership.
 
 ## Runtime Layers
 
-The runtime is split into six layers.
+The runtime is split into seven layers.
 
 1. `WorkbookPersistenceModel`
-   - plain workbook, sheet, style, formula, metadata structures
-   - optimized for I/O, import/export, and determinism
+   - plain workbook, sheet, style, formula, and metadata structures
+   - optimized for import, export, determinism, and compatibility
 2. `RuntimeColumnStore`
-   - typed hot-path storage used by the engine
-   - optimized for scans, binary search, and low-allocation edits
-3. `EngineServices`
-   - exact lookup index
-   - sorted lookup descriptor service
-   - dependency graph
-   - dirty-frontier scheduler
-   - change-set emitter
+   - typed hot-path column storage
+   - optimized for contiguous scans, binary search, and low-allocation writes
+3. `RangeEntityStore`
+   - canonical range handles
+   - prefix links for overlapping ranges
+   - cache roots for aggregates and criteria functions
 4. `CompiledFormulaPlanArena`
-   - canonicalized shared plans with typed execution metadata
-5. `ExecutionTier`
+   - canonicalized shared plans
+   - template-normalized repeated row and column shapes
+   - typed execution metadata
+5. `EngineServices`
+   - `ExactColumnIndexService`
+   - `SortedColumnSearchService`
+   - `RangeAggregateCacheService`
+   - `CriterionRangeCacheService`
+   - `StructuralTransformService`
+   - `DirtyFrontierScheduler`
+   - `ChangeSetEmitter`
+   - `RebuildExecutionPolicy`
+6. `ExecutionTier`
    - JS evaluator for full semantics
-   - WASM kernels for numeric/vector hot loops
-6. `Headless/UI Adapters`
+   - WASM kernels for closed numeric and mask-heavy hot loops
+7. `Headless` and `UI Adapters`
    - consume already-materialized changes
-   - never infer changes by rescanning the workbook
+   - never infer changes by rescanning workbook state
 
 ## Core Entity Model
 
 ```mermaid
 flowchart LR
-  PM["WorkbookPersistenceModel<br/>plain workbook + sheet records<br/>styles, formulas, metadata"] --> RT["RuntimeBuilder"]
-  RT --> CS["RuntimeColumnStore<br/>typed value columns<br/>row indirection<br/>formula slots"]
-  RT --> FP["CompiledFormulaPlanArena<br/>shared canonical plans<br/>range handles<br/>lookup descriptors"]
-  RT --> DG["DependencyGraph<br/>cell, range, column, and plan subscribers"]
-  RT --> XI["ExactColumnIndexService<br/>number->rows<br/>stringId->rows"]
-  RT --> SI["SortedColumnSearchService<br/>monotonic descriptors<br/>binary-search metadata<br/>arithmetic progression hints"]
-  RT --> CE["ChangeSetEmitter<br/>old/new values<br/>spill delta payloads<br/>visibility flags"]
+  PM["WorkbookPersistenceModel<br/>plain workbook + sheet records<br/>styles, formulas, metadata"] --> RB["RuntimeBuilder"]
+  RB --> CS["RuntimeColumnStore<br/>typed value columns<br/>row indirection<br/>formula slots"]
+  RB --> RS["RangeEntityStore<br/>range handles<br/>prefix links<br/>cache roots"]
+  RB --> FP["CompiledFormulaPlanArena<br/>shared canonical plans<br/>template-normalized shapes"]
+  RB --> DG["DependencyGraph<br/>cell, range, service, and plan subscribers"]
+  RB --> EXI["ExactColumnIndexService<br/>number -> rows<br/>stringId -> rows"]
+  RB --> SSI["SortedColumnSearchService<br/>monotonic descriptors<br/>binary-search metadata"]
+  RB --> RAC["RangeAggregateCacheService<br/>overlapping aggregate reuse"]
+  RB --> CRC["CriterionRangeCacheService<br/>criteria masks<br/>dependent cache graph"]
+  RB --> ST["StructuralTransformService<br/>row and column transforms<br/>address rewrites"]
+  RB --> RP["RebuildExecutionPolicy<br/>recalculateAll<br/>snapshot rebuild<br/>persistence rebuild"]
   FP --> EX["ExecutionTier"]
+  RS --> RAC
+  RS --> CRC
   DG --> SCH["DirtyFrontierScheduler"]
-  XI --> EX
-  SI --> EX
+  EXI --> EX
+  SSI --> EX
+  RAC --> EX
+  CRC --> EX
   SCH --> EX
-  EX --> CE
-  EX --> JS["JS Semantic Engine<br/>full semantics<br/>fallback and oracle"]
-  EX --> WASM["WASM Kernel Tier<br/>numeric/vector kernels<br/>aggregates and scans"]
+  EX --> CSE["ChangeSetEmitter<br/>old/new payloads<br/>spill deltas<br/>explicit vs recalculated"]
 ```
 
 ## Hot Runtime Storage
 
-### 1. Column-native value storage
+### RuntimeColumnStore
 
 Each sheet runtime uses column-oriented storage, not nested cell objects.
 
@@ -148,7 +203,7 @@ Per logical column:
 - `Uint32Array` for interned string ids
 - `Uint8Array` or bitsets for booleans and empties
 - compact tag arrays for cell kind and error state
-- optional sparse overlays for extremely sparse columns
+- optional sparse overlays only for genuinely sparse columns
 
 Per sheet:
 
@@ -161,16 +216,17 @@ Per sheet:
 This shape improves:
 
 - dense scans
-- binary search
-- exact index maintenance
+- exact and sorted lookup maintenance
+- criteria mask generation
 - cache locality
-- WASM memory transfer
+- WASM dispatch without object marshaling
 
-### 2. Formula-slot storage
+### Formula slots
 
-Formula cells do not store heavyweight evaluator state inline. They store:
+Formula cells do not own heavyweight evaluator state inline. They store:
 
 - `formulaSlotId`
+- `planId`
 - `currentValueKind`
 - `currentValuePayload`
 - `spillRegionId | 0`
@@ -179,28 +235,37 @@ Formula cells do not store heavyweight evaluator state inline. They store:
 
 The slot points into a shared plan arena.
 
-### 3. Shared strings and canonical formulas
+### RangeEntityStore
 
-Adopt the best IronCalc ideas here:
+Ranges are first-class engine entities.
 
-- intern strings once at runtime
-- canonicalize formulas to a normalized plan key
-- store one compiled plan for each canonical formula shape
-- specialize relative addressing through lightweight binding records, not duplicated ASTs
+Each range entity stores:
+
+- `rangeHandle`
+- sheet and bounds
+- optional prefix link to a smaller overlapping range
+- aggregate cache roots
+- criterion cache roots
+- dependent cache handles for invalidation
+
+This is where `WorkPaper` must match and surpass HyperFormula’s `RangeVertex` idea.
 
 ## Formula Plan Arena
 
 Each compiled plan contains:
 
 - canonical expression opcodes
+- template-normalized relative addressing shape
 - referenced cell handles
 - referenced range handles
 - optional exact lookup binding
 - optional sorted lookup binding
+- optional criterion cache binding
 - execution family classification
   - scalar
   - vector
   - aggregate
+  - criteria-aggregate
   - lookup-exact
   - lookup-sorted
   - spill-producing
@@ -209,9 +274,12 @@ Each compiled plan contains:
   - `js-with-wasm-kernel`
   - `wasm-first`
 
-The arena is append-mostly and shareable across sheets and workbooks with matching formula shapes.
+The arena is append-mostly and shared across equivalent formula shapes.
 
-## Search Architecture
+Repeated row-template formulas must normalize to one shared compiled plan body plus lightweight
+binding records. That is the direct fix for `build-parser-cache-row-templates`.
+
+## Engine-Owned Services
 
 ### ExactColumnIndexService
 
@@ -230,15 +298,15 @@ This service serves:
 - `MATCH(..., 0)`
 - `XMATCH(..., 0, ...)`
 - exact `XLOOKUP`
-- exact `VLOOKUP` / `HLOOKUP`
+- exact `VLOOKUP` and `HLOOKUP`
 
-It is built during workbook load and maintained on:
+It is maintained on:
 
 - literal writes
 - formula result changes
 - clear operations
-- row insert/remove/move
-- column insert/remove/move
+- row insert, remove, and move
+- column insert, remove, and move
 
 ### SortedColumnSearchService
 
@@ -262,17 +330,104 @@ This service serves:
 
 Its hot path is:
 
-- arithmetic answer if progression descriptor applies
-- otherwise one binary search over the runtime column
+- arithmetic answer if the progression descriptor applies
+- otherwise one binary search over the typed runtime column
 - otherwise controlled fallback to JS semantic path
+
+### RangeAggregateCacheService
+
+This service owns reusable results for overlapping aggregate ranges.
+
+Per range handle:
+
+- aggregate family
+- cached scalar or vector summary
+- prefix-range parent
+- tail delta metadata
+- dependency generation
+
+This service exists to flip `aggregate-overlapping-ranges`.
+
+### CriterionRangeCacheService
+
+This service owns reusable caches for:
+
+- `COUNTIF`
+- `COUNTIFS`
+- `SUMIF`
+- `SUMIFS`
+- `AVERAGEIF`
+- `AVERAGEIFS`
+- `MINIFS`
+- `MAXIFS`
+
+Each cache key includes:
+
+- values range handle
+- criteria range handles
+- normalized criterion text
+- aggregate family
+- coercion mode
+
+Each cache value contains:
+
+- a reusable match mask or matching row list
+- optional prefix-cache parent
+- tail delta metadata
+- dependent-cache handles for invalidation
+
+Invalidation flows from base range entities to dependent caches. This is mandatory. If the
+criterion cache is formula-owned instead of range-owned, `WorkPaper` will keep losing
+`conditional-aggregation-reused-ranges`.
+
+### StructuralTransformService
+
+This service owns:
+
+- row insert
+- row remove
+- row move
+- column insert
+- column remove
+- column move
+
+It updates:
+
+- row indirection
+- range handles
+- formula address rewrites
+- exact and sorted lookup services
+- criteria and aggregate cache generations
+- dependency graph generations
+
+The hot path must not behave like “apply 10,000 generic cell mutations”.
+
+### RebuildExecutionPolicy
+
+Rebuild must have three explicit modes:
+
+1. `recalculateAll`
+   - same engine and same runtime model
+   - mark all formulas dirty
+   - full recalc only
+2. `rebuildRuntimeFromSnapshot`
+   - config change requires a fresh runtime
+   - current engine snapshot can be imported directly
+   - no public-sheet serialization
+3. `rebuildFromPersistence`
+   - only when the runtime model itself must be reconstructed from persistence data
+
+This is the direct architectural answer to `rebuild-config-toggle`.
 
 ## Dependency Model
 
-The dependency graph is not cell-only. It supports four subscriber classes:
+The dependency graph is not cell-only. It supports six subscriber classes:
 
 - cell subscribers
 - range subscribers
-- column-service subscribers
+- exact-column-service subscribers
+- sorted-column-service subscribers
+- criterion-range-service subscribers
 - plan subscribers
 
 That lets the engine represent:
@@ -280,31 +435,35 @@ That lets the engine represent:
 - direct cell dependencies
 - aggregate range dependencies
 - exact lookup dependency on a column index
-- sorted lookup dependency on a sorted column descriptor
-
-This avoids waking more formulas than necessary on a single edit.
+- sorted lookup dependency on a sorted descriptor
+- criteria-family dependency on one or more reusable range caches
 
 ```mermaid
 flowchart TD
   E["Edit: Sheet1!B2 = 42"] --> CW["Column write"]
-  CW --> XIU["ExactColumnIndexService.update(B)"]
-  CW --> SIU["SortedColumnSearchService.update(B)"]
-  CW --> D1["Dirty cell subscribers"]
-  XIU --> D2["Dirty exact-lookup subscribers of column B"]
-  SIU --> D3["Dirty sorted-lookup subscribers of column B"]
-  D1 --> Q["DirtyFrontierScheduler"]
-  D2 --> Q
-  D3 --> Q
-  Q --> P1["Plan 17: SUM(B1:B1000)"]
-  Q --> P2["Plan 44: XMATCH(key, B:B, 0)"]
-  Q --> P3["Plan 51: XMATCH(x, B:B, 1)"]
+  CW --> EXU["ExactColumnIndexService.update(B)"]
+  CW --> SSU["SortedColumnSearchService.update(B)"]
+  CW --> CRU["CriterionRangeCacheService.invalidate(B-related ranges)"]
+  CW --> DS1["Dirty direct cell subscribers"]
+  EXU --> DS2["Dirty exact-lookup subscribers of column B"]
+  SSU --> DS3["Dirty sorted-lookup subscribers of column B"]
+  CRU --> DS4["Dirty criteria-cache subscribers of affected ranges"]
+  DS1 --> Q["DirtyFrontierScheduler"]
+  DS2 --> Q
+  DS3 --> Q
+  DS4 --> Q
+  Q --> P1["Plan: SUM(B1:B1000)"]
+  Q --> P2["Plan: XMATCH(key, B:B, 0)"]
+  Q --> P3["Plan: XMATCH(x, B:B, 1)"]
+  Q --> P4["Plan: SUMIFS(V:V, B:B, \">0\")"]
   P1 --> EX["ExecutionTier"]
   P2 --> EX
   P3 --> EX
+  P4 --> EX
   EX --> OUT["Direct ChangeSetEmitter payloads"]
 ```
 
-## Dirty-Frontier Scheduler
+## DirtyFrontierScheduler
 
 The scheduler owns recalculation order and scratch storage.
 
@@ -315,6 +474,7 @@ It should use:
 - generation-based dedupe instead of `Set`
 - spill-aware dependency invalidation
 - stable topological segments for unchanged graph regions
+- a true suspended bulk mutation lane for multi-edit batches
 
 The common single-edit path should allocate nothing.
 
@@ -325,38 +485,17 @@ The engine must emit direct change payloads.
 A tracked mutation result should already contain:
 
 - changed cell ids
-- old value tags/payloads
-- new value tags/payloads
-- spill added/removed regions
+- old value tags and payloads
+- new value tags and payloads
+- spill added and removed regions
 - explicit vs recalculated cause flags
 - visibility flags where relevant
 
 That removes the need for headless or UI layers to:
 
 - walk snapshots
-- read old/current visibility maps
-- format coordinates to infer what changed
-
-```mermaid
-sequenceDiagram
-  participant API as WorkPaper API
-  participant CS as RuntimeColumnStore
-  participant IDX as Lookup Services
-  participant DG as DependencyGraph
-  participant SCH as DirtyFrontierScheduler
-  participant EX as ExecutionTier
-  participant EM as ChangeSetEmitter
-  participant UI as Headless/UI Adapter
-
-  API->>CS: applyCellEdit(sheet,row,col,newValue)
-  CS->>IDX: maintain exact/sorted column state
-  CS->>DG: mark direct subscribers dirty
-  IDX->>DG: mark lookup subscribers dirty
-  DG->>SCH: enqueue affected plans/cells
-  SCH->>EX: execute only dirty frontier
-  EX->>EM: emit old/new results for touched cells
-  EM-->>UI: WorkPaperChange[]
-```
+- read old and current visibility maps
+- reformat coordinates to infer what changed
 
 ## Execution Tier
 
@@ -368,6 +507,7 @@ JS remains the semantic oracle and always owns:
 - canonicalization
 - edge-case semantics
 - type coercion correctness
+- criterion parsing and wildcard semantics
 - error propagation
 - fallback for unsupported WASM kernels
 
@@ -381,27 +521,26 @@ Examples:
 - exact numeric scans and predicate masks
 - approximate ordered numeric binary search
 - arithmetic progression detection
-- numeric text-to-number normalization batches
-- spill fill/copy kernels for dense numeric outputs
+- criteria mask generation over numeric columns and interned string-id columns
+- spill fill and copy kernels for dense numeric outputs
 
 WASM should not own:
 
-- general string semantics
 - workbook mutation orchestration
 - dependency graph logic
-- Excel-compatibility edge cases with broad object interactions
+- string wildcard semantics
+- general Excel-compatibility edge cases
 
-In this repo, that means `packages/wasm-kernel` is a compute tier, not a second spreadsheet engine.
+In this repo, `packages/wasm-kernel` is a compute tier, not a second spreadsheet engine.
 
 ### JS/WASM contract
-
-The contract is typed and boring.
 
 Inputs:
 
 - memory pointer to numeric column or scratch vector
+- optional pointer to interned string-id vector
 - row bounds
-- normalized lookup key
+- normalized lookup key or normalized criterion descriptor
 - descriptor flags
 - execution opcode
 
@@ -409,174 +548,186 @@ Outputs:
 
 - row index or `-1`
 - aggregate scalar
-- mask/vector length
+- mask length and mask pointer
 - error code enum
 
 No dynamic object marshaling is allowed on the hot path.
 
-```mermaid
-flowchart LR
-  PLAN["CompiledFormulaPlan"] --> CLS{"Execution family"}
-  CLS -->|"scalar edge-case"| JS["JS semantic evaluator"]
-  CLS -->|"numeric aggregate"| WK["WASM aggregate kernel"]
-  CLS -->|"exact numeric lookup"| WX["WASM exact scan/index kernel"]
-  CLS -->|"sorted numeric lookup"| WB["WASM binary-search kernel"]
-  CLS -->|"mixed/string semantics"| JS
-  JS --> RES["Typed result store"]
-  WK --> RES
-  WX --> RES
-  WB --> RES
-```
-
-### WASM memory topology
-
-The WASM tier should consume stable typed buffers with explicit ownership.
-
-- JS owns workbook orchestration and chooses kernels
-- runtime column storage exposes stable slices or copied scratch segments
-- WASM operates on numeric columns, masks, and output buffers only
-- results come back as scalars, row ids, or typed output spans
-
-```mermaid
-flowchart TD
-  COL["RuntimeColumnStore<br/>Float64Array / Uint32Array / Uint8Array"] --> SLICE["Column slice handle<br/>ptr + offset + length + tags"]
-  PLAN2["CompiledFormulaPlan"] --> DISPATCH["Kernel dispatcher"]
-  SLICE --> DISPATCH
-  DESC["Lookup/Aggregate descriptor<br/>bounds, direction, flags"] --> DISPATCH
-  DISPATCH --> MEM["WASM linear memory<br/>numeric inputs<br/>scratch masks<br/>output vectors"]
-  MEM --> K1["Aggregate kernels"]
-  MEM --> K2["Exact numeric lookup kernels"]
-  MEM --> K3["Sorted binary-search kernels"]
-  MEM --> K4["Spill fill/copy kernels"]
-  K1 --> OUT["Typed result payload"]
-  K2 --> OUT
-  K3 --> OUT
-  K4 --> OUT
-  OUT --> JSR["JS semantic result reconciliation"]
-```
-
 ### Kernel families
 
-The initial kernel set should be deliberately small and high-value.
+The initial kernel set should be deliberately small and tied to real red workloads.
 
 1. `aggregate_numeric_contiguous`
    - `SUM`, `AVERAGE`, `MIN`, `MAX`, and closed numeric reductions
-2. `lookup_exact_numeric`
+2. `criteria_mask_numeric`
+   - reusable mask generation for numeric criteria functions
+3. `criteria_mask_string_id`
+   - reusable mask generation for equality and direct-string criteria over interned ids
+4. `lookup_exact_numeric`
    - exact key hit over numeric column buckets or scan masks
-3. `lookup_sorted_numeric`
+5. `lookup_sorted_numeric`
    - monotonic numeric binary search and progression solve
-4. `vector_compare_numeric`
-   - predicate masks used by `FILTER`-adjacent and spill-producing numeric paths
-5. `spill_copy_numeric`
+6. `spill_copy_numeric`
    - dense numeric output materialization
 
 Each kernel family must have:
 
 - JS oracle parity tests
-- deterministic input/output fixtures
+- deterministic input and output fixtures
 - benchmark evidence that marshaling cost does not erase the gain
 
-## Build Pipeline
+## Build And Rebuild Pipeline
 
-Fresh build must finish all interactive state up front.
+### Fresh build stages
 
-### Stage 1. Persistence ingest
-
-- workbook model loaded
-- strings interned
-- sheet metadata normalized
-
-### Stage 2. Runtime column build
-
-- literal values loaded into typed columns
-- formula slots allocated
-- row indirection initialized
-
-### Stage 3. Plan build
-
-- formulas canonicalized
-- shared compiled plans created
-- range and cell handles bound
-- execution families classified
-
-### Stage 4. Service build
-
-- exact indexes built for eligible columns
-- sorted descriptors built for eligible columns
-- dependency graph edges finalized
-
-### Stage 5. Initial calculation
-
-- initial dirty frontier evaluated
-- direct change payload buffers prepared
+1. persistence ingest
+   - workbook model loaded
+   - strings interned
+   - sheet metadata normalized
+2. runtime column build
+   - literal values loaded into typed columns
+   - formula slots allocated
+   - row indirection initialized
+3. plan and range build
+   - formulas canonicalized
+   - repeated row and column templates normalized
+   - shared compiled plans created
+   - range entities created
+4. service build
+   - exact indexes built for eligible columns
+   - sorted descriptors built for eligible columns
+   - range aggregate roots built
+   - criteria cache roots prepared
+   - dependency graph edges finalized
+5. initial calculation
+   - initial dirty frontier evaluated
+   - direct change payload buffers prepared
 
 There must be no missing setup left for the first interactive mutation.
 
+### Rebuild modes
+
+1. `recalculateAll`
+   - use for same-config full recompute
+   - no engine reconstruction
+2. `rebuildRuntimeFromSnapshot`
+   - use when config changes but function and language surface still permit snapshot import
+3. `rebuildFromPersistence`
+   - use only when snapshot reuse is semantically invalid
+
+## Workload Ownership Matrix
+
+| Workload | Primary subsystem | What must be true when done |
+| --- | --- | --- |
+| `build-mixed-content` | `FormulaTemplateNormalizationService` | mixed build does not repeatedly recompile identical relative shapes |
+| `build-parser-cache-row-templates` | `FormulaTemplateNormalizationService` | repeated row templates normalize to one compiled plan family |
+| `rebuild-config-toggle` | `RebuildExecutionPolicy` | config toggle chooses snapshot rebuild when valid and persistence rebuild only when required |
+| `partial-recompute-mixed-frontier` | `DirtyFrontierScheduler` | range and service subscribers wake only relevant plans |
+| `batch-edit-multi-column` | `SuspendedBulkMutationLane` | multi-edit batches pay one frontier setup and one change emission |
+| `batch-suspended-multi-column` | `SuspendedBulkMutationLane` | suspended edits are a true deferred local batch |
+| `structural-insert-rows` | `StructuralTransformService` | row insert updates engine state without generic cell-mutation loops |
+| `aggregate-overlapping-ranges` | `RangeAggregateCacheService` | overlapping aggregates reuse prefix-range state |
+| `conditional-aggregation-reused-ranges` | `CriterionRangeCacheService` | repeated criteria formulas share one range-owned cache |
+| `lookup-with-column-index-after-column-write` | `ExactColumnIndexService` | post-write exact lookup is just index maintenance plus narrow frontier |
+| `lookup-approximate-sorted-after-column-write` | `SortedColumnSearchService` | post-write approximate lookup is descriptor maintenance plus one search |
+
 ## How High-Performance Calculation Works
 
-### Exact lookup
+### Exact lookup after a write
 
-For `XMATCH(key, B:B, 0)`:
+For `XMATCH(key, B:B, 0)` after `B2 = 42`:
 
-1. formula plan resolves to `lookup-exact`
-2. plan references `ExactColumnIndexService(sheet=B)`
-3. mutation path maintains the B index on every relevant write
-4. execution path does:
-   - normalize `key`
-   - direct bucket lookup
-   - select first/last row in bounds
-   - write scalar result
+1. write into the typed runtime column
+2. update `ExactColumnIndexService(B)` in place
+3. dirty only direct cell subscribers plus exact-lookup subscribers of `B`
+4. scheduler evaluates only affected plans
+5. emitter returns direct old and new payloads
 
-No range scan, no formula-local descriptor rebuild, no generic evaluator walk.
+No range scan, no evaluator refresh pass, no formula-local descriptor rebuild.
 
-### Approximate sorted lookup
+### Approximate sorted lookup after a write
 
-For `XMATCH(x, B:B, 1)`:
+For `XMATCH(x, B:B, 1)` after `B2 = 42`:
 
-1. formula plan resolves to `lookup-sorted`
-2. plan references `SortedColumnSearchService(sheet=B)`
-3. mutation path maintains monotonic metadata and progression hints
-4. execution path does:
-   - progression solve if valid
-   - otherwise binary search over the typed runtime column
-   - write scalar result
+1. write into the typed runtime column
+2. update `SortedColumnSearchService(B)` metadata in place
+3. dirty only sorted-lookup subscribers of `B`
+4. answer by arithmetic solve or one binary search over typed storage
 
-No exact-index detour, no range materialization.
+No exact-index detour, no vector materialization, no broad recalc frontier.
 
-### Aggregate formula
+### Conditional aggregation over reused ranges
 
-For `SUM(B1:B100000)`:
+For `SUMIFS(V:V, B:B, \">0\", C:C, \"x\")` copied down many rows:
 
-1. plan resolves to `aggregate`
-2. range dependency points at the B-column storage span
-3. if numeric-homogeneous, WASM aggregate kernel runs directly over typed memory
-4. scalar result writes back into the formula slot
+1. plan resolves to `criteria-aggregate`
+2. plan references range handles for `V`, `B`, and `C`
+3. `CriterionRangeCacheService` looks for a cache entry keyed by:
+   - values range handle
+   - criteria range handles
+   - normalized criterion text
+   - aggregate family
+4. if present, reuse the cached mask or matching row list
+5. if not present, build it once, store it on the range cache root, and link dependents
+6. aggregate via WASM if the mask and values lane are eligible
 
-### Single-cell edit
+This is the direct architectural answer to the current `14.9x` loss on
+`conditional-aggregation-reused-ranges`.
 
-For `B2 = 42`:
+### Structural row insert
 
-1. write into runtime column
-2. update exact and sorted services for column B
-3. dirty only subscribers of B2 and column B services
-4. scheduler evaluates affected plans
-5. emitter returns direct old/new payloads
+For `insertRows(500, 10)` on a formula-heavy sheet:
 
-The hot path should look like a database index update plus a tiny incremental compute frontier.
+1. `StructuralTransformService` updates row indirection
+2. range handles and formula address bindings are rewritten as engine entities
+3. exact and sorted lookup services apply the row transform
+4. criteria and aggregate cache generations are invalidated narrowly
+5. dependency graph generations advance once
+6. scheduler recalculates only the affected frontier
+
+No giant loop of generic cell rewrites.
+
+### Rebuild after config change
+
+For a config toggle:
+
+1. `RebuildExecutionPolicy` inspects the requested config change
+2. if semantics permit, use `recalculateAll`
+3. otherwise, if function and language surface still permit, use `rebuildRuntimeFromSnapshot`
+4. only then use `rebuildFromPersistence`
+
+This prevents the hot path from paying the most expensive rebuild mode by default.
+
+## Disallowed Fallbacks
+
+These are explicitly forbidden as primary architecture:
+
+- evaluator-owned primary lookup descriptors
+- evaluator-owned primary criteria caches
+- per-formula criteria rescans over reused identical ranges
+- structural row or column edits implemented as large ordinary cell-mutation loops
+- rebuild paths that serialize sheets through the public surface when snapshot import is valid
+- headless before and after workbook diff reconstruction on ordinary edits
+- WASM kernels invoked only after JS already materialized the full vector into object form
 
 ## Why This Can Beat HyperFormula
 
-HyperFormula already gets one thing right: search is engine-owned.
+HyperFormula already gets two important things right:
 
-This architecture goes further by adding:
+- search is engine-owned
+- criteria caches are range-owned
 
-- hotter runtime storage than cell/object-centric models
-- separate exact and sorted lookup services
+This architecture goes further by combining:
+
+- hotter runtime storage than cell-object-centric models
+- explicit rebuild mode policy
+- separate exact, sorted, aggregate, and criteria services
 - direct changed-cell payloads instead of outer diffing
-- plan sharing with typed execution-family dispatch
+- template-normalized plan sharing
+- structural transforms as engine-owned operations
 - WASM kernels fed by contiguous typed memory
 
-That combination is where the order-of-magnitude surplus-overhead wins come from.
+That combination is where the order-of-magnitude wins on the current red lanes can come from.
 
 ## Why This Should Not Copy IronCalc
 
@@ -592,49 +743,54 @@ It is not useful as the primary runtime blueprint because:
 - nested hash maps destroy scan and search locality
 - recursive evaluation inflates call and hash overhead
 - whole-model reevaluation is wrong for interactive edits
-- lookup paths that materialize arrays cannot win against engine-owned search services
+- lookup and criteria paths that materialize arrays cannot win against engine-owned services
 
 ## Migration Plan
 
-1. introduce `RuntimeColumnStore` alongside current runtime state
-2. move exact lookup to a shared `ExactColumnIndexService`
-3. move approximate lookup to a separate `SortedColumnSearchService`
-4. change tracked mutation results to emit direct old/new payloads
-5. move eligible aggregate and lookup kernels into WASM
-6. shift formula binding to shared plan arena ids instead of per-formula prepared descriptors
-7. retire formula-local primary lookup descriptors
+1. direct change payload substrate
+2. compiled plan arena and formula slots
+3. rebuild execution policy split
+4. formula template normalization service
+5. true suspended bulk mutation lane
+6. criterion and overlapping-range caches
+7. structural transform service
+8. post-write lookup maintenance cutover
+9. runtime column store authority
+10. WASM criteria and search kernels
+11. delete displaced paths
 
 ## Acceptance Criteria
 
 The architecture is not done until all of the following are true:
 
-1. first mutation after build pays no lookup-state setup cost
-2. `lookup-with-column-index` resolves through engine-owned exact index state only
-3. `lookup-approximate-sorted` resolves through engine-owned sorted-search state only
-4. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
-5. numeric aggregate and ordered numeric lookup hot loops have JS/WASM parity tests
-6. benchmark wins survive reruns, not just one lucky artifact
+1. `WorkPaper` wins all directly comparable workloads in the expanded benchmark suite
+2. `conditional-aggregation-reused-ranges` is served by a range-owned reusable criterion cache
+3. `structural-insert-rows` is served by `StructuralTransformService`
+4. `lookup-with-column-index-after-column-write` resolves through mutation-owned exact index state
+5. `lookup-approximate-sorted-after-column-write` resolves through mutation-owned sorted descriptor state
+6. rebuild uses explicit policy and does not default to persistence reconstruction
+7. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
+8. numeric aggregate, criteria-mask, and ordered-search hot loops have JS and WASM parity tests
+9. benchmark wins survive reruns on a clean committed tree, not one lucky artifact
 
 ## Benchmark Expectations
 
-Expected areas for `10x-50x` improvement over the current `bilig` architecture:
+Expected areas for `10x-50x` improvement over the current `WorkPaper` architecture:
 
-- first-mutation exact lookup overhead above the raw search
-- first-mutation approximate lookup overhead above the raw search
-- event-to-change translation
-- range materialization for numeric aggregate and lookup paths
+- conditional aggregation over reused ranges
+- structural insert and move transforms
+- post-write exact lookup overhead above the raw index update
+- wrong rebuild mode selection
 
 Expected areas for smaller but still meaningful wins:
 
-- warmed indexed lookup
-- warmed approximate sorted lookup
-- formula-edit recalculation
 - mixed-content build
+- parser-cache row templates
+- partial recompute mixed frontier
+- batch multi-column suspended edits
 
-The realistic target is:
+The realistic target is blunt:
 
-- consistent overall lead on directly comparable benchmarks
-- much larger lead on the avoidable-overhead layers beneath those benchmarks
-
-That is the architecture with the highest probability of creating a durable performance lead rather
-than another short-lived microbenchmark bump.
+- `24/24` comparable workload wins on the expanded suite
+- no remaining architecture-owned red lane
+- no victory that depends on hidden fallback paths

@@ -173,6 +173,35 @@ export type RuntimeDirectLookupDescriptor =
       matchMode: 1 | -1;
     };
 
+export interface RuntimeDirectCriteriaRange {
+  readonly sheetName: string;
+  readonly rowStart: number;
+  readonly rowEnd: number;
+  readonly col: number;
+  readonly length: number;
+}
+
+export type RuntimeDirectCriteriaOperand =
+  | {
+      kind: "literal";
+      value: CellValue;
+    }
+  | {
+      kind: "cell";
+      cellIndex: number;
+    };
+
+export interface RuntimeDirectCriteriaPair {
+  readonly range: RuntimeDirectCriteriaRange;
+  readonly criterion: RuntimeDirectCriteriaOperand;
+}
+
+export interface RuntimeDirectCriteriaDescriptor {
+  readonly aggregateKind: "count" | "sum" | "average" | "min" | "max";
+  readonly aggregateRange: RuntimeDirectCriteriaRange | undefined;
+  readonly criteriaPairs: readonly RuntimeDirectCriteriaPair[];
+}
+
 export interface CompiledPlanRecord {
   readonly id: number;
   readonly source: string;
@@ -198,6 +227,7 @@ export interface RuntimeFormula {
   rangeListOffset: number;
   rangeListLength: number;
   directLookup: RuntimeDirectLookupDescriptor | undefined;
+  directCriteria: RuntimeDirectCriteriaDescriptor | undefined;
 }
 
 export type U32 = Uint32Array;

@@ -1,7 +1,8 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
+import { EngineFormulaBindingError } from "../engine/errors.js";
 import type { EngineFormulaBindingService } from "../engine/services/formula-binding-service.js";
 
 function isEngineFormulaBindingService(value: unknown): value is EngineFormulaBindingService {
@@ -25,6 +26,43 @@ function getBindingService(engine: SpreadsheetEngine): EngineFormulaBindingServi
     throw new TypeError("Expected engine formula binding service");
   }
   return binding;
+}
+
+function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unknown {
+  const formulas = Reflect.get(engine, "formulas");
+  if (
+    typeof formulas !== "object" ||
+    formulas === null ||
+    typeof Reflect.get(formulas, "get") !== "function"
+  ) {
+    throw new TypeError("Expected internal formulas store");
+  }
+  return Reflect.get(formulas, "get").call(formulas, cellIndex);
+}
+
+function isRuntimeFormulaWithDirectCriteria(value: unknown): value is {
+  directCriteria: {
+    aggregateKind: string;
+    aggregateRange:
+      | {
+          sheetName: string;
+          rowStart: number;
+          rowEnd: number;
+          col: number;
+          length: number;
+        }
+      | undefined;
+    criteriaPairs: Array<{
+      range: { sheetName: string; rowStart: number; rowEnd: number; col: number; length: number };
+      criterion: { kind: "literal"; value: unknown } | { kind: "cell"; cellIndex: number };
+    }>;
+  };
+} {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const directCriteria = Reflect.get(value, "directCriteria");
+  return typeof directCriteria === "object" && directCriteria !== null;
 }
 
 describe("EngineFormulaBindingService", () => {
@@ -101,5 +139,185 @@ describe("EngineFormulaBindingService", () => {
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 12 });
     expect(engine.getDependencies("Sheet1", "A1").directDependents).toContain("Sheet1!C1");
     expect(engine.getDependencies("Sheet1", "C1").directDependents).toContain("Sheet1!D1");
+  });
+
+  it("binds direct criteria descriptors for supported conditional aggregate families", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-direct-criteria" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellValue("Sheet1", "A4", 4);
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "B3", 30);
+    engine.setCellValue("Sheet1", "B4", 40);
+    engine.setCellValue("Sheet1", "D1", 2);
+    engine.setCellFormula("Sheet1", "F1", 'COUNTIF(A1:A4,">1")');
+    engine.setCellFormula("Sheet1", "F2", "SUMIF(A1:A4,D1,B1:B4)");
+    engine.setCellFormula("Sheet1", "F3", "AVERAGEIFS(B1:B4,A1:A4,D1)");
+
+    const countIndex = engine.workbook.getCellIndex("Sheet1", "F1");
+    const sumIndex = engine.workbook.getCellIndex("Sheet1", "F2");
+    const averageIndex = engine.workbook.getCellIndex("Sheet1", "F3");
+    if (countIndex === undefined || sumIndex === undefined || averageIndex === undefined) {
+      throw new Error("expected criteria formulas to be materialized");
+    }
+
+    const countFormula = readRuntimeFormula(engine, countIndex);
+    if (!isRuntimeFormulaWithDirectCriteria(countFormula)) {
+      throw new Error("expected COUNTIF runtime formula to expose direct criteria metadata");
+    }
+    expect(countFormula.directCriteria.aggregateKind).toBe("count");
+    expect(countFormula.directCriteria.aggregateRange).toBeUndefined();
+    expect(countFormula.directCriteria.criteriaPairs[0]?.criterion).toMatchObject({
+      kind: "literal",
+    });
+
+    const sumFormula = readRuntimeFormula(engine, sumIndex);
+    if (!isRuntimeFormulaWithDirectCriteria(sumFormula)) {
+      throw new Error("expected SUMIF runtime formula to expose direct criteria metadata");
+    }
+    expect(sumFormula.directCriteria.aggregateKind).toBe("sum");
+    expect(sumFormula.directCriteria.aggregateRange).toMatchObject({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 1,
+      length: 4,
+    });
+    expect(sumFormula.directCriteria.criteriaPairs[0]?.criterion).toMatchObject({
+      kind: "cell",
+    });
+
+    const averageFormula = readRuntimeFormula(engine, averageIndex);
+    if (!isRuntimeFormulaWithDirectCriteria(averageFormula)) {
+      throw new Error("expected AVERAGEIFS runtime formula to expose direct criteria metadata");
+    }
+    expect(averageFormula.directCriteria.aggregateKind).toBe("average");
+    expect(averageFormula.directCriteria.aggregateRange).toMatchObject({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 1,
+      length: 4,
+    });
+  });
+
+  it("binds direct criteria descriptors for COUNTIFS SUMIFS MINIFS and MAXIFS", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-direct-criteria-families" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellValue("Sheet1", "A4", 4);
+    engine.setCellValue("Sheet1", "B1", "x");
+    engine.setCellValue("Sheet1", "B2", "x");
+    engine.setCellValue("Sheet1", "B3", "y");
+    engine.setCellValue("Sheet1", "B4", "x");
+    engine.setCellValue("Sheet1", "C1", 10);
+    engine.setCellValue("Sheet1", "C2", 20);
+    engine.setCellValue("Sheet1", "C3", 30);
+    engine.setCellValue("Sheet1", "C4", 40);
+    engine.setCellFormula("Sheet1", "G1", 'COUNTIFS(A1:A4,">1",B1:B4,"x")');
+    engine.setCellFormula("Sheet1", "G2", 'SUMIFS(C1:C4,A1:A4,">1",B1:B4,"x")');
+    engine.setCellFormula("Sheet1", "G3", 'MINIFS(C1:C4,A1:A4,">1",B1:B4,"x")');
+    engine.setCellFormula("Sheet1", "G4", 'MAXIFS(C1:C4,A1:A4,">1",B1:B4,"x")');
+
+    for (const address of ["G1", "G2", "G3", "G4"] as const) {
+      const cellIndex = engine.workbook.getCellIndex("Sheet1", address);
+      if (cellIndex === undefined) {
+        throw new Error(`expected ${address} to be materialized`);
+      }
+      const runtimeFormula = readRuntimeFormula(engine, cellIndex);
+      if (!isRuntimeFormulaWithDirectCriteria(runtimeFormula)) {
+        throw new Error(`expected ${address} to expose direct criteria metadata`);
+      }
+      expect(runtimeFormula.directCriteria.criteriaPairs).toHaveLength(2);
+      expect(runtimeFormula.directCriteria.criteriaPairs[0]?.criterion).toMatchObject({
+        kind: "literal",
+      });
+    }
+
+    const countFormula = readRuntimeFormula(engine, engine.workbook.getCellIndex("Sheet1", "G1")!);
+    const sumFormula = readRuntimeFormula(engine, engine.workbook.getCellIndex("Sheet1", "G2")!);
+    const minFormula = readRuntimeFormula(engine, engine.workbook.getCellIndex("Sheet1", "G3")!);
+    const maxFormula = readRuntimeFormula(engine, engine.workbook.getCellIndex("Sheet1", "G4")!);
+    if (
+      !isRuntimeFormulaWithDirectCriteria(countFormula) ||
+      !isRuntimeFormulaWithDirectCriteria(sumFormula) ||
+      !isRuntimeFormulaWithDirectCriteria(minFormula) ||
+      !isRuntimeFormulaWithDirectCriteria(maxFormula)
+    ) {
+      throw new Error("expected all supported criteria families to expose direct metadata");
+    }
+    expect(countFormula.directCriteria.aggregateKind).toBe("count");
+    expect(sumFormula.directCriteria.aggregateKind).toBe("sum");
+    expect(minFormula.directCriteria.aggregateKind).toBe("min");
+    expect(maxFormula.directCriteria.aggregateKind).toBe("max");
+  });
+
+  it("does not bind direct criteria descriptors for unsupported criteria shapes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-direct-criteria-unsupported" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellValue("Sheet1", "A4", 4);
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "B3", 30);
+    engine.setCellValue("Sheet1", "D1", 2);
+    engine.setCellFormula("Sheet1", "H2", "SUMIF(A1:A4,D1,B1:B3)");
+    engine.setCellFormula("Sheet1", "H3", 'COUNTIFS(A1:A4,">1",B1:B3,"x")');
+
+    for (const address of ["H2", "H3"] as const) {
+      const cellIndex = engine.workbook.getCellIndex("Sheet1", address);
+      if (cellIndex === undefined) {
+        throw new Error(`expected ${address} to be materialized`);
+      }
+      const runtimeFormula = readRuntimeFormula(engine, cellIndex);
+      expect(isRuntimeFormulaWithDirectCriteria(runtimeFormula)).toBe(false);
+    }
+  });
+
+  it("wraps rebuild and rebind failures with EngineFormulaBindingError", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-error-wrappers" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Other");
+    engine.setCellValue("Sheet1", "A1", 7);
+    engine.setCellFormula("Sheet1", "B1", "A1+Other!A1");
+    engine.setCellValue("Other", "A1", 1);
+
+    const formulaIndex = engine.workbook.getCellIndex("Sheet1", "B1");
+    if (formulaIndex === undefined) {
+      throw new Error("expected formula index");
+    }
+
+    const getSheetNameByIdSpy = vi
+      .spyOn(engine.workbook, "getSheetNameById")
+      .mockImplementation(() => {
+        throw new Error("binding explode");
+      });
+
+    const binding = getBindingService(engine);
+    for (const effect of [
+      binding.rebuildAllFormulaBindings(),
+      binding.rebindFormulaCells([formulaIndex], 0),
+    ]) {
+      const result = Effect.runSync(Effect.either(effect));
+      expect(result._tag).toBe("Left");
+      expect(result.left).toBeInstanceOf(EngineFormulaBindingError);
+      expect(result.left.message).toContain("binding explode");
+    }
+
+    getSheetNameByIdSpy.mockRestore();
   });
 });
