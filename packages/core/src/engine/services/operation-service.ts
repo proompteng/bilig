@@ -619,39 +619,6 @@ export function createEngineOperationService(args: {
     );
   };
 
-  const getPreparedExistingCellIndex = (
-    sheetName: string,
-    address: string,
-    preparedCellAddress: PreparedCellAddress | null,
-  ): number | undefined => {
-    if (!preparedCellAddress) {
-      return args.state.workbook.getCellIndex(sheetName, address);
-    }
-    const sheet = args.state.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return undefined;
-    }
-    return args.state.workbook.cellKeyToIndex.get(
-      makeCellKey(sheet.id, preparedCellAddress.row, preparedCellAddress.col),
-    );
-  };
-
-  const ensurePreparedCellTracked = (
-    sheetName: string,
-    address: string,
-    preparedCellAddress: PreparedCellAddress | null,
-  ): number => {
-    if (!preparedCellAddress) {
-      return args.ensureCellTracked(sheetName, address);
-    }
-    const sheet = args.state.workbook.getOrCreateSheet(sheetName);
-    return args.state.workbook.ensureCellAt(
-      sheet.id,
-      preparedCellAddress.row,
-      preparedCellAddress.col,
-    ).cellIndex;
-  };
-
   const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => {
     switch (op.kind) {
       case "upsertWorkbook":
@@ -851,6 +818,59 @@ export function createEngineOperationService(args: {
     );
     args.resetMaterializedCellScratch(reservedNewCells);
 
+    const preparedSheetIdByName = new Map<string, number>();
+    const resolvePreparedSheetId = (sheetName: string, create: boolean): number | undefined => {
+      const cachedSheetId = preparedSheetIdByName.get(sheetName);
+      if (cachedSheetId !== undefined) {
+        if (args.state.workbook.getSheetById(cachedSheetId)) {
+          return cachedSheetId;
+        }
+        preparedSheetIdByName.delete(sheetName);
+      }
+      const sheet = create
+        ? args.state.workbook.getOrCreateSheet(sheetName)
+        : args.state.workbook.getSheet(sheetName);
+      if (!sheet) {
+        return undefined;
+      }
+      preparedSheetIdByName.set(sheetName, sheet.id);
+      return sheet.id;
+    };
+    const getPreparedExistingCellIndex = (
+      sheetName: string,
+      address: string,
+      preparedCellAddress: PreparedCellAddress | null,
+    ): number | undefined => {
+      if (!preparedCellAddress) {
+        return args.state.workbook.getCellIndex(sheetName, address);
+      }
+      const sheetId = resolvePreparedSheetId(sheetName, false);
+      if (sheetId === undefined) {
+        return undefined;
+      }
+      return args.state.workbook.cellKeyToIndex.get(
+        makeCellKey(sheetId, preparedCellAddress.row, preparedCellAddress.col),
+      );
+    };
+    const ensurePreparedCellTracked = (
+      sheetName: string,
+      address: string,
+      preparedCellAddress: PreparedCellAddress | null,
+    ): number => {
+      if (!preparedCellAddress) {
+        return args.ensureCellTracked(sheetName, address);
+      }
+      const sheetId = resolvePreparedSheetId(sheetName, true);
+      if (sheetId === undefined) {
+        throw new Error(`Unknown sheet: ${sheetName}`);
+      }
+      return args.state.workbook.ensureCellAt(
+        sheetId,
+        preparedCellAddress.row,
+        preparedCellAddress.col,
+      ).cellIndex;
+    };
+
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
     try {
       batch.ops.forEach((op, opIndex) => {
@@ -881,6 +901,7 @@ export function createEngineOperationService(args: {
             setEntityVersionForOp(op, order);
             break;
           case "upsertSheet": {
+            preparedSheetIdByName.delete(op.name);
             args.state.workbook.createSheet(op.name, op.order, op.id);
             setEntityVersionForOp(op, order);
             const tombstone = sheetDeleteVersions.get(op.name);
@@ -894,6 +915,8 @@ export function createEngineOperationService(args: {
             break;
           }
           case "renameSheet": {
+            preparedSheetIdByName.delete(op.oldName);
+            preparedSheetIdByName.delete(op.newName);
             const renamedSheet = args.state.workbook.renameSheet(op.oldName, op.newName);
             if (args.state.trackReplicaVersions) {
               entityVersions.set(`sheet:${op.oldName}`, order);
@@ -924,6 +947,7 @@ export function createEngineOperationService(args: {
             break;
           }
           case "deleteSheet": {
+            preparedSheetIdByName.delete(op.name);
             const removal = args.removeSheetRuntime(op.name, explicitChangedCount);
             changedInputCount += removal.changedInputCount;
             formulaChangedCount += removal.formulaChangedCount;
@@ -1362,13 +1386,17 @@ export function createEngineOperationService(args: {
       args.rebuildTopoRanks();
       args.detectCycles();
     }
-    formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
-    const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
-    let recalculated = args.recalculate(
-      args.composeMutationRoots(changedInputCount, formulaChangedCount),
-      changedInputArray,
-    );
-    recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots);
+    const hasActiveFormulas = args.state.formulas.size > 0;
+    let recalculated = new Uint32Array();
+    if (hasActiveFormulas || refreshAllPivots) {
+      formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
+      const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
+      recalculated = args.recalculate(
+        args.composeMutationRoots(changedInputCount, formulaChangedCount),
+        changedInputArray,
+      );
+      recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots);
+    }
     const hasEventListeners =
       args.state.events.hasListeners() || args.state.events.hasCellListeners();
     const changed =
@@ -1668,13 +1696,17 @@ export function createEngineOperationService(args: {
       args.rebuildTopoRanks();
       args.detectCycles();
     }
-    formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
-    const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
-    let recalculated = args.recalculate(
-      args.composeMutationRoots(changedInputCount, formulaChangedCount),
-      changedInputArray,
-    );
-    recalculated = args.reconcilePivotOutputs(recalculated, false);
+    const hasActiveFormulas = args.state.formulas.size > 0;
+    let recalculated = new Uint32Array();
+    if (hasActiveFormulas) {
+      formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
+      const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
+      recalculated = args.recalculate(
+        args.composeMutationRoots(changedInputCount, formulaChangedCount),
+        changedInputArray,
+      );
+      recalculated = args.reconcilePivotOutputs(recalculated, false);
+    }
     const hasEventListeners =
       args.state.events.hasListeners() || args.state.events.hasCellListeners();
     const changed =

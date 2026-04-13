@@ -1600,17 +1600,26 @@ export function createEngineMutationService(args: {
       return Effect.flatMap(
         Effect.try({
           try: () => {
+            const maxEngineOpCount = ops.length * 2;
             const engineOps: EngineOp[] = [];
+            engineOps.length = maxEngineOpCount;
             const preparedCellAddressesByOpIndex: Array<PreparedCellAddress | null> = [];
+            preparedCellAddressesByOpIndex.length = maxEngineOpCount;
+            let engineOpCount = 0;
             let potentialNewCells = 0;
             const pushEngineOp = (
               engineOp: EngineOp,
               preparedCellAddress: PreparedCellAddress | null = null,
             ): void => {
-              engineOps.push(engineOp);
-              preparedCellAddressesByOpIndex.push(preparedCellAddress);
+              engineOps[engineOpCount] = engineOp;
+              preparedCellAddressesByOpIndex[engineOpCount] = preparedCellAddress;
+              engineOpCount += 1;
             };
-            ops.forEach((op) => {
+            for (let index = 0; index < ops.length; index += 1) {
+              const op = ops[index];
+              if (!op) {
+                continue;
+              }
               switch (op.kind) {
                 case "upsertWorkbook":
                   if (op.name) {
@@ -1694,7 +1703,9 @@ export function createEngineMutationService(args: {
                   break;
                 }
               }
-            });
+            }
+            engineOps.length = engineOpCount;
+            preparedCellAddressesByOpIndex.length = engineOpCount;
             return { engineOps, potentialNewCells, preparedCellAddressesByOpIndex };
           },
           catch: (cause) =>
