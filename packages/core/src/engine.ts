@@ -31,6 +31,7 @@ import type {
   WorkbookShapeSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
+import { ValueTag } from "@bilig/protocol";
 import {
   Float64Arena,
   Uint32Arena,
@@ -685,6 +686,21 @@ export class SpreadsheetEngine {
     );
   }
 
+  private cellHasSemanticDeleteImpact(cellIndex: number): boolean {
+    const snapshot = this.getCellByIndex(cellIndex);
+    if (snapshot.formula !== undefined) {
+      return true;
+    }
+    if (this.workbook.getCellFormat(cellIndex) !== undefined) {
+      return true;
+    }
+    return (
+      snapshot.value.tag === ValueTag.Number ||
+      snapshot.value.tag === ValueTag.Boolean ||
+      snapshot.value.tag === ValueTag.String
+    );
+  }
+
   private hasFormulaReferenceAtOrAfter(
     sheetName: string,
     axis: "row" | "column",
@@ -784,6 +800,9 @@ export class SpreadsheetEngine {
     let cellImpact = false;
     sheet.grid.forEachCell((cellIndex) => {
       if (cellImpact) {
+        return;
+      }
+      if (!this.cellHasSemanticDeleteImpact(cellIndex)) {
         return;
       }
       const row = this.workbook.cellStore.rows[cellIndex] ?? -1;
