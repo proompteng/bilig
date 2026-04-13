@@ -1387,7 +1387,7 @@ export function createEngineOperationService(args: {
       args.detectCycles();
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
-    let recalculated = new Uint32Array();
+    let recalculated: U32 = new Uint32Array();
     if (hasActiveFormulas || refreshAllPivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
@@ -1399,7 +1399,7 @@ export function createEngineOperationService(args: {
     }
     const hasEventListeners =
       args.state.events.hasListeners() || args.state.events.hasCellListeners();
-    const changed =
+    const changed: U32 =
       isRestore || !hasEventListeners
         ? new Uint32Array()
         : args.composeEventChanges(recalculated, explicitChangedCount);
@@ -1697,7 +1697,7 @@ export function createEngineOperationService(args: {
       args.detectCycles();
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
-    let recalculated = new Uint32Array();
+    let recalculated: U32 = new Uint32Array();
     if (hasActiveFormulas) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
@@ -1709,7 +1709,7 @@ export function createEngineOperationService(args: {
     }
     const hasEventListeners =
       args.state.events.hasListeners() || args.state.events.hasCellListeners();
-    const changed =
+    const changed: U32 =
       isRestore || !hasEventListeners
         ? new Uint32Array()
         : args.composeEventChanges(recalculated, explicitChangedCount);

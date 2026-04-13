@@ -595,8 +595,6 @@ export function useWorkbookGridRenderState(input: {
       hostBounds: {
         left: 0,
         top: 0,
-        width: hostElement.clientWidth,
-        height: hostElement.clientHeight,
       },
       getCellBounds: getCellLocalBounds,
     });
