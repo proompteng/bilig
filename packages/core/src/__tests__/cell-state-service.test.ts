@@ -88,10 +88,7 @@ describe("EngineCellStateService", () => {
           format: null,
         }),
       ),
-    ).toEqual([
-      { kind: "clearCell", sheetName: "Sheet1", address: "C3" },
-      { kind: "setCellFormat", sheetName: "Sheet1", address: "C3", format: null },
-    ]);
+    ).toEqual([{ kind: "clearCell", sheetName: "Sheet1", address: "C3" }]);
 
     expect(
       Effect.runSync(

@@ -76,6 +76,8 @@ export function createEngineCellStateService(args: {
     formatOverride: string | null = snapshot.format ?? null,
   ): EngineOp[] => {
     const ops: EngineOp[] = [];
+    const shouldEmitFormat =
+      formatOverride !== null && formatOverride !== undefined && formatOverride !== "";
     if (snapshot.formula !== undefined) {
       const translatedFormula =
         sourceSheetName && sourceAddress
@@ -103,12 +105,14 @@ export function createEngineCellStateService(args: {
           break;
       }
     }
-    ops.push({
-      kind: "setCellFormat",
-      sheetName,
-      address,
-      format: formatOverride,
-    });
+    if (shouldEmitFormat) {
+      ops.push({
+        kind: "setCellFormat",
+        sheetName,
+        address,
+        format: formatOverride,
+      });
+    }
     return ops;
   };
 

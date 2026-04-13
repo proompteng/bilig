@@ -148,6 +148,147 @@ describe("EngineOperationService", () => {
     expect(setLastMetricsSpy).toHaveBeenCalledTimes(3);
   });
 
+  it("treats batched clears of already-empty tracked dependency cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-batch-clear-empty-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+
+    const before = engine.exportSnapshot();
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "clearCell", sheetName: "Sheet1", address: "D4" },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats batched null writes to already-empty tracked dependency cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-batch-null-empty-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+
+    const before = engine.exportSnapshot();
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "D4", value: null },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats batched null writes to missing cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-batch-null-missing-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const before = engine.exportSnapshot();
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "D4", value: null },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats mutation-ref clears of already-empty tracked dependency cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-mutation-clear-empty-noop",
+      replicaId: "a",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId,
+        mutation: { kind: "clearCell", row: 3, col: 3 },
+      },
+    ];
+    const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
+    const batch = createBatch(getReplicaState(engine), forwardOps);
+    const before = engine.exportSnapshot();
+
+    Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("prunes explicit null literal writes back out of tracked empty dependency cells", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-null-literal-empty-prune",
+      replicaId: "a",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId,
+        mutation: { kind: "setCellValue", row: 3, col: 3, value: null },
+      },
+    ];
+    const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
+    const batch = createBatch(getReplicaState(engine), forwardOps);
+    const before = engine.exportSnapshot();
+
+    Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats mutation-ref null writes to missing cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-mutation-null-missing-noop",
+      replicaId: "a",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId,
+        mutation: { kind: "setCellValue", row: 3, col: 3, value: null },
+      },
+    ];
+    const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
+    const batch = createBatch(getReplicaState(engine), forwardOps);
+    const before = engine.exportSnapshot();
+
+    Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1));
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("rebinds formulas over existing literal cells through mutation refs", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-mutation-formula-over-literal",
+      replicaId: "a",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 3);
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId,
+        mutation: { kind: "setCellFormula", row: 0, col: 0, formula: "2+2" },
+      },
+    ];
+    const forwardOps = refs.map((ref) => cellMutationRefToEngineOp(engine.workbook, ref));
+    const batch = createBatch(getReplicaState(engine), forwardOps);
+
+    Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1));
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 4 });
+  });
+
   it("applies local cell mutation refs through the service", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "operation-local-refs", replicaId: "a" });
     await engine.ready();

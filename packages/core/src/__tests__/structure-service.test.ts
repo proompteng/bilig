@@ -42,7 +42,6 @@ describe("EngineStructureService", () => {
       { kind: "setCellValue", sheetName: "Sheet1", address: "B2", value: 20 },
       { kind: "setCellFormat", sheetName: "Sheet1", address: "B2", format: "0.00" },
       { kind: "setCellFormula", sheetName: "Sheet1", address: "A3", formula: "B2*2" },
-      { kind: "setCellFormat", sheetName: "Sheet1", address: "A3", format: null },
     ]);
   });
 

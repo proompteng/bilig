@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@bilig/protocol";
-import { compileFormula } from "../compiler.js";
+import type { FormulaNode } from "../ast.js";
+import { compileFormula, type CompiledFormula } from "../compiler.js";
+import type { JsPlanInstruction } from "../js-evaluator.js";
 import {
   renameFormulaSheetReferences,
   rewriteAddressForStructuralTransform,
@@ -10,6 +12,28 @@ import {
   serializeFormula,
   translateFormulaReferences,
 } from "../translation.js";
+
+function makeCompiledFormula(
+  ast: FormulaNode,
+  overrides: Partial<CompiledFormula> = {},
+): CompiledFormula {
+  const base = compileFormula("1");
+  return {
+    ...base,
+    source: serializeFormula(ast),
+    ast,
+    optimizedAst: ast,
+    deps: [],
+    symbolicNames: [],
+    symbolicTables: [],
+    symbolicSpills: [],
+    symbolicRefs: [],
+    symbolicRanges: [],
+    symbolicStrings: [],
+    jsPlan: [{ opcode: "return" }],
+    ...overrides,
+  };
+}
 
 describe("translateFormulaReferences", () => {
   it("shifts relative cell references", () => {
@@ -65,6 +89,9 @@ describe("translateFormulaReferences", () => {
   });
 
   it("throws when standalone row and column refs move outside bounds", () => {
+    expect(() => translateFormulaReferences("A1", -1, 0)).toThrow(
+      "Translated reference moved outside worksheet bounds: A1",
+    );
     expect(() => translateFormulaReferences("A:A", 0, -1)).toThrow(
       "Translated reference moved outside worksheet bounds: A",
     );
@@ -613,5 +640,359 @@ describe("translateFormulaReferences", () => {
     expect(rewritten.reusedProgram).toBe(false);
     expect(rewritten.compiled.ast.kind).toBe("ErrorLiteral");
     expect(rewritten.compiled.optimizedAst.kind).toBe("ErrorLiteral");
+  });
+
+  it("rewrites compiled cell references in place for owner-sheet structural moves", () => {
+    const compiled = compileFormula("A6");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 2,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("A7");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps).toEqual(["A7"]);
+    expect(rewritten.compiled.symbolicRefs).toEqual(["A7"]);
+    expect(rewritten.compiled.parsedDeps).toEqual([
+      { kind: "cell", address: "A7", row: 6, col: 0 },
+    ]);
+    expect(rewritten.compiled.parsedSymbolicRefs).toEqual([{ address: "A7", row: 6, col: 0 }]);
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-cell", address: "A7" },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("rewrites compiled row and column range plans without recompiling", () => {
+    const rowCompiled = compileFormula("SUM(5:7)");
+    const rowRewritten = rewriteCompiledFormulaForStructuralTransform(
+      rowCompiled,
+      "Sheet1",
+      "Sheet1",
+      {
+        kind: "move",
+        axis: "row",
+        start: 4,
+        count: 2,
+        target: 1,
+      },
+    );
+    expect(rowRewritten.source).toBe("SUM(2:7)");
+    expect(rowRewritten.reusedProgram).toBe(true);
+    expect(rowRewritten.compiled.deps).toEqual(["2:7"]);
+    expect(rowRewritten.compiled.symbolicRanges).toEqual(["2:7"]);
+    expect(rowRewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "2", end: "7", refKind: "rows" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [{ kind: "range", start: "2", end: "7", refKind: "rows" }],
+      },
+      { opcode: "return" },
+    ]);
+
+    const colCompiled = compileFormula("SUM(C:E)");
+    const colRewritten = rewriteCompiledFormulaForStructuralTransform(
+      colCompiled,
+      "Sheet1",
+      "Sheet1",
+      {
+        kind: "insert",
+        axis: "column",
+        start: 1,
+        count: 1,
+      },
+    );
+    expect(colRewritten.source).toBe("SUM(D:F)");
+    expect(colRewritten.reusedProgram).toBe(true);
+    expect(colRewritten.compiled.deps).toEqual(["D:F"]);
+    expect(colRewritten.compiled.symbolicRanges).toEqual(["D:F"]);
+    expect(colRewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "D", end: "F", refKind: "cols" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [{ kind: "range", start: "D", end: "F", refKind: "cols" }],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("preserves explicit sheet qualification when rewriting compiled range references", () => {
+    const compiled = compileFormula("SUM('Other Sheet'!A1:A3)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(
+      compiled,
+      "Sheet1",
+      "Other Sheet",
+      {
+        kind: "insert",
+        axis: "row",
+        start: 0,
+        count: 1,
+      },
+    );
+
+    expect(rewritten.source).toBe("SUM('Other Sheet'!A2:A4)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps).toHaveLength(1);
+    expect(rewritten.compiled.deps[0]).toBe("'Other Sheet'!A2:A4");
+    expect(rewritten.compiled.symbolicRanges).toHaveLength(1);
+    expect(rewritten.compiled.symbolicRanges[0]).toBe("'Other Sheet'!A2:A4");
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", sheetName: "Other Sheet", start: "A2", end: "A4", refKind: "cells" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [
+          { kind: "range", sheetName: "Other Sheet", start: "A2", end: "A4", refKind: "cells" },
+        ],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("rewrites compiled row ranges for downward moves without recompiling", () => {
+    const compiled = compileFormula("SUM(2:3)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "move",
+      axis: "row",
+      start: 1,
+      count: 1,
+      target: 4,
+    });
+
+    expect(rewritten.source).toBe("SUM(2:5)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps).toEqual(["2:5"]);
+    expect(rewritten.compiled.symbolicRanges).toEqual(["2:5"]);
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "2", end: "5", refKind: "rows" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [{ kind: "range", start: "2", end: "5", refKind: "rows" }],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("leaves compiled references unchanged when the structural target sheet does not match", () => {
+    const compiled = compileFormula("SUM('Other Sheet'!A1:A3)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 0,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("SUM('Other Sheet'!A1:A3)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps[0]).toBe("'Other Sheet'!A1:A3");
+    expect(rewritten.compiled.symbolicRanges[0]).toBe("'Other Sheet'!A1:A3");
+    expect(rewritten.compiled.jsPlan).toEqual(compiled.jsPlan);
+  });
+
+  it("leaves compiled row and column ranges unchanged when the transform axis does not apply", () => {
+    const rowCompiled = compileFormula("SUM(5:7)");
+    const rowRewritten = rewriteCompiledFormulaForStructuralTransform(
+      rowCompiled,
+      "Sheet1",
+      "Sheet1",
+      {
+        kind: "insert",
+        axis: "column",
+        start: 0,
+        count: 1,
+      },
+    );
+    expect(rowRewritten.source).toBe("SUM(5:7)");
+    expect(rowRewritten.reusedProgram).toBe(true);
+    expect(rowRewritten.compiled.jsPlan).toEqual(rowCompiled.jsPlan);
+
+    const colCompiled = compileFormula("SUM(C:E)");
+    const colRewritten = rewriteCompiledFormulaForStructuralTransform(
+      colCompiled,
+      "Sheet1",
+      "Sheet1",
+      {
+        kind: "insert",
+        axis: "row",
+        start: 0,
+        count: 1,
+      },
+    );
+    expect(colRewritten.source).toBe("SUM(C:E)");
+    expect(colRewritten.reusedProgram).toBe(true);
+    expect(colRewritten.compiled.jsPlan).toEqual(colCompiled.jsPlan);
+  });
+
+  it("rewrites compiled lookup plans across structural inserts", () => {
+    const compiled = compileFormula("MATCH(A6,A1:A10,0)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 0,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("MATCH(A7,A2:A11,0)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps).toEqual(["A7", "A2:A11"]);
+    expect(rewritten.compiled.symbolicRefs).toEqual(["A7"]);
+    expect(rewritten.compiled.symbolicRanges).toEqual(["A2:A11"]);
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-cell", address: "A7" },
+      {
+        opcode: "lookup-exact-match",
+        callee: "MATCH",
+        start: "A2",
+        end: "A11",
+        startRow: 1,
+        endRow: 10,
+        startCol: 0,
+        endCol: 0,
+        refKind: "cells",
+        searchMode: 1,
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("rewrites compiled call argument references for mixed cell and range operands", () => {
+    const compiled = compileFormula("COUNTIF(A1:A3,B1)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 0,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("COUNTIF(A2:A4,B2)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.deps).toEqual(["A2:A4", "B2"]);
+    expect(rewritten.compiled.symbolicRefs).toEqual(["B2"]);
+    expect(rewritten.compiled.symbolicRanges).toEqual(["A2:A4"]);
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "A2", end: "A4", refKind: "cells" },
+      { opcode: "push-cell", address: "B2" },
+      {
+        opcode: "call",
+        callee: "COUNTIF",
+        argc: 2,
+        argRefs: [
+          { kind: "range", start: "A2", end: "A4", refKind: "cells" },
+          { kind: "cell", address: "B2" },
+        ],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("rewrites manual compiled invoke formulas and lambda plan bodies without recompiling", () => {
+    const ast: FormulaNode = {
+      kind: "InvokeExpr",
+      callee: { kind: "StructuredRef", tableName: "Sales", columnName: "Amount" },
+      args: [
+        { kind: "ColumnRef", ref: "C", sheetName: "Sheet1" },
+        { kind: "RowRef", ref: "5", sheetName: "Sheet1" },
+      ],
+    };
+    const jsPlan: JsPlanInstruction[] = [
+      {
+        opcode: "push-lambda",
+        params: ["x"],
+        body: [{ opcode: "push-cell", sheetName: "Sheet1", address: "A1" }, { opcode: "return" }],
+      },
+      {
+        opcode: "call",
+        callee: "WRAP",
+        argc: 4,
+        argRefs: [
+          { kind: "range" },
+          { kind: "cell", sheetName: "Other Sheet", address: "B2" },
+          { kind: "row" },
+          { kind: "col" },
+        ],
+      },
+      { opcode: "return" },
+    ];
+    const compiled = makeCompiledFormula(ast, { jsPlan });
+
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 0,
+      count: 1,
+    });
+
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.source).toBe("(Sales[Amount])(Sheet1!C,Sheet1!6)");
+    expect(rewritten.compiled.ast).toEqual({
+      kind: "InvokeExpr",
+      callee: { kind: "StructuredRef", tableName: "Sales", columnName: "Amount" },
+      args: [
+        { kind: "ColumnRef", ref: "C", sheetName: "Sheet1" },
+        { kind: "RowRef", ref: "6", sheetName: "Sheet1" },
+      ],
+    });
+    expect(rewritten.compiled.jsPlan).toEqual([
+      {
+        opcode: "push-lambda",
+        params: ["x"],
+        body: [{ opcode: "push-cell", sheetName: "Sheet1", address: "A2" }, { opcode: "return" }],
+      },
+      {
+        opcode: "call",
+        callee: "WRAP",
+        argc: 4,
+        argRefs: [
+          { kind: "range" },
+          { kind: "cell", sheetName: "Other Sheet", address: "B2" },
+          { kind: "row" },
+          { kind: "col" },
+        ],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("collapses malformed manual compiled refs to #REF! when structural rewrites cannot preserve them", () => {
+    const compiled = makeCompiledFormula(
+      {
+        kind: "CallExpr",
+        callee: "SUM",
+        args: [
+          { kind: "CellRef", ref: "A0", sheetName: "Sheet1" },
+          { kind: "RowRef", ref: "0", sheetName: "Sheet1" },
+        ],
+      },
+      {
+        jsPlan: [{ opcode: "push-cell", sheetName: "Sheet1", address: "A0" }, { opcode: "return" }],
+      },
+    );
+
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 0,
+      count: 1,
+    });
+
+    expect(rewritten.reusedProgram).toBe(false);
+    expect(rewritten.source).toBe("SUM(#REF!,#REF!)");
+    expect(rewritten.compiled.ast).toEqual({
+      kind: "CallExpr",
+      callee: "SUM",
+      args: [
+        { kind: "ErrorLiteral", code: ErrorCode.Ref },
+        { kind: "ErrorLiteral", code: ErrorCode.Ref },
+      ],
+    });
   });
 });

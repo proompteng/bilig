@@ -5,30 +5,65 @@ interface EngineServiceErrorDetails {
   readonly cause?: unknown;
 }
 
-export class EngineMutationError extends Data.TaggedError("EngineMutationError")<EngineServiceErrorDetails> {}
+const TaggedEngineMutationError = Data.TaggedError(
+  "EngineMutationError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineRecalcError = Data.TaggedError("EngineRecalcError")<EngineServiceErrorDetails>;
+const TaggedEngineSnapshotError = Data.TaggedError(
+  "EngineSnapshotError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineSyncError = Data.TaggedError("EngineSyncError")<EngineServiceErrorDetails>;
+const TaggedEngineHistoryError = Data.TaggedError("EngineHistoryError")<EngineServiceErrorDetails>;
+const TaggedEnginePivotError = Data.TaggedError("EnginePivotError")<EngineServiceErrorDetails>;
+const TaggedEngineStructureError = Data.TaggedError(
+  "EngineStructureError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineFormulaBindingError = Data.TaggedError(
+  "EngineFormulaBindingError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineFormulaGraphError = Data.TaggedError(
+  "EngineFormulaGraphError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineFormulaEvaluationError = Data.TaggedError(
+  "EngineFormulaEvaluationError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineCellStateError = Data.TaggedError(
+  "EngineCellStateError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineTraversalError = Data.TaggedError(
+  "EngineTraversalError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineMaintenanceError = Data.TaggedError(
+  "EngineMaintenanceError",
+)<EngineServiceErrorDetails>;
+const TaggedEngineRuntimeScratchError = Data.TaggedError(
+  "EngineRuntimeScratchError",
+)<EngineServiceErrorDetails>;
 
-export class EngineRecalcError extends Data.TaggedError("EngineRecalcError")<EngineServiceErrorDetails> {}
+export class EngineMutationError extends TaggedEngineMutationError {}
 
-export class EngineSnapshotError extends Data.TaggedError("EngineSnapshotError")<EngineServiceErrorDetails> {}
+export class EngineRecalcError extends TaggedEngineRecalcError {}
 
-export class EngineSyncError extends Data.TaggedError("EngineSyncError")<EngineServiceErrorDetails> {}
+export class EngineSnapshotError extends TaggedEngineSnapshotError {}
 
-export class EngineHistoryError extends Data.TaggedError("EngineHistoryError")<EngineServiceErrorDetails> {}
+export class EngineSyncError extends TaggedEngineSyncError {}
 
-export class EnginePivotError extends Data.TaggedError("EnginePivotError")<EngineServiceErrorDetails> {}
+export class EngineHistoryError extends TaggedEngineHistoryError {}
 
-export class EngineStructureError extends Data.TaggedError("EngineStructureError")<EngineServiceErrorDetails> {}
+export class EnginePivotError extends TaggedEnginePivotError {}
 
-export class EngineFormulaBindingError extends Data.TaggedError("EngineFormulaBindingError")<EngineServiceErrorDetails> {}
+export class EngineStructureError extends TaggedEngineStructureError {}
 
-export class EngineFormulaGraphError extends Data.TaggedError("EngineFormulaGraphError")<EngineServiceErrorDetails> {}
+export class EngineFormulaBindingError extends TaggedEngineFormulaBindingError {}
 
-export class EngineFormulaEvaluationError extends Data.TaggedError("EngineFormulaEvaluationError")<EngineServiceErrorDetails> {}
+export class EngineFormulaGraphError extends TaggedEngineFormulaGraphError {}
 
-export class EngineCellStateError extends Data.TaggedError("EngineCellStateError")<EngineServiceErrorDetails> {}
+export class EngineFormulaEvaluationError extends TaggedEngineFormulaEvaluationError {}
 
-export class EngineTraversalError extends Data.TaggedError("EngineTraversalError")<EngineServiceErrorDetails> {}
+export class EngineCellStateError extends TaggedEngineCellStateError {}
 
-export class EngineMaintenanceError extends Data.TaggedError("EngineMaintenanceError")<EngineServiceErrorDetails> {}
+export class EngineTraversalError extends TaggedEngineTraversalError {}
 
-export class EngineRuntimeScratchError extends Data.TaggedError("EngineRuntimeScratchError")<EngineServiceErrorDetails> {}
+export class EngineMaintenanceError extends TaggedEngineMaintenanceError {}
+
+export class EngineRuntimeScratchError extends TaggedEngineRuntimeScratchError {}

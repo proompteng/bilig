@@ -97,20 +97,13 @@ describe("EngineMaintenanceService", () => {
 
     expect(
       Effect.runSync(maintenance.captureSheetCellState("Sheet1")).map((op) => op.kind),
-    ).toEqual([
-      "setCellValue",
-      "setCellFormat",
-      "setCellValue",
-      "setCellFormat",
-      "setCellValue",
-      "setCellFormat",
-    ]);
+    ).toEqual(["setCellValue", "setCellValue", "setCellValue"]);
     expect(
       Effect.runSync(maintenance.captureRowRangeCellState("Sheet1", 0, 2)).map((op) => op.kind),
-    ).toEqual(["setCellValue", "setCellFormat", "setCellValue", "setCellFormat"]);
+    ).toEqual(["setCellValue", "setCellValue"]);
     expect(
       Effect.runSync(maintenance.captureColumnRangeCellState("Sheet1", 0, 2)).map((op) => op.kind),
-    ).toEqual(["setCellValue", "setCellFormat", "setCellValue", "setCellFormat"]);
+    ).toEqual(["setCellValue", "setCellValue"]);
   });
 
   it("wraps capture callback failures with maintenance service errors", () => {

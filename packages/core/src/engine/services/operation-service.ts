@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import type { CellRangeRef, CellValue, EngineEvent } from "@bilig/protocol";
+import { ValueTag, type CellRangeRef, type CellValue, type EngineEvent } from "@bilig/protocol";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
 import { makeCellEntity } from "../../entity-ids.js";
 import {
@@ -681,6 +681,31 @@ export function createEngineOperationService(args: {
     );
   };
 
+  const isClearCellNoOp = (cellIndex: number): boolean => {
+    if (args.state.formulas.get(cellIndex) !== undefined) {
+      return false;
+    }
+    if (args.state.workbook.getCellFormat(cellIndex) !== undefined) {
+      return false;
+    }
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
+    if (
+      (flags &
+        (CellFlags.HasFormula |
+          CellFlags.JsOnly |
+          CellFlags.InCycle |
+          CellFlags.SpillChild |
+          CellFlags.PivotOutput)) !==
+      0
+    ) {
+      return false;
+    }
+    const value = args.state.workbook.cellStore.getValue(cellIndex, (id) =>
+      args.state.strings.get(id),
+    );
+    return value.tag === ValueTag.Empty;
+  };
+
   const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => {
     switch (op.kind) {
       case "upsertWorkbook":
@@ -1202,6 +1227,12 @@ export function createEngineOperationService(args: {
                 op.address,
                 preparedCellAddress,
               );
+              if (
+                op.value === null &&
+                (existingIndex === undefined || isClearCellNoOp(existingIndex))
+              ) {
+                break;
+              }
               if (existingIndex !== undefined) {
                 changedInputCount = args.markPivotRootsChanged(
                   args.clearPivotForCell(existingIndex),
@@ -1330,6 +1361,9 @@ export function createEngineOperationService(args: {
             );
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order);
+              break;
+            }
+            if (isClearCellNoOp(cellIndex)) {
               break;
             }
             changedInputCount = args.markPivotRootsChanged(
@@ -1559,6 +1593,12 @@ export function createEngineOperationService(args: {
             case "setCellValue": {
               const sheetName = resolveSheetName(sheetId);
               const prior = readCellValueForLookup(existingIndex);
+              if (
+                mutation.value === null &&
+                (existingIndex === undefined || isClearCellNoOp(existingIndex))
+              ) {
+                break;
+              }
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 writeLiteralToCellStore(
                   args.state.workbook.cellStore,
@@ -1703,6 +1743,9 @@ export function createEngineOperationService(args: {
             }
             case "clearCell": {
               const prior = readCellValueForLookup(existingIndex);
+              if (existingIndex !== undefined && isClearCellNoOp(existingIndex)) {
+                break;
+              }
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
                 args.state.workbook.notifyCellValueWritten(existingIndex);

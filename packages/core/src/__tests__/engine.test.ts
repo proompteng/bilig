@@ -417,6 +417,76 @@ describe("SpreadsheetEngine", () => {
     );
   });
 
+  it("does not leave explicit empty target cells after undoing a copy from empty cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "copy-undo-empty-targets" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+
+    const beforeCopy = engine.exportSnapshot();
+
+    engine.copyRange(
+      { sheetName: "Sheet1", startAddress: "D5", endAddress: "E6" },
+      { sheetName: "Sheet1", startAddress: "C3", endAddress: "D4" },
+    );
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(beforeCopy);
+  });
+
+  it("treats clearing an already-empty tracked dependency cell as a no-op", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "clear-empty-dependency-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+
+    const before = engine.exportSnapshot();
+    engine.clearCell("Sheet1", "D4");
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats sheet-id clear mutations on already-empty tracked dependency cells as no-ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "clear-empty-dependency-noop-by-id" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
+
+    const before = engine.exportSnapshot();
+    engine.clearCellAt(sheetId, 3, 3);
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats copying empty cells into empty targets as a no-op", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "copy-empty-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const before = engine.exportSnapshot();
+
+    engine.copyRange(
+      { sheetName: "Sheet1", startAddress: "D5", endAddress: "E6" },
+      { sheetName: "Sheet1", startAddress: "C3", endAddress: "D4" },
+    );
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("treats filling empty cells into empty targets as a no-op", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "fill-empty-noop" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const before = engine.exportSnapshot();
+
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "D5", endAddress: "E6" },
+      { sheetName: "Sheet1", startAddress: "C3", endAddress: "D4" },
+    );
+
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
   it("applies cell mutations by sheet id and returns inverse ops", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "cell-mutation-refs" });
     await engine.ready();
