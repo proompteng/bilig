@@ -392,6 +392,7 @@ export class SpreadsheetEngine {
         setBatchMutationDepth: (next) => {
           this.batchMutationDepth = next;
         },
+        materializePivot: (pivotRecord) => this.runtime.pivot.materializePivotNow(pivotRecord),
         collectFormulaDependents: () => new Uint32Array(),
       },
     });
