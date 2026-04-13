@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createCellNumberFormatRecord } from "@bilig/protocol";
+import { ValueTag, createCellNumberFormatRecord } from "@bilig/protocol";
+import { writeLiteralToCellStore } from "../engine-value-utils.js";
+import { StringPool } from "../string-pool.js";
 import { WorkbookStore } from "../workbook-store.js";
 
 describe("WorkbookStore", () => {
@@ -428,6 +430,31 @@ describe("WorkbookStore", () => {
       values: [{ field: "Sales", summarizeBy: "sum" }],
       rows: 3,
       cols: 2,
+    });
+  });
+
+  it("does not clear a remapped live cell when pruning an empty removed structural cell", () => {
+    const workbook = new WorkbookStore("prune-remapped-cell");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    const removedCellIndex = workbook.ensureCell("Sheet1", "B3");
+    const movedCellIndex = workbook.ensureCell("Sheet1", "B4");
+    writeLiteralToCellStore(workbook.cellStore, removedCellIndex, 7, strings);
+    writeLiteralToCellStore(workbook.cellStore, movedCellIndex, 5, strings);
+
+    workbook.deleteRows("Sheet1", 2, 1);
+    workbook.remapSheetCells("Sheet1", "row", (index) =>
+      index < 2 ? index : index >= 3 ? index - 1 : undefined,
+    );
+
+    workbook.cellStore.setValue(removedCellIndex, { tag: ValueTag.Empty });
+
+    expect(workbook.pruneCellIfEmpty(removedCellIndex)).toBe(false);
+    expect(workbook.getCellIndex("Sheet1", "B3")).toBe(movedCellIndex);
+    expect(workbook.cellStore.getValue(movedCellIndex, () => "")).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
     });
   });
 

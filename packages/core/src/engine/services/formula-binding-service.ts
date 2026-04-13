@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import {
   compileFormula,
   compileFormulaAst,
+  type CompiledFormula,
   type FormulaNode,
   parseCellAddress,
   parseRangeAddress,
@@ -77,6 +78,12 @@ export interface EngineFormulaBindingService {
     candidates?: readonly number[] | U32,
   ) => Effect.Effect<number, EngineFormulaBindingError>;
   readonly bindFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean;
+  readonly bindPreparedFormulaNow: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+  ) => boolean;
   readonly bindInitialFormulaNow: (
     cellIndex: number,
     ownerSheetName: string,
@@ -84,6 +91,7 @@ export interface EngineFormulaBindingService {
   ) => void;
   readonly clearFormulaNow: (cellIndex: number) => boolean;
   readonly invalidateFormulaNow: (cellIndex: number) => void;
+  readonly refreshRangeDependenciesNow: (rangeIndices: readonly number[]) => void;
   readonly rebindFormulaCellsNow: (
     candidates: readonly number[],
     formulaChangedCount: number,
@@ -985,6 +993,41 @@ export function createEngineFormulaBindingService(args: {
     setReverseEdgeSlice(entityId, args.edgeArena.removeValue(slice, dependentEntityId));
   };
 
+  const refreshRangeDependenciesNow = (rangeIndices: readonly number[]): void => {
+    const refreshed = new Set<number>();
+    const materializer = {
+      ensureCell: (sheetId: number, row: number, col: number) =>
+        args.ensureCellTrackedByCoords(sheetId, row, col),
+      forEachSheetCell: (
+        sheetId: number,
+        fn: (cellIndex: number, row: number, col: number) => void,
+      ) => args.forEachSheetCell(sheetId, fn),
+    };
+    rangeIndices.forEach((rangeIndex) => {
+      if (refreshed.has(rangeIndex)) {
+        return;
+      }
+      refreshed.add(rangeIndex);
+      const rangeEntity = makeRangeEntity(rangeIndex);
+      const { oldDependencySources, newDependencySources } = args.state.ranges.refresh(
+        rangeIndex,
+        materializer,
+      );
+      const nextSources = new Set<number>(newDependencySources);
+      oldDependencySources.forEach((dependencyEntity) => {
+        if (!nextSources.has(dependencyEntity)) {
+          removeReverseEdge(dependencyEntity, rangeEntity);
+        }
+      });
+      const priorSources = new Set<number>(oldDependencySources);
+      newDependencySources.forEach((dependencyEntity) => {
+        if (!priorSources.has(dependencyEntity)) {
+          appendReverseEdge(dependencyEntity, rangeEntity);
+        }
+      });
+    });
+  };
+
   const appendDefinedNameReverseEdge = (name: string, dependentCellIndex: number): void => {
     appendTrackedReverseEdge(
       args.reverseState.reverseDefinedNameEdges,
@@ -1369,8 +1412,12 @@ export function createEngineFormulaBindingService(args: {
     return existing !== undefined;
   };
 
-  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
-    const prepared = prepareFormulaBindingNow(cellIndex, ownerSheetName, source);
+  const bindPreparedFormulaPreparedNow = (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    prepared: ReturnType<typeof prepareFormulaBindingFromCompiledNow>,
+  ): boolean => {
     const existing = args.state.formulas.get(cellIndex);
     const topologyChanged =
       existing === undefined ||
@@ -1425,6 +1472,32 @@ export function createEngineFormulaBindingService(args: {
     installFreshFormulaNow(cellIndex, ownerSheetName, source, prepared);
     return topologyChanged;
   };
+
+  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean =>
+    bindPreparedFormulaPreparedNow(
+      cellIndex,
+      ownerSheetName,
+      source,
+      prepareFormulaBindingNow(cellIndex, ownerSheetName, source),
+    );
+
+  const bindPreparedFormulaNow = (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+  ): boolean =>
+    bindPreparedFormulaPreparedNow(
+      cellIndex,
+      ownerSheetName,
+      source,
+      prepareFormulaBindingFromCompiledNow(
+        cellIndex,
+        ownerSheetName,
+        source,
+        compiled as ParsedCompiledFormula,
+      ),
+    );
 
   const bindInitialFormulaNow = (
     cellIndex: number,
@@ -1585,9 +1658,14 @@ export function createEngineFormulaBindingService(args: {
     });
   };
 
-  const prepareFormulaBindingNow = (cellIndex: number, ownerSheetName: string, source: string) => {
+  const prepareFormulaBindingFromCompiledNow = (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiledInput: ParsedCompiledFormula,
+  ) => {
     const ownerSheetId = args.state.workbook.getSheet(ownerSheetName)?.id;
-    let compiled = compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula;
+    let compiled = normalizeLookupCompileMode(compiledInput);
     const hasLookupInstruction = hasLookupPlanInstruction(compiled.jsPlan);
     const directLookupBinding = hasLookupInstruction
       ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, ownerSheetName)
@@ -1701,6 +1779,14 @@ export function createEngineFormulaBindingService(args: {
       directApproximateLookupCandidates,
     };
   };
+
+  const prepareFormulaBindingNow = (cellIndex: number, ownerSheetName: string, source: string) =>
+    prepareFormulaBindingFromCompiledNow(
+      cellIndex,
+      ownerSheetName,
+      source,
+      compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula,
+    );
 
   const invalidateFormulaNow = (cellIndex: number): void => {
     clearFormulaNow(cellIndex);
@@ -1979,9 +2065,11 @@ export function createEngineFormulaBindingService(args: {
       });
     },
     bindFormulaNow,
+    bindPreparedFormulaNow,
     bindInitialFormulaNow,
     clearFormulaNow,
     invalidateFormulaNow,
+    refreshRangeDependenciesNow,
     rebindFormulaCellsNow,
     rebindDefinedNameDependentsNow(names, formulaChangedCount) {
       return rebindFormulaCellsNow(

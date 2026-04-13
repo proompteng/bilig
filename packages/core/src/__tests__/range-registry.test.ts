@@ -138,4 +138,69 @@ describe("RangeRegistry", () => {
     expect(releasedParent.removed).toBe(true);
     expect(registry.getDescriptor(first.rangeIndex).refCount).toBe(0);
   });
+
+  it("refreshes range members and dependency sources after structural row remaps", () => {
+    const registry = new RangeRegistry();
+    let entries = [
+      { cellIndex: 100, row: 0, col: 0 },
+      { cellIndex: 101, row: 1, col: 0 },
+      { cellIndex: 102, row: 2, col: 0 },
+    ];
+    const materializer = {
+      ensureCell: (_sheetId: number, row: number, col: number) => {
+        const entry = entries.find((current) => current.row === row && current.col === col);
+        if (!entry) {
+          throw new Error(`Missing materialized cell for ${row},${col}`);
+        }
+        return entry.cellIndex;
+      },
+      forEachSheetCell: (
+        _sheetId: number,
+        fn: (cellIndex: number, row: number, col: number) => void,
+      ) => {
+        entries.forEach(({ cellIndex, row, col }) => {
+          fn(cellIndex, row, col);
+        });
+      },
+    };
+
+    const prefix = registry.intern(
+      1,
+      {
+        kind: "cells",
+        start: { row: 0, col: 0, text: "A1" },
+        end: { row: 1, col: 0, text: "A2" },
+      },
+      materializer,
+    );
+    const range = registry.intern(
+      1,
+      {
+        kind: "cells",
+        start: { row: 0, col: 0, text: "A1" },
+        end: { row: 2, col: 0, text: "A3" },
+      },
+      materializer,
+    );
+
+    expect(registry.getMembers(range.rangeIndex)).toEqual(Uint32Array.from([100, 101, 102]));
+    expect(registry.getDependencySourceEntities(range.rangeIndex)).toEqual(
+      Uint32Array.from([makeRangeEntity(prefix.rangeIndex), makeCellEntity(102)]),
+    );
+
+    entries = [
+      { cellIndex: 102, row: 0, col: 0 },
+      { cellIndex: 100, row: 1, col: 0 },
+      { cellIndex: 101, row: 2, col: 0 },
+    ];
+
+    registry.refresh(prefix.rangeIndex, materializer);
+    registry.refresh(range.rangeIndex, materializer);
+
+    expect(registry.getMembers(prefix.rangeIndex)).toEqual(Uint32Array.from([102, 100]));
+    expect(registry.getMembers(range.rangeIndex)).toEqual(Uint32Array.from([102, 100, 101]));
+    expect(registry.getDependencySourceEntities(range.rangeIndex)).toEqual(
+      Uint32Array.from([makeRangeEntity(prefix.rangeIndex), makeCellEntity(101)]),
+    );
+  });
 });

@@ -3,10 +3,12 @@ import type { SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from "@bilig/p
 import {
   formatAddress,
   rewriteAddressForStructuralTransform,
+  rewriteCompiledFormulaForStructuralTransform,
   rewriteFormulaForStructuralTransform,
   rewriteRangeForStructuralTransform,
   type StructuralAxisTransform,
 } from "@bilig/formula";
+import type { CompiledFormula } from "@bilig/formula";
 import type { EngineOp } from "@bilig/workbook-domain";
 import { CellFlags } from "../../cell-store.js";
 import { emptyValue } from "../../engine-value-utils.js";
@@ -19,7 +21,12 @@ import {
 import type { FormulaTable } from "../../formula-table.js";
 import type { RuntimeFormula } from "../runtime-state.js";
 import { EngineStructureError } from "../errors.js";
-import type { WorkbookPivotRecord, WorkbookStore } from "../../workbook-store.js";
+import {
+  makeCellKey,
+  normalizeDefinedName,
+  type WorkbookPivotRecord,
+  type WorkbookStore,
+} from "../../workbook-store.js";
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -38,6 +45,21 @@ interface EngineStructureState {
   readonly workbook: WorkbookStore;
   readonly formulas: FormulaTable<RuntimeFormula>;
   readonly pivotOutputOwners: Map<number, string>;
+}
+
+interface StructuralFormulaRebindInput {
+  readonly cellIndex: number;
+  readonly ownerSheetName: string;
+  readonly source: string;
+  readonly compiled?: CompiledFormula;
+}
+
+function dependencyTouchesSheet(dependency: string, sheetName: string): boolean {
+  if (!dependency.includes("!")) {
+    return false;
+  }
+  const [qualifiedSheetName] = dependency.split("!");
+  return qualifiedSheetName?.replace(/^'(.*)'$/, "$1") === sheetName;
 }
 
 export interface EngineStructureService {
@@ -74,7 +96,8 @@ export function createEngineStructureService(args: {
   ) => EngineOp[];
   readonly removeFormula: (cellIndex: number) => boolean;
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
-  readonly rebuildAllFormulaBindings: () => number[];
+  readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void;
+  readonly rebindFormulaCells: (inputs: readonly StructuralFormulaRebindInput[]) => void;
 }): EngineStructureService {
   const shouldCaptureStoredCell = (cellIndex: number): boolean => {
     const value = args.state.workbook.cellStore.getValue(cellIndex, () => "");
@@ -151,7 +174,8 @@ export function createEngineStructureService(args: {
   const rewriteDefinedNamesForStructuralTransform = (
     sheetName: string,
     transform: StructuralAxisTransform,
-  ): void => {
+  ): Set<string> => {
+    const changedNames = new Set<string>();
     args.state.workbook.listDefinedNames().forEach((record) => {
       if (typeof record.value === "string" && record.value.startsWith("=")) {
         const nextFormula = rewriteFormulaForStructuralTransform(
@@ -184,6 +208,7 @@ export function createEngineStructureService(args: {
           };
           if (nextValue.formula !== record.value.formula) {
             args.state.workbook.setDefinedName(record.name, nextValue);
+            changedNames.add(normalizeDefinedName(record.name));
           }
           return;
         }
@@ -194,6 +219,7 @@ export function createEngineStructureService(args: {
           const nextAddress = rewriteAddressForStructuralTransform(record.value.address, transform);
           if (!nextAddress) {
             args.state.workbook.deleteDefinedName(record.name);
+            changedNames.add(normalizeDefinedName(record.name));
             return;
           }
           if (nextAddress !== record.value.address) {
@@ -201,6 +227,7 @@ export function createEngineStructureService(args: {
               ...record.value,
               address: nextAddress,
             });
+            changedNames.add(normalizeDefinedName(record.name));
           }
           return;
         }
@@ -215,6 +242,7 @@ export function createEngineStructureService(args: {
           );
           if (!nextRange) {
             args.state.workbook.deleteDefinedName(record.name);
+            changedNames.add(normalizeDefinedName(record.name));
             return;
           }
           if (
@@ -226,6 +254,7 @@ export function createEngineStructureService(args: {
               startAddress: nextRange.startAddress,
               endAddress: nextRange.endAddress,
             });
+            changedNames.add(normalizeDefinedName(record.name));
           }
           return;
         }
@@ -234,27 +263,121 @@ export function createEngineStructureService(args: {
           return;
       }
     });
+    return changedNames;
   };
 
   const rewriteCellFormulasForStructuralTransform = (
     sheetName: string,
     transform: StructuralAxisTransform,
-  ): void => {
+  ): Map<number, StructuralFormulaRebindInput> => {
+    const rewrittenFormulaCells = new Map<number, StructuralFormulaRebindInput>();
     args.state.formulas.forEach((formula, cellIndex) => {
       const ownerSheetName = args.state.workbook.getSheetNameById(
         args.state.workbook.cellStore.sheetIds[cellIndex]!,
       );
-      formula.source = rewriteFormulaForStructuralTransform(
-        formula.source,
+      if (!ownerSheetName) {
+        return;
+      }
+      const rewritten = rewriteCompiledFormulaForStructuralTransform(
+        formula.compiled,
         ownerSheetName,
         sheetName,
         transform,
       );
+      if (rewritten.source === formula.source) {
+        return;
+      }
+      rewrittenFormulaCells.set(cellIndex, {
+        cellIndex,
+        ownerSheetName,
+        source: rewritten.source,
+        compiled: rewritten.compiled,
+      });
     });
+    return rewrittenFormulaCells;
   };
 
-  const clearAllSpillMetadata = (): void => {
+  const rewriteFormulaSourceFallback = (
+    source: string,
+    ownerSheetName: string,
+    sheetName: string,
+    transform: StructuralAxisTransform,
+  ): string => rewriteFormulaForStructuralTransform(source, ownerSheetName, sheetName, transform);
+
+  const resolveStructuralFormulaRebindInputs = (argsForResolve: {
+    readonly formulaCellIndices: readonly number[];
+    readonly rewrittenFormulaCells: ReadonlyMap<number, StructuralFormulaRebindInput>;
+    readonly sheetName: string;
+    readonly transform: StructuralAxisTransform;
+    readonly changedDefinedNames: ReadonlySet<string>;
+    readonly changedTableNames: ReadonlySet<string>;
+  }): StructuralFormulaRebindInput[] => {
+    const inputs: StructuralFormulaRebindInput[] = [];
+    argsForResolve.formulaCellIndices.forEach((cellIndex) => {
+      const formula = args.state.formulas.get(cellIndex);
+      if (!formula) {
+        return;
+      }
+      const ownerSheetName = args.state.workbook.getSheetNameById(
+        args.state.workbook.cellStore.sheetIds[cellIndex]!,
+      );
+      if (!ownerSheetName) {
+        return;
+      }
+      const rewritten = argsForResolve.rewrittenFormulaCells.get(cellIndex);
+      const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
+        argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
+      );
+      const touchesChangedTable = formula.compiled.symbolicTables.some((name) =>
+        argsForResolve.changedTableNames.has(name),
+      );
+      if (!rewritten) {
+        inputs.push({
+          cellIndex,
+          ownerSheetName,
+          source: formula.source,
+        });
+        return;
+      }
+      if (touchesChangedName || touchesChangedTable) {
+        inputs.push({
+          cellIndex,
+          ownerSheetName,
+          source: rewriteFormulaSourceFallback(
+            formula.source,
+            ownerSheetName,
+            argsForResolve.sheetName,
+            argsForResolve.transform,
+          ),
+        });
+        return;
+      }
+      inputs.push(rewritten);
+    });
+    return inputs;
+  };
+
+  const collectStructuralRangeDependencies = (argsForCollect: {
+    readonly formulaCellIndices: readonly number[];
+  }): number[] => {
+    const rangeIndices = new Set<number>();
+    argsForCollect.formulaCellIndices.forEach((cellIndex) => {
+      const formula = args.state.formulas.get(cellIndex);
+      if (!formula) {
+        return;
+      }
+      formula.rangeDependencies.forEach((rangeIndex) => {
+        rangeIndices.add(rangeIndex);
+      });
+    });
+    return [...rangeIndices];
+  };
+
+  const clearSpillMetadataForSheet = (sheetName: string): void => {
     args.state.workbook.listSpills().forEach((spill) => {
+      if (spill.sheetName !== sheetName) {
+        return;
+      }
       args.state.workbook.deleteSpill(spill.sheetName, spill.address);
     });
   };
@@ -275,7 +398,8 @@ export function createEngineStructureService(args: {
   const rewriteWorkbookMetadataForStructuralTransform = (
     sheetName: string,
     transform: StructuralAxisTransform,
-  ): void => {
+  ): { changedTableNames: Set<string> } => {
+    const changedTableNames = new Set<string>();
     args.state.workbook
       .listTables()
       .filter((table) => table.sheetName === sheetName)
@@ -286,9 +410,11 @@ export function createEngineStructureService(args: {
           transform,
         );
         if (!range) {
+          changedTableNames.add(table.name);
           args.state.workbook.deleteTable(table.name);
           return;
         }
+        changedTableNames.add(table.name);
         args.state.workbook.setTable({
           ...table,
           startAddress: range.startAddress,
@@ -588,6 +714,111 @@ export function createEngineStructureService(args: {
         address: nextAddress,
       });
     });
+    return { changedTableNames };
+  };
+
+  const isCellIndexMapped = (cellIndex: number): boolean => {
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex];
+    const row = args.state.workbook.cellStore.rows[cellIndex];
+    const col = args.state.workbook.cellStore.cols[cellIndex];
+    if (
+      sheetId === undefined ||
+      row === undefined ||
+      col === undefined ||
+      !Number.isFinite(row) ||
+      !Number.isFinite(col)
+    ) {
+      return false;
+    }
+    return args.state.workbook.cellKeyToIndex.get(makeCellKey(sheetId, row, col)) === cellIndex;
+  };
+
+  const structuralAxisIndexAffected = (
+    axisIndex: number,
+    transform: StructuralAxisTransform,
+  ): boolean => {
+    const nextIndex = mapStructuralAxisIndex(axisIndex, transform);
+    return nextIndex === undefined || nextIndex !== axisIndex;
+  };
+
+  const collectStructuralFormulaImpacts = (argsForImpact: {
+    readonly targetSheetId: number | undefined;
+    readonly transform: StructuralAxisTransform;
+    readonly sheetName: string;
+    readonly rewrittenFormulaCells: ReadonlyMap<number, StructuralFormulaRebindInput>;
+    readonly changedDefinedNames: ReadonlySet<string>;
+    readonly changedTableNames: ReadonlySet<string>;
+  }): {
+    formulaCellIndices: number[];
+    rebindCellIndices: number[];
+  } => {
+    const formulaCellIndices = new Set<number>();
+    const rebindCellIndices = new Set<number>();
+    args.state.formulas.forEach((formula, cellIndex) => {
+      if (!isCellIndexMapped(cellIndex)) {
+        return;
+      }
+      const ownerSheetName = args.state.workbook.getSheetNameById(
+        args.state.workbook.cellStore.sheetIds[cellIndex]!,
+      );
+      if (!ownerSheetName) {
+        return;
+      }
+      const axisIndex =
+        argsForImpact.transform.axis === "row"
+          ? args.state.workbook.cellStore.rows[cellIndex]
+          : args.state.workbook.cellStore.cols[cellIndex];
+      const ownerPositionAffected =
+        ownerSheetName === argsForImpact.sheetName &&
+        axisIndex !== undefined &&
+        structuralAxisIndexAffected(axisIndex, argsForImpact.transform);
+      const dependencyPositionAffected =
+        argsForImpact.targetSheetId !== undefined &&
+        formula.dependencyIndices.some((dependencyCellIndex) => {
+          if (
+            args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !==
+            argsForImpact.targetSheetId
+          ) {
+            return false;
+          }
+          const dependencyAxisIndex =
+            argsForImpact.transform.axis === "row"
+              ? args.state.workbook.cellStore.rows[dependencyCellIndex]
+              : args.state.workbook.cellStore.cols[dependencyCellIndex];
+          return (
+            dependencyAxisIndex !== undefined &&
+            structuralAxisIndexAffected(dependencyAxisIndex, argsForImpact.transform)
+          );
+        });
+      const touchesSheetDependency = formula.compiled.deps.some((dependency) =>
+        dependencyTouchesSheet(dependency, argsForImpact.sheetName),
+      );
+      const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
+        argsForImpact.changedDefinedNames.has(normalizeDefinedName(name)),
+      );
+      const touchesChangedTable = formula.compiled.symbolicTables.some((name) =>
+        argsForImpact.changedTableNames.has(name),
+      );
+      const rewritten = argsForImpact.rewrittenFormulaCells.has(cellIndex);
+      if (
+        !ownerPositionAffected &&
+        !dependencyPositionAffected &&
+        !touchesSheetDependency &&
+        !touchesChangedName &&
+        !touchesChangedTable &&
+        !rewritten
+      ) {
+        return;
+      }
+      formulaCellIndices.add(cellIndex);
+      if (rewritten || touchesChangedName || touchesChangedTable || dependencyPositionAffected) {
+        rebindCellIndices.add(cellIndex);
+      }
+    });
+    return {
+      formulaCellIndices: [...formulaCellIndices],
+      rebindCellIndices: [...rebindCellIndices],
+    };
   };
 
   return {
@@ -627,11 +858,29 @@ export function createEngineStructureService(args: {
           const axis = op.kind.includes("Rows") ? "row" : "column";
           const transform = structuralTransformForOp(op);
           const sheetName = op.sheetName;
+          const targetSheetId = args.state.workbook.getSheet(sheetName)?.id;
 
           clearPivotOutputsForSheet(sheetName);
-          rewriteDefinedNamesForStructuralTransform(sheetName, transform);
-          rewriteCellFormulasForStructuralTransform(sheetName, transform);
-          rewriteWorkbookMetadataForStructuralTransform(sheetName, transform);
+          const changedDefinedNames = rewriteDefinedNamesForStructuralTransform(
+            sheetName,
+            transform,
+          );
+          const rewrittenFormulaCells = rewriteCellFormulasForStructuralTransform(
+            sheetName,
+            transform,
+          );
+          const { changedTableNames } = rewriteWorkbookMetadataForStructuralTransform(
+            sheetName,
+            transform,
+          );
+          const impactedFormulas = collectStructuralFormulaImpacts({
+            targetSheetId,
+            transform,
+            sheetName,
+            rewrittenFormulaCells,
+            changedDefinedNames,
+            changedTableNames,
+          });
 
           switch (op.kind) {
             case "insertRows":
@@ -654,6 +903,10 @@ export function createEngineStructureService(args: {
               break;
           }
 
+          const structuralRangeDependencies = collectStructuralRangeDependencies({
+            formulaCellIndices: impactedFormulas.formulaCellIndices,
+          });
+
           const remapped = args.state.workbook.remapSheetCells(sheetName, axis, (index) =>
             mapStructuralAxisIndex(index, transform),
           );
@@ -674,8 +927,22 @@ export function createEngineStructureService(args: {
             args.state.workbook.detachCellIndex(cellIndex);
           });
 
-          clearAllSpillMetadata();
-          const formulaCellIndices = args.rebuildAllFormulaBindings();
+          clearSpillMetadataForSheet(sheetName);
+          const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) =>
+            isCellIndexMapped(cellIndex),
+          );
+          args.refreshRangeDependencies(structuralRangeDependencies);
+          const rebindInputs = resolveStructuralFormulaRebindInputs({
+            formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) =>
+              isCellIndexMapped(cellIndex),
+            ),
+            rewrittenFormulaCells,
+            sheetName,
+            transform,
+            changedDefinedNames,
+            changedTableNames,
+          });
+          args.rebindFormulaCells(rebindInputs);
           return {
             changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
             formulaCellIndices,

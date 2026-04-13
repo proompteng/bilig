@@ -1039,7 +1039,6 @@ export function createEngineOperationService(args: {
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
             });
             topologyChanged = true;
-            structuralInvalidation = true;
             refreshAllPivots = true;
             setEntityVersionForOp(op, order);
             break;

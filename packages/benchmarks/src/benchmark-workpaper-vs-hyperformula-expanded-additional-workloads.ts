@@ -1,12 +1,15 @@
 import { WorkPaper } from "@bilig/headless";
 import { address } from "./workpaper-benchmark-fixtures.js";
 import {
+  buildSlidingAggregateSheet,
   buildConditionalAggregationSheet,
   buildLookupSheet,
   buildApproxLookupSheet,
   buildMixedFrontierSheet,
   buildOverlappingAggregateSheet,
+  buildParserCacheMixedTemplateSheet,
   buildParserCacheTemplateSheet,
+  buildMixedContentSheet,
   buildValueFormulaRows,
   buildBatchMultiColumnRows,
 } from "./workpaper-benchmark-fixtures.js";
@@ -219,6 +222,76 @@ export function measureHyperFormulaStructuralInsertRowsSample(rowCount: number):
   );
 }
 
+export function measureWorkPaperStructuralDeleteRowsSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildOverlappingAggregateSheet(rowCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.removeRows(sheetId, Math.floor(rowCount / 2), 1),
+    () => {
+      const dimensions = workbook.getSheetDimensions(sheetId);
+      return {
+        dimensions,
+        terminalSum: normalizeWorkPaperValue(
+          workbook.getCellValue(address(sheetId, Math.max(dimensions.height - 1, 0), 1)),
+        ),
+      };
+    },
+  );
+}
+
+export function measureHyperFormulaStructuralDeleteRowsSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildOverlappingAggregateSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.removeRows(sheetId, [Math.floor(rowCount / 2), 1]),
+    () => {
+      const dimensions = workbook.getSheetDimensions(sheetId);
+      return {
+        dimensions,
+        terminalSum: normalizeHyperFormulaValue(
+          workbook.getCellValue(address(sheetId, Math.max(dimensions.height - 1, 0), 1)),
+        ),
+      };
+    },
+  );
+}
+
+export function measureWorkPaperStructuralMoveRowsSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildOverlappingAggregateSheet(rowCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  const start = Math.floor(rowCount / 2);
+  return measureMutationSample(
+    workbook,
+    () => workbook.moveRows(sheetId, start, 1, 0),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      headValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 0))),
+    }),
+  );
+}
+
+export function measureHyperFormulaStructuralMoveRowsSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildOverlappingAggregateSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  const start = Math.floor(rowCount / 2);
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.moveRows(sheetId, start, 1, 0),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      headValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 0))),
+    }),
+  );
+}
+
 export function measureWorkPaperOverlappingAggregateSample(rowCount: number): BenchmarkSample {
   const workbook = WorkPaper.buildFromSheets({ Bench: buildOverlappingAggregateSheet(rowCount) });
   const sheetId = workbook.getSheetId("Bench")!;
@@ -246,6 +319,47 @@ export function measureHyperFormulaOverlappingAggregateSample(rowCount: number):
       terminalSum: normalizeHyperFormulaValue(
         workbook.getCellValue(address(sheetId, rowCount - 1, 1)),
       ),
+    }),
+  );
+}
+
+export function measureWorkPaperSlidingAggregateSample(
+  rowCount: number,
+  window: number,
+): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({
+    Bench: buildSlidingAggregateSheet(rowCount, window),
+  });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    () => ({
+      terminalSum: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 1)),
+      ),
+      leadingSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 1))),
+    }),
+  );
+}
+
+export function measureHyperFormulaSlidingAggregateSample(
+  rowCount: number,
+  window: number,
+): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildSlidingAggregateSheet(rowCount, window)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    () => ({
+      terminalSum: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 1)),
+      ),
+      leadingSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 1))),
     }),
   );
 }
@@ -291,6 +405,47 @@ export function measureHyperFormulaConditionalAggregationSample(
   );
 }
 
+export function measureWorkPaperConditionalAggregationCriteriaEditSample(
+  rowCount: number,
+  formulaCopies: number,
+): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({
+    Bench: buildConditionalAggregationSheet(rowCount, formulaCopies),
+  });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), "B"),
+    () => ({
+      sumifValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 4))),
+      countifValue: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, 0, 4 + formulaCopies)),
+      ),
+    }),
+  );
+}
+
+export function measureHyperFormulaConditionalAggregationCriteriaEditSample(
+  rowCount: number,
+  formulaCopies: number,
+): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildConditionalAggregationSheet(rowCount, formulaCopies)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), "B"),
+    () => ({
+      sumifValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
+      countifValue: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, 0, 4 + formulaCopies)),
+      ),
+    }),
+  );
+}
+
 export function measureWorkPaperParserCacheTemplateSample(rowCount: number): BenchmarkSample {
   return measureWorkPaperBuildFromSheets(
     { Bench: buildParserCacheTemplateSheet(rowCount) },
@@ -319,6 +474,83 @@ export function measureHyperFormulaParserCacheTemplateSample(rowCount: number): 
       };
     },
   );
+}
+
+export function measureWorkPaperParserCacheMixedTemplateSample(rowCount: number): BenchmarkSample {
+  return measureWorkPaperBuildFromSheets(
+    { Bench: buildParserCacheMixedTemplateSheet(rowCount) },
+    (workbook) => {
+      const sheetId = workbook.getSheetId("Bench")!;
+      return {
+        dimensions: workbook.getSheetDimensions(sheetId),
+        terminalValue: normalizeWorkPaperValue(
+          workbook.getCellValue(address(sheetId, rowCount - 1, 4)),
+        ),
+      };
+    },
+  );
+}
+
+export function measureHyperFormulaParserCacheMixedTemplateSample(
+  rowCount: number,
+): BenchmarkSample {
+  return measureHyperFormulaBuildFromSheets(
+    { Bench: toHyperFormulaSheet(buildParserCacheMixedTemplateSheet(rowCount)) },
+    (workbook) => {
+      const sheetId = workbook.getSheetId("Bench")!;
+      return {
+        dimensions: workbook.getSheetDimensions(sheetId),
+        terminalValue: normalizeHyperFormulaValue(
+          workbook.getCellValue(address(sheetId, rowCount - 1, 4)),
+        ),
+      };
+    },
+  );
+}
+
+export function measureWorkPaperRebuildRuntimeFromSnapshotSample(
+  rowCount: number,
+): BenchmarkSample {
+  const seeded = WorkPaper.buildFromSheets({
+    Bench: buildMixedContentSheet(rowCount),
+    Templates: buildParserCacheMixedTemplateSheet(Math.max(Math.floor(rowCount / 2), 2)),
+  });
+  const serializedSheets = seeded.getAllSheetsSerialized();
+  seeded.dispose();
+  return measureWorkPaperBuildFromSheets(serializedSheets, (workbook) => {
+    const benchId = workbook.getSheetId("Bench")!;
+    return {
+      sheetCount: workbook.countSheets(),
+      benchTerminal: normalizeWorkPaperValue(
+        workbook.getCellValue(address(benchId, rowCount - 1, 5)),
+      ),
+    };
+  });
+}
+
+export function measureHyperFormulaRebuildRuntimeFromSnapshotSample(
+  rowCount: number,
+): BenchmarkSample {
+  const seeded = HyperFormula.buildFromSheets(
+    {
+      Bench: toHyperFormulaSheet(buildMixedContentSheet(rowCount)),
+      Templates: toHyperFormulaSheet(
+        buildParserCacheMixedTemplateSheet(Math.max(Math.floor(rowCount / 2), 2)),
+      ),
+    },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const serializedSheets = seeded.getAllSheetsSerialized();
+  seeded.destroy();
+  return measureHyperFormulaBuildFromSheets(serializedSheets, (workbook) => {
+    const benchId = workbook.getSheetId("Bench")!;
+    return {
+      sheetCount: workbook.countSheets(),
+      benchTerminal: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(benchId, rowCount - 1, 5)),
+      ),
+    };
+  });
 }
 
 export function measureWorkPaperMixedFrontierSample(rowCount: number): BenchmarkSample {
@@ -386,6 +618,56 @@ export function measureHyperFormulaIndexedLookupAfterColumnWriteSample(
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.setCellContents(address(sheetId, rowCount, 0), rowCount + 1_000),
+    () => ({
+      formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  );
+}
+
+export function measureWorkPaperIndexedLookupAfterBatchWriteSample(
+  rowCount: number,
+  editCount: number,
+): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets(
+    { Bench: buildLookupSheet(rowCount) },
+    { useColumnIndex: true },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => {
+      workbook.suspendEvaluation();
+      for (let index = 0; index < editCount; index += 1) {
+        const row = rowCount - index;
+        workbook.setCellContents(address(sheetId, row, 0), row + 10_000);
+      }
+      return workbook.resumeEvaluation();
+    },
+    () => ({
+      formulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  );
+}
+
+export function measureHyperFormulaIndexedLookupAfterBatchWriteSample(
+  rowCount: number,
+  editCount: number,
+): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildLookupSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY, useColumnIndex: true },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => {
+      workbook.suspendEvaluation();
+      for (let index = 0; index < editCount; index += 1) {
+        const row = rowCount - index;
+        workbook.setCellContents(address(sheetId, row, 0), row + 10_000);
+      }
+      return workbook.resumeEvaluation();
+    },
     () => ({
       formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
     }),

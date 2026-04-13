@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@bilig/protocol";
+import { compileFormula } from "../compiler.js";
 import {
   renameFormulaSheetReferences,
   rewriteAddressForStructuralTransform,
+  rewriteCompiledFormulaForStructuralTransform,
   rewriteFormulaForStructuralTransform,
   rewriteRangeForStructuralTransform,
   serializeFormula,
@@ -569,5 +571,47 @@ describe("translateFormulaReferences", () => {
         ref: "$C$5",
       }),
     ).toBe("Sales.Q1!$C$5");
+  });
+
+  it("reuses compiled programs for shape-stable structural rewrites", () => {
+    const compiled = compileFormula("SUM(A1:A10)");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "insert",
+      axis: "row",
+      start: 5,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("SUM(A1:A11)");
+    expect(rewritten.reusedProgram).toBe(true);
+    expect(rewritten.compiled.program).toBe(compiled.program);
+    expect(rewritten.compiled.constants).toBe(compiled.constants);
+    expect(rewritten.compiled.deps).toEqual(["A1:A11"]);
+    expect(rewritten.compiled.symbolicRanges).toEqual(["A1:A11"]);
+    expect(rewritten.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "A1", end: "A11", refKind: "cells" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [{ kind: "range", start: "A1", end: "A11", refKind: "cells" }],
+      },
+      { opcode: "return" },
+    ]);
+  });
+
+  it("recompiles structural rewrites when the formula shape changes", () => {
+    const compiled = compileFormula("A6");
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(compiled, "Sheet1", "Sheet1", {
+      kind: "delete",
+      axis: "row",
+      start: 5,
+      count: 1,
+    });
+
+    expect(rewritten.source).toBe("#REF!");
+    expect(rewritten.reusedProgram).toBe(false);
+    expect(rewritten.compiled.ast.kind).toBe("ErrorLiteral");
+    expect(rewritten.compiled.optimizedAst.kind).toBe("ErrorLiteral");
   });
 });

@@ -232,6 +232,58 @@ export class RangeRegistry {
   expandToCells(rangeIndex: RangeIndex): Uint32Array {
     return this.getMembersView(rangeIndex);
   }
+
+  refresh(
+    rangeIndex: RangeIndex,
+    materializer: RangeMaterializer,
+  ): { oldDependencySources: Uint32Array; newDependencySources: Uint32Array } {
+    const descriptor = this.getDescriptor(rangeIndex);
+    const oldDependencySources = this.getDependencySourceEntities(rangeIndex);
+    let memberIndices: Uint32Array;
+    let dependencySourceEntities: Uint32Array;
+    if (descriptor.kind === "cells") {
+      const range = descriptorToCellRangeAddress(descriptor);
+      const sourceReuse = resolveCellRangeDependencyReuse(
+        this.descriptors,
+        this.byKey,
+        descriptor.sheetId,
+        range,
+      );
+      memberIndices = materializeBoundedMembers(
+        descriptor.sheetId,
+        range,
+        materializer,
+        this,
+        sourceReuse,
+      );
+      dependencySourceEntities = materializeCellRangeDependencySources(sourceReuse, memberIndices);
+    } else {
+      const range = descriptorToCellRangeAddress(descriptor);
+      memberIndices = materializeDynamicMembers(
+        descriptor.sheetId,
+        range,
+        descriptor.kind,
+        materializer,
+      );
+      dependencySourceEntities = materializeDynamicDependencySources(memberIndices);
+    }
+    const memberSlice = this.members.replace(
+      this.memberSlices[rangeIndex] ?? this.members.empty(),
+      memberIndices,
+    );
+    const dependencySourceSlice = this.dependencySources.replace(
+      this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty(),
+      dependencySourceEntities,
+    );
+    this.memberSlices[rangeIndex] = memberSlice;
+    this.dependencySourceSlices[rangeIndex] = dependencySourceSlice;
+    syncDescriptorMembers(descriptor, memberSlice);
+    syncDescriptorDependencySources(descriptor, dependencySourceSlice);
+    return {
+      oldDependencySources,
+      newDependencySources: this.getDependencySourceEntities(rangeIndex),
+    };
+  }
 }
 
 function materializeBoundedMembers(
@@ -464,6 +516,14 @@ function toCellRange(range: RangeAddress): CellRangeAddress {
     cellRange.sheetName = range.sheetName;
   }
   return cellRange;
+}
+
+function descriptorToCellRangeAddress(descriptor: RangeDescriptor): CellRangeAddress {
+  return {
+    kind: "cells",
+    start: toCellLikeAddress(undefined, descriptor.row1, descriptor.col1),
+    end: toCellLikeAddress(undefined, descriptor.row2, descriptor.col2),
+  };
 }
 
 function toCellLikeAddress(sheetName: string | undefined, row: number, col: number): CellAddress {

@@ -454,7 +454,21 @@ export function createEngineServiceRuntime(args: {
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     clearOwnedPivot: (pivotRecord) =>
       requireService(pivot, "pivot").clearOwnedPivotNow(pivotRecord),
-    rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
+    refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
+    rebindFormulaCells: (inputs) => {
+      const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex));
+      pending.forEach(({ cellIndex, ownerSheetName, source, compiled }) => {
+        try {
+          if (compiled) {
+            binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled);
+          } else {
+            binding.bindFormulaNow(cellIndex, ownerSheetName, source);
+          }
+        } catch {
+          binding.invalidateFormulaNow(cellIndex);
+        }
+      });
+    },
   });
   const maintenance = createEngineMaintenanceService({
     ...args.maintenance,

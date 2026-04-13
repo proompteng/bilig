@@ -44,29 +44,36 @@ of orchestration disappear.
 
 ## Current Benchmark Reality
 
-Latest local expanded artifact: `/tmp/workpaper-expanded-current.json`
+Latest local expanded smoke artifact: `/tmp/workpaper-vs-hf-expanded-smoke.json`
 
 Current position on that artifact:
 
-- `WorkPaper` wins `13/24` directly comparable workloads
-- `HyperFormula` wins `11/24`
-- overall geometric mean is still `1.193x` slower for `WorkPaper`
+- `WorkPaper` wins `13/31` directly comparable workloads
+- `HyperFormula` wins `18/31`
+- `WorkPaper` has `1` additional leadership-only workload that HyperFormula does not support
+- overall geometric mean is still `1.296x` slower for `WorkPaper`
 
-The remaining red lanes are these:
+The major remaining red lanes are these:
 
 | Workload | WorkPaper mean | HyperFormula mean | Primary owner that must change | Real issue |
 | --- | ---: | ---: | --- | --- |
-| `build-mixed-content` | `21.340667 ms` | `16.372333 ms` | `FormulaTemplateNormalizationService` | too much per-formula bind and compile work during mixed build |
-| `build-parser-cache-row-templates` | `108.853292 ms` | `50.341541 ms` | `FormulaTemplateNormalizationService` | repeated row-shifted formulas are still compiled too expensively |
-| `rebuild-config-toggle` | `33.938125 ms` | `14.454667 ms` | `RebuildExecutionPolicy` | wrong rebuild mode and too much runtime reconstruction |
-| `partial-recompute-mixed-frontier` | `5.098167 ms` | `4.714833 ms` | `DirtyFrontierScheduler` | frontier is still slightly broader than necessary |
-| `batch-edit-multi-column` | `1.241833 ms` | `1.133042 ms` | `SuspendedBulkMutationLane` | batch mutation still pays too much general transaction machinery |
-| `batch-suspended-multi-column` | `1.061250 ms` | `0.799417 ms` | `SuspendedBulkMutationLane` | suspended edits are improved but not yet the cheapest valid path |
-| `structural-insert-rows` | `70.896209 ms` | `6.222416 ms` | `StructuralTransformService` | structural edits still behave too much like ordinary cell mutation |
-| `aggregate-overlapping-ranges` | `4.290542 ms` | `3.015083 ms` | `RangeAggregateCacheService` | overlapping ranges do not reuse enough range-owned state |
-| `conditional-aggregation-reused-ranges` | `17.697083 ms` | `1.188792 ms` | `CriterionRangeCacheService` | repeated `COUNTIF` and `SUMIFS` shapes rescan instead of reusing one shared cache |
-| `lookup-with-column-index-after-column-write` | `1.899959 ms` | `0.098500 ms` | `ExactColumnIndexService` | post-write lookup maintenance still pays broader mutation or refresh work than the raw index update |
-| `lookup-approximate-sorted-after-column-write` | `0.526209 ms` | `0.116708 ms` | `SortedColumnSearchService` | sorted descriptor maintenance and post-write query ownership are still too broad |
+| `build-mixed-content` | `43.252125 ms` | `29.092334 ms` | `FormulaTemplateNormalizationService` | too much per-formula bind and compile work during mixed build |
+| `build-parser-cache-row-templates` | `139.724333 ms` | `58.085042 ms` | `FormulaTemplateNormalizationService` | repeated row-shifted formulas are still compiled too expensively |
+| `build-parser-cache-mixed-templates` | `160.053583 ms` | `91.431542 ms` | `FormulaTemplateNormalizationService` | mixed repeated template families still compile too many unique plan shapes |
+| `rebuild-config-toggle` | `33.676625 ms` | `23.042250 ms` | `RebuildExecutionPolicy` | wrong rebuild mode and too much runtime reconstruction |
+| `rebuild-runtime-from-snapshot` | `61.807833 ms` | `37.588708 ms` | `RebuildExecutionPolicy` | snapshot rebuild still reconstructs too much runtime state |
+| `batch-edit-multi-column` | `1.311875 ms` | `1.234583 ms` | `SuspendedBulkMutationLane` | multi-column ordinary batches are still marginally broader than the cheapest valid lane |
+| `batch-suspended-single-column` | `1.321250 ms` | `1.215375 ms` | `SuspendedBulkMutationLane` | suspended single-column edits are closer, but still not the cheapest valid path |
+| `batch-suspended-multi-column` | `1.176292 ms` | `0.914166 ms` | `SuspendedBulkMutationLane` | suspended multi-column edits still carry extra batch scaffolding |
+| `structural-insert-rows` | `61.017250 ms` | `8.896625 ms` | `StructuralTransformService` | structural edits still rebuild too much range and dependency state |
+| `structural-delete-rows` | `52.228375 ms` | `6.681292 ms` | `StructuralTransformService` | structural deletes still cost far too much graph and address maintenance |
+| `structural-move-rows` | `45.420334 ms` | `10.171417 ms` | `StructuralTransformService` | row moves are better, but still behave like broad transform bookkeeping rather than one narrow operation |
+| `aggregate-overlapping-ranges` | `4.417125 ms` | `4.227167 ms` | `RangeAggregateCacheService` | overlapping ranges still do not reuse enough range-owned aggregate state |
+| `aggregate-overlapping-sliding-window` | `0.221334 ms` | `0.094083 ms` | `RangeAggregateCacheService` | prefix or sliding-window aggregate reuse is still weaker than HyperFormula’s range reuse |
+| `lookup-with-column-index-after-column-write` | `3.470084 ms` | `0.134000 ms` | `ExactColumnIndexService` | post-write lookup maintenance still pays much broader mutation or refresh work than the raw index update |
+| `lookup-with-column-index-after-batch-write` | `2.185792 ms` | `0.831083 ms` | `ExactColumnIndexService` | batched writes still invalidate or rebuild too much exact index state |
+| `lookup-approximate-sorted` | `0.103292 ms` | `0.073875 ms` | `SortedColumnSearchService` | sorted query dispatch still carries more surrounding work than one narrow descriptor search |
+| `lookup-approximate-sorted-after-column-write` | `0.664334 ms` | `0.118333 ms` | `SortedColumnSearchService` | sorted descriptor maintenance and post-write query ownership are still too broad |
 
 This architecture exists to flip those exact lanes. If a subsystem does not map to a red workload,
 it is not a first-order priority.
@@ -96,10 +103,34 @@ The HyperFormula audit identifies the ownership boundaries that actually matter:
 - approximate sorted lookup is a different engine service, not an extension of exact indexing
 - criteria functions reuse range-owned caches through `RangeVertex` and dependent-cache invalidation
 - structural row and column operations are dedicated graph and address transforms in `Operations`
+- parser caching hashes canonical token streams relative to the base address, so repeated
+  row-shifted formulas amortize parse and dependency work instead of recompiling cell by cell
+- `updateConfig()` and `rebuildAndRecalculate()` both still go through a real rebuild path, so the
+  correct way to win rebuild lanes is explicit rebuild-mode policy, not pretending rebuild can be
+  skipped entirely
 
 That audit is recorded in:
 
 - `/Users/gregkonush/github.com/bilig2/docs/workpaper-hyperformula-prior-art-audit-2026-04-12.md`
+
+### HyperFormula Reread Implications
+
+The targeted reread changed the remaining execution order in four important ways:
+
+1. `StructuralTransformService` is now the highest-priority remaining subsystem.
+   Structural edits are plainly first-class graph, address, range, and search transforms in
+   HyperFormula, and our newly expanded structural benchmarks stay deeply red.
+2. post-write lookup maintenance must stay split.
+   `ExactColumnIndexService` and `SortedColumnSearchService` are not two knobs on one cache.
+   Exact lookup is mutation-owned bucket maintenance; approximate sorted lookup should remain mostly
+   a narrow descriptor plus binary search path.
+3. `FormulaTemplateNormalizationService` must target parser hash reuse, not generic “template
+   caching”.
+   The relevant prior art is canonical token hashing relative to the base address and canonical
+   function naming, not just reusing bound formulas after they are already expensive to parse.
+4. structural undo and redo must reuse the same transform model.
+   If structural edits and structural history diverge, the service is wrong even if one benchmark
+   flips green.
 
 ### IronCalc
 
@@ -129,6 +160,7 @@ It is not the runtime model to copy for maximum performance because it still rel
 8. WASM only accelerates closed, deterministic kernels with proven JS parity.
 9. Public-surface rebuild and serialization paths are correctness fallbacks, not primary hot paths.
 10. No phase is complete if the benchmark win depends on permanent dual ownership.
+11. Structural undo and redo must reuse the same transform model as forward structural operations.
 
 ## Runtime Layers
 
@@ -402,6 +434,15 @@ It updates:
 
 The hot path must not behave like “apply 10,000 generic cell mutations”.
 
+It also owns the structural history model:
+
+- undo remove restores rows or columns through the same transform surface
+- redo remove replays the same transform surface
+- undo and redo of move operations must restore address, range, and search state through transform
+  history, not by replaying generic cell edits
+
+This is a hard requirement taken from HyperFormula’s `Operations` and `UndoRedo` pairing.
+
 ### RebuildExecutionPolicy
 
 Rebuild must have three explicit modes:
@@ -418,6 +459,11 @@ Rebuild must have three explicit modes:
    - only when the runtime model itself must be reconstructed from persistence data
 
 This is the direct architectural answer to `rebuild-config-toggle`.
+
+The HyperFormula reread makes one extra requirement explicit:
+
+- `updateConfig()` and `rebuildAndRecalculate()` are both still real rebuild paths there, so our
+  policy must outperform by choosing the cheapest valid mode, not by assuming rebuild disappears
 
 ## Dependency Model
 
@@ -626,10 +672,15 @@ There must be no missing setup left for the first interactive mutation.
 | `batch-edit-multi-column` | `SuspendedBulkMutationLane` | multi-edit batches pay one frontier setup and one change emission |
 | `batch-suspended-multi-column` | `SuspendedBulkMutationLane` | suspended edits are a true deferred local batch |
 | `structural-insert-rows` | `StructuralTransformService` | row insert updates engine state without generic cell-mutation loops |
+| `structural-delete-rows` | `StructuralTransformService` | row delete updates engine state without generic cell-mutation loops |
+| `structural-move-rows` | `StructuralTransformService` | row move executes as one transform sequence, not add plus many generic mutations |
 | `aggregate-overlapping-ranges` | `RangeAggregateCacheService` | overlapping aggregates reuse prefix-range state |
 | `conditional-aggregation-reused-ranges` | `CriterionRangeCacheService` | repeated criteria formulas share one range-owned cache |
 | `lookup-with-column-index-after-column-write` | `ExactColumnIndexService` | post-write exact lookup is just index maintenance plus narrow frontier |
+| `lookup-with-column-index-after-batch-write` | `ExactColumnIndexService` | post-write exact lookup stays narrow even when many rows in the column change |
 | `lookup-approximate-sorted-after-column-write` | `SortedColumnSearchService` | post-write approximate lookup is descriptor maintenance plus one search |
+| `build-parser-cache-mixed-templates` | `FormulaTemplateNormalizationService` | mixed repeated template families normalize to a small set of canonical plan families |
+| `rebuild-runtime-from-snapshot` | `RebuildExecutionPolicy` | runtime rebuild from snapshot avoids public-sheet serialization and rebuilds only once |
 
 ## How High-Performance Calculation Works
 
@@ -749,15 +800,16 @@ It is not useful as the primary runtime blueprint because:
 
 1. direct change payload substrate
 2. compiled plan arena and formula slots
-3. rebuild execution policy split
-4. formula template normalization service
-5. true suspended bulk mutation lane
-6. criterion and overlapping-range caches
-7. structural transform service
-8. post-write lookup maintenance cutover
-9. runtime column store authority
-10. WASM criteria and search kernels
-11. delete displaced paths
+3. structural transform service
+4. exact column index write maintenance
+5. sorted lookup post-write fast path
+6. formula template normalization service
+7. rebuild execution policy split
+8. true suspended bulk mutation lane
+9. criterion and overlapping-range caches
+10. runtime column store authority
+11. WASM criteria and search kernels
+12. delete displaced paths
 
 ## Acceptance Criteria
 
@@ -765,13 +817,18 @@ The architecture is not done until all of the following are true:
 
 1. `WorkPaper` wins all directly comparable workloads in the expanded benchmark suite
 2. `conditional-aggregation-reused-ranges` is served by a range-owned reusable criterion cache
-3. `structural-insert-rows` is served by `StructuralTransformService`
-4. `lookup-with-column-index-after-column-write` resolves through mutation-owned exact index state
-5. `lookup-approximate-sorted-after-column-write` resolves through mutation-owned sorted descriptor state
+3. `structural-insert-rows`, `structural-delete-rows`, and `structural-move-rows` are all served
+   by `StructuralTransformService`
+4. `lookup-with-column-index-after-column-write` and
+   `lookup-with-column-index-after-batch-write` resolve through mutation-owned exact index state
+5. `lookup-approximate-sorted-after-column-write` resolves through mutation-owned sorted descriptor
+   state without broad refresh work
 6. rebuild uses explicit policy and does not default to persistence reconstruction
-7. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
-8. numeric aggregate, criteria-mask, and ordered-search hot loops have JS and WASM parity tests
-9. benchmark wins survive reruns on a clean committed tree, not one lucky artifact
+7. parser-template workloads are served by canonical token or template normalization rather than
+   repeated per-cell compilation
+8. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
+9. numeric aggregate, criteria-mask, and ordered-search hot loops have JS and WASM parity tests
+10. benchmark wins survive reruns on a clean committed tree, not one lucky artifact
 
 ## Benchmark Expectations
 
@@ -791,6 +848,6 @@ Expected areas for smaller but still meaningful wins:
 
 The realistic target is blunt:
 
-- `24/24` comparable workload wins on the expanded suite
+- `31/31` comparable workload wins on the expanded suite
 - no remaining architecture-owned red lane
 - no victory that depends on hidden fallback paths

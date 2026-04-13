@@ -2459,7 +2459,7 @@ export class WorkPaper {
     if (!this.isItPossibleToAddRows(sheetId, ...indexes)) {
       throw new WorkPaperOperationError("Rows cannot be added");
     }
-    return this.batch(() => {
+    return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertRows(this.sheetName(sheetId), start, amount);
       });
@@ -2478,7 +2478,7 @@ export class WorkPaper {
     if (!this.isItPossibleToRemoveRows(sheetId, ...indexes)) {
       throw new WorkPaperOperationError("Rows cannot be removed");
     }
-    return this.batch(() => {
+    return this.batchStructuralChanges(() => {
       indexes
         .toSorted((left, right) => right[0] - left[0])
         .forEach(([start, amount]) => {
@@ -2499,7 +2499,7 @@ export class WorkPaper {
     if (!this.isItPossibleToAddColumns(sheetId, ...indexes)) {
       throw new WorkPaperOperationError("Columns cannot be added");
     }
-    return this.batch(() => {
+    return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertColumns(this.sheetName(sheetId), start, amount);
       });
@@ -2518,7 +2518,7 @@ export class WorkPaper {
     if (!this.isItPossibleToRemoveColumns(sheetId, ...indexes)) {
       throw new WorkPaperOperationError("Columns cannot be removed");
     }
-    return this.batch(() => {
+    return this.batchStructuralChanges(() => {
       indexes
         .toSorted((left, right) => right[0] - left[0])
         .forEach(([start, amount]) => {
@@ -2546,18 +2546,26 @@ export class WorkPaper {
     if (!this.isItPossibleToMoveRows(sheetId, start, count, target)) {
       throw new WorkPaperOperationError("Rows cannot be moved");
     }
-    return this.captureChanges(undefined, () => {
-      this.engine.moveRows(this.sheetName(sheetId), start, count, target);
-    });
+    return this.canUseTrackedStructuralFastPath()
+      ? this.batchStructuralChanges(() => {
+          this.engine.moveRows(this.sheetName(sheetId), start, count, target);
+        })
+      : this.captureChanges(undefined, () => {
+          this.engine.moveRows(this.sheetName(sheetId), start, count, target);
+        });
   }
 
   moveColumns(sheetId: number, start: number, count: number, target: number): WorkPaperChange[] {
     if (!this.isItPossibleToMoveColumns(sheetId, start, count, target)) {
       throw new WorkPaperOperationError("Columns cannot be moved");
     }
-    return this.captureChanges(undefined, () => {
-      this.engine.moveColumns(this.sheetName(sheetId), start, count, target);
-    });
+    return this.canUseTrackedStructuralFastPath()
+      ? this.batchStructuralChanges(() => {
+          this.engine.moveColumns(this.sheetName(sheetId), start, count, target);
+        })
+      : this.captureChanges(undefined, () => {
+          this.engine.moveColumns(this.sheetName(sheetId), start, count, target);
+        });
   }
 
   addSheet(sheetName?: string): string {
@@ -3279,15 +3287,7 @@ export class WorkPaper {
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
   ): { changes: WorkPaperChange[]; nextVisibility: VisibilitySnapshot } | null {
-    if (
-      events.some(
-        (event) =>
-          event.invalidation === "full" ||
-          event.hasInvalidatedRanges ||
-          event.hasInvalidatedRows ||
-          event.hasInvalidatedColumns,
-      )
-    ) {
+    if (events.some((event) => event.invalidation === "full")) {
       return null;
     }
 
@@ -3437,6 +3437,52 @@ export class WorkPaper {
       });
     });
     return namedExpressionChanges.toSorted(compareWorkPaperNamedExpressionChanges);
+  }
+
+  private canUseTrackedStructuralFastPath(): boolean {
+    return (
+      this.batchDepth === 0 &&
+      !this.evaluationSuspended &&
+      this.visibilityCache === null &&
+      this.namedExpressions.size === 0
+    );
+  }
+
+  private computeTrackedChangesWithoutVisibilityCache(
+    events: readonly TrackedEngineEvent[],
+  ): WorkPaperChange[] {
+    const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events);
+    if (!fastPath) {
+      throw new WorkPaperOperationError(
+        "Structural mutation emitted an unsupported invalidation pattern for tracked changes",
+      );
+    }
+    return fastPath.changes;
+  }
+
+  private batchStructuralChanges(batchOperations: () => void): WorkPaperChange[] {
+    if (!this.canUseTrackedStructuralFastPath()) {
+      return this.batch(batchOperations);
+    }
+    this.assertNotDisposed();
+    const undoStackStart = this.getUndoStack().length;
+    this.drainTrackedEngineEvents();
+    this.batchDepth += 1;
+    try {
+      batchOperations();
+    } finally {
+      this.batchDepth -= 1;
+      this.flushPendingBatchOps();
+      this.mergeUndoHistory(undoStackStart);
+    }
+    const changes = this.computeTrackedChangesWithoutVisibilityCache(
+      this.drainTrackedEngineEvents(),
+    );
+    this.flushQueuedEvents();
+    if (changes.length > 0) {
+      this.emitter.emitDetailed({ eventName: "valuesUpdated", payload: { changes } });
+    }
+    return changes;
   }
 
   private computeChangesAfterMutation(

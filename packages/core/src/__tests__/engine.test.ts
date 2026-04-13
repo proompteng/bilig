@@ -4486,6 +4486,68 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Pivot", "B2")).toEqual({ tag: ValueTag.Empty });
   });
 
+  it("recalculates named, table, and direct cross-sheet formulas after structural row deletes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Summary");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
+      ["Region", "Sales"],
+      ["East", 10],
+      ["West", 7],
+      ["North", 5],
+    ]);
+    engine.setDefinedName("SalesRange", "=Data!B2:B4");
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B4",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setCellFormula("Summary", "A1", "SUM(Data!B2:B4)");
+    engine.setCellFormula("Summary", "A2", "SUM(Sales[Sales])");
+    engine.setCellFormula("Summary", "A3", "SUM(SalesRange)");
+
+    expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 22 });
+    expect(engine.getCellValue("Summary", "A2")).toEqual({ tag: ValueTag.Number, value: 22 });
+    expect(engine.getCellValue("Summary", "A3")).toEqual({ tag: ValueTag.Number, value: 22 });
+
+    engine.deleteRows("Data", 2, 1);
+
+    expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(engine.getCellValue("Summary", "A2")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(engine.getCellValue("Summary", "A3")).toEqual({ tag: ValueTag.Number, value: 15 });
+  });
+
+  it("recalculates positional cross-sheet formulas after structural row moves", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Summary");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "A4" }, [
+      [10],
+      [20],
+      [30],
+      [40],
+    ]);
+    engine.setCellFormula("Summary", "A1", "INDEX(Data!A1:A4,1)");
+    engine.setCellFormula("Summary", "A2", "INDEX(Data!A1:A4,2)");
+    engine.setCellFormula("Summary", "A3", "SUM(Data!A1:A4)");
+
+    expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Summary", "A2")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Summary", "A3")).toEqual({ tag: ValueTag.Number, value: 100 });
+
+    engine.moveRows("Data", 2, 1, 0);
+
+    expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 30 });
+    expect(engine.getCellValue("Summary", "A2")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Summary", "A3")).toEqual({ tag: ValueTag.Number, value: 100 });
+  });
+
   it("rewrites formulas for structural column inserts and roundtrips calc settings metadata", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -5575,6 +5637,29 @@ describe("SpreadsheetEngine", () => {
       invalidation: "cells",
       invalidatedColumns: [{ sheetName: "Sheet1", startIndex: 2, endIndex: 3 }],
     });
+    unsubscribe();
+  });
+
+  it("emits targeted cell invalidation for structural row edits when changed cells are explicit", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)");
+
+    const events: Array<{ invalidation: "cells" | "full"; changedCells: number }> = [];
+    const unsubscribe = engine.subscribe((event) => {
+      events.push({
+        invalidation: event.invalidation,
+        changedCells: event.changedCells.length,
+      });
+    });
+
+    engine.insertRows("Sheet1", 1, 1);
+
+    expect(events.at(-1)?.invalidation).toBe("cells");
+    expect(events.at(-1)?.changedCells).toBeGreaterThan(0);
     unsubscribe();
   });
 

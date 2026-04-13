@@ -180,6 +180,188 @@ export function buildMixedFrontierSheet(rowCount: number): WorkPaperSheet {
   });
 }
 
+export function buildStructuralColumnSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [rowNumber, rowNumber * 2, `=A${rowNumber}+B${rowNumber}`, `=C${rowNumber}*2`];
+  });
+}
+
+export function buildRenameDependencySheets(): Record<string, WorkPaperSheet> {
+  return {
+    Data: [[1], [2], [3]],
+    Summary: [["=Data!A1+1", "=SUM(Data!A1:A3)"]],
+  };
+}
+
+export function buildNamedExpressionBenchSheet(): WorkPaperSheet {
+  return [[1, "=Rate+1", "=Rate*2"], [2]];
+}
+
+export function buildLookupSearchModeReverseSheet(rowCount: number): WorkPaperSheet {
+  const target = Math.floor(rowCount / 2);
+  const rows: Array<Array<number | string>> = [["Key", "Value", "", target, ""]];
+  for (let index = 1; index <= rowCount; index += 1) {
+    const key = index === target + 1 ? target : index;
+    rows.push([key, key * 10]);
+  }
+  rows[0]![4] = `=XMATCH(D1,A2:A${rowCount + 1},0,-1)`;
+  return rows;
+}
+
+export function buildApproxLookupDescendingSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [
+    ["Key", "Value", "", Math.floor(rowCount / 2) + 0.5, ""],
+  ];
+  for (let index = rowCount; index >= 1; index -= 1) {
+    rows.push([index, index * 10]);
+  }
+  rows[0]![4] = `=MATCH(D1,A2:A${rowCount + 1},-1)`;
+  return rows;
+}
+
+export function buildApproxLookupDuplicateSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [["Key", "Value", "", Math.floor(rowCount / 4), ""]];
+  for (let index = 1; index <= rowCount; index += 1) {
+    const key = Math.ceil(index / 2);
+    rows.push([key, key * 10]);
+  }
+  rows[0]![4] = `=MATCH(D1,A2:A${rowCount + 1},1)`;
+  return rows;
+}
+
+export function buildConditionalAggregationSharedCriteriaSheet(
+  rowCount: number,
+  criteriaCount: number,
+): WorkPaperSheet {
+  const criteriaCells = Array.from({ length: criteriaCount }, (_, index) =>
+    String.fromCharCode(65 + (index % 4)),
+  );
+  const rows: Array<Array<number | string>> = [
+    [
+      "Group",
+      "Value",
+      "",
+      ...criteriaCells,
+      ...criteriaCells.map(
+        (_, index) => `=SUMIF(A2:A${rowCount + 1},${columnLabel(3 + index)}1,B2:B${rowCount + 1})`,
+      ),
+    ],
+  ];
+  for (let index = 1; index <= rowCount; index += 1) {
+    rows.push([String.fromCharCode(65 + (index % 4)), index]);
+  }
+  return rows;
+}
+
+export function buildConditionalAggregationMixedSheet(
+  rowCount: number,
+  formulaCopies: number,
+): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [
+    [
+      "Group",
+      "Amount",
+      "Flag",
+      "A",
+      10,
+      ...Array.from(
+        { length: formulaCopies },
+        () =>
+          `=COUNTIFS(A2:A${rowCount + 1},D1,B2:B${rowCount + 1},">="&E1,C2:C${rowCount + 1},"x")`,
+      ),
+      ...Array.from(
+        { length: formulaCopies },
+        () =>
+          `=SUMIFS(B2:B${rowCount + 1},A2:A${rowCount + 1},D1,B2:B${rowCount + 1},">="&E1,C2:C${rowCount + 1},"x")`,
+      ),
+    ],
+  ];
+  for (let index = 1; index <= rowCount; index += 1) {
+    rows.push([index % 2 === 0 ? "A" : "B", index, index % 3 === 0 ? "x" : "y"]);
+  }
+  return rows;
+}
+
+export function buildParserCacheUniqueFormulaSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [
+      rowNumber,
+      rowNumber * 2,
+      `=A${rowNumber}+B${rowNumber}+${rowNumber}`,
+      `=C${rowNumber}*2+${rowNumber}`,
+      `=SUM(A1:A${rowNumber})+${rowNumber}`,
+      `=D${rowNumber}+E${rowNumber}+${rowNumber}`,
+    ];
+  });
+}
+
+export function buildParserCacheMixedTemplateSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    if (rowNumber % 3 === 1) {
+      return [
+        rowNumber,
+        rowNumber * 2,
+        `=A${rowNumber}+B${rowNumber}`,
+        `=C${rowNumber}*2`,
+        `=SUM(A1:A${rowNumber})`,
+        `=D${rowNumber}+E${rowNumber}`,
+      ];
+    }
+    if (rowNumber % 3 === 2) {
+      return [
+        rowNumber,
+        rowNumber * 3,
+        `=A${rowNumber}*B${rowNumber}`,
+        `=C${rowNumber}+A${rowNumber}`,
+        `=AVERAGE(A1:A${rowNumber})`,
+        `=D${rowNumber}-E${rowNumber}`,
+      ];
+    }
+    return [
+      rowNumber,
+      rowNumber * 4,
+      `=B${rowNumber}-A${rowNumber}`,
+      `=ABS(C${rowNumber})`,
+      `=MAX(A1:A${rowNumber})`,
+      `=D${rowNumber}+E${rowNumber}`,
+    ];
+  });
+}
+
+export function buildSlidingAggregateSheet(rowCount: number, window: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    const endRow = Math.min(rowCount, rowNumber + window - 1);
+    return [rowNumber, `=SUM(A${rowNumber}:A${endRow})`];
+  });
+}
+
+export function build2dAggregateSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [rowNumber, rowNumber * 2, `=SUM(A1:B${rowNumber})`];
+  });
+}
+
+export function buildDynamicArraySortSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [[`=SORT(A2:A${rowCount + 1})`]];
+  for (let index = 0; index < rowCount; index += 1) {
+    rows.push([rowCount - index]);
+  }
+  return rows;
+}
+
+export function buildDynamicArrayUniqueSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [[`=UNIQUE(A2:A${rowCount + 1})`]];
+  for (let index = 0; index < rowCount; index += 1) {
+    rows.push([Math.floor(index / 2) + 1]);
+  }
+  return rows;
+}
+
 export function textLookupKey(index: number): string {
   return `KEY-${String(index).padStart(5, "0")}`;
 }
