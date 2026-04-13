@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { formatAddress } from "@bilig/formula";
@@ -752,13 +753,17 @@ describe("engine correctness", () => {
         await engine.ready();
         engine.importSnapshot(initialSnapshot);
 
+        let observedSemanticChange = false;
         for (const action of actions) {
           applyAction(engine, action);
-          assertSnapshotInvariants(engine.exportSnapshot());
+          const currentSnapshot = engine.exportSnapshot();
+          assertSnapshotInvariants(currentSnapshot);
+          observedSemanticChange ||= !isDeepStrictEqual(currentSnapshot, initialSnapshot);
         }
 
         const finalSnapshot = engine.exportSnapshot();
         const undoCount = undoAll(engine, actions.length * 4);
+        expect(undoCount > 0).toBe(observedSemanticChange);
         expect(engine.exportSnapshot()).toEqual(initialSnapshot);
 
         const redoCount = redoAll(engine, undoCount + 2);
