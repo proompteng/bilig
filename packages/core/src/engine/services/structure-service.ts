@@ -519,6 +519,10 @@ export function createEngineStructureService(args: {
         args.state.workbook.deletePivot(pivot.sheetName, pivot.address);
         return;
       }
+      if (nextAddress !== pivot.address) {
+        args.clearOwnedPivot(pivot);
+        args.state.workbook.deletePivot(pivot.sheetName, pivot.address);
+      }
       args.state.workbook.setPivot({
         ...pivot,
         address: nextAddress,

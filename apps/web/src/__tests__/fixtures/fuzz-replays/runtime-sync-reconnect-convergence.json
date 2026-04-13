@@ -1,0 +1,40 @@
+{
+  "suite": "web/runtime-sync/reconnect-convergence",
+  "kind": "property",
+  "seed": 20260413,
+  "counterexample": [
+    {
+      "kind": "local",
+      "address": "A1",
+      "value": 11
+    },
+    {
+      "kind": "submit"
+    },
+    {
+      "kind": "remote",
+      "address": "B1",
+      "value": 101
+    },
+    {
+      "kind": "local",
+      "address": "A2",
+      "value": 22
+    },
+    {
+      "kind": "submit"
+    },
+    {
+      "kind": "ack"
+    },
+    {
+      "kind": "remote",
+      "address": "B2",
+      "value": 202
+    },
+    {
+      "kind": "ack"
+    }
+  ],
+  "reproductionCommand": "pnpm test:fuzz:replay -- apps/web/src/__tests__/fixtures/fuzz-replays/runtime-sync-reconnect-convergence.json"
+}

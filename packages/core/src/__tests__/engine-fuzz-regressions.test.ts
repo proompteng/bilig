@@ -99,4 +99,25 @@ describe("engine fuzz regressions", () => {
       code: ErrorCode.Cycle,
     });
   });
+
+  it("propagates cycle errors through range dependents after direct formula writes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "cycle-range-dependent-regression" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "B1", "text");
+    engine.setCellValue("Sheet1", "C2", "text");
+    engine.setCellFormula("Sheet1", "B3", "SUM(A1:C3)");
+    engine.setCellFormula("Sheet1", "E4", "SUM(B1:C4)");
+
+    expect(engine.getCell("Sheet1", "B3").value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    });
+    expect(engine.getCell("Sheet1", "E4").value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    });
+  });
 });

@@ -1,0 +1,50 @@
+{
+  "suite": "bilig/projection/live-snapshot-parity",
+  "kind": "property",
+  "seed": 20260413,
+  "counterexample": [
+    {
+      "kind": "value",
+      "address": "A1",
+      "value": 12
+    },
+    {
+      "kind": "value",
+      "address": "B1",
+      "value": "north"
+    },
+    {
+      "kind": "formula",
+      "address": "C1",
+      "formula": "A1+1"
+    },
+    {
+      "kind": "insertRows",
+      "start": 1,
+      "count": 1
+    },
+    {
+      "kind": "style",
+      "range": {
+        "sheetName": "Sheet1",
+        "startAddress": "A2",
+        "endAddress": "C2"
+      },
+      "patch": {
+        "font": {
+          "bold": true
+        }
+      }
+    },
+    {
+      "kind": "format",
+      "range": {
+        "sheetName": "Sheet1",
+        "startAddress": "A1",
+        "endAddress": "B2"
+      },
+      "format": "0.00"
+    }
+  ],
+  "reproductionCommand": "pnpm test:fuzz:replay -- apps/bilig/src/zero/__tests__/fixtures/fuzz-replays/projection-live-snapshot-parity.json"
+}

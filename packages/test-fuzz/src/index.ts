@@ -61,6 +61,12 @@ export interface ReplaySelector {
   filePath: string | null;
 }
 
+export interface PromoteCapturedArtifactOptions {
+  artifactPath: string;
+  fixturePath: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface CaptureCounterexampleOptions<Ts extends unknown[] = unknown[]> {
   suite: string;
   kind: FuzzSuiteKind;
@@ -184,6 +190,28 @@ export function loadReplayFixture(filePath: string): ReplayFixture {
     fixture.reproductionCommand = raw["reproductionCommand"];
   }
   return fixture;
+}
+
+export function promoteCapturedArtifact(options: PromoteCapturedArtifactOptions): string {
+  const artifactPath = resolve(options.artifactPath);
+  const fixturePath = resolve(options.fixturePath);
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8")) as unknown;
+  if (
+    !isRecord(artifact) ||
+    typeof artifact["suite"] !== "string" ||
+    typeof artifact["seed"] !== "number"
+  ) {
+    throw new Error(`Invalid captured fuzz artifact: ${artifactPath}`);
+  }
+  const payload = {
+    ...artifact,
+    ...options.metadata,
+    sourceArtifact: artifactPath,
+    promotedAt: new Date().toISOString(),
+  };
+  mkdirSync(dirname(fixturePath), { recursive: true });
+  writeFileSync(fixturePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return fixturePath;
 }
 
 function resolveReplayFixtureForSuite(suite: string): ReplayFixture | null {

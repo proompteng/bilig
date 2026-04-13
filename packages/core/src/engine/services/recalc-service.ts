@@ -1,7 +1,8 @@
 import { Effect } from "effect";
-import { FormulaMode, ValueTag, type CellSnapshot } from "@bilig/protocol";
+import { ErrorCode, FormulaMode, ValueTag, type CellSnapshot } from "@bilig/protocol";
 import { makeCellKey } from "../../workbook-store.js";
 import { CellFlags } from "../../cell-store.js";
+import { errorValue } from "../../engine-value-utils.js";
 import type {
   EngineRuntimeState,
   RecalcVolatileState,
@@ -325,6 +326,32 @@ export function createEngineRecalcService(args: {
         pendingKernelSync[pendingKernelSyncCount] = cellIndex;
         pendingKernelSyncCount += 1;
       };
+      const hasCycleDependency = (formula: RuntimeFormula): boolean => {
+        for (
+          let dependencyIndex = 0;
+          dependencyIndex < formula.dependencyIndices.length;
+          dependencyIndex += 1
+        ) {
+          const dependencyCellIndex = formula.dependencyIndices[dependencyIndex]!;
+          if (
+            ((args.state.workbook.cellStore.flags[dependencyCellIndex] ?? 0) &
+              CellFlags.InCycle) !==
+            0
+          ) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const materializeCycleDependentError = (cellIndex: number): void => {
+        const spillChanges = args.clearOwnedSpill(cellIndex);
+        args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle));
+        queueKernelSync(cellIndex);
+        noteSpillChanges(spillChanges);
+        for (let spillIndex = 0; spillIndex < spillChanges.length; spillIndex += 1) {
+          queueKernelSync(spillChanges[spillIndex]!);
+        }
+      };
       const evaluateWasmSpillFormula = (cellIndex: number, formula: RuntimeFormula): number => {
         args.state.wasm.syncFromStore(
           args.state.workbook.cellStore,
@@ -392,6 +419,11 @@ export function createEngineRecalcService(args: {
           continue;
         }
         if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+          continue;
+        }
+        if (hasCycleDependency(formula)) {
+          jsCount += 1;
+          materializeCycleDependentError(cellIndex);
           continue;
         }
         if (formula.directLookup !== undefined || formula.directCriteria !== undefined) {

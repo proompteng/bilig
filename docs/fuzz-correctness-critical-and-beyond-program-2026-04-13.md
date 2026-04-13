@@ -1,6 +1,6 @@
 # Fuzz Correctness Critical And Beyond Program
 ## Date: 2026-04-13
-## Status: active
+## Status: implemented
 
 ## Why this document exists
 
@@ -39,13 +39,53 @@ The next correctness risk is no longer “can the engine and formula layers surv
 
 This document is the next-phase design. It is intentionally larger than the April 12 program. It is meant to cover the full critical path and then push beyond it.
 
-## Execution started
+## Execution completed
 
-Initial implementation begins with the first missing critical surface already present in `packages/core`:
+This program is implemented in the repo, not left as planning-only text.
 
-- CSV import/export semantic parity fuzz
+The landed coverage includes:
 
-The intent is to land the critical-path workstreams in order, not leave this as a planning-only document.
+- import/export parity in:
+  - `packages/core/src/__tests__/engine-import-export.fuzz.test.ts`
+  - `packages/core/src/__tests__/snapshot-wire-parity.fuzz.test.ts`
+  - `packages/core/src/__tests__/literal-loader-parity.fuzz.test.ts`
+- server sync and projection fuzz in:
+  - `apps/bilig/src/zero/__tests__/projection.fuzz.test.ts`
+  - `apps/bilig/src/zero/__tests__/migration-parity.fuzz.test.ts`
+  - `apps/bilig/src/zero/__tests__/sync-relay.fuzz.test.ts`
+  - `apps/bilig/src/zero/__tests__/reconnect-replay.fuzz.test.ts`
+- browser projection and runtime fuzz in:
+  - `apps/web/src/__tests__/projected-viewport.fuzz.test.ts`
+  - `apps/web/src/__tests__/viewport-cache-pruning.fuzz.test.ts`
+  - `apps/web/src/__tests__/worker-workbook-app-model.fuzz.test.ts`
+  - `apps/web/src/__tests__/runtime-sync.fuzz.test.ts`
+  - `apps/web/src/__tests__/selection-command-parity.fuzz.test.ts`
+- advanced workbook metadata fuzz in:
+  - `packages/core/src/__tests__/engine-charts.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-media.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-annotations.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-conditional-formats.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-protection.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-pivot.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-data-validation.fuzz.test.ts`
+- replay corpora and deterministic replays in:
+  - `packages/core/src/__tests__/fixtures/fuzz-replays/`
+  - `packages/formula/src/__tests__/fixtures/fuzz-replays/`
+  - `apps/bilig/src/zero/__tests__/fixtures/fuzz-replays/`
+  - `apps/web/src/__tests__/fixtures/fuzz-replays/`
+- replay tooling in:
+  - `packages/test-fuzz/src/index.ts`
+  - `scripts/promote-fuzz-artifact.ts`
+
+The implementation also fixed product bugs exposed while executing this program, including:
+
+- cycle error propagation drift across direct formula writes vs import/restore
+- pivot anchor rewrite and owned-output cleanup under structural edits
+- stale pivot materialization after edits inside pivot output footprints
+- live/browser selection command targeting drift
+- projection/runtime parity and metadata roundtrip defects found by the new suites
+
+The repo’s `default`, `main`, and browser fuzz lanes now exercise these workstreams through the existing `pnpm test:fuzz`, `pnpm test:fuzz:main`, and `pnpm test:fuzz:nightly` entrypoints.
 
 ## Relationship to existing correctness docs
 

@@ -49,6 +49,7 @@
     "test:fuzz:main": "bun scripts/run-fuzz.ts main",
     "test:fuzz:nightly": "bun scripts/run-fuzz.ts nightly",
     "test:fuzz:replay": "bun scripts/run-fuzz.ts replay",
+    "test:fuzz:promote": "bun scripts/promote-fuzz-artifact.ts",
     "test:correctness:core": "vitest --run packages/core/src/__tests__/engine-correctness.test.ts packages/core/src/__tests__/mutation-service.test.ts packages/core/src/__tests__/workbook-store.test.ts packages/core/src/__tests__/engine-range-format-ops.test.ts",
     "test:correctness:browser": "vitest --run apps/web/src/__tests__/projected-viewport-store.test.ts apps/web/src/__tests__/workbook-changes.test.tsx apps/web/src/__tests__/workbook-editor-conflict.test.tsx apps/web/src/__tests__/worker-runtime-state.test.ts apps/web/src/__tests__/worker-workbook-app-model.test.ts apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/worker-runtime.test.ts",
     "test:correctness:formula": "vitest --run packages/formula/src/__tests__/fixture-harness.test.ts packages/core/src/__tests__/formula-runtime-correctness.test.ts",
