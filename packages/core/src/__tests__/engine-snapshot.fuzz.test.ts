@@ -11,7 +11,6 @@ import {
 } from "./engine-fuzz-helpers.js";
 import {
   applyEngineSemanticActionAndCaptureResult,
-  assertNoSemanticEmptyCells,
   exportEngineSemanticReplaySnapshot,
   projectMetadataSnapshot,
   snapshotSemanticActionArbitrary,
@@ -61,7 +60,6 @@ describe("engine snapshot fuzz", () => {
             const acceptedActions = await acceptedPromise;
             const result = applyEngineSemanticActionAndCaptureResult(engine, action);
             assertSnapshotInvariants(result.after);
-            assertNoSemanticEmptyCells(result.after);
             if (result.accepted) {
               acceptedActions.push(action);
             }
@@ -72,7 +70,6 @@ describe("engine snapshot fuzz", () => {
 
         const finalSnapshot = engine.exportSnapshot();
         assertSnapshotInvariants(finalSnapshot);
-        assertNoSemanticEmptyCells(finalSnapshot);
         const expectedSnapshot = await exportEngineSemanticReplaySnapshot(seedSnapshot, accepted);
         expectSemanticSnapshot(finalSnapshot, expectedSnapshot);
         expect(projectMetadataSnapshot(finalSnapshot)).toEqual(

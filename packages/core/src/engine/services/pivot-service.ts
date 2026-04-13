@@ -106,6 +106,7 @@ export function createEnginePivotService(args: {
         CellFlags.SpillChild |
         CellFlags.PivotOutput
       );
+    args.state.workbook.pruneCellIfEmpty(cellIndex);
     return true;
   };
 

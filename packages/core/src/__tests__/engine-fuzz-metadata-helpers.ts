@@ -15,7 +15,6 @@ import { SpreadsheetEngine } from "../engine.js";
 import { EngineMutationError } from "../engine/errors.js";
 import {
   applyCoreAction,
-  assertSnapshotInvariants,
   clearFormatActionArbitrary,
   clearStyleActionArbitrary,
   coreReplicaActionArbitrary,
@@ -413,19 +412,6 @@ export function projectMetadataSnapshot(snapshot: WorkbookSnapshot): WorkbookSna
       ),
     ),
   };
-}
-
-export function assertNoSemanticEmptyCells(snapshot: WorkbookSnapshot): void {
-  assertSnapshotInvariants(snapshot);
-  snapshot.sheets.forEach((sheet) => {
-    sheet.cells.forEach((cell) => {
-      if (cell.formula === undefined && cell.format === undefined && cell.value === null) {
-        throw new Error(
-          `Semantically empty tracked cell leaked into snapshot at ${sheet.name}!${cell.address}`,
-        );
-      }
-    });
-  });
 }
 
 function hasSemanticChange(before: WorkbookSnapshot, after: WorkbookSnapshot): boolean {

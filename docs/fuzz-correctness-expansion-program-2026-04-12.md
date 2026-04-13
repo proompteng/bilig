@@ -2,6 +2,44 @@
 ## Date: 2026-04-12
 ## Status: implemented
 
+## Completed implementation
+
+The repo now implements this program with the following committed surfaces:
+
+- engine fuzz suites
+  - `packages/core/src/__tests__/engine-history.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-structure.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-replica.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-metadata.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-snapshot.fuzz.test.ts`
+  - `packages/core/src/__tests__/engine-replay-fixtures.test.ts`
+  - `packages/core/src/__tests__/formula-runtime-differential.fuzz.test.ts`
+- formula fuzz suites
+  - `packages/formula/src/__tests__/formula-parse.fuzz.test.ts`
+  - `packages/formula/src/__tests__/formula-translation.fuzz.test.ts`
+  - `packages/formula/src/__tests__/formula-rename.fuzz.test.ts`
+  - `packages/formula/src/__tests__/formula-evaluation.fuzz.test.ts`
+  - `packages/formula/src/__tests__/formula-replay-fixtures.test.ts`
+- shared generators and corpora
+  - `packages/core/src/__tests__/engine-fuzz-helpers.ts`
+  - `packages/core/src/__tests__/engine-fuzz-metadata-helpers.ts`
+  - `packages/formula/src/__tests__/formula-fuzz-helpers.ts`
+  - `packages/formula/src/__tests__/formula-fuzz-replay-fixtures.ts`
+  - `packages/core/src/__tests__/fixtures/fuzz-replays/`
+  - `packages/formula/src/__tests__/fixtures/fuzz-replays/`
+- deterministic regression coverage for fuzz-found engine bugs
+  - `packages/core/src/__tests__/engine-fuzz-regressions.test.ts`
+
+The implementation also fixed the engine bugs the expanded suites exposed:
+
+- structural delete undo now restores rewritten formulas on other sheets, not just the edited sheet
+- local range clear/copy/fill/move helpers no longer create no-op history entries
+- empty local batches no longer clear redo state
+- structural deletes on semantically blank sheets are treated as no-ops
+- pivot output cleanup prunes orphaned empty cells
+- pivot materialization now uses the JS semantic path until accelerated parity is proven
+- snapshot export preserves explicit authored blank cells while excluding uninitialized empties
+
 ## Why this document exists
 
 The repo already has a real correctness program:

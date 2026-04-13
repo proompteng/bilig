@@ -173,7 +173,8 @@ export function createEngineSnapshotService(args: {
                   if (
                     snapshot.formula === undefined &&
                     explicitFormat === undefined &&
-                    snapshot.value.tag === ValueTag.Empty
+                    snapshot.version === 0 &&
+                    (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
                   ) {
                     return;
                   }

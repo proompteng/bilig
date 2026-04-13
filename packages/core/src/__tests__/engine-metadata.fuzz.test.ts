@@ -7,7 +7,6 @@ import { runModelProperty } from "@bilig/test-fuzz";
 import { normalizeSnapshotForSemanticComparison } from "./engine-fuzz-helpers.js";
 import {
   applyEngineSemanticActionAndCaptureResult,
-  assertNoSemanticEmptyCells,
   exportEngineSemanticReplaySnapshot,
   metadataSeedNames,
   metadataSemanticActionArbitrary,
@@ -28,7 +27,6 @@ async function applyAndExpectMetadataSemantics(
   model: EngineMetadataModel,
 ): Promise<void> {
   const snapshot = engine.exportSnapshot();
-  assertNoSemanticEmptyCells(snapshot);
   try {
     const expectedSnapshot = await exportEngineSemanticReplaySnapshot(
       model.initialSnapshot,
