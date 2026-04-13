@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { formatAddress } from "@bilig/formula";
@@ -758,8 +759,9 @@ describe("engine correctness", () => {
         }
 
         const finalSnapshot = engine.exportSnapshot();
+        const changedWorkbookState = !isDeepStrictEqual(finalSnapshot, initialSnapshot);
         const undoCount = undoAll(engine, actions.length * 4);
-        expect(undoCount).toBeGreaterThan(0);
+        expect(undoCount > 0).toBe(changedWorkbookState);
         expect(engine.exportSnapshot()).toEqual(initialSnapshot);
 
         const redoCount = redoAll(engine, undoCount + 2);
