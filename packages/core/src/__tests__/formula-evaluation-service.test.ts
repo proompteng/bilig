@@ -1,8 +1,9 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 import type { FormulaNode } from "@bilig/formula";
 import { SpreadsheetEngine } from "../engine.js";
+import { EngineFormulaEvaluationError } from "../engine/errors.js";
 import type { EngineFormulaEvaluationService } from "../engine/services/formula-evaluation-service.js";
 import type { EngineMutationSupportService } from "../engine/services/mutation-support-service.js";
 
@@ -204,6 +205,56 @@ describe("EngineFormulaEvaluationService", () => {
 
     Effect.runSync(evaluation.evaluateUnsupportedFormula(b1Index!));
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("wraps workbook access failures from structured, spill, and multiple-operations helpers", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "evaluation-error-wrappers" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const evaluation = getEvaluationService(engine);
+
+    const getTableSpy = vi.spyOn(engine.workbook, "getTable").mockImplementation(() => {
+      throw new Error("structured explode");
+    });
+    const structured = Effect.runSync(
+      Effect.either(evaluation.resolveStructuredReference("Sales", "Amount")),
+    );
+    expect(structured._tag).toBe("Left");
+    expect(structured.left).toBeInstanceOf(EngineFormulaEvaluationError);
+    expect(structured.left.message).toContain("structured explode");
+    getTableSpy.mockRestore();
+
+    const getSpillSpy = vi.spyOn(engine.workbook, "getSpill").mockImplementation(() => {
+      throw new Error("spill explode");
+    });
+    const spill = Effect.runSync(
+      Effect.either(evaluation.resolveSpillReference("Sheet1", undefined, "A1")),
+    );
+    expect(spill._tag).toBe("Left");
+    expect(spill.left).toBeInstanceOf(EngineFormulaEvaluationError);
+    expect(spill.left.message).toContain("spill explode");
+    getSpillSpy.mockRestore();
+
+    const getCellIndexSpy = vi.spyOn(engine.workbook, "getCellIndex").mockImplementation(() => {
+      throw new Error("multiple operations explode");
+    });
+    const multipleOperations = Effect.runSync(
+      Effect.either(
+        evaluation.resolveMultipleOperations({
+          formulaSheetName: "Sheet1",
+          formulaAddress: "A1",
+          rowCellSheetName: "Sheet1",
+          rowCellAddress: "A1",
+          rowReplacementSheetName: "Sheet1",
+          rowReplacementAddress: "A2",
+        }),
+      ),
+    );
+    expect(multipleOperations._tag).toBe("Left");
+    expect(multipleOperations.left).toBeInstanceOf(EngineFormulaEvaluationError);
+    expect(multipleOperations.left.message).toContain("multiple operations explode");
+    getCellIndexSpy.mockRestore();
   });
 
   it("evaluates direct exact lookup formulas across uniform, text, and mixed columns", async () => {
