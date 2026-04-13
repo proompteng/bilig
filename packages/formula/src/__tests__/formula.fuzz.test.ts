@@ -9,7 +9,7 @@ import {
   serializeFormula,
   translateFormulaReferences,
 } from "../translation.js";
-import { fuzzVitestTimeoutMs, runProperty } from "@bilig/test-fuzz";
+import { runProperty } from "@bilig/test-fuzz";
 
 function quoteSheetName(sheetName: string): string {
   return sheetName.includes(" ") ? `'${sheetName}'` : sheetName;
@@ -268,135 +268,109 @@ const evaluationContext = {
 };
 
 describe("formula fuzz", () => {
-  const propertyTimeoutMs = fuzzVitestTimeoutMs("property");
+  it("canonicalizes valid formulas through parse and serialize", async () => {
+    await runProperty({
+      suite: "formula/canonicalization",
+      arbitrary: validFormulaArbitrary,
+      predicate: (formula) => {
+        const canonical = serializeFormula(parseFormula(formula));
+        expect(serializeFormula(parseFormula(canonical))).toBe(canonical);
+      },
+    });
+  });
 
-  it(
-    "canonicalizes valid formulas through parse and serialize",
-    async () => {
-      await runProperty({
-        suite: "formula/canonicalization",
-        arbitrary: validFormulaArbitrary,
-        predicate: (formula) => {
-          const canonical = serializeFormula(parseFormula(formula));
-          expect(serializeFormula(parseFormula(canonical))).toBe(canonical);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
-
-  it(
-    "reverses translated references back to the canonical formula",
-    async () => {
-      await runProperty({
-        suite: "formula/translation-reversal",
-        arbitrary: fc
-          .record({
-            formula: validFormulaArbitrary,
-            rowDelta: fc.integer({ min: 0, max: 4 }),
-            colDelta: fc.integer({ min: 0, max: 2 }),
-          })
-          .filter((value) => value.rowDelta !== 0 || value.colDelta !== 0),
-        predicate: ({ formula, rowDelta, colDelta }) => {
-          const canonical = serializeFormula(parseFormula(formula));
-          const translated = translateFormulaReferences(canonical, rowDelta, colDelta);
-          const restored = translateFormulaReferences(translated, -rowDelta, -colDelta);
-          expect(restored).toBe(canonical);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
-
-  it(
-    "reverses insert transforms through matching delete transforms",
-    async () => {
-      await runProperty({
-        suite: "formula/structural-insert-delete-reversal",
-        arbitrary: fc.record({
+  it("reverses translated references back to the canonical formula", async () => {
+    await runProperty({
+      suite: "formula/translation-reversal",
+      arbitrary: fc
+        .record({
           formula: validFormulaArbitrary,
-          axis: fc.constantFrom<"row" | "column">("row", "column"),
-          start: fc.integer({ min: 0, max: 4 }),
-          count: fc.integer({ min: 1, max: 2 }),
-        }),
-        predicate: ({ formula, axis, start, count }) => {
-          const canonical = serializeFormula(parseFormula(formula));
-          const inserted = rewriteFormulaForStructuralTransform(canonical, "Sheet1", "Sheet1", {
-            kind: "insert",
-            axis,
-            start,
-            count,
-          });
-          const restored = rewriteFormulaForStructuralTransform(inserted, "Sheet1", "Sheet1", {
-            kind: "delete",
-            axis,
-            start,
-            count,
-          });
-          expect(restored).toBe(canonical);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+          rowDelta: fc.integer({ min: 0, max: 4 }),
+          colDelta: fc.integer({ min: 0, max: 2 }),
+        })
+        .filter((value) => value.rowDelta !== 0 || value.colDelta !== 0),
+      predicate: ({ formula, rowDelta, colDelta }) => {
+        const canonical = serializeFormula(parseFormula(formula));
+        const translated = translateFormulaReferences(canonical, rowDelta, colDelta);
+        const restored = translateFormulaReferences(translated, -rowDelta, -colDelta);
+        expect(restored).toBe(canonical);
+      },
+    });
+  });
 
-  it(
-    "roundtrips quoted and unquoted sheet renames",
-    async () => {
-      await runProperty({
-        suite: "formula/sheet-rename-roundtrip",
-        arbitrary: fc
-          .record({
-            oldSheetName: sheetNameArbitrary,
-            newSheetName: sheetNameArbitrary,
-          })
-          .filter((value) => value.oldSheetName !== value.newSheetName)
-          .chain(({ oldSheetName, newSheetName }) =>
-            renameScopedFormulaArbitrary(oldSheetName, newSheetName).map((formula) => ({
-              formula,
-              oldSheetName,
-              newSheetName,
-            })),
-          ),
-        predicate: ({ formula, oldSheetName, newSheetName }) => {
-          const canonical = serializeFormula(parseFormula(formula));
-          const renamed = renameFormulaSheetReferences(canonical, oldSheetName, newSheetName);
-          const restored = renameFormulaSheetReferences(renamed, newSheetName, oldSheetName);
-          expect(restored).toBe(canonical);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+  it("reverses insert transforms through matching delete transforms", async () => {
+    await runProperty({
+      suite: "formula/structural-insert-delete-reversal",
+      arbitrary: fc.record({
+        formula: validFormulaArbitrary,
+        axis: fc.constantFrom<"row" | "column">("row", "column"),
+        start: fc.integer({ min: 0, max: 4 }),
+        count: fc.integer({ min: 1, max: 2 }),
+      }),
+      predicate: ({ formula, axis, start, count }) => {
+        const canonical = serializeFormula(parseFormula(formula));
+        const inserted = rewriteFormulaForStructuralTransform(canonical, "Sheet1", "Sheet1", {
+          kind: "insert",
+          axis,
+          start,
+          count,
+        });
+        const restored = rewriteFormulaForStructuralTransform(inserted, "Sheet1", "Sheet1", {
+          kind: "delete",
+          axis,
+          start,
+          count,
+        });
+        expect(restored).toBe(canonical);
+      },
+    });
+  });
 
-  it(
-    "keeps JS evaluation stable across canonicalization for coercion-heavy formulas",
-    async () => {
-      await runProperty({
-        suite: "formula/evaluation-canonicalization-stability",
-        arbitrary: evaluableFormulaArbitrary,
-        predicate: (formula) => {
-          const canonical = serializeFormula(parseFormula(formula));
-          expect(evaluateAst(parseFormula(formula), evaluationContext)).toEqual(
-            evaluateAst(parseFormula(canonical), evaluationContext),
-          );
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+  it("roundtrips quoted and unquoted sheet renames", async () => {
+    await runProperty({
+      suite: "formula/sheet-rename-roundtrip",
+      arbitrary: fc
+        .record({
+          oldSheetName: sheetNameArbitrary,
+          newSheetName: sheetNameArbitrary,
+        })
+        .filter((value) => value.oldSheetName !== value.newSheetName)
+        .chain(({ oldSheetName, newSheetName }) =>
+          renameScopedFormulaArbitrary(oldSheetName, newSheetName).map((formula) => ({
+            formula,
+            oldSheetName,
+            newSheetName,
+          })),
+        ),
+      predicate: ({ formula, oldSheetName, newSheetName }) => {
+        const canonical = serializeFormula(parseFormula(formula));
+        const renamed = renameFormulaSheetReferences(canonical, oldSheetName, newSheetName);
+        const restored = renameFormulaSheetReferences(renamed, newSheetName, oldSheetName);
+        expect(restored).toBe(canonical);
+      },
+    });
+  });
 
-  it(
-    "rejects malformed formulas without crashing the parser",
-    async () => {
-      await runProperty({
-        suite: "formula/invalid-input",
-        arbitrary: invalidFormulaArbitrary,
-        predicate: (formula) => {
-          expect(() => parseFormula(formula)).toThrow(/.+/);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+  it("keeps JS evaluation stable across canonicalization for coercion-heavy formulas", async () => {
+    await runProperty({
+      suite: "formula/evaluation-canonicalization-stability",
+      arbitrary: evaluableFormulaArbitrary,
+      predicate: (formula) => {
+        const canonical = serializeFormula(parseFormula(formula));
+        expect(evaluateAst(parseFormula(formula), evaluationContext)).toEqual(
+          evaluateAst(parseFormula(canonical), evaluationContext),
+        );
+      },
+    });
+  });
+
+  it("rejects malformed formulas without crashing the parser", async () => {
+    await runProperty({
+      suite: "formula/invalid-input",
+      arbitrary: invalidFormulaArbitrary,
+      predicate: (formula) => {
+        expect(() => parseFormula(formula)).toThrow(/.+/);
+      },
+    });
+  });
 });

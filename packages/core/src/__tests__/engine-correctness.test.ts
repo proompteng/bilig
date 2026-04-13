@@ -10,7 +10,7 @@ import type {
 } from "@bilig/protocol";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { SpreadsheetEngine } from "../engine.js";
-import { fuzzVitestTimeoutMs, runProperty } from "@bilig/test-fuzz";
+import { runProperty } from "@bilig/test-fuzz";
 
 type CoreCorrectnessAction =
   | { kind: "values"; range: CellRangeRef; values: LiteralInput[][] }
@@ -266,8 +266,6 @@ const correctnessActionArbitrary = fc.oneof<CoreCorrectnessAction>(
 );
 
 describe("engine correctness", () => {
-  const propertyTimeoutMs = fuzzVitestTimeoutMs("property");
-
   it("clears sparse style and format metadata when undoing structural edit sequences", async () => {
     const initialSnapshot = await createBaselineSnapshot("correctness-undo-sparse-ranges");
     const engine = new SpreadsheetEngine({
@@ -531,84 +529,76 @@ describe("engine correctness", () => {
     });
   });
 
-  it(
-    "reverses random local edit streams through undo and redo",
-    async () => {
-      await runProperty({
-        suite: "core/undo-redo-reversibility",
-        arbitrary: fc.array(correctnessActionArbitrary, { minLength: 4, maxLength: 18 }),
-        predicate: async (actions) => {
-          const initialSnapshot = await createBaselineSnapshot("correctness-undo-redo");
-          const engine = new SpreadsheetEngine({
-            workbookName: "correctness-undo-redo",
-            replicaId: "correctness-undo-redo",
-          });
-          await engine.ready();
-          engine.importSnapshot(initialSnapshot);
+  it("reverses random local edit streams through undo and redo", async () => {
+    await runProperty({
+      suite: "core/undo-redo-reversibility",
+      arbitrary: fc.array(correctnessActionArbitrary, { minLength: 4, maxLength: 18 }),
+      predicate: async (actions) => {
+        const initialSnapshot = await createBaselineSnapshot("correctness-undo-redo");
+        const engine = new SpreadsheetEngine({
+          workbookName: "correctness-undo-redo",
+          replicaId: "correctness-undo-redo",
+        });
+        await engine.ready();
+        engine.importSnapshot(initialSnapshot);
 
-          for (const action of actions) {
-            applyAction(engine, action);
-            assertSnapshotInvariants(engine.exportSnapshot());
-          }
+        for (const action of actions) {
+          applyAction(engine, action);
+          assertSnapshotInvariants(engine.exportSnapshot());
+        }
 
-          const finalSnapshot = engine.exportSnapshot();
-          const undoCount = undoAll(engine, actions.length * 4);
-          expect(undoCount).toBeGreaterThan(0);
-          expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+        const finalSnapshot = engine.exportSnapshot();
+        const undoCount = undoAll(engine, actions.length * 4);
+        expect(undoCount).toBeGreaterThan(0);
+        expect(engine.exportSnapshot()).toEqual(initialSnapshot);
 
-          const redoCount = redoAll(engine, undoCount + 2);
-          expect(redoCount).toBe(undoCount);
-          expect(engine.exportSnapshot()).toEqual(finalSnapshot);
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+        const redoCount = redoAll(engine, undoCount + 2);
+        expect(redoCount).toBe(undoCount);
+        expect(engine.exportSnapshot()).toEqual(finalSnapshot);
+      },
+    });
+  });
 
-  it(
-    "replays captured local batches into an equivalent replica state",
-    async () => {
-      await runProperty({
-        suite: "core/local-batch-replay-parity",
-        arbitrary: fc.array(correctnessActionArbitrary, { minLength: 4, maxLength: 18 }),
-        predicate: async (actions) => {
-          const initialSnapshot = await createBaselineSnapshot("correctness-replay");
-          const primary = new SpreadsheetEngine({
-            workbookName: "correctness-replay",
-            replicaId: "primary",
-          });
-          const replica = new SpreadsheetEngine({
-            workbookName: "correctness-replay",
-            replicaId: "replica",
-          });
-          await Promise.all([primary.ready(), replica.ready()]);
+  it("replays captured local batches into an equivalent replica state", async () => {
+    await runProperty({
+      suite: "core/local-batch-replay-parity",
+      arbitrary: fc.array(correctnessActionArbitrary, { minLength: 4, maxLength: 18 }),
+      predicate: async (actions) => {
+        const initialSnapshot = await createBaselineSnapshot("correctness-replay");
+        const primary = new SpreadsheetEngine({
+          workbookName: "correctness-replay",
+          replicaId: "primary",
+        });
+        const replica = new SpreadsheetEngine({
+          workbookName: "correctness-replay",
+          replicaId: "replica",
+        });
+        await Promise.all([primary.ready(), replica.ready()]);
 
-          const outbound: EngineOpBatch[] = [];
-          primary.subscribeBatches((batch) => outbound.push(batch));
+        const outbound: EngineOpBatch[] = [];
+        primary.subscribeBatches((batch) => outbound.push(batch));
 
-          primary.importSnapshot(initialSnapshot);
-          replica.importSnapshot(initialSnapshot);
+        primary.importSnapshot(initialSnapshot);
+        replica.importSnapshot(initialSnapshot);
 
-          let appliedBatches = 0;
-          expect(replica.exportSnapshot()).toEqual(primary.exportSnapshot());
+        let appliedBatches = 0;
+        expect(replica.exportSnapshot()).toEqual(primary.exportSnapshot());
 
-          for (const action of actions) {
-            applyAction(primary, action);
-            while (appliedBatches < outbound.length) {
-              const nextBatch = outbound[appliedBatches];
-              if (!nextBatch) {
-                throw new Error(`Missing outbound batch at index ${appliedBatches}`);
-              }
-              replica.applyRemoteBatch(nextBatch);
-              appliedBatches += 1;
+        for (const action of actions) {
+          applyAction(primary, action);
+          while (appliedBatches < outbound.length) {
+            const nextBatch = outbound[appliedBatches];
+            if (!nextBatch) {
+              throw new Error(`Missing outbound batch at index ${appliedBatches}`);
             }
-            const primarySnapshot = primary.exportSnapshot();
-            assertSnapshotInvariants(primarySnapshot);
-            expect(replica.exportSnapshot()).toEqual(primarySnapshot);
+            replica.applyRemoteBatch(nextBatch);
+            appliedBatches += 1;
           }
-        },
-      });
-    },
-    propertyTimeoutMs,
-  );
+          const primarySnapshot = primary.exportSnapshot();
+          assertSnapshotInvariants(primarySnapshot);
+          expect(replica.exportSnapshot()).toEqual(primarySnapshot);
+        }
+      },
+    });
+  });
 });

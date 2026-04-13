@@ -92,8 +92,6 @@ export interface ScheduledSuiteOptions<T> {
   parameters?: FuzzParameters;
 }
 
-const VITEST_TIMEOUT_BUFFER_MS = 5_000;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -151,10 +149,6 @@ function resolveBudget(kind: FuzzSuiteKind): { numRuns: number; maxMs: number } 
   const profile = resolveFuzzProfile();
   const baseProfile = profile === "replay" ? "main" : profile;
   return BUDGETS[baseProfile][kind === "browser" ? "browser" : kind];
-}
-
-export function fuzzVitestTimeoutMs(kind: FuzzSuiteKind): number {
-  return resolveBudget(kind).maxMs + VITEST_TIMEOUT_BUFFER_MS;
 }
 
 function resolveReplayFixturePath(): string | null {
