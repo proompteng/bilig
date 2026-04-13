@@ -46,29 +46,7 @@
         "kind": "undo"
       },
       "expect": {
-        "kind": "snapshot",
-        "snapshot": {
-          "version": 1,
-          "workbook": {
-            "name": "structural-axis-entry-undo"
-          },
-          "sheets": [
-            {
-              "id": 1,
-              "name": "Sheet1",
-              "order": 0,
-              "metadata": {
-                "rows": [
-                  {
-                    "id": "row-1",
-                    "index": 0
-                  }
-                ]
-              },
-              "cells": []
-            }
-          ]
-        }
+        "kind": "seed"
       }
     }
   ]

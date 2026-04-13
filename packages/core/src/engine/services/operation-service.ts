@@ -926,14 +926,16 @@ export function createEngineOperationService(args: {
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
     try {
+      if (!isRestore && source !== "history") {
+        batch.ops.forEach((op) => {
+          assertProtectionAllowsOp(op);
+        });
+      }
       batch.ops.forEach((op, opIndex) => {
         const order = batchOpOrder(batch, opIndex);
         const preparedCellAddress = preparedCellAddressesByOpIndex?.[opIndex] ?? null;
         if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
           return;
-        }
-        if (!isRestore && source !== "history") {
-          assertProtectionAllowsOp(op);
         }
 
         switch (op.kind) {

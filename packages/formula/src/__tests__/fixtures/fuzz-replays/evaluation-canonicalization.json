@@ -1,0 +1,14 @@
+{
+  "name": "evaluation-canonicalization",
+  "suite": "formula/replay/evaluation",
+  "guarantee": "canonicalized formulas preserve evaluation semantics",
+  "origin": "fuzz evaluation regression corpus",
+  "source": "IF(Summary!C2,VALUE(\"42\"),0)",
+  "canonical": "IF(Summary!C2,VALUE(\"42\"),0)",
+  "evaluation": {
+    "expected": {
+      "kind": "number",
+      "value": 42
+    }
+  }
+}

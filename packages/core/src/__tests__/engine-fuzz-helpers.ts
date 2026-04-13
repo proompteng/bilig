@@ -16,18 +16,24 @@ export const engineFuzzSheetName = "Sheet1";
 export type EngineSeedName =
   | "blank"
   | "formula-graph"
+  | "cross-sheet-graph"
   | "sparse-format"
+  | "annotation-rich"
   | "named-structures"
   | "validation-filter-sort"
-  | "structural-metadata";
+  | "structural-metadata"
+  | "pivot-analytics";
 
 export const engineSeedNames = [
   "blank",
   "formula-graph",
+  "cross-sheet-graph",
   "sparse-format",
+  "annotation-rich",
   "named-structures",
   "validation-filter-sort",
   "structural-metadata",
+  "pivot-analytics",
 ] as const satisfies readonly EngineSeedName[];
 
 export const engineSeedNameArbitrary = fc.constantFrom<EngineSeedName>(...engineSeedNames);
@@ -36,7 +42,9 @@ export type CoreAction =
   | { kind: "values"; range: CellRangeRef; values: LiteralInput[][] }
   | { kind: "formula"; address: string; formula: string }
   | { kind: "style"; range: CellRangeRef; patch: CellStylePatch }
+  | { kind: "clearStyle"; range: CellRangeRef }
   | { kind: "format"; range: CellRangeRef; format: CellNumberFormatInput }
+  | { kind: "clearFormat"; range: CellRangeRef }
   | { kind: "clear"; range: CellRangeRef }
   | { kind: "fill"; source: CellRangeRef; target: CellRangeRef }
   | { kind: "copy"; source: CellRangeRef; target: CellRangeRef }
@@ -102,6 +110,11 @@ export function normalizeSnapshotForSemanticComparison(
 ): WorkbookSnapshot {
   const clone = structuredClone(snapshot);
   if (clone.workbook.metadata) {
+    if (clone.workbook.metadata.properties) {
+      clone.workbook.metadata.properties = clone.workbook.metadata.properties.toSorted(
+        (left, right) => left.key.localeCompare(right.key),
+      );
+    }
     if (clone.workbook.metadata.definedNames) {
       clone.workbook.metadata.definedNames = clone.workbook.metadata.definedNames.toSorted(
         (left, right) => left.name.localeCompare(right.name),
@@ -122,6 +135,28 @@ export function normalizeSnapshotForSemanticComparison(
         left.id.localeCompare(right.id),
       );
     }
+    if (clone.workbook.metadata.pivots) {
+      clone.workbook.metadata.pivots = clone.workbook.metadata.pivots.toSorted((left, right) =>
+        `${left.sheetName}!${left.address}:${left.name}`.localeCompare(
+          `${right.sheetName}!${right.address}:${right.name}`,
+        ),
+      );
+    }
+    if (clone.workbook.metadata.charts) {
+      clone.workbook.metadata.charts = clone.workbook.metadata.charts.toSorted((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
+    if (clone.workbook.metadata.images) {
+      clone.workbook.metadata.images = clone.workbook.metadata.images.toSorted((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
+    if (clone.workbook.metadata.shapes) {
+      clone.workbook.metadata.shapes = clone.workbook.metadata.shapes.toSorted((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
   }
   clone.sheets = clone.sheets.map((sheet) => {
     const cells = sheet.cells.filter(
@@ -135,10 +170,24 @@ export function normalizeSnapshotForSemanticComparison(
     }
     const metadata = { ...sheet.metadata };
     if (metadata.rows) {
-      metadata.rows = metadata.rows.map(({ id: _id, ...rest }) => rest);
+      metadata.rows = metadata.rows
+        .map(({ id: _id, ...rest }) => rest)
+        .toSorted((left, right) => left.index - right.index);
     }
     if (metadata.columns) {
-      metadata.columns = metadata.columns.map(({ id: _id, ...rest }) => rest);
+      metadata.columns = metadata.columns
+        .map(({ id: _id, ...rest }) => rest)
+        .toSorted((left, right) => left.index - right.index);
+    }
+    if (metadata.rowMetadata) {
+      metadata.rowMetadata = metadata.rowMetadata.toSorted(
+        (left, right) => left.start - right.start || left.count - right.count,
+      );
+    }
+    if (metadata.columnMetadata) {
+      metadata.columnMetadata = metadata.columnMetadata.toSorted(
+        (left, right) => left.start - right.start || left.count - right.count,
+      );
     }
     if (metadata.styleRanges) {
       metadata.styleRanges = normalizeRangeRecords(metadata.styleRanges, "styleId");
@@ -166,6 +215,28 @@ export function normalizeSnapshotForSemanticComparison(
         }
         return JSON.stringify(left.rule).localeCompare(JSON.stringify(right.rule));
       });
+    }
+    if (metadata.conditionalFormats) {
+      metadata.conditionalFormats = metadata.conditionalFormats.toSorted((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
+    if (metadata.protectedRanges) {
+      metadata.protectedRanges = metadata.protectedRanges.toSorted((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
+    if (metadata.commentThreads) {
+      metadata.commentThreads = metadata.commentThreads.toSorted((left, right) =>
+        `${left.sheetName}!${left.address}:${left.threadId}`.localeCompare(
+          `${right.sheetName}!${right.address}:${right.threadId}`,
+        ),
+      );
+    }
+    if (metadata.notes) {
+      metadata.notes = metadata.notes.toSorted((left, right) =>
+        `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`),
+      );
     }
     return {
       ...sheet,
@@ -201,21 +272,50 @@ function normalizeRangeRecords<
     }
     return compareRangeRefs(left.range, right.range);
   });
-  const normalized: TRecord[] = [];
+  const grouped = new Map<string, TRecord[]>();
   for (const record of sorted) {
-    const previous = normalized.at(-1);
-    if (!previous || previous[idKey] !== record[idKey]) {
-      normalized.push(record);
-      continue;
-    }
-    const merged = mergeRanges(previous.range, record.range);
-    if (!merged) {
-      normalized.push(record);
-      continue;
-    }
-    normalized[normalized.length - 1] = { ...previous, range: merged };
+    const groupKey = record[idKey];
+    const group = grouped.get(groupKey) ?? [];
+    grouped.set(groupKey, insertOrMergeRangeRecord(group, record));
   }
-  return normalized;
+  return [...grouped.entries()]
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .flatMap(([_groupKey, group]) =>
+      group.toSorted((left, right) => compareRangeRefs(left.range, right.range)),
+    );
+}
+
+function insertOrMergeRangeRecord<TRecord extends { range: CellRangeRef }>(
+  group: readonly TRecord[],
+  record: TRecord,
+): TRecord[] {
+  const nextGroup = [...group];
+  nextGroup.push(record);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let leftIndex = 0; leftIndex < nextGroup.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < nextGroup.length; rightIndex += 1) {
+        const left = nextGroup[leftIndex];
+        const right = nextGroup[rightIndex];
+        if (!left || !right) {
+          continue;
+        }
+        const merged = mergeRanges(left.range, right.range);
+        if (!merged) {
+          continue;
+        }
+        nextGroup[leftIndex] = { ...left, range: merged };
+        nextGroup.splice(rightIndex, 1);
+        changed = true;
+        break;
+      }
+      if (changed) {
+        break;
+      }
+    }
+  }
+  return nextGroup;
 }
 
 function mergeRanges(left: CellRangeRef, right: CellRangeRef): CellRangeRef | null {
@@ -282,6 +382,10 @@ const sameSizedRangePairArbitrary = rangeSeedArbitrary.chain((source) =>
       targetStartRow: fc.integer({ min: 0, max: 6 - source.height }),
       targetStartCol: fc.integer({ min: 0, max: 6 - source.width }),
     })
+    .filter(
+      ({ targetStartRow, targetStartCol }) =>
+        targetStartRow !== source.startRow || targetStartCol !== source.startCol,
+    )
     .map(({ targetStartRow, targetStartCol }) => ({
       source: toRangeRef(
         engineFuzzSheetName,
@@ -356,9 +460,19 @@ export const styleActionArbitrary = fc
   .record({ range: rangeArbitrary, patch: stylePatchArbitrary })
   .map(({ range, patch }) => ({ kind: "style" as const, range, patch }));
 
+export const clearStyleActionArbitrary = rangeArbitrary.map((range) => ({
+  kind: "clearStyle" as const,
+  range,
+}));
+
 export const formatActionArbitrary = fc
   .record({ range: rangeArbitrary, format: formatInputArbitrary })
   .map(({ range, format }) => ({ kind: "format" as const, range, format }));
+
+export const clearFormatActionArbitrary = rangeArbitrary.map((range) => ({
+  kind: "clearFormat" as const,
+  range,
+}));
 
 export const clearActionArbitrary = rangeArbitrary.map((range) => ({
   kind: "clear" as const,
@@ -464,6 +578,40 @@ async function populateSeed(engine: SpreadsheetEngine, seedName: EngineSeedName)
       engine.setCellFormula(engineFuzzSheetName, "D2", "C1*A2");
       engine.setCellFormula(engineFuzzSheetName, "E3", "SUM(A1:B2)");
       return;
+    case "cross-sheet-graph":
+      engine.createSheet("Summary");
+      engine.setRangeValues(
+        {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "B3",
+        },
+        [
+          ["Region", "Sales"],
+          ["East", 12],
+          ["West", 18],
+        ],
+      );
+      engine.setRangeValues(
+        {
+          sheetName: "Summary",
+          startAddress: "A1",
+          endAddress: "B2",
+        },
+        [
+          ["Tax", "Multiplier"],
+          [0.08, 2],
+        ],
+      );
+      engine.setDefinedName("TaxCell", {
+        kind: "cell-ref",
+        sheetName: "Summary",
+        address: "A2",
+      });
+      engine.setCellFormula(engineFuzzSheetName, "C2", "B2*Summary!B2");
+      engine.setCellFormula(engineFuzzSheetName, "C3", "B3*(1+TaxCell)");
+      engine.setCellFormula("Summary", "D1", "SUM(Sheet1!B2:B3)");
+      return;
     case "sparse-format":
       engine.setRangeNumberFormat(
         { sheetName: engineFuzzSheetName, startAddress: "A1", endAddress: "A1" },
@@ -477,6 +625,85 @@ async function populateSeed(engine: SpreadsheetEngine, seedName: EngineSeedName)
         { sheetName: engineFuzzSheetName, startAddress: "E2", endAddress: "F2" },
         { alignment: { horizontal: "center", wrap: true } },
       );
+      return;
+    case "annotation-rich":
+      engine.setRangeValues(
+        {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "C4",
+        },
+        [
+          ["Owner", "Status", "Amount"],
+          ["Greg", "Draft", 10],
+          ["Ada", "Final", 24],
+          ["Lin", "Review", 17],
+        ],
+      );
+      engine.setConditionalFormat({
+        id: "cf-annotation-seed",
+        range: {
+          sheetName: engineFuzzSheetName,
+          startAddress: "B2",
+          endAddress: "B4",
+        },
+        rule: {
+          kind: "textContains",
+          text: "Final",
+        },
+        style: {
+          fill: { backgroundColor: "#dcfce7" },
+          font: { bold: true },
+        },
+      });
+      engine.setCommentThread({
+        threadId: "thread-annotation-seed",
+        sheetName: engineFuzzSheetName,
+        address: "C2",
+        comments: [{ id: "comment-1", body: "Verify reviewed total." }],
+      });
+      engine.setNote({
+        sheetName: engineFuzzSheetName,
+        address: "A4",
+        text: "Backfill owner before close.",
+      });
+      engine.setChart({
+        id: "chart-annotation-seed",
+        sheetName: engineFuzzSheetName,
+        address: "E2",
+        source: {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "C4",
+        },
+        chartType: "column",
+        firstRowAsHeaders: true,
+        firstColumnAsLabels: true,
+        title: "Pipeline",
+        legendPosition: "right",
+        rows: 6,
+        cols: 4,
+      });
+      engine.setImage({
+        id: "image-annotation-seed",
+        sheetName: engineFuzzSheetName,
+        address: "H2",
+        sourceUrl: "https://example.invalid/pipeline.png",
+        rows: 3,
+        cols: 2,
+        altText: "Pipeline thumbnail",
+      });
+      engine.setShape({
+        id: "shape-annotation-seed",
+        sheetName: engineFuzzSheetName,
+        address: "H6",
+        shapeType: "roundedRectangle",
+        rows: 2,
+        cols: 2,
+        text: "Review",
+        fillColor: "#e0f2fe",
+        strokeColor: "#0284c7",
+      });
       return;
     case "named-structures":
       engine.setRangeValues(
@@ -568,6 +795,58 @@ async function populateSeed(engine: SpreadsheetEngine, seedName: EngineSeedName)
         ],
       );
       return;
+    case "pivot-analytics":
+      engine.createSheet("Pivot");
+      engine.setRangeValues(
+        {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "C5",
+        },
+        [
+          ["Region", "Quarter", "Sales"],
+          ["East", "Q1", 10],
+          ["West", "Q1", 6],
+          ["East", "Q2", 12],
+          ["West", "Q2", 9],
+        ],
+      );
+      engine.setTable({
+        name: "QuarterlySales",
+        sheetName: engineFuzzSheetName,
+        startAddress: "A1",
+        endAddress: "C5",
+        columnNames: ["Region", "Quarter", "Sales"],
+        headerRow: true,
+        totalsRow: false,
+      });
+      engine.setFreezePane(engineFuzzSheetName, 1, 0);
+      engine.setFilter(engineFuzzSheetName, {
+        sheetName: engineFuzzSheetName,
+        startAddress: "A1",
+        endAddress: "C5",
+      });
+      engine.setSort(
+        engineFuzzSheetName,
+        {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "C5",
+        },
+        [{ keyAddress: "C1", direction: "desc" }],
+      );
+      engine.setPivotTable("Pivot", "B2", {
+        name: "QuarterlyPivot",
+        source: {
+          sheetName: engineFuzzSheetName,
+          startAddress: "A1",
+          endAddress: "C5",
+        },
+        groupBy: ["Region"],
+        values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+      });
+      engine.setCellFormula("Pivot", "F2", "SUM(Sheet1!C2:C5)");
+      return;
   }
 }
 
@@ -607,8 +886,14 @@ export function applyCoreAction(engine: SpreadsheetEngine, action: CoreAction): 
     case "style":
       engine.setRangeStyle(action.range, action.patch);
       break;
+    case "clearStyle":
+      engine.clearRangeStyle(action.range);
+      break;
     case "format":
       engine.setRangeNumberFormat(action.range, action.format);
+      break;
+    case "clearFormat":
+      engine.clearRangeNumberFormat(action.range);
       break;
     case "clear":
       engine.clearRange(action.range);
@@ -644,10 +929,11 @@ export function applyActionAndCaptureResult(
   const before = engine.exportSnapshot();
   try {
     applyCoreAction(engine, action);
+    const after = engine.exportSnapshot();
     return {
-      accepted: true,
+      accepted: hasSemanticChange(before, after),
       before,
-      after: engine.exportSnapshot(),
+      after,
     };
   } catch (error) {
     if (!(error instanceof EngineMutationError)) {
@@ -679,6 +965,15 @@ export async function exportReplaySnapshot(
   return replay.exportSnapshot();
 }
 
+function hasSemanticChange(before: WorkbookSnapshot, after: WorkbookSnapshot): boolean {
+  try {
+    deepStrictEqual(after, before);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export function applyReplayCommand(engine: SpreadsheetEngine, command: EngineReplayCommand): void {
   switch (command.kind) {
     case "undo":
@@ -694,7 +989,9 @@ export function applyReplayCommand(engine: SpreadsheetEngine, command: EngineRep
     case "values":
     case "formula":
     case "style":
+    case "clearStyle":
     case "format":
+    case "clearFormat":
     case "clear":
     case "fill":
     case "copy":

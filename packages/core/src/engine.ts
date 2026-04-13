@@ -31,7 +31,13 @@ import type {
   WorkbookShapeSnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
-import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress } from "@bilig/formula";
+import {
+  Float64Arena,
+  Uint32Arena,
+  formatAddress,
+  parseCellAddress,
+  rewriteFormulaForStructuralTransform,
+} from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import type { EngineCellMutationRef } from "./cell-mutations-at.js";
 import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
@@ -662,6 +668,298 @@ export class SpreadsheetEngine {
     return this.workbook.getVolatileContext();
   }
 
+  private formulaWouldRewriteForDelete(
+    formula: string,
+    sheetName: string,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+  ): boolean {
+    return (
+      rewriteFormulaForStructuralTransform(formula, sheetName, sheetName, {
+        kind: "delete",
+        axis,
+        start,
+        count,
+      }) !== formula
+    );
+  }
+
+  private hasFormulaReferenceAtOrAfter(
+    sheetName: string,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+  ): boolean {
+    let found = false;
+    for (const sheet of this.workbook.sheetsByName.values()) {
+      if (found) {
+        break;
+      }
+      sheet.grid.forEachCell((cellIndex) => {
+        if (found) {
+          return;
+        }
+        const formulaId = this.workbook.cellStore.formulaIds[cellIndex] ?? 0;
+        if (formulaId === 0) {
+          return;
+        }
+        const snapshot = this.getCellByIndex(cellIndex);
+        if (
+          snapshot.formula &&
+          this.formulaWouldRewriteForDelete(snapshot.formula, sheetName, axis, start, count)
+        ) {
+          found = true;
+        }
+      });
+    }
+    return found;
+  }
+
+  private definedNameTouchesAxisDelete(
+    value: WorkbookDefinedNameValueSnapshot,
+    sheetName: string,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+  ): boolean {
+    if (typeof value === "string") {
+      return this.formulaWouldRewriteForDelete(value, sheetName, axis, start, count);
+    }
+    if (value === null || typeof value !== "object") {
+      return false;
+    }
+    switch (value.kind) {
+      case "scalar":
+      case "structured-ref":
+        return false;
+      case "formula":
+        return this.formulaWouldRewriteForDelete(value.formula, sheetName, axis, start, count);
+      case "cell-ref": {
+        if (value.sheetName !== sheetName) {
+          return false;
+        }
+        const parsed = parseCellAddress(value.address, value.sheetName);
+        return axis === "row" ? parsed.row >= start : parsed.col >= start;
+      }
+      case "range-ref": {
+        if (value.sheetName !== sheetName) {
+          return false;
+        }
+        const end = parseCellAddress(value.endAddress, value.sheetName);
+        return axis === "row" ? end.row >= start : end.col >= start;
+      }
+    }
+  }
+
+  private rangeTouchesAxisDelete(
+    range: CellRangeRef,
+    axis: "row" | "column",
+    start: number,
+  ): boolean {
+    const end = parseCellAddress(range.endAddress, range.sheetName);
+    return axis === "row" ? end.row >= start : end.col >= start;
+  }
+
+  private addressTouchesAxisDelete(
+    sheetName: string,
+    address: string,
+    axis: "row" | "column",
+    start: number,
+  ): boolean {
+    const parsed = parseCellAddress(address, sheetName);
+    return axis === "row" ? parsed.row >= start : parsed.col >= start;
+  }
+
+  private hasStructuralDeleteImpact(
+    sheetName: string,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+  ): boolean {
+    const sheet = this.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return false;
+    }
+    let cellImpact = false;
+    sheet.grid.forEachCell((cellIndex) => {
+      if (cellImpact) {
+        return;
+      }
+      const row = this.workbook.cellStore.rows[cellIndex] ?? -1;
+      const col = this.workbook.cellStore.cols[cellIndex] ?? -1;
+      cellImpact = axis === "row" ? row >= start : col >= start;
+    });
+    if (cellImpact) {
+      return true;
+    }
+    const axisEntries =
+      axis === "row"
+        ? this.workbook.listRowAxisEntries(sheetName)
+        : this.workbook.listColumnAxisEntries(sheetName);
+    if (axisEntries.some((entry) => entry.index >= start)) {
+      return true;
+    }
+    const axisMetadata =
+      axis === "row"
+        ? this.workbook.listRowMetadata(sheetName)
+        : this.workbook.listColumnMetadata(sheetName);
+    if (axisMetadata.some((record) => record.start + record.count - 1 >= start)) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listStyleRanges(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listFormatRanges(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    const freezePane = this.workbook.getFreezePane(sheetName);
+    if (freezePane && (axis === "row" ? freezePane.rows > start : freezePane.cols > start)) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listFilters(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listSorts(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listDataValidations(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listConditionalFormats(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listRangeProtections(sheetName)
+        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listCommentThreads(sheetName)
+        .some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listNotes(sheetName)
+        .some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listTables()
+        .some(
+          (table) =>
+            table.sheetName === sheetName &&
+            this.rangeTouchesAxisDelete(
+              { sheetName, startAddress: table.startAddress, endAddress: table.endAddress },
+              axis,
+              start,
+            ),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listSpills()
+        .some(
+          (spill) =>
+            spill.sheetName === sheetName &&
+            this.addressTouchesAxisDelete(sheetName, spill.address, axis, start),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listPivots()
+        .some(
+          (pivot) =>
+            (pivot.sheetName === sheetName &&
+              this.addressTouchesAxisDelete(sheetName, pivot.address, axis, start)) ||
+            (pivot.source.sheetName === sheetName &&
+              this.rangeTouchesAxisDelete(pivot.source, axis, start)),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listCharts()
+        .some(
+          (chart) =>
+            (chart.sheetName === sheetName &&
+              this.addressTouchesAxisDelete(sheetName, chart.address, axis, start)) ||
+            (chart.source.sheetName === sheetName &&
+              this.rangeTouchesAxisDelete(chart.source, axis, start)),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listImages()
+        .some(
+          (image) =>
+            image.sheetName === sheetName &&
+            this.addressTouchesAxisDelete(sheetName, image.address, axis, start),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listShapes()
+        .some(
+          (shape) =>
+            shape.sheetName === sheetName &&
+            this.addressTouchesAxisDelete(sheetName, shape.address, axis, start),
+        )
+    ) {
+      return true;
+    }
+    if (
+      this.workbook
+        .listDefinedNames()
+        .some((definedName) =>
+          this.definedNameTouchesAxisDelete(definedName.value, sheetName, axis, start, count),
+        )
+    ) {
+      return true;
+    }
+    return this.hasFormulaReferenceAtOrAfter(sheetName, axis, start, count);
+  }
+
   recalculateNow(): number[] {
     return runEngineEffect(this.runtime.recalc.recalculateNow());
   }
@@ -717,7 +1015,7 @@ export class SpreadsheetEngine {
   }
 
   deleteRows(sheetName: string, start: number, count: number): void {
-    if (count <= 0) {
+    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, "row", start, count)) {
       return;
     }
     this.executeLocalTransaction([{ kind: "deleteRows", sheetName, start, count }]);
@@ -765,7 +1063,7 @@ export class SpreadsheetEngine {
   }
 
   deleteColumns(sheetName: string, start: number, count: number): void {
-    if (count <= 0) {
+    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, "column", start, count)) {
       return;
     }
     this.executeLocalTransaction([{ kind: "deleteColumns", sheetName, start, count }]);
@@ -1368,6 +1666,9 @@ export class SpreadsheetEngine {
     ops: EngineOp[],
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
+    if (ops.length === 0) {
+      return null;
+    }
     return this.runtime.mutation.executeLocalNow(ops, potentialNewCells);
   }
 }

@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import { SpreadsheetEngine } from "../engine.js";
+
+describe("engine fuzz regressions", () => {
+  it("does not mutate source cells when moveRange is blocked by protection", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "move-protection-regression" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "C5" }, [
+      ["Id", "Status", "Amount"],
+      [1, "Draft", 10],
+      [2, "Final", 20],
+      [3, "Review", 30],
+      [4, "Final", 40],
+    ]);
+    engine.setRangeProtection({
+      id: "protect-a1-c4",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C4" },
+      hideFormulas: true,
+    });
+
+    const before = engine.exportSnapshot();
+    expect(() =>
+      engine.moveRange(
+        { sheetName: "Sheet1", startAddress: "A5", endAddress: "A6" },
+        { sheetName: "Sheet1", startAddress: "A1", endAddress: "A2" },
+      ),
+    ).toThrow(/Failed to execute local transaction/);
+    expect(engine.exportSnapshot()).toEqual(before);
+  });
+
+  it("restores pivot materialization dimensions after undoing source clears", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "pivot-undo-regression" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Pivot");
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "C5" }, [
+      ["Region", "Quarter", "Sales"],
+      ["East", "Q1", 10],
+      ["West", "Q1", 6],
+      ["East", "Q2", 12],
+      ["West", "Q2", 9],
+    ]);
+    engine.setTable({
+      name: "QuarterlySales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C5",
+      columnNames: ["Region", "Quarter", "Sales"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setPivotTable("Pivot", "B2", {
+      name: "QuarterlyPivot",
+      source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C5" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+
+    expect(engine.getPivotTable("Pivot", "B2")?.rows).toBe(3);
+    engine.clearRange({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A2" });
+    expect(engine.getPivotTable("Pivot", "B2")?.rows).toBe(1);
+    expect(engine.undo()).toBe(true);
+    expect(engine.getPivotTable("Pivot", "B2")?.rows).toBe(3);
+  });
+
+  it("treats structural deletes on blank sheets as history no-ops", async () => {
+    const seed = new SpreadsheetEngine({ workbookName: "blank-structural-noop-seed" });
+    await seed.ready();
+    seed.createSheet("Sheet1");
+    const snapshot = seed.exportSnapshot();
+
+    const engine = new SpreadsheetEngine({ workbookName: "blank-structural-noop" });
+    await engine.ready();
+    engine.importSnapshot(snapshot);
+
+    const before = engine.exportSnapshot();
+    engine.deleteColumns("Sheet1", 0, 1);
+    expect(engine.exportSnapshot()).toEqual(before);
+    expect(engine.undo()).toBe(false);
+  });
+});

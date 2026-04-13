@@ -7,7 +7,7 @@ import {
   type CellRangeRef,
   type CellValue,
 } from "@bilig/protocol";
-import { formatAddress, parseCellAddress, parseRangeAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp } from "@bilig/workbook-domain";
 import { CellFlags } from "../../cell-store.js";
 import { normalizeRange } from "../../engine-range-utils.js";
@@ -288,129 +288,6 @@ export function createEnginePivotService(args: {
     const sourceSheet = args.state.workbook.getSheet(pivot.source.sheetName);
     if (!sourceSheet) {
       return writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Ref)], changedCellIndices);
-    }
-
-    if (args.state.wasm.ready) {
-      const bounds = normalizeRange(pivot.source);
-      const rangeAddr = parseRangeAddress(
-        `${pivot.source.sheetName}!${pivot.source.startAddress}:${pivot.source.endAddress}`,
-      );
-      const registered = args.state.ranges.intern(sourceSheet.id, rangeAddr, {
-        ensureCell: (sheetId, row, col) => args.ensureCellTrackedByCoords(sheetId, row, col),
-        forEachSheetCell: (sheetId, fn) => args.forEachSheetCell(sheetId, fn),
-      });
-      args.scheduleWasmProgramSync();
-      args.flushWasmProgramSync();
-      args.flushDeferredKernelSync();
-
-      const sourceHeader =
-        readPivotSourceRows({
-          sheetName: pivot.source.sheetName,
-          startAddress: pivot.source.startAddress,
-          endAddress: formatAddress(bounds.startRow, bounds.endCol),
-        })[0] ?? [];
-      const headerLookup = new Map<string, number>();
-      sourceHeader.forEach((cell, index) => {
-        let label = "";
-        if (cell.tag === ValueTag.Number) {
-          label = String(cell.value);
-        } else if (cell.tag === ValueTag.Boolean) {
-          label = cell.value ? "TRUE" : "FALSE";
-        } else if (cell.tag === ValueTag.String) {
-          label = cell.value.trim();
-        }
-        const normalized = label.trim().toUpperCase();
-        if (normalized.length > 0 && !headerLookup.has(normalized)) {
-          headerLookup.set(normalized, index);
-        }
-      });
-
-      const groupByIndexValues = pivot.groupBy.map((group) =>
-        headerLookup.get(group.trim().toUpperCase()),
-      );
-      const valueIndexValues = pivot.values.map((value) =>
-        headerLookup.get(value.sourceColumn.trim().toUpperCase()),
-      );
-      if (
-        groupByIndexValues.every((value): value is number => value !== undefined) &&
-        valueIndexValues.every((value): value is number => value !== undefined)
-      ) {
-        const groupByIndices = new Uint32Array(groupByIndexValues);
-        const valueIndices = new Uint32Array(valueIndexValues);
-        const valueAggs = new Uint8Array(
-          pivot.values.map((value) => (value.summarizeBy === "sum" ? 1 : 2)),
-        );
-
-        const materialized = args.state.wasm.materializePivotTable(
-          registered.rangeIndex,
-          bounds.endCol - bounds.startCol + 1,
-          groupByIndices,
-          valueIndices,
-          valueAggs,
-        );
-
-        const shouldFallbackToJs =
-          materialized?.rows === 1 &&
-          materialized?.cols === 1 &&
-          materialized.tags[0] === ValueTag.Error;
-
-        if (materialized && !shouldFallbackToJs) {
-          const owner = parseCellAddress(pivot.address, pivot.sheetName);
-          const blockedOutput = guardPivotOutputWrite(
-            pivot,
-            owner.row,
-            owner.col,
-            materialized.rows,
-            materialized.cols,
-            changedCellIndices,
-          );
-          if (blockedOutput) {
-            return blockedOutput;
-          }
-          const values: CellValue[] = [];
-          const count = materialized.rows * materialized.cols;
-          const groupByCount = pivot.groupBy.length;
-          for (let index = 0; index < count; index += 1) {
-            if (index < materialized.cols && index >= groupByCount) {
-              const valueIndex = index - groupByCount;
-              const field = pivot.values[valueIndex]!;
-              const label =
-                field.outputLabel?.trim() ||
-                `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
-              values.push({
-                tag: ValueTag.String,
-                value: label,
-                stringId: args.state.strings.intern(label),
-              });
-              continue;
-            }
-            const tag = materialized.tags[index]! as ValueTag;
-            if (tag === ValueTag.Empty) {
-              values.push(emptyValue());
-            } else if (tag === ValueTag.Number) {
-              values.push({ tag: ValueTag.Number, value: materialized.numbers[index]! });
-            } else if (tag === ValueTag.Boolean) {
-              values.push({ tag: ValueTag.Boolean, value: materialized.numbers[index]! !== 0 });
-            } else if (tag === ValueTag.String) {
-              const stringId = materialized.stringIds[index]!;
-              values.push({
-                tag: ValueTag.String,
-                value: args.state.strings.get(stringId),
-                stringId,
-              });
-            } else if (tag === ValueTag.Error) {
-              values.push({ tag: ValueTag.Error, code: materialized.errors[index]! });
-            }
-          }
-          return writePivotOutput(
-            pivot,
-            materialized.rows,
-            materialized.cols,
-            values,
-            changedCellIndices,
-          );
-        }
-      }
     }
 
     const materialized = materializePivotTable(

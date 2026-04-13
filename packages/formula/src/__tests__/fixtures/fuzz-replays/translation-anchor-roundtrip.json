@@ -1,0 +1,14 @@
+{
+  "name": "translation-anchor-roundtrip",
+  "suite": "formula/replay/translation",
+  "guarantee": "anchored translations reverse to the canonical source",
+  "origin": "fuzz translation regression corpus",
+  "source": "SUM($A$1:B2,Sheet1!C:C)",
+  "canonical": "SUM($A$1:B2,Sheet1!C:C)",
+  "translation": {
+    "rowDelta": 2,
+    "colDelta": 1,
+    "translated": "SUM($A$1:C4,Sheet1!D:D)",
+    "restored": "SUM($A$1:B2,Sheet1!C:C)"
+  }
+}

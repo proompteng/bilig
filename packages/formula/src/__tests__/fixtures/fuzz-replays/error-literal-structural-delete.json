@@ -1,0 +1,19 @@
+{
+  "name": "error-literal-structural-delete",
+  "suite": "formula/replay/error-literals",
+  "guarantee": "structural rewrites preserve explicit workbook error literals like #REF!",
+  "origin": "ci structural delete regression",
+  "source": "A1+D4",
+  "canonical": "A1+D4",
+  "structural": {
+    "ownerSheetName": "Sheet1",
+    "targetSheetName": "Sheet1",
+    "transform": {
+      "kind": "delete",
+      "axis": "column",
+      "start": 3,
+      "count": 1
+    },
+    "rewritten": "A1+#REF!"
+  }
+}

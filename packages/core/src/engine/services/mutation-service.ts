@@ -4,6 +4,7 @@ import {
   parseCellAddress,
   rewriteAddressForStructuralTransform,
   rewriteRangeForStructuralTransform,
+  translateFormulaReferences,
 } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type CellSnapshot, type LiteralInput } from "@bilig/protocol";
@@ -87,6 +88,27 @@ function transactionRecordOps(record: TransactionRecord): readonly EngineOp[] {
 
 function cloneTransactionRecordOps(record: TransactionRecord): EngineOp[] {
   return record.kind === "single-op" ? [structuredClone(record.op)] : structuredClone(record.ops);
+}
+
+interface ComparableCellState {
+  formula?: string;
+  value: LiteralInput | null;
+  format: string | null;
+}
+
+function translateFormulaForTarget(
+  formula: string,
+  sourceSheetName: string,
+  sourceAddress: string,
+  targetSheetName: string,
+  targetAddress: string,
+): string {
+  if (sourceSheetName !== targetSheetName) {
+    return formula;
+  }
+  const source = parseCellAddress(sourceAddress, sourceSheetName);
+  const target = parseCellAddress(targetAddress, targetSheetName);
+  return translateFormulaReferences(formula, target.row - source.row, target.col - source.col);
 }
 
 export interface EngineMutationService {
@@ -310,6 +332,114 @@ export function createEngineMutationService(args: {
         };
     }
   };
+
+  const readStoredCellState = (sheetName: string, address: string): ComparableCellState => {
+    const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return { value: null, format: null };
+    }
+    const snapshot = args.getCellByIndex(cellIndex);
+    const format = args.state.workbook.getCellFormat(cellIndex) ?? null;
+    if (snapshot.formula !== undefined) {
+      return { formula: snapshot.formula, value: null, format };
+    }
+    switch (snapshot.value.tag) {
+      case ValueTag.Number:
+      case ValueTag.Boolean:
+      case ValueTag.String:
+        return { value: snapshot.value.value, format };
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        return { value: null, format };
+    }
+  };
+
+  const readDesiredCellState = (
+    targetSheetName: string,
+    targetAddress: string,
+    snapshot: CellSnapshot,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+    formatOverride: string | null = snapshot.format ?? null,
+  ): ComparableCellState => {
+    if (snapshot.formula !== undefined) {
+      return {
+        formula:
+          sourceSheetName && sourceAddress
+            ? translateFormulaForTarget(
+                snapshot.formula,
+                sourceSheetName,
+                sourceAddress,
+                targetSheetName,
+                targetAddress,
+              )
+            : snapshot.formula,
+        value: null,
+        format: formatOverride,
+      };
+    }
+    switch (snapshot.value.tag) {
+      case ValueTag.Number:
+      case ValueTag.Boolean:
+      case ValueTag.String:
+        return { value: snapshot.value.value, format: formatOverride };
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        return { value: null, format: formatOverride };
+    }
+  };
+
+  const hasStoredCellContent = (sheetName: string, address: string): boolean => {
+    const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return false;
+    }
+    const snapshot = args.getCellByIndex(cellIndex);
+    if (snapshot.formula !== undefined) {
+      return true;
+    }
+    return snapshot.value.tag !== ValueTag.Empty;
+  };
+
+  const hasStoredCellState = (sheetName: string, address: string): boolean => {
+    const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return false;
+    }
+    const snapshot = args.getCellByIndex(cellIndex);
+    return (
+      snapshot.formula !== undefined ||
+      snapshot.value.tag !== ValueTag.Empty ||
+      args.state.workbook.getCellFormat(cellIndex) !== undefined
+    );
+  };
+
+  const shouldApplyCellState = (
+    targetSheetName: string,
+    targetAddress: string,
+    snapshot: CellSnapshot,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ): boolean => {
+    const current = readStoredCellState(targetSheetName, targetAddress);
+    const desired = readDesiredCellState(
+      targetSheetName,
+      targetAddress,
+      snapshot,
+      sourceSheetName,
+      sourceAddress,
+    );
+    return (
+      current.formula !== desired.formula ||
+      current.value !== desired.value ||
+      current.format !== desired.format
+    );
+  };
+
+  const captureWorkbookCellState = (): EngineOp[] =>
+    [...args.state.workbook.sheetsByName.values()].flatMap((sheet) =>
+      args.captureSheetCellState(sheet.name),
+    );
 
   const buildFastMutationHistoryFromRefs = (
     refs: readonly EngineCellMutationRef[],
@@ -631,7 +761,7 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...args.captureSheetCellState(op.sheetName),
+          ...captureWorkbookCellState(),
           ...captureStructuralWorkbookMetadataOps(),
         ];
       }
@@ -666,7 +796,7 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...args.captureSheetCellState(op.sheetName),
+          ...captureWorkbookCellState(),
           ...captureStructuralWorkbookMetadataOps(),
         ];
       }
@@ -1490,21 +1620,30 @@ export function createEngineMutationService(args: {
             );
           }
 
-          const opCount = expectedHeight * expectedWidth;
-          const ops = Array.from<EngineOp>({ length: opCount });
-          let opIndex = 0;
+          const ops: EngineOp[] = [];
           for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
             for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
-              ops[opIndex] = {
+              const address = formatAddress(
+                bounds.startRow + rowOffset,
+                bounds.startCol + colOffset,
+              );
+              const current = readStoredCellState(range.sheetName, address);
+              const nextValue = values[rowOffset]![colOffset] ?? null;
+              if (current.formula === undefined && current.value === nextValue) {
+                continue;
+              }
+              ops.push({
                 kind: "setCellValue",
                 sheetName: range.sheetName,
-                address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
-                value: values[rowOffset]![colOffset] ?? null,
-              };
-              opIndex += 1;
+                address,
+                value: nextValue,
+              });
             }
           }
-          Effect.runSync(this.executeLocal(ops, opCount));
+          if (ops.length === 0) {
+            return;
+          }
+          Effect.runSync(this.executeLocal(ops, ops.length));
         },
         catch: (cause) =>
           new EngineMutationError({
@@ -1555,21 +1694,24 @@ export function createEngineMutationService(args: {
       return Effect.try({
         try: () => {
           const bounds = normalizeRange(range);
-          const opCount =
-            (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
-          const ops = Array.from<EngineOp>({ length: opCount });
-          let opIndex = 0;
+          const ops: EngineOp[] = [];
           for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
             for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-              ops[opIndex] = {
+              const address = formatAddress(row, col);
+              if (!hasStoredCellContent(range.sheetName, address)) {
+                continue;
+              }
+              ops.push({
                 kind: "clearCell",
                 sheetName: range.sheetName,
-                address: formatAddress(row, col),
-              };
-              opIndex += 1;
+                address,
+              });
             }
           }
-          Effect.runSync(this.executeLocal(ops, opCount));
+          if (ops.length === 0) {
+            return;
+          }
+          Effect.runSync(this.executeLocal(ops, ops.length));
         },
         catch: (cause) =>
           new EngineMutationError({
@@ -1600,16 +1742,31 @@ export function createEngineMutationService(args: {
                 sourceBounds.startRow + sourceRowOffset,
                 sourceBounds.startCol + sourceColOffset,
               );
+              const nextAddress = formatAddress(row, col);
+              if (
+                !shouldApplyCellState(
+                  target.sheetName,
+                  nextAddress,
+                  sourceCell,
+                  source.sheetName,
+                  sourceAddress,
+                )
+              ) {
+                continue;
+              }
               ops.push(
                 ...args.toCellStateOps(
                   target.sheetName,
-                  formatAddress(row, col),
+                  nextAddress,
                   sourceCell,
                   source.sheetName,
                   sourceAddress,
                 ),
               );
             }
+          }
+          if (ops.length === 0) {
+            return;
           }
           Effect.runSync(this.executeLocal(ops, ops.length));
         },
@@ -1645,16 +1802,31 @@ export function createEngineMutationService(args: {
                 sourceBounds.startRow + rowOffset,
                 sourceBounds.startCol + colOffset,
               );
+              const sourceCell = getMatrixCell(sourceMatrix, rowOffset, colOffset);
+              if (
+                !shouldApplyCellState(
+                  target.sheetName,
+                  nextAddress,
+                  sourceCell,
+                  source.sheetName,
+                  sourceAddress,
+                )
+              ) {
+                continue;
+              }
               ops.push(
                 ...args.toCellStateOps(
                   target.sheetName,
                   nextAddress,
-                  getMatrixCell(sourceMatrix, rowOffset, colOffset),
+                  sourceCell,
                   source.sheetName,
                   sourceAddress,
                 ),
               );
             }
+          }
+          if (ops.length === 0) {
+            return;
           }
           Effect.runSync(this.executeLocal(ops, ops.length));
         },
@@ -1678,14 +1850,27 @@ export function createEngineMutationService(args: {
           if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
             throw new Error("moveRange requires source and target dimensions to match exactly");
           }
+          if (
+            source.sheetName === target.sheetName &&
+            sourceBounds.startRow === targetBounds.startRow &&
+            sourceBounds.endRow === targetBounds.endRow &&
+            sourceBounds.startCol === targetBounds.startCol &&
+            sourceBounds.endCol === targetBounds.endCol
+          ) {
+            return;
+          }
 
           const ops: EngineOp[] = [];
           for (let row = sourceBounds.startRow; row <= sourceBounds.endRow; row += 1) {
             for (let col = sourceBounds.startCol; col <= sourceBounds.endCol; col += 1) {
+              const address = formatAddress(row, col);
+              if (!hasStoredCellState(source.sheetName, address)) {
+                continue;
+              }
               ops.push({
                 kind: "clearCell",
                 sheetName: source.sheetName,
-                address: formatAddress(row, col),
+                address,
               });
             }
           }
@@ -1699,16 +1884,31 @@ export function createEngineMutationService(args: {
                 sourceBounds.startRow + rowOffset,
                 sourceBounds.startCol + colOffset,
               );
+              const sourceCell = getMatrixCell(sourceMatrix, rowOffset, colOffset);
+              if (
+                !shouldApplyCellState(
+                  target.sheetName,
+                  nextAddress,
+                  sourceCell,
+                  source.sheetName,
+                  sourceAddress,
+                )
+              ) {
+                continue;
+              }
               ops.push(
                 ...args.toCellStateOps(
                   target.sheetName,
                   nextAddress,
-                  getMatrixCell(sourceMatrix, rowOffset, colOffset),
+                  sourceCell,
                   source.sheetName,
                   sourceAddress,
                 ),
               );
             }
+          }
+          if (ops.length === 0) {
+            return;
           }
           Effect.runSync(this.executeLocal(ops, ops.length));
         },

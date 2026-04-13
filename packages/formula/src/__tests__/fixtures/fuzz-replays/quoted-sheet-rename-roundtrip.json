@@ -1,0 +1,14 @@
+{
+  "name": "quoted-sheet-rename-roundtrip",
+  "suite": "formula/replay/rename",
+  "guarantee": "quoted and unquoted sheet references survive rename roundtrips",
+  "origin": "fuzz rename regression corpus",
+  "source": "SUM('My Sheet'!A1:B2,Data!C3)",
+  "canonical": "SUM('My Sheet'!A1:B2,Data!C3)",
+  "rename": {
+    "oldSheetName": "My Sheet",
+    "newSheetName": "Archive",
+    "renamed": "SUM(Archive!A1:B2,Data!C3)",
+    "restored": "SUM('My Sheet'!A1:B2,Data!C3)"
+  }
+}

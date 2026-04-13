@@ -160,22 +160,24 @@ function materializeFormatRangeOps(
   upsertFormat?: CellNumberFormatRecord,
 ): EngineOp[] {
   const tiles = resolveFormatTiles(workbook, range);
-  const ops: EngineOp[] = [];
-  if (upsertFormat && upsertFormat.id !== WorkbookStore.defaultFormatId) {
-    ops.push({ kind: "upsertCellNumberFormat", format: { ...upsertFormat } });
-  }
+  const rangeOps: EngineOp[] = [];
   tiles.forEach((tile) => {
     const nextFormatId = resolveFormatId(tile.formatId, tile);
     if (nextFormatId === tile.formatId) {
       return;
     }
-    ops.push({
+    rangeOps.push({
       kind: "setFormatRange",
       range: tile.range,
       formatId: nextFormatId,
     });
   });
-  return ops;
+  if (rangeOps.length === 0) {
+    return [];
+  }
+  return upsertFormat && upsertFormat.id !== WorkbookStore.defaultFormatId
+    ? [{ kind: "upsertCellNumberFormat", format: { ...upsertFormat } }, ...rangeOps]
+    : rangeOps;
 }
 
 function resolveStyleTiles(workbook: WorkbookStore, range: CellRangeRef): StyleTile[] {
