@@ -26,6 +26,7 @@ export function GridTextOverlay({ active, scene }: GridTextOverlayProps) {
           <span
             className="block w-full"
             style={{
+              clipPath: `inset(${item.clipInsetTop}px ${item.clipInsetRight}px ${item.clipInsetBottom}px ${item.clipInsetLeft}px)`,
               lineHeight: 1.2,
               overflow: "hidden",
               textDecorationLine: [

@@ -120,10 +120,12 @@ export function resolveFillHandlePreviewBounds(options: {
 export function resolveFillHandleOverlayBounds(options: {
   sourceRange: Rectangle;
   getCellBounds: (col: number, row: number) => Rectangle | undefined;
-  hostBounds: Pick<DOMRect, "left" | "top">;
+  hostBounds: Pick<DOMRect, "left" | "top" | "width" | "height">;
+  minX?: number;
+  minY?: number;
   size?: number;
 }): FillHandleOverlayBounds | undefined {
-  const { getCellBounds, hostBounds, size = 12, sourceRange } = options;
+  const { getCellBounds, hostBounds, minX = 0, minY = 0, size = 12, sourceRange } = options;
   const anchorBounds = getCellBounds(
     sourceRange.x + sourceRange.width - 1,
     sourceRange.y + sourceRange.height - 1,
@@ -132,10 +134,21 @@ export function resolveFillHandleOverlayBounds(options: {
     return undefined;
   }
 
-  return {
+  const resolvedBounds = {
     x: anchorBounds.x - hostBounds.left + anchorBounds.width - size / 2,
     y: anchorBounds.y - hostBounds.top + anchorBounds.height - size / 2,
     width: size,
     height: size,
   };
+
+  if (
+    resolvedBounds.x + resolvedBounds.width <= minX ||
+    resolvedBounds.y + resolvedBounds.height <= minY ||
+    resolvedBounds.x >= hostBounds.width ||
+    resolvedBounds.y >= hostBounds.height
+  ) {
+    return undefined;
+  }
+
+  return resolvedBounds;
 }

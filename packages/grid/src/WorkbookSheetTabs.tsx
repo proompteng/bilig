@@ -13,17 +13,13 @@ interface WorkbookSheetTabsProps {
 }
 
 const sheetStripClass = cva(
-  "flex min-h-11 items-center justify-between gap-2 border-t border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 py-1.5",
+  "flex min-h-12 items-center justify-between gap-2 border-t border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 pt-1.5 pb-2",
 );
 
-const sheetTabsShellClass = cva("flex min-w-0 flex-1 items-center gap-2 overflow-hidden");
+const sheetTabsShellClass = cva("flex min-w-0 flex-1 items-end gap-2 overflow-hidden");
 
 const sheetListClass = cva(
   "wb-scrollbar-none relative flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--color-mauve-200)]",
-);
-
-const sheetIndicatorClass = cva(
-  "absolute bottom-[-1px] left-0 z-10 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--color-mauve-800)] transition-[translate,width] duration-200 ease-out",
 );
 
 const sheetTabClass = cva(
@@ -31,7 +27,7 @@ const sheetTabClass = cva(
   {
     variants: {
       active: {
-        true: "text-[var(--color-mauve-950)]",
+        true: "border-[var(--color-mauve-700)] text-[var(--color-mauve-950)]",
         false: "border-transparent",
       },
     },
@@ -281,7 +277,6 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
               })()
             ),
           )}
-          <Tabs.Indicator className={sheetIndicatorClass()} renderBeforeHydration />
         </Tabs.List>
         {onCreateSheet ? (
           <button

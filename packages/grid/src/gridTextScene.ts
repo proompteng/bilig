@@ -12,6 +12,10 @@ export interface GridTextItem {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  readonly clipInsetTop: number;
+  readonly clipInsetRight: number;
+  readonly clipInsetBottom: number;
+  readonly clipInsetLeft: number;
   readonly text: string;
   readonly align: "left" | "center" | "right";
   readonly wrap: boolean;
@@ -47,7 +51,7 @@ interface BuildGridTextSceneOptions {
   readonly hoveredHeader?: HeaderSelection | null;
   readonly activeHeaderDrag?: HeaderSelection | null;
   readonly resizeGuideColumn?: number | null;
-  readonly hostBounds: Pick<DOMRect, "left" | "top">;
+  readonly hostBounds: Pick<DOMRect, "left" | "top" | "width" | "height">;
   readonly getCellBounds: (col: number, row: number) => Rectangle | undefined;
 }
 
@@ -111,6 +115,7 @@ export function buildGridTextScene({
           ? `${indexToColumn(col)}${row + 1}`
           : null,
       snapshotOverride: selectedCellSnapshot,
+      gridMetrics,
     });
     if (item) {
       items.push(item);
@@ -130,16 +135,18 @@ function buildCellTextItem({
   visibleColumnEnd,
   selectedAddress = null,
   snapshotOverride = null,
+  gridMetrics,
 }: {
   engine: GridEngineLike;
   sheetName: string;
   col: number;
   row: number;
-  hostBounds: Pick<DOMRect, "left" | "top">;
+  hostBounds: Pick<DOMRect, "left" | "top" | "width" | "height">;
   getCellBounds: (col: number, row: number) => Rectangle | undefined;
   visibleColumnEnd: number;
   selectedAddress?: string | null;
   snapshotOverride?: CellSnapshot | null;
+  gridMetrics: GridMetrics;
 }): GridTextItem | null {
   const bounds = getCellBounds(col, row);
   if (!bounds) {
@@ -174,11 +181,24 @@ function buildCellTextItem({
     renderCell,
   });
 
-  return {
+  const localBounds = {
     x: renderBounds.x - hostBounds.left,
     y: renderBounds.y - hostBounds.top,
     width: renderBounds.width,
     height: renderBounds.height,
+  };
+
+  return {
+    ...localBounds,
+    ...resolveClipInsets({
+      bounds: localBounds,
+      clipRect: {
+        x: gridMetrics.rowMarkerWidth,
+        y: gridMetrics.headerHeight,
+        width: hostBounds.width - gridMetrics.rowMarkerWidth,
+        height: hostBounds.height - gridMetrics.headerHeight,
+      },
+    }),
     text: renderCell.displayText,
     align: renderCell.align,
     wrap: renderCell.wrap,
@@ -187,6 +207,19 @@ function buildCellTextItem({
     fontSize: renderCell.fontSize,
     underline: renderCell.underline,
     strike: false,
+  };
+}
+
+function resolveClipInsets(options: {
+  bounds: Rectangle;
+  clipRect: Rectangle;
+}): Pick<GridTextItem, "clipInsetTop" | "clipInsetRight" | "clipInsetBottom" | "clipInsetLeft"> {
+  const { bounds, clipRect } = options;
+  return {
+    clipInsetTop: Math.max(0, clipRect.y - bounds.y),
+    clipInsetRight: Math.max(0, bounds.x + bounds.width - (clipRect.x + clipRect.width)),
+    clipInsetBottom: Math.max(0, bounds.y + bounds.height - (clipRect.y + clipRect.height)),
+    clipInsetLeft: Math.max(0, clipRect.x - bounds.x),
   };
 }
 
@@ -334,6 +367,10 @@ function pushHeaderTextItems(options: {
       y: 0,
       width: column.width,
       height: gridMetrics.headerHeight,
+      clipInsetTop: 0,
+      clipInsetRight: 0,
+      clipInsetBottom: 0,
+      clipInsetLeft: Math.max(0, gridMetrics.rowMarkerWidth - column.left),
       text: indexToColumn(column.index),
       align: "center",
       wrap: false,
@@ -367,6 +404,10 @@ function pushHeaderTextItems(options: {
       y: row.top,
       width: gridMetrics.rowMarkerWidth,
       height: row.height,
+      clipInsetTop: Math.max(0, gridMetrics.headerHeight - row.top),
+      clipInsetRight: 0,
+      clipInsetBottom: 0,
+      clipInsetLeft: 0,
       text: String(row.index + 1),
       align: "right",
       wrap: false,

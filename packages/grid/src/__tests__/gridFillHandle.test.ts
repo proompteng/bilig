@@ -93,7 +93,7 @@ describe("gridFillHandle", () => {
     expect(
       resolveFillHandleOverlayBounds({
         sourceRange: { x: 1, y: 2, width: 2, height: 3 },
-        hostBounds: { left: 100, top: 200 },
+        hostBounds: { left: 100, top: 200, width: 400, height: 300 },
         getCellBounds: (col, row) =>
           col === 2 && row === 4 ? { x: 250, y: 320, width: 80, height: 24 } : undefined,
       }),
@@ -103,5 +103,18 @@ describe("gridFillHandle", () => {
       width: 12,
       height: 12,
     });
+  });
+
+  test("hides overlay bounds when the anchor cell is above the visible grid body", () => {
+    expect(
+      resolveFillHandleOverlayBounds({
+        sourceRange: { x: 1, y: 2, width: 2, height: 3 },
+        hostBounds: { left: 0, top: 0, width: 400, height: 300 },
+        minX: 46,
+        minY: 24,
+        getCellBounds: (col, row) =>
+          col === 2 && row === 4 ? { x: 250, y: -20, width: 80, height: 24 } : undefined,
+      }),
+    ).toBeUndefined();
   });
 });

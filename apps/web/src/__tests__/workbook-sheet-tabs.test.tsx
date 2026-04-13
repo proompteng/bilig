@@ -37,6 +37,9 @@ describe("WorkbookSheetTabs", () => {
         .querySelector("[data-testid='workbook-sheet-tab-Sheet1']")
         ?.getAttribute("aria-selected"),
     ).toBe("true");
+    expect(
+      host.querySelector("[data-testid='workbook-sheet-tab-Sheet1']")?.getAttribute("class"),
+    ).toContain("border-[var(--color-mauve-700)]");
 
     await act(async () => {
       host

@@ -592,7 +592,12 @@ export function useWorkbookGridRenderState(input: {
       sheetName,
       visibleItems: deferredVisibleItems,
       visibleRegion: deferredVisibleRegion,
-      hostBounds: { left: 0, top: 0 },
+      hostBounds: {
+        left: 0,
+        top: 0,
+        width: hostElement.clientWidth,
+        height: hostElement.clientHeight,
+      },
       getCellBounds: getCellLocalBounds,
     });
   }, [
@@ -638,7 +643,12 @@ export function useWorkbookGridRenderState(input: {
       sheetName,
       visibleItems: deferredVisibleItems,
       visibleRegion: deferredVisibleRegion,
-      hostBounds: { left: 0, top: 0 },
+      hostBounds: {
+        left: 0,
+        top: 0,
+        width: hostElement.clientWidth,
+        height: hostElement.clientHeight,
+      },
       getCellBounds: getCellLocalBounds,
     });
   }, [
@@ -676,12 +686,21 @@ export function useWorkbookGridRenderState(input: {
     }
     return resolveFillHandleOverlayBounds({
       sourceRange: selectionRange,
-      hostBounds: { left: 0, top: 0 },
+      hostBounds: {
+        left: 0,
+        top: 0,
+        width: hostElement.clientWidth,
+        height: hostElement.clientHeight,
+      },
       getCellBounds: getCellLocalBounds,
+      minX: gridMetrics.rowMarkerWidth,
+      minY: gridMetrics.headerHeight,
     });
   }, [
     fillPreviewRange,
     getCellLocalBounds,
+    gridMetrics.headerHeight,
+    gridMetrics.rowMarkerWidth,
     gridSelection.columns.length,
     gridSelection.rows.length,
     hostElement,

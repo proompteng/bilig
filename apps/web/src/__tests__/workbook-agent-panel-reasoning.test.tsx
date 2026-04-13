@@ -144,6 +144,28 @@ describe("WorkbookAgentPanel reasoning", () => {
     ).not.toBeNull();
     expect(panel.host.textContent).not.toContain("**Check**");
 
+    const expandedBody = panel.host.querySelector(
+      "[data-testid='workbook-agent-reasoning-panel-reasoning-1-viewport'] > div",
+    );
+    expect(expandedBody?.className).toContain("px-2");
+    expect(expandedBody?.className).toContain("pb-2");
+    expect(expandedBody?.className).toContain("w-full");
+    expect(expandedBody?.className).toContain("max-w-full");
+
+    const expandedCard = expandedBody?.firstElementChild;
+    expect(expandedCard?.className).toContain("bg-[var(--wb-surface-muted)]");
+    expect(expandedCard?.className).toContain("rounded-[var(--wb-radius-control)]");
+    expect(expandedCard?.className).toContain("w-full");
+    expect(expandedCard?.className).toContain("max-w-full");
+    expect(expandedCard?.className).toContain("overflow-x-hidden");
+    expect(expandedCard?.className).toContain("px-3");
+    expect(expandedCard?.className).toContain("py-2");
+
+    const trigger = panel.host.querySelector(
+      "[data-testid='workbook-agent-reasoning-toggle-reasoning-1']",
+    );
+    expect(trigger?.parentElement?.className).not.toContain("bg-[var(--wb-surface-muted)]");
+
     await act(async () => {
       panel.root.unmount();
     });
@@ -162,6 +184,27 @@ describe("WorkbookAgentPanel reasoning", () => {
     expect(panel.host.textContent).toContain(
       "Inspect the named ranges and verify the import columns.",
     );
+
+    await act(async () => {
+      panel.root.unmount();
+    });
+  });
+
+  it("renders the composer inside a Base UI scroll viewport", async () => {
+    const panel = renderPanel({
+      id: "system-input-1",
+      kind: "system",
+      text: "Ready",
+    });
+
+    await panel.render();
+
+    const input = panel.host.querySelector("[data-testid='workbook-agent-input']");
+    const viewport = panel.host.querySelector("[data-testid='workbook-agent-input-viewport']");
+
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    expect(viewport instanceof HTMLDivElement).toBe(true);
+    expect(input?.className).toContain("overflow-hidden");
 
     await act(async () => {
       panel.root.unmount();

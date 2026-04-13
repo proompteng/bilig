@@ -6,6 +6,7 @@ import { cn } from "./cn.js";
 import {
   agentPanelDisclosureBadgeClass,
   agentPanelDisclosureBodyClass,
+  agentPanelDisclosureBodyCardClass,
   agentPanelDisclosureChevronClass,
   agentPanelDisclosureContentClass,
   agentPanelDisclosureFrameClass,
@@ -52,26 +53,33 @@ export function WorkbookAgentDisclosureRow(props: {
           type="button"
         >
           <ChevronRight className={agentPanelDisclosureChevronClass({ open })} />
-          <div className={agentPanelDisclosureContentClass()}>
+          <div className={agentPanelDisclosureContentClass({ open })}>
             <span className={cn(agentPanelDisclosureLabelClass(), props.labelClassName)}>
               {props.label}
             </span>
             {summary ? (
-              <span className={cn(agentPanelDisclosureSummaryClass(), props.summaryClassName)}>
+              <span
+                className={cn(agentPanelDisclosureSummaryClass({ open }), props.summaryClassName)}
+              >
                 {summary}
               </span>
             ) : null}
           </div>
-          {props.badge ? <div className={agentPanelDisclosureBadgeClass()}>{props.badge}</div> : null}
+          {props.badge ? (
+            <div className={agentPanelDisclosureBadgeClass()}>{props.badge}</div>
+          ) : null}
         </Collapsible.Trigger>
-        <Collapsible.Panel className={agentPanelDisclosurePanelClass()} data-testid={props.panelTestId}>
+        <Collapsible.Panel
+          className={agentPanelDisclosurePanelClass()}
+          data-testid={props.panelTestId}
+        >
           <ScrollArea.Root className="relative overflow-hidden">
             <ScrollArea.Viewport
               className={agentPanelDisclosureViewportClass()}
               data-testid={viewportTestId}
             >
               <ScrollArea.Content className={agentPanelDisclosureBodyClass()}>
-                {props.children}
+                <div className={agentPanelDisclosureBodyCardClass()}>{props.children}</div>
               </ScrollArea.Content>
             </ScrollArea.Viewport>
             <ScrollArea.Scrollbar

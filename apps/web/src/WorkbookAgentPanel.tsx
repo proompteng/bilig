@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties, useEffect, useRef } from "react";
+import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from "react";
 import { Button } from "@base-ui/react/button";
 import { ScrollArea } from "@base-ui/react/scroll-area";
 import { ArrowUp, Square } from "lucide-react";
@@ -34,6 +34,9 @@ import {
   agentPanelBodyMutedTextClass,
   agentPanelBodyTextClass,
   agentPanelComposerFrameClass,
+  agentPanelComposerScrollContentClass,
+  agentPanelComposerScrollRootClass,
+  agentPanelComposerScrollViewportClass,
   agentPanelComposerSendButtonClass,
   agentPanelComposerTextareaClass,
   agentPanelEyebrowTextClass,
@@ -58,7 +61,7 @@ import {
 } from "./workbook-agent-panel-history.js";
 
 const toolStatusPillClass = cva(
-  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] leading-none font-semibold uppercase tracking-[0.04em]",
+  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] leading-none font-medium uppercase tracking-[0.05em]",
   {
     variants: {
       status: {
@@ -78,15 +81,18 @@ const agentPanelThemeStyle: CSSProperties & Record<`--${string}`, string> = {
   "--wb-border": "var(--color-mauve-200)",
   "--wb-border-strong": "var(--color-mauve-300)",
   "--wb-grid-border": "var(--color-mauve-100)",
-  "--wb-text": "var(--color-mauve-950)",
+  "--wb-text": "var(--color-mauve-900)",
   "--wb-text-muted": "var(--color-mauve-700)",
-  "--wb-text-subtle": "var(--color-mauve-500)",
+  "--wb-text-subtle": "var(--color-mauve-600)",
   "--wb-accent": "var(--color-mauve-900)",
   "--wb-accent-soft": "var(--color-mauve-100)",
   "--wb-accent-ring": "var(--color-mauve-400)",
   "--wb-hover": "var(--color-mauve-100)",
   "--wb-shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.04)",
 };
+
+const AGENT_COMPOSER_MIN_HEIGHT = 112;
+const AGENT_COMPOSER_MAX_HEIGHT = 224;
 
 function formatThreadEntryCount(entryCount: number): string {
   return `${entryCount} ${entryCount === 1 ? "item" : "items"}`;
@@ -370,7 +376,6 @@ function TextDisclosureEntryRow(props: {
     <WorkbookAgentDisclosureRow
       id={props.entry.id}
       label={props.label}
-      labelClassName="font-semibold"
       panelTestId={`workbook-agent-${disclosureKey}-panel-${props.entry.id}`}
       summary={summary ?? `No ${props.label.toLowerCase()} details available.`}
       triggerLabel={{
@@ -679,7 +684,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
             <pre
               className={cn(
                 agentPanelMetaTextClass(),
-                "mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+                "mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
               )}
             >
               {entry.argumentsText}
@@ -695,7 +700,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
               <pre
                 className={cn(
                   agentPanelMetaTextClass(),
-                  "mt-1 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+                  "mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
                 )}
               >
                 {entry.outputText}
@@ -1066,6 +1071,8 @@ export function WorkbookAgentPanel(props: {
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const composerViewportRef = useRef<HTMLDivElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const optimisticEntries = props.optimisticEntries ?? [];
 
@@ -1076,6 +1083,20 @@ export function WorkbookAgentPanel(props: {
     }
     node.scrollTop = node.scrollHeight;
   }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status]);
+
+  useLayoutEffect(() => {
+    const viewport = composerViewportRef.current;
+    const textarea = composerTextareaRef.current;
+    if (!viewport || !textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    const measuredHeight = Math.max(textarea.scrollHeight, AGENT_COMPOSER_MIN_HEIGHT);
+    textarea.style.height = `${measuredHeight}px`;
+    viewport.style.height = `${Math.min(measuredHeight, AGENT_COMPOSER_MAX_HEIGHT)}px`;
+    viewport.scrollTop = viewport.scrollHeight;
+  }, [props.draft]);
 
   const isRunning = props.snapshot?.status === "inProgress";
   const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])];
@@ -1112,7 +1133,9 @@ export function WorkbookAgentPanel(props: {
                   <div className={agentPanelTimelineListClass()}>
                     {visibleEntries.map((entry, index) => (
                       <Fragment key={entry.id}>
-                        <WorkbookAgentEntryRow entry={entry} />
+                        <div className="min-w-0 w-full max-w-full overflow-hidden">
+                          <WorkbookAgentEntryRow entry={entry} />
+                        </div>
                         {props.showAssistantProgress && progressAnchorIndex === index ? (
                           <AssistantProgressRow />
                         ) : null}
@@ -1186,26 +1209,47 @@ export function WorkbookAgentPanel(props: {
             Ask the workbook assistant
           </label>
           <div className={agentPanelComposerFrameClass()}>
-            <textarea
-              id="workbook-agent-input"
-              className={agentPanelComposerTextareaClass()}
-              data-testid="workbook-agent-input"
-              placeholder="Ask the workbook assistant"
-              value={props.draft}
-              onChange={(event) => {
-                props.onDraftChange(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (isRunning) {
-                  return;
-                }
-                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
-                  return;
-                }
-                event.preventDefault();
-                props.onSubmit();
-              }}
-            />
+            <ScrollArea.Root className={agentPanelComposerScrollRootClass()}>
+              <ScrollArea.Viewport
+                ref={composerViewportRef}
+                className={agentPanelComposerScrollViewportClass()}
+                data-testid="workbook-agent-input-viewport"
+              >
+                <ScrollArea.Content className={agentPanelComposerScrollContentClass()}>
+                  <textarea
+                    ref={composerTextareaRef}
+                    id="workbook-agent-input"
+                    className={agentPanelComposerTextareaClass()}
+                    data-testid="workbook-agent-input"
+                    placeholder="Ask the workbook assistant"
+                    value={props.draft}
+                    onChange={(event) => {
+                      props.onDraftChange(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (isRunning) {
+                        return;
+                      }
+                      if (
+                        event.key !== "Enter" ||
+                        event.shiftKey ||
+                        event.nativeEvent.isComposing
+                      ) {
+                        return;
+                      }
+                      event.preventDefault();
+                      props.onSubmit();
+                    }}
+                  />
+                </ScrollArea.Content>
+              </ScrollArea.Viewport>
+              <ScrollArea.Scrollbar
+                className={agentPanelScrollAreaScrollbarClass()}
+                orientation="vertical"
+              >
+                <ScrollArea.Thumb className={agentPanelScrollAreaThumbClass()} />
+              </ScrollArea.Scrollbar>
+            </ScrollArea.Root>
             <Button
               aria-label={isRunning ? "Stop" : "Send message"}
               className={agentPanelComposerSendButtonClass()}

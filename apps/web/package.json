@@ -25,6 +25,7 @@
     "@bilig/workbook-domain": "workspace:*",
     "@bilig/worker-transport": "workspace:*",
     "@bilig/zero-sync": "workspace:*",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@hugeicons/core-free-icons": "4.1.1",
     "@hugeicons/react": "1.1.6",
     "@rocicorp/zero": "1.1.1",

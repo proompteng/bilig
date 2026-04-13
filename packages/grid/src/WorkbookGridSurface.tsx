@@ -119,7 +119,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
       <div
-        className="sheet-grid-host min-h-0 flex-1 bg-[var(--wb-surface)] pr-2 pb-2"
+        className="sheet-grid-host min-h-0 flex-1 overflow-hidden bg-[var(--wb-surface)] pr-2 pb-2"
         data-column-width-overrides={renderState.columnWidthOverridesAttr}
         data-default-column-width={renderState.gridMetrics.columnWidth}
         data-testid="sheet-grid"
