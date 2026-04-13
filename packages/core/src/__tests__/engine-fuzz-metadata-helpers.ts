@@ -400,17 +400,18 @@ export function projectMetadataSnapshot(snapshot: WorkbookSnapshot): WorkbookSna
   return {
     version: normalized.version,
     workbook: structuredClone(normalized.workbook),
-    sheets: normalized.sheets.map((sheet) =>
-      Object.assign(
-        {
-          id: sheet.id,
-          name: sheet.name,
-          order: sheet.order,
-          cells: [] as WorkbookSnapshot["sheets"][number]["cells"],
-        },
-        sheet.metadata ? { metadata: structuredClone(sheet.metadata) } : {},
-      ),
-    ),
+    sheets: normalized.sheets.map((sheet) => {
+      const metadataOnlySheet: WorkbookSnapshot["sheets"][number] = {
+        id: sheet.id,
+        name: sheet.name,
+        order: sheet.order,
+        cells: [],
+      };
+      if (sheet.metadata) {
+        metadataOnlySheet.metadata = structuredClone(sheet.metadata);
+      }
+      return metadataOnlySheet;
+    }),
   };
 }
 

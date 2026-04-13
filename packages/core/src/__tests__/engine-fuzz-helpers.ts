@@ -13,6 +13,12 @@ import { EngineMutationError } from "../engine/errors.js";
 
 export const engineFuzzSheetName = "Sheet1";
 
+type ComparableRangeRef = {
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+};
+
 export type EngineSeedName =
   | "blank"
   | "formula-graph"
@@ -247,7 +253,7 @@ export function normalizeSnapshotForSemanticComparison(
   return clone;
 }
 
-function compareRangeRefs(left: CellRangeRef, right: CellRangeRef): number {
+function compareRangeRefs(left: ComparableRangeRef, right: ComparableRangeRef): number {
   const leftStart = parseCellAddress(left.startAddress, left.sheetName);
   const leftEnd = parseCellAddress(left.endAddress, left.sheetName);
   const rightStart = parseCellAddress(right.startAddress, right.sheetName);
@@ -262,7 +268,7 @@ function compareRangeRefs(left: CellRangeRef, right: CellRangeRef): number {
 }
 
 function normalizeRangeRecords<
-  TRecord extends { range: CellRangeRef } & Record<TKey, string>,
+  TRecord extends { range: ComparableRangeRef } & Record<TKey, string>,
   TKey extends keyof TRecord & string,
 >(records: readonly TRecord[], idKey: TKey): TRecord[] {
   const sorted = [...records].toSorted((left, right) => {
@@ -285,7 +291,7 @@ function normalizeRangeRecords<
     );
 }
 
-function insertOrMergeRangeRecord<TRecord extends { range: CellRangeRef }>(
+function insertOrMergeRangeRecord<TRecord extends { range: ComparableRangeRef }>(
   group: readonly TRecord[],
   record: TRecord,
 ): TRecord[] {
@@ -318,7 +324,10 @@ function insertOrMergeRangeRecord<TRecord extends { range: CellRangeRef }>(
   return nextGroup;
 }
 
-function mergeRanges(left: CellRangeRef, right: CellRangeRef): CellRangeRef | null {
+function mergeRanges(
+  left: ComparableRangeRef,
+  right: ComparableRangeRef,
+): ComparableRangeRef | null {
   if (left.sheetName !== right.sheetName) {
     return null;
   }
