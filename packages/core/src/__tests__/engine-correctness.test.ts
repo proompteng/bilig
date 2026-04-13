@@ -472,6 +472,216 @@ describe("engine correctness", () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot);
   });
 
+  it("restores named-range structures after insert-column undo", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-structural-named-range-undo",
+      replicaId: "correctness-structural-named-range-undo",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "B3" }, [
+      ["Qty", "Amount"],
+      [1, 10],
+      [2, 20],
+    ]);
+    engine.setDefinedName("SalesRange", {
+      kind: "range-ref",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+    });
+    engine.setTable({
+      name: "Sales",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setCellFormula(sheetName, "C1", "SUM(SalesRange)");
+
+    const initialSnapshot = engine.exportSnapshot();
+
+    engine.insertColumns(sheetName, 0, 1);
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName,
+        startAddress: "B1",
+        endAddress: "C3",
+      },
+    });
+    expect(engine.getTable("Sales")).toEqual({
+      name: "Sales",
+      sheetName,
+      startAddress: "B1",
+      endAddress: "C3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("SUM(SalesRange)");
+    expect(engine.getCellValue(sheetName, "D1")).toMatchObject({ tag: 1, value: 33 });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName,
+        startAddress: "A1",
+        endAddress: "B3",
+      },
+    });
+    expect(engine.getTable("Sales")).toEqual({
+      name: "Sales",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    expect(engine.getCell(sheetName, "C1").formula).toBe("SUM(SalesRange)");
+    expect(engine.getCellValue(sheetName, "C1")).toMatchObject({ tag: 1, value: 33 });
+  });
+
+  it("restores named-range structures after delete-row undo", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-structural-named-range-delete-row-undo",
+      replicaId: "correctness-structural-named-range-delete-row-undo",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "B3" }, [
+      ["Qty", "Amount"],
+      [1, 10],
+      [2, 20],
+    ]);
+    engine.setDefinedName("SalesRange", {
+      kind: "range-ref",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+    });
+    engine.setTable({
+      name: "Sales",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setCellFormula(sheetName, "C1", "SUM(SalesRange)");
+
+    const initialSnapshot = engine.exportSnapshot();
+
+    engine.deleteRows(sheetName, 2, 2);
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName,
+        startAddress: "A1",
+        endAddress: "B2",
+      },
+    });
+    expect(engine.getTable("Sales")).toEqual({
+      name: "Sales",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B2",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName,
+        startAddress: "A1",
+        endAddress: "B3",
+      },
+    });
+    expect(engine.getTable("Sales")).toEqual({
+      name: "Sales",
+      sheetName,
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    expect(engine.getCell(sheetName, "C1").formula).toBe("SUM(SalesRange)");
+    expect(engine.getCellValue(sheetName, "C1")).toMatchObject({ tag: 1, value: 33 });
+  });
+
+  it("restores filter, sort, and validation metadata after delete-row undo", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-structural-sheet-metadata-delete-row-undo",
+      replicaId: "correctness-structural-sheet-metadata-delete-row-undo",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+    engine.setRangeValues({ sheetName, startAddress: "A1", endAddress: "C3" }, [
+      ["Id", "Status", "Amount"],
+      [1, "Draft", 10],
+      [2, "Final", 20],
+    ]);
+    engine.setFilter(sheetName, { sheetName, startAddress: "A1", endAddress: "C3" });
+    engine.setSort(sheetName, { sheetName, startAddress: "A1", endAddress: "C3" }, [
+      { keyAddress: "B1", direction: "asc" },
+    ]);
+    engine.setDataValidation({
+      range: { sheetName, startAddress: "B2", endAddress: "B3" },
+      rule: { kind: "list", values: ["Draft", "Final"] },
+      allowBlank: false,
+      showDropdown: true,
+    });
+
+    const initialSnapshot = engine.exportSnapshot();
+
+    engine.deleteRows(sheetName, 0, 1);
+    expect(engine.getFilters(sheetName)).toEqual([
+      {
+        sheetName,
+        range: { sheetName, startAddress: "A1", endAddress: "C2" },
+      },
+    ]);
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+    expect(engine.getFilters(sheetName)).toEqual([
+      {
+        sheetName,
+        range: { sheetName, startAddress: "A1", endAddress: "C3" },
+      },
+    ]);
+    expect(engine.getSorts(sheetName)).toEqual([
+      {
+        sheetName,
+        range: { sheetName, startAddress: "A1", endAddress: "C3" },
+        keys: [{ keyAddress: "B1", direction: "asc" }],
+      },
+    ]);
+    expect(engine.getDataValidations(sheetName)).toEqual([
+      {
+        range: { sheetName, startAddress: "B2", endAddress: "B3" },
+        rule: { kind: "list", values: ["Draft", "Final"] },
+        allowBlank: false,
+        showDropdown: true,
+      },
+    ]);
+  });
+
   it("prunes orphaned explicit formats after structural undo restores", async () => {
     const initialSnapshot = await createBaselineSnapshot("correctness-undo-format-orphan-prune");
     const engine = new SpreadsheetEngine({

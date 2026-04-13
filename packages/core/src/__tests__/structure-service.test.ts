@@ -123,4 +123,43 @@ describe("EngineStructureService", () => {
       endAddress: "B5",
     });
   });
+
+  it("rewrites range-backed defined names across column inserts", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "structure-defined-range-rewrite" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B3" }, [
+      ["Qty", "Amount"],
+      [1, 10],
+      [2, 20],
+    ]);
+    engine.setDefinedName("SalesRange", {
+      kind: "range-ref",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B3",
+    });
+    engine.setCellFormula("Data", "C1", "SUM(SalesRange)");
+
+    Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: "insertColumns",
+        sheetName: "Data",
+        start: 0,
+        count: 1,
+      }),
+    );
+
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName: "Data",
+        startAddress: "B1",
+        endAddress: "C3",
+      },
+    });
+    expect(engine.getCell("Data", "D1").formula).toBe("SUM(SalesRange)");
+    expect(engine.getCellValue("Data", "D1")).toMatchObject({ tag: 1, value: 33 });
+  });
 });

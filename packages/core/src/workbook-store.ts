@@ -377,6 +377,30 @@ export class WorkbookStore {
     return `${this.getSheetNameById(this.cellStore.sheetIds[index]!)}!${this.getAddress(index)}`;
   }
 
+  detachCellIndex(index: number): boolean {
+    const sheetId = this.cellStore.sheetIds[index];
+    if (!sheetId) {
+      return false;
+    }
+    const sheet = this.getSheetById(sheetId);
+    const row = this.cellStore.rows[index];
+    const col = this.cellStore.cols[index];
+    if (sheet && row !== undefined && col !== undefined) {
+      const key = makeCellKey(sheet.id, row, col);
+      if (this.cellKeyToIndex.get(key) === index) {
+        this.cellKeyToIndex.delete(key);
+      }
+      if (sheet.grid.get(row, col) === index) {
+        sheet.grid.clear(row, col);
+      }
+    }
+    this.cellStore.sheetIds[index] = 0;
+    this.cellStore.rows[index] = 0;
+    this.cellStore.cols[index] = 0;
+    this.cellStore.flags[index] = (this.cellStore.flags[index] ?? 0) & ~CellFlags.Materialized;
+    return true;
+  }
+
   pruneCellIfEmpty(index: number): boolean {
     const sheetId = this.cellStore.sheetIds[index];
     if (!sheetId) {
@@ -405,9 +429,7 @@ export class WorkbookStore {
     ) {
       return false;
     }
-    this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col));
-    sheet.grid.clear(row, col);
-    return true;
+    return this.detachCellIndex(index);
   }
 
   setCellFormat(index: number, format: string | null | undefined): void {

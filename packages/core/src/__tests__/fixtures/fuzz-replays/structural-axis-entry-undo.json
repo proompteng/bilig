@@ -1,0 +1,75 @@
+{
+  "name": "structural-axis-entry-undo",
+  "seed": "blank",
+  "steps": [
+    {
+      "command": {
+        "kind": "insertRows",
+        "start": 0,
+        "count": 1
+      },
+      "expect": {
+        "kind": "snapshot",
+        "snapshot": {
+          "version": 1,
+          "workbook": {
+            "name": "structural-axis-entry-undo"
+          },
+          "sheets": [
+            {
+              "id": 1,
+              "name": "Sheet1",
+              "order": 0,
+              "metadata": {
+                "rows": [
+                  {
+                    "id": "row-1",
+                    "index": 0
+                  }
+                ]
+              },
+              "cells": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "kind": "deleteColumns",
+        "start": 0,
+        "count": 1
+      }
+    },
+    {
+      "command": {
+        "kind": "undo"
+      },
+      "expect": {
+        "kind": "snapshot",
+        "snapshot": {
+          "version": 1,
+          "workbook": {
+            "name": "structural-axis-entry-undo"
+          },
+          "sheets": [
+            {
+              "id": 1,
+              "name": "Sheet1",
+              "order": 0,
+              "metadata": {
+                "rows": [
+                  {
+                    "id": "row-1",
+                    "index": 0
+                  }
+                ]
+              },
+              "cells": []
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

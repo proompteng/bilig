@@ -1,0 +1,69 @@
+{
+  "name": "structural-delete-formula-undo",
+  "seed": "blank",
+  "steps": [
+    {
+      "command": {
+        "kind": "formula",
+        "address": "A1",
+        "formula": "A1+D4"
+      }
+    },
+    {
+      "command": {
+        "kind": "deleteRows",
+        "start": 2,
+        "count": 2
+      },
+      "expect": {
+        "kind": "snapshot",
+        "snapshot": {
+          "version": 1,
+          "workbook": {
+            "name": "structural-delete-formula-undo"
+          },
+          "sheets": [
+            {
+              "id": 1,
+              "name": "Sheet1",
+              "order": 0,
+              "cells": [
+                {
+                  "address": "A1",
+                  "formula": "A1+#REF!"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "kind": "undo"
+      },
+      "expect": {
+        "kind": "snapshot",
+        "snapshot": {
+          "version": 1,
+          "workbook": {
+            "name": "structural-delete-formula-undo"
+          },
+          "sheets": [
+            {
+              "id": 1,
+              "name": "Sheet1",
+              "order": 0,
+              "cells": [
+                {
+                  "address": "A1",
+                  "formula": "A1+D4"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

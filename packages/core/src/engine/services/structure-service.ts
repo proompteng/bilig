@@ -153,17 +153,85 @@ export function createEngineStructureService(args: {
     transform: StructuralAxisTransform,
   ): void => {
     args.state.workbook.listDefinedNames().forEach((record) => {
-      if (typeof record.value !== "string" || !record.value.startsWith("=")) {
+      if (typeof record.value === "string" && record.value.startsWith("=")) {
+        const nextFormula = rewriteFormulaForStructuralTransform(
+          record.value.slice(1),
+          sheetName,
+          sheetName,
+          transform,
+        );
+        if (`=${nextFormula}` !== record.value) {
+          args.state.workbook.setDefinedName(record.name, `=${nextFormula}`);
+        }
         return;
       }
-      const nextFormula = rewriteFormulaForStructuralTransform(
-        record.value.slice(1),
-        sheetName,
-        sheetName,
-        transform,
-      );
-      if (`=${nextFormula}` !== record.value) {
-        args.state.workbook.setDefinedName(record.name, `=${nextFormula}`);
+      if (typeof record.value !== "object" || !record.value) {
+        return;
+      }
+      switch (record.value.kind) {
+        case "formula": {
+          const nextFormula = rewriteFormulaForStructuralTransform(
+            record.value.formula.startsWith("=")
+              ? record.value.formula.slice(1)
+              : record.value.formula,
+            sheetName,
+            sheetName,
+            transform,
+          );
+          const nextValue = {
+            ...record.value,
+            formula: record.value.formula.startsWith("=") ? `=${nextFormula}` : nextFormula,
+          };
+          if (nextValue.formula !== record.value.formula) {
+            args.state.workbook.setDefinedName(record.name, nextValue);
+          }
+          return;
+        }
+        case "cell-ref": {
+          if (record.value.sheetName !== sheetName) {
+            return;
+          }
+          const nextAddress = rewriteAddressForStructuralTransform(record.value.address, transform);
+          if (!nextAddress) {
+            args.state.workbook.deleteDefinedName(record.name);
+            return;
+          }
+          if (nextAddress !== record.value.address) {
+            args.state.workbook.setDefinedName(record.name, {
+              ...record.value,
+              address: nextAddress,
+            });
+          }
+          return;
+        }
+        case "range-ref": {
+          if (record.value.sheetName !== sheetName) {
+            return;
+          }
+          const nextRange = rewriteRangeForStructuralTransform(
+            record.value.startAddress,
+            record.value.endAddress,
+            transform,
+          );
+          if (!nextRange) {
+            args.state.workbook.deleteDefinedName(record.name);
+            return;
+          }
+          if (
+            nextRange.startAddress !== record.value.startAddress ||
+            nextRange.endAddress !== record.value.endAddress
+          ) {
+            args.state.workbook.setDefinedName(record.name, {
+              ...record.value,
+              startAddress: nextRange.startAddress,
+              endAddress: nextRange.endAddress,
+            });
+          }
+          return;
+        }
+        case "scalar":
+        case "structured-ref":
+          return;
       }
     });
   };
@@ -598,6 +666,7 @@ export function createEngineStructureService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
+            args.state.workbook.detachCellIndex(cellIndex);
           });
 
           clearAllSpillMetadata();

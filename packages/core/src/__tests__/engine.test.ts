@@ -4275,6 +4275,66 @@ describe("SpreadsheetEngine", () => {
     expect(restored.exportSnapshot()).toEqual(snapshot);
   });
 
+  it("roundtrips structurally shifted range-backed defined names through snapshots", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "snapshot-structural-defined-range" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "B3" }, [
+      ["Qty", "Amount"],
+      [1, 10],
+      [2, 20],
+    ]);
+    engine.setDefinedName("SalesRange", {
+      kind: "range-ref",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+    });
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Qty", "Amount"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setCellFormula("Sheet1", "C1", "SUM(SalesRange)");
+    engine.insertColumns("Sheet1", 0, 1);
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.workbook.metadata?.definedNames).toEqual([
+      {
+        name: "SalesRange",
+        value: {
+          kind: "range-ref",
+          sheetName: "Sheet1",
+          startAddress: "B1",
+          endAddress: "C3",
+        },
+      },
+    ]);
+
+    const restored = new SpreadsheetEngine({
+      workbookName: "snapshot-structural-defined-range-restored",
+    });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: {
+        kind: "range-ref",
+        sheetName: "Sheet1",
+        startAddress: "B1",
+        endAddress: "C3",
+      },
+    });
+    expect(restored.getCell("Sheet1", "D1").formula).toBe("SUM(SalesRange)");
+    expect(restored.getCellValue("Sheet1", "D1")).toMatchObject({ tag: 1, value: 33 });
+    expect(restored.exportSnapshot()).toEqual(snapshot);
+  });
+
   it("treats no-op structural, metadata, freeze, and filter updates as stable public operations", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

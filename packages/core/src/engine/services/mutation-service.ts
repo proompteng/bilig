@@ -1,9 +1,15 @@
 import { Effect } from "effect";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import {
+  formatAddress,
+  parseCellAddress,
+  rewriteAddressForStructuralTransform,
+  rewriteRangeForStructuralTransform,
+} from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type CellSnapshot, type LiteralInput } from "@bilig/protocol";
 import { normalizeRange } from "../../engine-range-utils.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
+import { structuralTransformForOp } from "../../engine-structural-utils.js";
 import { restoreFormatRangeOps, restoreStyleRangeOps } from "../../engine-range-format-ops.js";
 import { sheetMetadataToOps } from "../../engine-snapshot-utils.js";
 import { parseCsv, parseCsvCellInput } from "../../csv.js";
@@ -341,6 +347,155 @@ export function createEngineMutationService(args: {
   };
 
   const inverseOpsFor = (op: EngineOp): EngineOp[] => {
+    const captureStructuralWorkbookMetadataOps = (): EngineOp[] => {
+      const restoredOps: EngineOp[] = [];
+      args.state.workbook.listDefinedNames().forEach(({ name, value }) => {
+        restoredOps.push({
+          kind: "upsertDefinedName",
+          name,
+          value: structuredClone(value),
+        });
+      });
+      args.state.workbook.listTables().forEach((table) => {
+        restoredOps.push({
+          kind: "upsertTable",
+          table: {
+            name: table.name,
+            sheetName: table.sheetName,
+            startAddress: table.startAddress,
+            endAddress: table.endAddress,
+            columnNames: [...table.columnNames],
+            headerRow: table.headerRow,
+            totalsRow: table.totalsRow,
+          },
+        });
+      });
+      args.state.workbook.listSpills().forEach((spill) => {
+        restoredOps.push({
+          kind: "upsertSpillRange",
+          sheetName: spill.sheetName,
+          address: spill.address,
+          rows: spill.rows,
+          cols: spill.cols,
+        });
+      });
+      args.state.workbook.listPivots().forEach((pivot) => {
+        restoredOps.push({
+          kind: "upsertPivotTable",
+          name: pivot.name,
+          sheetName: pivot.sheetName,
+          address: pivot.address,
+          source: { ...pivot.source },
+          groupBy: [...pivot.groupBy],
+          values: pivot.values.map((value) => Object.assign({}, value)),
+          rows: pivot.rows,
+          cols: pivot.cols,
+        });
+      });
+      args.state.workbook.listCharts().forEach((chart) => {
+        restoredOps.push({
+          kind: "upsertChart",
+          chart: structuredClone(chart),
+        });
+      });
+      args.state.workbook.listImages().forEach((image) => {
+        restoredOps.push({
+          kind: "upsertImage",
+          image: structuredClone(image),
+        });
+      });
+      args.state.workbook.listShapes().forEach((shape) => {
+        restoredOps.push({
+          kind: "upsertShape",
+          shape: structuredClone(shape),
+        });
+      });
+      return restoredOps;
+    };
+
+    const clearStructuralSheetMetadataOps = (
+      sheetName: string,
+      transform: ReturnType<typeof structuralTransformForOp>,
+    ): EngineOp[] => {
+      const clearedOps: EngineOp[] = [];
+      args.state.workbook.listFilters(sheetName).forEach((filter) => {
+        const range = rewriteRangeForStructuralTransform(
+          filter.range.startAddress,
+          filter.range.endAddress,
+          transform,
+        );
+        if (!range) {
+          return;
+        }
+        clearedOps.push({
+          kind: "clearFilter",
+          sheetName,
+          range: {
+            ...filter.range,
+            startAddress: range.startAddress,
+            endAddress: range.endAddress,
+          },
+        });
+      });
+      args.state.workbook.listSorts(sheetName).forEach((sort) => {
+        const range = rewriteRangeForStructuralTransform(
+          sort.range.startAddress,
+          sort.range.endAddress,
+          transform,
+        );
+        if (!range) {
+          return;
+        }
+        clearedOps.push({
+          kind: "clearSort",
+          sheetName,
+          range: { ...sort.range, startAddress: range.startAddress, endAddress: range.endAddress },
+        });
+      });
+      args.state.workbook.listDataValidations(sheetName).forEach((validation) => {
+        const range = rewriteRangeForStructuralTransform(
+          validation.range.startAddress,
+          validation.range.endAddress,
+          transform,
+        );
+        if (!range) {
+          return;
+        }
+        clearedOps.push({
+          kind: "clearDataValidation",
+          sheetName,
+          range: {
+            ...validation.range,
+            startAddress: range.startAddress,
+            endAddress: range.endAddress,
+          },
+        });
+      });
+      args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
+        const address = rewriteAddressForStructuralTransform(thread.address, transform);
+        if (!address) {
+          return;
+        }
+        clearedOps.push({
+          kind: "deleteCommentThread",
+          sheetName,
+          address,
+        });
+      });
+      args.state.workbook.listNotes(sheetName).forEach((note) => {
+        const address = rewriteAddressForStructuralTransform(note.address, transform);
+        if (!address) {
+          return;
+        }
+        clearedOps.push({
+          kind: "deleteNote",
+          sheetName,
+          address,
+        });
+      });
+      return clearedOps;
+    };
+
     switch (op.kind) {
       case "upsertWorkbook":
         return [{ kind: "upsertWorkbook", name: args.state.workbook.workbookName }];
@@ -465,7 +620,9 @@ export function createEngineMutationService(args: {
           op.start,
           op.count,
         );
+        const transform = structuralTransformForOp(op);
         return [
+          ...clearStructuralSheetMetadataOps(op.sheetName, transform),
           {
             kind: "insertRows",
             sheetName: op.sheetName,
@@ -475,6 +632,7 @@ export function createEngineMutationService(args: {
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
           ...args.captureSheetCellState(op.sheetName),
+          ...captureStructuralWorkbookMetadataOps(),
         ];
       }
       case "moveRows":
@@ -497,7 +655,9 @@ export function createEngineMutationService(args: {
           op.start,
           op.count,
         );
+        const transform = structuralTransformForOp(op);
         return [
+          ...clearStructuralSheetMetadataOps(op.sheetName, transform),
           {
             kind: "insertColumns",
             sheetName: op.sheetName,
@@ -507,6 +667,7 @@ export function createEngineMutationService(args: {
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
           ...args.captureSheetCellState(op.sheetName),
+          ...captureStructuralWorkbookMetadataOps(),
         ];
       }
       case "moveColumns":

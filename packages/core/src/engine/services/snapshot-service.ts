@@ -232,9 +232,6 @@ export function createEngineSnapshotService(args: {
               context: { ...snapshot.workbook.metadata.volatileContext },
             });
           }
-          snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
-            ops.push({ kind: "upsertDefinedName", name, value });
-          });
           snapshot.workbook.metadata?.styles?.forEach((style) => {
             ops.push({ kind: "upsertCellStyle", style: cloneCellStyleRecord(style) });
           });
@@ -412,6 +409,9 @@ export function createEngineSnapshotService(args: {
                 totalsRow: table.totalsRow,
               },
             });
+          });
+          snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
+            ops.push({ kind: "upsertDefinedName", name, value });
           });
           snapshot.workbook.metadata?.spills?.forEach((spill) => {
             ops.push({
