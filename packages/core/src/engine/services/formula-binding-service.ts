@@ -503,6 +503,7 @@ function buildDirectLookupDescriptor(args: {
         col: binding.col,
         length: prepared.length,
         columnVersion: prepared.columnVersion,
+        structureVersion: prepared.structureVersion,
         sheetColumnVersions: prepared.sheetColumnVersions,
         start: prepared.uniformStart,
         step: prepared.uniformStep,
@@ -536,6 +537,7 @@ function buildDirectLookupDescriptor(args: {
       col: binding.col,
       length: prepared.length,
       columnVersion: prepared.columnVersion,
+      structureVersion: prepared.structureVersion,
       sheetColumnVersions: prepared.sheetColumnVersions,
       start: prepared.uniformStart,
       step: prepared.uniformStep,
@@ -1065,15 +1067,18 @@ export function createEngineFormulaBindingService(args: {
       }
       for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
         const rangeIndex = existing.rangeDependencies[index]!;
+        const dependencySources = args.state.ranges.getDependencySourceEntities(rangeIndex);
         const released = args.state.ranges.release(rangeIndex);
         if (!released.removed) {
           continue;
         }
         const rangeEntity = makeRangeEntity(rangeIndex);
-        for (let memberIndex = 0; memberIndex < released.members.length; memberIndex += 1) {
-          const memberCellIndex = released.members[memberIndex]!;
-          removeReverseEdge(makeCellEntity(memberCellIndex), rangeEntity);
-          pruneTrackedDependencyCell(memberCellIndex, cellIndex);
+        for (let sourceIndex = 0; sourceIndex < dependencySources.length; sourceIndex += 1) {
+          const dependencyEntity = dependencySources[sourceIndex]!;
+          removeReverseEdge(dependencyEntity, rangeEntity);
+          if (!isRangeEntity(dependencyEntity)) {
+            pruneTrackedDependencyCell(entityPayload(dependencyEntity), cellIndex);
+          }
         }
         setReverseEdgeSlice(rangeEntity, args.edgeArena.empty());
       }
@@ -1208,10 +1213,10 @@ export function createEngineFormulaBindingService(args: {
 
     for (let rangeCursor = 0; rangeCursor < prepared.dependencies.newRangeCount; rangeCursor += 1) {
       const rangeIndex = prepared.dependencies.newRangeIndices[rangeCursor]!;
-      const memberIndices = args.state.ranges.expandToCells(rangeIndex);
+      const dependencySources = args.state.ranges.getDependencySourceEntities(rangeIndex);
       const rangeEntity = makeRangeEntity(rangeIndex);
-      for (let index = 0; index < memberIndices.length; index += 1) {
-        appendReverseEdge(makeCellEntity(memberIndices[index]!), rangeEntity);
+      for (let index = 0; index < dependencySources.length; index += 1) {
+        appendReverseEdge(dependencySources[index]!, rangeEntity);
       }
     }
     const formulaEntity = makeCellEntity(cellIndex);

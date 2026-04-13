@@ -135,6 +135,7 @@ export interface SheetRecord {
   order: number;
   grid: SheetGrid;
   columnVersions: Uint32Array;
+  structureVersion: number;
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>;
   columnAxis: Array<WorkbookAxisEntryRecord | undefined>;
   styleRanges: WorkbookStyleRangeRecord[];
@@ -195,6 +196,7 @@ export class WorkbookStore {
       order,
       grid: new SheetGrid(),
       columnVersions: new Uint32Array(MAX_COLS),
+      structureVersion: 1,
       rowAxis: [],
       columnAxis: [],
       styleRanges: [],
@@ -270,6 +272,10 @@ export class WorkbookStore {
 
   getSheetColumnVersion(sheetName: string, col: number): number {
     return this.sheetsByName.get(sheetName)?.columnVersions[col] ?? 0;
+  }
+
+  getSheetStructureVersion(sheetName: string): number {
+    return this.sheetsByName.get(sheetName)?.structureVersion ?? 0;
   }
 
   getSheetById(id: number): SheetRecord | undefined {
@@ -681,15 +687,22 @@ export class WorkbookStore {
     count: number,
     entries?: readonly WorkbookAxisEntrySnapshot[],
   ): void {
-    this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "row", start, 0, count, entries);
+    const sheet = this.getOrCreateSheet(sheetName);
+    this.spliceAxisEntries(sheet, "row", start, 0, count, entries);
+    this.bumpSheetStructureVersion(sheet);
   }
 
   deleteRows(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
-    return this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count, 0);
+    const sheet = this.getOrCreateSheet(sheetName);
+    const deleted = this.spliceAxisEntries(sheet, "row", start, count, 0);
+    this.bumpSheetStructureVersion(sheet);
+    return deleted;
   }
 
   moveRows(sheetName: string, start: number, count: number, target: number): void {
-    this.moveAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count, target);
+    const sheet = this.getOrCreateSheet(sheetName);
+    this.moveAxisEntries(sheet, "row", start, count, target);
+    this.bumpSheetStructureVersion(sheet);
   }
 
   insertColumns(
@@ -698,15 +711,22 @@ export class WorkbookStore {
     count: number,
     entries?: readonly WorkbookAxisEntrySnapshot[],
   ): void {
-    this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "column", start, 0, count, entries);
+    const sheet = this.getOrCreateSheet(sheetName);
+    this.spliceAxisEntries(sheet, "column", start, 0, count, entries);
+    this.bumpSheetStructureVersion(sheet);
   }
 
   deleteColumns(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
-    return this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count, 0);
+    const sheet = this.getOrCreateSheet(sheetName);
+    const deleted = this.spliceAxisEntries(sheet, "column", start, count, 0);
+    this.bumpSheetStructureVersion(sheet);
+    return deleted;
   }
 
   moveColumns(sheetName: string, start: number, count: number, target: number): void {
-    this.moveAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count, target);
+    const sheet = this.getOrCreateSheet(sheetName);
+    this.moveAxisEntries(sheet, "column", start, count, target);
+    this.bumpSheetStructureVersion(sheet);
   }
 
   setFreezePane(sheetName: string, rows: number, cols: number): WorkbookFreezePaneRecord {
@@ -1027,6 +1047,10 @@ export class WorkbookStore {
     if (Number.isInteger(id) && id >= this.nextSheetId) {
       this.nextSheetId = id + 1;
     }
+  }
+
+  private bumpSheetStructureVersion(sheet: SheetRecord): void {
+    sheet.structureVersion += 1;
   }
 
   private bumpFormatId(id: string): void {

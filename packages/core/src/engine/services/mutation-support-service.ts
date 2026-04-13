@@ -26,6 +26,17 @@ function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
 
+function advanceEpoch(current: number, setEpoch: (next: number) => void, seen: U32): number {
+  if (current >= 0xffff_fffe) {
+    setEpoch(1);
+    seen.fill(0);
+    return 1;
+  }
+  const next = current + 1;
+  setEpoch(next);
+  return next;
+}
+
 export interface EngineMutationSupportService {
   readonly beginMutationCollection: () => Effect.Effect<void, EngineMutationError>;
   readonly markInputChanged: (
@@ -216,21 +227,21 @@ export function createEngineMutationSupportService(args: {
   };
 
   const beginMutationCollectionNow = (): void => {
-    args.setChangedInputEpoch(args.getChangedInputEpoch() + 1);
-    if (args.getChangedInputEpoch() === 0xffff_ffff) {
-      args.setChangedInputEpoch(1);
-      args.getChangedInputSeen().fill(0);
-    }
-    args.setChangedFormulaEpoch(args.getChangedFormulaEpoch() + 1);
-    if (args.getChangedFormulaEpoch() === 0xffff_ffff) {
-      args.setChangedFormulaEpoch(1);
-      args.getChangedFormulaSeen().fill(0);
-    }
-    args.setExplicitChangedEpoch(args.getExplicitChangedEpoch() + 1);
-    if (args.getExplicitChangedEpoch() === 0xffff_ffff) {
-      args.setExplicitChangedEpoch(1);
-      args.getExplicitChangedSeen().fill(0);
-    }
+    advanceEpoch(
+      args.getChangedInputEpoch(),
+      args.setChangedInputEpoch,
+      args.getChangedInputSeen(),
+    );
+    advanceEpoch(
+      args.getChangedFormulaEpoch(),
+      args.setChangedFormulaEpoch,
+      args.getChangedFormulaSeen(),
+    );
+    advanceEpoch(
+      args.getExplicitChangedEpoch(),
+      args.setExplicitChangedEpoch,
+      args.getExplicitChangedSeen(),
+    );
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1);
   };
 
@@ -414,11 +425,11 @@ export function createEngineMutationSupportService(args: {
 
   const collectImpactedFormulasForCells = (cellIndices: readonly number[]): number => {
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1);
-    args.setImpactedFormulaEpoch(args.getImpactedFormulaEpoch() + 1);
-    if (args.getImpactedFormulaEpoch() === 0xffff_ffff) {
-      args.setImpactedFormulaEpoch(1);
-      args.getImpactedFormulaSeen().fill(0);
-    }
+    advanceEpoch(
+      args.getImpactedFormulaEpoch(),
+      args.setImpactedFormulaEpoch,
+      args.getImpactedFormulaSeen(),
+    );
 
     let impactedCount = 0;
     for (let cellCursor = 0; cellCursor < cellIndices.length; cellCursor += 1) {
@@ -635,11 +646,11 @@ export function createEngineMutationSupportService(args: {
     composeEventChanges(recalculated, explicitChangedCount) {
       return Effect.try({
         try: () => {
-          args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-          if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-            args.setChangedUnionEpoch(1);
-            args.getChangedUnionSeen().fill(0);
-          }
+          advanceEpoch(
+            args.getChangedUnionEpoch(),
+            args.setChangedUnionEpoch,
+            args.getChangedUnionSeen(),
+          );
           let changedCount = 0;
           for (let index = 0; index < explicitChangedCount; index += 1) {
             const cellIndex = args.getExplicitChangedBuffer()[index]!;
@@ -671,11 +682,11 @@ export function createEngineMutationSupportService(args: {
     unionChangedSets(...sets) {
       return Effect.try({
         try: () => {
-          args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-          if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-            args.setChangedUnionEpoch(1);
-            args.getChangedUnionSeen().fill(0);
-          }
+          advanceEpoch(
+            args.getChangedUnionEpoch(),
+            args.setChangedUnionEpoch,
+            args.getChangedUnionSeen(),
+          );
           let changedCount = 0;
           for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
             const set = sets[setIndex]!;
@@ -701,11 +712,11 @@ export function createEngineMutationSupportService(args: {
     composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount) {
       return Effect.try({
         try: () => {
-          args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-          if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-            args.setChangedUnionEpoch(1);
-            args.getChangedUnionSeen().fill(0);
-          }
+          advanceEpoch(
+            args.getChangedUnionEpoch(),
+            args.setChangedUnionEpoch,
+            args.getChangedUnionSeen(),
+          );
           let changedCount = 0;
           for (let index = 0; index < changedRoots.length; index += 1) {
             const cellIndex = changedRoots[index]!;
@@ -849,6 +860,11 @@ export function createEngineMutationSupportService(args: {
     markExplicitChangedNow,
     composeMutationRootsNow,
     composeEventChangesNow(recalculated, explicitChangedCount) {
+      advanceEpoch(
+        args.getChangedUnionEpoch(),
+        args.setChangedUnionEpoch,
+        args.getChangedUnionSeen(),
+      );
       if (explicitChangedCount === 0) {
         return recalculated;
       }
@@ -889,11 +905,6 @@ export function createEngineMutationSupportService(args: {
         args.getChangedUnion()[2] = secondRecalculated;
         return args.getChangedUnion().subarray(0, 3);
       }
-      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-        args.setChangedUnionEpoch(1);
-        args.getChangedUnionSeen().fill(0);
-      }
       let changedCount = 0;
       for (let index = 0; index < explicitChangedCount; index += 1) {
         const cellIndex = args.getExplicitChangedBuffer()[index]!;
@@ -916,11 +927,11 @@ export function createEngineMutationSupportService(args: {
       return args.getChangedUnion().subarray(0, changedCount);
     },
     unionChangedSetsNow(...sets) {
-      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-        args.setChangedUnionEpoch(1);
-        args.getChangedUnionSeen().fill(0);
-      }
+      advanceEpoch(
+        args.getChangedUnionEpoch(),
+        args.setChangedUnionEpoch,
+        args.getChangedUnionSeen(),
+      );
       let changedCount = 0;
       for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
         const set = sets[setIndex]!;
@@ -937,11 +948,11 @@ export function createEngineMutationSupportService(args: {
       return args.getChangedUnion().subarray(0, changedCount);
     },
     composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount) {
-      args.setChangedUnionEpoch(args.getChangedUnionEpoch() + 1);
-      if (args.getChangedUnionEpoch() === 0xffff_ffff) {
-        args.setChangedUnionEpoch(1);
-        args.getChangedUnionSeen().fill(0);
-      }
+      advanceEpoch(
+        args.getChangedUnionEpoch(),
+        args.setChangedUnionEpoch,
+        args.getChangedUnionSeen(),
+      );
       let changedCount = 0;
       for (let index = 0; index < changedRoots.length; index += 1) {
         const cellIndex = changedRoots[index]!;

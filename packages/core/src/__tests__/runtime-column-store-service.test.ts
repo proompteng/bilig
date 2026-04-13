@@ -110,4 +110,55 @@ describe("createEngineRuntimeColumnStoreService", () => {
       { tag: ValueTag.Empty },
     ]);
   });
+
+  it("invalidates cached column slices after structural row remaps", () => {
+    const workbook = new WorkbookStore("runtime-column-store-structural");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    setStoredCellValue(workbook, strings, "Sheet1", "C3", { tag: ValueTag.Boolean, value: false });
+    setStoredCellValue(workbook, strings, "Sheet1", "C4", { tag: ValueTag.String, value: "north" });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+
+    expect(runtimeColumnStore.readCellValue("Sheet1", 2, 2)).toEqual({
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+
+    workbook.deleteRows("Sheet1", 0, 1);
+    workbook.remapSheetCells("Sheet1", "row", (index) => (index === 0 ? undefined : index - 1));
+
+    expect(runtimeColumnStore.readCellValue("Sheet1", 1, 2)).toEqual({
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+    expect(runtimeColumnStore.readCellValue("Sheet1", 2, 2)).toEqual({
+      tag: ValueTag.String,
+      value: "north",
+      stringId: expect.any(Number),
+    });
+  });
+
+  it("treats missing sheets and unknown raw tags as empty cells", () => {
+    const workbook = new WorkbookStore("runtime-column-store-empty");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    const cellIndex = workbook.ensureCell("Sheet1", "A1");
+    workbook.cellStore.tags[cellIndex] = 99;
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+
+    expect(runtimeColumnStore.readCellValue("Missing", 0, 0)).toEqual({
+      tag: ValueTag.Empty,
+    });
+    expect(runtimeColumnStore.readCellValue("Sheet1", 0, 0)).toEqual({
+      tag: ValueTag.Empty,
+    });
+  });
 });

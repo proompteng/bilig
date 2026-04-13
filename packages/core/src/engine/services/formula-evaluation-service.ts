@@ -124,8 +124,16 @@ export function createEngineFormulaEvaluationService(args: {
     directLookup: Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact" }>,
   ): PreparedExactVectorLookup => {
     const prepared = directLookup.prepared;
-    const columnVersion = prepared.sheetColumnVersions[prepared.col] ?? 0;
-    if (columnVersion === prepared.columnVersion) {
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: prepared.sheetName,
+      rowStart: prepared.rowStart,
+      rowEnd: prepared.rowEnd,
+      col: prepared.col,
+    });
+    if (
+      currentSlice.columnVersion === prepared.columnVersion &&
+      currentSlice.structureVersion === prepared.structureVersion
+    ) {
       return prepared;
     }
     const refreshed = args.exactLookup.prepareVectorLookup({
@@ -142,8 +150,16 @@ export function createEngineFormulaEvaluationService(args: {
     directLookup: Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate" }>,
   ): PreparedApproximateVectorLookup => {
     const prepared = directLookup.prepared;
-    const columnVersion = prepared.sheetColumnVersions[prepared.col] ?? 0;
-    if (columnVersion === prepared.columnVersion) {
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: prepared.sheetName,
+      rowStart: prepared.rowStart,
+      rowEnd: prepared.rowEnd,
+      col: prepared.col,
+    });
+    if (
+      currentSlice.columnVersion === prepared.columnVersion &&
+      currentSlice.structureVersion === prepared.structureVersion
+    ) {
       return prepared;
     }
     const refreshed = args.sortedLookup.prepareVectorLookup({
@@ -165,8 +181,16 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact-uniform-numeric" }>
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact" }> => {
-    const columnVersion = directLookup.sheetColumnVersions[directLookup.col] ?? 0;
-    if (columnVersion === directLookup.columnVersion) {
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: directLookup.sheetName,
+      rowStart: directLookup.rowStart,
+      rowEnd: directLookup.rowEnd,
+      col: directLookup.col,
+    });
+    if (
+      currentSlice.columnVersion === directLookup.columnVersion &&
+      currentSlice.structureVersion === directLookup.structureVersion
+    ) {
       return directLookup;
     }
     const refreshed = args.exactLookup.prepareVectorLookup({
@@ -182,6 +206,7 @@ export function createEngineFormulaEvaluationService(args: {
     ) {
       directLookup.length = refreshed.length;
       directLookup.columnVersion = refreshed.columnVersion;
+      directLookup.structureVersion = refreshed.structureVersion;
       directLookup.sheetColumnVersions = refreshed.sheetColumnVersions;
       directLookup.start = refreshed.uniformStart;
       directLookup.step = refreshed.uniformStep;
@@ -206,8 +231,16 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate-uniform-numeric" }>
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate" }> => {
-    const columnVersion = directLookup.sheetColumnVersions[directLookup.col] ?? 0;
-    if (columnVersion === directLookup.columnVersion) {
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: directLookup.sheetName,
+      rowStart: directLookup.rowStart,
+      rowEnd: directLookup.rowEnd,
+      col: directLookup.col,
+    });
+    if (
+      currentSlice.columnVersion === directLookup.columnVersion &&
+      currentSlice.structureVersion === directLookup.structureVersion
+    ) {
       return directLookup;
     }
     const refreshed = args.sortedLookup.prepareVectorLookup({
@@ -223,6 +256,7 @@ export function createEngineFormulaEvaluationService(args: {
     ) {
       directLookup.length = refreshed.length;
       directLookup.columnVersion = refreshed.columnVersion;
+      directLookup.structureVersion = refreshed.structureVersion;
       directLookup.sheetColumnVersions = refreshed.sheetColumnVersions;
       directLookup.start = refreshed.uniformStart;
       directLookup.step = refreshed.uniformStep;

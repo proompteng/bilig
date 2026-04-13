@@ -46,6 +46,7 @@ export interface SortedColumnSearchService {
 
 interface ApproximateColumnIndexEntry {
   columnVersion: number;
+  structureVersion: number;
   comparableKind: "numeric" | "text" | undefined;
   uniformStart: number | undefined;
   uniformStep: number | undefined;
@@ -236,6 +237,7 @@ export function createSortedColumnSearchService(args: {
     if (hasInvalid || (hasNumeric && hasText)) {
       return {
         columnVersion: slice.columnVersion,
+        structureVersion: slice.structureVersion,
         comparableKind: undefined,
         uniformStart: undefined,
         uniformStep: undefined,
@@ -261,6 +263,7 @@ export function createSortedColumnSearchService(args: {
       }
       return {
         columnVersion: slice.columnVersion,
+        structureVersion: slice.structureVersion,
         comparableKind: "text",
         uniformStart: undefined,
         uniformStep: undefined,
@@ -291,6 +294,7 @@ export function createSortedColumnSearchService(args: {
     const uniformNumericStep = detectUniformNumericStep(numericValues);
     return {
       columnVersion: slice.columnVersion,
+      structureVersion: slice.structureVersion,
       comparableKind: "numeric",
       uniformStart: uniformNumericStep?.start,
       uniformStep: uniformNumericStep?.step,
@@ -308,14 +312,18 @@ export function createSortedColumnSearchService(args: {
     rowEnd: number,
   ): ApproximateColumnIndexEntry => {
     const cacheKey = getColumnCacheKey(sheetName, col, rowStart, rowEnd);
-    const columnVersion = args.runtimeColumnStore.getColumnSlice({
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
       sheetName,
       rowStart,
       rowEnd,
       col,
-    }).columnVersion;
+    });
     let entry = approximateColumnIndices.get(cacheKey);
-    if (!entry || entry.columnVersion !== columnVersion) {
+    if (
+      !entry ||
+      entry.columnVersion !== currentSlice.columnVersion ||
+      entry.structureVersion !== currentSlice.structureVersion
+    ) {
       entry = buildApproximateColumnIndex(sheetName, col, rowStart, rowEnd);
       approximateColumnIndices.set(cacheKey, entry);
     }
@@ -342,6 +350,7 @@ export function createSortedColumnSearchService(args: {
       col: request.col,
       length: request.rowEnd - request.rowStart + 1,
       columnVersion: entry.columnVersion,
+      structureVersion: entry.structureVersion,
       sheetColumnVersions: columnSlice.sheetColumnVersions,
       comparableKind: entry.comparableKind,
       uniformStart: entry.uniformStart,
@@ -356,13 +365,22 @@ export function createSortedColumnSearchService(args: {
   const refreshPreparedVectorLookup = (
     prepared: PreparedApproximateVectorLookup,
   ): PreparedApproximateVectorLookup => {
-    const columnVersion = prepared.sheetColumnVersions[prepared.col] ?? 0;
-    if (columnVersion === prepared.columnVersion) {
+    const currentSlice = args.runtimeColumnStore.getColumnSlice({
+      sheetName: prepared.sheetName,
+      rowStart: prepared.rowStart,
+      rowEnd: prepared.rowEnd,
+      col: prepared.col,
+    });
+    if (
+      currentSlice.columnVersion === prepared.columnVersion &&
+      currentSlice.structureVersion === prepared.structureVersion
+    ) {
       return prepared;
     }
     const refreshed = prepareVectorLookup(prepared);
     prepared.length = refreshed.length;
     prepared.columnVersion = refreshed.columnVersion;
+    prepared.structureVersion = refreshed.structureVersion;
     prepared.sheetColumnVersions = refreshed.sheetColumnVersions;
     prepared.comparableKind = refreshed.comparableKind;
     prepared.uniformStart = refreshed.uniformStart;

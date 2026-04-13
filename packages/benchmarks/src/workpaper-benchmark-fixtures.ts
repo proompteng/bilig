@@ -129,6 +129,57 @@ export function buildDynamicArraySheet(rowCount: number): WorkPaperSheet {
   return rows;
 }
 
+export function buildOverlappingAggregateSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [rowNumber, `=SUM(A1:A${rowNumber})`];
+  });
+}
+
+export function buildConditionalAggregationSheet(
+  rowCount: number,
+  formulaCopies: number,
+): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [
+    [
+      "Group",
+      "Value",
+      "",
+      "A",
+      ...Array.from(
+        { length: formulaCopies },
+        () => `=SUMIF(A2:A${rowCount + 1},D1,B2:B${rowCount + 1})`,
+      ),
+      ...Array.from({ length: formulaCopies }, () => `=COUNTIF(A2:A${rowCount + 1},D1)`),
+    ],
+  ];
+  for (let index = 1; index <= rowCount; index += 1) {
+    rows.push([index % 2 === 0 ? "A" : "B", index]);
+  }
+  return rows;
+}
+
+export function buildParserCacheTemplateSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [
+      rowNumber,
+      rowNumber * 2,
+      `=A${rowNumber}+B${rowNumber}`,
+      `=C${rowNumber}*2`,
+      `=SUM(A1:A${rowNumber})`,
+      `=D${rowNumber}+E${rowNumber}`,
+    ];
+  });
+}
+
+export function buildMixedFrontierSheet(rowCount: number): WorkPaperSheet {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1;
+    return [rowNumber, `=$A$1+${rowNumber}`, `=SUM(A1:A${rowNumber})`];
+  });
+}
+
 export function textLookupKey(index: number): string {
   return `KEY-${String(index).padStart(5, "0")}`;
 }

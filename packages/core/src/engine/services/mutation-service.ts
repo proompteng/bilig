@@ -1711,7 +1711,7 @@ export function createEngineMutationService(args: {
                 potentialNewCells,
                 (forward) => {
                   args.applyBatchNow(
-                    createBatch(args.state.replicaState, forward.ops),
+                    createBatch(args.state.replicaState, [...transactionRecordOps(forward)]),
                     "local",
                     forward.potentialNewCells,
                     preparedCellAddressesByOpIndex,

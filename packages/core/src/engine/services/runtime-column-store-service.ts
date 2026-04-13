@@ -8,6 +8,7 @@ export interface RuntimeColumnSlice {
   readonly col: number;
   readonly length: number;
   columnVersion: number;
+  structureVersion: number;
   sheetColumnVersions: Uint32Array;
   tags: Uint8Array;
   numbers: Float64Array;
@@ -111,6 +112,7 @@ export function createEngineRuntimeColumnStoreService(args: {
   }): RuntimeColumnSlice => {
     const sheet = args.state.workbook.getSheet(request.sheetName);
     const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions;
+    const structureVersion = sheet?.structureVersion ?? 0;
     const length = request.rowEnd - request.rowStart + 1;
     const tags = new Uint8Array(length);
     const numbers = new Float64Array(length);
@@ -149,6 +151,7 @@ export function createEngineRuntimeColumnStoreService(args: {
       col: request.col,
       length,
       columnVersion: sheetColumnVersions[request.col] ?? 0,
+      structureVersion,
       sheetColumnVersions,
       tags,
       numbers,
@@ -172,10 +175,12 @@ export function createEngineRuntimeColumnStoreService(args: {
     const currentSheet = args.state.workbook.getSheet(request.sheetName);
     const currentSheetColumnVersions = currentSheet?.columnVersions ?? emptyColumnVersions;
     const currentColumnVersion = currentSheetColumnVersions[request.col] ?? 0;
+    const currentStructureVersion = currentSheet?.structureVersion ?? 0;
     let slice = columnSliceCache.get(cacheKey);
     if (
       !slice ||
       slice.columnVersion !== currentColumnVersion ||
+      slice.structureVersion !== currentStructureVersion ||
       slice.sheetColumnVersions !== currentSheetColumnVersions
     ) {
       slice = buildColumnSlice(request);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { makeCellEntity, makeRangeEntity } from "../entity-ids.js";
 import { RangeRegistry } from "../range-registry.js";
 
 describe("RangeRegistry", () => {
@@ -89,5 +90,52 @@ describe("RangeRegistry", () => {
     expect(descriptor.membersOffset).toBe(0);
     expect(descriptor.membersLength).toBe(0);
     expect(descriptor.refCount).toBe(0);
+  });
+
+  it("chains prefix ranges through prior range entities instead of all member cells", () => {
+    const registry = new RangeRegistry();
+    let nextCellIndex = 30;
+
+    const first = registry.intern(
+      1,
+      {
+        kind: "cells",
+        start: { row: 0, col: 0, text: "A1" },
+        end: { row: 1, col: 0, text: "A2" },
+      },
+      {
+        ensureCell: () => nextCellIndex++,
+        forEachSheetCell: () => {},
+      },
+    );
+    const second = registry.intern(
+      1,
+      {
+        kind: "cells",
+        start: { row: 0, col: 0, text: "A1" },
+        end: { row: 2, col: 0, text: "A3" },
+      },
+      {
+        ensureCell: () => nextCellIndex++,
+        forEachSheetCell: () => {},
+      },
+    );
+
+    expect(registry.getMembers(second.rangeIndex)).toEqual(Uint32Array.from([30, 31, 32]));
+    expect(registry.getDependencySourceEntities(second.rangeIndex)).toEqual(
+      Uint32Array.from([makeRangeEntity(first.rangeIndex), makeCellEntity(32)]),
+    );
+
+    const releasedFirst = registry.release(first.rangeIndex);
+    expect(releasedFirst.removed).toBe(false);
+    expect(registry.getDescriptor(first.rangeIndex).refCount).toBe(1);
+
+    const releasedSecond = registry.release(second.rangeIndex);
+    expect(releasedSecond.removed).toBe(true);
+    expect(registry.getDescriptor(second.rangeIndex).refCount).toBe(0);
+
+    const releasedParent = registry.release(first.rangeIndex);
+    expect(releasedParent.removed).toBe(true);
+    expect(registry.getDescriptor(first.rangeIndex).refCount).toBe(0);
   });
 });

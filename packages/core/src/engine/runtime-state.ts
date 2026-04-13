@@ -98,6 +98,7 @@ export interface PreparedExactVectorLookup {
   col: number;
   length: number;
   columnVersion: number;
+  structureVersion: number;
   sheetColumnVersions: Uint32Array;
   comparableKind: "numeric" | "text" | "mixed";
   uniformStart: number | undefined;
@@ -117,6 +118,7 @@ export interface PreparedApproximateVectorLookup {
   col: number;
   length: number;
   columnVersion: number;
+  structureVersion: number;
   sheetColumnVersions: Uint32Array;
   comparableKind: "numeric" | "text" | undefined;
   uniformStart: number | undefined;
@@ -143,6 +145,7 @@ export type RuntimeDirectLookupDescriptor =
       col: number;
       length: number;
       columnVersion: number;
+      structureVersion: number;
       sheetColumnVersions: Uint32Array;
       start: number;
       step: number;
@@ -163,6 +166,7 @@ export type RuntimeDirectLookupDescriptor =
       col: number;
       length: number;
       columnVersion: number;
+      structureVersion: number;
       sheetColumnVersions: Uint32Array;
       start: number;
       step: number;

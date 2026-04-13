@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ValueTag } from "@bilig/protocol";
+import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { StringPool } from "../string-pool.js";
 import { WorkbookStore } from "../workbook-store.js";
 import { createExactColumnIndexService } from "../engine/services/exact-column-index-service.js";
@@ -10,7 +10,10 @@ function setStoredCellValue(
   strings: StringPool,
   sheetName: string,
   address: string,
-  value: { tag: ValueTag.String; value: string } | { tag: ValueTag.Number; value: number },
+  value:
+    | { tag: ValueTag.String; value: string }
+    | { tag: ValueTag.Number; value: number }
+    | { tag: ValueTag.Boolean; value: boolean },
 ): void {
   const cellIndex = workbook.ensureCell(sheetName, address);
   workbook.cellStore.setValue(
@@ -75,5 +78,215 @@ describe("createExactColumnIndexService", () => {
         searchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 });
+  });
+
+  it("refreshes prepared lookups after structural row remaps and handles text and mixed columns", () => {
+    const workbook = new WorkbookStore("exact-index-prepared");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 3, 5].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+    ["apple", "pear", "plum"].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `B${index + 1}`, {
+        tag: ValueTag.String,
+        value,
+      });
+    });
+    workbook.ensureCell("Sheet1", "C1");
+    setStoredCellValue(workbook, strings, "Sheet1", "C2", {
+      tag: ValueTag.String,
+      value: "pear",
+    });
+    setStoredCellValue(workbook, strings, "Sheet1", "C3", {
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+
+    const numericPrepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 3 },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 3 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    const pristineTextPrepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 1,
+    });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "PEAR" },
+        prepared: pristineTextPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        prepared: pristineTextPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        prepared: pristineTextPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "PEAR" },
+        sheetName: "Sheet1",
+        start: "B1",
+        end: "B3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        sheetName: "Sheet1",
+        start: "B1",
+        end: "B3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        sheetName: "Sheet1",
+        start: "B1",
+        end: "B3",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    workbook.deleteRows("Sheet1", 0, 1);
+    workbook.remapSheetCells("Sheet1", "row", (index) => (index === 0 ? undefined : index - 1));
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 5 },
+        prepared: numericPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+
+    const textPrepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 1,
+    });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "PEAR" },
+        prepared: textPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 1 });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        prepared: textPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        prepared: textPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+    const mixedPrepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 2,
+    });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: false },
+        prepared: mixedPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 });
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        prepared: mixedPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.String, value: "pear" },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "B2",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
+    expect(
+      exact.findVectorMatch({
+        lookupValue: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+        sheetName: "Sheet1",
+        start: "A1",
+        end: "A2",
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: false });
   });
 });

@@ -1,5 +1,6 @@
 import { MAX_COLS, MAX_ROWS, MAX_WASM_RANGE_CELLS, type RangeIndex } from "@bilig/protocol";
 import type { CellAddress, CellRangeAddress, RangeAddress } from "@bilig/formula";
+import { makeCellEntity, makeRangeEntity } from "./entity-ids.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 
 export interface RangeDescriptor {
@@ -12,8 +13,11 @@ export interface RangeDescriptor {
   col2: number;
   membersOffset: number;
   membersLength: number;
+  dependencySourcesOffset: number;
+  dependencySourcesLength: number;
   refCount: number;
   dynamic: boolean;
+  parentRangeIndex: RangeIndex | undefined;
 }
 
 export interface RangeMaterializer {
@@ -41,6 +45,8 @@ export class RangeRegistry {
   private readonly dynamicBySheet = new Map<number, DynamicRangeIndex[]>();
   private readonly members = new EdgeArena();
   private readonly memberSlices: EdgeSlice[] = [];
+  private readonly dependencySources = new EdgeArena();
+  private readonly dependencySourceSlices: EdgeSlice[] = [];
 
   get size(): number {
     return this.descriptors.length;
@@ -52,6 +58,8 @@ export class RangeRegistry {
     this.dynamicBySheet.clear();
     this.members.reset();
     this.memberSlices.length = 0;
+    this.dependencySources.reset();
+    this.dependencySourceSlices.length = 0;
   }
 
   intern(
@@ -83,17 +91,38 @@ export class RangeRegistry {
       col2: cellRange.end.col,
       membersOffset: 0,
       membersLength: 0,
+      dependencySourcesOffset: 0,
+      dependencySourcesLength: 0,
       refCount: 1,
       dynamic,
+      parentRangeIndex: undefined,
     };
 
+    const sourceReuse =
+      range.kind === "cells"
+        ? resolveCellRangeDependencyReuse(this.descriptors, this.byKey, sheetId, cellRange)
+        : undefined;
     const memberIndices =
       range.kind === "cells"
-        ? materializeBoundedMembers(sheetId, cellRange, materializer)
+        ? materializeBoundedMembers(sheetId, cellRange, materializer, this, sourceReuse)
         : materializeDynamicMembers(sheetId, cellRange, range.kind, materializer);
+    const dependencySourceEntities =
+      range.kind === "cells"
+        ? materializeCellRangeDependencySources(sourceReuse, memberIndices)
+        : materializeDynamicDependencySources(memberIndices);
     const memberSlice = this.members.replace(this.members.empty(), memberIndices);
+    const dependencySourceSlice = this.dependencySources.replace(
+      this.dependencySources.empty(),
+      dependencySourceEntities,
+    );
     this.memberSlices[descriptor.index] = memberSlice;
+    this.dependencySourceSlices[descriptor.index] = dependencySourceSlice;
     syncDescriptorMembers(descriptor, memberSlice);
+    syncDescriptorDependencySources(descriptor, dependencySourceSlice);
+    if (sourceReuse) {
+      descriptor.parentRangeIndex = sourceReuse.parentRangeIndex;
+      this.descriptors[sourceReuse.parentRangeIndex]!.refCount += 1;
+    }
     this.descriptors.push(descriptor);
     this.byKey.set(descriptorKey, descriptor.index);
 
@@ -126,7 +155,12 @@ export class RangeRegistry {
     const members = this.members.read(memberSlice);
     this.members.free(memberSlice);
     this.memberSlices[rangeIndex] = this.members.empty();
+    const dependencySourceSlice =
+      this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty();
+    this.dependencySources.free(dependencySourceSlice);
+    this.dependencySourceSlices[rangeIndex] = this.dependencySources.empty();
     syncDescriptorMembers(descriptor, this.memberSlices[rangeIndex]);
+    syncDescriptorDependencySources(descriptor, this.dependencySourceSlices[rangeIndex]);
     if (descriptor.dynamic) {
       const dynamic = this.dynamicBySheet.get(descriptor.sheetId);
       if (dynamic) {
@@ -136,7 +170,12 @@ export class RangeRegistry {
         );
       }
     }
+    const parentRangeIndex = descriptor.parentRangeIndex;
+    descriptor.parentRangeIndex = undefined;
     descriptor.refCount = 0;
+    if (parentRangeIndex !== undefined) {
+      this.release(parentRangeIndex);
+    }
     return { removed: true, members };
   }
 
@@ -150,6 +189,12 @@ export class RangeRegistry {
 
   getMembers(rangeIndex: RangeIndex): Uint32Array {
     return this.members.read(this.memberSlices[rangeIndex] ?? this.members.empty());
+  }
+
+  getDependencySourceEntities(rangeIndex: RangeIndex): Uint32Array {
+    return this.dependencySources.read(
+      this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty(),
+    );
   }
 
   getMembersView(rangeIndex: RangeIndex): Uint32Array {
@@ -193,7 +238,25 @@ function materializeBoundedMembers(
   sheetId: number,
   range: CellRangeAddress,
   materializer: RangeMaterializer,
+  registry: RangeRegistry,
+  reuse:
+    | {
+        parentRangeIndex: RangeIndex;
+        tailStartRow: number;
+        tailEndRow: number;
+        tailStartCol: number;
+        tailEndCol: number;
+      }
+    | undefined,
 ): Uint32Array {
+  if (reuse) {
+    const tailCells = materializeBoundedTailCells(sheetId, reuse, materializer);
+    const parentMembers = registry.getMembersView(reuse.parentRangeIndex);
+    const members = new Uint32Array(parentMembers.length + tailCells.length);
+    members.set(parentMembers, 0);
+    members.set(tailCells, parentMembers.length);
+    return members;
+  }
   const rowCount = range.end.row - range.start.row + 1;
   const colCount = range.end.col - range.start.col + 1;
   const memberCount = rowCount * colCount;
@@ -247,6 +310,116 @@ function materializeDynamicMembers(
   return matches.toSorted();
 }
 
+function materializeDynamicDependencySources(memberIndices: Uint32Array): Uint32Array {
+  const dependencySources = new Uint32Array(memberIndices.length);
+  for (let index = 0; index < memberIndices.length; index += 1) {
+    dependencySources[index] = makeCellEntity(memberIndices[index]!);
+  }
+  return dependencySources;
+}
+
+function materializeCellRangeDependencySources(
+  reuse:
+    | {
+        parentRangeIndex: RangeIndex;
+        tailStartRow: number;
+        tailEndRow: number;
+        tailStartCol: number;
+        tailEndCol: number;
+      }
+    | undefined,
+  memberIndices: Uint32Array,
+): Uint32Array {
+  if (reuse) {
+    const tailMemberCount =
+      (reuse.tailEndRow - reuse.tailStartRow + 1) * (reuse.tailEndCol - reuse.tailStartCol + 1);
+    const dependencySources = new Uint32Array(tailMemberCount + 1);
+    dependencySources[0] = makeRangeEntity(reuse.parentRangeIndex);
+    const tailStartIndex = memberIndices.length - tailMemberCount;
+    for (let index = 0; index < tailMemberCount; index += 1) {
+      dependencySources[index + 1] = makeCellEntity(memberIndices[tailStartIndex + index]!);
+    }
+    return dependencySources;
+  }
+  return materializeDynamicDependencySources(memberIndices);
+}
+
+function resolveCellRangeDependencyReuse(
+  descriptors: readonly RangeDescriptor[],
+  byKey: ReadonlyMap<string, RangeIndex>,
+  sheetId: number,
+  range: CellRangeAddress,
+):
+  | {
+      parentRangeIndex: RangeIndex;
+      tailStartRow: number;
+      tailEndRow: number;
+      tailStartCol: number;
+      tailEndCol: number;
+    }
+  | undefined {
+  const width = range.end.col - range.start.col + 1;
+  const height = range.end.row - range.start.row + 1;
+  if (width === 1 && height > 1) {
+    const prefixKey = keyForRange(sheetId, {
+      kind: "cells",
+      start: range.start,
+      end: { ...range.end, row: range.end.row - 1 },
+    });
+    const prefixRangeIndex = byKey.get(prefixKey);
+    if (prefixRangeIndex !== undefined && descriptors[prefixRangeIndex]?.refCount) {
+      return {
+        parentRangeIndex: prefixRangeIndex,
+        tailStartRow: range.end.row,
+        tailEndRow: range.end.row,
+        tailStartCol: range.start.col,
+        tailEndCol: range.end.col,
+      };
+    }
+  }
+  if (height === 1 && width > 1) {
+    const prefixKey = keyForRange(sheetId, {
+      kind: "cells",
+      start: range.start,
+      end: { ...range.end, col: range.end.col - 1 },
+    });
+    const prefixRangeIndex = byKey.get(prefixKey);
+    if (prefixRangeIndex !== undefined && descriptors[prefixRangeIndex]?.refCount) {
+      return {
+        parentRangeIndex: prefixRangeIndex,
+        tailStartRow: range.start.row,
+        tailEndRow: range.end.row,
+        tailStartCol: range.end.col,
+        tailEndCol: range.end.col,
+      };
+    }
+  }
+  return undefined;
+}
+
+function materializeBoundedTailCells(
+  sheetId: number,
+  reuse: {
+    tailStartRow: number;
+    tailEndRow: number;
+    tailStartCol: number;
+    tailEndCol: number;
+  },
+  materializer: RangeMaterializer,
+): Uint32Array {
+  const tailRowCount = reuse.tailEndRow - reuse.tailStartRow + 1;
+  const tailColCount = reuse.tailEndCol - reuse.tailStartCol + 1;
+  const tailCells = new Uint32Array(tailRowCount * tailColCount);
+  let cursor = 0;
+  for (let row = reuse.tailStartRow; row <= reuse.tailEndRow; row += 1) {
+    for (let col = reuse.tailStartCol; col <= reuse.tailEndCol; col += 1) {
+      tailCells[cursor] = materializer.ensureCell(sheetId, row, col);
+      cursor += 1;
+    }
+  }
+  return tailCells;
+}
+
 function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: number): boolean {
   if (descriptor.kind === "rows") {
     return row >= descriptor.row1 && row <= descriptor.row2;
@@ -260,6 +433,11 @@ function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: numb
 function syncDescriptorMembers(descriptor: RangeDescriptor, slice: EdgeSlice): void {
   descriptor.membersOffset = slice.ptr < 0 ? 0 : slice.ptr;
   descriptor.membersLength = slice.len;
+}
+
+function syncDescriptorDependencySources(descriptor: RangeDescriptor, slice: EdgeSlice): void {
+  descriptor.dependencySourcesOffset = slice.ptr < 0 ? 0 : slice.ptr;
+  descriptor.dependencySourcesLength = slice.len;
 }
 
 function toCellRange(range: RangeAddress): CellRangeAddress {

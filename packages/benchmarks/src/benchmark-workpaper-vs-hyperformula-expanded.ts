@@ -35,6 +35,30 @@ import {
   buildValueFormulaRows,
   range,
 } from "./workpaper-benchmark-fixtures.js";
+import {
+  measureHyperFormulaApproximateLookupAfterColumnWriteSample,
+  measureHyperFormulaConditionalAggregationSample,
+  measureHyperFormulaConfigToggleSample,
+  measureHyperFormulaIndexedLookupAfterColumnWriteSample,
+  measureHyperFormulaMixedFrontierSample,
+  measureHyperFormulaOverlappingAggregateSample,
+  measureHyperFormulaParserCacheTemplateSample,
+  measureHyperFormulaRebuildAndRecalculateSample,
+  measureHyperFormulaStructuralInsertRowsSample,
+  measureHyperFormulaSuspendedBatchMultiColumnEditSample,
+  measureHyperFormulaSuspendedBatchSingleColumnEditSample,
+  measureWorkPaperApproximateLookupAfterColumnWriteSample,
+  measureWorkPaperConditionalAggregationSample,
+  measureWorkPaperConfigToggleSample,
+  measureWorkPaperIndexedLookupAfterColumnWriteSample,
+  measureWorkPaperMixedFrontierSample,
+  measureWorkPaperOverlappingAggregateSample,
+  measureWorkPaperParserCacheTemplateSample,
+  measureWorkPaperRebuildAndRecalculateSample,
+  measureWorkPaperStructuralInsertRowsSample,
+  measureWorkPaperSuspendedBatchMultiColumnEditSample,
+  measureWorkPaperSuspendedBatchSingleColumnEditSample,
+} from "./benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js";
 
 const { HyperFormula } = await import("hyperformula");
 type HyperFormulaInstance = ReturnType<typeof HyperFormula.buildFromSheets>;
@@ -42,18 +66,57 @@ type HyperFormulaInstance = ReturnType<typeof HyperFormula.buildFromSheets>;
 export type ExpandedComparativeBenchmarkWorkload =
   | "build-dense-literals"
   | "build-mixed-content"
+  | "build-parser-cache-row-templates"
   | "build-many-sheets"
+  | "rebuild-and-recalculate"
+  | "rebuild-config-toggle"
   | "single-edit-chain"
   | "single-edit-fanout"
+  | "partial-recompute-mixed-frontier"
   | "single-formula-edit-recalc"
   | "batch-edit-single-column"
   | "batch-edit-multi-column"
+  | "batch-suspended-single-column"
+  | "batch-suspended-multi-column"
+  | "structural-insert-rows"
   | "range-read-dense"
+  | "aggregate-overlapping-ranges"
+  | "conditional-aggregation-reused-ranges"
   | "lookup-no-column-index"
   | "lookup-with-column-index"
+  | "lookup-with-column-index-after-column-write"
   | "lookup-approximate-sorted"
+  | "lookup-approximate-sorted-after-column-write"
   | "lookup-text-exact"
   | "dynamic-array-filter";
+
+export const EXPANDED_COMPARATIVE_WORKLOADS = [
+  "build-dense-literals",
+  "build-mixed-content",
+  "build-parser-cache-row-templates",
+  "build-many-sheets",
+  "rebuild-and-recalculate",
+  "rebuild-config-toggle",
+  "single-edit-chain",
+  "single-edit-fanout",
+  "partial-recompute-mixed-frontier",
+  "single-formula-edit-recalc",
+  "batch-edit-single-column",
+  "batch-edit-multi-column",
+  "batch-suspended-single-column",
+  "batch-suspended-multi-column",
+  "structural-insert-rows",
+  "range-read-dense",
+  "aggregate-overlapping-ranges",
+  "conditional-aggregation-reused-ranges",
+  "lookup-no-column-index",
+  "lookup-with-column-index",
+  "lookup-with-column-index-after-column-write",
+  "lookup-approximate-sorted",
+  "lookup-approximate-sorted-after-column-write",
+  "lookup-text-exact",
+  "dynamic-array-filter",
+] as const satisfies readonly ExpandedComparativeBenchmarkWorkload[];
 
 export interface ExpandedComparativeComparableResult {
   workload: ExpandedComparativeBenchmarkWorkload;
@@ -113,11 +176,32 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaMixedBuildSample(750),
     ),
     runComparableScenario(
+      "build-parser-cache-row-templates",
+      { cols: 6, rows: 1_500 },
+      runtimeOptions,
+      () => measureWorkPaperParserCacheTemplateSample(1_500),
+      () => measureHyperFormulaParserCacheTemplateSample(1_500),
+    ),
+    runComparableScenario(
       "build-many-sheets",
       { sheetCount: 8, rowsPerSheet: 120, colsPerSheet: 12 },
       runtimeOptions,
       () => measureWorkPaperManySheetsBuildSample(8, 120, 12),
       () => measureHyperFormulaManySheetsBuildSample(8, 120, 12),
+    ),
+    runComparableScenario(
+      "rebuild-and-recalculate",
+      { cols: 6, rows: 1_500 },
+      runtimeOptions,
+      () => measureWorkPaperRebuildAndRecalculateSample(1_500),
+      () => measureHyperFormulaRebuildAndRecalculateSample(1_500),
+    ),
+    runComparableScenario(
+      "rebuild-config-toggle",
+      { rowCount: 5_000, config: "useColumnIndex:false->true" },
+      runtimeOptions,
+      () => measureWorkPaperConfigToggleSample(5_000),
+      () => measureHyperFormulaConfigToggleSample(5_000),
     ),
     runComparableScenario(
       "single-edit-chain",
@@ -132,6 +216,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperSingleFanoutEditSample(2_000),
       () => measureHyperFormulaSingleFanoutEditSample(2_000),
+    ),
+    runComparableScenario(
+      "partial-recompute-mixed-frontier",
+      { rowCount: 1_500, graphShape: "scalar+range+fanout" },
+      runtimeOptions,
+      () => measureWorkPaperMixedFrontierSample(1_500),
+      () => measureHyperFormulaMixedFrontierSample(1_500),
     ),
     runComparableScenario(
       "single-formula-edit-recalc",
@@ -155,11 +246,46 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaBatchMultiColumnEditSample(250),
     ),
     runComparableScenario(
+      "batch-suspended-single-column",
+      { editCount: 500, mode: "suspend-resume" },
+      runtimeOptions,
+      () => measureWorkPaperSuspendedBatchSingleColumnEditSample(500),
+      () => measureHyperFormulaSuspendedBatchSingleColumnEditSample(500),
+    ),
+    runComparableScenario(
+      "batch-suspended-multi-column",
+      { rowCount: 250, editsPerRow: 2, mode: "suspend-resume" },
+      runtimeOptions,
+      () => measureWorkPaperSuspendedBatchMultiColumnEditSample(250),
+      () => measureHyperFormulaSuspendedBatchMultiColumnEditSample(250),
+    ),
+    runComparableScenario(
+      "structural-insert-rows",
+      { rowCount: 1_500, insertIndex: 750 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralInsertRowsSample(1_500),
+      () => measureHyperFormulaStructuralInsertRowsSample(1_500),
+    ),
+    runComparableScenario(
       "range-read-dense",
       { cols: 24, rows: 240, materializedCells: 240 * 24 },
       runtimeOptions,
       () => measureWorkPaperRangeReadSample(240, 24),
       () => measureHyperFormulaRangeReadSample(240, 24),
+    ),
+    runComparableScenario(
+      "aggregate-overlapping-ranges",
+      { rowCount: 1_500, functionName: "SUM" },
+      runtimeOptions,
+      () => measureWorkPaperOverlappingAggregateSample(1_500),
+      () => measureHyperFormulaOverlappingAggregateSample(1_500),
+    ),
+    runComparableScenario(
+      "conditional-aggregation-reused-ranges",
+      { rowCount: 2_000, formulaCopies: 32 },
+      runtimeOptions,
+      () => measureWorkPaperConditionalAggregationSample(2_000, 32),
+      () => measureHyperFormulaConditionalAggregationSample(2_000, 32),
     ),
     runComparableScenario(
       "lookup-no-column-index",
@@ -176,11 +302,25 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaLookupSample(5_000, true),
     ),
     runComparableScenario(
+      "lookup-with-column-index-after-column-write",
+      { rowCount: 5_000, useColumnIndex: true, mutate: "lookup-column" },
+      runtimeOptions,
+      () => measureWorkPaperIndexedLookupAfterColumnWriteSample(5_000),
+      () => measureHyperFormulaIndexedLookupAfterColumnWriteSample(5_000),
+    ),
+    runComparableScenario(
       "lookup-approximate-sorted",
       { rowCount: 5_000 },
       runtimeOptions,
       () => measureWorkPaperApproximateLookupSample(5_000),
       () => measureHyperFormulaApproximateLookupSample(5_000),
+    ),
+    runComparableScenario(
+      "lookup-approximate-sorted-after-column-write",
+      { rowCount: 5_000, mutate: "sorted-column-tail" },
+      runtimeOptions,
+      () => measureWorkPaperApproximateLookupAfterColumnWriteSample(5_000),
+      () => measureHyperFormulaApproximateLookupAfterColumnWriteSample(5_000),
     ),
     runComparableScenario(
       "lookup-text-exact",
@@ -207,11 +347,12 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const cliOptions = parseExpandedBenchmarkCliOptions(process.argv.slice(2));
   console.log(
     JSON.stringify(
       runWorkPaperVsHyperFormulaExpandedBenchmarkSuite({
-        sampleCount: DEFAULT_COMPETITIVE_SAMPLE_COUNT,
-        warmupCount: DEFAULT_COMPETITIVE_WARMUP_COUNT,
+        sampleCount: cliOptions.sampleCount ?? DEFAULT_COMPETITIVE_SAMPLE_COUNT,
+        warmupCount: cliOptions.warmupCount ?? DEFAULT_COMPETITIVE_WARMUP_COUNT,
       }),
       null,
       2,
@@ -900,6 +1041,33 @@ function isProtocolValueLike(
 
 function isHyperFormulaErrorLike(value: unknown): value is { value: unknown } {
   return value !== null && typeof value === "object" && "value" in value;
+}
+
+function parseExpandedBenchmarkCliOptions(
+  args: readonly string[],
+): ComparativeBenchmarkSuiteOptions {
+  const options: ComparativeBenchmarkSuiteOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--sample-count") {
+      const raw = args[index + 1];
+      if (raw === undefined) {
+        throw new Error("Missing value for --sample-count");
+      }
+      options.sampleCount = Number.parseInt(raw, 10);
+      index += 1;
+      continue;
+    }
+    if (arg === "--warmup-count") {
+      const raw = args[index + 1];
+      if (raw === undefined) {
+        throw new Error("Missing value for --warmup-count");
+      }
+      options.warmupCount = Number.parseInt(raw, 10);
+      index += 1;
+    }
+  }
+  return options;
 }
 
 function toHyperFormulaSheet(sheet: ReadonlyArray<ReadonlyArray<unknown>>): HyperFormulaSheet {
