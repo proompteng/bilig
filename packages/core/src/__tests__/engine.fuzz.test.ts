@@ -12,7 +12,7 @@ import type {
 } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
 import { EngineMutationError } from "../engine/errors.js";
-import { runModelProperty, runProperty } from "@bilig/test-fuzz";
+import { fuzzVitestTimeoutMs, runModelProperty, runProperty } from "@bilig/test-fuzz";
 
 type CoreAction =
   | { kind: "values"; range: CellRangeRef; values: LiteralInput[][] }
@@ -415,58 +415,69 @@ const engineHistoryCommandArbitraries: Array<
   redoCommandArbitrary,
 ];
 
+const propertyTimeoutMs = fuzzVitestTimeoutMs("property");
+const modelTimeoutMs = fuzzVitestTimeoutMs("model");
+
 describe("engine fuzz", () => {
-  it("preserves replay parity and snapshot roundtrips across rich random command streams", async () => {
-    await runProperty({
-      suite: "core/rich-command-replay-roundtrip",
-      arbitrary: fc.array(coreActionArbitrary, { minLength: 5, maxLength: 16 }),
-      predicate: async (actions) => {
-        const engine = new SpreadsheetEngine({
-          workbookName,
-          replicaId: "fuzz-core",
-        });
-        engine.createSheet(sheetName);
-
-        const applied: CoreAction[] = [];
-        for (const action of actions) {
-          const result = applyActionAndCaptureResult(engine, action);
-          if (result.accepted) {
-            applied.push(action);
-          }
-
-          const snapshot = result.after;
-          assertSnapshotInvariants(snapshot);
-          expect(exportReplaySnapshot(applied)).toEqual(snapshot);
-
-          const restored = new SpreadsheetEngine({
-            workbookName: snapshot.workbook.name,
-            replicaId: "fuzz-core-restore",
+  it(
+    "preserves replay parity and snapshot roundtrips across rich random command streams",
+    async () => {
+      await runProperty({
+        suite: "core/rich-command-replay-roundtrip",
+        arbitrary: fc.array(coreActionArbitrary, { minLength: 5, maxLength: 16 }),
+        predicate: async (actions) => {
+          const engine = new SpreadsheetEngine({
+            workbookName,
+            replicaId: "fuzz-core",
           });
-          restored.importSnapshot(snapshot);
-          expect(restored.exportSnapshot()).toEqual(snapshot);
-        }
-      },
-    });
-  });
+          engine.createSheet(sheetName);
 
-  it("keeps model-based history semantics aligned with replayed workbook state", async () => {
-    const ran = await runModelProperty({
-      suite: "core/model-history-undo-redo",
-      commands: fc.commands(engineHistoryCommandArbitraries, { maxCommands: 18 }),
-      createModel: () => ({
-        applied: [],
-        undone: [],
-      }),
-      createReal: async () => {
-        const engine = new SpreadsheetEngine({
-          workbookName,
-          replicaId: "fuzz-core-model",
-        });
-        engine.createSheet(sheetName);
-        applyAndExpectSnapshot(engine, { applied: [], undone: [] }, "initial model state");
-        return engine;
-      },
-    });
-    expect(ran).toBe(true);
-  });
+          const applied: CoreAction[] = [];
+          for (const action of actions) {
+            const result = applyActionAndCaptureResult(engine, action);
+            if (result.accepted) {
+              applied.push(action);
+            }
+
+            const snapshot = result.after;
+            assertSnapshotInvariants(snapshot);
+            expect(exportReplaySnapshot(applied)).toEqual(snapshot);
+
+            const restored = new SpreadsheetEngine({
+              workbookName: snapshot.workbook.name,
+              replicaId: "fuzz-core-restore",
+            });
+            restored.importSnapshot(snapshot);
+            expect(restored.exportSnapshot()).toEqual(snapshot);
+          }
+        },
+      });
+    },
+    propertyTimeoutMs,
+  );
+
+  it(
+    "keeps model-based history semantics aligned with replayed workbook state",
+    async () => {
+      const ran = await runModelProperty({
+        suite: "core/model-history-undo-redo",
+        commands: fc.commands(engineHistoryCommandArbitraries, { maxCommands: 18 }),
+        createModel: () => ({
+          applied: [],
+          undone: [],
+        }),
+        createReal: async () => {
+          const engine = new SpreadsheetEngine({
+            workbookName,
+            replicaId: "fuzz-core-model",
+          });
+          engine.createSheet(sheetName);
+          applyAndExpectSnapshot(engine, { applied: [], undone: [] }, "initial model state");
+          return engine;
+        },
+      });
+      expect(ran).toBe(true);
+    },
+    modelTimeoutMs,
+  );
 });
