@@ -417,11 +417,16 @@ describe("SpreadsheetEngine", () => {
     );
   });
 
-  it("does not leave explicit empty target cells after undoing a copy from empty cells", async () => {
+  it("treats copying empty cells into tracked empty dependencies as a history no-op", async () => {
+    const seed = new SpreadsheetEngine({ workbookName: "copy-undo-empty-targets-seed" });
+    await seed.ready();
+    seed.createSheet("Sheet1");
+    seed.setCellFormula("Sheet1", "A1", "A1+D4");
+    const snapshot = seed.exportSnapshot();
+
     const engine = new SpreadsheetEngine({ workbookName: "copy-undo-empty-targets" });
     await engine.ready();
-    engine.createSheet("Sheet1");
-    engine.setCellFormula("Sheet1", "A1", "A1+D4");
+    engine.importSnapshot(snapshot);
 
     const beforeCopy = engine.exportSnapshot();
 
@@ -430,7 +435,8 @@ describe("SpreadsheetEngine", () => {
       { sheetName: "Sheet1", startAddress: "C3", endAddress: "D4" },
     );
 
-    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(beforeCopy);
+    expect(engine.undo()).toBe(false);
     expect(engine.exportSnapshot()).toEqual(beforeCopy);
   });
 

@@ -426,6 +426,9 @@ export class WorkbookStore {
     ) {
       return false;
     }
+    if (sheet.grid.get(row, col) !== index) {
+      return false;
+    }
     return this.detachCellIndex(index);
   }
 
