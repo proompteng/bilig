@@ -628,6 +628,7 @@ export function createEngineStructureService(args: {
           const transform = structuralTransformForOp(op);
           const sheetName = op.sheetName;
 
+          clearPivotOutputsForSheet(sheetName);
           rewriteDefinedNamesForStructuralTransform(sheetName, transform);
           rewriteCellFormulasForStructuralTransform(sheetName, transform);
           rewriteWorkbookMetadataForStructuralTransform(sheetName, transform);
@@ -674,7 +675,6 @@ export function createEngineStructureService(args: {
           });
 
           clearAllSpillMetadata();
-          clearPivotOutputsForSheet(sheetName);
           const formulaCellIndices = args.rebuildAllFormulaBindings();
           return {
             changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
