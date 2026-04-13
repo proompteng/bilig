@@ -124,8 +124,14 @@ export function normalizeSnapshotForSemanticComparison(
     }
   }
   clone.sheets = clone.sheets.map((sheet) => {
+    const cells = sheet.cells.filter(
+      (cell) => cell.formula !== undefined || cell.format !== undefined || cell.value !== null,
+    );
     if (!sheet.metadata) {
-      return sheet;
+      return {
+        ...sheet,
+        cells,
+      };
     }
     const metadata = { ...sheet.metadata };
     if (metadata.rows) {
@@ -163,6 +169,7 @@ export function normalizeSnapshotForSemanticComparison(
     }
     return {
       ...sheet,
+      cells,
       metadata,
     };
   });
