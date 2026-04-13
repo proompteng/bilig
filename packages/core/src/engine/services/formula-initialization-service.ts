@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
+import { CellFlags } from "../../cell-store.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 
@@ -19,7 +20,10 @@ export interface EngineFormulaInitializationService {
 }
 
 export function createEngineFormulaInitializationService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "getLastMetrics" | "setLastMetrics">;
+  readonly state: Pick<
+    EngineRuntimeState,
+    "workbook" | "formulas" | "getLastMetrics" | "setLastMetrics"
+  >;
   readonly beginMutationCollection: () => void;
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number;
   readonly resetMaterializedCellScratch: (expectedSize: number) => void;
@@ -116,6 +120,11 @@ export function createEngineFormulaInitializationService(args: {
     if (topologyChanged) {
       args.rebuildTopoRanks();
       args.detectCycles();
+      args.state.formulas.forEach((_formula, cellIndex) => {
+        if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+          changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
+        }
+      });
     }
     formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
     const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);

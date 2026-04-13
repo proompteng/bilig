@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
 
 describe("engine fuzz regressions", () => {
@@ -78,5 +79,24 @@ describe("engine fuzz regressions", () => {
     engine.deleteColumns("Sheet1", 0, 1);
     expect(engine.exportSnapshot()).toEqual(before);
     expect(engine.undo()).toBe(false);
+  });
+
+  it("propagates cycle errors to dependent formulas after direct formula writes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "cycle-dependent-regression" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellFormula("Sheet1", "A1", "SUM(B1:B1)");
+    engine.setCellFormula("Sheet1", "C1", "SUM(B1:C2)");
+    engine.setCellFormula("Sheet1", "A2", "SUM(B1:C2)");
+
+    expect(engine.getCell("Sheet1", "C1").value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    });
+    expect(engine.getCell("Sheet1", "A2").value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    });
   });
 });

@@ -61,6 +61,7 @@ export function createEngineFormulaGraphService(args: {
   readonly getBatchMutationDepth: () => number;
   readonly getWasmProgramSyncPending: () => boolean;
   readonly setWasmProgramSyncPending: (next: boolean) => void;
+  readonly notifyCellValueWritten: (cellIndex: number) => void;
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
     fn: (dependencyCellIndex: number) => void,
@@ -170,6 +171,7 @@ export function createEngineFormulaGraphService(args: {
         (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.InCycle;
       args.state.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups[cellIndex] ?? -1;
       args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle));
+      args.notifyCellValueWritten(cellIndex);
     }
   };
 

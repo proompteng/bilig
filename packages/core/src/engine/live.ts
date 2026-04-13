@@ -162,7 +162,7 @@ type EngineFormulaBindingRuntimeConfig = Omit<
 
 type EngineFormulaGraphRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaGraphService>[0],
-  "forEachFormulaDependencyCell" | "collectFormulaDependents"
+  "notifyCellValueWritten" | "forEachFormulaDependencyCell" | "collectFormulaDependents"
 >;
 
 type EngineRecalcRuntimeConfig = Omit<
@@ -292,6 +292,7 @@ export function createEngineServiceRuntime(args: {
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore });
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
+    notifyCellValueWritten: (cellIndex) => args.state.workbook.notifyCellValueWritten(cellIndex),
     forEachFormulaDependencyCell: (cellIndex, fn) =>
       traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),

@@ -561,6 +561,16 @@ export function createEngineOperationService(args: {
     args.state.workbook.pruneCellIfEmpty(cellIndex);
   };
 
+  const markCycleMemberInputsChanged = (changedInputCount: number): number => {
+    args.state.formulas.forEach((_formula, cellIndex) => {
+      if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) === 0) {
+        return;
+      }
+      changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
+    });
+    return changedInputCount;
+  };
+
   const entityKeyForOp = (op: EngineOp): string => {
     switch (op.kind) {
       case "upsertWorkbook":
@@ -1447,6 +1457,7 @@ export function createEngineOperationService(args: {
     if (topologyChanged) {
       args.rebuildTopoRanks();
       args.detectCycles();
+      changedInputCount = markCycleMemberInputsChanged(changedInputCount);
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
     const hasActivePivots = args.state.workbook.listPivots().length > 0;
@@ -1810,6 +1821,7 @@ export function createEngineOperationService(args: {
     if (topologyChanged) {
       args.rebuildTopoRanks();
       args.detectCycles();
+      changedInputCount = markCycleMemberInputsChanged(changedInputCount);
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
     const hasActivePivots = args.state.workbook.listPivots().length > 0;
