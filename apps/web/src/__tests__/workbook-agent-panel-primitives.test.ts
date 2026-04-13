@@ -17,14 +17,14 @@ describe("workbook agent panel primitives", () => {
   });
 
   it("keeps disclosure rows tightly aligned around the chevron", () => {
-    expect(agentPanelDisclosureTriggerClass()).toContain("flex");
-    expect(agentPanelDisclosureTriggerClass()).not.toContain("grid");
+    expect(agentPanelDisclosureTriggerClass()).toContain("grid");
+    expect(agentPanelDisclosureTriggerClass()).not.toContain("flex");
     expect(agentPanelDisclosureTriggerClass()).toContain("items-start");
-    expect(agentPanelDisclosureContentClass()).toContain("flex-1");
-    expect(agentPanelDisclosureContentClass()).toContain("flex-wrap");
-    expect(agentPanelDisclosureSummaryClass()).toContain("whitespace-normal");
-    expect(agentPanelDisclosureSummaryClass()).not.toContain("truncate");
-    expect(agentPanelDisclosureChevronClass({ open: false })).toContain("size-4");
+    expect(agentPanelDisclosureContentClass({ open: false })).toContain("flex-wrap");
+    expect(agentPanelDisclosureContentClass({ open: true })).toContain("grid-cols-1");
+    expect(agentPanelDisclosureSummaryClass({ open: true })).toContain("whitespace-normal");
+    expect(agentPanelDisclosureSummaryClass({ open: false })).toContain("truncate");
+    expect(agentPanelDisclosureChevronClass({ open: false })).toContain("size-3.5");
     expect(agentPanelDisclosureChevronClass({ open: false })).toContain("mt-0.5");
   });
 });

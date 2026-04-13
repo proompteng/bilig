@@ -24,7 +24,7 @@ describe("workbook agent panel history", () => {
 
     const textContainer = progressRow?.firstElementChild;
     expect(textContainer?.className).toContain("text-[13px]");
-    expect(textContainer?.className).toContain("leading-6");
+    expect(textContainer?.className).toContain("leading-[1.65]");
     expect(textContainer?.className).toContain("text-[var(--wb-text-subtle)]");
 
     await act(async () => {

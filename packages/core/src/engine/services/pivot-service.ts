@@ -349,7 +349,12 @@ export function createEnginePivotService(args: {
           valueAggs,
         );
 
-        if (materialized) {
+        const shouldFallbackToJs =
+          materialized?.rows === 1 &&
+          materialized?.cols === 1 &&
+          materialized.tags[0] === ValueTag.Error;
+
+        if (materialized && !shouldFallbackToJs) {
           const owner = parseCellAddress(pivot.address, pivot.sheetName);
           const blockedOutput = guardPivotOutputWrite(
             pivot,

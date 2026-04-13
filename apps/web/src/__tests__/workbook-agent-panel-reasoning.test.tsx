@@ -159,7 +159,7 @@ describe("WorkbookAgentPanel reasoning", () => {
     expect(expandedCard?.className).toContain("max-w-full");
     expect(expandedCard?.className).toContain("overflow-x-hidden");
     expect(expandedCard?.className).toContain("px-3");
-    expect(expandedCard?.className).toContain("py-2");
+    expect(expandedCard?.className).toContain("py-3");
 
     const trigger = panel.host.querySelector(
       "[data-testid='workbook-agent-reasoning-toggle-reasoning-1']",

@@ -564,6 +564,8 @@ export function createEngineServiceRuntime(args: {
       requireService(pivot, "pivot").clearPivotForCellNow(cellIndex),
     clearOwnedPivot: (pivotRecord) =>
       requireService(pivot, "pivot").clearOwnedPivotNow(pivotRecord),
+    materializePivot: (pivotRecord) =>
+      requireService(pivot, "pivot").materializePivotNow(pivotRecord),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     bindFormula: (cellIndex, ownerSheetName, source) =>
       binding.bindFormulaNow(cellIndex, ownerSheetName, source),

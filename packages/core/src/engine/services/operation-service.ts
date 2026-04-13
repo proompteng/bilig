@@ -204,6 +204,7 @@ export function createEngineOperationService(args: {
   readonly clearOwnedSpill: (cellIndex: number) => number[];
   readonly clearPivotForCell: (cellIndex: number) => number[];
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
+  readonly materializePivot: (pivot: WorkbookPivotRecord) => number[];
   readonly removeFormula: (cellIndex: number) => boolean;
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => boolean;
   readonly setInvalidFormulaValue: (cellIndex: number) => void;
@@ -735,8 +736,8 @@ export function createEngineOperationService(args: {
   const applyPivotUpsertOp = (
     op: Extract<EngineOp, { kind: "upsertPivotTable" }>,
     order: OpOrder,
-  ): void => {
-    args.state.workbook.setPivot({
+  ): number[] => {
+    const pivot = {
       name: op.name,
       sheetName: op.sheetName,
       address: op.address,
@@ -745,8 +746,10 @@ export function createEngineOperationService(args: {
       values: op.values,
       rows: op.rows,
       cols: op.cols,
-    });
+    } satisfies WorkbookPivotRecord;
+    args.state.workbook.setPivot(pivot);
     setEntityVersionForOp(op, order);
+    return args.materializePivot(pivot);
   };
 
   const applyPivotDeleteOp = (
@@ -775,8 +778,7 @@ export function createEngineOperationService(args: {
         return candidates;
       }
       case "upsertPivotTable":
-        applyPivotUpsertOp(op, order);
-        return [];
+        return applyPivotUpsertOp(op, order);
       case "deletePivotTable":
         return applyPivotDeleteOp(op, order);
       default:
@@ -1318,7 +1320,14 @@ export function createEngineOperationService(args: {
             break;
           }
           case "upsertPivotTable":
-            applyPivotUpsertOp(op, order);
+            const changedPivotUpsertOutputs = applyPivotUpsertOp(op, order);
+            changedInputCount = args.markPivotRootsChanged(
+              changedPivotUpsertOutputs,
+              changedInputCount,
+            );
+            changedPivotUpsertOutputs.forEach((cellIndex) => {
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
+            });
             refreshAllPivots = true;
             break;
           case "deletePivotTable": {
@@ -1387,8 +1396,9 @@ export function createEngineOperationService(args: {
       args.detectCycles();
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
+    const hasActivePivots = args.state.workbook.listPivots().length > 0;
     let recalculated: U32 = new Uint32Array();
-    if (hasActiveFormulas || refreshAllPivots) {
+    if (hasActiveFormulas || hasActivePivots || refreshAllPivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
       recalculated = args.recalculate(
@@ -1697,8 +1707,9 @@ export function createEngineOperationService(args: {
       args.detectCycles();
     }
     const hasActiveFormulas = args.state.formulas.size > 0;
+    const hasActivePivots = args.state.workbook.listPivots().length > 0;
     let recalculated: U32 = new Uint32Array();
-    if (hasActiveFormulas) {
+    if (hasActiveFormulas || hasActivePivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount);
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount);
       recalculated = args.recalculate(
