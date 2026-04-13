@@ -10,6 +10,7 @@ import {
 import type { EngineOp } from "@bilig/workbook-domain";
 import { CellFlags } from "../../cell-store.js";
 import { emptyValue } from "../../engine-value-utils.js";
+import { ValueTag } from "@bilig/protocol";
 import {
   mapStructuralAxisIndex,
   mapStructuralBoundary,
@@ -75,6 +76,23 @@ export function createEngineStructureService(args: {
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
   readonly rebuildAllFormulaBindings: () => number[];
 }): EngineStructureService {
+  const shouldCaptureStoredCell = (cellIndex: number): boolean => {
+    const value = args.state.workbook.cellStore.getValue(cellIndex, () => "");
+    const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
+    const formula = args.state.formulas.get(cellIndex);
+    const version = args.state.workbook.cellStore.versions[cellIndex] ?? 0;
+    if ((flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
+      return false;
+    }
+    return !(
+      formula === undefined &&
+      explicitFormat === undefined &&
+      version === 0 &&
+      (value.tag === ValueTag.Empty || value.tag === ValueTag.Error)
+    );
+  };
+
   const captureStoredCellState = (
     cellIndex: number,
     sheetName: string,
@@ -96,6 +114,9 @@ export function createEngineStructureService(args: {
     }
     const captured: Array<{ cellIndex: number; row: number; col: number }> = [];
     sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      if (!shouldCaptureStoredCell(cellIndex)) {
+        return;
+      }
       const index = axis === "row" ? row : col;
       if (index >= start && index < start + count) {
         captured.push({ cellIndex, row, col });
@@ -115,6 +136,9 @@ export function createEngineStructureService(args: {
     }
     const captured: Array<{ cellIndex: number; row: number; col: number }> = [];
     sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      if (!shouldCaptureStoredCell(cellIndex)) {
+        return;
+      }
       captured.push({ cellIndex, row, col });
     });
     return captured

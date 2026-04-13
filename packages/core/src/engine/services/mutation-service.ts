@@ -473,7 +473,8 @@ export function createEngineMutationService(args: {
             count: op.count,
             entries,
           },
-          ...args.captureRowRangeCellState(op.sheetName, op.start, op.count),
+          ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
+          ...args.captureSheetCellState(op.sheetName),
         ];
       }
       case "moveRows":
@@ -504,7 +505,8 @@ export function createEngineMutationService(args: {
             count: op.count,
             entries,
           },
-          ...args.captureColumnRangeCellState(op.sheetName, op.start, op.count),
+          ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
+          ...args.captureSheetCellState(op.sheetName),
         ];
       }
       case "moveColumns":

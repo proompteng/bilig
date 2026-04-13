@@ -419,6 +419,61 @@ describe("engine correctness", () => {
     expect(restored.exportSnapshot()).toEqual(snapshot);
   });
 
+  it("preserves rewritten error formulas across structural delete undo", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-structural-formula-error-undo",
+      replicaId: "correctness-structural-formula-error-undo",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+
+    engine.setCellFormula(sheetName, "A1", "A1+D4");
+    engine.deleteRows(sheetName, 2, 2);
+
+    expect(engine.exportSnapshot()).toEqual({
+      version: 1,
+      workbook: { name: "correctness-structural-formula-error-undo" },
+      sheets: [
+        {
+          id: 1,
+          name: sheetName,
+          order: 0,
+          cells: [{ address: "A1", formula: "A1+#REF!" }],
+        },
+      ],
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual({
+      version: 1,
+      workbook: { name: "correctness-structural-formula-error-undo" },
+      sheets: [
+        {
+          id: 1,
+          name: sheetName,
+          order: 0,
+          cells: [{ address: "A1", formula: "A1+D4" }],
+        },
+      ],
+    });
+  });
+
+  it("restores metadata-only number formats after structural delete undo", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-structural-format-only-undo",
+      replicaId: "correctness-structural-format-only-undo",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+
+    engine.setRangeNumberFormat({ sheetName, startAddress: "A1", endAddress: "A1" }, "0.00");
+    const initialSnapshot = engine.exportSnapshot();
+
+    engine.deleteColumns(sheetName, 0, 1);
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+  });
+
   it("prunes orphaned explicit formats after structural undo restores", async () => {
     const initialSnapshot = await createBaselineSnapshot("correctness-undo-format-orphan-prune");
     const engine = new SpreadsheetEngine({

@@ -327,22 +327,31 @@ function exportReplaySnapshot(actions: readonly CoreAction[]): WorkbookSnapshot 
 interface EngineHistoryModel {
   applied: CoreAction[];
   undone: CoreAction[];
+  history: string[];
 }
 
 function currentModelSnapshot(model: EngineHistoryModel): WorkbookSnapshot {
   return exportReplaySnapshot(model.applied);
 }
 
-function applyAndExpectSnapshot(
-  engine: SpreadsheetEngine,
-  model: EngineHistoryModel,
-  _actionDescription: string,
-): void {
+function applyAndExpectSnapshot(engine: SpreadsheetEngine, model: EngineHistoryModel): void {
   const snapshot = engine.exportSnapshot();
   assertSnapshotInvariants(snapshot);
-  expect(normalizeSnapshotForSemanticComparison(snapshot)).toEqual(
-    normalizeSnapshotForSemanticComparison(currentModelSnapshot(model)),
-  );
+  try {
+    expect(normalizeSnapshotForSemanticComparison(snapshot)).toEqual(
+      normalizeSnapshotForSemanticComparison(currentModelSnapshot(model)),
+    );
+  } catch (error) {
+    const commandHistory = model.history.join(" -> ");
+    const wrapped =
+      error instanceof Error
+        ? new Error(`${error.message}\ncommandHistory=${commandHistory}`)
+        : new Error(`commandHistory=${commandHistory}`);
+    if (error instanceof Error) {
+      wrapped.stack = error.stack;
+    }
+    throw wrapped;
+  }
 }
 
 function applyActionCommandArbitrary(
@@ -356,9 +365,10 @@ function applyActionCommandArbitrary(
         model.applied.push(action);
         model.undone = [];
       }
-      applyAndExpectSnapshot(real, model, `apply ${action.kind}`);
+      model.history.push(`apply(${JSON.stringify(action)})`);
+      applyAndExpectSnapshot(real, model);
     },
-    toString: () => `apply(${action.kind})`,
+    toString: () => `apply(${JSON.stringify(action)})`,
   }));
 }
 
@@ -374,7 +384,8 @@ const undoCommandArbitrary: fc.Arbitrary<AsyncCommand<EngineHistoryModel, Spread
         throw new Error("Undo command ran with no applied action");
       }
       model.undone.push(action);
-      applyAndExpectSnapshot(real, model, "undo");
+      model.history.push("undo()");
+      applyAndExpectSnapshot(real, model);
     },
     toString: () => "undo()",
   });
@@ -391,7 +402,8 @@ const redoCommandArbitrary: fc.Arbitrary<AsyncCommand<EngineHistoryModel, Spread
         throw new Error("Redo command ran with no undone action");
       }
       model.applied.push(action);
-      applyAndExpectSnapshot(real, model, "redo");
+      model.history.push("redo()");
+      applyAndExpectSnapshot(real, model);
     },
     toString: () => "redo()",
   });
@@ -465,6 +477,7 @@ describe("engine fuzz", () => {
         createModel: () => ({
           applied: [],
           undone: [],
+          history: [],
         }),
         createReal: async () => {
           const engine = new SpreadsheetEngine({
@@ -472,7 +485,7 @@ describe("engine fuzz", () => {
             replicaId: "fuzz-core-model",
           });
           engine.createSheet(sheetName);
-          applyAndExpectSnapshot(engine, { applied: [], undone: [] }, "initial model state");
+          applyAndExpectSnapshot(engine, { applied: [], undone: [], history: [] });
           return engine;
         },
       });

@@ -14,6 +14,7 @@ import type {
 } from "./ast.js";
 import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from "./addressing.js";
 import { lexFormula, type Token } from "./lexer.js";
+import { ErrorCode } from "@bilig/protocol";
 
 const PRECEDENCE: Record<string, number> = {
   eq: 1,
@@ -29,6 +30,17 @@ const PRECEDENCE: Record<string, number> = {
   slash: 4,
   caret: 5,
   colon: 6,
+};
+
+const ERROR_LITERAL_CODES: Record<string, ErrorCode> = {
+  "#REF!": ErrorCode.Ref,
+  "#NAME?": ErrorCode.Name,
+  "#DIV/0!": ErrorCode.Div0,
+  "#N/A": ErrorCode.NA,
+  "#VALUE!": ErrorCode.Value,
+  "#CYCLE!": ErrorCode.Cycle,
+  "#SPILL!": ErrorCode.Spill,
+  "#BLOCKED!": ErrorCode.Blocked,
 };
 
 function assertNoStandaloneAxisRefs(node: FormulaNode): void {
@@ -251,6 +263,13 @@ export function parseFormula(source: string): FormulaNode {
     } else if (token.kind === "string") {
       eat("string");
       result = { kind: "StringLiteral", value: token.value };
+    } else if (token.kind === "error") {
+      eat("error");
+      const code = ERROR_LITERAL_CODES[token.value.toUpperCase()];
+      if (code === undefined) {
+        throw new Error(`Unsupported error literal '${token.value}'`);
+      }
+      result = { kind: "ErrorLiteral", code };
     } else if (token.kind === "quotedIdentifier") {
       const first = eat("quotedIdentifier").value;
       if (current().kind === "bang") {

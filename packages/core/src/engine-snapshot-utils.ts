@@ -152,20 +152,29 @@ export function exportSheetMetadata(
   return metadata;
 }
 
-export function sheetMetadataToOps(workbook: WorkbookStore, sheetName: string): EngineOp[] {
+export function sheetMetadataToOps(
+  workbook: WorkbookStore,
+  sheetName: string,
+  options: {
+    includeAxisEntries?: boolean;
+  } = {},
+): EngineOp[] {
+  const includeAxisEntries = options.includeAxisEntries ?? true;
   const ops: EngineOp[] = [];
-  workbook.listRowAxisEntries(sheetName).forEach((entry) => {
-    ops.push({ kind: "insertRows", sheetName, start: entry.index, count: 1, entries: [entry] });
-  });
-  workbook.listColumnAxisEntries(sheetName).forEach((entry) => {
-    ops.push({
-      kind: "insertColumns",
-      sheetName,
-      start: entry.index,
-      count: 1,
-      entries: [entry],
+  if (includeAxisEntries) {
+    workbook.listRowAxisEntries(sheetName).forEach((entry) => {
+      ops.push({ kind: "insertRows", sheetName, start: entry.index, count: 1, entries: [entry] });
     });
-  });
+    workbook.listColumnAxisEntries(sheetName).forEach((entry) => {
+      ops.push({
+        kind: "insertColumns",
+        sheetName,
+        start: entry.index,
+        count: 1,
+        entries: [entry],
+      });
+    });
+  }
   workbook.listRowMetadata(sheetName).forEach((record) => {
     ops.push({
       kind: "updateRowMetadata",

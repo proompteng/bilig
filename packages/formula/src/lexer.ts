@@ -3,6 +3,7 @@ export type TokenKind =
   | "identifier"
   | "quotedIdentifier"
   | "string"
+  | "error"
   | "lbracket"
   | "rbracket"
   | "hash"
@@ -35,6 +36,16 @@ export function lexFormula(input: string): Token[] {
   const source = input.trim();
   const tokens: Token[] = [];
   let index = 0;
+  const errorLiterals = [
+    "#BLOCKED!",
+    "#CYCLE!",
+    "#SPILL!",
+    "#VALUE!",
+    "#DIV/0!",
+    "#NAME?",
+    "#REF!",
+    "#N/A",
+  ];
 
   while (index < source.length) {
     const char = source[index]!;
@@ -94,6 +105,19 @@ export function lexFormula(input: string): Token[] {
       tokens.push({ kind: "quotedIdentifier", value });
       index = end + 1;
       continue;
+    }
+
+    if (char === "#") {
+      const remainingUpper = source.slice(index).toUpperCase();
+      const errorLiteral = errorLiterals.find((candidate) => remainingUpper.startsWith(candidate));
+      if (errorLiteral) {
+        tokens.push({
+          kind: "error",
+          value: source.slice(index, index + errorLiteral.length),
+        });
+        index += errorLiteral.length;
+        continue;
+      }
     }
 
     if (/[A-Za-z_$]/.test(char)) {

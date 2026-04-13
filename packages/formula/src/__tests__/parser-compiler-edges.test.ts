@@ -56,6 +56,26 @@ describe("formula parser/compiler edges", () => {
     expect(() => lexFormula("@oops")).toThrow("Unexpected token '@'");
   });
 
+  it("parses workbook error literals inside formulas and as standalone expressions", () => {
+    expect(lexFormula("A1+#REF!").slice(0, 3)).toEqual([
+      { kind: "identifier", value: "A1" },
+      { kind: "plus", value: "+" },
+      { kind: "error", value: "#REF!" },
+    ]);
+
+    expect(parseFormula("A1+#REF!")).toEqual({
+      kind: "BinaryExpr",
+      operator: "+",
+      left: { kind: "CellRef", ref: "A1" },
+      right: { kind: "ErrorLiteral", code: ErrorCode.Ref },
+    });
+
+    expect(parseFormula("#DIV/0!")).toEqual({
+      kind: "ErrorLiteral",
+      code: ErrorCode.Div0,
+    });
+  });
+
   it("rejects standalone axis refs and malformed ranges", () => {
     expect(() => parseFormula("'Sheet 1'!1")).toThrow(
       "Row and column references must appear inside a range",

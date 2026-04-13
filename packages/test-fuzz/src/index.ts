@@ -106,6 +106,14 @@ function parsePositiveInteger(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function parseInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function serializeArtifactValue(value: unknown): unknown {
   if (value instanceof Uint8Array) {
     return { type: "Uint8Array", values: [...value] };
@@ -233,7 +241,7 @@ function resolveParameters<Ts extends unknown[]>(
 ): FuzzParameters<Ts> {
   const budget = resolveBudget(kind);
   const replayFixture = resolveReplayFixtureForSuite(suite);
-  const seedOverride = parsePositiveInteger(process.env["BILIG_FUZZ_SEED"]);
+  const seedOverride = parseInteger(process.env["BILIG_FUZZ_SEED"]);
   const runsOverride = parsePositiveInteger(process.env["BILIG_FUZZ_NUM_RUNS"]);
   const maxMsOverride = parsePositiveInteger(process.env["BILIG_FUZZ_MAX_MS"]);
 
