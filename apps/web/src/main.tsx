@@ -12,9 +12,9 @@ import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-conn
 import type { ZeroConnectionState } from "./worker-workbook-app-model.js";
 import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);

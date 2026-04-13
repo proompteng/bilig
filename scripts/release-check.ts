@@ -9,9 +9,9 @@ const budgets = {
   runtimeWasmGzipBytes: 250 * 1024,
   sqliteWasmGzipBytes: 400 * 1024,
   cssGzipBytes: 32 * 1024,
-  startupFontGzipBytes: 0,
+  startupFontGzipBytes: 160 * 1024,
   startupShellGzipBytes: 390 * 1024,
-  startupFontFileCount: 0,
+  startupFontFileCount: 8,
 };
 
 async function findAssets() {
