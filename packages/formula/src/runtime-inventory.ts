@@ -4,7 +4,8 @@ import {
   type BuiltinJsStatus,
   type BuiltinWasmStatus,
 } from "./builtin-capabilities.js";
-import { getBuiltin, hasBuiltin } from "./builtins.js";
+import { formulaInventory } from "./generated/formula-inventory.js";
+import { getBuiltin } from "./builtins.js";
 import { lookupBuiltins } from "./builtins/lookup.js";
 import { placeholderBuiltinNames } from "./builtins/placeholder.js";
 
@@ -13,6 +14,9 @@ export type FormulaRuntimeJsStatus = BuiltinJsStatus | FormulaRuntimeStatus;
 
 const lookupBuiltinNameSet = new Set(Object.keys(lookupBuiltins).map(normalizeFormulaName));
 const placeholderBuiltinNameSet = new Set(placeholderBuiltinNames.map(normalizeFormulaName));
+const formulaInventoryByName = new Map(
+  formulaInventory.map((entry) => [normalizeFormulaName(entry.name), entry]),
+);
 const runtimeAliasByCanonicalName = new Map<string, string>([
   ["AVERAGE", "AVG"],
   ["USE.THE.COUNTIF", "COUNTIF"],
@@ -41,15 +45,28 @@ export function isPlaceholderBuiltinRuntime(name: string): boolean {
 }
 
 export function getFormulaRuntimeStatus(name: string): FormulaRuntimeStatus {
+  const fromInventory = formulaInventoryByName.get(normalizeFormulaName(name));
+  if (fromInventory) {
+    return fromInventory.runtimeStatus;
+  }
   if (isPlaceholderBuiltinRuntime(name)) {
     return "placeholder";
   }
-  return getFormulaRuntimeLookupNames(name).some((entry) => hasBuiltin(entry))
+  return getFormulaRuntimeLookupNames(name).some(
+    (entry) =>
+      getBuiltin(entry) !== undefined ||
+      lookupBuiltinNameSet.has(entry) ||
+      builtinJsSpecialNames.has(entry),
+  )
     ? "implemented"
     : "missing";
 }
 
 export function getFormulaRuntimeJsStatus(name: string): FormulaRuntimeJsStatus {
+  const fromInventory = formulaInventoryByName.get(normalizeFormulaName(name));
+  if (fromInventory) {
+    return fromInventory.jsStatus;
+  }
   const runtimeStatus = getFormulaRuntimeStatus(name);
   if (runtimeStatus !== "implemented") {
     return runtimeStatus;
@@ -60,6 +77,10 @@ export function getFormulaRuntimeJsStatus(name: string): FormulaRuntimeJsStatus 
 }
 
 export function getFormulaRuntimeWasmStatus(name: string): BuiltinWasmStatus {
+  const fromInventory = formulaInventoryByName.get(normalizeFormulaName(name));
+  if (fromInventory) {
+    return fromInventory.wasmStatus;
+  }
   return getFormulaRuntimeLookupNames(name).some((entry) => builtinWasmEnabledNames.has(entry))
     ? "production"
     : "not-started";

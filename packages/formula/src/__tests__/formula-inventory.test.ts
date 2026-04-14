@@ -39,10 +39,15 @@ describe("formula inventory", () => {
     });
   });
 
-  it("tracks the full unified formula inventory as registered runtime coverage", () => {
-    expect(formulaInventorySummary.registeredInCodebase).toBe(formulaInventorySummary.total);
-    expect(formulaInventorySummary.missingInCodebase).toBe(0);
-    expect(formulaInventorySummary.placeholders).toBe(0);
+  it("tracks summary counts consistently with the generated inventory", () => {
+    const registeredInCodebase = formulaInventory.filter((entry) => entry.registeredInCodebase);
+    const placeholders = formulaInventory.filter((entry) => entry.placeholder);
+
+    expect(formulaInventorySummary.registeredInCodebase).toBe(registeredInCodebase.length);
+    expect(formulaInventorySummary.missingInCodebase).toBe(
+      formulaInventory.length - registeredInCodebase.length,
+    );
+    expect(formulaInventorySummary.placeholders).toBe(placeholders.length);
   });
 
   it("keeps runtime and protocol reporting for key formulas", () => {

@@ -219,10 +219,10 @@ async function readSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData>
   ]);
 
   const jsSpecialBuiltinNames = new Set(
-    extractStringArray(getVariableInitializer(capabilitySource, "builtinJsSpecialNames")),
+    extractStringArray(getVariableInitializer(capabilitySource, "jsSpecialBuiltinNames")),
   );
   const wasmProductionBuiltinNames = new Set(
-    extractStringArray(getVariableInitializer(capabilitySource, "builtinWasmEnabledNames")),
+    extractStringArray(getVariableInitializer(capabilitySource, "wasmProductionBuiltinNames")),
   );
   jsSpecialBuiltinNames.forEach((name) => implementedBuiltinNames.add(name));
 
