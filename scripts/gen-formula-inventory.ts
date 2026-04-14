@@ -2,15 +2,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import ts from "typescript";
 import { BUILTINS } from "../packages/protocol/src/opcodes.ts";
-import {
-  getFormulaRuntimeLookupNames,
-  getFormulaRuntimeJsStatus,
-  getFormulaRuntimeStatus,
-  getFormulaRuntimeWasmStatus,
-  normalizeFormulaName,
-  type FormulaRuntimeStatus,
-} from "../packages/formula/src/runtime-inventory.ts";
 
 interface FormulaInventorySourceEntry {
   name: string;
@@ -24,6 +17,9 @@ interface FormulaInventorySource {
 }
 
 type FormulaDeterminism = "deterministic" | "provider-backed";
+type FormulaRuntimeStatus = "missing" | "placeholder" | "implemented";
+type FormulaRuntimeJsStatus = "implemented" | "special-js-only" | FormulaRuntimeStatus;
+type FormulaRuntimeWasmStatus = "production" | "not-started";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 const sourcePath = path.join(repoRoot, "packages/formula/src/formula-inventory-source.json");
@@ -33,6 +29,13 @@ const generatedReportPath = path.join(
 );
 const generatedDocPath = path.join(repoRoot, "docs/odf-1.4-mandatory-office-excel-functions.md");
 const missingProtocolPath = path.join(repoRoot, "docs/formula-inventory-missing-from-protocol.md");
+const builtinCapabilitiesPath = path.join(repoRoot, "packages/formula/src/builtin-capabilities.ts");
+const builtinsPath = path.join(repoRoot, "packages/formula/src/builtins.ts");
+const logicalBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/logical.ts");
+const textBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/text.ts");
+const datetimeBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/datetime.ts");
+const lookupBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/lookup.ts");
+const placeholderBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/placeholder.ts");
 
 const providerBackedNames = new Set([
   "CALL",
@@ -60,6 +63,19 @@ const providerBackedNames = new Set([
 const protocolBuiltinsByName = new Map(
   BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin]),
 );
+const runtimeAliasByCanonicalName = new Map<string, string>([
+  ["AVERAGE", "AVG"],
+  ["USE.THE.COUNTIF", "COUNTIF"],
+]);
+
+interface SourceDerivedRuntimeData {
+  placeholderNames: Set<string>;
+  implementedBuiltinNames: Set<string>;
+  jsSpecialBuiltinNames: Set<string>;
+  wasmProductionBuiltinNames: Set<string>;
+}
+
+let cachedRuntimeData: Promise<SourceDerivedRuntimeData> | undefined;
 
 function escapeTsString(value: string): string {
   return JSON.stringify(value);
@@ -77,37 +93,192 @@ function inferDeterminism(name: string): FormulaDeterminism {
   return providerBackedNames.has(name) ? "provider-backed" : "deterministic";
 }
 
+function normalizeFormulaName(name: string): string {
+  return name.trim().toUpperCase();
+}
+
 function runtimeLookupNames(name: string): string[] {
-  return getFormulaRuntimeLookupNames(name);
+  const canonical = normalizeFormulaName(name);
+  const alias = runtimeAliasByCanonicalName.get(canonical);
+  return alias ? [canonical, alias] : [canonical];
 }
 
-function inferRuntimeStatus(name: string): FormulaRuntimeStatus {
-  const statuses = new Set(runtimeLookupNames(name).map((entry) => getFormulaRuntimeStatus(entry)));
-  if (statuses.has("placeholder")) {
-    return "placeholder";
+async function readTsSourceFile(filePath: string): Promise<ts.SourceFile> {
+  const sourceText = await readFile(filePath, "utf8");
+  return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+}
+
+function getVariableInitializer(
+  sourceFile: ts.SourceFile,
+  variableName: string,
+): ts.Expression | undefined {
+  let found: ts.Expression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === variableName
+    ) {
+      found = node.initializer;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function extractStringLiteralValue(node: ts.Expression): string | undefined {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
   }
-  return statuses.has("implemented") ? "implemented" : "missing";
+  return undefined;
 }
 
-function inferJsStatus(
-  name: string,
-): "implemented" | "special-js-only" | "placeholder" | "missing" {
-  const statuses = new Set(
-    runtimeLookupNames(name).map((entry) => getFormulaRuntimeJsStatus(entry)),
+function extractStringArray(expression: ts.Expression | undefined): string[] {
+  if (!expression) {
+    return [];
+  }
+  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
+    return extractStringArray(expression.expression);
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    return expression.elements
+      .flatMap((element) => {
+        if (ts.isSpreadElement(element)) {
+          return extractStringArray(element.expression);
+        }
+        const value = extractStringLiteralValue(element);
+        return value ? [value] : [];
+      })
+      .map((value) => normalizeFormulaName(value));
+  }
+  if (
+    ts.isNewExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === "Set" &&
+    expression.arguments?.[0]
+  ) {
+    return extractStringArray(expression.arguments[0]);
+  }
+  return [];
+}
+
+function extractObjectKeys(expression: ts.Expression | undefined): string[] {
+  if (!expression) {
+    return [];
+  }
+  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
+    return extractObjectKeys(expression.expression);
+  }
+  if (!ts.isObjectLiteralExpression(expression)) {
+    return [];
+  }
+  return expression.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) {
+      return [];
+    }
+    const nameNode = property.name;
+    if (ts.isIdentifier(nameNode) || ts.isStringLiteral(nameNode)) {
+      return [normalizeFormulaName(nameNode.text)];
+    }
+    return [];
+  });
+}
+
+async function readSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData> {
+  const [
+    capabilitySource,
+    builtinsSource,
+    logicalSource,
+    textSource,
+    datetimeSource,
+    lookupSource,
+    placeholderSource,
+  ] = await Promise.all([
+    readTsSourceFile(builtinCapabilitiesPath),
+    readTsSourceFile(builtinsPath),
+    readTsSourceFile(logicalBuiltinsPath),
+    readTsSourceFile(textBuiltinsPath),
+    readTsSourceFile(datetimeBuiltinsPath),
+    readTsSourceFile(lookupBuiltinsPath),
+    readTsSourceFile(placeholderBuiltinsPath),
+  ]);
+
+  const implementedBuiltinNames = new Set([
+    ...BUILTINS.filter((builtin) => !builtin.name.startsWith("__")).map((builtin) =>
+      normalizeFormulaName(builtin.name),
+    ),
+    ...extractObjectKeys(getVariableInitializer(builtinsSource, "scalarBuiltins")),
+    ...extractStringArray(getVariableInitializer(builtinsSource, "externalScalarBuiltinNames")),
+    ...extractObjectKeys(getVariableInitializer(logicalSource, "logicalBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(textSource, "textBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(datetimeSource, "datetimeBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(lookupSource, "lookupBuiltins")),
+    ...extractStringArray(getVariableInitializer(lookupSource, "externalLookupBuiltinNames")),
+  ]);
+
+  const jsSpecialBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(capabilitySource, "builtinJsSpecialNames")),
   );
-  if (statuses.has("placeholder")) {
-    return "placeholder";
-  }
-  if (statuses.has("special-js-only")) {
-    return "special-js-only";
-  }
-  return statuses.has("implemented") ? "implemented" : "missing";
+  const wasmProductionBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(capabilitySource, "builtinWasmEnabledNames")),
+  );
+  jsSpecialBuiltinNames.forEach((name) => implementedBuiltinNames.add(name));
+
+  const implementedScalarPlaceholderBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(placeholderSource, "implementedScalarBuiltinNames")),
+  );
+  const allAdditionalExcelScalarBuiltinNames = extractStringArray(
+    getVariableInitializer(placeholderSource, "allAdditionalExcelScalarBuiltinNames"),
+  );
+  const protocolScalarPlaceholderBuiltinNames = extractStringArray(
+    getVariableInitializer(placeholderSource, "protocolScalarPlaceholderBuiltinNames"),
+  );
+  const placeholderNames = new Set([
+    ...protocolScalarPlaceholderBuiltinNames,
+    ...allAdditionalExcelScalarBuiltinNames.filter(
+      (name) => !implementedScalarPlaceholderBuiltinNames.has(name),
+    ),
+  ]);
+
+  return {
+    placeholderNames,
+    implementedBuiltinNames,
+    jsSpecialBuiltinNames,
+    wasmProductionBuiltinNames,
+  };
 }
 
-function inferWasmStatus(name: string): "production" | "not-started" {
-  return runtimeLookupNames(name).some(
-    (entry) => getFormulaRuntimeWasmStatus(entry) === "production",
-  )
+async function getSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData> {
+  cachedRuntimeData ??= readSourceDerivedRuntimeData();
+  return cachedRuntimeData;
+}
+
+async function inferRuntimeStatus(name: string): Promise<FormulaRuntimeStatus> {
+  const runtimeData = await getSourceDerivedRuntimeData();
+  if (runtimeLookupNames(name).some((entry) => runtimeData.placeholderNames.has(entry))) {
+    return "placeholder";
+  }
+  return runtimeLookupNames(name).some((entry) => runtimeData.implementedBuiltinNames.has(entry))
+    ? "implemented"
+    : "missing";
+}
+
+async function inferJsStatus(name: string): Promise<FormulaRuntimeJsStatus> {
+  const runtimeData = await getSourceDerivedRuntimeData();
+  const runtimeStatus = await inferRuntimeStatus(name);
+  if (runtimeStatus !== "implemented") {
+    return runtimeStatus;
+  }
+  return runtimeLookupNames(name).some((entry) => runtimeData.jsSpecialBuiltinNames.has(entry))
+    ? "special-js-only"
+    : "implemented";
+}
+
+async function inferWasmStatus(name: string): Promise<FormulaRuntimeWasmStatus> {
+  const runtimeData = await getSourceDerivedRuntimeData();
+  return runtimeLookupNames(name).some((entry) => runtimeData.wasmProductionBuiltinNames.has(entry))
     ? "production"
     : "not-started";
 }
@@ -116,30 +287,36 @@ function summarizeOdfMembership(odfStatus: string): boolean {
   return odfStatus === "Implemented";
 }
 
+async function buildInventoryEntries(source: FormulaInventorySource) {
+  return await Promise.all(
+    source.entries.map(async (entry) => {
+      const name = normalizeFormulaName(entry.name);
+      const protocolBuiltin = runtimeLookupNames(name)
+        .map((entryName) => protocolBuiltinsByName.get(entryName))
+        .find((entryBuiltin) => entryBuiltin !== undefined);
+      const runtimeStatus = await inferRuntimeStatus(name);
+      const jsStatus = await inferJsStatus(name);
+      const wasmStatus = await inferWasmStatus(name);
+      return {
+        name,
+        odfStatus: entry.odfStatus,
+        inOfficeList: entry.inOfficeList,
+        deterministic: inferDeterminism(name),
+        runtimeStatus,
+        protocolId: protocolBuiltin?.id,
+        protocolName: protocolBuiltin?.name,
+        protocolSupportsWasm: protocolBuiltin?.supportsWasm ?? false,
+        jsStatus,
+        wasmStatus,
+        placeholder: runtimeStatus === "placeholder",
+        registeredInCodebase: runtimeStatus !== "missing",
+      };
+    }),
+  );
+}
+
 async function renderInventoryReport(source: FormulaInventorySource): Promise<string> {
-  const entries = source.entries.map((entry) => {
-    const name = normalizeFormulaName(entry.name);
-    const protocolBuiltin = runtimeLookupNames(name)
-      .map((entryName) => protocolBuiltinsByName.get(entryName))
-      .find((entryBuiltin) => entryBuiltin !== undefined);
-    const runtimeStatus = inferRuntimeStatus(name);
-    const jsStatus = inferJsStatus(name);
-    const wasmStatus = inferWasmStatus(name);
-    return {
-      name,
-      odfStatus: entry.odfStatus,
-      inOfficeList: entry.inOfficeList,
-      deterministic: inferDeterminism(name),
-      runtimeStatus,
-      protocolId: protocolBuiltin?.id,
-      protocolName: protocolBuiltin?.name,
-      protocolSupportsWasm: protocolBuiltin?.supportsWasm ?? false,
-      jsStatus,
-      wasmStatus,
-      placeholder: runtimeStatus === "placeholder",
-      registeredInCodebase: runtimeStatus !== "missing",
-    };
-  });
+  const entries = await buildInventoryEntries(source);
 
   const summary = {
     total: entries.length,
@@ -204,12 +381,17 @@ ${lines.length === 0 ? "" : `${lines.join(",\n")},`}
 }
 
 async function renderInventoryDoc(source: FormulaInventorySource): Promise<string> {
-  const rows = source.entries.map((entry) => {
-    const name = normalizeFormulaName(entry.name);
-    const runtimeStatus = inferRuntimeStatus(name);
-    const implemented = runtimeStatus === "missing" ? "No" : "Yes";
-    return `| ${escapeMd(name)} | ${escapeMd(entry.odfStatus)} | ${entry.inOfficeList ? "Yes" : "No"} | ${implemented} |`;
-  });
+  const runtimeStatuses = await Promise.all(
+    source.entries.map((entry) => inferRuntimeStatus(normalizeFormulaName(entry.name))),
+  );
+  const rows = await Promise.all(
+    source.entries.map(async (entry) => {
+      const name = normalizeFormulaName(entry.name);
+      const runtimeStatus = await inferRuntimeStatus(name);
+      const implemented = runtimeStatus === "missing" ? "No" : "Yes";
+      return `| ${escapeMd(name)} | ${escapeMd(entry.odfStatus)} | ${entry.inOfficeList ? "Yes" : "No"} | ${implemented} |`;
+    }),
+  );
 
   const odfMandatory = source.entries.filter((entry) =>
     summarizeOdfMembership(entry.odfStatus),
@@ -224,12 +406,8 @@ async function renderInventoryDoc(source: FormulaInventorySource): Promise<strin
   const officeOnly = source.entries.filter(
     (entry) => !summarizeOdfMembership(entry.odfStatus) && entry.inOfficeList,
   ).length;
-  const implementedCount = source.entries.filter(
-    (entry) => inferRuntimeStatus(entry.name) !== "missing",
-  ).length;
-  const placeholderCount = source.entries.filter(
-    (entry) => inferRuntimeStatus(entry.name) === "placeholder",
-  ).length;
+  const implementedCount = runtimeStatuses.filter((status) => status !== "missing").length;
+  const placeholderCount = runtimeStatuses.filter((status) => status === "placeholder").length;
 
   return `# ODF 1.4 and Office Excel Function Coverage
 
@@ -266,16 +444,19 @@ ${rows.join("\n")}
 }
 
 async function renderMissingProtocolDoc(source: FormulaInventorySource): Promise<string> {
-  const entries = source.entries
-    .map((entry) => {
-      const name = normalizeFormulaName(entry.name);
-      const runtimeStatus = inferRuntimeStatus(name);
-      return {
-        name,
-        runtimeStatus,
-        deterministic: inferDeterminism(name),
-      };
-    })
+  const entries = (
+    await Promise.all(
+      source.entries.map(async (entry) => {
+        const name = normalizeFormulaName(entry.name);
+        const runtimeStatus = await inferRuntimeStatus(name);
+        return {
+          name,
+          runtimeStatus,
+          deterministic: inferDeterminism(name),
+        };
+      }),
+    )
+  )
     .filter(
       (entry) =>
         entry.deterministic === "deterministic" &&

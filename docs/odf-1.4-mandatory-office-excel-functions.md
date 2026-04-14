@@ -19,8 +19,8 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **525**
-- Not yet registered in codebase: **0**
+- Registered in codebase: **455**
+- Not yet registered in codebase: **70**
 - Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
@@ -29,18 +29,18 @@
 | Function | ODF status | In Office list | Implemented in codebase |
 | --- | --- | --- | --- |
 | ABS | Not in ODF 1.4 mandatory | Yes | Yes |
-| ACCRINT | Implemented | Yes | Yes |
-| ACCRINTM | Implemented | Yes | Yes |
+| ACCRINT | Implemented | Yes | No |
+| ACCRINTM | Implemented | Yes | No |
 | ACOS | Not in ODF 1.4 mandatory | Yes | Yes |
 | ACOSH | Implemented | Yes | Yes |
 | ACOT | Implemented | Yes | Yes |
 | ACOTH | Implemented | Yes | Yes |
 | ADDRESS | Placeholder (blocked) | Yes | Yes |
 | AGGREGATE | Not in ODF 1.4 mandatory | Yes | Yes |
-| AMORDEGRC | Not in ODF 1.4 mandatory | Yes | Yes |
-| AMORLINC | Implemented | Yes | Yes |
+| AMORDEGRC | Not in ODF 1.4 mandatory | Yes | No |
+| AMORLINC | Implemented | Yes | No |
 | AND | Not in ODF 1.4 mandatory | Yes | Yes |
-| ARABIC | Implemented | Yes | Yes |
+| ARABIC | Implemented | Yes | No |
 | AREAS | Placeholder (blocked) | Yes | Yes |
 | ARRAYTOTEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | ASC | Placeholder (blocked) | Yes | Yes |
@@ -49,7 +49,7 @@
 | ATAN | Not in ODF 1.4 mandatory | Yes | Yes |
 | ATAN2 | Not in ODF 1.4 mandatory | Yes | Yes |
 | ATANH | Implemented | Yes | Yes |
-| AVEDEV | Placeholder (blocked) | Yes | Yes |
+| AVEDEV | Placeholder (blocked) | Yes | No |
 | AVERAGE | Not in ODF 1.4 mandatory | Yes | Yes |
 | AVERAGEA | Placeholder (blocked) | Yes | Yes |
 | AVERAGEIF | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -76,13 +76,13 @@
 | BITOR | Placeholder (blocked) | Yes | Yes |
 | BITRSHIFT | Placeholder (blocked) | Yes | Yes |
 | BITXOR | Placeholder (blocked) | Yes | Yes |
-| BYCOL | Not in ODF 1.4 mandatory | Yes | Yes |
-| BYROW | Not in ODF 1.4 mandatory | Yes | Yes |
+| BYCOL | Not in ODF 1.4 mandatory | Yes | No |
+| BYROW | Not in ODF 1.4 mandatory | Yes | No |
 | CALL | Not in ODF 1.4 mandatory | Yes | Yes |
 | CEILING | Implemented | Yes | Yes |
 | CEILING.MATH | Not in ODF 1.4 mandatory | Yes | Yes |
 | CEILING.PRECISE | Not in ODF 1.4 mandatory | Yes | Yes |
-| CELL | Not in ODF 1.4 mandatory | Yes | Yes |
+| CELL | Not in ODF 1.4 mandatory | Yes | No |
 | CHAR | Placeholder (blocked) | Yes | Yes |
 | CHIDIST | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHIINV | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -99,13 +99,13 @@
 | CHOOSEROWS | Not in ODF 1.4 mandatory | Yes | Yes |
 | CLEAN | Placeholder (blocked) | Yes | Yes |
 | CODE | Placeholder (blocked) | Yes | Yes |
-| COLUMN | Placeholder (blocked) | Yes | Yes |
+| COLUMN | Placeholder (blocked) | Yes | No |
 | COLUMNS | Not in ODF 1.4 mandatory | Yes | Yes |
 | COMBIN | Implemented | Yes | Yes |
 | COMBINA | Implemented | Yes | Yes |
-| COMPLEX | Placeholder (blocked) | Yes | Yes |
+| COMPLEX | Placeholder (blocked) | Yes | No |
 | CONCAT | Not in ODF 1.4 mandatory | Yes | Yes |
-| CONCATENATE | Placeholder (blocked) | Yes | Yes |
+| CONCATENATE | Placeholder (blocked) | Yes | No |
 | CONFIDENCE | Placeholder (blocked) | Yes | Yes |
 | CONFIDENCE.NORM | Not in ODF 1.4 mandatory | Yes | Yes |
 | CONFIDENCE.T | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -161,7 +161,7 @@
 | DEGREES | Not in ODF 1.4 mandatory | Yes | Yes |
 | DELTA | Placeholder (blocked) | Yes | Yes |
 | DETECTLANGUAGE | Not in ODF 1.4 mandatory | Yes | Yes |
-| DEVSQ | Placeholder (blocked) | Yes | Yes |
+| DEVSQ | Placeholder (blocked) | Yes | No |
 | DGET | Not in ODF 1.4 mandatory | Yes | Yes |
 | DISC | Placeholder (blocked) | Yes | Yes |
 | DMAX | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -214,8 +214,8 @@
 | FLOOR.MATH | Not in ODF 1.4 mandatory | Yes | Yes |
 | FLOOR.PRECISE | Not in ODF 1.4 mandatory | Yes | Yes |
 | FORECAST | Placeholder (blocked) | No | Yes |
-| FORMULA | Implemented | No | Yes |
-| FORMULATEXT | Not in ODF 1.4 mandatory | Yes | Yes |
+| FORMULA | Implemented | No | No |
+| FORMULATEXT | Not in ODF 1.4 mandatory | Yes | No |
 | FREQUENCY | Placeholder (blocked) | Yes | Yes |
 | FTEST | Placeholder (blocked) | Yes | Yes |
 | FV | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -231,8 +231,8 @@
 | GCD | Implemented | Yes | Yes |
 | GEOMEAN | Placeholder (blocked) | Yes | Yes |
 | GESTEP | Placeholder (blocked) | Yes | Yes |
-| GETPIVOTDATA | Placeholder (blocked) | Yes | Yes |
-| GROUPBY | Not in ODF 1.4 mandatory | Yes | Yes |
+| GETPIVOTDATA | Placeholder (blocked) | Yes | No |
+| GROUPBY | Not in ODF 1.4 mandatory | Yes | No |
 | GROWTH | Placeholder (blocked) | Yes | Yes |
 | HARMEAN | Placeholder (blocked) | Yes | Yes |
 | HEX2BIN | Placeholder (blocked) | Yes | Yes |
@@ -248,34 +248,34 @@
 | IFERROR | Implemented | Yes | Yes |
 | IFNA | Implemented | Yes | Yes |
 | IFS | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMABS | Placeholder (blocked) | Yes | Yes |
+| IMABS | Placeholder (blocked) | Yes | No |
 | IMAGE | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMAGINARY | Placeholder (blocked) | Yes | Yes |
-| IMARGUMENT | Placeholder (blocked) | Yes | Yes |
-| IMCONJUGATE | Placeholder (blocked) | Yes | Yes |
-| IMCOS | Placeholder (blocked) | Yes | Yes |
-| IMCOSH | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMCOT | Placeholder (blocked) | Yes | Yes |
-| IMCSC | Placeholder (blocked) | Yes | Yes |
-| IMCSCH | Placeholder (blocked) | Yes | Yes |
-| IMDIV | Placeholder (blocked) | Yes | Yes |
-| IMEXP | Placeholder (blocked) | Yes | Yes |
-| IMLN | Placeholder (blocked) | Yes | Yes |
-| IMLOG10 | Placeholder (blocked) | Yes | Yes |
-| IMLOG2 | Placeholder (blocked) | Yes | Yes |
-| IMPOWER | Placeholder (blocked) | Yes | Yes |
-| IMPRODUCT | Placeholder (blocked) | Yes | Yes |
-| IMREAL | Placeholder (blocked) | Yes | Yes |
-| IMSEC | Placeholder (blocked) | Yes | Yes |
-| IMSECH | Placeholder (blocked) | Yes | Yes |
-| IMSIN | Placeholder (blocked) | Yes | Yes |
-| IMSINH | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMSQRT | Placeholder (blocked) | Yes | Yes |
-| IMSUB | Placeholder (blocked) | Yes | Yes |
-| IMSUM | Placeholder (blocked) | Yes | Yes |
-| IMTAN | Placeholder (blocked) | Yes | Yes |
+| IMAGINARY | Placeholder (blocked) | Yes | No |
+| IMARGUMENT | Placeholder (blocked) | Yes | No |
+| IMCONJUGATE | Placeholder (blocked) | Yes | No |
+| IMCOS | Placeholder (blocked) | Yes | No |
+| IMCOSH | Not in ODF 1.4 mandatory | Yes | No |
+| IMCOT | Placeholder (blocked) | Yes | No |
+| IMCSC | Placeholder (blocked) | Yes | No |
+| IMCSCH | Placeholder (blocked) | Yes | No |
+| IMDIV | Placeholder (blocked) | Yes | No |
+| IMEXP | Placeholder (blocked) | Yes | No |
+| IMLN | Placeholder (blocked) | Yes | No |
+| IMLOG10 | Placeholder (blocked) | Yes | No |
+| IMLOG2 | Placeholder (blocked) | Yes | No |
+| IMPOWER | Placeholder (blocked) | Yes | No |
+| IMPRODUCT | Placeholder (blocked) | Yes | No |
+| IMREAL | Placeholder (blocked) | Yes | No |
+| IMSEC | Placeholder (blocked) | Yes | No |
+| IMSECH | Placeholder (blocked) | Yes | No |
+| IMSIN | Placeholder (blocked) | Yes | No |
+| IMSINH | Not in ODF 1.4 mandatory | Yes | No |
+| IMSQRT | Placeholder (blocked) | Yes | No |
+| IMSUB | Placeholder (blocked) | Yes | No |
+| IMSUM | Placeholder (blocked) | Yes | No |
+| IMTAN | Placeholder (blocked) | Yes | No |
 | INDEX | Not in ODF 1.4 mandatory | Yes | Yes |
-| INDIRECT | Implemented | Yes | Yes |
+| INDIRECT | Implemented | Yes | No |
 | INFO | Placeholder (blocked) | Yes | Yes |
 | INT | Not in ODF 1.4 mandatory | Yes | Yes |
 | INTERCEPT | Placeholder (blocked) | Yes | Yes |
@@ -295,7 +295,7 @@
 | ISTEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | JIS | Placeholder (blocked) | No | Yes |
 | KURT | Placeholder (blocked) | Yes | Yes |
-| LAMBDA | Not in ODF 1.4 mandatory | Yes | Yes |
+| LAMBDA | Not in ODF 1.4 mandatory | Yes | No |
 | LARGE | Placeholder (blocked) | Yes | Yes |
 | LCM | Implemented | Yes | Yes |
 | LEFT | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -305,11 +305,11 @@
 | LEGACY.CHITEST | Legacy not implemented | No | Yes |
 | LEGACY.FDIST | Legacy not implemented | No | Yes |
 | LEGACY.FINV | Legacy not implemented | No | Yes |
-| LEGACY.NORMSDIST | Legacy not implemented | No | Yes |
-| LEGACY.NORMSINV | Legacy not implemented | No | Yes |
+| LEGACY.NORMSDIST | Legacy not implemented | No | No |
+| LEGACY.NORMSINV | Legacy not implemented | No | No |
 | LEN | Not in ODF 1.4 mandatory | Yes | Yes |
 | LENB | Missing | Yes | Yes |
-| LET | Not in ODF 1.4 mandatory | Yes | Yes |
+| LET | Not in ODF 1.4 mandatory | Yes | No |
 | LINEST | Placeholder (blocked) | Yes | Yes |
 | LN | Not in ODF 1.4 mandatory | Yes | Yes |
 | LOG | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -321,13 +321,13 @@
 | LOGNORMDIST | Placeholder (blocked) | Yes | Yes |
 | LOOKUP | Placeholder (blocked) | Yes | Yes |
 | LOWER | Not in ODF 1.4 mandatory | Yes | Yes |
-| MAKEARRAY | Not in ODF 1.4 mandatory | Yes | Yes |
-| MAP | Not in ODF 1.4 mandatory | Yes | Yes |
+| MAKEARRAY | Not in ODF 1.4 mandatory | Yes | No |
+| MAP | Not in ODF 1.4 mandatory | Yes | No |
 | MATCH | Not in ODF 1.4 mandatory | Yes | Yes |
 | MAX | Not in ODF 1.4 mandatory | Yes | Yes |
 | MAXA | Placeholder (blocked) | Yes | Yes |
 | MAXIFS | Not in ODF 1.4 mandatory | Yes | Yes |
-| MDETERM | Implemented | Yes | Yes |
+| MDETERM | Implemented | Yes | No |
 | MDURATION | Placeholder (blocked) | Yes | Yes |
 | MEDIAN | Placeholder (blocked) | Yes | Yes |
 | MID | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -336,17 +336,17 @@
 | MINA | Placeholder (blocked) | Yes | Yes |
 | MINIFS | Not in ODF 1.4 mandatory | Yes | Yes |
 | MINUTE | Not in ODF 1.4 mandatory | Yes | Yes |
-| MINVERSE | Implemented | Yes | Yes |
+| MINVERSE | Implemented | Yes | No |
 | MIRR | Placeholder (blocked) | Yes | Yes |
-| MMULT | Implemented | Yes | Yes |
+| MMULT | Implemented | Yes | No |
 | MOD | Not in ODF 1.4 mandatory | Yes | Yes |
 | MODE | Placeholder (blocked) | Yes | Yes |
 | MODE.MULT | Not in ODF 1.4 mandatory | Yes | Yes |
 | MODE.SNGL | Not in ODF 1.4 mandatory | Yes | Yes |
 | MONTH | Not in ODF 1.4 mandatory | Yes | Yes |
 | MROUND | Implemented | Yes | Yes |
-| MULTINOMIAL | Implemented | Yes | Yes |
-| MULTIPLE.OPERATIONS | Missing | No | Yes |
+| MULTINOMIAL | Implemented | Yes | No |
+| MULTIPLE.OPERATIONS | Missing | No | No |
 | MUNIT | Implemented | Yes | Yes |
 | N | Not in ODF 1.4 mandatory | Yes | Yes |
 | NA | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -383,7 +383,7 @@
 | PERCENTILE | Placeholder (blocked) | Yes | Yes |
 | PERCENTILE.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
 | PERCENTILE.INC | Not in ODF 1.4 mandatory | Yes | Yes |
-| PERCENTOF | Not in ODF 1.4 mandatory | Yes | Yes |
+| PERCENTOF | Not in ODF 1.4 mandatory | Yes | No |
 | PERCENTRANK | Placeholder (blocked) | Yes | Yes |
 | PERCENTRANK.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
 | PERCENTRANK.INC | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -392,7 +392,7 @@
 | PHI | Placeholder (blocked) | Yes | Yes |
 | PHONETIC | Not in ODF 1.4 mandatory | Yes | Yes |
 | PI | Not in ODF 1.4 mandatory | Yes | Yes |
-| PIVOTBY | Not in ODF 1.4 mandatory | Yes | Yes |
+| PIVOTBY | Not in ODF 1.4 mandatory | Yes | No |
 | PMT | Not in ODF 1.4 mandatory | Yes | Yes |
 | POISSON | Placeholder (blocked) | Yes | Yes |
 | POISSON.DIST | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -403,7 +403,7 @@
 | PRICEMAT | Placeholder (blocked) | Yes | Yes |
 | PROB | Placeholder (blocked) | Yes | Yes |
 | PRODUCT | Not in ODF 1.4 mandatory | Yes | Yes |
-| PROPER | Not in ODF 1.4 mandatory | Yes | Yes |
+| PROPER | Not in ODF 1.4 mandatory | Yes | No |
 | PV | Not in ODF 1.4 mandatory | Yes | Yes |
 | QUARTILE | Placeholder (blocked) | Yes | Yes |
 | QUARTILE.EXC | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -418,26 +418,26 @@
 | RANK.EQ | Not in ODF 1.4 mandatory | Yes | Yes |
 | RATE | Not in ODF 1.4 mandatory | Yes | Yes |
 | RECEIVED | Placeholder (blocked) | Yes | Yes |
-| REDUCE | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXEXTRACT | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXREPLACE | Not in ODF 1.4 mandatory | Yes | Yes |
-| REGEXTEST | Not in ODF 1.4 mandatory | Yes | Yes |
+| REDUCE | Not in ODF 1.4 mandatory | Yes | No |
+| REGEXEXTRACT | Not in ODF 1.4 mandatory | Yes | No |
+| REGEXREPLACE | Not in ODF 1.4 mandatory | Yes | No |
+| REGEXTEST | Not in ODF 1.4 mandatory | Yes | No |
 | REGISTER.ID | Not in ODF 1.4 mandatory | Yes | Yes |
 | REPLACE | Not in ODF 1.4 mandatory | Yes | Yes |
 | REPLACEB | Missing | Yes | Yes |
 | REPT | Not in ODF 1.4 mandatory | Yes | Yes |
 | RIGHT | Not in ODF 1.4 mandatory | Yes | Yes |
 | RIGHTB | Missing | Yes | Yes |
-| ROMAN | Implemented | Yes | Yes |
+| ROMAN | Implemented | Yes | No |
 | ROUND | Not in ODF 1.4 mandatory | Yes | Yes |
 | ROUNDDOWN | Implemented | Yes | Yes |
 | ROUNDUP | Implemented | Yes | Yes |
-| ROW | Placeholder (blocked) | Yes | Yes |
+| ROW | Placeholder (blocked) | Yes | No |
 | ROWS | Not in ODF 1.4 mandatory | Yes | Yes |
 | RRI | Placeholder (blocked) | Yes | Yes |
 | RSQ | Placeholder (blocked) | Yes | Yes |
 | RTD | Not in ODF 1.4 mandatory | Yes | Yes |
-| SCAN | Not in ODF 1.4 mandatory | Yes | Yes |
+| SCAN | Not in ODF 1.4 mandatory | Yes | No |
 | SEARCH | Implemented | Yes | Yes |
 | SEARCHB | Missing | Yes | Yes |
 | SEC | Implemented | Yes | Yes |
@@ -445,14 +445,14 @@
 | SECOND | Not in ODF 1.4 mandatory | Yes | Yes |
 | SEQUENCE | Not in ODF 1.4 mandatory | Yes | Yes |
 | SERIESSUM | Implemented | Yes | Yes |
-| SHEET | Placeholder (blocked) | Yes | Yes |
-| SHEETS | Placeholder (blocked) | Yes | Yes |
+| SHEET | Placeholder (blocked) | Yes | No |
+| SHEETS | Placeholder (blocked) | Yes | No |
 | SIGN | Implemented | Yes | Yes |
 | SIN | Not in ODF 1.4 mandatory | Yes | Yes |
 | SINH | Implemented | Yes | Yes |
 | SKEW | Placeholder (blocked) | Yes | Yes |
 | SKEW.P | Not in ODF 1.4 mandatory | Yes | Yes |
-| SKEWP | Missing | No | Yes |
+| SKEWP | Missing | No | No |
 | SLN | Not in ODF 1.4 mandatory | Yes | Yes |
 | SLOPE | Placeholder (blocked) | Yes | Yes |
 | SMALL | Placeholder (blocked) | Yes | Yes |
@@ -476,9 +476,9 @@
 | SUMIFS | Implemented | Yes | Yes |
 | SUMPRODUCT | Implemented | Yes | Yes |
 | SUMSQ | Implemented | Yes | Yes |
-| SUMX2MY2 | Implemented | Yes | Yes |
-| SUMX2PY2 | Implemented | Yes | Yes |
-| SUMXMY2 | Implemented | Yes | Yes |
+| SUMX2MY2 | Implemented | Yes | No |
+| SUMX2PY2 | Implemented | Yes | No |
+| SUMXMY2 | Implemented | Yes | No |
 | SWITCH | Not in ODF 1.4 mandatory | Yes | Yes |
 | SYD | Not in ODF 1.4 mandatory | Yes | Yes |
 | T | Not in ODF 1.4 mandatory | Yes | Yes |
