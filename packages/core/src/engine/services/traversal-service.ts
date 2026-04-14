@@ -279,9 +279,6 @@ export function createEngineTraversalService(args: {
           ensureFormulaBufferCapacity(formulaCount + 1);
           topoFormulaBuffer[formulaCount] = formulaCellIndex;
           formulaCount += 1;
-          ensureEntityQueueCapacity(entityQueueLength + 1);
-          topoEntityQueue[entityQueueLength] = dependent;
-          entityQueueLength += 1;
           continue;
         }
         if (isRangeEntity(dependent)) {
