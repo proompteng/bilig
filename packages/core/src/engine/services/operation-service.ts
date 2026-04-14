@@ -824,9 +824,9 @@ export function createEngineOperationService(args: {
     if (rangeIndices.length > 0) {
       args.refreshRangeDependencies(rangeIndices);
     }
-    const formulas = args
-      .collectFormulaDependents(makeCellEntity(cellIndex))
-      .filter((candidate) => candidate !== cellIndex);
+    const formulas = Array.from(args.collectFormulaDependents(makeCellEntity(cellIndex))).filter(
+      (candidate) => candidate !== cellIndex,
+    );
     if (formulas.length === 0) {
       return formulaChangedCount;
     }
