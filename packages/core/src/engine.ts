@@ -1629,6 +1629,12 @@ export class SpreadsheetEngine {
 
   importSheetCsv(sheetName: string, csv: string): void {
     runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv));
+    if (csv.includes("=")) {
+      // CSV import applies one bulk mutation batch. A second full recalc settles
+      // formulas whose imported ranges include other formulas introduced later in the same batch.
+      this.recalculateNow();
+      this.recalculateNow();
+    }
   }
 
   getCellValue(sheetName: string, address: string): CellValue {

@@ -5707,6 +5707,37 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("recalculates range formulas over imported formula cells after CSV import", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "csv-range-recalc" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "SUM(B1:B1)");
+    engine.setCellValue("Sheet1", "B1", "text:@4yt");
+    engine.setCellFormula("Sheet1", "C1", "SUM(B2:C4)");
+    engine.setCellValue("Sheet1", "A2", false);
+    engine.setCellValue("Sheet1", "C2", true);
+    engine.setCellFormula("Sheet1", "A3", "SUM(B1:B1)");
+    engine.setCellFormula("Sheet1", "C3", "B1+B1");
+    engine.setCellFormula("Sheet1", "A4", "SUM(B1:B1)");
+    engine.setCellValue("Sheet1", "B4", 'text:"k');
+    engine.setCellValue("Sheet1", "C4", "text:&Pr!}${");
+
+    const csv = engine.exportSheetCsv("Sheet1");
+
+    const restored = new SpreadsheetEngine({ workbookName: "csv-range-recalc-restored" });
+    await restored.ready();
+    restored.importSheetCsv("Sheet1", csv);
+
+    expect(restored.getCellValue("Sheet1", "C3")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(restored.getCellValue("Sheet1", "C1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("persists cell formats through imperative updates and snapshot roundtrip", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
