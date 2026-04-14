@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@bilig/protocol':
+        specifier: workspace:*
+        version: link:packages/protocol
       '@bilig/test-fuzz':
         specifier: workspace:*
         version: link:packages/test-fuzz

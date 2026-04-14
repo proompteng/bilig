@@ -23,9 +23,9 @@ export type ProjectionAction =
   | { kind: "insertColumns"; start: number; count: number }
   | { kind: "deleteColumns"; start: number; count: number };
 
-export const projectionSheetName = "Sheet1";
+const projectionSheetName = "Sheet1";
 
-export const projectionOptions: WorkbookProjectionOptions = {
+const projectionOptions: WorkbookProjectionOptions = {
   revision: 9,
   calculatedRevision: 9,
   ownerUserId: "owner-1",
@@ -127,9 +127,7 @@ export function applyProjectionAction(engine: SpreadsheetEngine, action: Project
   }
 }
 
-export function normalizeProjection(
-  projection: WorkbookSourceProjection,
-): WorkbookSourceProjection {
+function normalizeProjection(projection: WorkbookSourceProjection): WorkbookSourceProjection {
   return {
     ...projection,
     sheets: projection.sheets.toSorted((left, right) => left.sheetId - right.sheetId),

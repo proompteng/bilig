@@ -82,6 +82,7 @@
     "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm formula:dominance:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm --filter @bilig/web build && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
+    "@bilig/protocol": "workspace:*",
     "@bilig/test-fuzz": "workspace:*",
     "@playwright/test": "1.58.2",
     "@types/node": "25.5.0",
