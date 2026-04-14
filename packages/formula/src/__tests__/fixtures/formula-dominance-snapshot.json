@@ -2,64 +2,16 @@
   "schemaVersion": 1,
   "formulaBreadth": {
     "officeListed": {
-      "production": 475,
+      "production": 508,
       "total": 508,
-      "percent": 93.5
+      "percent": 100
     },
     "tracked": {
-      "production": 475,
+      "production": 525,
       "total": 525,
-      "percent": 90.5
+      "percent": 100
     },
-    "missingOfficeFunctions": [
-      "ACCRINT",
-      "ACCRINTM",
-      "AMORDEGRC",
-      "AMORLINC",
-      "ARABIC",
-      "AVEDEV",
-      "COMPLEX",
-      "CONCATENATE",
-      "DEVSQ",
-      "IMABS",
-      "IMAGINARY",
-      "IMARGUMENT",
-      "IMCONJUGATE",
-      "IMCOS",
-      "IMCOSH",
-      "IMCOT",
-      "IMCSC",
-      "IMCSCH",
-      "IMDIV",
-      "IMEXP",
-      "IMLN",
-      "IMLOG10",
-      "IMLOG2",
-      "IMPOWER",
-      "IMPRODUCT",
-      "IMREAL",
-      "IMSEC",
-      "IMSECH",
-      "IMSIN",
-      "IMSINH",
-      "IMSQRT",
-      "IMSUB",
-      "IMSUM",
-      "IMTAN",
-      "MDETERM",
-      "MINVERSE",
-      "MMULT",
-      "MULTINOMIAL",
-      "PERCENTOF",
-      "PROPER",
-      "REGEXEXTRACT",
-      "REGEXREPLACE",
-      "REGEXTEST",
-      "ROMAN",
-      "SUMX2MY2",
-      "SUMX2PY2",
-      "SUMXMY2"
-    ]
+    "missingOfficeFunctions": []
   },
   "canonical": {
     "summary": {

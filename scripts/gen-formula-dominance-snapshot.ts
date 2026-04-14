@@ -116,8 +116,8 @@ function buildSnapshot(): FormulaDominanceSnapshot {
     schemaVersion: 1,
     formulaBreadth: {
       officeListed: ratio(
-        formulaInventorySummary.registeredInCodebase,
-        formulaInventorySummary.officeListed,
+        formulaInventorySummary.officeListedRegisteredInCodebase,
+        officeListed.length,
       ),
       tracked: ratio(formulaInventorySummary.registeredInCodebase, formulaInventorySummary.total),
       missingOfficeFunctions: officeListed

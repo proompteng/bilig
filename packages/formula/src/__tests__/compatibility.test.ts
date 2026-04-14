@@ -47,7 +47,7 @@ describe("formula compatibility registry", () => {
 
     expect(snapshot.formulaBreadth.officeListed).toEqual(
       createRatioRecord(
-        formulaInventorySummary.registeredInCodebase,
+        formulaInventorySummary.officeListedRegisteredInCodebase,
         formulaInventorySummary.officeListed,
       ),
     );
