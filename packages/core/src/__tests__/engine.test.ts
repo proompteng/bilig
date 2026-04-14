@@ -5738,6 +5738,32 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("recalculates transitive range dependents when a downstream formula becomes an error", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "transitive-range-recalc" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "C1", 1_835_115_565);
+    engine.setCellValue("Sheet1", "D1", -24);
+    engine.setCellFormula("Sheet1", "A2", "SUM(B1:E2)");
+    engine.setCellFormula("Sheet1", "B2", 'IF(E2>0,"text:yes","text:no")');
+
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({
+      tag: ValueTag.Number,
+      value: 1_835_115_541,
+    });
+
+    engine.setCellValue("Sheet1", "E2", "text:ooe)ZL#<");
+
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("persists cell formats through imperative updates and snapshot roundtrip", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

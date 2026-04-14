@@ -11,6 +11,7 @@ import {
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
 import {
   entityPayload,
+  isRangeEntity,
   makeCellEntity,
   makeExactLookupColumnEntity,
   makeSortedLookupColumnEntity,
@@ -267,6 +268,7 @@ export function createEngineOperationService(args: {
     candidates: readonly number[],
     formulaChangedCount: number,
   ) => number;
+  readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void;
   readonly rebindFormulasForSheet: (
     sheetName: string,
     formulaChangedCount: number,
@@ -316,6 +318,7 @@ export function createEngineOperationService(args: {
   readonly flushWasmProgramSync: () => void;
   readonly getBatchMutationDepth: () => number;
   readonly setBatchMutationDepth: (next: number) => void;
+  readonly getEntityDependents: (entityId: number) => Uint32Array;
   readonly collectFormulaDependents: (entityId: number) => Uint32Array;
   readonly noteExactLookupLiteralWrite: (request: {
     sheetName: string;
@@ -804,6 +807,30 @@ export function createEngineOperationService(args: {
       formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount);
     }
     return formulaChangedCount;
+  };
+
+  const refreshDependentRangesAndRebindFormulaDependents = (
+    cellIndex: number,
+    formulaChangedCount: number,
+  ): number => {
+    const directDependents = args.getEntityDependents(makeCellEntity(cellIndex));
+    const rangeIndices: number[] = [];
+    for (let index = 0; index < directDependents.length; index += 1) {
+      const dependent = directDependents[index]!;
+      if (isRangeEntity(dependent)) {
+        rangeIndices.push(entityPayload(dependent));
+      }
+    }
+    if (rangeIndices.length > 0) {
+      args.refreshRangeDependencies(rangeIndices);
+    }
+    const formulas = args
+      .collectFormulaDependents(makeCellEntity(cellIndex))
+      .filter((candidate) => candidate !== cellIndex);
+    if (formulas.length === 0) {
+      return formulaChangedCount;
+    }
+    return args.rebindFormulaCells(formulas, formulaChangedCount);
   };
 
   const entityKeyForOp = (op: EngineOp): string => {
@@ -1488,7 +1515,14 @@ export function createEngineOperationService(args: {
                 args.clearOwnedSpill(cellIndex),
                 changedInputCount,
               );
-              topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+              const removedFormula = args.removeFormula(cellIndex);
+              if (removedFormula) {
+                formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(
+                  cellIndex,
+                  formulaChangedCount,
+                );
+              }
+              topologyChanged = removedFormula || topologyChanged;
             }
             writeLiteralToCellStore(
               args.state.workbook.cellStore,
@@ -1574,6 +1608,7 @@ export function createEngineOperationService(args: {
               op.address,
               preparedCellAddress,
             );
+            const priorHadFormula = args.state.formulas.get(cellIndex) !== undefined;
             if (!isRestore) {
               changedInputCount = args.markSpillRootsChanged(
                 args.clearOwnedSpill(cellIndex),
@@ -1589,6 +1624,13 @@ export function createEngineOperationService(args: {
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
               topologyChanged = topologyChanged || changedTopology;
+              if (!priorHadFormula) {
+                formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(
+                  cellIndex,
+                  formulaChangedCount,
+                );
+                topologyChanged = true;
+              }
               const aggregateDependents = collectAffectedDirectAggregateDependents({
                 sheetName: op.sheetName,
                 row: parsedAddress.row,
@@ -1676,7 +1718,14 @@ export function createEngineOperationService(args: {
               args.clearOwnedSpill(cellIndex),
               changedInputCount,
             );
-            topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
+            const removedFormula = args.removeFormula(cellIndex);
+            if (removedFormula) {
+              formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(
+                cellIndex,
+                formulaChangedCount,
+              );
+            }
+            topologyChanged = removedFormula || topologyChanged;
             args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
             args.state.workbook.notifyCellValueWritten(cellIndex);
             const parsedAddress = parseCellAddress(op.address, op.sheetName);

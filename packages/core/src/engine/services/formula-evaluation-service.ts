@@ -29,6 +29,7 @@ import type { RangeAggregateCacheService } from "./range-aggregate-cache-service
 function decodeErrorCode(rawCode: number | undefined): ErrorCode {
   return rawCode ?? ErrorCode.None;
 }
+
 import type {
   EngineRuntimeColumnStoreService,
   RuntimeColumnSlice,
@@ -897,12 +898,11 @@ export function createEngineFormulaEvaluationService(args: {
       }
       return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
     }
+    // SUM/AVERAGE ranges must avoid subtracting large nearly-equal prefixes or
+    // they can drift on exact integer inputs after import. Reuse still happens
+    // per range family via the rowStart-keyed aggregate cache.
     const sharedPrefixStart =
-      directAggregate.aggregateKind === "sum" ||
-      directAggregate.aggregateKind === "count" ||
-      directAggregate.aggregateKind === "average"
-        ? 0
-        : directAggregate.rowStart;
+      directAggregate.aggregateKind === "count" ? 0 : directAggregate.rowStart;
     const prefix = args.aggregateCache.getOrBuildPrefix({
       sheetName: directAggregate.sheetName,
       rowStart: sharedPrefixStart,

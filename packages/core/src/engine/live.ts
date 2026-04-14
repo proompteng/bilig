@@ -593,6 +593,7 @@ export function createEngineServiceRuntime(args: {
       binding.rebindTableDependentsNow(tableNames, formulaChangedCount),
     rebindFormulaCells: (candidates, formulaChangedCount) =>
       binding.rebindFormulaCellsNow(candidates, formulaChangedCount),
+    refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
       binding.rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
     removeSheetRuntime: (sheetName, explicitChangedCount) =>
@@ -640,6 +641,7 @@ export function createEngineServiceRuntime(args: {
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, "recalc").reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
+    getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
     noteSortedLookupLiteralWrite: (request) => sortedLookup.recordLiteralWrite(request),
