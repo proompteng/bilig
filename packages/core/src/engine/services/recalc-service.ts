@@ -431,6 +431,12 @@ export function createEngineRecalcService(args: {
           formula.directAggregate !== undefined ||
           formula.directCriteria !== undefined
         ) {
+          if (wasmBatchCount > 0) {
+            wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
+            wasmBatchCount = 0;
+            wasmBatchHasVolatile = false;
+            wasmBatchRandCount = 0;
+          }
           const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex);
           if (directLookupChanges !== undefined) {
             noteSpillChanges(directLookupChanges);

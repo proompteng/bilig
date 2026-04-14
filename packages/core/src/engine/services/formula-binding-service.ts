@@ -1222,12 +1222,18 @@ export function createEngineFormulaBindingService(args: {
     if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
       return;
     }
+    if ((args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0) {
+      return;
+    }
     args.state.workbook.pruneCellIfEmpty(cellIndex);
   };
 
   const pruneOrphanedDependencyCells = (cellIndices: readonly number[]): void => {
     cellIndices.forEach((cellIndex) => {
       if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
+        return;
+      }
+      if ((args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0) {
         return;
       }
       args.state.workbook.pruneCellIfEmpty(cellIndex);
