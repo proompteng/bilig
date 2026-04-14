@@ -107,6 +107,25 @@ describe("EnginePivotService", () => {
     expect(engine.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
   });
 
+  it("drops orphaned pivot ownership when the pivot metadata is already gone", async () => {
+    const engine = await buildPivotEngine();
+    const service = getPivotService(engine);
+    const pivotCellIndex = engine.workbook.getCellIndex("Pivot", "B2");
+    if (pivotCellIndex === undefined) {
+      throw new TypeError("Expected pivot output cell");
+    }
+
+    expect(engine.deletePivotTable("Pivot", "B2")).toBe(true);
+    const pivotOutputOwners = Reflect.get(engine, "pivotOutputOwners");
+    if (!(pivotOutputOwners instanceof Map)) {
+      throw new TypeError("Expected pivot output owners");
+    }
+    pivotOutputOwners.set(pivotCellIndex, "Pivot!B2");
+
+    expect(Effect.runSync(service.clearPivotForCell(pivotCellIndex))).toEqual([]);
+    expect(pivotOutputOwners.has(pivotCellIndex)).toBe(false);
+  });
+
   it("wraps materialize, resolve, clear-owned, and clear-for-cell failures with EnginePivotError", async () => {
     const engine = await buildPivotEngine();
     const service = getPivotService(engine);
