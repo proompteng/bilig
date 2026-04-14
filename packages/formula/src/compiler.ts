@@ -1,6 +1,11 @@
 import { BuiltinId, FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
-import { formatRangeAddress, parseCellAddress, parseRangeAddress } from "./addressing.js";
+import {
+  columnToIndex,
+  formatRangeAddress,
+  parseCellAddress,
+  parseRangeAddress,
+} from "./addressing.js";
 import { getNativeGroupedArrayKind } from "./binder-wasm-rules.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
 import { lowerToPlan, type JsPlanInstruction } from "./js-evaluator.js";
@@ -477,14 +482,10 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
 export interface CompiledFormula extends FormulaRecord {
   ast: FormulaNode;
   optimizedAst: FormulaNode;
+  astMatchesSource?: boolean;
+  directAggregateCandidate?: DirectAggregateCandidate;
   deps: string[];
-  parsedDeps?: Array<{
-    address: string;
-    kind: "cell";
-    sheetName?: string;
-    row?: number;
-    col?: number;
-  }>;
+  parsedDeps?: ParsedDependencyReference[];
   symbolicNames: string[];
   symbolicTables: string[];
   symbolicSpills: string[];
@@ -495,9 +496,48 @@ export interface CompiledFormula extends FormulaRecord {
   program: Uint32Array;
   constants: Float64Array;
   symbolicRefs: string[];
-  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string; row?: number; col?: number }>;
+  parsedSymbolicRefs?: ParsedCellReferenceInfo[];
   symbolicRanges: string[];
+  parsedSymbolicRanges?: ParsedRangeReferenceInfo[];
   symbolicStrings: string[];
+}
+
+export interface ParsedCellReferenceInfo {
+  address: string;
+  sheetName?: string;
+  explicitSheet?: boolean;
+  row?: number;
+  col?: number;
+  rowAbsolute?: boolean;
+  colAbsolute?: boolean;
+}
+
+export interface ParsedRangeReferenceInfo {
+  address: string;
+  kind: "range";
+  refKind: "cells" | "rows" | "cols";
+  sheetName?: string;
+  explicitSheet?: boolean;
+  startAddress: string;
+  endAddress: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+  startRowAbsolute?: boolean;
+  endRowAbsolute?: boolean;
+  startColAbsolute?: boolean;
+  endColAbsolute?: boolean;
+}
+
+export type ParsedDependencyReference =
+  | ({ kind: "cell" } & ParsedCellReferenceInfo)
+  | ParsedRangeReferenceInfo;
+
+export interface DirectAggregateCandidate {
+  callee: string;
+  aggregateKind: "sum" | "average" | "count" | "min" | "max";
+  symbolicRangeIndex: number;
 }
 
 interface CompileFormulaAstOptions {
@@ -505,6 +545,22 @@ interface CompileFormulaAstOptions {
   symbolicNames?: string[];
   symbolicTables?: string[];
   symbolicSpills?: string[];
+}
+
+const CELL_REFERENCE_PARTS_RE = /^(\$?)([A-Z]+)(\$?)([1-9][0-9]*)$/i;
+const COLUMN_REFERENCE_PARTS_RE = /^(\$?)([A-Z]+)$/i;
+const ROW_REFERENCE_PARTS_RE = /^(\$?)([1-9][0-9]*)$/;
+
+interface CellReferenceParts {
+  row: number;
+  col: number;
+  rowAbsolute: boolean;
+  colAbsolute: boolean;
+}
+
+interface AxisReferenceParts {
+  index: number;
+  absolute: boolean;
 }
 
 function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
@@ -571,19 +627,144 @@ function parseSimpleOperand(source: string): FormulaNode | null {
   return null;
 }
 
+function stripSheetQualifier(reference: string): string {
+  const bang = reference.lastIndexOf("!");
+  return bang === -1 ? reference.trim() : reference.slice(bang + 1).trim();
+}
+
+function parseCellReferenceParts(reference: string): CellReferenceParts | undefined {
+  const match = CELL_REFERENCE_PARTS_RE.exec(stripSheetQualifier(reference));
+  if (!match) {
+    return undefined;
+  }
+  const [, colAbsolute, columnText, rowAbsolute, rowText] = match;
+  return {
+    row: Number.parseInt(rowText!, 10) - 1,
+    col: columnToIndex(columnText!),
+    rowAbsolute: rowAbsolute === "$",
+    colAbsolute: colAbsolute === "$",
+  };
+}
+
+function parseAxisReferenceParts(
+  reference: string,
+  kind: "row" | "column",
+): AxisReferenceParts | undefined {
+  const match = (kind === "row" ? ROW_REFERENCE_PARTS_RE : COLUMN_REFERENCE_PARTS_RE).exec(
+    stripSheetQualifier(reference),
+  );
+  if (!match) {
+    return undefined;
+  }
+  return kind === "row"
+    ? {
+        index: Number.parseInt(match[2]!, 10) - 1,
+        absolute: match[1] === "$",
+      }
+    : {
+        index: columnToIndex(match[2]!),
+        absolute: match[1] === "$",
+      };
+}
+
+function buildParsedCellReferenceInfo(reference: string): ParsedCellReferenceInfo {
+  const parsedCell = parseCellAddress(reference);
+  const parts = parseCellReferenceParts(reference);
+  return {
+    address: reference,
+    ...(parsedCell.sheetName !== undefined ? { sheetName: parsedCell.sheetName } : {}),
+    ...(reference.includes("!") ? { explicitSheet: true } : {}),
+    row: parsedCell.row,
+    col: parsedCell.col,
+    ...(parts
+      ? {
+          rowAbsolute: parts.rowAbsolute,
+          colAbsolute: parts.colAbsolute,
+        }
+      : {}),
+  };
+}
+
+function buildParsedRangeReferenceInfo(reference: string): ParsedRangeReferenceInfo {
+  const parsedRange = parseRangeAddress(reference);
+  const bounds =
+    parsedRange.kind === "cells"
+      ? {
+          startRow: parsedRange.start.row,
+          endRow: parsedRange.end.row,
+          startCol: parsedRange.start.col,
+          endCol: parsedRange.end.col,
+        }
+      : parsedRange.kind === "rows"
+        ? {
+            startRow: parsedRange.start.row,
+            endRow: parsedRange.end.row,
+            startCol: 0,
+            endCol: 0,
+          }
+        : {
+            startRow: 0,
+            endRow: 0,
+            startCol: parsedRange.start.col,
+            endCol: parsedRange.end.col,
+          };
+  const separator = reference.indexOf(":");
+  const rawStart = reference.slice(0, separator).trim();
+  const rawEnd = reference.slice(separator + 1).trim();
+  const cellStart = parsedRange.kind === "cells" ? parseCellReferenceParts(rawStart) : undefined;
+  const cellEnd = parsedRange.kind === "cells" ? parseCellReferenceParts(rawEnd) : undefined;
+  const rowStart =
+    parsedRange.kind === "rows" ? parseAxisReferenceParts(rawStart, "row") : undefined;
+  const rowEnd = parsedRange.kind === "rows" ? parseAxisReferenceParts(rawEnd, "row") : undefined;
+  const colStart =
+    parsedRange.kind === "cols" ? parseAxisReferenceParts(rawStart, "column") : undefined;
+  const colEnd =
+    parsedRange.kind === "cols" ? parseAxisReferenceParts(rawEnd, "column") : undefined;
+  return {
+    address: reference,
+    kind: "range",
+    refKind: parsedRange.kind,
+    ...(parsedRange.sheetName !== undefined ? { sheetName: parsedRange.sheetName } : {}),
+    ...(rawStart.includes("!") ? { explicitSheet: true } : {}),
+    startAddress: parsedRange.start.text,
+    endAddress: parsedRange.end.text,
+    ...bounds,
+    ...(parsedRange.kind === "cells"
+      ? {
+          startRowAbsolute: cellStart?.rowAbsolute ?? false,
+          endRowAbsolute: cellEnd?.rowAbsolute ?? false,
+          startColAbsolute: cellStart?.colAbsolute ?? false,
+          endColAbsolute: cellEnd?.colAbsolute ?? false,
+        }
+      : parsedRange.kind === "rows"
+        ? {
+            startRowAbsolute: rowStart?.absolute ?? false,
+            endRowAbsolute: rowEnd?.absolute ?? false,
+          }
+        : {
+            startColAbsolute: colStart?.absolute ?? false,
+            endColAbsolute: colEnd?.absolute ?? false,
+          }),
+  };
+}
+
+function parseDependencyReference(reference: string): ParsedDependencyReference {
+  if (reference.includes(":")) {
+    return buildParsedRangeReferenceInfo(reference);
+  }
+  return {
+    kind: "cell",
+    ...buildParsedCellReferenceInfo(reference),
+  };
+}
+
 function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
   const trimmed = source.trim();
   const singleOperand = parseSimpleOperand(trimmed);
   const refs: string[] = [];
-  const parsedRefs: Array<{ address: string; sheetName?: string; row?: number; col?: number }> = [];
+  const parsedRefs: ParsedCellReferenceInfo[] = [];
   const deps: string[] = [];
-  const parsedDeps: Array<{
-    address: string;
-    kind: "cell";
-    sheetName?: string;
-    row?: number;
-    col?: number;
-  }> = [];
+  const parsedDeps: ParsedDependencyReference[] = [];
   const constants: number[] = [];
   const program: number[] = [];
 
@@ -593,10 +774,9 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
       return existing;
     }
     const index = refs.push(ref) - 1;
-    const parsed = parseCellAddress(ref);
-    parsedRefs.push({ address: ref, row: parsed.row, col: parsed.col });
+    parsedRefs.push(buildParsedCellReferenceInfo(ref));
     deps.push(ref);
-    parsedDeps.push({ kind: "cell", address: ref, row: parsed.row, col: parsed.col });
+    parsedDeps.push({ kind: "cell", ...buildParsedCellReferenceInfo(ref) });
     return index;
   };
 
@@ -641,6 +821,7 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
       symbolicStrings: [],
       ast: singleOperand,
       optimizedAst: singleOperand,
+      astMatchesSource: true,
       deps,
       parsedDeps,
       symbolicNames: [],
@@ -699,6 +880,7 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
     symbolicStrings: [],
     ast,
     optimizedAst: ast,
+    astMatchesSource: true,
     deps,
     parsedDeps,
     symbolicNames: [],
@@ -709,6 +891,51 @@ function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
     producesSpill: false,
     jsPlan,
     maxStackDepth: computeMaxStackDepth(jsPlan),
+  };
+}
+
+function buildDirectAggregateCandidate(
+  node: FormulaNode,
+  symbolicRanges: readonly string[],
+): DirectAggregateCandidate | undefined {
+  if (node.kind !== "CallExpr" || node.args.length !== 1) {
+    return undefined;
+  }
+  const callee = node.callee.trim().toUpperCase();
+  const aggregateKind =
+    callee === "SUM"
+      ? "sum"
+      : callee === "COUNT"
+        ? "count"
+        : callee === "MIN"
+          ? "min"
+          : callee === "MAX"
+            ? "max"
+            : callee === "AVERAGE" || callee === "AVG"
+              ? "average"
+              : undefined;
+  if (!aggregateKind) {
+    return undefined;
+  }
+  const rangeNode = node.args[0];
+  if (!rangeNode || rangeNode.kind !== "RangeRef" || rangeNode.refKind !== "cells") {
+    return undefined;
+  }
+  const qualifiedRange = formatRangeAddress(
+    parseRangeAddress(
+      rangeNode.sheetName
+        ? `${rangeNode.sheetName}!${rangeNode.start}:${rangeNode.end}`
+        : `${rangeNode.start}:${rangeNode.end}`,
+    ),
+  );
+  const symbolicRangeIndex = symbolicRanges.indexOf(qualifiedRange);
+  if (symbolicRangeIndex === -1) {
+    return undefined;
+  }
+  return {
+    callee: node.callee,
+    aggregateKind,
+    symbolicRangeIndex,
   };
 }
 
@@ -723,6 +950,7 @@ export function compileFormulaAst(
   const jsPlan = lowerToPlan(optimizedAst);
   const volatileMetadata = analyzeVolatileMetadata(options.originalAst ?? ast);
   const spillResult = producesSpillResult(optimizedAst);
+  const directAggregateCandidate = buildDirectAggregateCandidate(optimizedAst, state.ranges);
 
   if (bound.mode === FormulaMode.WasmFastPath) {
     emitNode(optimizedAst, state);
@@ -744,11 +972,16 @@ export function compileFormulaAst(
     program: Uint32Array.from(state.program),
     constants: Float64Array.from(state.constants),
     symbolicRefs: state.refs,
+    parsedSymbolicRefs: state.refs.map((reference) => buildParsedCellReferenceInfo(reference)),
     symbolicRanges: state.ranges,
+    parsedSymbolicRanges: state.ranges.map((reference) => buildParsedRangeReferenceInfo(reference)),
     symbolicStrings: state.strings,
     ast: options.originalAst ?? ast,
     optimizedAst,
+    astMatchesSource: true,
+    ...(directAggregateCandidate ? { directAggregateCandidate } : {}),
     deps: bound.deps,
+    parsedDeps: bound.deps.map(parseDependencyReference),
     symbolicNames: options.symbolicNames ?? bound.symbolicNames,
     symbolicTables: options.symbolicTables ?? bound.symbolicTables,
     symbolicSpills: options.symbolicSpills ?? bound.symbolicSpills,

@@ -70,6 +70,7 @@ export function createEngineMaintenanceService(args: {
     reverseDefinedNameEdges: Map<string, Set<number>>;
     reverseTableEdges: Map<string, Set<number>>;
     reverseSpillEdges: Map<string, Set<number>>;
+    reverseAggregateColumnEdges: Map<number, Set<number>>;
     reverseExactLookupColumnEdges: Map<number, EdgeSlice>;
     reverseSortedLookupColumnEdges: Map<number, EdgeSlice>;
   };
@@ -111,6 +112,7 @@ export function createEngineMaintenanceService(args: {
     args.reverseState.reverseDefinedNameEdges.clear();
     args.reverseState.reverseTableEdges.clear();
     args.reverseState.reverseSpillEdges.clear();
+    args.reverseState.reverseAggregateColumnEdges.clear();
     args.reverseState.reverseExactLookupColumnEdges.clear();
     args.reverseState.reverseSortedLookupColumnEdges.clear();
     args.pivotOutputOwners.clear();

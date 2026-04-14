@@ -37,11 +37,15 @@ import {
 } from "./workpaper-benchmark-fixtures.js";
 import {
   measureHyperFormulaConditionalAggregationCriteriaEditSample,
+  measureHyperFormulaBatchSingleColumnUndoSample,
   measureHyperFormulaIndexedLookupAfterBatchWriteSample,
   measureHyperFormulaParserCacheMixedTemplateSample,
   measureHyperFormulaRebuildRuntimeFromSnapshotSample,
   measureHyperFormulaSlidingAggregateSample,
+  measureHyperFormulaStructuralDeleteColumnsSample,
   measureHyperFormulaStructuralDeleteRowsSample,
+  measureHyperFormulaStructuralInsertColumnsSample,
+  measureHyperFormulaStructuralMoveColumnsSample,
   measureHyperFormulaStructuralMoveRowsSample,
   measureHyperFormulaApproximateLookupAfterColumnWriteSample,
   measureHyperFormulaConditionalAggregationSample,
@@ -55,11 +59,15 @@ import {
   measureHyperFormulaSuspendedBatchMultiColumnEditSample,
   measureHyperFormulaSuspendedBatchSingleColumnEditSample,
   measureWorkPaperConditionalAggregationCriteriaEditSample,
+  measureWorkPaperBatchSingleColumnUndoSample,
   measureWorkPaperIndexedLookupAfterBatchWriteSample,
   measureWorkPaperParserCacheMixedTemplateSample,
   measureWorkPaperRebuildRuntimeFromSnapshotSample,
   measureWorkPaperSlidingAggregateSample,
+  measureWorkPaperStructuralDeleteColumnsSample,
   measureWorkPaperStructuralDeleteRowsSample,
+  measureWorkPaperStructuralInsertColumnsSample,
+  measureWorkPaperStructuralMoveColumnsSample,
   measureWorkPaperStructuralMoveRowsSample,
   measureWorkPaperApproximateLookupAfterColumnWriteSample,
   measureWorkPaperConditionalAggregationSample,
@@ -92,11 +100,15 @@ export type ExpandedComparativeBenchmarkWorkload =
   | "single-formula-edit-recalc"
   | "batch-edit-single-column"
   | "batch-edit-multi-column"
+  | "batch-edit-single-column-with-undo"
   | "batch-suspended-single-column"
   | "batch-suspended-multi-column"
   | "structural-insert-rows"
   | "structural-delete-rows"
   | "structural-move-rows"
+  | "structural-insert-columns"
+  | "structural-delete-columns"
+  | "structural-move-columns"
   | "range-read-dense"
   | "aggregate-overlapping-ranges"
   | "aggregate-overlapping-sliding-window"
@@ -126,11 +138,15 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   "single-formula-edit-recalc",
   "batch-edit-single-column",
   "batch-edit-multi-column",
+  "batch-edit-single-column-with-undo",
   "batch-suspended-single-column",
   "batch-suspended-multi-column",
   "structural-insert-rows",
   "structural-delete-rows",
   "structural-move-rows",
+  "structural-insert-columns",
+  "structural-delete-columns",
+  "structural-move-columns",
   "range-read-dense",
   "aggregate-overlapping-ranges",
   "aggregate-overlapping-sliding-window",
@@ -288,6 +304,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaBatchMultiColumnEditSample(250),
     ),
     runComparableScenario(
+      "batch-edit-single-column-with-undo",
+      { editCount: 500, includesUndo: true },
+      runtimeOptions,
+      () => measureWorkPaperBatchSingleColumnUndoSample(500),
+      () => measureHyperFormulaBatchSingleColumnUndoSample(500),
+    ),
+    runComparableScenario(
       "batch-suspended-single-column",
       { editCount: 500, mode: "suspend-resume" },
       runtimeOptions,
@@ -321,6 +344,27 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperStructuralMoveRowsSample(1_500),
       () => measureHyperFormulaStructuralMoveRowsSample(1_500),
+    ),
+    runComparableScenario(
+      "structural-insert-columns",
+      { rowCount: 1_500, insertIndex: 1 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralInsertColumnsSample(1_500),
+      () => measureHyperFormulaStructuralInsertColumnsSample(1_500),
+    ),
+    runComparableScenario(
+      "structural-delete-columns",
+      { rowCount: 1_500, deleteIndex: 1 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralDeleteColumnsSample(1_500),
+      () => measureHyperFormulaStructuralDeleteColumnsSample(1_500),
+    ),
+    runComparableScenario(
+      "structural-move-columns",
+      { rowCount: 1_500, start: 1, target: 0 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralMoveColumnsSample(1_500),
+      () => measureHyperFormulaStructuralMoveColumnsSample(1_500),
     ),
     runComparableScenario(
       "range-read-dense",

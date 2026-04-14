@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { StringPool } from "../string-pool.js";
 import { WorkbookStore } from "../workbook-store.js";
@@ -75,6 +75,51 @@ describe("createSortedColumnSearchService", () => {
         matchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 });
+  });
+
+  it("updates cached sorted columns incrementally for monotonic literal writes without rematerializing the column", () => {
+    const workbook = new WorkbookStore("sorted-index-incremental");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 3, 5, 7].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `A${index + 1}`, value);
+    });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+    const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, "getColumnSlice");
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+
+    const prepared = sorted.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    });
+    const sliceCallsAfterPrepare = getColumnSliceSpy.mock.calls.length;
+
+    setStoredNumber(workbook, strings, "A4", 9);
+    sorted.recordLiteralWrite({
+      sheetName: "Sheet1",
+      row: 3,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 7 },
+      newValue: { tag: ValueTag.Number, value: 9 },
+    });
+
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 8 },
+        prepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+    expect(getColumnSliceSpy.mock.calls.length).toBe(sliceCallsAfterPrepare);
   });
 
   it("refreshes prepared lookups after structural remaps and rejects unsupported lookup shapes", () => {

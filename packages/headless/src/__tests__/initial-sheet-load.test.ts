@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as formula from "@bilig/formula";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag } from "@bilig/protocol";
 import { WorkPaper } from "../index.js";
@@ -29,6 +30,35 @@ describe("initial mixed sheet load", () => {
       expect(restoreMutationSpy).not.toHaveBeenCalled();
     } finally {
       restoreMutationSpy.mockRestore();
+    }
+  });
+
+  it("normalizes repeated row-template formulas during mixed-sheet initialization", () => {
+    const compileSpy = vi.spyOn(formula, "compileFormulaAst");
+    const parseSpy = vi.spyOn(formula, "parseFormula");
+    try {
+      const workbook = WorkPaper.buildFromSheets({
+        Bench: [
+          [1, 2, "=A1+B1", "=C1*2"],
+          [2, 4, "=A2+B2", "=C2*2"],
+          [3, 6, "=A3+B3", "=C3*2"],
+        ],
+      });
+      const sheetId = workbook.getSheetId("Bench")!;
+
+      expect(workbook.getCellValue({ sheet: sheetId, row: 0, col: 2 })).toEqual({
+        tag: ValueTag.Number,
+        value: 3,
+      });
+      expect(workbook.getCellValue({ sheet: sheetId, row: 2, col: 3 })).toEqual({
+        tag: ValueTag.Number,
+        value: 18,
+      });
+      expect(compileSpy).toHaveBeenCalledTimes(2);
+      expect(parseSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      compileSpy.mockRestore();
+      parseSpy.mockRestore();
     }
   });
 });

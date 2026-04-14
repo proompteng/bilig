@@ -405,4 +405,62 @@ describe("EngineFormulaEvaluationService", () => {
     Effect.runSync(evaluation.evaluateDirectLookupFormula(f3Index!));
     expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
+
+  it("evaluates direct aggregate formulas with progressive prefixes and coercion rules", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "evaluation-direct-aggregate-service" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", true);
+    engine.setCellValue("Sheet1", "A4", "skip");
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A4)");
+    engine.setCellFormula("Sheet1", "B2", "AVERAGE(A1:A4)");
+    engine.setCellFormula("Sheet1", "B3", "COUNT(A1:A4)");
+    engine.setCellFormula("Sheet1", "C1", "SUM(A1:A1)");
+    engine.setCellFormula("Sheet1", "C2", "SUM(A1:A2)");
+    engine.setCellFormula("Sheet1", "C3", "SUM(A1:A4)");
+
+    const evaluation = getEvaluationService(engine);
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    const b2Index = engine.workbook.getCellIndex("Sheet1", "B2");
+    const b3Index = engine.workbook.getCellIndex("Sheet1", "B3");
+    const c1Index = engine.workbook.getCellIndex("Sheet1", "C1");
+    const c2Index = engine.workbook.getCellIndex("Sheet1", "C2");
+    const c3Index = engine.workbook.getCellIndex("Sheet1", "C3");
+    expect(b1Index).toBeDefined();
+    expect(b2Index).toBeDefined();
+    expect(b3Index).toBeDefined();
+    expect(c1Index).toBeDefined();
+    expect(c2Index).toBeDefined();
+    expect(c3Index).toBeDefined();
+
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(c1Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(c2Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(c3Index!));
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Number, value: 3 });
+
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b1Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b2Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b3Index!));
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    engine.setCellFormula("Sheet1", "A4", "NA()");
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b1Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b2Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b3Index!));
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
 });

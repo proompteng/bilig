@@ -222,8 +222,26 @@ export function createExactColumnIndexService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings">;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
 }): ExactColumnIndexService {
+  const emptyColumnVersions = new Uint32Array(0);
   const exactColumnIndices = new Map<string, ExactColumnIndexEntry>();
   const cacheKeysByColumn = new Map<string, Set<string>>();
+
+  const getCurrentColumnVersions = (
+    sheetName: string,
+    col: number,
+  ): {
+    columnVersion: number;
+    structureVersion: number;
+    sheetColumnVersions: Uint32Array;
+  } => {
+    const sheet = args.state.workbook.getSheet(sheetName);
+    const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions;
+    return {
+      columnVersion: sheetColumnVersions[col] ?? 0,
+      structureVersion: sheet?.structureVersion ?? 0,
+      sheetColumnVersions,
+    };
+  };
 
   const trackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
     const registryKey = columnRegistryKey(sheetName, col);
@@ -381,17 +399,12 @@ export function createExactColumnIndexService(args: {
     rowEnd: number,
   ): ExactColumnIndexEntry => {
     const cacheKey = getExactColumnCacheKey(sheetName, col, rowStart, rowEnd);
-    const columnVersion = args.runtimeColumnStore.getColumnSlice({
-      sheetName,
-      rowStart,
-      rowEnd,
-      col,
-    });
+    const currentVersions = getCurrentColumnVersions(sheetName, col);
     let entry = exactColumnIndices.get(cacheKey);
     if (
       !entry ||
-      entry.columnVersion !== columnVersion.columnVersion ||
-      entry.structureVersion !== columnVersion.structureVersion
+      entry.columnVersion !== currentVersions.columnVersion ||
+      entry.structureVersion !== currentVersions.structureVersion
     ) {
       entry = buildExactColumnIndex(sheetName, col, rowStart, rowEnd);
       replaceExactColumnIndex(cacheKey, entry);
@@ -470,7 +483,6 @@ export function createExactColumnIndexService(args: {
       request.rowStart,
       request.rowEnd,
     );
-    const columnSlice = args.runtimeColumnStore.getColumnSlice(request);
     return {
       sheetName: request.sheetName,
       rowStart: request.rowStart,
@@ -479,7 +491,8 @@ export function createExactColumnIndexService(args: {
       length: request.rowEnd - request.rowStart + 1,
       columnVersion: entry.columnVersion,
       structureVersion: entry.structureVersion,
-      sheetColumnVersions: columnSlice.sheetColumnVersions,
+      sheetColumnVersions: getCurrentColumnVersions(request.sheetName, request.col)
+        .sheetColumnVersions,
       comparableKind: entry.comparableKind,
       uniformStart: entry.uniformStart,
       uniformStep: entry.uniformStep,
@@ -495,15 +508,10 @@ export function createExactColumnIndexService(args: {
   const refreshPreparedVectorLookup = (
     prepared: PreparedExactVectorLookup,
   ): PreparedExactVectorLookup => {
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: prepared.sheetName,
-      rowStart: prepared.rowStart,
-      rowEnd: prepared.rowEnd,
-      col: prepared.col,
-    });
+    const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col);
     if (
-      currentSlice.columnVersion === prepared.columnVersion &&
-      currentSlice.structureVersion === prepared.structureVersion
+      currentVersions.columnVersion === prepared.columnVersion &&
+      currentVersions.structureVersion === prepared.structureVersion
     ) {
       return prepared;
     }

@@ -987,20 +987,14 @@ export class WorkbookStore {
     if (!sheet) {
       return { changedCellIndices: [], removedCellIndices: [] };
     }
-    const entries: Array<{ cellIndex: number; row: number; col: number }> = [];
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-      entries.push({ cellIndex, row, col });
-    });
-    entries.forEach(({ row, col }) => {
+    const changedEntries = sheet.grid.remapAxis(axis, remapIndex);
+    changedEntries.forEach(({ row, col }) => {
       this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col));
-      sheet.grid.clear(row, col);
     });
 
     const changedCellIndices: number[] = [];
     const removedCellIndices: number[] = [];
-    for (const { cellIndex, row, col } of entries) {
-      const nextRow = axis === "row" ? remapIndex(row) : row;
-      const nextCol = axis === "column" ? remapIndex(col) : col;
+    for (const { cellIndex, row, col, nextRow, nextCol } of changedEntries) {
       if (nextRow === undefined || nextCol === undefined) {
         removedCellIndices.push(cellIndex);
         continue;
@@ -1008,7 +1002,6 @@ export class WorkbookStore {
       this.cellStore.rows[cellIndex] = nextRow;
       this.cellStore.cols[cellIndex] = nextCol;
       this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex);
-      sheet.grid.set(nextRow, nextCol, cellIndex);
       if (nextRow !== row || nextCol !== col) {
         changedCellIndices.push(cellIndex);
       }

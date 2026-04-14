@@ -7,6 +7,7 @@ import {
   buildApproxLookupSheet,
   buildMixedFrontierSheet,
   buildOverlappingAggregateSheet,
+  buildStructuralColumnSheet,
   buildParserCacheMixedTemplateSheet,
   buildParserCacheTemplateSheet,
   buildMixedContentSheet,
@@ -125,6 +126,55 @@ export function measureHyperFormulaSuspendedBatchMultiColumnEditSample(
       ),
       sampleProductValue: normalizeHyperFormulaValue(
         workbook.getCellValue(address(sheetId, rowCount - 1, 3)),
+      ),
+    }),
+  );
+}
+
+export function measureWorkPaperBatchSingleColumnUndoSample(editCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildValueFormulaRows(editCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => {
+      workbook.batch(() => {
+        for (let row = 0; row < editCount; row += 1) {
+          workbook.setCellContents(address(sheetId, row, 0), row * 3);
+        }
+      });
+      return workbook.undo();
+    },
+    (undoChanges) => ({
+      undoChangeCount: undoChanges.length,
+      restoredValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 0))),
+      restoredFormulaValue: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, editCount - 1, 1)),
+      ),
+    }),
+  );
+}
+
+export function measureHyperFormulaBatchSingleColumnUndoSample(editCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildValueFormulaRows(editCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => {
+      workbook.batch(() => {
+        for (let row = 0; row < editCount; row += 1) {
+          workbook.setCellContents(address(sheetId, row, 0), row * 3);
+        }
+      });
+      return workbook.undo();
+    },
+    (undoChanges) => ({
+      undoChangeCount: undoChanges.length,
+      restoredValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 0))),
+      restoredFormulaValue: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, editCount - 1, 1)),
       ),
     }),
   );
@@ -288,6 +338,111 @@ export function measureHyperFormulaStructuralMoveRowsSample(rowCount: number): B
     () => ({
       dimensions: workbook.getSheetDimensions(sheetId),
       headValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 0))),
+    }),
+  );
+}
+
+export function measureWorkPaperStructuralInsertColumnsSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildStructuralColumnSheet(rowCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.addColumns(sheetId, 1, 1),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalFormula: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 4)),
+      ),
+    }),
+  );
+}
+
+export function measureHyperFormulaStructuralInsertColumnsSample(
+  rowCount: number,
+): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildStructuralColumnSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.addColumns(sheetId, [1, 1]),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalFormula: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 4)),
+      ),
+    }),
+  );
+}
+
+export function measureWorkPaperStructuralDeleteColumnsSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildStructuralColumnSheet(rowCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.removeColumns(sheetId, 1, 1),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalValue: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 0)),
+      ),
+    }),
+  );
+}
+
+export function measureHyperFormulaStructuralDeleteColumnsSample(
+  rowCount: number,
+): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildStructuralColumnSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.removeColumns(sheetId, [1, 1]),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalValue: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 0)),
+      ),
+    }),
+  );
+}
+
+export function measureWorkPaperStructuralMoveColumnsSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildStructuralColumnSheet(rowCount) });
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureMutationSample(
+    workbook,
+    () => workbook.moveColumns(sheetId, 1, 1, 0),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      headValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 0))),
+      terminalFormula: normalizeWorkPaperValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 3)),
+      ),
+    }),
+  );
+}
+
+export function measureHyperFormulaStructuralMoveColumnsSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildStructuralColumnSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  );
+  const sheetId = workbook.getSheetId("Bench")!;
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.moveColumns(sheetId, 1, 1, 0),
+    () => ({
+      dimensions: workbook.getSheetDimensions(sheetId),
+      headValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 0))),
+      terminalFormula: normalizeHyperFormulaValue(
+        workbook.getCellValue(address(sheetId, rowCount - 1, 3)),
+      ),
     }),
   );
 }

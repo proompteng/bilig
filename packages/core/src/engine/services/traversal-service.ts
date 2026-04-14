@@ -1,6 +1,8 @@
 import { Effect } from "effect";
 import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
 import {
+  makeExactLookupColumnEntity,
+  makeSortedLookupColumnEntity,
   entityPayload,
   isExactLookupColumnEntity,
   isRangeEntity,
@@ -127,8 +129,70 @@ export function createEngineTraversalService(args: {
     if (!formula) {
       return;
     }
+    const seen = new Set<number>();
+    const push = (dependencyCellIndex: number): void => {
+      if (seen.has(dependencyCellIndex)) {
+        return;
+      }
+      seen.add(dependencyCellIndex);
+      fn(dependencyCellIndex);
+    };
     for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
-      fn(formula.dependencyIndices[index]!);
+      push(formula.dependencyIndices[index]!);
+    }
+    for (let index = 0; index < formula.rangeDependencies.length; index += 1) {
+      const members = args.state.ranges.expandToCells(formula.rangeDependencies[index]!);
+      for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
+        push(members[memberIndex]!);
+      }
+    }
+    const pushDirectRange = (
+      range: { sheetName: string; rowStart: number; rowEnd: number; col: number } | undefined,
+    ): void => {
+      if (!range) {
+        return;
+      }
+      const sheet = args.state.workbook.getSheet(range.sheetName);
+      if (!sheet) {
+        return;
+      }
+      for (let row = range.rowStart; row <= range.rowEnd; row += 1) {
+        const dependencyCellIndex = sheet.grid.get(row, range.col);
+        if (dependencyCellIndex !== -1) {
+          push(dependencyCellIndex);
+        }
+      }
+    };
+    pushDirectRange(formula.directAggregate);
+    if (formula.directCriteria) {
+      pushDirectRange(formula.directCriteria.aggregateRange);
+      for (let index = 0; index < formula.directCriteria.criteriaPairs.length; index += 1) {
+        const pair = formula.directCriteria.criteriaPairs[index]!;
+        pushDirectRange(pair.range);
+        if (pair.criterion.kind === "cell") {
+          push(pair.criterion.cellIndex);
+        }
+      }
+    }
+    const directLookup = formula.directLookup;
+    if (directLookup) {
+      if (directLookup.kind === "exact" || directLookup.kind === "approximate") {
+        pushDirectRange({
+          sheetName: directLookup.prepared.sheetName,
+          rowStart: directLookup.prepared.rowStart,
+          rowEnd: directLookup.prepared.rowEnd,
+          col: directLookup.prepared.col,
+        });
+        push(directLookup.operandCellIndex);
+      } else {
+        pushDirectRange({
+          sheetName: directLookup.sheetName,
+          rowStart: directLookup.rowStart,
+          rowEnd: directLookup.rowEnd,
+          col: directLookup.col,
+        });
+        push(directLookup.operandCellIndex);
+      }
     }
   };
 
@@ -179,6 +243,24 @@ export function createEngineTraversalService(args: {
 
     for (let queueIndex = 0; queueIndex < entityQueueLength; queueIndex += 1) {
       const currentEntity = topoEntityQueue[queueIndex]!;
+      if (
+        !isRangeEntity(currentEntity) &&
+        !isExactLookupColumnEntity(currentEntity) &&
+        !isSortedLookupColumnEntity(currentEntity)
+      ) {
+        const cellIndex = entityPayload(currentEntity);
+        const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex];
+        const col = args.state.workbook.cellStore.cols[cellIndex];
+        if (sheetId !== undefined && col !== undefined) {
+          const exactLookupEntity = makeExactLookupColumnEntity(sheetId, col);
+          const sortedLookupEntity = makeSortedLookupColumnEntity(sheetId, col);
+          ensureEntityQueueCapacity(entityQueueLength + 2);
+          topoEntityQueue[entityQueueLength] = exactLookupEntity;
+          entityQueueLength += 1;
+          topoEntityQueue[entityQueueLength] = sortedLookupEntity;
+          entityQueueLength += 1;
+        }
+      }
       const dependents = getEntityDependentsNow(currentEntity);
       for (let index = 0; index < dependents.length; index += 1) {
         const dependent = dependents[index]!;

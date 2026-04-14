@@ -106,6 +106,7 @@ describe("RangeRegistry", () => {
       {
         ensureCell: () => nextCellIndex++,
         forEachSheetCell: () => {},
+        isFormulaCell: (cellIndex: number) => cellIndex === 31 || cellIndex === 32,
       },
     );
     const second = registry.intern(
@@ -118,10 +119,12 @@ describe("RangeRegistry", () => {
       {
         ensureCell: () => nextCellIndex++,
         forEachSheetCell: () => {},
+        isFormulaCell: (cellIndex: number) => cellIndex === 31 || cellIndex === 32,
       },
     );
 
     expect(registry.getMembers(second.rangeIndex)).toEqual(Uint32Array.from([30, 31, 32]));
+    expect(registry.getFormulaMembers(second.rangeIndex)).toEqual(Uint32Array.from([31, 32]));
     expect(registry.getDependencySourceEntities(second.rangeIndex)).toEqual(
       Uint32Array.from([makeRangeEntity(first.rangeIndex), makeCellEntity(32)]),
     );
@@ -162,6 +165,7 @@ describe("RangeRegistry", () => {
           fn(cellIndex, row, col);
         });
       },
+      isFormulaCell: (cellIndex: number) => cellIndex === 101,
     };
 
     const prefix = registry.intern(
@@ -198,7 +202,9 @@ describe("RangeRegistry", () => {
     registry.refresh(range.rangeIndex, materializer);
 
     expect(registry.getMembers(prefix.rangeIndex)).toEqual(Uint32Array.from([102, 100]));
+    expect(registry.getFormulaMembers(prefix.rangeIndex)).toEqual(new Uint32Array());
     expect(registry.getMembers(range.rangeIndex)).toEqual(Uint32Array.from([102, 100, 101]));
+    expect(registry.getFormulaMembers(range.rangeIndex)).toEqual(Uint32Array.from([101]));
     expect(registry.getDependencySourceEntities(range.rangeIndex)).toEqual(
       Uint32Array.from([makeRangeEntity(prefix.rangeIndex), makeCellEntity(101)]),
     );

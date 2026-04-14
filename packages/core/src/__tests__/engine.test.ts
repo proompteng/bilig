@@ -103,6 +103,17 @@ type RuntimeFormulaWithDirectCriteria = {
   };
 };
 
+type RuntimeFormulaWithDirectAggregate = {
+  directAggregate: {
+    aggregateKind: "sum" | "average" | "count" | "min" | "max";
+    sheetName: string;
+    rowStart: number;
+    rowEnd: number;
+    col: number;
+    length: number;
+  };
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -227,6 +238,27 @@ function isRuntimeFormulaWithDirectCriteria(
       directCriteria.aggregateKind === "min" ||
       directCriteria.aggregateKind === "max") &&
     Array.isArray(directCriteria.criteriaPairs)
+  );
+}
+
+function isRuntimeFormulaWithDirectAggregate(
+  value: unknown,
+): value is RuntimeFormulaWithDirectAggregate {
+  if (!isRecord(value) || !("directAggregate" in value) || !isRecord(value.directAggregate)) {
+    return false;
+  }
+  const directAggregate = value.directAggregate;
+  return (
+    (directAggregate.aggregateKind === "sum" ||
+      directAggregate.aggregateKind === "average" ||
+      directAggregate.aggregateKind === "count" ||
+      directAggregate.aggregateKind === "min" ||
+      directAggregate.aggregateKind === "max") &&
+    typeof directAggregate.sheetName === "string" &&
+    typeof directAggregate.rowStart === "number" &&
+    typeof directAggregate.rowEnd === "number" &&
+    typeof directAggregate.col === "number" &&
+    typeof directAggregate.length === "number"
   );
 }
 
@@ -2841,27 +2873,27 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "F1", 'COUNTIF(A1:A4,">0")');
     expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F2", 'COUNTIFS(A1:A4,">0",B1:B4,"x")');
     expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F2").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F2").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F3", 'SUMIF(A1:A4,">0",C1:C4)');
     expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 70 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F3").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F3").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F4", 'SUMIFS(C1:C4,A1:A4,">0",B1:B4,"x")');
     expect(engine.getCellValue("Sheet1", "F4")).toEqual({ tag: ValueTag.Number, value: 70 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F4").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F4").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F5", 'AVERAGEIF(A1:A4,">0")');
     expect(engine.getCellValue("Sheet1", "F5")).toEqual({ tag: ValueTag.Number, value: 4 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F5").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F5").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F6", 'AVERAGEIFS(C1:C4,A1:A4,">0",B1:B4,"x")');
     expect(engine.getCellValue("Sheet1", "F6")).toEqual({
@@ -2869,7 +2901,7 @@ describe("SpreadsheetEngine", () => {
       value: (10 + 20 + 40) / 3,
     });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
-    expect(engine.explainCell("Sheet1", "F6").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F6").mode).toBe(FormulaMode.WasmFastPath);
 
     engine.setCellFormula("Sheet1", "F7", "SUMPRODUCT(D1:D3,E1:E3)");
     expect(engine.getCellValue("Sheet1", "F7")).toEqual({ tag: ValueTag.Number, value: 32 });
@@ -2910,10 +2942,10 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 10 });
     expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 30 });
     expect(engine.getCellValue("Sheet1", "F4")).toEqual({ tag: ValueTag.Number, value: 20 });
-    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.explainCell("Sheet1", "F2").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.explainCell("Sheet1", "F3").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.explainCell("Sheet1", "F4").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "F2").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "F3").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "F4").mode).toBe(FormulaMode.WasmFastPath);
 
     const countIndex = engine.workbook.getCellIndex("Sheet1", "F1");
     const minIndex = engine.workbook.getCellIndex("Sheet1", "F2");
@@ -2978,6 +3010,82 @@ describe("SpreadsheetEngine", () => {
       tag: ValueTag.Error,
       code: ErrorCode.Div0,
     });
+  });
+
+  it("binds direct aggregate descriptors for bounded single-column SUM, AVERAGE, and COUNT", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "direct-aggregate-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", true);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A3)");
+    engine.setCellFormula("Sheet1", "B2", "AVERAGE(A1:A3)");
+    engine.setCellFormula("Sheet1", "B3", "COUNT(A1:A3)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "B2").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "B3").mode).toBe(FormulaMode.WasmFastPath);
+
+    const sumIndex = engine.workbook.getCellIndex("Sheet1", "B1");
+    const averageIndex = engine.workbook.getCellIndex("Sheet1", "B2");
+    const countIndex = engine.workbook.getCellIndex("Sheet1", "B3");
+    if (sumIndex === undefined || averageIndex === undefined || countIndex === undefined) {
+      throw new Error("expected direct aggregate formulas to exist");
+    }
+
+    const sumFormula = readRuntimeFormula(engine, sumIndex);
+    const averageFormula = readRuntimeFormula(engine, averageIndex);
+    const countFormula = readRuntimeFormula(engine, countIndex);
+    if (!isRuntimeFormulaWithDirectAggregate(sumFormula)) {
+      throw new Error("expected SUM runtime formula to expose direct aggregate metadata");
+    }
+    if (!isRuntimeFormulaWithDirectAggregate(averageFormula)) {
+      throw new Error("expected AVERAGE runtime formula to expose direct aggregate metadata");
+    }
+    if (!isRuntimeFormulaWithDirectAggregate(countFormula)) {
+      throw new Error("expected COUNT runtime formula to expose direct aggregate metadata");
+    }
+    expect(isRuntimeFormulaWithRanges(sumFormula)).toBe(true);
+    expect(sumFormula.rangeDependencies).toHaveLength(0);
+    expect(isRuntimeFormulaWithDependencies(sumFormula)).toBe(true);
+    expect(sumFormula.dependencyIndices).toEqual(new Uint32Array());
+
+    expect(sumFormula.directAggregate).toMatchObject({
+      aggregateKind: "sum",
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+      length: 3,
+    });
+    expect(averageFormula.directAggregate.aggregateKind).toBe("average");
+    expect(countFormula.directAggregate.aggregateKind).toBe("count");
+
+    engine.setCellValue("Sheet1", "A1", 5);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("rebinds direct aggregate formulas when a formula appears inside a previously literal aggregate range", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "direct-aggregate-rebind-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 5 });
+
+    engine.setCellFormula("Sheet1", "A2", "A1*3");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    engine.setCellValue("Sheet1", "A1", 4);
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 16 });
   });
 
   it("uses the direct js path for exact MATCH and XMATCH while keeping XLOOKUP on wasm", async () => {
@@ -3082,6 +3190,14 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A1", 10);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    });
 
     engine.setCellValue("Sheet1", "A2", 20);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({
@@ -4683,6 +4799,82 @@ describe("SpreadsheetEngine", () => {
     ]);
   });
 
+  it("keeps simple cell-reference formula families correct across structural column transforms", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "structural-simple-columns" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellFormula("Sheet1", "C1", "A1+B1");
+    engine.setCellFormula("Sheet1", "D1", "C1*2");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 10 });
+
+    engine.insertColumns("Sheet1", 1, 1);
+
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("A1+C1");
+    expect(engine.getCell("Sheet1", "E1").formula).toBe("D1*2");
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 10 });
+
+    engine.deleteColumns("Sheet1", 1, 1);
+
+    expect(engine.getCell("Sheet1", "C1").formula).toBe("A1+B1");
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("C1*2");
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 10 });
+
+    engine.moveColumns("Sheet1", 1, 1, 0);
+
+    expect(engine.getCell("Sheet1", "C1").formula).toBe("B1+A1");
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("C1*2");
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 10 });
+  });
+
+  it("keeps repeated row-shifted formula families correct across structural column transforms", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "structural-column-families" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue("Sheet1", `A${row}`, row);
+      engine.setCellValue("Sheet1", `B${row}`, row * 2);
+      engine.setCellFormula("Sheet1", `C${row}`, `A${row}+B${row}`);
+      engine.setCellFormula("Sheet1", `D${row}`, `C${row}*2`);
+    }
+
+    engine.insertColumns("Sheet1", 1, 1);
+
+    for (let row = 1; row <= 4; row += 1) {
+      expect(engine.getCell("Sheet1", `D${row}`).formula).toBe(`A${row}+C${row}`);
+      expect(engine.getCell("Sheet1", `E${row}`).formula).toBe(`D${row}*2`);
+      expect(engine.getCellValue("Sheet1", `D${row}`)).toEqual({
+        tag: ValueTag.Number,
+        value: row * 3,
+      });
+      expect(engine.getCellValue("Sheet1", `E${row}`)).toEqual({
+        tag: ValueTag.Number,
+        value: row * 6,
+      });
+    }
+
+    engine.deleteColumns("Sheet1", 1, 1);
+
+    for (let row = 1; row <= 4; row += 1) {
+      expect(engine.getCell("Sheet1", `C${row}`).formula).toBe(`A${row}+B${row}`);
+      expect(engine.getCell("Sheet1", `D${row}`).formula).toBe(`C${row}*2`);
+      expect(engine.getCellValue("Sheet1", `C${row}`)).toEqual({
+        tag: ValueTag.Number,
+        value: row * 3,
+      });
+      expect(engine.getCellValue("Sheet1", `D${row}`)).toEqual({
+        tag: ValueTag.Number,
+        value: row * 6,
+      });
+    }
+  });
+
   it("routes multi-name scalar formulas through the wasm path once names exist", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -5935,7 +6127,8 @@ describe("SpreadsheetEngine", () => {
       Uint32Array.of(engine.workbook.getCellIndex("Sheet1", "D1")!),
     );
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
-    expect(engine.getDependencies("Sheet1", "A2").directDependents).toContain("Sheet1!E1");
+    expect(engine.getDependencies("Sheet1", "D1").directDependents).toContain("Sheet1!E1");
+    expect(engine.getDependencies("Sheet1", "A2").directDependents).toEqual([]);
 
     engine.setCellValue("Sheet1", "A2", 25);
     expect(engine.getCellValue("Sheet1", "E1")).toEqual({
@@ -5973,8 +6166,32 @@ describe("SpreadsheetEngine", () => {
 
     expect(pushCell).toBeDefined();
     expect(pushRange).toBeDefined();
+    expect(runtimeFormula?.dependencyIndices).toEqual(Uint32Array.of(c1Index!));
     expect(pushCell! & 0x00ff_ffff).toBe(c1Index);
     expect(pushRange! & 0x00ff_ffff).toBe(runtimeFormula?.rangeDependencies[0]);
+  });
+
+  it("tracks literal-backed ranges through range entities without inflating topo dependency cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "range-topology-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A3)");
+
+    const cellIndex = engine.workbook.getCellIndex("Sheet1", "B1");
+    expect(cellIndex).toBeDefined();
+    const runtimeFormula = readRuntimeFormula(engine, cellIndex!);
+
+    expect(isRuntimeFormulaWithRanges(runtimeFormula)).toBe(true);
+    expect(isRuntimeFormulaWithDirectAggregate(runtimeFormula)).toBe(true);
+    expect(runtimeFormula?.dependencyIndices).toEqual(new Uint32Array());
+    expect(runtimeFormula?.rangeDependencies).toHaveLength(0);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    engine.setCellValue("Sheet1", "A2", 4);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
   });
 
   it("assigns deterministic cycle group ids for cyclic formulas", async () => {

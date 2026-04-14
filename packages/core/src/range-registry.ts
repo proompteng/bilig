@@ -13,6 +13,8 @@ export interface RangeDescriptor {
   col2: number;
   membersOffset: number;
   membersLength: number;
+  formulaMembersOffset: number;
+  formulaMembersLength: number;
   dependencySourcesOffset: number;
   dependencySourcesLength: number;
   refCount: number;
@@ -26,6 +28,7 @@ export interface RangeMaterializer {
     sheetId: number,
     fn: (cellIndex: number, row: number, col: number) => void,
   ): void;
+  isFormulaCell?(cellIndex: number): boolean;
 }
 
 interface DynamicRangeIndex {
@@ -45,6 +48,8 @@ export class RangeRegistry {
   private readonly dynamicBySheet = new Map<number, DynamicRangeIndex[]>();
   private readonly members = new EdgeArena();
   private readonly memberSlices: EdgeSlice[] = [];
+  private readonly formulaMembers = new EdgeArena();
+  private readonly formulaMemberSlices: EdgeSlice[] = [];
   private readonly dependencySources = new EdgeArena();
   private readonly dependencySourceSlices: EdgeSlice[] = [];
 
@@ -58,6 +63,8 @@ export class RangeRegistry {
     this.dynamicBySheet.clear();
     this.members.reset();
     this.memberSlices.length = 0;
+    this.formulaMembers.reset();
+    this.formulaMemberSlices.length = 0;
     this.dependencySources.reset();
     this.dependencySourceSlices.length = 0;
   }
@@ -91,6 +98,8 @@ export class RangeRegistry {
       col2: cellRange.end.col,
       membersOffset: 0,
       membersLength: 0,
+      formulaMembersOffset: 0,
+      formulaMembersLength: 0,
       dependencySourcesOffset: 0,
       dependencySourcesLength: 0,
       refCount: 1,
@@ -102,6 +111,10 @@ export class RangeRegistry {
       range.kind === "cells"
         ? resolveCellRangeDependencyReuse(this.descriptors, this.byKey, sheetId, cellRange)
         : undefined;
+    const isFormulaCell =
+      materializer.isFormulaCell === undefined
+        ? undefined
+        : (cellIndex: number): boolean => materializer.isFormulaCell!(cellIndex);
     const memberIndices =
       range.kind === "cells"
         ? materializeBoundedMembers(sheetId, cellRange, materializer, this, sourceReuse)
@@ -110,14 +123,26 @@ export class RangeRegistry {
       range.kind === "cells"
         ? materializeCellRangeDependencySources(sourceReuse, memberIndices)
         : materializeDynamicDependencySources(memberIndices);
+    const formulaMemberIndices = materializeFormulaMembers(
+      memberIndices,
+      isFormulaCell,
+      sourceReuse ? this.getFormulaMembersView(sourceReuse.parentRangeIndex) : undefined,
+      sourceReuse ? this.getMembersView(sourceReuse.parentRangeIndex).length : 0,
+    );
     const memberSlice = this.members.replace(this.members.empty(), memberIndices);
+    const formulaMemberSlice = this.formulaMembers.replace(
+      this.formulaMembers.empty(),
+      formulaMemberIndices,
+    );
     const dependencySourceSlice = this.dependencySources.replace(
       this.dependencySources.empty(),
       dependencySourceEntities,
     );
     this.memberSlices[descriptor.index] = memberSlice;
+    this.formulaMemberSlices[descriptor.index] = formulaMemberSlice;
     this.dependencySourceSlices[descriptor.index] = dependencySourceSlice;
     syncDescriptorMembers(descriptor, memberSlice);
+    syncDescriptorFormulaMembers(descriptor, formulaMemberSlice);
     syncDescriptorDependencySources(descriptor, dependencySourceSlice);
     if (sourceReuse) {
       descriptor.parentRangeIndex = sourceReuse.parentRangeIndex;
@@ -155,11 +180,15 @@ export class RangeRegistry {
     const members = this.members.read(memberSlice);
     this.members.free(memberSlice);
     this.memberSlices[rangeIndex] = this.members.empty();
+    const formulaMemberSlice = this.formulaMemberSlices[rangeIndex] ?? this.formulaMembers.empty();
+    this.formulaMembers.free(formulaMemberSlice);
+    this.formulaMemberSlices[rangeIndex] = this.formulaMembers.empty();
     const dependencySourceSlice =
       this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty();
     this.dependencySources.free(dependencySourceSlice);
     this.dependencySourceSlices[rangeIndex] = this.dependencySources.empty();
     syncDescriptorMembers(descriptor, this.memberSlices[rangeIndex]);
+    syncDescriptorFormulaMembers(descriptor, this.formulaMemberSlices[rangeIndex]);
     syncDescriptorDependencySources(descriptor, this.dependencySourceSlices[rangeIndex]);
     if (descriptor.dynamic) {
       const dynamic = this.dynamicBySheet.get(descriptor.sheetId);
@@ -197,15 +226,33 @@ export class RangeRegistry {
     );
   }
 
+  getFormulaMembers(rangeIndex: RangeIndex): Uint32Array {
+    return this.formulaMembers.read(
+      this.formulaMemberSlices[rangeIndex] ?? this.formulaMembers.empty(),
+    );
+  }
+
   getMembersView(rangeIndex: RangeIndex): Uint32Array {
     return this.members.readView(this.memberSlices[rangeIndex] ?? this.members.empty());
+  }
+
+  getFormulaMembersView(rangeIndex: RangeIndex): Uint32Array {
+    return this.formulaMembers.readView(
+      this.formulaMemberSlices[rangeIndex] ?? this.formulaMembers.empty(),
+    );
   }
 
   getMemberPoolView(): Uint32Array {
     return this.members.view();
   }
 
-  addDynamicMember(sheetId: number, row: number, col: number, cellIndex: number): RangeIndex[] {
+  addDynamicMember(
+    sheetId: number,
+    row: number,
+    col: number,
+    cellIndex: number,
+    includeAsFormulaMember = false,
+  ): RangeIndex[] {
     const entries = this.dynamicBySheet.get(sheetId);
     if (!entries || entries.length === 0) {
       return [];
@@ -223,6 +270,16 @@ export class RangeRegistry {
       if (nextMembers.ptr !== currentSlice.ptr || nextMembers.len !== currentSlice.len) {
         this.memberSlices[rangeIndex] = nextMembers;
         syncDescriptorMembers(descriptor, nextMembers);
+        if (includeAsFormulaMember) {
+          const currentFormulaSlice =
+            this.formulaMemberSlices[rangeIndex] ?? this.formulaMembers.empty();
+          const nextFormulaMembers = this.formulaMembers.appendUnique(
+            currentFormulaSlice,
+            cellIndex,
+          );
+          this.formulaMemberSlices[rangeIndex] = nextFormulaMembers;
+          syncDescriptorFormulaMembers(descriptor, nextFormulaMembers);
+        }
         matched.push(rangeIndex);
       }
     }
@@ -240,6 +297,7 @@ export class RangeRegistry {
     const descriptor = this.getDescriptor(rangeIndex);
     const oldDependencySources = this.getDependencySourceEntities(rangeIndex);
     let memberIndices: Uint32Array;
+    let formulaMemberIndices: Uint32Array;
     let dependencySourceEntities: Uint32Array;
     if (descriptor.kind === "cells") {
       const range = descriptorToCellRangeAddress(descriptor);
@@ -249,6 +307,10 @@ export class RangeRegistry {
         descriptor.sheetId,
         range,
       );
+      const isFormulaCell =
+        materializer.isFormulaCell === undefined
+          ? undefined
+          : (cellIndex: number): boolean => materializer.isFormulaCell!(cellIndex);
       memberIndices = materializeBoundedMembers(
         descriptor.sheetId,
         range,
@@ -257,6 +319,12 @@ export class RangeRegistry {
         sourceReuse,
       );
       dependencySourceEntities = materializeCellRangeDependencySources(sourceReuse, memberIndices);
+      formulaMemberIndices = materializeFormulaMembers(
+        memberIndices,
+        isFormulaCell,
+        sourceReuse ? this.getFormulaMembersView(sourceReuse.parentRangeIndex) : undefined,
+        sourceReuse ? this.getMembersView(sourceReuse.parentRangeIndex).length : 0,
+      );
     } else {
       const range = descriptorToCellRangeAddress(descriptor);
       memberIndices = materializeDynamicMembers(
@@ -266,18 +334,29 @@ export class RangeRegistry {
         materializer,
       );
       dependencySourceEntities = materializeDynamicDependencySources(memberIndices);
+      const isFormulaCell =
+        materializer.isFormulaCell === undefined
+          ? undefined
+          : (cellIndex: number): boolean => materializer.isFormulaCell!(cellIndex);
+      formulaMemberIndices = materializeFormulaMembers(memberIndices, isFormulaCell);
     }
     const memberSlice = this.members.replace(
       this.memberSlices[rangeIndex] ?? this.members.empty(),
       memberIndices,
+    );
+    const formulaMemberSlice = this.formulaMembers.replace(
+      this.formulaMemberSlices[rangeIndex] ?? this.formulaMembers.empty(),
+      formulaMemberIndices,
     );
     const dependencySourceSlice = this.dependencySources.replace(
       this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty(),
       dependencySourceEntities,
     );
     this.memberSlices[rangeIndex] = memberSlice;
+    this.formulaMemberSlices[rangeIndex] = formulaMemberSlice;
     this.dependencySourceSlices[rangeIndex] = dependencySourceSlice;
     syncDescriptorMembers(descriptor, memberSlice);
+    syncDescriptorFormulaMembers(descriptor, formulaMemberSlice);
     syncDescriptorDependencySources(descriptor, dependencySourceSlice);
     return {
       oldDependencySources,
@@ -368,6 +447,39 @@ function materializeDynamicDependencySources(memberIndices: Uint32Array): Uint32
     dependencySources[index] = makeCellEntity(memberIndices[index]!);
   }
   return dependencySources;
+}
+
+function materializeFormulaMembers(
+  memberIndices: Uint32Array,
+  isFormulaCell: ((cellIndex: number) => boolean) | undefined,
+  parentFormulaMembers?: Uint32Array,
+  parentMemberCount = 0,
+): Uint32Array {
+  if (!isFormulaCell) {
+    return parentFormulaMembers ? Uint32Array.from(parentFormulaMembers) : new Uint32Array();
+  }
+  let appendedFormulaCount = 0;
+  const startIndex = parentMemberCount;
+  for (let index = startIndex; index < memberIndices.length; index += 1) {
+    if (isFormulaCell(memberIndices[index]!)) {
+      appendedFormulaCount += 1;
+    }
+  }
+  const parentCount = parentFormulaMembers?.length ?? 0;
+  const formulaMembers = new Uint32Array(parentCount + appendedFormulaCount);
+  if (parentFormulaMembers && parentCount > 0) {
+    formulaMembers.set(parentFormulaMembers, 0);
+  }
+  let cursor = parentCount;
+  for (let index = startIndex; index < memberIndices.length; index += 1) {
+    const cellIndex = memberIndices[index]!;
+    if (!isFormulaCell(cellIndex)) {
+      continue;
+    }
+    formulaMembers[cursor] = cellIndex;
+    cursor += 1;
+  }
+  return formulaMembers;
 }
 
 function materializeCellRangeDependencySources(
@@ -485,6 +597,11 @@ function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: numb
 function syncDescriptorMembers(descriptor: RangeDescriptor, slice: EdgeSlice): void {
   descriptor.membersOffset = slice.ptr < 0 ? 0 : slice.ptr;
   descriptor.membersLength = slice.len;
+}
+
+function syncDescriptorFormulaMembers(descriptor: RangeDescriptor, slice: EdgeSlice): void {
+  descriptor.formulaMembersOffset = slice.ptr < 0 ? 0 : slice.ptr;
+  descriptor.formulaMembersLength = slice.len;
 }
 
 function syncDescriptorDependencySources(descriptor: RangeDescriptor, slice: EdgeSlice): void {

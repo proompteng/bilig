@@ -500,7 +500,14 @@ export function createEngineMutationSupportService(args: {
       }
       const row = args.state.workbook.cellStore.rows[cellIndex] ?? 0;
       const col = args.state.workbook.cellStore.cols[cellIndex] ?? 0;
-      const rangeIndices = args.state.ranges.addDynamicMember(sheetId, row, col, cellIndex);
+      const isFormulaCell = (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0;
+      const rangeIndices = args.state.ranges.addDynamicMember(
+        sheetId,
+        row,
+        col,
+        cellIndex,
+        isFormulaCell,
+      );
       if (rangeIndices.length > 0) {
         args.scheduleWasmProgramSync();
       }
@@ -517,6 +524,9 @@ export function createEngineMutationSupportService(args: {
           const formulaCellIndex = entityPayload(formulaEntity);
           const formula = args.state.formulas.get(formulaCellIndex);
           if (!formula) {
+            continue;
+          }
+          if (!isFormulaCell) {
             continue;
           }
           const nextDependencyIndices = appendPackedCellIndex(formula.dependencyIndices, cellIndex);

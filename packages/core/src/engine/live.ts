@@ -13,6 +13,7 @@ import {
 } from "./services/formula-evaluation-service.js";
 import { createCriterionRangeCacheService } from "./services/criterion-range-cache-service.js";
 import { createExactColumnIndexService } from "./services/exact-column-index-service.js";
+import { createRangeAggregateCacheService } from "./services/range-aggregate-cache-service.js";
 import { createSortedColumnSearchService } from "./services/sorted-column-search-service.js";
 import {
   createEngineFormulaBindingService,
@@ -22,6 +23,7 @@ import {
   createEngineFormulaInitializationService,
   type EngineFormulaInitializationService,
 } from "./services/formula-initialization-service.js";
+import { createEngineFormulaTemplateNormalizationService } from "./services/formula-template-normalization-service.js";
 import { createEngineCompiledPlanService } from "./services/compiled-plan-service.js";
 import {
   createEngineFormulaGraphService,
@@ -243,12 +245,14 @@ type EngineOperationRuntimeConfig = Omit<
   | "composeEventChanges"
   | "captureChangedCells"
   | "getChangedInputBuffer"
+  | "ensureRecalcScratchCapacity"
   | "ensureCellTracked"
   | "resetMaterializedCellScratch"
   | "syncDynamicRanges"
   | "rebuildTopoRanks"
   | "detectCycles"
   | "recalculate"
+  | "evaluateDirectFormula"
   | "reconcilePivotOutputs"
   | "flushWasmProgramSync"
 >;
@@ -287,7 +291,12 @@ export function createEngineServiceRuntime(args: {
   const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state });
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state });
   const compiledPlans = createEngineCompiledPlanService();
+  const formulaTemplates = createEngineFormulaTemplateNormalizationService();
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore });
+  const aggregateCache = createRangeAggregateCacheService({
+    state: args.state,
+    runtimeColumnStore,
+  });
   const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore });
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore });
   const graph = createEngineFormulaGraphService({
@@ -398,6 +407,7 @@ export function createEngineServiceRuntime(args: {
     state: args.state,
     runtimeColumnStore,
     criterionCache,
+    aggregateCache,
     exactLookup,
     sortedLookup,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
@@ -441,6 +451,7 @@ export function createEngineServiceRuntime(args: {
     state: {
       workbook: args.state.workbook,
       formulas: args.state.formulas,
+      ranges: args.state.ranges,
       pivotOutputOwners: args.pivotState.pivotOutputOwners,
     },
     captureStoredCellOps: (cellIndex, sheetName, address, sourceSheetName, sourceAddress) =>
@@ -457,9 +468,14 @@ export function createEngineServiceRuntime(args: {
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex));
-      pending.forEach(({ cellIndex, ownerSheetName, source, compiled }) => {
+      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, preservesValue }) => {
         try {
-          if (compiled) {
+          if (compiled && preservesValue) {
+            if (binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled)) {
+              return;
+            }
+            binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled);
+          } else if (compiled) {
             binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled);
           } else {
             binding.bindFormulaNow(cellIndex, ownerSheetName, source);
@@ -528,12 +544,17 @@ export function createEngineServiceRuntime(args: {
   formulaInitialization = createEngineFormulaInitializationService({
     state: args.state,
     beginMutationCollection: () => support.beginMutationCollectionNow(),
+    ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     ensureCellTrackedByCoords: (sheetId, row, col) =>
       support.ensureCellTrackedByCoordsNow(sheetId, row, col),
     resetMaterializedCellScratch: (expectedSize) =>
       support.resetMaterializedCellScratchNow(expectedSize),
     bindFormula: (cellIndex, ownerSheetName, source) =>
       binding.bindInitialFormulaNow(cellIndex, ownerSheetName, source),
+    bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled) =>
+      binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled),
+    compileTemplateFormula: (source, row, col) => formulaTemplates.compileForCell(source, row, col),
+    clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     setInvalidFormulaValue: (cellIndex) => binding.invalidateFormulaNow(cellIndex),
     markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
@@ -604,6 +625,7 @@ export function createEngineServiceRuntime(args: {
     captureChangedCells: (changedCellIndices) =>
       changeSetEmitter.captureChangedCells(changedCellIndices),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
     ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
     resetMaterializedCellScratch: (expectedSize) =>
@@ -613,12 +635,16 @@ export function createEngineServiceRuntime(args: {
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) =>
       requireService(recalc, "recalc").recalculateNowSync(changedRoots, kernelSyncRoots),
+    evaluateDirectFormula: (cellIndex: number) =>
+      evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, "recalc").reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
+    noteSortedLookupLiteralWrite: (request) => sortedLookup.recordLiteralWrite(request),
     invalidateExactLookupColumn: (request) => exactLookup.invalidateColumn(request),
+    invalidateSortedLookupColumn: (request) => sortedLookup.invalidateColumn(request),
   });
   const mutation = createEngineMutationService({
     state: args.state,

@@ -473,4 +473,33 @@ describe("WorkbookStore", () => {
       { id: "column-1", index: 1, size: 120, hidden: false },
     ]);
   });
+
+  it("remaps only affected cells during structural column shifts", () => {
+    const workbook = new WorkbookStore("remap-affected-columns");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    const leftCellIndex = workbook.ensureCell("Sheet1", "A1");
+    const movedCellIndex = workbook.ensureCell("Sheet1", "B1");
+    const farCellIndex = workbook.ensureCell("Sheet1", "D1");
+    writeLiteralToCellStore(workbook.cellStore, leftCellIndex, 1, strings);
+    writeLiteralToCellStore(workbook.cellStore, movedCellIndex, 2, strings);
+    writeLiteralToCellStore(workbook.cellStore, farCellIndex, 4, strings);
+
+    const remapped = workbook.remapSheetCells("Sheet1", "column", (index) =>
+      index < 1 ? index : index + 1,
+    );
+
+    expect(remapped.changedCellIndices).toEqual(
+      expect.arrayContaining([movedCellIndex, farCellIndex]),
+    );
+    expect(remapped.changedCellIndices).not.toContain(leftCellIndex);
+    expect(workbook.getCellIndex("Sheet1", "A1")).toBe(leftCellIndex);
+    expect(workbook.getCellIndex("Sheet1", "C1")).toBe(movedCellIndex);
+    expect(workbook.getCellIndex("Sheet1", "E1")).toBe(farCellIndex);
+    expect(workbook.getCellIndex("Sheet1", "B1")).toBeUndefined();
+    expect(workbook.cellStore.cols[leftCellIndex]).toBe(0);
+    expect(workbook.cellStore.cols[movedCellIndex]).toBe(2);
+    expect(workbook.cellStore.cols[farCellIndex]).toBe(4);
+  });
 });

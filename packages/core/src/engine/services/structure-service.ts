@@ -27,6 +27,7 @@ import {
   type WorkbookPivotRecord,
   type WorkbookStore,
 } from "../../workbook-store.js";
+import type { RangeRegistry } from "../../range-registry.js";
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -44,6 +45,7 @@ type StructuralAxisOp = Extract<
 interface EngineStructureState {
   readonly workbook: WorkbookStore;
   readonly formulas: FormulaTable<RuntimeFormula>;
+  readonly ranges: RangeRegistry;
   readonly pivotOutputOwners: Map<number, string>;
 }
 
@@ -52,6 +54,7 @@ interface StructuralFormulaRebindInput {
   readonly ownerSheetName: string;
   readonly source: string;
   readonly compiled?: CompiledFormula;
+  readonly preservesValue?: boolean;
 }
 
 function dependencyTouchesSheet(dependency: string, sheetName: string): boolean {
@@ -60,6 +63,93 @@ function dependencyTouchesSheet(dependency: string, sheetName: string): boolean 
   }
   const [qualifiedSheetName] = dependency.split("!");
   return qualifiedSheetName?.replace(/^'(.*)'$/, "$1") === sheetName;
+}
+
+function rangeDependencyAxisAffected(
+  rangeDescriptor: { sheetId: number; row1: number; row2: number; col1: number; col2: number },
+  targetSheetId: number,
+  transform: StructuralAxisTransform,
+): boolean {
+  if (rangeDescriptor.sheetId !== targetSheetId) {
+    return false;
+  }
+  const start = transform.axis === "row" ? rangeDescriptor.row1 : rangeDescriptor.col1;
+  const end = transform.axis === "row" ? rangeDescriptor.row2 : rangeDescriptor.col2;
+  return !(end < transform.start || start >= transform.start + transform.count);
+}
+
+function runtimeDirectRangeAxisAffected(
+  targetSheetId: number | undefined,
+  targetSheetName: string,
+  transform: StructuralAxisTransform,
+  range: { sheetName: string; rowStart: number; rowEnd: number; col: number } | undefined,
+): boolean {
+  if (!range || targetSheetId === undefined || range.sheetName !== targetSheetName) {
+    return false;
+  }
+  const descriptor =
+    transform.axis === "row"
+      ? {
+          sheetId: targetSheetId,
+          row1: range.rowStart,
+          row2: range.rowEnd,
+          col1: range.col,
+          col2: range.col,
+        }
+      : {
+          sheetId: targetSheetId,
+          row1: range.rowStart,
+          row2: range.rowEnd,
+          col1: range.col,
+          col2: range.col,
+        };
+  return rangeDependencyAxisAffected(descriptor, targetSheetId, transform);
+}
+
+function isStructurallyStableSimpleFormulaNode(node: CompiledFormula["optimizedAst"]): boolean {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "CellRef":
+      return true;
+    case "UnaryExpr":
+      return isStructurallyStableSimpleFormulaNode(node.argument);
+    case "BinaryExpr":
+      return (
+        isStructurallyStableSimpleFormulaNode(node.left) &&
+        isStructurallyStableSimpleFormulaNode(node.right)
+      );
+    case "NameRef":
+    case "StructuredRef":
+    case "SpillRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+    case "CallExpr":
+    case "InvokeExpr":
+      return false;
+  }
+}
+
+function structuralRewritePreservesValue(
+  formula: RuntimeFormula,
+  rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
+  transform: StructuralAxisTransform,
+): boolean {
+  return (
+    transform.kind !== "delete" &&
+    rewritten.reusedProgram &&
+    !rewritten.compiled.volatile &&
+    formula.compiled.symbolicNames.length === 0 &&
+    formula.compiled.symbolicTables.length === 0 &&
+    formula.compiled.symbolicSpills.length === 0 &&
+    formula.directLookup === undefined &&
+    formula.directAggregate === undefined &&
+    formula.directCriteria === undefined &&
+    isStructurallyStableSimpleFormulaNode(rewritten.compiled.optimizedAst)
+  );
 }
 
 export interface EngineStructureService {
@@ -266,35 +356,19 @@ export function createEngineStructureService(args: {
     return changedNames;
   };
 
-  const rewriteCellFormulasForStructuralTransform = (
+  const rewriteStructuralFormulaCompiled = (
+    formula: RuntimeFormula,
+    ownerSheetName: string,
     sheetName: string,
     transform: StructuralAxisTransform,
-  ): Map<number, StructuralFormulaRebindInput> => {
-    const rewrittenFormulaCells = new Map<number, StructuralFormulaRebindInput>();
-    args.state.formulas.forEach((formula, cellIndex) => {
-      const ownerSheetName = args.state.workbook.getSheetNameById(
-        args.state.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      if (!ownerSheetName) {
-        return;
-      }
-      const rewritten = rewriteCompiledFormulaForStructuralTransform(
-        formula.compiled,
-        ownerSheetName,
-        sheetName,
-        transform,
-      );
-      if (rewritten.source === formula.source) {
-        return;
-      }
-      rewrittenFormulaCells.set(cellIndex, {
-        cellIndex,
-        ownerSheetName,
-        source: rewritten.source,
-        compiled: rewritten.compiled,
-      });
-    });
-    return rewrittenFormulaCells;
+  ): ReturnType<typeof rewriteCompiledFormulaForStructuralTransform> | undefined => {
+    const rewritten = rewriteCompiledFormulaForStructuralTransform(
+      formula.compiled,
+      ownerSheetName,
+      sheetName,
+      transform,
+    );
+    return rewritten.source === formula.source ? undefined : rewritten;
   };
 
   const rewriteFormulaSourceFallback = (
@@ -306,7 +380,6 @@ export function createEngineStructureService(args: {
 
   const resolveStructuralFormulaRebindInputs = (argsForResolve: {
     readonly formulaCellIndices: readonly number[];
-    readonly rewrittenFormulaCells: ReadonlyMap<number, StructuralFormulaRebindInput>;
     readonly sheetName: string;
     readonly transform: StructuralAxisTransform;
     readonly changedDefinedNames: ReadonlySet<string>;
@@ -324,7 +397,12 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return;
       }
-      const rewritten = argsForResolve.rewrittenFormulaCells.get(cellIndex);
+      const rewritten = rewriteStructuralFormulaCompiled(
+        formula,
+        ownerSheetName,
+        argsForResolve.sheetName,
+        argsForResolve.transform,
+      );
       const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
         argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
       );
@@ -352,7 +430,17 @@ export function createEngineStructureService(args: {
         });
         return;
       }
-      inputs.push(rewritten);
+      inputs.push({
+        cellIndex,
+        ownerSheetName,
+        source: rewritten.source,
+        compiled: rewritten.compiled,
+        preservesValue: structuralRewritePreservesValue(
+          formula,
+          rewritten,
+          argsForResolve.transform,
+        ),
+      });
     });
     return inputs;
   };
@@ -745,7 +833,6 @@ export function createEngineStructureService(args: {
     readonly targetSheetId: number | undefined;
     readonly transform: StructuralAxisTransform;
     readonly sheetName: string;
-    readonly rewrittenFormulaCells: ReadonlyMap<number, StructuralFormulaRebindInput>;
     readonly changedDefinedNames: ReadonlySet<string>;
     readonly changedTableNames: ReadonlySet<string>;
   }): {
@@ -774,7 +861,7 @@ export function createEngineStructureService(args: {
         structuralAxisIndexAffected(axisIndex, argsForImpact.transform);
       const dependencyPositionAffected =
         argsForImpact.targetSheetId !== undefined &&
-        formula.dependencyIndices.some((dependencyCellIndex) => {
+        (formula.dependencyIndices.some((dependencyCellIndex) => {
           if (
             args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !==
             argsForImpact.targetSheetId
@@ -789,7 +876,55 @@ export function createEngineStructureService(args: {
             dependencyAxisIndex !== undefined &&
             structuralAxisIndexAffected(dependencyAxisIndex, argsForImpact.transform)
           );
-        });
+        }) ||
+          formula.rangeDependencies.some((rangeIndex) =>
+            rangeDependencyAxisAffected(
+              args.state.ranges.getDescriptor(rangeIndex),
+              argsForImpact.targetSheetId!,
+              argsForImpact.transform,
+            ),
+          ) ||
+          runtimeDirectRangeAxisAffected(
+            argsForImpact.targetSheetId,
+            argsForImpact.sheetName,
+            argsForImpact.transform,
+            formula.directAggregate,
+          ) ||
+          runtimeDirectRangeAxisAffected(
+            argsForImpact.targetSheetId,
+            argsForImpact.sheetName,
+            argsForImpact.transform,
+            formula.directCriteria?.aggregateRange,
+          ) ||
+          formula.directCriteria?.criteriaPairs.some((pair) =>
+            runtimeDirectRangeAxisAffected(
+              argsForImpact.targetSheetId,
+              argsForImpact.sheetName,
+              argsForImpact.transform,
+              pair.range,
+            ),
+          ) ||
+          runtimeDirectRangeAxisAffected(
+            argsForImpact.targetSheetId,
+            argsForImpact.sheetName,
+            argsForImpact.transform,
+            formula.directLookup?.kind === "exact" || formula.directLookup?.kind === "approximate"
+              ? {
+                  sheetName: formula.directLookup.prepared.sheetName,
+                  rowStart: formula.directLookup.prepared.rowStart,
+                  rowEnd: formula.directLookup.prepared.rowEnd,
+                  col: formula.directLookup.prepared.col,
+                }
+              : formula.directLookup?.kind === "exact-uniform-numeric" ||
+                  formula.directLookup?.kind === "approximate-uniform-numeric"
+                ? {
+                    sheetName: formula.directLookup.sheetName,
+                    rowStart: formula.directLookup.rowStart,
+                    rowEnd: formula.directLookup.rowEnd,
+                    col: formula.directLookup.col,
+                  }
+                : undefined,
+          ));
       const touchesSheetDependency = formula.compiled.deps.some((dependency) =>
         dependencyTouchesSheet(dependency, argsForImpact.sheetName),
       );
@@ -799,19 +934,23 @@ export function createEngineStructureService(args: {
       const touchesChangedTable = formula.compiled.symbolicTables.some((name) =>
         argsForImpact.changedTableNames.has(name),
       );
-      const rewritten = argsForImpact.rewrittenFormulaCells.has(cellIndex);
       if (
         !ownerPositionAffected &&
         !dependencyPositionAffected &&
         !touchesSheetDependency &&
         !touchesChangedName &&
-        !touchesChangedTable &&
-        !rewritten
+        !touchesChangedTable
       ) {
         return;
       }
       formulaCellIndices.add(cellIndex);
-      if (rewritten || touchesChangedName || touchesChangedTable || dependencyPositionAffected) {
+      if (
+        ownerPositionAffected ||
+        dependencyPositionAffected ||
+        touchesSheetDependency ||
+        touchesChangedName ||
+        touchesChangedTable
+      ) {
         rebindCellIndices.add(cellIndex);
       }
     });
@@ -865,10 +1004,6 @@ export function createEngineStructureService(args: {
             sheetName,
             transform,
           );
-          const rewrittenFormulaCells = rewriteCellFormulasForStructuralTransform(
-            sheetName,
-            transform,
-          );
           const { changedTableNames } = rewriteWorkbookMetadataForStructuralTransform(
             sheetName,
             transform,
@@ -877,7 +1012,6 @@ export function createEngineStructureService(args: {
             targetSheetId,
             transform,
             sheetName,
-            rewrittenFormulaCells,
             changedDefinedNames,
             changedTableNames,
           });
@@ -936,16 +1070,20 @@ export function createEngineStructureService(args: {
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) =>
               isCellIndexMapped(cellIndex),
             ),
-            rewrittenFormulaCells,
             sheetName,
             transform,
             changedDefinedNames,
             changedTableNames,
           });
           args.rebindFormulaCells(rebindInputs);
+          const preservedFormulaCellIndices = new Set(
+            rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex),
+          );
           return {
             changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
-            formulaCellIndices,
+            formulaCellIndices: formulaCellIndices.filter(
+              (cellIndex) => !preservedFormulaCellIndices.has(cellIndex),
+            ),
           };
         },
         catch: (cause) =>

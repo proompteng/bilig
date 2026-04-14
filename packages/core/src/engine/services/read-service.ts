@@ -37,7 +37,7 @@ export interface EngineReadService {
 }
 
 export function createEngineReadService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas">;
+  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "ranges">;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
@@ -158,9 +158,16 @@ export function createEngineReadService(args: {
       return { directDependents: [], directPrecedents: [] };
     }
     const directDependents = new Set<number>();
-    const directPrecedents: number[] = [];
+    const directPrecedents = new Set<number>();
     args.forEachFormulaDependencyCell(cellIndex, (dependencyCellIndex) => {
-      directPrecedents.push(dependencyCellIndex);
+      directPrecedents.add(dependencyCellIndex);
+    });
+    const formula = args.state.formulas.get(cellIndex);
+    formula?.rangeDependencies.forEach((rangeIndex) => {
+      const members = args.state.ranges.expandToCells(rangeIndex);
+      for (let index = 0; index < members.length; index += 1) {
+        directPrecedents.add(members[index]!);
+      }
     });
     const dependents = args.getEntityDependents(makeCellEntity(cellIndex));
     for (let index = 0; index < dependents.length; index += 1) {
@@ -191,7 +198,7 @@ export function createEngineReadService(args: {
       directDependents.add(entityPayload(dependent));
     }
     return {
-      directPrecedents: directPrecedents.map((dependencyCellIndex) =>
+      directPrecedents: [...directPrecedents].map((dependencyCellIndex) =>
         args.state.workbook.getQualifiedAddress(dependencyCellIndex),
       ),
       directDependents: [...directDependents].map((dependentCellIndex) =>

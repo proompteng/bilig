@@ -1026,12 +1026,14 @@ export class WorkPaper {
   private batchDepth = 0;
   private batchStartVisibility: VisibilitySnapshot | null = null;
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null;
+  private batchUsesTrackedFastPath = false;
   private batchUndoStackLength = 0;
   private pendingBatchOps: EngineCellMutationRef[] = [];
   private pendingBatchPotentialNewCells = 0;
   private evaluationSuspended = false;
   private suspendedVisibility: VisibilitySnapshot | null = null;
   private suspendedNamedValues: NamedExpressionValueSnapshot | null = null;
+  private suspendedUsesTrackedFastPath = false;
   private suspendedCellMutationRefs: EngineCellMutationRef[] = [];
   private suspendedCellMutationPotentialNewCells = 0;
   private queuedEvents: QueuedEvent[] = [];
@@ -1123,7 +1125,7 @@ export class WorkPaper {
       });
     });
     workbook.clearHistoryStacks();
-    workbook.primeChangeTrackingCaches();
+    workbook.resetChangeTrackingCaches();
     return workbook;
   }
 
@@ -1170,7 +1172,7 @@ export class WorkPaper {
       });
     });
     workbook.clearHistoryStacks();
-    workbook.primeChangeTrackingCaches();
+    workbook.resetChangeTrackingCaches();
     return workbook;
   }
 
@@ -1406,10 +1408,15 @@ export class WorkPaper {
       ...this.config,
       ...cloneConfig(next),
     };
-    const hasChanges = WORKPAPER_CONFIG_KEYS.some(
-      (key) => Object.hasOwn(next, key) && this.config[key] !== next[key],
+    const changedKeys = WORKPAPER_CONFIG_KEYS.filter(
+      (key) => Object.hasOwn(next, key) && this.config[key] !== merged[key],
     );
-    if (!hasChanges) {
+    if (changedKeys.length === 0) {
+      return;
+    }
+    validateWorkPaperConfig(merged);
+    if (this.canApplyRuntimeOnlyConfigUpdate(changedKeys)) {
+      this.applyRuntimeOnlyConfigUpdate(merged);
       return;
     }
     this.rebuildWithConfig(merged);
@@ -1466,8 +1473,14 @@ export class WorkPaper {
     this.assertNotDisposed();
     const isOutermost = this.batchDepth === 0;
     if (isOutermost) {
-      this.batchStartVisibility = this.ensureVisibilityCache();
-      this.batchStartNamedValues = this.ensureNamedExpressionValueCache();
+      this.batchUsesTrackedFastPath = this.canUseTrackedMutationFastPath();
+      if (this.batchUsesTrackedFastPath) {
+        this.batchStartVisibility = null;
+        this.batchStartNamedValues = EMPTY_NAMED_EXPRESSION_VALUES;
+      } else {
+        this.batchStartVisibility = this.ensureVisibilityCache();
+        this.batchStartNamedValues = this.ensureNamedExpressionValueCache();
+      }
       this.batchUndoStackLength = this.getUndoStack().length;
       this.drainTrackedEngineEvents();
     }
@@ -1484,10 +1497,13 @@ export class WorkPaper {
     if (!isOutermost) {
       return [];
     }
-    const changes = this.computeChangesAfterMutation(
-      this.batchStartVisibility ?? new Map(),
-      this.batchStartNamedValues ?? new Map(),
-    );
+    const changes = this.batchUsesTrackedFastPath
+      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
+      : this.computeChangesAfterMutation(
+          this.batchStartVisibility ?? new Map(),
+          this.batchStartNamedValues ?? new Map(),
+        );
+    this.batchUsesTrackedFastPath = false;
     this.batchStartVisibility = null;
     this.batchStartNamedValues = null;
     if (!this.evaluationSuspended) {
@@ -1506,8 +1522,15 @@ export class WorkPaper {
     }
     this.evaluationSuspended = true;
     this.flushPendingBatchOps();
-    this.suspendedVisibility = this.ensureVisibilityCache();
-    this.suspendedNamedValues = this.ensureNamedExpressionValueCache();
+    if (this.visibilityCache === null && this.namedExpressions.size === 0) {
+      this.suspendedVisibility = null;
+      this.suspendedNamedValues = EMPTY_NAMED_EXPRESSION_VALUES;
+      this.suspendedUsesTrackedFastPath = true;
+    } else {
+      this.suspendedVisibility = this.ensureVisibilityCache();
+      this.suspendedNamedValues = this.ensureNamedExpressionValueCache();
+      this.suspendedUsesTrackedFastPath = false;
+    }
     this.drainTrackedEngineEvents();
     this.emitter.emitDetailed({ eventName: "evaluationSuspended", payload: {} });
   }
@@ -1518,13 +1541,16 @@ export class WorkPaper {
       return [];
     }
     this.flushSuspendedCellMutations();
-    const changes = this.computeChangesAfterMutation(
-      this.suspendedVisibility ?? new Map(),
-      this.suspendedNamedValues ?? new Map(),
-    );
+    const changes = this.suspendedUsesTrackedFastPath
+      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
+      : this.computeChangesAfterMutation(
+          this.suspendedVisibility ?? new Map(),
+          this.suspendedNamedValues ?? new Map(),
+        );
     this.evaluationSuspended = false;
     this.suspendedVisibility = null;
     this.suspendedNamedValues = null;
+    this.suspendedUsesTrackedFastPath = false;
     this.flushQueuedEvents();
     this.emitter.emitDetailed({ eventName: "evaluationResumed", payload: { changes } });
     if (changes.length > 0) {
@@ -2299,6 +2325,17 @@ export class WorkPaper {
       }
       const existingCellIndex = sheet.grid.get(address.row, address.col);
       if (
+        this.enqueueSuspendedLiteralMutation(
+          address.sheet,
+          address.row,
+          address.col,
+          content,
+          existingCellIndex,
+        )
+      ) {
+        return [];
+      }
+      if (
         this.enqueueDeferredBatchLiteral(
           address.sheet,
           address.row,
@@ -2309,7 +2346,7 @@ export class WorkPaper {
       ) {
         return [];
       }
-      return this.captureChanges(undefined, () => {
+      const mutate = () => {
         this.flushPendingBatchOps();
         const mutation: EngineCellMutationRef["mutation"] =
           content === null
@@ -2337,6 +2374,12 @@ export class WorkPaper {
           returnUndoOps: false,
           reuseRefs: true,
         });
+      };
+      if (this.canUseTrackedMutationFastPath()) {
+        return this.captureTrackedChangesWithoutVisibilityCache(mutate);
+      }
+      return this.captureChanges(undefined, () => {
+        mutate();
       });
     }
     if (!this.isItPossibleToSetCellContents(address, content)) {
@@ -2980,13 +3023,10 @@ export class WorkPaper {
     return events;
   }
 
-  private primeChangeTrackingCaches(): void {
+  private resetChangeTrackingCaches(): void {
     this.sheetRecordsCache = null;
-    this.visibilityCache = this.captureVisibilitySnapshot();
-    this.namedExpressionValueCache =
-      this.namedExpressions.size > 0
-        ? this.captureNamedExpressionValueSnapshot()
-        : EMPTY_NAMED_EXPRESSION_VALUES;
+    this.visibilityCache = null;
+    this.namedExpressionValueCache = null;
     this.drainTrackedEngineEvents();
   }
 
@@ -3088,6 +3128,34 @@ export class WorkPaper {
       returnUndoOps: false,
       reuseRefs: true,
     });
+  }
+
+  private enqueueSuspendedLiteralMutation(
+    sheetId: number,
+    row: number,
+    col: number,
+    content: RawCellContent,
+    existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1,
+  ): boolean {
+    if (
+      !this.evaluationSuspended ||
+      !isDeferredBatchLiteralContent(content) ||
+      isFormulaContent(content)
+    ) {
+      return false;
+    }
+    if (content === null) {
+      this.suspendedCellMutationRefs.push({ sheetId, mutation: { kind: "clearCell", row, col } });
+      return true;
+    }
+    this.suspendedCellMutationRefs.push({
+      sheetId,
+      mutation: { kind: "setCellValue", row, col, value: content },
+    });
+    if (existingCellIndex === -1) {
+      this.suspendedCellMutationPotentialNewCells += 1;
+    }
+    return true;
   }
 
   private enqueueDeferredBatchLiteral(
@@ -3448,20 +3516,62 @@ export class WorkPaper {
     );
   }
 
+  private canUseTrackedMutationFastPath(): boolean {
+    return (
+      this.batchDepth === 0 &&
+      !this.evaluationSuspended &&
+      this.visibilityCache === null &&
+      this.namedExpressions.size === 0
+    );
+  }
+
+  private downgradeTrackedBatchFastPath(): void {
+    if (!this.batchUsesTrackedFastPath || this.batchDepth === 0) {
+      return;
+    }
+    this.batchStartVisibility = this.ensureVisibilityCache();
+    this.batchStartNamedValues =
+      this.namedExpressions.size > 0
+        ? this.ensureNamedExpressionValueCache()
+        : EMPTY_NAMED_EXPRESSION_VALUES;
+    this.batchUsesTrackedFastPath = false;
+  }
+
   private computeTrackedChangesWithoutVisibilityCache(
     events: readonly TrackedEngineEvent[],
   ): WorkPaperChange[] {
     const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events);
     if (!fastPath) {
       throw new WorkPaperOperationError(
-        "Structural mutation emitted an unsupported invalidation pattern for tracked changes",
+        "Mutation emitted an unsupported invalidation pattern for tracked changes",
       );
     }
     return fastPath.changes;
   }
 
+  private captureTrackedChangesWithoutVisibilityCache(mutate: () => void): WorkPaperChange[] {
+    this.assertNotDisposed();
+    this.drainTrackedEngineEvents();
+    try {
+      mutate();
+    } catch (error) {
+      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+        throw error;
+      }
+      throw new WorkPaperOperationError(this.messageOf(error, "Mutation failed"));
+    }
+    const changes = this.computeTrackedChangesWithoutVisibilityCache(
+      this.drainTrackedEngineEvents(),
+    );
+    if (changes.length > 0) {
+      this.emitter.emitDetailed({ eventName: "valuesUpdated", payload: { changes } });
+    }
+    return changes;
+  }
+
   private batchStructuralChanges(batchOperations: () => void): WorkPaperChange[] {
     if (!this.canUseTrackedStructuralFastPath()) {
+      this.downgradeTrackedBatchFastPath();
       return this.batch(batchOperations);
     }
     this.assertNotDisposed();
@@ -3517,6 +3627,7 @@ export class WorkPaper {
     mutate: () => void,
   ): WorkPaperChange[] {
     this.assertNotDisposed();
+    this.downgradeTrackedBatchFastPath();
     if (semanticEvent !== undefined) {
       this.flushPendingBatchOps();
     }
@@ -3901,8 +4012,20 @@ export class WorkPaper {
     return true;
   }
 
+  private canApplyRuntimeOnlyConfigUpdate(
+    changedKeys: readonly (keyof WorkPaperConfig)[],
+  ): boolean {
+    return changedKeys.every((key) => key === "useColumnIndex" || key === "useStats");
+  }
+
+  private applyRuntimeOnlyConfigUpdate(nextConfig: WorkPaperConfig): void {
+    if (this.config.useColumnIndex !== nextConfig.useColumnIndex) {
+      this.engine.setUseColumnIndexEnabled(nextConfig.useColumnIndex ?? false);
+    }
+    this.config = cloneConfig(nextConfig);
+  }
+
   private rebuildWithConfig(nextConfig: WorkPaperConfig): void {
-    validateWorkPaperConfig(nextConfig);
     this.validateCurrentSheetsWithinLimits(nextConfig);
     const canReuseSnapshot = this.canReuseSnapshotRebuild(nextConfig);
     const snapshot = canReuseSnapshot ? this.engine.exportSnapshot() : null;
@@ -3957,7 +4080,7 @@ export class WorkPaper {
       }
     });
     this.clearHistoryStacks();
-    this.primeChangeTrackingCaches();
+    this.resetChangeTrackingCaches();
     this.clipboard = clipboard;
     if (suspended) {
       this.suspendedVisibility = this.ensureVisibilityCache();

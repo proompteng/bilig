@@ -426,7 +426,11 @@ export function createEngineRecalcService(args: {
           materializeCycleDependentError(cellIndex);
           continue;
         }
-        if (formula.directLookup !== undefined || formula.directCriteria !== undefined) {
+        if (
+          formula.directLookup !== undefined ||
+          formula.directAggregate !== undefined ||
+          formula.directCriteria !== undefined
+        ) {
           const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex);
           if (directLookupChanges !== undefined) {
             noteSpillChanges(directLookupChanges);

@@ -8,6 +8,22 @@ function blockKey(row: number, col: number): number {
 export class SheetGrid {
   readonly blocks = new Map<number, Uint32Array>();
 
+  private setInBlocks(
+    blocks: Map<number, Uint32Array>,
+    row: number,
+    col: number,
+    cellIndex: number,
+  ): void {
+    const key = blockKey(row, col);
+    let block = blocks.get(key);
+    if (!block) {
+      block = new Uint32Array(BLOCK_ROWS * BLOCK_COLS);
+      blocks.set(key, block);
+    }
+    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS);
+    block[offset] = cellIndex + 1;
+  }
+
   get(row: number, col: number): number {
     const block = this.blocks.get(blockKey(row, col));
     if (!block) return -1;
@@ -17,14 +33,7 @@ export class SheetGrid {
   }
 
   set(row: number, col: number, cellIndex: number): void {
-    const key = blockKey(row, col);
-    let block = this.blocks.get(key);
-    if (!block) {
-      block = new Uint32Array(BLOCK_ROWS * BLOCK_COLS);
-      this.blocks.set(key, block);
-    }
-    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS);
-    block[offset] = cellIndex + 1;
+    this.setInBlocks(this.blocks, row, col, cellIndex);
   }
 
   clear(row: number, col: number): void {
@@ -73,5 +82,59 @@ export class SheetGrid {
         }
       }
     });
+  }
+
+  remapAxis(
+    axis: "row" | "column",
+    remapIndex: (index: number) => number | undefined,
+  ): Array<{
+    cellIndex: number;
+    row: number;
+    col: number;
+    nextRow: number | undefined;
+    nextCol: number | undefined;
+  }> {
+    const changedEntries: Array<{
+      cellIndex: number;
+      row: number;
+      col: number;
+      nextRow: number | undefined;
+      nextCol: number | undefined;
+    }> = [];
+    const nextBlocks = new Map<number, Uint32Array>();
+    this.blocks.forEach((block, key) => {
+      const blockRow = Math.floor(key / 1_000_000);
+      const blockCol = key % 1_000_000;
+      for (let offset = 0; offset < block.length; offset += 1) {
+        const value = block[offset]!;
+        if (value === 0) {
+          continue;
+        }
+        const localRow = Math.floor(offset / BLOCK_COLS);
+        const localCol = offset % BLOCK_COLS;
+        const row = blockRow * BLOCK_ROWS + localRow;
+        const col = blockCol * BLOCK_COLS + localCol;
+        const nextRow = axis === "row" ? remapIndex(row) : row;
+        const nextCol = axis === "column" ? remapIndex(col) : col;
+        if (nextRow !== row || nextCol !== col) {
+          changedEntries.push({
+            cellIndex: value - 1,
+            row,
+            col,
+            nextRow,
+            nextCol,
+          });
+        }
+        if (nextRow === undefined || nextCol === undefined) {
+          continue;
+        }
+        this.setInBlocks(nextBlocks, nextRow, nextCol, value - 1);
+      }
+    });
+    this.blocks.clear();
+    nextBlocks.forEach((block, key) => {
+      this.blocks.set(key, block);
+    });
+    return changedEntries;
   }
 }

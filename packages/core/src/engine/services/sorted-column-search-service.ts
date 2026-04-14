@@ -42,9 +42,23 @@ export interface SortedColumnSearchService {
   readonly findVectorMatch: (
     request: ApproximateVectorMatchRequest,
   ) => ApproximateVectorMatchResult;
+  readonly invalidateColumn: (request: { sheetName: string; col: number }) => void;
+  readonly recordLiteralWrite: (request: {
+    sheetName: string;
+    row: number;
+    col: number;
+    oldValue: CellValue;
+    newValue: CellValue;
+    oldStringId?: number;
+    newStringId?: number;
+  }) => void;
 }
 
 interface ApproximateColumnIndexEntry {
+  sheetName: string;
+  rowStart: number;
+  rowEnd: number;
+  col: number;
   columnVersion: number;
   structureVersion: number;
   comparableKind: "numeric" | "text" | undefined;
@@ -184,11 +198,72 @@ function resolveSingleColumnBounds(
   };
 }
 
+function columnRegistryKey(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`;
+}
+
 export function createSortedColumnSearchService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "strings">;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
 }): SortedColumnSearchService {
+  const emptyColumnVersions = new Uint32Array(0);
   const approximateColumnIndices = new Map<string, ApproximateColumnIndexEntry>();
+  const cacheKeysByColumn = new Map<string, Set<string>>();
+
+  const getCurrentColumnVersions = (
+    sheetName: string,
+    col: number,
+  ): {
+    columnVersion: number;
+    structureVersion: number;
+    sheetColumnVersions: Uint32Array;
+  } => {
+    const sheet = args.state.workbook.getSheet(sheetName);
+    const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions;
+    return {
+      columnVersion: sheetColumnVersions[col] ?? 0,
+      structureVersion: sheet?.structureVersion ?? 0,
+      sheetColumnVersions,
+    };
+  };
+
+  const trackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
+    const registryKey = columnRegistryKey(sheetName, col);
+    const existing = cacheKeysByColumn.get(registryKey);
+    if (existing) {
+      existing.add(cacheKey);
+      return;
+    }
+    cacheKeysByColumn.set(registryKey, new Set([cacheKey]));
+  };
+
+  const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
+    const registryKey = columnRegistryKey(sheetName, col);
+    const existing = cacheKeysByColumn.get(registryKey);
+    if (!existing) {
+      return;
+    }
+    existing.delete(cacheKey);
+    if (existing.size === 0) {
+      cacheKeysByColumn.delete(registryKey);
+    }
+  };
+
+  const replaceColumnIndex = (
+    cacheKey: string,
+    entry: ApproximateColumnIndexEntry | undefined,
+  ): void => {
+    const existing = approximateColumnIndices.get(cacheKey);
+    if (existing) {
+      untrackCacheKey(existing.sheetName, existing.col, cacheKey);
+      approximateColumnIndices.delete(cacheKey);
+    }
+    if (!entry) {
+      return;
+    }
+    approximateColumnIndices.set(cacheKey, entry);
+    trackCacheKey(entry.sheetName, entry.col, cacheKey);
+  };
 
   const comparableAtOffset = (slice: RuntimeColumnSlice, offset: number): ApproximateComparable => {
     const tag = decodeValueTag(slice.tags[offset]);
@@ -236,6 +311,10 @@ export function createSortedColumnSearchService(args: {
 
     if (hasInvalid || (hasNumeric && hasText)) {
       return {
+        sheetName,
+        rowStart,
+        rowEnd,
+        col,
         columnVersion: slice.columnVersion,
         structureVersion: slice.structureVersion,
         comparableKind: undefined,
@@ -262,6 +341,10 @@ export function createSortedColumnSearchService(args: {
         }
       }
       return {
+        sheetName,
+        rowStart,
+        rowEnd,
+        col,
         columnVersion: slice.columnVersion,
         structureVersion: slice.structureVersion,
         comparableKind: "text",
@@ -293,6 +376,10 @@ export function createSortedColumnSearchService(args: {
     }
     const uniformNumericStep = detectUniformNumericStep(numericValues);
     return {
+      sheetName,
+      rowStart,
+      rowEnd,
+      col,
       columnVersion: slice.columnVersion,
       structureVersion: slice.structureVersion,
       comparableKind: "numeric",
@@ -312,22 +399,97 @@ export function createSortedColumnSearchService(args: {
     rowEnd: number,
   ): ApproximateColumnIndexEntry => {
     const cacheKey = getColumnCacheKey(sheetName, col, rowStart, rowEnd);
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName,
-      rowStart,
-      rowEnd,
-      col,
-    });
+    const currentVersions = getCurrentColumnVersions(sheetName, col);
     let entry = approximateColumnIndices.get(cacheKey);
     if (
       !entry ||
-      entry.columnVersion !== currentSlice.columnVersion ||
-      entry.structureVersion !== currentSlice.structureVersion
+      entry.columnVersion !== currentVersions.columnVersion ||
+      entry.structureVersion !== currentVersions.structureVersion
     ) {
       entry = buildApproximateColumnIndex(sheetName, col, rowStart, rowEnd);
-      approximateColumnIndices.set(cacheKey, entry);
+      replaceColumnIndex(cacheKey, entry);
     }
     return entry;
+  };
+
+  const updateEntryLiteralWrite = (
+    entry: ApproximateColumnIndexEntry,
+    row: number,
+    oldValue: ApproximateComparable,
+    newValue: ApproximateComparable,
+    currentColumnVersion: number,
+    currentStructureVersion: number,
+  ): boolean => {
+    entry.columnVersion = currentColumnVersion;
+    entry.structureVersion = currentStructureVersion;
+    if (row < entry.rowStart || row > entry.rowEnd) {
+      return true;
+    }
+    if (oldValue.kind !== newValue.kind) {
+      return false;
+    }
+    if (oldValue.kind === "invalid" || newValue.kind === "invalid") {
+      return false;
+    }
+    if (entry.comparableKind === undefined) {
+      return false;
+    }
+    if (
+      (entry.comparableKind === "numeric" &&
+        newValue.kind !== "numeric" &&
+        newValue.kind !== "empty") ||
+      (entry.comparableKind === "text" && newValue.kind !== "text" && newValue.kind !== "empty")
+    ) {
+      return false;
+    }
+
+    const offset = row - entry.rowStart;
+    if (entry.comparableKind === "numeric") {
+      if (!entry.numericValues) {
+        return false;
+      }
+      const nextNumeric = newValue.kind === "numeric" ? newValue.value : 0;
+      entry.numericValues[offset] = nextNumeric;
+      entry.uniformStart = undefined;
+      entry.uniformStep = undefined;
+      const previous = offset > 0 ? entry.numericValues[offset - 1]! : undefined;
+      const next =
+        offset + 1 < entry.numericValues.length ? entry.numericValues[offset + 1]! : undefined;
+      if (
+        (previous !== undefined && compareApproximateNumeric(previous, nextNumeric) > 0) ||
+        (next !== undefined && compareApproximateNumeric(nextNumeric, next) > 0)
+      ) {
+        entry.sortedAscending = false;
+      }
+      if (
+        (previous !== undefined && compareApproximateNumeric(previous, nextNumeric) < 0) ||
+        (next !== undefined && compareApproximateNumeric(nextNumeric, next) < 0)
+      ) {
+        entry.sortedDescending = false;
+      }
+      return true;
+    }
+
+    if (!entry.textValues) {
+      return false;
+    }
+    const nextText = newValue.kind === "text" ? newValue.value : "";
+    entry.textValues[offset] = nextText;
+    const previous = offset > 0 ? entry.textValues[offset - 1]! : undefined;
+    const next = offset + 1 < entry.textValues.length ? entry.textValues[offset + 1]! : undefined;
+    if (
+      (previous !== undefined && compareApproximateText(previous, nextText) > 0) ||
+      (next !== undefined && compareApproximateText(nextText, next) > 0)
+    ) {
+      entry.sortedAscending = false;
+    }
+    if (
+      (previous !== undefined && compareApproximateText(previous, nextText) < 0) ||
+      (next !== undefined && compareApproximateText(nextText, next) < 0)
+    ) {
+      entry.sortedDescending = false;
+    }
+    return true;
   };
 
   const prepareVectorLookup = (request: {
@@ -342,7 +504,6 @@ export function createSortedColumnSearchService(args: {
       request.rowStart,
       request.rowEnd,
     );
-    const columnSlice = args.runtimeColumnStore.getColumnSlice(request);
     return {
       sheetName: request.sheetName,
       rowStart: request.rowStart,
@@ -351,7 +512,8 @@ export function createSortedColumnSearchService(args: {
       length: request.rowEnd - request.rowStart + 1,
       columnVersion: entry.columnVersion,
       structureVersion: entry.structureVersion,
-      sheetColumnVersions: columnSlice.sheetColumnVersions,
+      sheetColumnVersions: getCurrentColumnVersions(request.sheetName, request.col)
+        .sheetColumnVersions,
       comparableKind: entry.comparableKind,
       uniformStart: entry.uniformStart,
       uniformStep: entry.uniformStep,
@@ -365,15 +527,10 @@ export function createSortedColumnSearchService(args: {
   const refreshPreparedVectorLookup = (
     prepared: PreparedApproximateVectorLookup,
   ): PreparedApproximateVectorLookup => {
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: prepared.sheetName,
-      rowStart: prepared.rowStart,
-      rowEnd: prepared.rowEnd,
-      col: prepared.col,
-    });
+    const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col);
     if (
-      currentSlice.columnVersion === prepared.columnVersion &&
-      currentSlice.structureVersion === prepared.structureVersion
+      currentVersions.columnVersion === prepared.columnVersion &&
+      currentVersions.structureVersion === prepared.structureVersion
     ) {
       return prepared;
     }
@@ -646,6 +803,54 @@ export function createSortedColumnSearchService(args: {
         }
       }
       return { handled: true, position: best === -1 ? undefined : best + 1 };
+    },
+    invalidateColumn(request) {
+      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col));
+      if (!cacheKeys) {
+        return;
+      }
+      for (const cacheKey of cacheKeys) {
+        replaceColumnIndex(cacheKey, undefined);
+      }
+    },
+    recordLiteralWrite(request) {
+      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col));
+      if (!cacheKeys || cacheKeys.size === 0) {
+        return;
+      }
+      const currentVersions = getCurrentColumnVersions(request.sheetName, request.col);
+      const oldComparable = normalizeApproximateComparableValue(
+        request.oldValue,
+        (id) => args.state.strings.get(id),
+        request.oldStringId,
+      );
+      const newComparable = normalizeApproximateComparableValue(
+        request.newValue,
+        (id) => args.state.strings.get(id),
+        request.newStringId,
+      );
+      for (const cacheKey of cacheKeys) {
+        const entry = approximateColumnIndices.get(cacheKey);
+        if (!entry) {
+          continue;
+        }
+        if (entry.structureVersion !== currentVersions.structureVersion) {
+          replaceColumnIndex(cacheKey, undefined);
+          continue;
+        }
+        if (
+          !updateEntryLiteralWrite(
+            entry,
+            request.row,
+            oldComparable,
+            newComparable,
+            currentVersions.columnVersion,
+            currentVersions.structureVersion,
+          )
+        ) {
+          replaceColumnIndex(cacheKey, undefined);
+        }
+      }
     },
   };
 }

@@ -3,11 +3,12 @@ import { compileFormula, compileFormulaAst, parseFormula } from "@bilig/formula"
 import { createEngineCompiledPlanService } from "../engine/services/compiled-plan-service.js";
 
 describe("EngineCompiledPlanService", () => {
-  it("reuses one immutable compiled plan for identical compiled formulas and releases it by refcount", () => {
+  it("reuses one immutable compiled plan for the same compiled object identity and releases it by refcount", () => {
     const service = createEngineCompiledPlanService();
+    const shared = compileFormula("1+2");
 
-    const first = service.intern("1+2", compileFormula("1+2"));
-    const second = service.intern("1+2", compileFormula("1+2"));
+    const first = service.intern("1+2", shared);
+    const second = service.intern("1+2", shared);
     const different = service.intern("2+3", compileFormula("2+3"));
 
     expect(second.id).toBe(first.id);

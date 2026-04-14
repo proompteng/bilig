@@ -1,9 +1,20 @@
 import { Effect } from "effect";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import { ValueTag, type CellRangeRef, type CellValue, type EngineEvent } from "@bilig/protocol";
+import {
+  MAX_COLS,
+  ValueTag,
+  type CellRangeRef,
+  type CellValue,
+  type EngineEvent,
+} from "@bilig/protocol";
 import type { EngineCellMutationRef } from "../../cell-mutations-at.js";
-import { makeCellEntity } from "../../entity-ids.js";
+import {
+  entityPayload,
+  makeCellEntity,
+  makeExactLookupColumnEntity,
+  makeSortedLookupColumnEntity,
+} from "../../entity-ids.js";
 import {
   batchOpOrder,
   compareOpOrder,
@@ -89,8 +100,8 @@ function assertNever(value: never): never {
 }
 
 function collectTrackedDependents(
-  registry: Map<string, Set<number>>,
-  keys: readonly string[],
+  registry: Map<string | number, Set<number>>,
+  keys: readonly (string | number)[],
 ): number[] {
   const candidates = new Set<number>();
   keys.forEach((key) => {
@@ -99,6 +110,10 @@ function collectTrackedDependents(
     });
   });
   return [...candidates];
+}
+
+function aggregateColumnDependencyKey(sheetId: number, col: number): number {
+  return sheetId * MAX_COLS + col;
 }
 
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
@@ -176,6 +191,39 @@ function withOptionalLookupStringIds(request: {
   };
 }
 
+function normalizeExactLookupKey(
+  value: CellValue,
+  lookupString: (id: number) => string,
+  stringId = 0,
+): string | undefined {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return "e:";
+    case ValueTag.Number:
+      return `n:${Object.is(value.value, -0) ? 0 : value.value}`;
+    case ValueTag.Boolean:
+      return value.value ? "b:1" : "b:0";
+    case ValueTag.String:
+      return `s:${(stringId !== 0 ? lookupString(stringId) : value.value).toUpperCase()}`;
+    case ValueTag.Error:
+      return undefined;
+  }
+}
+
+function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[]): U32 {
+  if (extras.length === 0) {
+    return base instanceof Uint32Array ? base : Uint32Array.from(base);
+  }
+  const merged = new Set<number>();
+  for (let index = 0; index < base.length; index += 1) {
+    merged.add(base[index]!);
+  }
+  for (let index = 0; index < extras.length; index += 1) {
+    merged.add(extras[index]!);
+  }
+  return Uint32Array.from(merged);
+}
+
 export function createEngineOperationService(args: {
   readonly state: Pick<
     EngineRuntimeState,
@@ -195,6 +243,9 @@ export function createEngineOperationService(args: {
   >;
   readonly reverseState: {
     readonly reverseSpillEdges: Map<string, Set<number>>;
+    readonly reverseAggregateColumnEdges: Map<number, Set<number>>;
+    readonly reverseExactLookupColumnEdges: Map<number, import("../../edge-arena.js").EdgeSlice>;
+    readonly reverseSortedLookupColumnEdges: Map<number, import("../../edge-arena.js").EdgeSlice>;
   };
   readonly getSelectionState: () => import("@bilig/protocol").SelectionState;
   readonly setSelection: (sheetName: string, address: string) => void;
@@ -249,6 +300,7 @@ export function createEngineOperationService(args: {
     changedCellIndices: readonly number[] | U32,
   ) => readonly import("@bilig/protocol").EngineChangedCell[];
   readonly getChangedInputBuffer: () => U32;
+  readonly ensureRecalcScratchCapacity: (size: number) => void;
   readonly ensureCellTracked: (sheetName: string, address: string) => number;
   readonly estimatePotentialNewCells: (ops: readonly EngineOp[]) => number;
   readonly resetMaterializedCellScratch: (expectedSize: number) => void;
@@ -259,6 +311,7 @@ export function createEngineOperationService(args: {
     changedRoots: readonly number[] | U32,
     kernelSyncRoots?: readonly number[] | U32,
   ) => U32;
+  readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined;
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32;
   readonly flushWasmProgramSync: () => void;
   readonly getBatchMutationDepth: () => number;
@@ -273,7 +326,17 @@ export function createEngineOperationService(args: {
     oldStringId?: number;
     newStringId?: number;
   }) => void;
+  readonly noteSortedLookupLiteralWrite: (request: {
+    sheetName: string;
+    row: number;
+    col: number;
+    oldValue: CellValue;
+    newValue: CellValue;
+    oldStringId?: number;
+    newStringId?: number;
+  }) => void;
   readonly invalidateExactLookupColumn: (request: { sheetName: string; col: number }) => void;
+  readonly invalidateSortedLookupColumn: (request: { sheetName: string; col: number }) => void;
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
     args.state.batchListeners.forEach((listener) => listener(batch));
@@ -569,6 +632,178 @@ export function createEngineOperationService(args: {
       changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
     });
     return changedInputCount;
+  };
+
+  const hasTrackedExactLookupDependents = (sheetId: number, col: number): boolean => {
+    const slice = args.reverseState.reverseExactLookupColumnEdges.get(
+      entityPayload(makeExactLookupColumnEntity(sheetId, col)),
+    );
+    return slice !== undefined && slice.len > 0;
+  };
+
+  const hasTrackedSortedLookupDependents = (sheetId: number, col: number): boolean => {
+    const slice = args.reverseState.reverseSortedLookupColumnEdges.get(
+      entityPayload(makeSortedLookupColumnEntity(sheetId, col)),
+    );
+    return slice !== undefined && slice.len > 0;
+  };
+
+  const hasTrackedDirectAggregateDependents = (sheetId: number, col: number): boolean =>
+    (args.reverseState.reverseAggregateColumnEdges.get(aggregateColumnDependencyKey(sheetId, col))
+      ?.size ?? 0) > 0;
+
+  const markAffectedExactLookupDependents = (
+    request: {
+      sheetName: string;
+      row: number;
+      col: number;
+      oldValue: CellValue;
+      newValue: CellValue;
+      oldStringId?: number;
+      newStringId?: number;
+    },
+    formulaChangedCount: number,
+  ): number => {
+    const sheet = args.state.workbook.getSheet(request.sheetName);
+    if (!sheet) {
+      return formulaChangedCount;
+    }
+    const dependents = args.collectFormulaDependents(
+      makeExactLookupColumnEntity(sheet.id, request.col),
+    );
+    if (dependents.length === 0) {
+      return formulaChangedCount;
+    }
+    const oldKey = normalizeExactLookupKey(
+      request.oldValue,
+      (id) => args.state.strings.get(id),
+      request.oldStringId,
+    );
+    const newKey = normalizeExactLookupKey(
+      request.newValue,
+      (id) => args.state.strings.get(id),
+      request.newStringId,
+    );
+    for (let index = 0; index < dependents.length; index += 1) {
+      const formulaCellIndex = dependents[index]!;
+      const formula = args.state.formulas.get(formulaCellIndex);
+      const directLookup = formula?.directLookup;
+      if (!directLookup) {
+        continue;
+      }
+      if (directLookup.kind !== "exact" && directLookup.kind !== "exact-uniform-numeric") {
+        continue;
+      }
+      const rowStart =
+        directLookup.kind === "exact" ? directLookup.prepared.rowStart : directLookup.rowStart;
+      const rowEnd =
+        directLookup.kind === "exact" ? directLookup.prepared.rowEnd : directLookup.rowEnd;
+      if (request.row < rowStart || request.row > rowEnd) {
+        continue;
+      }
+      const operand = readCellValueForLookup(directLookup.operandCellIndex);
+      const operandKey = normalizeExactLookupKey(
+        operand.value,
+        (id) => args.state.strings.get(id),
+        operand.stringId,
+      );
+      if (operandKey === undefined || (operandKey !== oldKey && operandKey !== newKey)) {
+        continue;
+      }
+      formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount);
+    }
+    return formulaChangedCount;
+  };
+
+  const markAffectedApproximateLookupDependents = (
+    request: {
+      sheetName: string;
+      row: number;
+      col: number;
+    },
+    formulaChangedCount: number,
+  ): number => {
+    const sheet = args.state.workbook.getSheet(request.sheetName);
+    if (!sheet) {
+      return formulaChangedCount;
+    }
+    const dependents = args.collectFormulaDependents(
+      makeSortedLookupColumnEntity(sheet.id, request.col),
+    );
+    if (dependents.length === 0) {
+      return formulaChangedCount;
+    }
+    for (let index = 0; index < dependents.length; index += 1) {
+      const formulaCellIndex = dependents[index]!;
+      const directLookup = args.state.formulas.get(formulaCellIndex)?.directLookup;
+      if (
+        directLookup?.kind !== "approximate" &&
+        directLookup?.kind !== "approximate-uniform-numeric"
+      ) {
+        continue;
+      }
+      const rowStart =
+        directLookup.kind === "approximate"
+          ? directLookup.prepared.rowStart
+          : directLookup.rowStart;
+      const rowEnd =
+        directLookup.kind === "approximate" ? directLookup.prepared.rowEnd : directLookup.rowEnd;
+      if (request.row < rowStart || request.row > rowEnd) {
+        continue;
+      }
+      formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount);
+    }
+    return formulaChangedCount;
+  };
+
+  const collectAffectedDirectAggregateDependents = (request: {
+    sheetName: string;
+    row: number;
+    col: number;
+  }): number[] => {
+    const sheet = args.state.workbook.getSheet(request.sheetName);
+    if (!sheet) {
+      return [];
+    }
+    const dependents = collectTrackedDependents(args.reverseState.reverseAggregateColumnEdges, [
+      aggregateColumnDependencyKey(sheet.id, request.col),
+    ]);
+    if (dependents.length === 0) {
+      return [];
+    }
+    return dependents.filter((formulaCellIndex) => {
+      const directAggregate = args.state.formulas.get(formulaCellIndex)?.directAggregate;
+      return (
+        directAggregate !== undefined &&
+        directAggregate.sheetName === request.sheetName &&
+        directAggregate.col === request.col &&
+        request.row >= directAggregate.rowStart &&
+        request.row <= directAggregate.rowEnd
+      );
+    });
+  };
+
+  const markAffectedDirectAggregateDependents = (
+    request: {
+      sheetName: string;
+      row: number;
+      col: number;
+    },
+    formulaChangedCount: number,
+    postRecalcDirectFormulaIndices?: Set<number>,
+  ): number => {
+    const dependents = collectAffectedDirectAggregateDependents(request);
+    for (let index = 0; index < dependents.length; index += 1) {
+      const formulaCellIndex = dependents[index]!;
+      if (
+        postRecalcDirectFormulaIndices &&
+        (args.state.formulas.get(formulaCellIndex)?.dependencyIndices.length ?? 0) > 0
+      ) {
+        postRecalcDirectFormulaIndices.add(formulaCellIndex);
+      }
+      formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount);
+    }
+    return formulaChangedCount;
   };
 
   const entityKeyForOp = (op: EngineOp): string => {
@@ -896,6 +1131,7 @@ export function createEngineOperationService(args: {
     const invalidatedRanges: CellRangeRef[] = [];
     const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = [];
     const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = [];
+    const postRecalcDirectFormulaIndices = new Set<number>();
     let refreshAllPivots = false;
     let appliedOps = 0;
     const canSkipOrderChecks = source !== "remote";
@@ -904,6 +1140,7 @@ export function createEngineOperationService(args: {
     args.state.workbook.cellStore.ensureCapacity(
       args.state.workbook.cellStore.size + reservedNewCells,
     );
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1);
     args.resetMaterializedCellScratch(reservedNewCells);
 
     const preparedSheetIdByName = new Map<string, number>();
@@ -1221,12 +1458,13 @@ export function createEngineOperationService(args: {
             break;
           }
           case "setCellValue": {
+            const existingIndex = getPreparedExistingCellIndex(
+              op.sheetName,
+              op.address,
+              preparedCellAddress,
+            );
+            const prior = readCellValueForLookup(existingIndex);
             if (!isRestore) {
-              const existingIndex = getPreparedExistingCellIndex(
-                op.sheetName,
-                op.address,
-                preparedCellAddress,
-              );
               if (
                 op.value === null &&
                 (existingIndex === undefined || isClearCellNoOp(existingIndex))
@@ -1259,6 +1497,42 @@ export function createEngineOperationService(args: {
               args.state.strings,
             );
             args.state.workbook.notifyCellValueWritten(cellIndex);
+            const exactLookupRequest = withOptionalLookupStringIds({
+              sheetName: op.sheetName,
+              row: preparedCellAddress?.row ?? parseCellAddress(op.address, op.sheetName).row,
+              col: preparedCellAddress?.col ?? parseCellAddress(op.address, op.sheetName).col,
+              oldValue: prior.value,
+              newValue: literalToValue(op.value, args.state.strings),
+              oldStringId: prior.stringId,
+              newStringId:
+                typeof op.value === "string"
+                  ? args.state.workbook.cellStore.stringIds[cellIndex]
+                  : undefined,
+            });
+            args.noteExactLookupLiteralWrite(exactLookupRequest);
+            formulaChangedCount = markAffectedExactLookupDependents(
+              exactLookupRequest,
+              formulaChangedCount,
+            );
+            formulaChangedCount = markAffectedDirectAggregateDependents(
+              exactLookupRequest,
+              formulaChangedCount,
+              postRecalcDirectFormulaIndices,
+            );
+            const sortedLookupRequest = withOptionalLookupStringIds({
+              sheetName: op.sheetName,
+              row: exactLookupRequest.row,
+              col: exactLookupRequest.col,
+              oldValue: prior.value,
+              newValue: literalToValue(op.value, args.state.strings),
+              oldStringId: prior.stringId,
+              newStringId: exactLookupRequest.newStringId,
+            });
+            args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+            formulaChangedCount = markAffectedApproximateLookupDependents(
+              sortedLookupRequest,
+              formulaChangedCount,
+            );
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
               ~(
@@ -1279,6 +1553,9 @@ export function createEngineOperationService(args: {
             break;
           }
           case "setCellFormula": {
+            const parsedAddress = parseCellAddress(op.address, op.sheetName);
+            args.invalidateExactLookupColumn({ sheetName: op.sheetName, col: parsedAddress.col });
+            args.invalidateSortedLookupColumn({ sheetName: op.sheetName, col: parsedAddress.col });
             if (!isRestore) {
               const existingIndex = getPreparedExistingCellIndex(
                 op.sheetName,
@@ -1309,8 +1586,32 @@ export function createEngineOperationService(args: {
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted;
               }
+              changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
               topologyChanged = topologyChanged || changedTopology;
+              const aggregateDependents = collectAffectedDirectAggregateDependents({
+                sheetName: op.sheetName,
+                row: parsedAddress.row,
+                col: parsedAddress.col,
+              }).filter((candidate) => candidate !== cellIndex);
+              if (aggregateDependents.length > 0) {
+                formulaChangedCount = args.rebindFormulaCells(
+                  aggregateDependents,
+                  formulaChangedCount,
+                );
+                for (let index = 0; index < aggregateDependents.length; index += 1) {
+                  postRecalcDirectFormulaIndices.add(aggregateDependents[index]!);
+                  formulaChangedCount = args.markFormulaChanged(
+                    aggregateDependents[index]!,
+                    formulaChangedCount,
+                  );
+                  changedInputCount = args.markInputChanged(
+                    aggregateDependents[index]!,
+                    changedInputCount,
+                  );
+                }
+                topologyChanged = true;
+              }
             } catch {
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted;
@@ -1359,6 +1660,7 @@ export function createEngineOperationService(args: {
               op.address,
               preparedCellAddress,
             );
+            const prior = readCellValueForLookup(cellIndex);
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order);
               break;
@@ -1376,6 +1678,41 @@ export function createEngineOperationService(args: {
             );
             topologyChanged = args.removeFormula(cellIndex) || topologyChanged;
             args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
+            args.state.workbook.notifyCellValueWritten(cellIndex);
+            const parsedAddress = parseCellAddress(op.address, op.sheetName);
+            const exactLookupRequest = withOptionalLookupStringIds({
+              sheetName: op.sheetName,
+              row: parsedAddress.row,
+              col: parsedAddress.col,
+              oldValue: prior.value,
+              newValue: emptyValue(),
+              oldStringId: prior.stringId,
+              newStringId: undefined,
+            });
+            args.noteExactLookupLiteralWrite(exactLookupRequest);
+            formulaChangedCount = markAffectedExactLookupDependents(
+              exactLookupRequest,
+              formulaChangedCount,
+            );
+            formulaChangedCount = markAffectedDirectAggregateDependents(
+              exactLookupRequest,
+              formulaChangedCount,
+              postRecalcDirectFormulaIndices,
+            );
+            const sortedLookupRequest = withOptionalLookupStringIds({
+              sheetName: op.sheetName,
+              row: parsedAddress.row,
+              col: parsedAddress.col,
+              oldValue: prior.value,
+              newValue: emptyValue(),
+              oldStringId: prior.stringId,
+              newStringId: undefined,
+            });
+            args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+            formulaChangedCount = markAffectedApproximateLookupDependents(
+              sortedLookupRequest,
+              formulaChangedCount,
+            );
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
               ~(
@@ -1502,6 +1839,19 @@ export function createEngineOperationService(args: {
         args.composeMutationRoots(changedInputCount, formulaChangedCount),
         changedInputArray,
       );
+      if (postRecalcDirectFormulaIndices.size > 0) {
+        const postRecalcChanged: number[] = [];
+        postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+          const changedCellIndices = args.evaluateDirectFormula(cellIndex);
+          postRecalcChanged.push(cellIndex);
+          if (changedCellIndices) {
+            for (let index = 0; index < changedCellIndices.length; index += 1) {
+              postRecalcChanged.push(changedCellIndices[index]!);
+            }
+          }
+        });
+        recalculated = mergeChangedCellIndices(recalculated, postRecalcChanged);
+      }
       recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots);
     }
     const hasEventListeners =
@@ -1558,10 +1908,12 @@ export function createEngineOperationService(args: {
     let explicitChangedCount = 0;
     let topologyChanged = false;
     let compileMs = 0;
+    const postRecalcDirectFormulaIndices = new Set<number>();
     const reservedNewCells = potentialNewCells ?? refs.length;
     args.state.workbook.cellStore.ensureCapacity(
       args.state.workbook.cellStore.size + reservedNewCells,
     );
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1);
     args.resetMaterializedCellScratch(reservedNewCells);
 
     const sheetNameById = new Map<number, string>();
@@ -1592,7 +1944,23 @@ export function createEngineOperationService(args: {
           switch (mutation.kind) {
             case "setCellValue": {
               const sheetName = resolveSheetName(sheetId);
-              const prior = readCellValueForLookup(existingIndex);
+              const hasExactLookupDependents = hasTrackedExactLookupDependents(
+                sheetId,
+                mutation.col,
+              );
+              const hasSortedLookupDependents = hasTrackedSortedLookupDependents(
+                sheetId,
+                mutation.col,
+              );
+              const hasAggregateDependents = hasTrackedDirectAggregateDependents(
+                sheetId,
+                mutation.col,
+              );
+              const needsLookupValueRead =
+                hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents;
+              const prior = needsLookupValueRead
+                ? readCellValueForLookup(existingIndex)
+                : { value: emptyValue(), stringId: undefined };
               if (
                 mutation.value === null &&
                 (existingIndex === undefined || isClearCellNoOp(existingIndex))
@@ -1607,20 +1975,54 @@ export function createEngineOperationService(args: {
                   args.state.strings,
                 );
                 args.state.workbook.notifyCellValueWritten(existingIndex);
-                args.noteExactLookupLiteralWrite(
-                  withOptionalLookupStringIds({
-                    sheetName,
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: prior.value,
-                    newValue: literalToValue(mutation.value, args.state.strings),
-                    oldStringId: prior.stringId,
-                    newStringId:
-                      typeof mutation.value === "string"
-                        ? args.state.workbook.cellStore.stringIds[existingIndex]
-                        : undefined,
-                  }),
-                );
+                if (needsLookupValueRead) {
+                  const newValue = literalToValue(mutation.value, args.state.strings);
+                  const newStringId =
+                    typeof mutation.value === "string"
+                      ? args.state.workbook.cellStore.stringIds[existingIndex]
+                      : undefined;
+                  if (hasExactLookupDependents || hasAggregateDependents) {
+                    const exactLookupRequest = withOptionalLookupStringIds({
+                      sheetName,
+                      row: mutation.row,
+                      col: mutation.col,
+                      oldValue: prior.value,
+                      newValue,
+                      oldStringId: prior.stringId,
+                      newStringId,
+                    });
+                    if (hasExactLookupDependents) {
+                      args.noteExactLookupLiteralWrite(exactLookupRequest);
+                      formulaChangedCount = markAffectedExactLookupDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                      );
+                    }
+                    if (hasAggregateDependents) {
+                      formulaChangedCount = markAffectedDirectAggregateDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                        postRecalcDirectFormulaIndices,
+                      );
+                    }
+                  }
+                  if (hasSortedLookupDependents) {
+                    const sortedLookupRequest = withOptionalLookupStringIds({
+                      sheetName,
+                      row: mutation.row,
+                      col: mutation.col,
+                      oldValue: prior.value,
+                      newValue,
+                      oldStringId: prior.stringId,
+                      newStringId,
+                    });
+                    args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                    formulaChangedCount = markAffectedApproximateLookupDependents(
+                      sortedLookupRequest,
+                      formulaChangedCount,
+                    );
+                  }
+                }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
                 if (!isRestore) {
                   explicitChangedCount = args.markExplicitChanged(
@@ -1662,20 +2064,54 @@ export function createEngineOperationService(args: {
                 args.state.strings,
               );
               args.state.workbook.notifyCellValueWritten(cellIndex);
-              args.noteExactLookupLiteralWrite(
-                withOptionalLookupStringIds({
-                  sheetName,
-                  row: mutation.row,
-                  col: mutation.col,
-                  oldValue: prior.value,
-                  newValue: literalToValue(mutation.value, args.state.strings),
-                  oldStringId: prior.stringId,
-                  newStringId:
-                    typeof mutation.value === "string"
-                      ? args.state.workbook.cellStore.stringIds[cellIndex]
-                      : undefined,
-                }),
-              );
+              if (needsLookupValueRead) {
+                const newValue = literalToValue(mutation.value, args.state.strings);
+                const newStringId =
+                  typeof mutation.value === "string"
+                    ? args.state.workbook.cellStore.stringIds[cellIndex]
+                    : undefined;
+                if (hasExactLookupDependents || hasAggregateDependents) {
+                  const exactLookupRequest = withOptionalLookupStringIds({
+                    sheetName,
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue,
+                    oldStringId: prior.stringId,
+                    newStringId,
+                  });
+                  if (hasExactLookupDependents) {
+                    args.noteExactLookupLiteralWrite(exactLookupRequest);
+                    formulaChangedCount = markAffectedExactLookupDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                    );
+                  }
+                  if (hasAggregateDependents) {
+                    formulaChangedCount = markAffectedDirectAggregateDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                      postRecalcDirectFormulaIndices,
+                    );
+                  }
+                }
+                if (hasSortedLookupDependents) {
+                  const sortedLookupRequest = withOptionalLookupStringIds({
+                    sheetName,
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue,
+                    oldStringId: prior.stringId,
+                    newStringId,
+                  });
+                  args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                  formulaChangedCount = markAffectedApproximateLookupDependents(
+                    sortedLookupRequest,
+                    formulaChangedCount,
+                  );
+                }
+              }
               args.state.workbook.cellStore.flags[cellIndex] =
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
                 ~(
@@ -1699,7 +2135,12 @@ export function createEngineOperationService(args: {
             }
             case "setCellFormula": {
               const sheetName = resolveSheetName(sheetId);
-              args.invalidateExactLookupColumn({ sheetName, col: mutation.col });
+              if (hasTrackedExactLookupDependents(sheetId, mutation.col)) {
+                args.invalidateExactLookupColumn({ sheetName, col: mutation.col });
+              }
+              if (hasTrackedSortedLookupDependents(sheetId, mutation.col)) {
+                args.invalidateSortedLookupColumn({ sheetName, col: mutation.col });
+              }
               if (!isRestore && existingIndex !== undefined) {
                 changedInputCount = args.markPivotRootsChanged(
                   args.clearPivotForCell(existingIndex),
@@ -1723,8 +2164,32 @@ export function createEngineOperationService(args: {
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted;
                 }
+                changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
                 formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
                 topologyChanged = topologyChanged || changedTopology;
+                const aggregateDependents = collectAffectedDirectAggregateDependents({
+                  sheetName,
+                  row: mutation.row,
+                  col: mutation.col,
+                }).filter((candidate) => candidate !== cellIndex);
+                if (aggregateDependents.length > 0) {
+                  formulaChangedCount = args.rebindFormulaCells(
+                    aggregateDependents,
+                    formulaChangedCount,
+                  );
+                  for (let index = 0; index < aggregateDependents.length; index += 1) {
+                    postRecalcDirectFormulaIndices.add(aggregateDependents[index]!);
+                    formulaChangedCount = args.markFormulaChanged(
+                      aggregateDependents[index]!,
+                      formulaChangedCount,
+                    );
+                    changedInputCount = args.markInputChanged(
+                      aggregateDependents[index]!,
+                      changedInputCount,
+                    );
+                  }
+                  topologyChanged = true;
+                }
               } catch {
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted;
@@ -1742,24 +2207,73 @@ export function createEngineOperationService(args: {
               break;
             }
             case "clearCell": {
-              const prior = readCellValueForLookup(existingIndex);
+              const hasExactLookupDependents = hasTrackedExactLookupDependents(
+                sheetId,
+                mutation.col,
+              );
+              const hasSortedLookupDependents = hasTrackedSortedLookupDependents(
+                sheetId,
+                mutation.col,
+              );
+              const hasAggregateDependents = hasTrackedDirectAggregateDependents(
+                sheetId,
+                mutation.col,
+              );
+              const needsLookupValueRead =
+                hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents;
+              const prior = needsLookupValueRead
+                ? readCellValueForLookup(existingIndex)
+                : { value: emptyValue(), stringId: undefined };
               if (existingIndex !== undefined && isClearCellNoOp(existingIndex)) {
                 break;
               }
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
                 args.state.workbook.notifyCellValueWritten(existingIndex);
-                args.noteExactLookupLiteralWrite(
-                  withOptionalLookupStringIds({
-                    sheetName: resolveSheetName(sheetId),
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: prior.value,
-                    newValue: emptyValue(),
-                    oldStringId: prior.stringId,
-                    newStringId: undefined,
-                  }),
-                );
+                if (needsLookupValueRead) {
+                  const sheetName = resolveSheetName(sheetId);
+                  if (hasExactLookupDependents || hasAggregateDependents) {
+                    const exactLookupRequest = withOptionalLookupStringIds({
+                      sheetName,
+                      row: mutation.row,
+                      col: mutation.col,
+                      oldValue: prior.value,
+                      newValue: emptyValue(),
+                      oldStringId: prior.stringId,
+                      newStringId: undefined,
+                    });
+                    if (hasExactLookupDependents) {
+                      args.noteExactLookupLiteralWrite(exactLookupRequest);
+                      formulaChangedCount = markAffectedExactLookupDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                      );
+                    }
+                    if (hasAggregateDependents) {
+                      formulaChangedCount = markAffectedDirectAggregateDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                        postRecalcDirectFormulaIndices,
+                      );
+                    }
+                  }
+                  if (hasSortedLookupDependents) {
+                    const sortedLookupRequest = withOptionalLookupStringIds({
+                      sheetName,
+                      row: mutation.row,
+                      col: mutation.col,
+                      oldValue: prior.value,
+                      newValue: emptyValue(),
+                      oldStringId: prior.stringId,
+                      newStringId: undefined,
+                    });
+                    args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                    formulaChangedCount = markAffectedApproximateLookupDependents(
+                      sortedLookupRequest,
+                      formulaChangedCount,
+                    );
+                  }
+                }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount);
                 if (!isRestore) {
                   explicitChangedCount = args.markExplicitChanged(
@@ -1797,17 +2311,50 @@ export function createEngineOperationService(args: {
               topologyChanged = args.removeFormula(existingIndex) || topologyChanged;
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue());
               args.state.workbook.notifyCellValueWritten(existingIndex);
-              args.noteExactLookupLiteralWrite(
-                withOptionalLookupStringIds({
-                  sheetName: resolveSheetName(sheetId),
-                  row: mutation.row,
-                  col: mutation.col,
-                  oldValue: prior.value,
-                  newValue: emptyValue(),
-                  oldStringId: prior.stringId,
-                  newStringId: undefined,
-                }),
-              );
+              if (needsLookupValueRead) {
+                const sheetName = resolveSheetName(sheetId);
+                if (hasExactLookupDependents || hasAggregateDependents) {
+                  const exactLookupRequest = withOptionalLookupStringIds({
+                    sheetName,
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue: emptyValue(),
+                    oldStringId: prior.stringId,
+                    newStringId: undefined,
+                  });
+                  if (hasExactLookupDependents) {
+                    args.noteExactLookupLiteralWrite(exactLookupRequest);
+                    formulaChangedCount = markAffectedExactLookupDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                    );
+                  }
+                  if (hasAggregateDependents) {
+                    formulaChangedCount = markAffectedDirectAggregateDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                      postRecalcDirectFormulaIndices,
+                    );
+                  }
+                }
+                if (hasSortedLookupDependents) {
+                  const sortedLookupRequest = withOptionalLookupStringIds({
+                    sheetName,
+                    row: mutation.row,
+                    col: mutation.col,
+                    oldValue: prior.value,
+                    newValue: emptyValue(),
+                    oldStringId: prior.stringId,
+                    newStringId: undefined,
+                  });
+                  args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                  formulaChangedCount = markAffectedApproximateLookupDependents(
+                    sortedLookupRequest,
+                    formulaChangedCount,
+                  );
+                }
+              }
               args.state.workbook.cellStore.flags[existingIndex] =
                 (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
                 ~(
@@ -1875,6 +2422,19 @@ export function createEngineOperationService(args: {
         args.composeMutationRoots(changedInputCount, formulaChangedCount),
         changedInputArray,
       );
+      if (postRecalcDirectFormulaIndices.size > 0) {
+        const postRecalcChanged: number[] = [];
+        postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+          const changedCellIndices = args.evaluateDirectFormula(cellIndex);
+          postRecalcChanged.push(cellIndex);
+          if (changedCellIndices) {
+            for (let index = 0; index < changedCellIndices.length; index += 1) {
+              postRecalcChanged.push(changedCellIndices[index]!);
+            }
+          }
+        });
+        recalculated = mergeChangedCellIndices(recalculated, postRecalcChanged);
+      }
       recalculated = args.reconcilePivotOutputs(recalculated, false);
     }
     const hasEventListeners =

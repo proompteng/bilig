@@ -202,6 +202,15 @@ export interface RuntimeDirectCriteriaDescriptor {
   readonly criteriaPairs: readonly RuntimeDirectCriteriaPair[];
 }
 
+export interface RuntimeDirectAggregateDescriptor {
+  readonly aggregateKind: "sum" | "average" | "count" | "min" | "max";
+  readonly sheetName: string;
+  readonly rowStart: number;
+  readonly rowEnd: number;
+  readonly col: number;
+  readonly length: number;
+}
+
 export interface CompiledPlanRecord {
   readonly id: number;
   readonly source: string;
@@ -227,6 +236,7 @@ export interface RuntimeFormula {
   rangeListOffset: number;
   rangeListLength: number;
   directLookup: RuntimeDirectLookupDescriptor | undefined;
+  directAggregate: RuntimeDirectAggregateDescriptor | undefined;
   directCriteria: RuntimeDirectCriteriaDescriptor | undefined;
 }
 
@@ -275,8 +285,9 @@ export interface EngineRuntimeState {
   readonly selectionListeners: Set<() => void>;
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
-  readonly useColumnIndex: boolean;
   readonly trackReplicaVersions: boolean;
+  getUseColumnIndex(): boolean;
+  setUseColumnIndex(enabled: boolean): void;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;
@@ -304,8 +315,9 @@ export interface EngineRuntimeStateController {
   readonly selectionListeners: Set<() => void>;
   readonly undoStack: TransactionLogEntry[];
   readonly redoStack: TransactionLogEntry[];
-  readonly useColumnIndex: boolean;
   readonly trackReplicaVersions: boolean;
+  getUseColumnIndex(): boolean;
+  setUseColumnIndex(enabled: boolean): void;
   getSelection(): SelectionState;
   setSelection(selection: SelectionState): void;
   getSyncState(): SyncState;

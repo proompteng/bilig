@@ -24,6 +24,11 @@ import type {
 import { EngineFormulaEvaluationError } from "../errors.js";
 import type { CriterionRangeCacheService } from "./criterion-range-cache-service.js";
 import type { ExactColumnIndexService } from "./exact-column-index-service.js";
+import type { RangeAggregateCacheService } from "./range-aggregate-cache-service.js";
+
+function decodeErrorCode(rawCode: number | undefined): ErrorCode {
+  return rawCode ?? ErrorCode.None;
+}
 import type {
   EngineRuntimeColumnStoreService,
   RuntimeColumnSlice,
@@ -88,10 +93,32 @@ function referenceReplacementKey(sheetName: string, address: string): string {
   return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
 }
 
+function cellValuesEqual(left: CellValue, right: CellValue): boolean {
+  if (left.tag !== right.tag) {
+    return false;
+  }
+  switch (left.tag) {
+    case ValueTag.Empty:
+      return true;
+    case ValueTag.Number:
+      return right.tag === ValueTag.Number && left.value === right.value;
+    case ValueTag.Boolean:
+      return right.tag === ValueTag.Boolean && left.value === right.value;
+    case ValueTag.String:
+      return right.tag === ValueTag.String && left.value === right.value;
+    case ValueTag.Error:
+      return right.tag === ValueTag.Error && left.code === right.code;
+  }
+}
+
 export function createEngineFormulaEvaluationService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "strings" | "formulas" | "useColumnIndex">;
+  readonly state: Pick<
+    EngineRuntimeState,
+    "workbook" | "strings" | "formulas" | "getUseColumnIndex"
+  >;
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
   readonly criterionCache: CriterionRangeCacheService;
+  readonly aggregateCache: RangeAggregateCacheService;
   readonly exactLookup: Pick<
     ExactColumnIndexService,
     "findVectorMatch" | "prepareVectorLookup" | "findPreparedVectorMatch"
@@ -177,15 +204,12 @@ export function createEngineFormulaEvaluationService(args: {
     directLookup: Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact" }>,
   ): PreparedExactVectorLookup => {
     const prepared = directLookup.prepared;
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: prepared.sheetName,
-      rowStart: prepared.rowStart,
-      rowEnd: prepared.rowEnd,
-      col: prepared.col,
-    });
+    const lookupSheet = args.state.workbook.getSheet(prepared.sheetName);
+    const currentColumnVersion = lookupSheet?.columnVersions[prepared.col] ?? 0;
+    const currentStructureVersion = lookupSheet?.structureVersion ?? 0;
     if (
-      currentSlice.columnVersion === prepared.columnVersion &&
-      currentSlice.structureVersion === prepared.structureVersion
+      currentColumnVersion === prepared.columnVersion &&
+      currentStructureVersion === prepared.structureVersion
     ) {
       return prepared;
     }
@@ -203,15 +227,12 @@ export function createEngineFormulaEvaluationService(args: {
     directLookup: Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate" }>,
   ): PreparedApproximateVectorLookup => {
     const prepared = directLookup.prepared;
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: prepared.sheetName,
-      rowStart: prepared.rowStart,
-      rowEnd: prepared.rowEnd,
-      col: prepared.col,
-    });
+    const lookupSheet = args.state.workbook.getSheet(prepared.sheetName);
+    const currentColumnVersion = lookupSheet?.columnVersions[prepared.col] ?? 0;
+    const currentStructureVersion = lookupSheet?.structureVersion ?? 0;
     if (
-      currentSlice.columnVersion === prepared.columnVersion &&
-      currentSlice.structureVersion === prepared.structureVersion
+      currentColumnVersion === prepared.columnVersion &&
+      currentStructureVersion === prepared.structureVersion
     ) {
       return prepared;
     }
@@ -234,15 +255,12 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact-uniform-numeric" }>
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "exact" }> => {
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: directLookup.sheetName,
-      rowStart: directLookup.rowStart,
-      rowEnd: directLookup.rowEnd,
-      col: directLookup.col,
-    });
+    const lookupSheet = args.state.workbook.getSheet(directLookup.sheetName);
+    const currentColumnVersion = lookupSheet?.columnVersions[directLookup.col] ?? 0;
+    const currentStructureVersion = lookupSheet?.structureVersion ?? 0;
     if (
-      currentSlice.columnVersion === directLookup.columnVersion &&
-      currentSlice.structureVersion === directLookup.structureVersion
+      currentColumnVersion === directLookup.columnVersion &&
+      currentStructureVersion === directLookup.structureVersion
     ) {
       return directLookup;
     }
@@ -284,15 +302,12 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate-uniform-numeric" }>
     | Extract<NonNullable<RuntimeFormula["directLookup"]>, { kind: "approximate" }> => {
-    const currentSlice = args.runtimeColumnStore.getColumnSlice({
-      sheetName: directLookup.sheetName,
-      rowStart: directLookup.rowStart,
-      rowEnd: directLookup.rowEnd,
-      col: directLookup.col,
-    });
+    const lookupSheet = args.state.workbook.getSheet(directLookup.sheetName);
+    const currentColumnVersion = lookupSheet?.columnVersions[directLookup.col] ?? 0;
+    const currentStructureVersion = lookupSheet?.structureVersion ?? 0;
     if (
-      currentSlice.columnVersion === directLookup.columnVersion &&
-      currentSlice.structureVersion === directLookup.structureVersion
+      currentColumnVersion === directLookup.columnVersion &&
+      currentStructureVersion === directLookup.structureVersion
     ) {
       return directLookup;
     }
@@ -369,7 +384,7 @@ export function createEngineFormulaEvaluationService(args: {
     lookupValue: CellValue,
     range: RangeBuiltinArgument,
   ): number | undefined => {
-    if (!args.state.useColumnIndex || range.refKind !== "cells" || range.cols !== 1) {
+    if (!args.state.getUseColumnIndex() || range.refKind !== "cells" || range.cols !== 1) {
       return undefined;
     }
     if (!range.sheetName || !range.start || !range.end) {
@@ -385,11 +400,9 @@ export function createEngineFormulaEvaluationService(args: {
     return result.handled ? result.position : undefined;
   };
 
-  const lookupBuiltinResolver = args.state.useColumnIndex
-    ? createLookupBuiltinResolver({
-        resolveIndexedExactMatch,
-      })
-    : undefined;
+  const lookupBuiltinResolver = createLookupBuiltinResolver({
+    resolveIndexedExactMatch,
+  });
 
   const resolveExactVectorMatch = (
     _formula: RuntimeFormula,
@@ -815,6 +828,130 @@ export function createEngineFormulaEvaluationService(args: {
     return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
   };
 
+  const tryEvaluateDirectAggregate = (formula: RuntimeFormula): CellValue | undefined => {
+    const directAggregate = formula.directAggregate;
+    if (!directAggregate) {
+      return undefined;
+    }
+    if (formula.dependencyIndices.length > 0) {
+      const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName);
+      if (!aggregateSheet) {
+        return undefined;
+      }
+      let sum = 0;
+      let count = 0;
+      let averageCount = 0;
+      let minimum = Number.POSITIVE_INFINITY;
+      let maximum = Number.NEGATIVE_INFINITY;
+      for (let row = directAggregate.rowStart; row <= directAggregate.rowEnd; row += 1) {
+        const memberCellIndex = aggregateSheet.grid.get(row, directAggregate.col);
+        const value: CellValue =
+          memberCellIndex === -1 ? { tag: ValueTag.Empty } : readCellValueByIndex(memberCellIndex);
+        switch (value.tag) {
+          case ValueTag.Number:
+            sum += value.value;
+            count += 1;
+            averageCount += 1;
+            minimum = Math.min(minimum, value.value);
+            maximum = Math.max(maximum, value.value);
+            break;
+          case ValueTag.Boolean: {
+            const booleanNumber = value.value ? 1 : 0;
+            sum += booleanNumber;
+            count += 1;
+            averageCount += 1;
+            minimum = Math.min(minimum, booleanNumber);
+            maximum = Math.max(maximum, booleanNumber);
+            break;
+          }
+          case ValueTag.Empty:
+            averageCount += 1;
+            minimum = Math.min(minimum, 0);
+            maximum = Math.max(maximum, 0);
+            break;
+          case ValueTag.Error:
+            if (
+              directAggregate.aggregateKind === "sum" ||
+              directAggregate.aggregateKind === "average"
+            ) {
+              return directErrorResult(value.code);
+            }
+            break;
+          case ValueTag.String:
+            break;
+        }
+      }
+      if (directAggregate.aggregateKind === "sum") {
+        return directNumberResult(sum);
+      }
+      if (directAggregate.aggregateKind === "count") {
+        return directNumberResult(count);
+      }
+      if (directAggregate.aggregateKind === "average") {
+        return averageCount === 0
+          ? directErrorResult(ErrorCode.Div0)
+          : directNumberResult(sum / averageCount);
+      }
+      if (directAggregate.aggregateKind === "min") {
+        return directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum);
+      }
+      return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
+    }
+    const sharedPrefixStart =
+      directAggregate.aggregateKind === "sum" ||
+      directAggregate.aggregateKind === "count" ||
+      directAggregate.aggregateKind === "average"
+        ? 0
+        : directAggregate.rowStart;
+    const prefix = args.aggregateCache.getOrBuildPrefix({
+      sheetName: directAggregate.sheetName,
+      rowStart: sharedPrefixStart,
+      rowEnd: directAggregate.rowEnd,
+      col: directAggregate.col,
+    });
+    const endOffset = directAggregate.rowEnd - sharedPrefixStart;
+    const startOffset = directAggregate.rowStart - sharedPrefixStart - 1;
+    const errorCode = prefix.prefixErrorCodes[endOffset];
+    const prefixSum = prefix.prefixSums[endOffset] ?? 0;
+    const prefixCount = prefix.prefixCount[endOffset] ?? 0;
+    const prefixAverageCount = prefix.prefixAverageCount[endOffset] ?? 0;
+    const prefixErrorCount = prefix.prefixErrorCounts[endOffset] ?? 0;
+    const sum = startOffset >= 0 ? prefixSum - (prefix.prefixSums[startOffset] ?? 0) : prefixSum;
+    const count =
+      startOffset >= 0 ? prefixCount - (prefix.prefixCount[startOffset] ?? 0) : prefixCount;
+    const averageCount =
+      startOffset >= 0
+        ? prefixAverageCount - (prefix.prefixAverageCount[startOffset] ?? 0)
+        : prefixAverageCount;
+    const errorCount =
+      startOffset >= 0
+        ? prefixErrorCount - (prefix.prefixErrorCounts[startOffset] ?? 0)
+        : prefixErrorCount;
+    if (
+      errorCode !== ErrorCode.None &&
+      errorCount > 0 &&
+      (directAggregate.aggregateKind === "sum" || directAggregate.aggregateKind === "average")
+    ) {
+      return startOffset >= 0 ? undefined : directErrorResult(decodeErrorCode(errorCode));
+    }
+    if (directAggregate.aggregateKind === "sum") {
+      return directNumberResult(sum);
+    }
+    if (directAggregate.aggregateKind === "count") {
+      return directNumberResult(count);
+    }
+    if (directAggregate.aggregateKind === "min") {
+      const minimum = prefix.prefixMinimums[endOffset] ?? Number.POSITIVE_INFINITY;
+      return directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum);
+    }
+    if (directAggregate.aggregateKind === "max") {
+      const maximum = prefix.prefixMaximums[endOffset] ?? Number.NEGATIVE_INFINITY;
+      return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
+    }
+    const denominator = averageCount;
+    return denominator === 0 ? directNumberResult(0) : directNumberResult(sum / denominator);
+  };
+
   const resolveStructuredReferenceNow = (
     tableName: string,
     columnName: string,
@@ -1002,6 +1139,9 @@ export function createEngineFormulaEvaluationService(args: {
     formula: RuntimeFormula,
     result: EvaluationResult,
   ): number[] => {
+    const beforeValue = args.state.workbook.cellStore.getValue(cellIndex, (id) =>
+      id === 0 ? "" : args.state.strings.get(id),
+    );
     const materialization = isArrayValue(result)
       ? args.materializeSpill(cellIndex, result)
       : formula.compiled.producesSpill
@@ -1024,10 +1164,19 @@ export function createEngineFormulaEvaluationService(args: {
         ? args.state.strings.intern(materialization.ownerValue.value)
         : 0,
     );
+    if (!cellValuesEqual(beforeValue, materialization.ownerValue)) {
+      args.state.workbook.notifyCellValueWritten(cellIndex);
+    }
+    for (let index = 0; index < materialization.changedCellIndices.length; index += 1) {
+      args.state.workbook.notifyCellValueWritten(materialization.changedCellIndices[index]!);
+    }
     return materialization.changedCellIndices;
   };
 
   const storeDirectScalarResult = (cellIndex: number, result: CellValue): number[] => {
+    const beforeValue = args.state.workbook.cellStore.getValue(cellIndex, (id) =>
+      id === 0 ? "" : args.state.strings.get(id),
+    );
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
       ~(CellFlags.SpillChild | CellFlags.PivotOutput);
@@ -1036,6 +1185,9 @@ export function createEngineFormulaEvaluationService(args: {
       result,
       result.tag === ValueTag.String ? args.state.strings.intern(result.value) : 0,
     );
+    if (!cellValuesEqual(beforeValue, result)) {
+      args.state.workbook.notifyCellValueWritten(cellIndex);
+    }
     return emptyChangedCellIndices;
   };
 
@@ -1045,7 +1197,9 @@ export function createEngineFormulaEvaluationService(args: {
       return undefined;
     }
     const directResult =
-      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectCriteriaAggregate(formula);
+      tryEvaluateDirectVectorLookup(formula) ??
+      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectCriteriaAggregate(formula);
     return directResult === undefined
       ? undefined
       : formula.compiled.producesSpill
@@ -1063,7 +1217,9 @@ export function createEngineFormulaEvaluationService(args: {
     }
 
     const directResult =
-      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectCriteriaAggregate(formula);
+      tryEvaluateDirectVectorLookup(formula) ??
+      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectCriteriaAggregate(formula);
     if (directResult !== undefined) {
       return storeFormulaResult(cellIndex, formula, directResult);
     }
@@ -1141,11 +1297,7 @@ export function createEngineFormulaEvaluationService(args: {
         }
         return resolveApproximateVectorMatch(formula, request);
       },
-      ...(lookupBuiltinResolver
-        ? {
-            resolveLookupBuiltin: lookupBuiltinResolver,
-          }
-        : {}),
+      resolveLookupBuiltin: lookupBuiltinResolver,
     };
     const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
     return storeFormulaResult(cellIndex, formula, result);

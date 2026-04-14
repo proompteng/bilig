@@ -3,8 +3,12 @@ import { ErrorCode } from "@bilig/protocol";
 import type { FormulaNode } from "../ast.js";
 import { compileFormula, type CompiledFormula } from "../compiler.js";
 import type { JsPlanInstruction } from "../js-evaluator.js";
+import { parseFormula } from "../parser.js";
 import {
+  buildRelativeFormulaTemplateKey,
+  buildRelativeFormulaTemplateKeyFromAst,
   renameFormulaSheetReferences,
+  translateCompiledFormula,
   rewriteAddressForStructuralTransform,
   rewriteCompiledFormulaForStructuralTransform,
   rewriteFormulaForStructuralTransform,
@@ -97,6 +101,19 @@ describe("translateFormulaReferences", () => {
     );
     expect(() => translateFormulaReferences("1:1", -1, 0)).toThrow(
       "Translated reference moved outside worksheet bounds: 1",
+    );
+  });
+
+  it("builds one template key for repeated relative formula shapes", () => {
+    expect(buildRelativeFormulaTemplateKey("A1+B1", 0, 2)).toBe(
+      buildRelativeFormulaTemplateKey("A2+B2", 1, 2),
+    );
+    expect(buildRelativeFormulaTemplateKey("SUM(A1:A1)", 0, 4)).not.toBe(
+      buildRelativeFormulaTemplateKey("SUM(A1:A2)", 1, 4),
+    );
+    const ast = parseFormula("A3+B$1");
+    expect(buildRelativeFormulaTemplateKeyFromAst(ast, 2, 2)).toBe(
+      buildRelativeFormulaTemplateKey("A3+B$1", 2, 2),
     );
   });
 
@@ -656,9 +673,24 @@ describe("translateFormulaReferences", () => {
     expect(rewritten.compiled.deps).toEqual(["A7"]);
     expect(rewritten.compiled.symbolicRefs).toEqual(["A7"]);
     expect(rewritten.compiled.parsedDeps).toEqual([
-      { kind: "cell", address: "A7", row: 6, col: 0 },
+      {
+        kind: "cell",
+        address: "A7",
+        row: 6,
+        col: 0,
+        rowAbsolute: false,
+        colAbsolute: false,
+      },
     ]);
-    expect(rewritten.compiled.parsedSymbolicRefs).toEqual([{ address: "A7", row: 6, col: 0 }]);
+    expect(rewritten.compiled.parsedSymbolicRefs).toEqual([
+      {
+        address: "A7",
+        row: 6,
+        col: 0,
+        rowAbsolute: false,
+        colAbsolute: false,
+      },
+    ]);
     expect(rewritten.compiled.jsPlan).toEqual([
       { opcode: "push-cell", address: "A7" },
       { opcode: "return" },
@@ -994,5 +1026,27 @@ describe("translateFormulaReferences", () => {
         { kind: "ErrorLiteral", code: ErrorCode.Ref },
       ],
     });
+  });
+
+  it("translates compiled formulas by row and column offsets without recompiling", () => {
+    const compiled = compileFormula("SUM(A1:B1)+C1");
+    const translated = translateCompiledFormula(compiled, 2, 1);
+
+    expect(translated.source).toBe("SUM(B3:C3)+D3");
+    expect(translated.compiled.deps).toEqual(["B3:C3", "D3"]);
+    expect(translated.compiled.symbolicRefs).toEqual(["D3"]);
+    expect(translated.compiled.symbolicRanges).toEqual(["B3:C3"]);
+    expect(translated.compiled.jsPlan).toEqual([
+      { opcode: "push-range", start: "B3", end: "C3", refKind: "cells" },
+      {
+        opcode: "call",
+        callee: "SUM",
+        argc: 1,
+        argRefs: [{ kind: "range", start: "B3", end: "C3", refKind: "cells" }],
+      },
+      { opcode: "push-cell", address: "D3" },
+      { opcode: "binary", operator: "+" },
+      { opcode: "return" },
+    ]);
   });
 });

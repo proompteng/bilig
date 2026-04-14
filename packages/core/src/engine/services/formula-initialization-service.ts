@@ -25,9 +25,22 @@ export function createEngineFormulaInitializationService(args: {
     "workbook" | "formulas" | "getLastMetrics" | "setLastMetrics"
   >;
   readonly beginMutationCollection: () => void;
+  readonly ensureRecalcScratchCapacity: (size: number) => void;
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number;
   readonly resetMaterializedCellScratch: (expectedSize: number) => void;
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void;
+  readonly bindPreparedFormula: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: import("@bilig/formula").CompiledFormula,
+  ) => void;
+  readonly compileTemplateFormula: (
+    source: string,
+    row: number,
+    col: number,
+  ) => import("@bilig/formula").CompiledFormula;
+  readonly clearTemplateFormulaCache: () => void;
   readonly removeFormula: (cellIndex: number) => boolean;
   readonly setInvalidFormulaValue: (cellIndex: number) => void;
   readonly markInputChanged: (cellIndex: number, count: number) => number;
@@ -64,6 +77,7 @@ export function createEngineFormulaInitializationService(args: {
     args.state.workbook.cellStore.ensureCapacity(
       args.state.workbook.cellStore.size + reservedNewCells,
     );
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1);
     args.resetMaterializedCellScratch(reservedNewCells);
 
     const sheetNameById = new Map<number, string>();
@@ -82,6 +96,7 @@ export function createEngineFormulaInitializationService(args: {
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
     try {
+      args.clearTemplateFormulaCache();
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
         refs.forEach((ref) => {
           if (ref.mutation.kind !== "setCellFormula") {
@@ -97,7 +112,12 @@ export function createEngineFormulaInitializationService(args: {
           );
           const compileStarted = performance.now();
           try {
-            args.bindFormula(cellIndex, sheetName, ref.mutation.formula);
+            args.bindPreparedFormula(
+              cellIndex,
+              sheetName,
+              ref.mutation.formula,
+              args.compileTemplateFormula(ref.mutation.formula, ref.mutation.row, ref.mutation.col),
+            );
             compileMs += performance.now() - compileStarted;
             formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount);
             topologyChanged = true;

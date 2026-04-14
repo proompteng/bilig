@@ -9,7 +9,14 @@ import {
   renameFormulaSheetReferences,
   serializeFormula,
 } from "@bilig/formula";
-import { FormulaMode, ErrorCode, Opcode, ValueTag, type CellValue } from "@bilig/protocol";
+import {
+  FormulaMode,
+  ErrorCode,
+  MAX_COLS,
+  Opcode,
+  ValueTag,
+  type CellValue,
+} from "@bilig/protocol";
 import { CellFlags } from "../../cell-store.js";
 import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
 import { resolveRuntimeDirectLookupBinding } from "../direct-vector-lookup.js";
@@ -34,6 +41,7 @@ import { normalizeDefinedName } from "../../workbook-store.js";
 import {
   type EngineRuntimeState,
   type MaterializedDependencies,
+  type RuntimeDirectAggregateDescriptor,
   type RuntimeDirectLookupDescriptor,
   type RuntimeDirectCriteriaDescriptor,
   type RuntimeFormula,
@@ -84,6 +92,11 @@ export interface EngineFormulaBindingService {
     source: string,
     compiled: CompiledFormula,
   ) => boolean;
+  readonly rewriteFormulaCompiledPreservingBindingNow: (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+  ) => boolean;
   readonly bindInitialFormulaNow: (
     cellIndex: number,
     ownerSheetName: string,
@@ -115,9 +128,9 @@ function formulaBindingErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
 
-function appendTrackedReverseEdge(
-  registry: Map<string, Set<number>>,
-  key: string,
+function appendTrackedReverseEdge<Key extends string | number>(
+  registry: Map<Key, Set<number>>,
+  key: Key,
   dependentCellIndex: number,
 ): void {
   const existing = registry.get(key);
@@ -128,9 +141,9 @@ function appendTrackedReverseEdge(
   registry.set(key, new Set([dependentCellIndex]));
 }
 
-function removeTrackedReverseEdge(
-  registry: Map<string, Set<number>>,
-  key: string,
+function removeTrackedReverseEdge<Key extends string | number>(
+  registry: Map<Key, Set<number>>,
+  key: Key,
   dependentCellIndex: number,
 ): void {
   const existing = registry.get(key);
@@ -143,9 +156,9 @@ function removeTrackedReverseEdge(
   }
 }
 
-function collectTrackedDependents(
-  registry: Map<string, Set<number>>,
-  keys: readonly string[],
+function collectTrackedDependents<Key extends string | number>(
+  registry: Map<Key, Set<number>>,
+  keys: readonly Key[],
 ): number[] {
   const candidates = new Set<number>();
   keys.forEach((key) => {
@@ -154,6 +167,14 @@ function collectTrackedDependents(
     });
   });
   return [...candidates];
+}
+
+function aggregateColumnDependencyKey(sheetId: number, col: number): number {
+  return sheetId * MAX_COLS + col;
+}
+
+function formulaColumnCountKey(sheetId: number, col: number): number {
+  return sheetId * MAX_COLS + col;
 }
 
 function directLookupColumnInfo(directLookup: RuntimeDirectLookupDescriptor): {
@@ -303,6 +324,26 @@ function directCriteriaStructureEqual(
   return true;
 }
 
+function directAggregateStructureEqual(
+  left: RuntimeDirectAggregateDescriptor | undefined,
+  right: RuntimeDirectAggregateDescriptor | undefined,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return (
+    left.aggregateKind === right.aggregateKind &&
+    left.sheetName === right.sheetName &&
+    left.rowStart === right.rowStart &&
+    left.rowEnd === right.rowEnd &&
+    left.col === right.col &&
+    left.length === right.length
+  );
+}
+
 function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
   if (!node) {
     return undefined;
@@ -337,6 +378,60 @@ interface IndexedExactLookupCandidate {
   endRow: number;
   startCol: number;
   endCol: number;
+}
+
+interface PreparedFormulaBindingShape {
+  readonly dependencies: {
+    readonly rangeDependencies: ArrayLike<number>;
+  };
+  readonly compiled: CompiledFormula;
+  readonly directLookup: RuntimeDirectLookupDescriptor | undefined;
+  readonly directAggregate: RuntimeDirectAggregateDescriptor | undefined;
+  readonly directCriteria: RuntimeDirectCriteriaDescriptor | undefined;
+}
+
+function hasInPlaceDependencyRebindShape(
+  existing: RuntimeFormula,
+  prepared: PreparedFormulaBindingShape,
+): boolean {
+  return (
+    existing.rangeDependencies.length === 0 &&
+    prepared.dependencies.rangeDependencies.length === 0 &&
+    existing.compiled.symbolicNames.length === 0 &&
+    prepared.compiled.symbolicNames.length === 0 &&
+    existing.compiled.symbolicTables.length === 0 &&
+    prepared.compiled.symbolicTables.length === 0 &&
+    existing.compiled.symbolicSpills.length === 0 &&
+    prepared.compiled.symbolicSpills.length === 0 &&
+    existing.directLookup === undefined &&
+    prepared.directLookup === undefined &&
+    existing.directAggregate === undefined &&
+    prepared.directAggregate === undefined &&
+    existing.directCriteria === undefined &&
+    prepared.directCriteria === undefined
+  );
+}
+
+function canRewriteCompiledPreservingBindings(
+  existing: RuntimeFormula,
+  compiled: CompiledFormula,
+): boolean {
+  return (
+    existing.rangeDependencies.length === 0 &&
+    existing.compiled.symbolicNames.length === 0 &&
+    existing.compiled.symbolicTables.length === 0 &&
+    existing.compiled.symbolicSpills.length === 0 &&
+    compiled.symbolicNames.length === 0 &&
+    compiled.symbolicTables.length === 0 &&
+    compiled.symbolicSpills.length === 0 &&
+    compiled.symbolicRanges.length === 0 &&
+    existing.directLookup === undefined &&
+    existing.directAggregate === undefined &&
+    existing.directCriteria === undefined &&
+    existing.programLength === compiled.program.length &&
+    existing.constNumberLength === compiled.constants.length &&
+    existing.compiled.mode === compiled.mode
+  );
 }
 
 function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedExactLookupCandidate[] {
@@ -423,14 +518,10 @@ interface DirectApproximateLookupCandidate {
 }
 
 type ParsedCompiledFormula = ReturnType<typeof compileFormula> & {
-  parsedDeps?: Array<{
-    address: string;
-    kind: "cell";
-    sheetName?: string;
-    row?: number;
-    col?: number;
-  }>;
-  parsedSymbolicRefs?: Array<{ address: string; sheetName?: string; row?: number; col?: number }>;
+  parsedDeps?: import("@bilig/formula").ParsedDependencyReference[];
+  parsedSymbolicRefs?: import("@bilig/formula").ParsedCellReferenceInfo[];
+  parsedSymbolicRanges?: import("@bilig/formula").ParsedRangeReferenceInfo[];
+  directAggregateCandidate?: import("@bilig/formula").DirectAggregateCandidate;
 };
 
 function uint32ArrayEqual(
@@ -725,6 +816,82 @@ function buildDirectCriteriaDescriptor(args: {
   };
 }
 
+function buildDirectAggregateDescriptor(args: {
+  readonly compiled: ParsedCompiledFormula;
+  readonly ownerSheetName: string;
+}): RuntimeDirectAggregateDescriptor | undefined {
+  const directAggregateCandidate = args.compiled.directAggregateCandidate;
+  if (directAggregateCandidate) {
+    const rangeInfo =
+      args.compiled.parsedSymbolicRanges?.[directAggregateCandidate.symbolicRangeIndex];
+    if (
+      rangeInfo &&
+      rangeInfo.refKind === "cells" &&
+      (rangeInfo.sheetName === undefined || rangeInfo.sheetName === args.ownerSheetName) &&
+      rangeInfo.startCol === rangeInfo.endCol
+    ) {
+      return {
+        aggregateKind: directAggregateCandidate.aggregateKind,
+        sheetName: rangeInfo.sheetName ?? args.ownerSheetName,
+        rowStart: rangeInfo.startRow,
+        rowEnd: rangeInfo.endRow,
+        col: rangeInfo.startCol,
+        length: rangeInfo.endRow - rangeInfo.startRow + 1,
+      };
+    }
+  }
+  const node = args.compiled.optimizedAst;
+  if (node.kind !== "CallExpr" || node.args.length !== 1) {
+    return undefined;
+  }
+  if (
+    args.compiled.symbolicNames.length > 0 ||
+    args.compiled.symbolicTables.length > 0 ||
+    args.compiled.symbolicSpills.length > 0
+  ) {
+    return undefined;
+  }
+  const callee = node.callee.trim().toUpperCase();
+  if (
+    callee !== "SUM" &&
+    callee !== "AVERAGE" &&
+    callee !== "AVG" &&
+    callee !== "COUNT" &&
+    callee !== "MIN" &&
+    callee !== "MAX"
+  ) {
+    return undefined;
+  }
+  const rangeNode = node.args[0];
+  if (!rangeNode || rangeNode.kind !== "RangeRef" || rangeNode.refKind !== "cells") {
+    return undefined;
+  }
+  if (rangeNode.sheetName !== undefined && rangeNode.sheetName !== args.ownerSheetName) {
+    return undefined;
+  }
+  const range = resolveDirectCriteriaRange(rangeNode, args.ownerSheetName);
+  if (!range) {
+    return undefined;
+  }
+  return {
+    aggregateKind:
+      callee === "SUM"
+        ? "sum"
+        : callee === "COUNT"
+          ? "count"
+          : callee === "MIN"
+            ? "min"
+            : callee === "MAX"
+              ? "max"
+              : "average",
+    sheetName: range.sheetName,
+    rowStart: range.rowStart,
+    rowEnd: range.rowEnd,
+    col: range.col,
+    length: range.length,
+  };
+}
+
 function buildDirectLookupDescriptor(args: {
   readonly compiled: ParsedCompiledFormula;
   readonly ownerSheetName: string;
@@ -831,7 +998,7 @@ const PUSH_STRING_OPCODE = Number(Opcode.PushString);
 export function createEngineFormulaBindingService(args: {
   readonly state: Pick<
     EngineRuntimeState,
-    "workbook" | "strings" | "formulas" | "ranges" | "useColumnIndex"
+    "workbook" | "strings" | "formulas" | "ranges" | "getUseColumnIndex"
   >;
   readonly compiledPlans: EngineCompiledPlanService;
   readonly exactLookup: Pick<ExactColumnIndexService, "primeColumnIndex" | "prepareVectorLookup">;
@@ -849,6 +1016,7 @@ export function createEngineFormulaBindingService(args: {
     reverseDefinedNameEdges: Map<string, Set<number>>;
     reverseTableEdges: Map<string, Set<number>>;
     reverseSpillEdges: Map<string, Set<number>>;
+    reverseAggregateColumnEdges: Map<number, Set<number>>;
     reverseExactLookupColumnEdges: Map<number, EdgeSlice>;
     reverseSortedLookupColumnEdges: Map<number, EdgeSlice>;
   };
@@ -888,6 +1056,7 @@ export function createEngineFormulaBindingService(args: {
 }): EngineFormulaBindingService {
   const compiledSourceCache = new Map<string, ParsedCompiledFormula>();
   const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>();
+  const formulaColumnCounts = new Map<number, number>();
 
   const normalizeLookupCompileMode = (compiled: ParsedCompiledFormula): ParsedCompiledFormula => {
     if (compiled.mode !== FormulaMode.WasmFastPath) {
@@ -1002,6 +1171,8 @@ export function createEngineFormulaBindingService(args: {
         sheetId: number,
         fn: (cellIndex: number, row: number, col: number) => void,
       ) => args.forEachSheetCell(sheetId, fn),
+      isFormulaCell: (cellIndex: number) =>
+        (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0,
     };
     rangeIndices.forEach((rangeIndex) => {
       if (refreshed.has(rangeIndex)) {
@@ -1061,6 +1232,104 @@ export function createEngineFormulaBindingService(args: {
       }
       args.state.workbook.pruneCellIfEmpty(cellIndex);
     });
+  };
+
+  const updateFormulaDependenciesInPlaceNow = (
+    cellIndex: number,
+    existing: RuntimeFormula,
+    prepared: ReturnType<typeof prepareFormulaBindingFromCompiledNow>,
+    ownerSheetName: string,
+    source: string,
+  ): void => {
+    const formulaEntity = makeCellEntity(cellIndex);
+    const previousDependencies = args.edgeArena.read(existing.dependencyEntities);
+    const nextDependencies = prepared.dependencies.dependencyEntities;
+    const nextDependencySet = new Set<number>(nextDependencies);
+    const previousDependencySet = new Set<number>(previousDependencies);
+
+    previousDependencies.forEach((dependencyEntity) => {
+      if (nextDependencySet.has(dependencyEntity)) {
+        return;
+      }
+      removeReverseEdge(dependencyEntity, formulaEntity);
+      if (!isRangeEntity(dependencyEntity)) {
+        pruneTrackedDependencyCell(entityPayload(dependencyEntity), cellIndex);
+      }
+    });
+    nextDependencies.forEach((dependencyEntity) => {
+      if (previousDependencySet.has(dependencyEntity)) {
+        return;
+      }
+      appendReverseEdge(dependencyEntity, formulaEntity);
+    });
+
+    args.compiledPlans.release(existing.planId);
+    existing.source = source;
+    existing.planId = prepared.plan.id;
+    existing.compiled = prepared.plan.compiled;
+    existing.plan = prepared.plan;
+    existing.dependencyIndices = prepared.dependencies.dependencyIndices;
+    existing.dependencyEntities = args.edgeArena.replace(
+      existing.dependencyEntities,
+      nextDependencies,
+    );
+    existing.runtimeProgram = prepared.runtimeProgram;
+    existing.constants = prepared.compiled.constants;
+    existing.programLength = prepared.runtimeProgram.length;
+    existing.constNumberLength = prepared.compiled.constants.length;
+    existing.directLookup = undefined;
+    existing.directAggregate = undefined;
+    existing.directCriteria = undefined;
+    args.state.workbook.cellStore.flags[cellIndex] =
+      ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
+        ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
+      CellFlags.HasFormula;
+    if (existing.compiled.mode === FormulaMode.JsOnly) {
+      args.state.workbook.cellStore.flags[cellIndex] =
+        (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
+    } else {
+      args.state.workbook.cellStore.flags[cellIndex] =
+        (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
+    }
+    args.scheduleWasmProgramSync();
+
+    primeLookupCandidatesNow(
+      ownerSheetName,
+      undefined,
+      prepared.indexedExactLookupCandidates,
+      prepared.directApproximateLookupCandidates,
+    );
+  };
+
+  const rewriteFormulaCompiledPreservingBindingNow = (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+  ): boolean => {
+    const existing = args.state.formulas.get(cellIndex);
+    if (!existing || !canRewriteCompiledPreservingBindings(existing, compiled)) {
+      return false;
+    }
+    args.compiledPlans.release(existing.planId);
+    const plan = args.compiledPlans.intern(source, compiled);
+    existing.source = source;
+    existing.planId = plan.id;
+    existing.compiled = plan.compiled;
+    existing.plan = plan;
+    existing.programLength = compiled.program.length;
+    existing.constNumberLength = compiled.constants.length;
+    args.state.workbook.cellStore.flags[cellIndex] =
+      ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
+        ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
+      CellFlags.HasFormula;
+    if (compiled.mode === FormulaMode.JsOnly) {
+      args.state.workbook.cellStore.flags[cellIndex] =
+        (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
+    } else {
+      args.state.workbook.cellStore.flags[cellIndex] =
+        (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
+    }
+    return true;
   };
 
   const isCellIndexMappedNow = (cellIndex: number): boolean => {
@@ -1123,6 +1392,7 @@ export function createEngineFormulaBindingService(args: {
   const materializeDependencies = (
     currentSheetName: string,
     compiled: ParsedCompiledFormula,
+    directAggregate: RuntimeDirectAggregateDescriptor | undefined,
     directLookupBinding: ReturnType<typeof resolveRuntimeDirectLookupBinding> | undefined,
   ): MaterializedDependencies => {
     const currentSheetId = args.state.workbook.getSheet(currentSheetName)?.id;
@@ -1133,7 +1403,8 @@ export function createEngineFormulaBindingService(args: {
       parsedCellDeps !== undefined &&
       parsedCellDeps.length === deps.length &&
       parsedCellDeps.length > 0 &&
-      parsedCellDeps.length <= 2
+      parsedCellDeps.length <= 2 &&
+      parsedCellDeps.every((dependency) => dependency?.kind === "cell")
     ) {
       ensureDependencyBuildCapacity(
         args.state.workbook.cellStore.size + 1,
@@ -1145,6 +1416,9 @@ export function createEngineFormulaBindingService(args: {
       let dependencyEntityCount = 0;
       for (let depIndex = 0; depIndex < parsedCellDeps.length; depIndex += 1) {
         const parsedDep = parsedCellDeps[depIndex]!;
+        if (parsedDep.sheetName && !args.state.workbook.getSheet(parsedDep.sheetName)) {
+          continue;
+        }
         const cellIndex =
           parsedDep.sheetName === undefined &&
           parsedDep.row !== undefined &&
@@ -1194,6 +1468,10 @@ export function createEngineFormulaBindingService(args: {
     let dependencyEntityCount = 0;
     let rangeDependencyCount = 0;
     let newRangeCount = 0;
+    const symbolicRangeIndexByAddress =
+      compiled.symbolicRanges.length > 0
+        ? new Map(compiled.symbolicRanges.map((range, index) => [range, index]))
+        : undefined;
     args
       .getSymbolicRangeBindings()
       .fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length);
@@ -1202,6 +1480,9 @@ export function createEngineFormulaBindingService(args: {
       const dep = deps[depIndex]!;
       const parsedDep = compiled.parsedDeps?.[depIndex];
       if (parsedDep?.kind === "cell") {
+        if (parsedDep.sheetName && !args.state.workbook.getSheet(parsedDep.sheetName)) {
+          continue;
+        }
         const cellIndex =
           parsedDep.sheetName === undefined &&
           parsedDep.row !== undefined &&
@@ -1219,7 +1500,17 @@ export function createEngineFormulaBindingService(args: {
         continue;
       }
       if (dep.includes(":")) {
-        const range = parseRangeAddress(dep, currentSheetName);
+        const parsedRangeDep =
+          parsedDep?.kind === "range"
+            ? parsedDep
+            : compiled.parsedSymbolicRanges?.find((range) => range.address === dep);
+        const range =
+          parsedRangeDep === undefined
+            ? parseRangeAddress(dep, currentSheetName)
+            : parseRangeAddress(
+                `${parsedRangeDep.startAddress}:${parsedRangeDep.endAddress}`,
+                parsedRangeDep.sheetName ?? currentSheetName,
+              );
         const sheetName = range.sheetName ?? currentSheetName;
         const isDirectLookupColumn =
           directLookupBinding !== undefined &&
@@ -1251,7 +1542,7 @@ export function createEngineFormulaBindingService(args: {
           }
           continue;
         }
-        const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
+        const symbolicRangeIndex = symbolicRangeIndexByAddress?.get(dep) ?? -1;
         if (range.sheetName && !args.state.workbook.getSheet(sheetName)) {
           continue;
         }
@@ -1259,9 +1550,43 @@ export function createEngineFormulaBindingService(args: {
         if (!sheet) {
           continue;
         }
+        const compactDirectAggregateRange =
+          directAggregate !== undefined &&
+          range.kind === "cells" &&
+          range.start.col === directAggregate.col &&
+          range.end.col === directAggregate.col &&
+          range.start.row === directAggregate.rowStart &&
+          range.end.row === directAggregate.rowEnd &&
+          sheetName === directAggregate.sheetName;
+        if (compactDirectAggregateRange) {
+          if (
+            (formulaColumnCounts.get(formulaColumnCountKey(sheet.id, range.start.col)) ?? 0) === 0
+          ) {
+            continue;
+          }
+          for (let row = range.start.row; row <= range.end.row; row += 1) {
+            const cellIndex = sheet.grid.get(row, range.start.col);
+            if (cellIndex === -1) {
+              continue;
+            }
+            if ((args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) === 0) {
+              continue;
+            }
+            if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
+              args.getDependencyBuildSeen()[cellIndex] = epoch;
+              args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex;
+              dependencyIndexCount += 1;
+            }
+            args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex);
+            dependencyEntityCount += 1;
+          }
+          continue;
+        }
         const registered = args.state.ranges.intern(sheet.id, range, {
           ensureCell: (sheetId, row, col) => args.ensureCellTrackedByCoords(sheetId, row, col),
           forEachSheetCell: (sheetId, fn) => args.forEachSheetCell(sheetId, fn),
+          isFormulaCell: (cellIndex) =>
+            (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0,
         });
         if (symbolicRangeIndex !== -1) {
           args.getSymbolicRangeBindings()[symbolicRangeIndex] = registered.rangeIndex;
@@ -1271,7 +1596,7 @@ export function createEngineFormulaBindingService(args: {
         dependencyEntityCount += 1;
         args.getDependencyBuildRanges()[rangeDependencyCount] = registered.rangeIndex;
         rangeDependencyCount += 1;
-        const memberIndices = args.state.ranges.expandToCells(registered.rangeIndex);
+        const memberIndices = args.state.ranges.getFormulaMembersView(registered.rangeIndex);
         for (let memberIndex = 0; memberIndex < memberIndices.length; memberIndex += 1) {
           const cellIndex = memberIndices[memberIndex]!;
           if (args.getDependencyBuildSeen()[cellIndex] === epoch) {
@@ -1315,6 +1640,17 @@ export function createEngineFormulaBindingService(args: {
   const clearFormulaNow = (cellIndex: number): boolean => {
     const existing = args.state.formulas.get(cellIndex);
     if (existing) {
+      const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex];
+      const col = args.state.workbook.cellStore.cols[cellIndex];
+      if (sheetId !== undefined && col !== undefined) {
+        const columnKey = formulaColumnCountKey(sheetId, col);
+        const nextCount = (formulaColumnCounts.get(columnKey) ?? 1) - 1;
+        if (nextCount <= 0) {
+          formulaColumnCounts.delete(columnKey);
+        } else {
+          formulaColumnCounts.set(columnKey, nextCount);
+        }
+      }
       const dependencyEntities = args.edgeArena.readView(existing.dependencyEntities);
       const formulaEntity = makeCellEntity(cellIndex);
       for (let index = 0; index < dependencyEntities.length; index += 1) {
@@ -1354,17 +1690,15 @@ export function createEngineFormulaBindingService(args: {
             : makeSortedLookupColumnEntity(lookupSheet.id, lookupInfo.col);
           removeReverseEdge(lookupEntity, formulaEntity);
           if (
-            existingDirectLookup.kind === "exact" ||
             existingDirectLookup.kind === "approximate" ||
-            existingDirectLookup.kind === "exact-uniform-numeric" ||
             existingDirectLookup.kind === "approximate-uniform-numeric"
           ) {
             const rowStart =
-              existingDirectLookup.kind === "exact" || existingDirectLookup.kind === "approximate"
+              existingDirectLookup.kind === "approximate"
                 ? existingDirectLookup.prepared.rowStart
                 : existingDirectLookup.rowStart;
             const rowEnd =
-              existingDirectLookup.kind === "exact" || existingDirectLookup.kind === "approximate"
+              existingDirectLookup.kind === "approximate"
                 ? existingDirectLookup.prepared.rowEnd
                 : existingDirectLookup.rowEnd;
             for (let row = rowStart; row <= rowEnd; row += 1) {
@@ -1376,6 +1710,16 @@ export function createEngineFormulaBindingService(args: {
               removeReverseEdge(makeCellEntity(memberCellIndex), lookupEntity);
             }
           }
+        }
+      }
+      if (existing.directAggregate) {
+        const aggregateSheet = args.state.workbook.getSheet(existing.directAggregate.sheetName);
+        if (aggregateSheet) {
+          removeTrackedReverseEdge(
+            args.reverseState.reverseAggregateColumnEdges,
+            aggregateColumnDependencyKey(aggregateSheet.id, existing.directAggregate.col),
+            cellIndex,
+          );
         }
       }
       for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
@@ -1430,6 +1774,7 @@ export function createEngineFormulaBindingService(args: {
       !stringArrayEqual(existing.compiled.symbolicTables, prepared.compiled.symbolicTables) ||
       !stringArrayEqual(existing.compiled.symbolicSpills, prepared.compiled.symbolicSpills) ||
       !directLookupStructureEqual(existing.directLookup, prepared.directLookup) ||
+      !directAggregateStructureEqual(existing.directAggregate, prepared.directAggregate) ||
       !directCriteriaStructureEqual(existing.directCriteria, prepared.directCriteria);
 
     if (existing && !topologyChanged) {
@@ -1444,6 +1789,7 @@ export function createEngineFormulaBindingService(args: {
       existing.programLength = prepared.runtimeProgram.length;
       existing.constNumberLength = prepared.compiled.constants.length;
       existing.directLookup = prepared.directLookup;
+      existing.directAggregate = prepared.directAggregate;
       existing.directCriteria = prepared.directCriteria;
       args.state.workbook.cellStore.flags[cellIndex] =
         ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
@@ -1465,6 +1811,10 @@ export function createEngineFormulaBindingService(args: {
         prepared.directApproximateLookupCandidates,
       );
       return false;
+    }
+    if (existing && hasInPlaceDependencyRebindShape(existing, prepared)) {
+      updateFormulaDependenciesInPlaceNow(cellIndex, existing, prepared, ownerSheetName, source);
+      return true;
     }
     if (existing) {
       clearFormulaNow(cellIndex);
@@ -1541,10 +1891,17 @@ export function createEngineFormulaBindingService(args: {
       rangeListOffset: 0,
       rangeListLength: prepared.dependencies.rangeDependencies.length,
       directLookup: prepared.directLookup,
+      directAggregate: prepared.directAggregate,
       directCriteria: prepared.directCriteria,
     };
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula);
     runtimeFormula.formulaSlotId = formulaSlotId;
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex];
+    const col = args.state.workbook.cellStore.cols[cellIndex];
+    if (sheetId !== undefined && col !== undefined) {
+      const columnKey = formulaColumnCountKey(sheetId, col);
+      formulaColumnCounts.set(columnKey, (formulaColumnCounts.get(columnKey) ?? 0) + 1);
+    }
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
         ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
@@ -1596,23 +1953,17 @@ export function createEngineFormulaBindingService(args: {
         const lookupEntity = lookupInfo.isExact
           ? makeExactLookupColumnEntity(lookupSheet.id, lookupInfo.col)
           : makeSortedLookupColumnEntity(lookupSheet.id, lookupInfo.col);
-        const rowStart =
-          prepared.directLookup.kind === "exact" || prepared.directLookup.kind === "approximate"
-            ? prepared.directLookup.prepared.rowStart
-            : prepared.directLookup.rowStart;
-        const rowEnd =
-          prepared.directLookup.kind === "exact" || prepared.directLookup.kind === "approximate"
-            ? prepared.directLookup.prepared.rowEnd
-            : prepared.directLookup.rowEnd;
-        for (let row = rowStart; row <= rowEnd; row += 1) {
-          const memberCellIndex = args.ensureCellTrackedByCoords(
-            lookupSheet.id,
-            row,
-            lookupInfo.col,
-          );
-          appendReverseEdge(makeCellEntity(memberCellIndex), lookupEntity);
-        }
         appendReverseEdge(lookupEntity, formulaEntity);
+      }
+    }
+    if (prepared.directAggregate) {
+      const aggregateSheet = args.state.workbook.getSheet(prepared.directAggregate.sheetName);
+      if (aggregateSheet) {
+        appendTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(aggregateSheet.id, prepared.directAggregate.col),
+          cellIndex,
+        );
       }
     }
     args.scheduleWasmProgramSync();
@@ -1670,26 +2021,30 @@ export function createEngineFormulaBindingService(args: {
     const directLookupBinding = hasLookupInstruction
       ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, ownerSheetName)
       : undefined;
+    const directAggregateCandidate = buildDirectAggregateDescriptor({
+      compiled,
+      ownerSheetName,
+    });
+    const directAggregate = directAggregateCandidate;
     const directCriteria = buildDirectCriteriaDescriptor({
       compiled,
       ownerSheetName,
       workbook: args.state.workbook,
       ensureCellTracked: args.ensureCellTracked,
     });
-    if (directCriteria && compiled.mode === FormulaMode.WasmFastPath) {
-      compiled = {
-        ...compiled,
-        mode: FormulaMode.JsOnly,
-      };
-    }
     const indexedExactLookupCandidates =
-      hasLookupInstruction && args.state.useColumnIndex
+      hasLookupInstruction && args.state.getUseColumnIndex()
         ? collectIndexedExactLookupCandidates(compiled.optimizedAst)
         : [];
     const directApproximateLookupCandidates = hasLookupInstruction
       ? collectDirectApproximateLookupCandidates(compiled.optimizedAst)
       : [];
-    const dependencies = materializeDependencies(ownerSheetName, compiled, directLookupBinding);
+    const dependencies = materializeDependencies(
+      ownerSheetName,
+      compiled,
+      directAggregate,
+      directLookupBinding,
+    );
     const directLookup = directLookupBinding
       ? buildDirectLookupDescriptor({
           compiled,
@@ -1772,6 +2127,7 @@ export function createEngineFormulaBindingService(args: {
       compiled,
       dependencies,
       directLookup,
+      directAggregate,
       directCriteria,
       runtimeProgram,
       plan: args.compiledPlans.intern(source, compiled),
@@ -1980,8 +2336,10 @@ export function createEngineFormulaBindingService(args: {
           args.reverseState.reverseDefinedNameEdges.clear();
           args.reverseState.reverseTableEdges.clear();
           args.reverseState.reverseSpillEdges.clear();
+          args.reverseState.reverseAggregateColumnEdges.clear();
           args.reverseState.reverseExactLookupColumnEdges.clear();
           args.reverseState.reverseSortedLookupColumnEdges.clear();
+          formulaColumnCounts.clear();
 
           const activeCellIndices: number[] = [];
           pending.forEach(({ cellIndex, source }) => {
@@ -2066,6 +2424,7 @@ export function createEngineFormulaBindingService(args: {
     },
     bindFormulaNow,
     bindPreparedFormulaNow,
+    rewriteFormulaCompiledPreservingBindingNow,
     bindInitialFormulaNow,
     clearFormulaNow,
     invalidateFormulaNow,

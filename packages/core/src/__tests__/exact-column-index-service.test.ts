@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { StringPool } from "../string-pool.js";
 import { WorkbookStore } from "../workbook-store.js";
@@ -348,6 +348,57 @@ describe("createExactColumnIndexService", () => {
         searchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 });
+  });
+
+  it("reuses prepared exact lookups after incremental writes without rematerializing the column", () => {
+    const workbook = new WorkbookStore("exact-index-slice-reuse");
+    const strings = new StringPool();
+    workbook.createSheet("Sheet1");
+
+    [1, 2, 3].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, "Sheet1", `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      });
+    });
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    });
+    const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, "getColumnSlice");
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    });
+
+    const prepared = exact.prepareVectorLookup({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    });
+    const sliceCallsAfterPrepare = getColumnSliceSpy.mock.calls.length;
+
+    setStoredCellValue(workbook, strings, "Sheet1", "A3", {
+      tag: ValueTag.Number,
+      value: 30,
+    });
+    exact.recordLiteralWrite({
+      sheetName: "Sheet1",
+      row: 2,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 3 },
+      newValue: { tag: ValueTag.Number, value: 30 },
+    });
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 30 },
+        prepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 });
+    expect(getColumnSliceSpy.mock.calls.length).toBe(sliceCallsAfterPrepare);
   });
 
   it("falls back to rebuilds when incremental literal writes invalidate comparable kinds or structure versions", () => {

@@ -17,6 +17,7 @@ export * from "./compiler.js";
 export * from "./js-evaluator.js";
 export * from "./program-arena.js";
 export * from "./runtime-values.js";
+export * from "./formula-template-key.js";
 export * from "./translation.js";
 export * from "./compatibility.js";
 export * from "./builtin-capabilities.js";

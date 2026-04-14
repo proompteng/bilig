@@ -215,6 +215,38 @@ describe("WorkPaper", () => {
     expect(workbook.getCellValue(cell(sheetId, 1, 0)).tag).toBe(ValueTag.Empty);
   });
 
+  it("uses tracked engine changes for literal-only outer batches on a fresh workbook", () => {
+    const workbook = WorkPaper.buildFromArray([[1], [2]]);
+    const sheetId = workbook.getSheetId("Sheet1")!;
+    expect(hasCaptureVisibilitySnapshot(workbook)).toBe(true);
+    if (!hasCaptureVisibilitySnapshot(workbook)) {
+      throw new Error("Expected work paper runtime to expose captureVisibilitySnapshot in tests");
+    }
+    const captureVisibilitySnapshot = vi
+      .spyOn(workbook, "captureVisibilitySnapshot")
+      .mockImplementation(() => {
+        throw new Error("literal-only outer batches should not rebuild visibility snapshots");
+      });
+
+    const changes = workbook.batch(() => {
+      workbook.setCellContents(cell(sheetId, 0, 0), 10);
+      workbook.setCellContents(cell(sheetId, 1, 0), 20);
+    });
+
+    expect(
+      changes.map((change) => (change.kind === "cell" ? `${change.sheetName}!${change.a1}` : "")),
+    ).toEqual(["Sheet1!A1", "Sheet1!A2"]);
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 10,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 1, 0))).toMatchObject({
+      tag: ValueTag.Number,
+      value: 20,
+    });
+    captureVisibilitySnapshot.mockRestore();
+  });
+
   it("flushes deferred literal edits before formula writes inside a batch", () => {
     const workbook = WorkPaper.buildFromArray([[1]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
@@ -423,6 +455,15 @@ describe("WorkPaper", () => {
     const workbook = WorkPaper.buildFromArray([[1], [2]]);
     const sheetId = workbook.getSheetId("Sheet1")!;
     const beforeBatchId = workbook.getStats().lastMetrics.batchId;
+    expect(hasCaptureVisibilitySnapshot(workbook)).toBe(true);
+    if (!hasCaptureVisibilitySnapshot(workbook)) {
+      throw new Error("Expected work paper runtime to expose captureVisibilitySnapshot in tests");
+    }
+    const captureVisibilitySnapshot = vi
+      .spyOn(workbook, "captureVisibilitySnapshot")
+      .mockImplementation(() => {
+        throw new Error("suspended resume on a fresh workbook should use tracked engine changes");
+      });
 
     workbook.suspendEvaluation();
     workbook.setCellContents(cell(sheetId, 0, 1), "=A1+A2");
@@ -441,6 +482,7 @@ describe("WorkPaper", () => {
       tag: ValueTag.Number,
       value: 30,
     });
+    captureVisibilitySnapshot.mockRestore();
 
     const undoChanges = workbook.undo();
 
@@ -610,6 +652,43 @@ describe("WorkPaper", () => {
       }),
     ).toEqual(beforeSummaryValues);
     expect(workbook.getNamedExpressionValue("Rate")).toEqual(beforeRateValue);
+  });
+
+  it("preserves undo history across runtime-only config toggles", () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [[1, "=MATCH(3,A1:A3,0)"], [2], [3]],
+      },
+      { useColumnIndex: false, useStats: false },
+    );
+    const sheetId = workbook.getSheetId("Bench")!;
+
+    workbook.setCellContents(cell(sheetId, 0, 0), 2);
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(workbook.isThereSomethingToUndo()).toBe(true);
+
+    workbook.updateConfig({ useColumnIndex: true, useStats: true });
+
+    expect(workbook.getConfig()).toMatchObject({ useColumnIndex: true, useStats: true });
+    expect(workbook.isThereSomethingToUndo()).toBe(true);
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+
+    const undoChanges = workbook.undo();
+    expect(undoChanges).not.toEqual([]);
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
   });
 
   it("returns changes in deterministic order for cells and named expressions", () => {

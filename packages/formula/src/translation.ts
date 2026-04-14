@@ -1,8 +1,14 @@
-import { ErrorCode } from "@bilig/protocol";
+import { ErrorCode, FormulaMode } from "@bilig/protocol";
 import type { BinaryExprNode, FormulaNode } from "./ast.js";
 import type { RangeAddress } from "./addressing.js";
 import { formatRangeAddress, parseCellAddress, parseRangeAddress } from "./addressing.js";
-import { compileFormulaAst, type CompiledFormula } from "./compiler.js";
+import {
+  compileFormulaAst,
+  type CompiledFormula,
+  type ParsedCellReferenceInfo,
+  type ParsedDependencyReference,
+  type ParsedRangeReferenceInfo,
+} from "./compiler.js";
 import type { JsPlanInstruction, ReferenceOperand } from "./js-evaluator.js";
 import { parseFormula } from "./parser.js";
 
@@ -56,6 +62,165 @@ export function translateFormulaReferences(
   return serializeFormula(translateNode(ast, rowDelta, colDelta));
 }
 
+export function buildRelativeFormulaTemplateKey(
+  source: string,
+  ownerRow: number,
+  ownerCol: number,
+): string {
+  return buildRelativeFormulaTemplateKeyFromAst(parseFormula(source), ownerRow, ownerCol);
+}
+
+export function buildRelativeFormulaTemplateKeyFromAst(
+  node: FormulaNode,
+  ownerRow: number,
+  ownerCol: number,
+): string {
+  return buildRelativeFormulaTemplateKeyInternal(node, ownerRow, ownerCol);
+}
+
+export interface CompiledFormulaTranslationResult {
+  source: string;
+  compiled: CompiledFormula;
+}
+
+export function canTranslateCompiledFormulaWithoutAst(compiled: CompiledFormula): boolean {
+  return (
+    (compiled.symbolicRanges.length === 0 || compiled.directAggregateCandidate !== undefined) &&
+    compiled.symbolicNames.length === 0 &&
+    compiled.symbolicTables.length === 0 &&
+    compiled.symbolicSpills.length === 0 &&
+    !compiled.jsPlan.some(
+      (instruction) =>
+        instruction.opcode === "lookup-exact-match" ||
+        instruction.opcode === "lookup-approximate-match",
+    )
+  );
+}
+
+export function translateCompiledFormulaWithoutAst(
+  compiled: CompiledFormula,
+  rowDelta: number,
+  colDelta: number,
+  sourceOverride?: string,
+): CompiledFormulaTranslationResult {
+  const translatedParsedDeps = compiled.parsedDeps?.map((dependency) =>
+    translateParsedDependencyReference(dependency, rowDelta, colDelta),
+  );
+  const translatedParsedSymbolicRefs = compiled.parsedSymbolicRefs?.map((reference) =>
+    translateParsedCellReference(reference, rowDelta, colDelta),
+  );
+  const translatedParsedSymbolicRanges = compiled.parsedSymbolicRanges?.map((range) =>
+    translateParsedRangeReference(range, rowDelta, colDelta),
+  );
+  const source = sourceOverride ?? compiled.source;
+  const translatedCellMap = buildTranslatedCellReferenceMap(
+    compiled.parsedSymbolicRefs,
+    translatedParsedSymbolicRefs,
+  );
+  const translatedRangeMap = buildTranslatedRangeReferenceMap(
+    compiled.parsedSymbolicRanges,
+    translatedParsedSymbolicRanges,
+  );
+
+  return {
+    source,
+    compiled: {
+      ...compiled,
+      source,
+      astMatchesSource: false,
+      deps:
+        translatedParsedDeps?.map((dependency) => formatParsedDependencyReference(dependency)) ??
+        compiled.deps.map((dependency) =>
+          translateQualifiedDependencyReference(dependency, rowDelta, colDelta),
+        ),
+      symbolicRefs:
+        translatedParsedSymbolicRefs?.map((reference) => formatParsedCellReference(reference)) ??
+        compiled.symbolicRefs.map((ref) =>
+          translateQualifiedCellReference(ref, rowDelta, colDelta),
+        ),
+      symbolicRanges:
+        translatedParsedSymbolicRanges?.map((range) => formatParsedRangeReference(range)) ??
+        compiled.symbolicRanges.map((range) =>
+          translateQualifiedRangeReference(range, rowDelta, colDelta),
+        ),
+      jsPlan:
+        compiled.symbolicRanges.length === 0 && compiled.mode === FormulaMode.WasmFastPath
+          ? compiled.jsPlan
+          : compiled.jsPlan.map((instruction) =>
+              translateJsPlanInstructionWithoutAst(
+                instruction,
+                translatedCellMap,
+                translatedRangeMap,
+                rowDelta,
+                colDelta,
+              ),
+            ),
+      ...(translatedParsedDeps ? { parsedDeps: translatedParsedDeps } : {}),
+      ...(translatedParsedSymbolicRefs ? { parsedSymbolicRefs: translatedParsedSymbolicRefs } : {}),
+      ...(translatedParsedSymbolicRanges
+        ? { parsedSymbolicRanges: translatedParsedSymbolicRanges }
+        : {}),
+    },
+  };
+}
+
+export function translateCompiledFormula(
+  compiled: CompiledFormula,
+  rowDelta: number,
+  colDelta: number,
+  sourceOverride?: string,
+): CompiledFormulaTranslationResult {
+  const translatedAst = translateNode(compiled.ast, rowDelta, colDelta);
+  const translatedOptimizedAst =
+    compiled.optimizedAst === compiled.ast
+      ? translatedAst
+      : translateNode(compiled.optimizedAst, rowDelta, colDelta);
+  const translatedParsedDeps = compiled.parsedDeps?.map((dependency) =>
+    translateParsedDependencyReference(dependency, rowDelta, colDelta),
+  );
+  const translatedParsedSymbolicRefs = compiled.parsedSymbolicRefs?.map((reference) =>
+    translateParsedCellReference(reference, rowDelta, colDelta),
+  );
+  const translatedParsedSymbolicRanges = compiled.parsedSymbolicRanges?.map((range) =>
+    translateParsedRangeReference(range, rowDelta, colDelta),
+  );
+  const source = sourceOverride ?? serializeFormula(translatedAst);
+
+  return {
+    source,
+    compiled: {
+      ...compiled,
+      source,
+      ast: translatedAst,
+      optimizedAst: translatedOptimizedAst,
+      astMatchesSource: true,
+      deps:
+        translatedParsedDeps?.map((dependency) => formatParsedDependencyReference(dependency)) ??
+        compiled.deps.map((dependency) =>
+          translateQualifiedDependencyReference(dependency, rowDelta, colDelta),
+        ),
+      symbolicRefs:
+        translatedParsedSymbolicRefs?.map((reference) => formatParsedCellReference(reference)) ??
+        compiled.symbolicRefs.map((ref) =>
+          translateQualifiedCellReference(ref, rowDelta, colDelta),
+        ),
+      symbolicRanges:
+        translatedParsedSymbolicRanges?.map((range) => formatParsedRangeReference(range)) ??
+        compiled.symbolicRanges.map((range) =>
+          translateQualifiedRangeReference(range, rowDelta, colDelta),
+        ),
+      jsPlan: compiled.jsPlan.map((instruction) =>
+        translateJsPlanInstruction(instruction, rowDelta, colDelta),
+      ),
+      ...(translatedParsedDeps ? { parsedDeps: translatedParsedDeps } : {}),
+      ...(translatedParsedSymbolicRefs ? { parsedSymbolicRefs: translatedParsedSymbolicRefs } : {}),
+      ...(translatedParsedSymbolicRanges
+        ? { parsedSymbolicRanges: translatedParsedSymbolicRanges }
+        : {}),
+    },
+  };
+}
+
 export function rewriteFormulaForStructuralTransform(
   source: string,
   ownerSheetName: string,
@@ -80,24 +245,32 @@ export function rewriteCompiledFormulaForStructuralTransform(
   targetSheetName: string,
   transform: StructuralAxisTransform,
 ): StructuralCompiledFormulaRewriteResult {
+  const currentAst =
+    compiled.astMatchesSource === false ? parseFormula(compiled.source) : compiled.ast;
+  const currentOptimizedAst =
+    compiled.astMatchesSource === false
+      ? currentAst
+      : compiled.optimizedAst === compiled.ast
+        ? currentAst
+        : compiled.optimizedAst;
   const rewrittenAst = rewriteNodeForStructuralTransform(
-    compiled.ast,
+    currentAst,
     ownerSheetName,
     targetSheetName,
     transform,
   );
   const rewrittenOptimizedAst =
-    compiled.optimizedAst === compiled.ast
+    currentOptimizedAst === currentAst
       ? rewrittenAst
       : rewriteNodeForStructuralTransform(
-          compiled.optimizedAst,
+          currentOptimizedAst,
           ownerSheetName,
           targetSheetName,
           transform,
         );
   const source = serializeFormula(rewrittenAst);
 
-  if (!nodeStructuralShapeEqual(compiled.optimizedAst, rewrittenOptimizedAst)) {
+  if (!nodeStructuralShapeEqual(currentOptimizedAst, rewrittenOptimizedAst)) {
     return {
       source,
       compiled: compileFormulaAst(source, rewrittenOptimizedAst, {
@@ -117,6 +290,7 @@ export function rewriteCompiledFormulaForStructuralTransform(
       source,
       ast: rewrittenAst,
       optimizedAst: rewrittenOptimizedAst,
+      astMatchesSource: true,
       deps: compiled.deps.map((dependency) =>
         rewriteQualifiedDependencyReference(dependency, ownerSheetName, targetSheetName, transform),
       ),
@@ -132,7 +306,12 @@ export function rewriteCompiledFormulaForStructuralTransform(
       ...(compiled.parsedDeps
         ? {
             parsedDeps: compiled.parsedDeps.map((dependency) =>
-              rewriteParsedCellReference(dependency, ownerSheetName, targetSheetName, transform),
+              rewriteParsedDependencyReference(
+                dependency,
+                ownerSheetName,
+                targetSheetName,
+                transform,
+              ),
             ),
           }
         : {}),
@@ -140,6 +319,13 @@ export function rewriteCompiledFormulaForStructuralTransform(
         ? {
             parsedSymbolicRefs: compiled.parsedSymbolicRefs.map((ref) =>
               rewriteParsedCellReference(ref, ownerSheetName, targetSheetName, transform),
+            ),
+          }
+        : {}),
+      ...(compiled.parsedSymbolicRanges
+        ? {
+            parsedSymbolicRanges: compiled.parsedSymbolicRanges.map((range) =>
+              rewriteParsedRangeReference(range, ownerSheetName, targetSheetName, transform),
             ),
           }
         : {}),
@@ -270,6 +456,45 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
   }
 }
 
+function buildRelativeFormulaTemplateKeyInternal(
+  node: FormulaNode,
+  ownerRow: number,
+  ownerCol: number,
+): string {
+  switch (node.kind) {
+    case "NumberLiteral":
+      return `n:${node.value}`;
+    case "BooleanLiteral":
+      return node.value ? "b:1" : "b:0";
+    case "StringLiteral":
+      return `s:${JSON.stringify(node.value)}`;
+    case "ErrorLiteral":
+      return `e:${node.code}`;
+    case "NameRef":
+      return `name:${node.name}`;
+    case "StructuredRef":
+      return `table:${node.tableName}[${node.columnName}]`;
+    case "CellRef":
+      return `cell:${templateSheetKey(node.sheetName)}:${buildRelativeCellReferenceKey(node.ref, ownerRow, ownerCol)}`;
+    case "SpillRef":
+      return `spill:${templateSheetKey(node.sheetName)}:${buildRelativeCellReferenceKey(node.ref, ownerRow, ownerCol)}`;
+    case "ColumnRef":
+      return `col:${templateSheetKey(node.sheetName)}:${buildRelativeAxisReferenceKey(node.ref, ownerCol, "column")}`;
+    case "RowRef":
+      return `row:${templateSheetKey(node.sheetName)}:${buildRelativeAxisReferenceKey(node.ref, ownerRow, "row")}`;
+    case "RangeRef":
+      return `range:${node.refKind}:${templateSheetKey(node.sheetName)}:${buildRelativeRangeReferenceKey(node, ownerRow, ownerCol)}`;
+    case "UnaryExpr":
+      return `unary:${node.operator}:${buildRelativeFormulaTemplateKeyInternal(node.argument, ownerRow, ownerCol)}`;
+    case "BinaryExpr":
+      return `binary:${node.operator}:${buildRelativeFormulaTemplateKeyInternal(node.left, ownerRow, ownerCol)}:${buildRelativeFormulaTemplateKeyInternal(node.right, ownerRow, ownerCol)}`;
+    case "CallExpr":
+      return `call:${node.callee}:${node.args.map((arg) => buildRelativeFormulaTemplateKeyInternal(arg, ownerRow, ownerCol)).join("|")}`;
+    case "InvokeExpr":
+      return `invoke:${buildRelativeFormulaTemplateKeyInternal(node.callee, ownerRow, ownerCol)}:${node.args.map((arg) => buildRelativeFormulaTemplateKeyInternal(arg, ownerRow, ownerCol)).join("|")}`;
+  }
+}
+
 function rewriteNodeForStructuralTransform(
   node: FormulaNode,
   ownerSheetName: string,
@@ -352,6 +577,47 @@ function rewriteNodeForStructuralTransform(
           rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform),
         ),
       };
+  }
+}
+
+function templateSheetKey(sheetName: string | undefined): string {
+  return sheetName === undefined ? "." : JSON.stringify(sheetName);
+}
+
+function buildRelativeCellReferenceKey(ref: string, ownerRow: number, ownerCol: number): string {
+  const parsed = parseCellReferenceParts(ref);
+  if (!parsed) {
+    return `invalid:${ref}`;
+  }
+  const colKey = parsed.colAbsolute ? `ac${parsed.col}` : `rc${parsed.col - ownerCol}`;
+  const rowKey = parsed.rowAbsolute ? `ar${parsed.row}` : `rr${parsed.row - ownerRow}`;
+  return `${colKey}:${rowKey}`;
+}
+
+function buildRelativeAxisReferenceKey(
+  ref: string,
+  ownerIndex: number,
+  kind: "row" | "column",
+): string {
+  const parsed = parseAxisReferenceParts(ref, kind);
+  if (!parsed) {
+    return `invalid:${ref}`;
+  }
+  return parsed.absolute ? `a${parsed.index}` : `r${parsed.index - ownerIndex}`;
+}
+
+function buildRelativeRangeReferenceKey(
+  node: Extract<FormulaNode, { kind: "RangeRef" }>,
+  ownerRow: number,
+  ownerCol: number,
+): string {
+  switch (node.refKind) {
+    case "cells":
+      return `${buildRelativeCellReferenceKey(node.start, ownerRow, ownerCol)}:${buildRelativeCellReferenceKey(node.end, ownerRow, ownerCol)}`;
+    case "rows":
+      return `${buildRelativeAxisReferenceKey(node.start, ownerRow, "row")}:${buildRelativeAxisReferenceKey(node.end, ownerRow, "row")}`;
+    case "cols":
+      return `${buildRelativeAxisReferenceKey(node.start, ownerCol, "column")}:${buildRelativeAxisReferenceKey(node.end, ownerCol, "column")}`;
   }
 }
 
@@ -568,9 +834,7 @@ function rewriteRangeNode(
   };
 }
 
-function rewriteParsedCellReference<
-  Reference extends { address: string; sheetName?: string; row?: number; col?: number },
->(
+function rewriteParsedCellReference<Reference extends ParsedCellReferenceInfo>(
   reference: Reference,
   ownerSheetName: string,
   targetSheetName: string,
@@ -591,6 +855,399 @@ function rewriteParsedCellReference<
     ...(reference.sheetName !== undefined ? { sheetName: parsed.sheetName } : {}),
     ...(reference.row !== undefined ? { row: parsed.row } : {}),
     ...(reference.col !== undefined ? { col: parsed.col } : {}),
+  };
+}
+
+function rewriteParsedRangeReference(
+  reference: ParsedRangeReferenceInfo,
+  ownerSheetName: string,
+  targetSheetName: string,
+  transform: StructuralAxisTransform,
+): ParsedRangeReferenceInfo {
+  const explicitSheetName = reference.sheetName;
+  if (!targetsSheet(explicitSheetName, ownerSheetName, targetSheetName)) {
+    return reference;
+  }
+  const nextRange = rewriteRangeAddressForStructuralTransform(
+    parseRangeAddress(
+      formatQualifiedRangeReference(
+        explicitSheetName,
+        reference.startAddress,
+        reference.endAddress,
+      ),
+    ),
+    transform,
+  );
+  if (!nextRange) {
+    return reference;
+  }
+  const bounds =
+    nextRange.kind === "cells"
+      ? {
+          startRow: nextRange.start.row,
+          endRow: nextRange.end.row,
+          startCol: nextRange.start.col,
+          endCol: nextRange.end.col,
+        }
+      : nextRange.kind === "rows"
+        ? {
+            startRow: nextRange.start.row,
+            endRow: nextRange.end.row,
+            startCol: 0,
+            endCol: 0,
+          }
+        : {
+            startRow: 0,
+            endRow: 0,
+            startCol: nextRange.start.col,
+            endCol: nextRange.end.col,
+          };
+  return {
+    ...reference,
+    address: formatQualifiedRangeReference(
+      explicitSheetName,
+      nextRange.start.text,
+      nextRange.end.text,
+    ),
+    refKind: nextRange.kind,
+    startAddress: nextRange.start.text,
+    endAddress: nextRange.end.text,
+    ...bounds,
+  };
+}
+
+function rewriteParsedDependencyReference(
+  reference: ParsedDependencyReference,
+  ownerSheetName: string,
+  targetSheetName: string,
+  transform: StructuralAxisTransform,
+): ParsedDependencyReference {
+  return reference.kind === "cell"
+    ? rewriteParsedCellReference(reference, ownerSheetName, targetSheetName, transform)
+    : rewriteParsedRangeReference(reference, ownerSheetName, targetSheetName, transform);
+}
+
+function translateParsedCellReference<Reference extends ParsedCellReferenceInfo>(
+  reference: Reference,
+  rowDelta: number,
+  colDelta: number,
+): Reference {
+  const parts =
+    reference.rowAbsolute !== undefined &&
+    reference.colAbsolute !== undefined &&
+    reference.row !== undefined &&
+    reference.col !== undefined
+      ? {
+          row: reference.row,
+          col: reference.col,
+          rowAbsolute: reference.rowAbsolute,
+          colAbsolute: reference.colAbsolute,
+        }
+      : parseCellReferenceParts(reference.address);
+  if (!parts) {
+    return reference;
+  }
+  const nextRow = parts.rowAbsolute ? parts.row : parts.row + rowDelta;
+  const nextCol = parts.colAbsolute ? parts.col : parts.col + colDelta;
+  const nextLocalAddress = formatCellReference(parts, nextRow, nextCol);
+  const nextAddress =
+    reference.explicitSheet || reference.sheetName !== undefined
+      ? formatQualifiedCellReference(reference.sheetName, nextLocalAddress)
+      : nextLocalAddress;
+  return {
+    ...reference,
+    address: nextAddress,
+    ...(reference.sheetName !== undefined ? { sheetName: reference.sheetName } : {}),
+    ...(reference.explicitSheet !== undefined ? { explicitSheet: reference.explicitSheet } : {}),
+    ...(reference.row !== undefined ? { row: nextRow } : {}),
+    ...(reference.col !== undefined ? { col: nextCol } : {}),
+    ...(reference.rowAbsolute !== undefined ? { rowAbsolute: parts.rowAbsolute } : {}),
+    ...(reference.colAbsolute !== undefined ? { colAbsolute: parts.colAbsolute } : {}),
+  };
+}
+
+function translateParsedRangeReference(
+  reference: ParsedRangeReferenceInfo,
+  rowDelta: number,
+  colDelta: number,
+): ParsedRangeReferenceInfo {
+  const nextRange = translateParsedRangeReferenceInfo(reference, rowDelta, colDelta);
+  const bounds =
+    nextRange.refKind === "cells"
+      ? {
+          startRow: nextRange.startRow,
+          endRow: nextRange.endRow,
+          startCol: nextRange.startCol,
+          endCol: nextRange.endCol,
+        }
+      : nextRange.refKind === "rows"
+        ? {
+            startRow: nextRange.startRow,
+            endRow: nextRange.endRow,
+            startCol: 0,
+            endCol: 0,
+          }
+        : {
+            startRow: 0,
+            endRow: 0,
+            startCol: nextRange.startCol,
+            endCol: nextRange.endCol,
+          };
+  return {
+    ...reference,
+    address: formatParsedRangeReference(nextRange),
+    refKind: nextRange.refKind,
+    startAddress: nextRange.startAddress,
+    endAddress: nextRange.endAddress,
+    ...bounds,
+    ...(reference.explicitSheet !== undefined ? { explicitSheet: reference.explicitSheet } : {}),
+  };
+}
+
+function translateParsedDependencyReference(
+  reference: ParsedDependencyReference,
+  rowDelta: number,
+  colDelta: number,
+): ParsedDependencyReference {
+  return reference.kind === "cell"
+    ? translateParsedCellReference(reference, rowDelta, colDelta)
+    : translateParsedRangeReference(reference, rowDelta, colDelta);
+}
+
+function translateQualifiedCellReference(raw: string, rowDelta: number, colDelta: number): string {
+  const explicitlyQualified = raw.includes("!");
+  const parsed = parseCellAddress(raw);
+  const nextAddress = translateCellReference(parsed.text, rowDelta, colDelta);
+  return explicitlyQualified
+    ? formatQualifiedCellReference(parsed.sheetName, nextAddress)
+    : nextAddress;
+}
+
+function formatParsedCellReference(reference: ParsedCellReferenceInfo): string {
+  const localAddress = formatParsedLocalCellReference(reference);
+  return reference.explicitSheet || reference.sheetName !== undefined
+    ? formatQualifiedCellReference(reference.sheetName, localAddress)
+    : localAddress;
+}
+
+function formatParsedLocalCellReference(reference: ParsedCellReferenceInfo): string {
+  const parts =
+    reference.row !== undefined &&
+    reference.col !== undefined &&
+    reference.rowAbsolute !== undefined &&
+    reference.colAbsolute !== undefined
+      ? {
+          row: reference.row,
+          col: reference.col,
+          rowAbsolute: reference.rowAbsolute,
+          colAbsolute: reference.colAbsolute,
+        }
+      : parseCellReferenceParts(reference.address);
+  if (!parts) {
+    return stripSheetQualifier(reference.address);
+  }
+  return formatCellReference(parts, parts.row, parts.col);
+}
+
+function formatParsedRangeReference(reference: ParsedRangeReferenceInfo): string {
+  return formatQualifiedRangeReference(
+    reference.explicitSheet ? reference.sheetName : undefined,
+    reference.startAddress,
+    reference.endAddress,
+  );
+}
+
+function stripSheetQualifier(reference: string): string {
+  const bang = reference.lastIndexOf("!");
+  return bang === -1 ? reference : reference.slice(bang + 1);
+}
+
+function translatedCellInstructionKey(sheetName: string | undefined, address: string): string {
+  return `${sheetName ?? ""}\t${address}`;
+}
+
+function translatedRangeInstructionKey(
+  sheetName: string | undefined,
+  refKind: "cells" | "rows" | "cols",
+  start: string,
+  end: string,
+): string {
+  return `${sheetName ?? ""}\t${refKind}\t${start}\t${end}`;
+}
+
+function buildTranslatedCellReferenceMap(
+  original: readonly ParsedCellReferenceInfo[] | undefined,
+  translated: readonly ParsedCellReferenceInfo[] | undefined,
+): Map<string, ParsedCellReferenceInfo> {
+  const output = new Map<string, ParsedCellReferenceInfo>();
+  if (!original || !translated || original.length !== translated.length) {
+    return output;
+  }
+  for (let index = 0; index < original.length; index += 1) {
+    const source = original[index];
+    const target = translated[index];
+    if (!source || !target) {
+      continue;
+    }
+    output.set(
+      translatedCellInstructionKey(source.sheetName, formatParsedLocalCellReference(source)),
+      target,
+    );
+  }
+  return output;
+}
+
+function buildTranslatedRangeReferenceMap(
+  original: readonly ParsedRangeReferenceInfo[] | undefined,
+  translated: readonly ParsedRangeReferenceInfo[] | undefined,
+): Map<string, ParsedRangeReferenceInfo> {
+  const output = new Map<string, ParsedRangeReferenceInfo>();
+  if (!original || !translated || original.length !== translated.length) {
+    return output;
+  }
+  for (let index = 0; index < original.length; index += 1) {
+    const source = original[index];
+    const target = translated[index];
+    if (!source || !target) {
+      continue;
+    }
+    output.set(
+      translatedRangeInstructionKey(
+        source.sheetName,
+        source.refKind,
+        source.startAddress,
+        source.endAddress,
+      ),
+      target,
+    );
+  }
+  return output;
+}
+
+function formatParsedDependencyReference(reference: ParsedDependencyReference): string {
+  return reference.kind === "cell"
+    ? formatParsedCellReference(reference)
+    : formatParsedRangeReference(reference);
+}
+
+function translateQualifiedDependencyReference(
+  raw: string,
+  rowDelta: number,
+  colDelta: number,
+): string {
+  if (!raw.includes(":")) {
+    return translateQualifiedCellReference(raw, rowDelta, colDelta);
+  }
+  return translateQualifiedRangeReference(raw, rowDelta, colDelta);
+}
+
+function translateQualifiedRangeReference(raw: string, rowDelta: number, colDelta: number): string {
+  const explicitlyQualified = raw.includes("!");
+  const parsed = parseRangeAddress(raw);
+  const nextRange = translateRangeAddress(parsed, rowDelta, colDelta);
+  if (explicitlyQualified) {
+    return formatRangeAddress(nextRange);
+  }
+  return `${nextRange.start.text}:${nextRange.end.text}`;
+}
+
+function translateRangeAddress(
+  range: RangeAddress,
+  rowDelta: number,
+  colDelta: number,
+): RangeAddress {
+  switch (range.kind) {
+    case "cells": {
+      const startAddress = translateCellReference(range.start.text, rowDelta, colDelta);
+      const endAddress = translateCellReference(range.end.text, rowDelta, colDelta);
+      return parseRangeAddress(
+        formatQualifiedRangeReference(range.sheetName, startAddress, endAddress),
+      );
+    }
+    case "rows": {
+      const start = translateRowReference(range.start.text, rowDelta);
+      const end = translateRowReference(range.end.text, rowDelta);
+      return parseRangeAddress(formatQualifiedRangeReference(range.sheetName, start, end));
+    }
+    case "cols": {
+      const start = translateColumnReference(range.start.text, colDelta);
+      const end = translateColumnReference(range.end.text, colDelta);
+      return parseRangeAddress(formatQualifiedRangeReference(range.sheetName, start, end));
+    }
+  }
+}
+
+function translateParsedRangeReferenceInfo(
+  reference: ParsedRangeReferenceInfo,
+  rowDelta: number,
+  colDelta: number,
+): ParsedRangeReferenceInfo {
+  if (reference.refKind === "cells") {
+    const startRow =
+      (reference.startRowAbsolute ?? false) ? reference.startRow : reference.startRow + rowDelta;
+    const endRow =
+      (reference.endRowAbsolute ?? false) ? reference.endRow : reference.endRow + rowDelta;
+    const startCol =
+      (reference.startColAbsolute ?? false) ? reference.startCol : reference.startCol + colDelta;
+    const endCol =
+      (reference.endColAbsolute ?? false) ? reference.endCol : reference.endCol + colDelta;
+    const startAddress = formatCellReference(
+      {
+        row: reference.startRow,
+        col: reference.startCol,
+        rowAbsolute: reference.startRowAbsolute ?? false,
+        colAbsolute: reference.startColAbsolute ?? false,
+      },
+      startRow,
+      startCol,
+    );
+    const endAddress = formatCellReference(
+      {
+        row: reference.endRow,
+        col: reference.endCol,
+        rowAbsolute: reference.endRowAbsolute ?? false,
+        colAbsolute: reference.endColAbsolute ?? false,
+      },
+      endRow,
+      endCol,
+    );
+    return {
+      ...reference,
+      startAddress,
+      endAddress,
+      startRow,
+      endRow,
+      startCol,
+      endCol,
+    };
+  }
+  if (reference.refKind === "rows") {
+    const startRow =
+      (reference.startRowAbsolute ?? false) ? reference.startRow : reference.startRow + rowDelta;
+    const endRow =
+      (reference.endRowAbsolute ?? false) ? reference.endRow : reference.endRow + rowDelta;
+    return {
+      ...reference,
+      startAddress: formatAxisReference(reference.startRowAbsolute ?? false, startRow, "row"),
+      endAddress: formatAxisReference(reference.endRowAbsolute ?? false, endRow, "row"),
+      startRow,
+      endRow,
+      startCol: 0,
+      endCol: 0,
+    };
+  }
+  const startCol =
+    (reference.startColAbsolute ?? false) ? reference.startCol : reference.startCol + colDelta;
+  const endCol =
+    (reference.endColAbsolute ?? false) ? reference.endCol : reference.endCol + colDelta;
+  return {
+    ...reference,
+    startAddress: formatAxisReference(reference.startColAbsolute ?? false, startCol, "column"),
+    endAddress: formatAxisReference(reference.endColAbsolute ?? false, endCol, "column"),
+    startRow: 0,
+    endRow: 0,
+    startCol,
+    endCol,
   };
 }
 
@@ -800,6 +1457,190 @@ function rewriteJsPlanInstruction(
   }
 }
 
+function translateJsPlanInstruction(
+  instruction: JsPlanInstruction,
+  rowDelta: number,
+  colDelta: number,
+): JsPlanInstruction {
+  switch (instruction.opcode) {
+    case "push-cell":
+      return {
+        ...instruction,
+        address: translateCellReference(instruction.address, rowDelta, colDelta),
+      };
+    case "push-range": {
+      const nextRange = translatePlanRangeInstruction(
+        instruction.sheetName,
+        instruction.start,
+        instruction.end,
+        rowDelta,
+        colDelta,
+      );
+      return { ...instruction, ...nextRange };
+    }
+    case "lookup-exact-match":
+    case "lookup-approximate-match": {
+      const nextRange = translatePlanRangeInstruction(
+        instruction.sheetName,
+        instruction.start,
+        instruction.end,
+        rowDelta,
+        colDelta,
+      );
+      const parsed = parseRangeAddress(
+        formatQualifiedRangeReference(instruction.sheetName, nextRange.start, nextRange.end),
+      );
+      if (parsed.kind !== "cells") {
+        return instruction;
+      }
+      return {
+        ...instruction,
+        ...nextRange,
+        startRow: parsed.start.row,
+        endRow: parsed.end.row,
+        startCol: parsed.start.col,
+        endCol: parsed.end.col,
+      };
+    }
+    case "call":
+      return instruction.argRefs
+        ? {
+            ...instruction,
+            argRefs: instruction.argRefs.map((argRef) =>
+              argRef ? translateReferenceOperand(argRef, rowDelta, colDelta) : argRef,
+            ),
+          }
+        : instruction;
+    case "push-lambda":
+      return {
+        ...instruction,
+        body: instruction.body.map((step) => translateJsPlanInstruction(step, rowDelta, colDelta)),
+      };
+    case "push-number":
+    case "push-boolean":
+    case "push-string":
+    case "push-error":
+    case "push-name":
+    case "unary":
+    case "binary":
+    case "invoke":
+    case "begin-scope":
+    case "bind-name":
+    case "end-scope":
+    case "jump-if-false":
+    case "jump":
+    case "return":
+      return instruction;
+  }
+}
+
+function translateJsPlanInstructionWithoutAst(
+  instruction: JsPlanInstruction,
+  translatedCellMap: ReadonlyMap<string, ParsedCellReferenceInfo>,
+  translatedRangeMap: ReadonlyMap<string, ParsedRangeReferenceInfo>,
+  rowDelta: number,
+  colDelta: number,
+): JsPlanInstruction {
+  switch (instruction.opcode) {
+    case "push-cell": {
+      const translated = translatedCellMap.get(
+        translatedCellInstructionKey(instruction.sheetName, instruction.address),
+      );
+      return translated
+        ? {
+            ...instruction,
+            address: formatParsedLocalCellReference(translated),
+          }
+        : translateJsPlanInstruction(instruction, rowDelta, colDelta);
+    }
+    case "push-range": {
+      const translated = translatedRangeMap.get(
+        translatedRangeInstructionKey(
+          instruction.sheetName,
+          instruction.refKind,
+          instruction.start,
+          instruction.end,
+        ),
+      );
+      return translated
+        ? {
+            ...instruction,
+            start: translated.startAddress,
+            end: translated.endAddress,
+          }
+        : translateJsPlanInstruction(instruction, rowDelta, colDelta);
+    }
+    case "lookup-exact-match":
+    case "lookup-approximate-match": {
+      const translated = translatedRangeMap.get(
+        translatedRangeInstructionKey(
+          instruction.sheetName,
+          instruction.refKind,
+          instruction.start,
+          instruction.end,
+        ),
+      );
+      if (!translated || translated.refKind !== "cells") {
+        return translateJsPlanInstruction(instruction, rowDelta, colDelta);
+      }
+      return {
+        ...instruction,
+        start: translated.startAddress,
+        end: translated.endAddress,
+        startRow: translated.startRow,
+        endRow: translated.endRow,
+        startCol: translated.startCol,
+        endCol: translated.endCol,
+      };
+    }
+    case "call":
+      return instruction.argRefs
+        ? {
+            ...instruction,
+            argRefs: instruction.argRefs.map((argRef) =>
+              argRef
+                ? translateReferenceOperandWithoutAst(
+                    argRef,
+                    translatedCellMap,
+                    translatedRangeMap,
+                    rowDelta,
+                    colDelta,
+                  )
+                : argRef,
+            ),
+          }
+        : instruction;
+    case "push-lambda":
+      return {
+        ...instruction,
+        body: instruction.body.map((step) =>
+          translateJsPlanInstructionWithoutAst(
+            step,
+            translatedCellMap,
+            translatedRangeMap,
+            rowDelta,
+            colDelta,
+          ),
+        ),
+      };
+    case "push-number":
+    case "push-boolean":
+    case "push-string":
+    case "push-error":
+    case "push-name":
+    case "unary":
+    case "binary":
+    case "invoke":
+    case "begin-scope":
+    case "bind-name":
+    case "end-scope":
+    case "jump-if-false":
+    case "jump":
+    case "return":
+      return instruction;
+  }
+}
+
 function rewriteReferenceOperand(
   operand: ReferenceOperand,
   ownerSheetName: string,
@@ -838,6 +1679,99 @@ function rewriteReferenceOperand(
     case "row":
     case "col":
       return operand;
+  }
+}
+
+function translateReferenceOperand(
+  operand: ReferenceOperand,
+  rowDelta: number,
+  colDelta: number,
+): ReferenceOperand {
+  switch (operand.kind) {
+    case "cell":
+      return operand.address
+        ? {
+            ...operand,
+            address: translateCellReference(operand.address, rowDelta, colDelta),
+          }
+        : operand;
+    case "range":
+      if (!operand.start || !operand.end || !operand.refKind) {
+        return operand;
+      }
+      return {
+        ...operand,
+        ...translatePlanRangeInstruction(
+          operand.sheetName,
+          operand.start,
+          operand.end,
+          rowDelta,
+          colDelta,
+        ),
+      };
+    case "row":
+      return operand.address
+        ? {
+            ...operand,
+            address: translateRowReference(operand.address, rowDelta),
+          }
+        : operand;
+    case "col":
+      return operand.address
+        ? {
+            ...operand,
+            address: translateColumnReference(operand.address, colDelta),
+          }
+        : operand;
+  }
+}
+
+function translateReferenceOperandWithoutAst(
+  operand: ReferenceOperand,
+  translatedCellMap: ReadonlyMap<string, ParsedCellReferenceInfo>,
+  translatedRangeMap: ReadonlyMap<string, ParsedRangeReferenceInfo>,
+  rowDelta: number,
+  colDelta: number,
+): ReferenceOperand {
+  switch (operand.kind) {
+    case "cell": {
+      if (!operand.address) {
+        return operand;
+      }
+      const translated = translatedCellMap.get(
+        translatedCellInstructionKey(operand.sheetName, operand.address),
+      );
+      return translated
+        ? {
+            ...operand,
+            address: formatParsedLocalCellReference(translated),
+          }
+        : translateReferenceOperand(operand, rowDelta, colDelta);
+    }
+    case "range": {
+      if (!operand.start || !operand.end || !operand.refKind) {
+        return operand;
+      }
+      const translated = translatedRangeMap.get(
+        translatedRangeInstructionKey(
+          operand.sheetName,
+          operand.refKind,
+          operand.start,
+          operand.end,
+        ),
+      );
+      return translated
+        ? {
+            ...operand,
+            start: translated.startAddress,
+            end: translated.endAddress,
+            refKind: translated.refKind,
+          }
+        : translateReferenceOperand(operand, rowDelta, colDelta);
+    }
+    case "row":
+    case "col":
+      return translateReferenceOperand(operand, rowDelta, colDelta);
   }
 }
 
@@ -889,6 +1823,21 @@ function rewritePlanRangeInstruction(
         end: nextRange.end.text,
       }
     : undefined;
+}
+
+function translatePlanRangeInstruction(
+  explicitSheetName: string | undefined,
+  start: string,
+  end: string,
+  rowDelta: number,
+  colDelta: number,
+): { start: string; end: string } {
+  const parsed = parseRangeAddress(formatQualifiedRangeReference(explicitSheetName, start, end));
+  const nextRange = translateRangeAddress(parsed, rowDelta, colDelta);
+  return {
+    start: nextRange.start.text,
+    end: nextRange.end.text,
+  };
 }
 
 function formatQualifiedCellReference(sheetName: string | undefined, address: string): string {

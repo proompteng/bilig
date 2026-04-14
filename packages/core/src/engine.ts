@@ -134,6 +134,7 @@ export class SpreadsheetEngine {
   private readonly reverseDefinedNameEdges = new Map<string, Set<number>>();
   private readonly reverseTableEdges = new Map<string, Set<number>>();
   private readonly reverseSpillEdges = new Map<string, Set<number>>();
+  private readonly reverseAggregateColumnEdges = new Map<number, Set<number>>();
   private readonly reverseExactLookupColumnEdges = new Map<number, EdgeSlice>();
   private readonly reverseSortedLookupColumnEdges = new Map<number, EdgeSlice>();
   private readonly pivotOutputOwners = new Map<number, string>();
@@ -147,6 +148,7 @@ export class SpreadsheetEngine {
   private readonly undoStack: TransactionLogEntry[] = [];
   private readonly redoStack: TransactionLogEntry[] = [];
   private transactionReplayDepth = 0;
+  private useColumnIndexEnabled: boolean;
   private dependencyBuildEpoch = 1;
   private dependencyBuildSeen: U32 = new Uint32Array(128);
   private dependencyBuildCells: U32 = new Uint32Array(128);
@@ -176,6 +178,7 @@ export class SpreadsheetEngine {
     this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
     this.formulas = new FormulaTable(this.workbook.cellStore);
     this.replicaState = createReplicaState(options.replicaId ?? "local");
+    this.useColumnIndexEnabled = options.useColumnIndex ?? false;
     this.state = createEngineRuntimeState({
       workbook: this.workbook,
       strings: this.strings,
@@ -191,8 +194,11 @@ export class SpreadsheetEngine {
       selectionListeners: this.selectionListeners,
       undoStack: this.undoStack,
       redoStack: this.redoStack,
-      useColumnIndex: options.useColumnIndex ?? false,
       trackReplicaVersions: options.trackReplicaVersions ?? true,
+      getUseColumnIndex: () => this.useColumnIndexEnabled,
+      setUseColumnIndex: (enabled) => {
+        this.useColumnIndexEnabled = enabled;
+      },
       getSelection: () => this.selection,
       setSelection: (selection) => {
         this.selection = selection;
@@ -228,6 +234,7 @@ export class SpreadsheetEngine {
           reverseDefinedNameEdges: this.reverseDefinedNameEdges,
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
+          reverseAggregateColumnEdges: this.reverseAggregateColumnEdges,
           reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
           reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
@@ -261,6 +268,7 @@ export class SpreadsheetEngine {
           reverseDefinedNameEdges: this.reverseDefinedNameEdges,
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
+          reverseAggregateColumnEdges: this.reverseAggregateColumnEdges,
           reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
           reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
@@ -394,6 +402,9 @@ export class SpreadsheetEngine {
         state: this.state,
         reverseState: {
           reverseSpillEdges: this.reverseSpillEdges,
+          reverseAggregateColumnEdges: this.reverseAggregateColumnEdges,
+          reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
+          reverseSortedLookupColumnEdges: this.reverseSortedLookupColumnEdges,
         },
         getBatchMutationDepth: () => this.batchMutationDepth,
         setBatchMutationDepth: (next) => {
@@ -404,7 +415,13 @@ export class SpreadsheetEngine {
         noteExactLookupLiteralWrite: () => {
           return;
         },
+        noteSortedLookupLiteralWrite: () => {
+          return;
+        },
         invalidateExactLookupColumn: () => {
+          return;
+        },
+        invalidateSortedLookupColumn: () => {
           return;
         },
       },
@@ -460,6 +477,10 @@ export class SpreadsheetEngine {
 
   getLastMetrics(): RecalcMetrics {
     return this.lastMetrics;
+  }
+
+  setUseColumnIndexEnabled(enabled: boolean): void {
+    this.state.setUseColumnIndex(enabled);
   }
 
   getSyncState(): SyncState {

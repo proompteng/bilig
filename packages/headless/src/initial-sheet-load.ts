@@ -26,12 +26,17 @@ function sheetContainsFormulaContent(content: WorkPaperSheet): boolean {
   );
 }
 
-export function loadInitialMixedSheet(args: {
+export interface PreparedInitialMixedSheetLoad {
+  formulaRefs: EngineCellMutationRef[];
+  potentialNewCells: number;
+}
+
+export function prepareInitialMixedSheetLoad(args: {
   engine: SpreadsheetEngine;
   sheetId: number;
   content: WorkPaperSheet;
   rewriteFormula: (formula: string, destination: WorkPaperCellAddress) => string;
-}): void {
+}): PreparedInitialMixedSheetLoad {
   const sheet = args.engine.workbook.getSheetById(args.sheetId);
   if (!sheet) {
     throw new Error(`Unknown sheet id: ${args.sheetId}`);
@@ -121,8 +126,21 @@ export function loadInitialMixedSheet(args: {
     cellStore.onSetValue = previousOnSetValue;
   }
 
-  if (formulaRefs.length === 0) {
+  return {
+    formulaRefs,
+    potentialNewCells: formulaRefs.length,
+  };
+}
+
+export function loadInitialMixedSheet(args: {
+  engine: SpreadsheetEngine;
+  sheetId: number;
+  content: WorkPaperSheet;
+  rewriteFormula: (formula: string, destination: WorkPaperCellAddress) => string;
+}): void {
+  const prepared = prepareInitialMixedSheetLoad(args);
+  if (prepared.formulaRefs.length === 0) {
     return;
   }
-  args.engine.initializeCellFormulasAt(formulaRefs, formulaRefs.length);
+  args.engine.initializeCellFormulasAt(prepared.formulaRefs, prepared.potentialNewCells);
 }
