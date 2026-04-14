@@ -1,7 +1,8 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 import { SpreadsheetEngine } from "../engine.js";
+import { EnginePivotError } from "../engine/errors.js";
 import type { EnginePivotService } from "../engine/services/pivot-service.js";
 
 function isEnginePivotService(value: unknown): value is EnginePivotService {
@@ -78,5 +79,81 @@ describe("EnginePivotService", () => {
     );
 
     expect(resolved).toEqual({ tag: ValueTag.Number, value: 15 });
+  });
+
+  it("clears pivot ownership for one cell and rematerializes through the service boundary", async () => {
+    const engine = await buildPivotEngine();
+    const service = getPivotService(engine);
+    const pivot = engine.getPivotTables()[0];
+    if (!pivot) {
+      throw new TypeError("Expected pivot table");
+    }
+    const pivotCellIndex = engine.workbook.getCellIndex("Pivot", "B2");
+    if (pivotCellIndex === undefined) {
+      throw new TypeError("Expected pivot output cell");
+    }
+
+    const cleared = Effect.runSync(service.clearPivotForCell(pivotCellIndex));
+    expect(cleared.length).toBeGreaterThan(0);
+    expect(engine.getPivotTables()).toEqual([]);
+    expect(engine.getCellValue("Pivot", "B2")).toEqual({ tag: ValueTag.Empty });
+
+    const rematerialized = Effect.runSync(service.materializePivot(pivot));
+    expect(rematerialized.length).toBeGreaterThan(0);
+    expect(engine.getCellValue("Pivot", "B2")).toMatchObject({
+      tag: ValueTag.String,
+      value: "Region",
+    });
+    expect(engine.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
+  });
+
+  it("wraps materialize, resolve, clear-owned, and clear-for-cell failures with EnginePivotError", async () => {
+    const engine = await buildPivotEngine();
+    const service = getPivotService(engine);
+    const pivot = engine.getPivotTables()[0];
+    if (!pivot) {
+      throw new TypeError("Expected pivot table");
+    }
+
+    const getValueSpy = vi.spyOn(engine.workbook.cellStore, "getValue").mockImplementation(() => {
+      throw new Error("pivot cell explode");
+    });
+    const materialize = Effect.runSync(Effect.either(service.materializePivot(pivot)));
+    expect(materialize._tag).toBe("Left");
+    expect(materialize.left).toBeInstanceOf(EnginePivotError);
+    expect(materialize.left.message).toContain(`Failed to materialize pivot ${pivot.name}`);
+    const clearedOwned = Effect.runSync(Effect.either(service.clearOwnedPivot(pivot)));
+    expect(clearedOwned._tag).toBe("Left");
+    expect(clearedOwned.left).toBeInstanceOf(EnginePivotError);
+    expect(clearedOwned.left.message).toContain(
+      `Failed to clear pivot output ownership for ${pivot.name}`,
+    );
+    getValueSpy.mockRestore();
+
+    const listPivotsSpy = vi.spyOn(engine.workbook, "listPivots").mockImplementation(() => {
+      throw new Error("resolve explode");
+    });
+    const resolved = Effect.runSync(
+      Effect.either(service.resolvePivotData("Pivot", "B2", "Sales", [])),
+    );
+    expect(resolved._tag).toBe("Left");
+    expect(resolved.left).toBeInstanceOf(EnginePivotError);
+    expect(resolved.left.message).toContain("Failed to resolve pivot data for Pivot!B2");
+    listPivotsSpy.mockRestore();
+
+    const pivotCellIndex = engine.workbook.getCellIndex("Pivot", "B2");
+    if (pivotCellIndex === undefined) {
+      throw new TypeError("Expected pivot output cell");
+    }
+    const getPivotByKeySpy = vi.spyOn(engine.workbook, "getPivotByKey").mockImplementation(() => {
+      throw new Error("clear cell explode");
+    });
+    const clearedForCell = Effect.runSync(Effect.either(service.clearPivotForCell(pivotCellIndex)));
+    expect(clearedForCell._tag).toBe("Left");
+    expect(clearedForCell.left).toBeInstanceOf(EnginePivotError);
+    expect(clearedForCell.left.message).toContain(
+      `Failed to clear pivot ownership for cell ${pivotCellIndex}`,
+    );
+    getPivotByKeySpy.mockRestore();
   });
 });

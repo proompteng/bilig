@@ -49,6 +49,35 @@ function getMutationSupportService(engine: SpreadsheetEngine): EngineMutationSup
   return support;
 }
 
+function readRuntimeDirectLookupKind(
+  engine: SpreadsheetEngine,
+  sheetName: string,
+  address: string,
+): string | undefined {
+  const formulas = Reflect.get(engine, "formulas");
+  if (
+    typeof formulas !== "object" ||
+    formulas === null ||
+    typeof Reflect.get(formulas, "get") !== "function"
+  ) {
+    throw new TypeError("Expected internal formulas store");
+  }
+  const cellIndex = engine.workbook.getCellIndex(sheetName, address);
+  if (cellIndex === undefined) {
+    throw new Error(`expected runtime formula at ${sheetName}!${address}`);
+  }
+  const runtimeFormula = Reflect.get(formulas, "get").call(formulas, cellIndex);
+  if (typeof runtimeFormula !== "object" || runtimeFormula === null) {
+    throw new Error(`expected runtime formula at ${sheetName}!${address}`);
+  }
+  const directLookup = Reflect.get(runtimeFormula, "directLookup");
+  if (typeof directLookup !== "object" || directLookup === null) {
+    return undefined;
+  }
+  const kind = Reflect.get(directLookup, "kind");
+  return typeof kind === "string" ? kind : undefined;
+}
+
 describe("EngineFormulaEvaluationService", () => {
   it("re-evaluates JS indirection spills through the service", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "evaluation-indirect" });
@@ -406,6 +435,139 @@ describe("EngineFormulaEvaluationService", () => {
     expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
 
+  it("refreshes direct uniform numeric lookup descriptors across exact and approximate branches", async () => {
+    const exactEngine = new SpreadsheetEngine({
+      workbookName: "evaluation-direct-exact-uniform-refresh",
+      useColumnIndex: true,
+    });
+    await exactEngine.ready();
+    exactEngine.createSheet("Sheet1");
+    exactEngine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A4" }, [
+      [1],
+      [2],
+      [3],
+      [4],
+    ]);
+    exactEngine.setCellValue("Sheet1", "B1", 3);
+    exactEngine.setCellFormula("Sheet1", "C1", "MATCH(B1,A1:A4,0)");
+
+    const exactEvaluation = getEvaluationService(exactEngine);
+    const exactIndex = exactEngine.workbook.getCellIndex("Sheet1", "C1");
+    expect(exactIndex).toBeDefined();
+    expect(readRuntimeDirectLookupKind(exactEngine, "Sheet1", "C1")).toBe("exact-uniform-numeric");
+
+    Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!));
+    expect(exactEngine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 3 });
+
+    exactEngine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A4" }, [
+      [12],
+      [22],
+      [32],
+      [42],
+    ]);
+    exactEngine.setCellValue("Sheet1", "B1", 32);
+    Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!));
+    expect(exactEngine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(readRuntimeDirectLookupKind(exactEngine, "Sheet1", "C1")).toBe("exact");
+
+    exactEngine.setCellValue("Sheet1", "B1", "32");
+    Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!));
+    expect(exactEngine.getCellValue("Sheet1", "C1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    exactEngine.setCellFormula("Sheet1", "B1", "1/0");
+    expect(
+      Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!)),
+    ).toBeUndefined();
+
+    const approximateEngine = new SpreadsheetEngine({
+      workbookName: "evaluation-direct-approx-uniform-refresh",
+    });
+    await approximateEngine.ready();
+    approximateEngine.createSheet("Sheet1");
+    approximateEngine.setRangeValues(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B4" },
+      [
+        [10, 40],
+        [20, 30],
+        [30, 20],
+        [40, 10],
+      ],
+    );
+    approximateEngine.setCellValue("Sheet1", "D1", 35);
+    approximateEngine.setCellValue("Sheet1", "E1", 25);
+    approximateEngine.setCellFormula("Sheet1", "F1", "MATCH(D1,A1:A4,1)");
+    approximateEngine.setCellFormula("Sheet1", "F2", "MATCH(E1,B1:B4,-1)");
+
+    const approximateEvaluation = getEvaluationService(approximateEngine);
+    const ascendingIndex = approximateEngine.workbook.getCellIndex("Sheet1", "F1");
+    const descendingIndex = approximateEngine.workbook.getCellIndex("Sheet1", "F2");
+    expect(ascendingIndex).toBeDefined();
+    expect(descendingIndex).toBeDefined();
+    expect(readRuntimeDirectLookupKind(approximateEngine, "Sheet1", "F1")).toBe(
+      "approximate-uniform-numeric",
+    );
+    expect(readRuntimeDirectLookupKind(approximateEngine, "Sheet1", "F2")).toBe(
+      "approximate-uniform-numeric",
+    );
+
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(ascendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F1")).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+
+    approximateEngine.setCellValue("Sheet1", "D1", null);
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(ascendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    approximateEngine.setCellValue("Sheet1", "D1", 50);
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(ascendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F1")).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+
+    approximateEngine.setCellValue("Sheet1", "D1", "pear");
+    expect(
+      Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(ascendingIndex!)),
+    ).toBeUndefined();
+
+    approximateEngine.setRangeValues(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A4" },
+      [[100], [90], [80], [70]],
+    );
+    approximateEngine.setCellValue("Sheet1", "D1", 85);
+    expect(
+      Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(ascendingIndex!)),
+    ).toBeUndefined();
+
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(descendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F2")).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+
+    approximateEngine.setCellValue("Sheet1", "E1", 50);
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(descendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    approximateEngine.setCellValue("Sheet1", "E1", 5);
+    Effect.runSync(approximateEvaluation.evaluateDirectLookupFormula(descendingIndex!));
+    expect(approximateEngine.getCellValue("Sheet1", "F2")).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+  });
+
   it("evaluates direct aggregate formulas with progressive prefixes and coercion rules", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "evaluation-direct-aggregate-service" });
     await engine.ready();
@@ -462,5 +624,41 @@ describe("EngineFormulaEvaluationService", () => {
       code: ErrorCode.NA,
     });
     expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("evaluates direct aggregate formulas with formula members from live cell state", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "evaluation-direct-aggregate-live" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellFormula("Sheet1", "A2", "A1*3");
+    engine.setCellFormula("Sheet1", "A3", 'IF(A1>0,NA(),"ok")');
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A3)");
+    engine.setCellFormula("Sheet1", "B2", "COUNT(A1:A3)");
+    engine.setCellFormula("Sheet1", "B3", "MIN(A1:A3)");
+    engine.setCellFormula("Sheet1", "B4", "MAX(A1:A3)");
+
+    const evaluation = getEvaluationService(engine);
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    const b2Index = engine.workbook.getCellIndex("Sheet1", "B2");
+    const b3Index = engine.workbook.getCellIndex("Sheet1", "B3");
+    const b4Index = engine.workbook.getCellIndex("Sheet1", "B4");
+    expect(b1Index).toBeDefined();
+    expect(b2Index).toBeDefined();
+    expect(b3Index).toBeDefined();
+    expect(b4Index).toBeDefined();
+
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b1Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b2Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b3Index!));
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b4Index!));
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Number, value: 6 });
   });
 });

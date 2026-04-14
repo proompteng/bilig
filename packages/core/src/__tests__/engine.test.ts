@@ -3088,6 +3088,110 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 16 });
   });
 
+  it("keeps direct aggregate dependents current through coordinate mutation APIs", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "direct-aggregate-coordinate-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+    if (sheetId === undefined) {
+      throw new Error("expected Sheet1 to exist");
+    }
+
+    engine.setCellValueAt(sheetId, 0, 0, 2);
+    engine.setCellValueAt(sheetId, 1, 0, 3);
+    engine.setCellFormulaAt(sheetId, 0, 1, "SUM(A1:A2)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 5 });
+
+    engine.setCellFormulaAt(sheetId, 1, 0, "A1*3");
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    engine.setCellValueAt(sheetId, 0, 0, 4);
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 16 });
+  });
+
+  it("keeps direct aggregate formulas current through coordinate clears", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "direct-aggregate-clear-at-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+    if (sheetId === undefined) {
+      throw new Error("expected Sheet1 to exist");
+    }
+
+    engine.setCellValueAt(sheetId, 0, 0, 2);
+    engine.setCellValueAt(sheetId, 1, 0, 3);
+    engine.setCellFormulaAt(sheetId, 0, 1, "SUM(A1:A2)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 5 });
+
+    engine.clearCellAt(sheetId, 1, 0);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("keeps lookup formulas current through coordinate literal writes", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "lookup-coordinate-write-spec",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+    if (sheetId === undefined) {
+      throw new Error("expected Sheet1 to exist");
+    }
+
+    engine.setCellValueAt(sheetId, 0, 0, 10);
+    engine.setCellValueAt(sheetId, 1, 0, 20);
+    engine.setCellValueAt(sheetId, 2, 0, 30);
+    engine.setCellValueAt(sheetId, 0, 3, 20);
+    engine.setCellValueAt(sheetId, 1, 3, 25);
+    engine.setCellFormulaAt(sheetId, 0, 4, "XMATCH(D1,A1:A3,0)");
+    engine.setCellFormulaAt(sheetId, 0, 5, "MATCH(D2,A1:A3,1)");
+
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    engine.setCellValueAt(sheetId, 1, 0, 25);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    engine.setCellValueAt(sheetId, 1, 0, 20);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("keeps lookup formulas current through coordinate clears", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "lookup-coordinate-clear-spec",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")?.id;
+    if (sheetId === undefined) {
+      throw new Error("expected Sheet1 to exist");
+    }
+
+    engine.setCellValueAt(sheetId, 0, 0, 10);
+    engine.setCellValueAt(sheetId, 1, 0, 20);
+    engine.setCellValueAt(sheetId, 2, 0, 30);
+    engine.setCellValueAt(sheetId, 0, 3, 20);
+    engine.setCellValueAt(sheetId, 1, 3, 25);
+    engine.setCellFormulaAt(sheetId, 0, 4, "XMATCH(D1,A1:A3,0)");
+    engine.setCellFormulaAt(sheetId, 0, 5, "MATCH(D2,A1:A3,1)");
+
+    engine.clearCellAt(sheetId, 1, 0);
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
   it("uses the direct js path for exact MATCH and XMATCH while keeping XLOOKUP on wasm", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

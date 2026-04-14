@@ -333,4 +333,52 @@ describe("EngineFormulaBindingService", () => {
 
     getSheetNameByIdSpy.mockRestore();
   });
+
+  it("wraps tracked dependent rebinding failures with EngineFormulaBindingError", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "binding-tracked-wrapper-errors" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 7);
+    engine.createSheet("Other");
+    engine.setCellFormula("Other", "B1", "Sheet1!A1*2");
+    const formulaIndex = engine.workbook.getCellIndex("Other", "B1");
+    if (formulaIndex === undefined) {
+      throw new Error("expected tracked formula indices");
+    }
+    const reverseTableEdges = Reflect.get(engine, "reverseTableEdges");
+    if (!(reverseTableEdges instanceof Map)) {
+      throw new Error("expected table reverse-edge registry");
+    }
+    reverseTableEdges.set("Sales", new Set([formulaIndex]));
+
+    const getSheetNameByIdSpy = vi
+      .spyOn(engine.workbook, "getSheetNameById")
+      .mockImplementation(() => {
+        throw new Error("tracked explode");
+      });
+
+    const binding = getBindingService(engine);
+    const definedNames = Effect.runSync(
+      Effect.either(binding.rebindDefinedNameDependents([""], 0)),
+    );
+    expect(definedNames._tag).toBe("Left");
+    expect(definedNames.left).toBeInstanceOf(EngineFormulaBindingError);
+    expect(definedNames.left.message).toContain("Defined names must be non-empty");
+
+    const tableDependents = Effect.runSync(
+      Effect.either(binding.rebindTableDependents(["Sales"], 0)),
+    );
+    expect(tableDependents._tag).toBe("Left");
+    expect(tableDependents.left).toBeInstanceOf(EngineFormulaBindingError);
+    expect(tableDependents.left.message).toContain("tracked explode");
+
+    const sheetRebind = Effect.runSync(
+      Effect.either(binding.rebindFormulasForSheet("Sheet1", 0, [formulaIndex])),
+    );
+    expect(sheetRebind._tag).toBe("Left");
+    expect(sheetRebind.left).toBeInstanceOf(EngineFormulaBindingError);
+    expect(sheetRebind.left.message).toContain("tracked explode");
+
+    getSheetNameByIdSpy.mockRestore();
+  });
 });

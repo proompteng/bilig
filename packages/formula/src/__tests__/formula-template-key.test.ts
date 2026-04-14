@@ -35,4 +35,17 @@ describe("buildRelativeFormulaTemplateTokenKey", () => {
       buildRelativeFormulaTemplateKey("'My Sheet'!A4+SUM(B:B)", 3, 1),
     );
   });
+
+  it("keeps function-call tokens and row ranges in the token key", () => {
+    expect(buildRelativeFormulaTemplateTokenKey("SUM(2:4)+1", 1, 0)).toBe(
+      buildRelativeFormulaTemplateTokenKey("SUM(3:5)+1", 2, 0),
+    );
+    expect(buildRelativeFormulaTemplateTokenKey("MY_FUNC(1,A1)", 0, 0)).toContain("fn:MY_FUNC");
+  });
+
+  it("does not confuse plain numeric literals with row references", () => {
+    expect(buildRelativeFormulaTemplateTokenKey("1+A1", 0, 0)).not.toBe(
+      buildRelativeFormulaTemplateTokenKey("2+A2", 1, 0),
+    );
+  });
 });

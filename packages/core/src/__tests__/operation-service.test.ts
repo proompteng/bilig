@@ -148,6 +148,46 @@ describe("EngineOperationService", () => {
     expect(setLastMetricsSpy).toHaveBeenCalledTimes(3);
   });
 
+  it("applies structural and metadata batches through the service", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-structural-metadata" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellFormula("Sheet1", "D1", "SUM(A1:B1)");
+
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "insertColumns", sheetName: "Sheet1", start: 1, count: 1 },
+      {
+        kind: "updateRowMetadata",
+        sheetName: "Sheet1",
+        start: 0,
+        count: 1,
+        size: 24,
+        hidden: false,
+      },
+      {
+        kind: "updateColumnMetadata",
+        sheetName: "Sheet1",
+        start: 0,
+        count: 1,
+        size: 90,
+        hidden: true,
+      },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.getCell("Sheet1", "E1").formula).toBe("SUM(A1:C1)");
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getRowMetadata("Sheet1")).toEqual([
+      { sheetName: "Sheet1", start: 0, count: 1, size: 24, hidden: false },
+    ]);
+    expect(engine.getColumnMetadata("Sheet1")).toEqual([
+      { sheetName: "Sheet1", start: 0, count: 1, size: 90, hidden: true },
+    ]);
+  });
+
   it("treats batched clears of already-empty tracked dependency cells as no-ops", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "operation-batch-clear-empty-noop" });
     await engine.ready();

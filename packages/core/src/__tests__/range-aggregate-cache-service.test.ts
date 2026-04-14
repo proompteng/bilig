@@ -118,4 +118,87 @@ describe("RangeAggregateCacheService", () => {
     expect(reused).toBe(extended);
     expect(getColumnSlice).toHaveBeenCalledTimes(2);
   });
+
+  it("rebuilds cached prefixes when the column version changes", () => {
+    const values: CellValue[] = [{ tag: ValueTag.Number, value: 4 }];
+    let columnVersion = 5;
+    const getColumnSlice = vi.fn(
+      (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+        makeSlice(values, request, columnVersion, 1),
+    );
+    const workbook = new WorkbookStore("aggregate-cache-rebuild");
+    workbook.createSheet("Sheet1");
+    const sheet = workbook.getSheet("Sheet1");
+    if (!sheet) {
+      throw new Error("expected Sheet1 to exist");
+    }
+    sheet.columnVersions = Uint32Array.of(columnVersion);
+    sheet.structureVersion = 1;
+    const service = createRangeAggregateCacheService({
+      state: { workbook },
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        normalizeStringId: () => "",
+        normalizeLookupText: () => "",
+      },
+    });
+
+    const first = service.getOrBuildPrefix({ sheetName: "Sheet1", rowStart: 0, rowEnd: 0, col: 0 });
+    expect(first.prefixSums[0]).toBe(4);
+
+    columnVersion = 6;
+    sheet.columnVersions[0] = columnVersion;
+    const rebuilt = service.getOrBuildPrefix({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 0,
+      col: 0,
+    });
+
+    expect(rebuilt).not.toBe(first);
+    expect(getColumnSlice).toHaveBeenCalledTimes(2);
+  });
+
+  it("extends prefixes across number and boolean deltas", () => {
+    const values: CellValue[] = [
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.Number, value: 2 },
+    ];
+    const getColumnSlice = vi.fn(
+      (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+        makeSlice(values, request, 9, 2),
+    );
+    const workbook = new WorkbookStore("aggregate-cache-extend");
+    workbook.createSheet("Sheet1");
+    const sheet = workbook.getSheet("Sheet1");
+    if (!sheet) {
+      throw new Error("expected Sheet1 to exist");
+    }
+    sheet.columnVersions = Uint32Array.of(9);
+    sheet.structureVersion = 2;
+    const service = createRangeAggregateCacheService({
+      state: { workbook },
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        normalizeStringId: () => "",
+        normalizeLookupText: () => "",
+      },
+    });
+
+    service.getOrBuildPrefix({ sheetName: "Sheet1", rowStart: 0, rowEnd: 0, col: 0 });
+    const extended = service.getOrBuildPrefix({
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    });
+
+    expect(extended.prefixSums).toEqual(Float64Array.from([1, 2, 4]));
+    expect(extended.prefixCount).toEqual(Uint32Array.from([1, 2, 3]));
+  });
 });

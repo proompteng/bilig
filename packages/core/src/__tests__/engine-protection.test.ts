@@ -82,4 +82,25 @@ describe("SpreadsheetEngine protections", () => {
     expect(engine.deleteRangeProtection("protect-a1")).toBe(true);
     expect(() => engine.setCellValue("Sheet1", "A1", 7)).not.toThrow();
   });
+
+  it("reports missing range protections after deletion through the public API", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "protection-delete-missing" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeProtection({
+      id: "protect-a1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B2",
+      },
+      hideFormulas: true,
+    });
+
+    expect(engine.getRangeProtection("protect-a1")).toMatchObject({ id: "protect-a1" });
+    expect(engine.deleteRangeProtection("protect-a1")).toBe(true);
+    expect(engine.getRangeProtection("protect-a1")).toBeUndefined();
+    expect(engine.getRangeProtections("Sheet1")).toEqual([]);
+    expect(engine.deleteRangeProtection("protect-a1")).toBe(false);
+  });
 });

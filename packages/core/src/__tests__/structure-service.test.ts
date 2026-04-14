@@ -161,4 +161,45 @@ describe("EngineStructureService", () => {
     expect(engine.getCell("Data", "D1").formula).toBe("SUM(SalesRange)");
     expect(engine.getCellValue("Data", "D1")).toMatchObject({ tag: 1, value: 33 });
   });
+
+  it("rewrites formulas and axis identities across column deletes and moves through the service", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "structure-delete-move-columns" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellValue("Sheet1", "C1", 5);
+    engine.setCellFormula("Sheet1", "E1", "SUM(A1:B1)");
+    engine.updateColumnMetadata("Sheet1", 0, 1, 90, true);
+
+    Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: "deleteColumns",
+        sheetName: "Sheet1",
+        start: 0,
+        count: 1,
+      }),
+    );
+
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("SUM(A1:A1)");
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([]);
+
+    engine.updateColumnMetadata("Sheet1", 1, 1, 110, false);
+    engine.setCellFormula("Sheet1", "D2", "B1");
+
+    Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: "moveColumns",
+        sheetName: "Sheet1",
+        start: 1,
+        count: 1,
+        target: 0,
+      }),
+    );
+
+    expect(engine.getCell("Sheet1", "D2").formula).toBe("A1");
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([
+      { id: "column-2", index: 0, size: 110, hidden: false },
+    ]);
+  });
 });

@@ -39,4 +39,28 @@ describe("EngineFormulaTemplateNormalizationService", () => {
     expect(second.ast).not.toBe(first.ast);
     expect(second.deps).toEqual(["A2", "B2"]);
   });
+
+  it("reuses an existing family when the recent-column cache was displaced", () => {
+    const service = createEngineFormulaTemplateNormalizationService();
+
+    const first = service.compileForCell("A1+B1", 0, 2);
+    service.compileForCell("A1*B1", 0, 2);
+    const reused = service.compileForCell("A1+B1", 0, 2);
+
+    expect(reused.ast).toBe(first.ast);
+    expect(reused.source).toBe("A1+B1");
+    expect(reused.deps).toEqual(["A1", "B1"]);
+  });
+
+  it("translates an existing family after a recent-column cache miss", () => {
+    const service = createEngineFormulaTemplateNormalizationService();
+
+    const first = service.compileForCell("A1+B1", 0, 2);
+    service.compileForCell("A1*B1", 0, 2);
+    const translated = service.compileForCell("A2+B2", 1, 2);
+
+    expect(translated.ast).toBe(first.ast);
+    expect(translated.astMatchesSource).toBe(false);
+    expect(translated.deps).toEqual(["A2", "B2"]);
+  });
 });

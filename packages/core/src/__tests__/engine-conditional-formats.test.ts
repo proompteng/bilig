@@ -140,4 +140,32 @@ describe("SpreadsheetEngine conditional formats", () => {
       endAddress: "B5",
     });
   });
+
+  it("deletes conditional formats through the public API and reports missing ids", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "conditional-format-delete" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setConditionalFormat({
+      id: "cf-1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A3",
+      },
+      rule: {
+        kind: "cellIs",
+        operator: "greaterThan",
+        values: [5],
+      },
+      style: {
+        fill: { backgroundColor: "#00ff00" },
+      },
+    });
+
+    expect(engine.getConditionalFormat("cf-1")).toMatchObject({ id: "cf-1" });
+    expect(engine.deleteConditionalFormat("cf-1")).toBe(true);
+    expect(engine.getConditionalFormat("cf-1")).toBeUndefined();
+    expect(engine.getConditionalFormats("Sheet1")).toEqual([]);
+    expect(engine.deleteConditionalFormat("cf-1")).toBe(false);
+  });
 });
