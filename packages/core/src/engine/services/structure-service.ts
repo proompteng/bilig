@@ -194,14 +194,13 @@ export function createEngineStructureService(args: {
     const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
     const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
     const formula = args.state.formulas.get(cellIndex);
-    const version = args.state.workbook.cellStore.versions[cellIndex] ?? 0;
     if ((flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
       return false;
     }
     return !(
       formula === undefined &&
       explicitFormat === undefined &&
-      version === 0 &&
+      (flags & CellFlags.AuthoredBlank) === 0 &&
       (value.tag === ValueTag.Empty || value.tag === ValueTag.Error)
     );
   };

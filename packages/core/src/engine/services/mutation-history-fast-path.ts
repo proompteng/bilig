@@ -1,5 +1,6 @@
 import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import type { EngineOp } from "@bilig/workbook-domain";
+import { CellFlags } from "../../cell-store.js";
 import { makeCellKey, type WorkbookStore } from "../../workbook-store.js";
 import type { PreparedCellAddress, TransactionRecord } from "../runtime-state.js";
 
@@ -134,7 +135,9 @@ function restoreCellOpFromSnapshot(
   switch (snapshot.value.tag) {
     case ValueTag.Empty:
     case ValueTag.Error:
-      return { kind: "clearCell", sheetName, address };
+      return (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+        ? { kind: "setCellValue", sheetName, address, value: null, authoredBlank: true }
+        : { kind: "clearCell", sheetName, address };
     case ValueTag.Number:
     case ValueTag.Boolean:
     case ValueTag.String:

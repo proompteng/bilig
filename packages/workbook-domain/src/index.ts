@@ -122,7 +122,13 @@ export type WorkbookOp =
   | { kind: "deleteCommentThread"; sheetName: string; address: string }
   | { kind: "upsertNote"; note: WorkbookNoteOp }
   | { kind: "deleteNote"; sheetName: string; address: string }
-  | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
+  | {
+      kind: "setCellValue";
+      sheetName: string;
+      address: string;
+      value: LiteralInput;
+      authoredBlank?: boolean;
+    }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
   | { kind: "upsertCellStyle"; style: WorkbookCellStyleOp }

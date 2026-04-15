@@ -419,6 +419,7 @@ export class WorkbookStore {
       this.cellFormats.has(index) ||
       (flags &
         (CellFlags.HasFormula |
+          CellFlags.AuthoredBlank |
           CellFlags.SpillChild |
           CellFlags.PivotOutput |
           CellFlags.PendingDelete)) !==

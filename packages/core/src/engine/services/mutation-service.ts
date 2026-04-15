@@ -8,6 +8,7 @@ import {
 } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type CellSnapshot, type LiteralInput } from "@bilig/protocol";
+import { CellFlags } from "../../cell-store.js";
 import { normalizeRange } from "../../engine-range-utils.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
 import { structuralTransformForOp } from "../../engine-structural-utils.js";
@@ -94,6 +95,7 @@ interface ComparableCellState {
   formula?: string;
   value: LiteralInput | null;
   format: string | null;
+  authoredBlank?: boolean;
 }
 
 function translateFormulaForTarget(
@@ -320,7 +322,15 @@ export function createEngineMutationService(args: {
     switch (snapshot.value.tag) {
       case ValueTag.Empty:
       case ValueTag.Error:
-        return { kind: "clearCell", sheetName: sheet.name, address };
+        return (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+          ? {
+              kind: "setCellValue",
+              sheetName: sheet.name,
+              address,
+              value: null,
+              authoredBlank: true,
+            }
+          : { kind: "clearCell", sheetName: sheet.name, address };
       case ValueTag.Number:
       case ValueTag.Boolean:
       case ValueTag.String:
@@ -343,6 +353,8 @@ export function createEngineMutationService(args: {
     if (snapshot.formula !== undefined) {
       return { formula: snapshot.formula, value: null, format };
     }
+    const authoredBlank =
+      ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.AuthoredBlank) !== 0;
     switch (snapshot.value.tag) {
       case ValueTag.Number:
       case ValueTag.Boolean:
@@ -350,7 +362,7 @@ export function createEngineMutationService(args: {
         return { value: snapshot.value.value, format };
       case ValueTag.Empty:
       case ValueTag.Error:
-        return { value: null, format };
+        return { value: null, format, authoredBlank };
     }
   };
 
@@ -385,7 +397,11 @@ export function createEngineMutationService(args: {
         return { value: snapshot.value.value, format: formatOverride };
       case ValueTag.Empty:
       case ValueTag.Error:
-        return { value: null, format: formatOverride };
+        return {
+          value: null,
+          format: formatOverride,
+          authoredBlank: (snapshot.flags & CellFlags.AuthoredBlank) !== 0,
+        };
     }
   };
 
@@ -398,7 +414,9 @@ export function createEngineMutationService(args: {
     if (snapshot.formula !== undefined) {
       return true;
     }
-    return snapshot.value.tag !== ValueTag.Empty;
+    return (
+      snapshot.value.tag !== ValueTag.Empty || (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+    );
   };
 
   const hasStoredCellState = (sheetName: string, address: string): boolean => {
@@ -410,7 +428,8 @@ export function createEngineMutationService(args: {
     return (
       snapshot.formula !== undefined ||
       snapshot.value.tag !== ValueTag.Empty ||
-      args.state.workbook.getCellFormat(cellIndex) !== undefined
+      args.state.workbook.getCellFormat(cellIndex) !== undefined ||
+      ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.AuthoredBlank) !== 0
     );
   };
 
@@ -432,14 +451,10 @@ export function createEngineMutationService(args: {
     return (
       current.formula !== desired.formula ||
       current.value !== desired.value ||
-      current.format !== desired.format
+      current.format !== desired.format ||
+      current.authoredBlank !== desired.authoredBlank
     );
   };
-
-  const captureWorkbookCellState = (): EngineOp[] =>
-    [...args.state.workbook.sheetsByName.values()].flatMap((sheet) =>
-      args.captureSheetCellState(sheet.name),
-    );
 
   const buildFastMutationHistoryFromRefs = (
     refs: readonly EngineCellMutationRef[],
@@ -761,7 +776,9 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...captureWorkbookCellState(),
+          ...[...args.state.workbook.sheetsByName.values()].flatMap((sheet) =>
+            args.captureSheetCellState(sheet.name),
+          ),
           ...captureStructuralWorkbookMetadataOps(),
         ];
       }
@@ -796,7 +813,9 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...captureWorkbookCellState(),
+          ...[...args.state.workbook.sheetsByName.values()].flatMap((sheet) =>
+            args.captureSheetCellState(sheet.name),
+          ),
           ...captureStructuralWorkbookMetadataOps(),
         ];
       }

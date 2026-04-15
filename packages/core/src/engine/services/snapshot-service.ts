@@ -173,7 +173,7 @@ export function createEngineSnapshotService(args: {
                   if (
                     snapshot.formula === undefined &&
                     explicitFormat === undefined &&
-                    snapshot.version === 0 &&
+                    (snapshot.flags & CellFlags.AuthoredBlank) === 0 &&
                     (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
                   ) {
                     return;
@@ -384,6 +384,7 @@ export function createEngineSnapshotService(args: {
                   sheetName: sheet.name,
                   address: cell.address,
                   value: cell.value ?? null,
+                  authoredBlank: cell.value === null,
                 });
               }
               if (cell.format !== undefined) {

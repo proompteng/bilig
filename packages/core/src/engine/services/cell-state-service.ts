@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { ValueTag, type CellRangeRef, type CellSnapshot } from "@bilig/protocol";
 import { formatAddress, parseCellAddress, translateFormulaReferences } from "@bilig/formula";
 import type { EngineOp } from "@bilig/workbook-domain";
+import { CellFlags } from "../../cell-store.js";
 import { normalizeRange } from "../../engine-range-utils.js";
 import type { EngineRuntimeState } from "../runtime-state.js";
 import { EngineCellStateError } from "../errors.js";
@@ -93,7 +94,11 @@ export function createEngineCellStateService(args: {
     } else {
       switch (snapshot.value.tag) {
         case ValueTag.Empty:
-          ops.push({ kind: "clearCell", sheetName, address });
+          ops.push(
+            (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+              ? { kind: "setCellValue", sheetName, address, value: null, authoredBlank: true }
+              : { kind: "clearCell", sheetName, address },
+          );
           break;
         case ValueTag.Number:
         case ValueTag.Boolean:
@@ -144,7 +149,9 @@ export function createEngineCellStateService(args: {
     switch (snapshot.value.tag) {
       case ValueTag.Empty:
       case ValueTag.Error:
-        return [{ kind: "clearCell", sheetName, address }];
+        return (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+          ? [{ kind: "setCellValue", sheetName, address, value: null, authoredBlank: true }]
+          : [{ kind: "clearCell", sheetName, address }];
       case ValueTag.Number:
       case ValueTag.Boolean:
       case ValueTag.String:

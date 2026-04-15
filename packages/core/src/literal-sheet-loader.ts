@@ -31,10 +31,6 @@ export function loadLiteralSheetIntoEmptySheet(
         if (!shouldMaterialize(raw, rowIndex, colIndex)) {
           return;
         }
-        if (raw === null) {
-          return;
-        }
-
         const cellIndex = cellStore.allocate(sheetId, rowIndex, colIndex);
         workbook.cellKeyToIndex.set(makeCellKey(sheetId, rowIndex, colIndex), cellIndex);
         sheet.grid.set(rowIndex, colIndex, cellIndex);
@@ -68,7 +64,7 @@ function writeLiteralCell(
   cellStore: WorkbookStore["cellStore"],
   strings: StringPool,
   cellIndex: number,
-  raw: Exclude<LiteralInput, null>,
+  raw: LiteralInput,
 ): void {
   cellStore.flags[cellIndex] = CellFlags.Materialized;
   cellStore.formulaIds[cellIndex] = 0;
@@ -76,6 +72,14 @@ function writeLiteralCell(
   cellStore.versions[cellIndex] = 1;
   cellStore.topoRanks[cellIndex] = 0;
   cellStore.cycleGroupIds[cellIndex] = -1;
+
+  if (raw === null) {
+    cellStore.flags[cellIndex] |= CellFlags.AuthoredBlank;
+    cellStore.tags[cellIndex] = ValueTag.Empty;
+    cellStore.numbers[cellIndex] = 0;
+    cellStore.stringIds[cellIndex] = 0;
+    return;
+  }
 
   if (typeof raw === "number") {
     cellStore.tags[cellIndex] = ValueTag.Number;

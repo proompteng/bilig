@@ -9,6 +9,7 @@ export const enum CellFlags {
   PendingDelete = 1 << 5,
   SpillChild = 1 << 6,
   PivotOutput = 1 << 7,
+  AuthoredBlank = 1 << 8,
 }
 
 export class CellStore {

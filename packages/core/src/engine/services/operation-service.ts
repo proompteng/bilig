@@ -342,7 +342,9 @@ export function createEngineOperationService(args: {
   readonly invalidateSortedLookupColumn: (request: { sheetName: string; col: number }) => void;
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
-    args.state.batchListeners.forEach((listener) => listener(batch));
+    args.state.batchListeners.forEach((listener) => {
+      listener(batch);
+    });
   };
   const entityVersions: VersionStore = args.state.trackReplicaVersions
     ? args.state.entityVersions
@@ -603,7 +605,8 @@ export function createEngineOperationService(args: {
         return;
       }
       default:
-        return assertNever(op);
+        assertNever(op);
+        return;
     }
   };
 
@@ -943,7 +946,7 @@ export function createEngineOperationService(args: {
     );
   };
 
-  const isClearCellNoOp = (cellIndex: number): boolean => {
+  const isNullLiteralWriteNoOp = (cellIndex: number): boolean => {
     if (args.state.formulas.get(cellIndex) !== undefined) {
       return false;
     }
@@ -966,6 +969,13 @@ export function createEngineOperationService(args: {
       args.state.strings.get(id),
     );
     return value.tag === ValueTag.Empty;
+  };
+
+  const isClearCellNoOp = (cellIndex: number): boolean => {
+    if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.AuthoredBlank) !== 0) {
+      return false;
+    }
+    return isNullLiteralWriteNoOp(cellIndex);
   };
 
   const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => {
@@ -1494,7 +1504,7 @@ export function createEngineOperationService(args: {
             if (!isRestore) {
               if (
                 op.value === null &&
-                (existingIndex === undefined || isClearCellNoOp(existingIndex))
+                (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))
               ) {
                 break;
               }
@@ -1530,6 +1540,10 @@ export function createEngineOperationService(args: {
               op.value,
               args.state.strings,
             );
+            if (op.authoredBlank === true && op.value === null) {
+              args.state.workbook.cellStore.flags[cellIndex] =
+                (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank;
+            }
             args.state.workbook.notifyCellValueWritten(cellIndex);
             const exactLookupRequest = withOptionalLookupStringIds({
               sheetName: op.sheetName,
@@ -1801,7 +1815,7 @@ export function createEngineOperationService(args: {
             setEntityVersionForOp(op, order);
             break;
           }
-          case "upsertPivotTable":
+          case "upsertPivotTable": {
             const changedPivotUpsertOutputs = applyPivotUpsertOp(op, order);
             changedInputCount = args.markPivotRootsChanged(
               changedPivotUpsertOutputs,
@@ -1812,6 +1826,7 @@ export function createEngineOperationService(args: {
             });
             refreshAllPivots = true;
             break;
+          }
           case "deletePivotTable": {
             const changedPivotOutputs = applyPivotDeleteOp(op, order);
             changedInputCount = args.markPivotRootsChanged(changedPivotOutputs, changedInputCount);
@@ -2012,7 +2027,8 @@ export function createEngineOperationService(args: {
                 : { value: emptyValue(), stringId: undefined };
               if (
                 mutation.value === null &&
-                (existingIndex === undefined || isClearCellNoOp(existingIndex))
+                !isRestore &&
+                (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))
               ) {
                 break;
               }
@@ -2407,6 +2423,7 @@ export function createEngineOperationService(args: {
               args.state.workbook.cellStore.flags[existingIndex] =
                 (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
                 ~(
+                  CellFlags.AuthoredBlank |
                   CellFlags.HasFormula |
                   CellFlags.JsOnly |
                   CellFlags.InCycle |

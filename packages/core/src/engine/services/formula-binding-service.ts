@@ -1222,7 +1222,7 @@ export function createEngineFormulaBindingService(args: {
     if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
       return;
     }
-    if ((args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0) {
+    if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.AuthoredBlank) !== 0) {
       return;
     }
     args.state.workbook.pruneCellIfEmpty(cellIndex);
@@ -1233,7 +1233,7 @@ export function createEngineFormulaBindingService(args: {
       if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
         return;
       }
-      if ((args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0) {
+      if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.AuthoredBlank) !== 0) {
         return;
       }
       args.state.workbook.pruneCellIfEmpty(cellIndex);

@@ -375,6 +375,32 @@ describe("engine correctness", () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot);
   });
 
+  it("does not preserve temporary null dependency placeholders as authored blanks during undo", async () => {
+    const initialSnapshot = await createBaselineSnapshot("correctness-undo-temporary-blank-prune");
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-undo-temporary-blank-prune",
+      replicaId: "correctness-undo-temporary-blank-prune",
+    });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.setCellFormula(sheetName, "A1", "C3+A1");
+    engine.setRangeValues({ sheetName, startAddress: "B3", endAddress: "C3" }, [[0, false]]);
+    engine.deleteRows(sheetName, 0, 1);
+    engine.setRangeStyle(
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+      { fill: { backgroundColor: "#dbeafe" } },
+    );
+    engine.setCellFormula(sheetName, "A1", "A1+A1");
+    engine.setRangeStyle(
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+      { fill: { backgroundColor: "#dbeafe" } },
+    );
+
+    expect(undoAll(engine, 24)).toBeGreaterThan(0);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+  });
+
   it("does not reify inherited number formats into explicit cells during structural undo", async () => {
     const initialSnapshot = await createBaselineSnapshot("correctness-structural-format-prune");
     const engine = new SpreadsheetEngine({

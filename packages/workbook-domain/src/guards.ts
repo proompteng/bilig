@@ -654,7 +654,8 @@ export function isWorkbookOp(value: unknown): value is import("./index.js").Work
       return (
         hasString(value, "sheetName") &&
         hasString(value, "address") &&
-        isLiteralInput(value["value"])
+        isLiteralInput(value["value"]) &&
+        (value["authoredBlank"] === undefined || typeof value["authoredBlank"] === "boolean")
       );
     case "setCellFormula":
       return (

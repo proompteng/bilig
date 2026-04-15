@@ -1,5 +1,6 @@
 import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
 import type { CellStore } from "./cell-store.js";
+import { CellFlags } from "./cell-store.js";
 import { StringPool } from "./string-pool.js";
 
 export function normalizePivotLookupText(value: string): string {
@@ -48,6 +49,7 @@ export function writeLiteralToCellStore(
     cellStore.stringIds[index] = stringPool.intern(input);
     cellStore.numbers[index] = 0;
   }
+  cellStore.flags[index] = (cellStore.flags[index] ?? 0) & ~CellFlags.AuthoredBlank;
   cellStore.versions[index] = (cellStore.versions[index] ?? 0) + 1;
   cellStore.onSetValue?.(index);
 }
