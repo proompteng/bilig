@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { ValueTag } from "@bilig/protocol";
+import { ErrorCode, ValueTag } from "@bilig/protocol";
 import { createBatch } from "../replica-state.js";
 import { SpreadsheetEngine } from "../engine.js";
 import type { EngineOperationService } from "../engine/services/operation-service.js";
@@ -327,6 +327,51 @@ describe("EngineOperationService", () => {
     Effect.runSync(getOperationService(engine).applyCellMutationsAt(refs, batch, "local", 1));
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 4 });
+  });
+
+  it("keeps lookup formulas current through generic batch literal writes", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "operation-batch-lookup-write",
+      useColumnIndex: true,
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 20);
+    engine.setCellValue("Sheet1", "A3", 30);
+    engine.setCellValue("Sheet1", "D1", 20);
+    engine.setCellValue("Sheet1", "D2", 25);
+    engine.setCellFormula("Sheet1", "E1", "XMATCH(D1,A1:A3,0)");
+    engine.setCellFormula("Sheet1", "F1", "MATCH(D2,A1:A3,1)");
+
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A2", value: 25 },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("keeps aggregate formulas current through generic batch clears", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "operation-batch-aggregate-clear" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)");
+
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: "clearCell", sheetName: "Sheet1", address: "A2" },
+    ]);
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, "local"));
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
 
   it("applies local cell mutation refs through the service", async () => {
