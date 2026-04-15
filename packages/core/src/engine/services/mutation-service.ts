@@ -2103,8 +2103,9 @@ export function createEngineMutationService(args: {
                 engineOps,
                 potentialNewCells,
                 (forward) => {
+                  const batchOps = forward.kind === "single-op" ? [forward.op] : forward.ops;
                   args.applyBatchNow(
-                    createBatch(args.state.replicaState, [...transactionRecordOps(forward)]),
+                    createBatch(args.state.replicaState, batchOps),
                     "local",
                     forward.potentialNewCells,
                     preparedCellAddressesByOpIndex,

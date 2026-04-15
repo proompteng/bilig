@@ -28,6 +28,7 @@ export function writeLiteralToCellStore(
   input: LiteralInput,
   stringPool: StringPool,
 ): void {
+  const flags = cellStore.flags[index] ?? 0;
   if (input === null) {
     cellStore.tags[index] = ValueTag.Empty;
     cellStore.errors[index] = ErrorCode.None;
@@ -49,7 +50,9 @@ export function writeLiteralToCellStore(
     cellStore.stringIds[index] = stringPool.intern(input);
     cellStore.numbers[index] = 0;
   }
-  cellStore.flags[index] = (cellStore.flags[index] ?? 0) & ~CellFlags.AuthoredBlank;
+  if ((flags & CellFlags.AuthoredBlank) !== 0) {
+    cellStore.flags[index] = flags & ~CellFlags.AuthoredBlank;
+  }
   cellStore.versions[index] = (cellStore.versions[index] ?? 0) + 1;
   cellStore.onSetValue?.(index);
 }
