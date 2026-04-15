@@ -346,7 +346,7 @@ export function createEngineMutationService(args: {
   const readStoredCellState = (sheetName: string, address: string): ComparableCellState => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
-      return { value: null, format: null };
+      return { value: null, format: null, authoredBlank: false };
     }
     const snapshot = args.getCellByIndex(cellIndex);
     const format = args.state.workbook.getCellFormat(cellIndex) ?? null;
@@ -452,7 +452,7 @@ export function createEngineMutationService(args: {
       current.formula !== desired.formula ||
       current.value !== desired.value ||
       current.format !== desired.format ||
-      current.authoredBlank !== desired.authoredBlank
+      (current.authoredBlank ?? false) !== (desired.authoredBlank ?? false)
     );
   };
 

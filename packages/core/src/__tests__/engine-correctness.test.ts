@@ -766,6 +766,27 @@ describe("engine correctness", () => {
     });
   });
 
+  it("does not record undo history for empty fill and structural no-op sequences", async () => {
+    const initialSnapshot = await createBaselineSnapshot("correctness-empty-noop-history");
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-empty-noop-history",
+      replicaId: "correctness-empty-noop-history",
+    });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.clearRange({ sheetName, startAddress: "A1", endAddress: "A1" });
+    engine.fillRange(
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+      { sheetName, startAddress: "A1", endAddress: "A1" },
+    );
+    engine.clearRange({ sheetName, startAddress: "A1", endAddress: "A1" });
+    engine.deleteColumns(sheetName, 0, 1);
+
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+    expect(engine.undo()).toBe(false);
+  });
+
   it("reverses random local edit streams through undo and redo", async () => {
     await runProperty({
       suite: "core/undo-redo-reversibility",
