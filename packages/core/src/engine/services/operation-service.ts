@@ -1500,7 +1500,26 @@ export function createEngineOperationService(args: {
               op.address,
               preparedCellAddress,
             );
-            const prior = readCellValueForLookup(existingIndex);
+            const parsedAddress = preparedCellAddress ?? parseCellAddress(op.address, op.sheetName);
+            const sheet = args.state.workbook.getSheet(op.sheetName);
+            const sheetId = sheet?.id;
+            const hasExactLookupDependents =
+              sheetId !== undefined
+                ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col)
+                : false;
+            const hasSortedLookupDependents =
+              sheetId !== undefined
+                ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col)
+                : false;
+            const hasAggregateDependents =
+              sheetId !== undefined
+                ? hasTrackedDirectAggregateDependents(sheetId, parsedAddress.col)
+                : false;
+            const needsLookupValueRead =
+              hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents;
+            const prior = needsLookupValueRead
+              ? readCellValueForLookup(existingIndex)
+              : { value: emptyValue(), stringId: undefined };
             if (!isRestore) {
               if (
                 op.value === null &&
@@ -1545,42 +1564,54 @@ export function createEngineOperationService(args: {
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank;
             }
             args.state.workbook.notifyCellValueWritten(cellIndex);
-            const exactLookupRequest = withOptionalLookupStringIds({
-              sheetName: op.sheetName,
-              row: preparedCellAddress?.row ?? parseCellAddress(op.address, op.sheetName).row,
-              col: preparedCellAddress?.col ?? parseCellAddress(op.address, op.sheetName).col,
-              oldValue: prior.value,
-              newValue: literalToValue(op.value, args.state.strings),
-              oldStringId: prior.stringId,
-              newStringId:
+            if (needsLookupValueRead) {
+              const newValue = literalToValue(op.value, args.state.strings);
+              const newStringId =
                 typeof op.value === "string"
                   ? args.state.workbook.cellStore.stringIds[cellIndex]
-                  : undefined,
-            });
-            args.noteExactLookupLiteralWrite(exactLookupRequest);
-            formulaChangedCount = markAffectedExactLookupDependents(
-              exactLookupRequest,
-              formulaChangedCount,
-            );
-            formulaChangedCount = markAffectedDirectAggregateDependents(
-              exactLookupRequest,
-              formulaChangedCount,
-              postRecalcDirectFormulaIndices,
-            );
-            const sortedLookupRequest = withOptionalLookupStringIds({
-              sheetName: op.sheetName,
-              row: exactLookupRequest.row,
-              col: exactLookupRequest.col,
-              oldValue: prior.value,
-              newValue: literalToValue(op.value, args.state.strings),
-              oldStringId: prior.stringId,
-              newStringId: exactLookupRequest.newStringId,
-            });
-            args.noteSortedLookupLiteralWrite(sortedLookupRequest);
-            formulaChangedCount = markAffectedApproximateLookupDependents(
-              sortedLookupRequest,
-              formulaChangedCount,
-            );
+                  : undefined;
+              if (hasExactLookupDependents || hasAggregateDependents) {
+                const exactLookupRequest = withOptionalLookupStringIds({
+                  sheetName: op.sheetName,
+                  row: parsedAddress.row,
+                  col: parsedAddress.col,
+                  oldValue: prior.value,
+                  newValue,
+                  oldStringId: prior.stringId,
+                  newStringId,
+                });
+                if (hasExactLookupDependents) {
+                  args.noteExactLookupLiteralWrite(exactLookupRequest);
+                  formulaChangedCount = markAffectedExactLookupDependents(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                  );
+                }
+                if (hasAggregateDependents) {
+                  formulaChangedCount = markAffectedDirectAggregateDependents(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                    postRecalcDirectFormulaIndices,
+                  );
+                }
+              }
+              if (hasSortedLookupDependents) {
+                const sortedLookupRequest = withOptionalLookupStringIds({
+                  sheetName: op.sheetName,
+                  row: parsedAddress.row,
+                  col: parsedAddress.col,
+                  oldValue: prior.value,
+                  newValue,
+                  oldStringId: prior.stringId,
+                  newStringId,
+                });
+                args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                formulaChangedCount = markAffectedApproximateLookupDependents(
+                  sortedLookupRequest,
+                  formulaChangedCount,
+                );
+              }
+            }
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
               ~(
@@ -1716,7 +1747,26 @@ export function createEngineOperationService(args: {
               op.address,
               preparedCellAddress,
             );
-            const prior = readCellValueForLookup(cellIndex);
+            const parsedAddress = preparedCellAddress ?? parseCellAddress(op.address, op.sheetName);
+            const sheet = args.state.workbook.getSheet(op.sheetName);
+            const sheetId = sheet?.id;
+            const hasExactLookupDependents =
+              sheetId !== undefined
+                ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col)
+                : false;
+            const hasSortedLookupDependents =
+              sheetId !== undefined
+                ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col)
+                : false;
+            const hasAggregateDependents =
+              sheetId !== undefined
+                ? hasTrackedDirectAggregateDependents(sheetId, parsedAddress.col)
+                : false;
+            const needsLookupValueRead =
+              hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents;
+            const prior = needsLookupValueRead
+              ? readCellValueForLookup(cellIndex)
+              : { value: emptyValue(), stringId: undefined };
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order);
               break;
@@ -1742,40 +1792,49 @@ export function createEngineOperationService(args: {
             topologyChanged = removedFormula || topologyChanged;
             args.state.workbook.cellStore.setValue(cellIndex, emptyValue());
             args.state.workbook.notifyCellValueWritten(cellIndex);
-            const parsedAddress = parseCellAddress(op.address, op.sheetName);
-            const exactLookupRequest = withOptionalLookupStringIds({
-              sheetName: op.sheetName,
-              row: parsedAddress.row,
-              col: parsedAddress.col,
-              oldValue: prior.value,
-              newValue: emptyValue(),
-              oldStringId: prior.stringId,
-              newStringId: undefined,
-            });
-            args.noteExactLookupLiteralWrite(exactLookupRequest);
-            formulaChangedCount = markAffectedExactLookupDependents(
-              exactLookupRequest,
-              formulaChangedCount,
-            );
-            formulaChangedCount = markAffectedDirectAggregateDependents(
-              exactLookupRequest,
-              formulaChangedCount,
-              postRecalcDirectFormulaIndices,
-            );
-            const sortedLookupRequest = withOptionalLookupStringIds({
-              sheetName: op.sheetName,
-              row: parsedAddress.row,
-              col: parsedAddress.col,
-              oldValue: prior.value,
-              newValue: emptyValue(),
-              oldStringId: prior.stringId,
-              newStringId: undefined,
-            });
-            args.noteSortedLookupLiteralWrite(sortedLookupRequest);
-            formulaChangedCount = markAffectedApproximateLookupDependents(
-              sortedLookupRequest,
-              formulaChangedCount,
-            );
+            if (needsLookupValueRead) {
+              if (hasExactLookupDependents || hasAggregateDependents) {
+                const exactLookupRequest = withOptionalLookupStringIds({
+                  sheetName: op.sheetName,
+                  row: parsedAddress.row,
+                  col: parsedAddress.col,
+                  oldValue: prior.value,
+                  newValue: emptyValue(),
+                  oldStringId: prior.stringId,
+                  newStringId: undefined,
+                });
+                if (hasExactLookupDependents) {
+                  args.noteExactLookupLiteralWrite(exactLookupRequest);
+                  formulaChangedCount = markAffectedExactLookupDependents(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                  );
+                }
+                if (hasAggregateDependents) {
+                  formulaChangedCount = markAffectedDirectAggregateDependents(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                    postRecalcDirectFormulaIndices,
+                  );
+                }
+              }
+              if (hasSortedLookupDependents) {
+                const sortedLookupRequest = withOptionalLookupStringIds({
+                  sheetName: op.sheetName,
+                  row: parsedAddress.row,
+                  col: parsedAddress.col,
+                  oldValue: prior.value,
+                  newValue: emptyValue(),
+                  oldStringId: prior.stringId,
+                  newStringId: undefined,
+                });
+                args.noteSortedLookupLiteralWrite(sortedLookupRequest);
+                formulaChangedCount = markAffectedApproximateLookupDependents(
+                  sortedLookupRequest,
+                  formulaChangedCount,
+                );
+              }
+            }
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
               ~(

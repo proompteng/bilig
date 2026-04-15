@@ -190,6 +190,37 @@ describe("EngineMutationService", () => {
     });
   });
 
+  it("preserves undo history for bulk render commit cell upserts", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "bulk-render-commit" });
+    await engine.ready();
+
+    engine.renderCommit([
+      { kind: "upsertSheet", name: "Sheet1", order: 0 },
+      { kind: "upsertCell", sheetName: "Sheet1", addr: "A1", value: 1 },
+      { kind: "upsertCell", sheetName: "Sheet1", addr: "A2", value: 2 },
+      { kind: "upsertCell", sheetName: "Sheet1", addr: "A3", formula: "A1+A2" },
+      { kind: "upsertCell", sheetName: "Sheet1", addr: "B1", value: 7, format: "0.00" },
+    ]);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.exportSnapshot()).toMatchObject({
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: expect.arrayContaining([
+            expect.objectContaining({ address: "A3", formula: "A1+A2" }),
+            expect.objectContaining({ address: "B1", value: 7, format: "0.00" }),
+          ]),
+        },
+      ],
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.exportSnapshot()).toMatchObject({ sheets: [] });
+  });
+
   it("captures sheet metadata and cells when building delete-sheet undo ops", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "undo-sheet" });
     await engine.ready();
