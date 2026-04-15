@@ -3,9 +3,9 @@
 const coveragePath = new URL("../coverage/coverage-final.json", import.meta.url);
 
 const thresholds = [
-  { label: "packages/core/src", prefix: "/packages/core/src/", lines: 90 },
-  { label: "packages/formula/src", prefix: "/packages/formula/src/", lines: 90 },
-  { label: "packages/renderer/src", prefix: "/packages/renderer/src/", lines: 90 },
+  { label: "packages/core/src", prefix: "/packages/core/src/", lines: 91 },
+  { label: "packages/formula/src", prefix: "/packages/formula/src/", lines: 91 },
+  { label: "packages/renderer/src", prefix: "/packages/renderer/src/", lines: 91 },
 ];
 
 const ignoredSuffixes = ["/index.ts", "/snapshot.ts", "/ast.ts"];

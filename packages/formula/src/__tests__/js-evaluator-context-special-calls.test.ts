@@ -58,13 +58,62 @@ describe("js evaluator context special calls", () => {
   });
 
   it("preserves validation and NA or REF branches", () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula("CHOOSE(1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("ROW(A1,B1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("COLUMN(A1,B1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("ISOMITTED()")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
     expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(1)")), context)).toEqual(
       err(ErrorCode.Ref),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(A1,B1)")), context)).toEqual(
+      err(ErrorCode.Value),
     );
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Missing")')), context)).toEqual(
       err(ErrorCode.NA),
     );
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET(1)")), context)).toEqual(err(ErrorCode.NA));
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET(A1,B1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS(1)")), context)).toEqual(
+      err(ErrorCode.NA),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS(A1,B1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("bogus",A1)')), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("CELL(1,A1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("CELL()")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("contents")')), {
+        ...context,
+        currentAddress: undefined,
+      }),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("address")')), {
+        ...context,
+        currentAddress: undefined,
+      }),
+    ).toEqual(err(ErrorCode.Value));
+    expect(evaluatePlan(lowerToPlan(parseFormula("PHONETIC()")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("PHONETIC(LAMBDA(x,x))")), context)).toEqual(
       err(ErrorCode.Value),
     );
     expect(
@@ -76,7 +125,13 @@ describe("js evaluator context special calls", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("CHOOSE(0,1,2)")), context)).toEqual(
       err(ErrorCode.Value),
     );
+    expect(evaluatePlan(lowerToPlan(parseFormula('CHOOSE("x",1,2)')), context)).toEqual(
+      err(ErrorCode.Value),
+    );
     expect(evaluatePlan(lowerToPlan(parseFormula("PHONETIC()")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("CELL(TRUE(),A1)")), context)).toEqual(
       err(ErrorCode.Value),
     );
   });
@@ -112,7 +167,7 @@ describe("js evaluator context special calls", () => {
   });
 
   it("falls back to normal range evaluation when direct exact lookup is unavailable", () => {
-    const resolveExactVectorMatch = vi.fn(() => ({ handled: false }));
+    const resolveExactVectorMatch = vi.fn(() => ({ handled: false as const }));
     const noteExactLookupFallback = vi.fn();
     const noteRangeMaterialization = vi.fn();
     const resolveRange = vi.fn(() => [number(1), number(2), number(3)]);
@@ -193,7 +248,7 @@ describe("js evaluator context special calls", () => {
   });
 
   it("falls back to XMATCH approximate evaluation when the direct handler declines", () => {
-    const resolveApproximateVectorMatch = vi.fn(() => ({ handled: false }));
+    const resolveApproximateVectorMatch = vi.fn(() => ({ handled: false as const }));
     const noteRangeMaterialization = vi.fn();
     const resolveRange = vi.fn(() => [number(9), number(7), number(5)]);
 

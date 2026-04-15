@@ -12,7 +12,16 @@ describe("js evaluator workbook special calls", () => {
         start === "A1" && end === "A3" ? [number(2), number(3), number(4)] : [],
       resolveName: (name: string): CellValue =>
         name === "TaxRate" ? number(0.085) : err(ErrorCode.Name),
-      resolvePivotData: ({ dataField, address, filters }) =>
+      resolvePivotData: ({
+        dataField,
+        address,
+        filters,
+      }: {
+        dataField: string;
+        sheetName: string;
+        address: string;
+        filters: ReadonlyArray<{ field: string; item: CellValue }>;
+      }) =>
         dataField === "Sales" &&
         address === "B2" &&
         filters.length === 1 &&
@@ -137,18 +146,58 @@ describe("js evaluator workbook special calls", () => {
       resolveRange: (): CellValue[] => [],
     };
 
+    expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales")'), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",1)'), context)).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(evaluateAst(parseFormula("GETPIVOTDATA(A1:A2,B2)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula('GETPIVOTDATA(A1,B2,"Region","East")'), context)).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",B2,A1:A2,"East")'), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",B2,A1,A2)'), context)).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",B2,A1,"East")'), context)).toEqual(
+      err(ErrorCode.Ref),
+    );
     expect(evaluateAst(parseFormula("GROUPBY(A1:A2,B1:B2)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula("GROUPBY(1,B1:B2,SUM)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula("GROUPBY(A1:A2,LAMBDA(x,x),SUM)"), context)).toEqual(
       err(ErrorCode.Value),
     );
     expect(evaluateAst(parseFormula("PIVOTBY(A1:A2,B1:B2,C1:C2)"), context)).toEqual(
       err(ErrorCode.Value),
     );
+    expect(evaluateAst(parseFormula("PIVOTBY(1,B1:B2,C1:C2,SUM)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula("PIVOTBY(A1:A2,B1:B2,LAMBDA(x,x),SUM)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluateAst(parseFormula("MULTIPLE.OPERATIONS(B5,B3)"), context)).toEqual(
+      err(ErrorCode.Value),
+    );
     expect(evaluateAst(parseFormula("MULTIPLE.OPERATIONS(1,B3,C4)"), context)).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(evaluateAst(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,1,E4)"), context)).toEqual(
       err(ErrorCode.Ref),
     );
     expect(evaluateAst(parseFormula('INDIRECT("R1C1",FALSE())'), context)).toEqual(
       err(ErrorCode.Value),
     );
+    expect(evaluateAst(parseFormula('INDIRECT("A1","x")'), context)).toEqual(err(ErrorCode.Value));
   });
 });
 

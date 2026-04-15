@@ -46,6 +46,15 @@ const context = {
 
 describe("js evaluator array specials", () => {
   it("evaluates spill-oriented array helpers", () => {
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula('TEXTSPLIT("Ab|aB","|","",FALSE(),1)')), context),
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [text("Ab"), text("aB")],
+    });
+
     expect(evaluatePlanResult(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,0)")), context)).toEqual({
       kind: "array",
       rows: 3,
@@ -81,28 +90,36 @@ describe("js evaluator array specials", () => {
   });
 
   it("evaluates lambda-based array helpers", () => {
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")), context)).toEqual({
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")), context),
+    ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
       values: [number(2), number(3), number(3), number(4)],
     });
 
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,x+1))")), context)).toEqual({
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,x+1))")), context),
+    ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
       values: [number(3), number(4), number(2), number(1)],
     });
 
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")), context)).toEqual({
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")), context),
+    ).toEqual({
       kind: "array",
       rows: 2,
       cols: 1,
       values: [number(5), number(1)],
     });
 
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("SCAN(0,A1:B2,LAMBDA(a,x,a+x))")), context)).toEqual({
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("SCAN(0,A1:B2,LAMBDA(a,x,a+x))")), context),
+    ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
@@ -114,7 +131,37 @@ describe("js evaluator array specials", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha","")')), context)).toEqual(
       err(ErrorCode.Value),
     );
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("a,b",",","",TRUE(),"x")')), context),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",SEQUENCE(2))')), context),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),SEQUENCE(2))')),
+        context,
+      ),
+    ).toEqual(err(ErrorCode.Value));
     expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,1,1)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,"x",3)')), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,SEQUENCE(2),3)")), context)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:B2,SEQUENCE(2))")), context),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('MAKEARRAY("x",1,LAMBDA(r,c,r+c))')), context),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(2,SEQUENCE(2),LAMBDA(r,c,r+c))")), context),
+    ).toEqual(err(ErrorCode.Value));
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(LAMBDA(x,x))")), context)).toEqual(
       err(ErrorCode.Value),
     );
     expect(

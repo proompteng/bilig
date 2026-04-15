@@ -35,11 +35,25 @@ const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 });
 - Use `batch()`, `undo()`, `redo()`, `suspendEvaluation()`, and `resumeEvaluation()`.
 - Register custom functions and language translations before workbook construction.
 - Use copy, cut, paste, fill-range translation, and formula normalization helpers.
+- Persist and restore WorkPaper documents with:
+  - `exportWorkPaperDocument()`
+  - `createWorkPaperFromDocument()`
+  - `serializeWorkPaperDocument()`
+  - `parseWorkPaperDocument()`
 - Subscribe with HyperFormula-style positional listeners through `on()`, `once()`, and `off()`.
 - Subscribe with richer payload objects through `onDetailed()`, `onceDetailed()`, and `offDetailed()`.
 - Use stable compatibility adapters through `graph`, `rangeMapping`, `arrayMapping`,
   `sheetMapping`, `addressMapping`, `dependencyGraph`, `evaluator`,
   `columnSearch`, and `lazilyTransformingAstService`.
+
+## Persistence
+
+`@bilig/headless` follows the HyperFormula-style persistence model:
+
+- sheets are serialized as ordered sheet-content arrays
+- named expressions are serialized separately
+- only the JSON-safe subset of `WorkPaperConfig` is persisted automatically
+- custom function plugins and callback hooks should be registered in code before restore
 
 ## Compatibility Notes
 

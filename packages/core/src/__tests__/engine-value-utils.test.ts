@@ -93,4 +93,17 @@ describe("engine value utils", () => {
       ),
     ).toBe(true);
   });
+
+  it("formats empty cells and rejects mismatched boolean and pivot values", () => {
+    expect(cellValueDisplayText(emptyValue())).toBe("");
+    expect(
+      areCellValuesEqual(
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toBe(false);
+    expect(
+      pivotItemMatches({ tag: ValueTag.Number, value: 7 }, { tag: ValueTag.Boolean, value: true }),
+    ).toBe(false);
+  });
 });
