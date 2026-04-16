@@ -1,258 +1,225 @@
-import { describe, expect, it } from "vitest";
-import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import {
-  evaluatePlan,
-  evaluatePlanResult,
-  lowerToPlan,
-  optimizeFormula,
-  parseFormula,
-} from "../index.js";
-import type { FormulaNode } from "../ast.js";
+import { describe, expect, it } from 'vitest'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { evaluatePlan, evaluatePlanResult, lowerToPlan, optimizeFormula, parseFormula } from '../index.js'
+import type { FormulaNode } from '../ast.js'
 
 const context = {
-  sheetName: "Sheet1",
+  sheetName: 'Sheet1',
   resolveCell: (_sheetName: string, address: string): CellValue => {
     switch (address) {
-      case "A1":
-        return { tag: ValueTag.Number, value: 2 };
-      case "B1":
-        return { tag: ValueTag.Number, value: 3 };
+      case 'A1':
+        return { tag: ValueTag.Number, value: 2 }
+      case 'B1':
+        return { tag: ValueTag.Number, value: 3 }
       default:
-        return { tag: ValueTag.Empty };
+        return { tag: ValueTag.Empty }
     }
   },
   resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-    if (start === "A1" && end === "B2") {
+    if (start === 'A1' && end === 'B2') {
       return [
         { tag: ValueTag.Number, value: 2 },
         { tag: ValueTag.Number, value: 3 },
         { tag: ValueTag.Boolean, value: true },
         { tag: ValueTag.Empty },
-      ];
+      ]
     }
-    return [];
+    return []
   },
-};
+}
 
-describe("js evaluator", () => {
-  it("evaluates direct plans for ranges, jumps, and fallback stack handling", () => {
+describe('js evaluator', () => {
+  it('evaluates direct plans for ranges, jumps, and fallback stack handling', () => {
     expect(
       evaluatePlan(
         [
-          { opcode: "push-range", start: "A1", end: "B2", refKind: "cells" },
-          { opcode: "call", callee: "SUM", argc: 1 },
-          { opcode: "return" },
+          { opcode: 'push-range', start: 'A1', end: 'B2', refKind: 'cells' },
+          { opcode: 'call', callee: 'SUM', argc: 1 },
+          { opcode: 'return' },
         ],
         context,
       ),
-    ).toEqual({ tag: ValueTag.Number, value: 6 });
+    ).toEqual({ tag: ValueTag.Number, value: 6 })
 
-    expect(
-      evaluatePlan(
-        [{ opcode: "push-range", start: "A1", end: "B2", refKind: "cells" }, { opcode: "return" }],
-        context,
-      ),
-    ).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(evaluatePlan([{ opcode: 'push-range', start: 'A1', end: 'B2', refKind: 'cells' }, { opcode: 'return' }], context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    })
 
     expect(
       evaluatePlan(
         [
-          { opcode: "push-number", value: 0 },
-          { opcode: "jump-if-false", target: 4 },
-          { opcode: "push-number", value: 1 },
-          { opcode: "jump", target: 5 },
-          { opcode: "push-number", value: 2 },
-          { opcode: "return" },
+          { opcode: 'push-number', value: 0 },
+          { opcode: 'jump-if-false', target: 4 },
+          { opcode: 'push-number', value: 1 },
+          { opcode: 'jump', target: 5 },
+          { opcode: 'push-number', value: 2 },
+          { opcode: 'return' },
         ],
         context,
       ),
-    ).toEqual({ tag: ValueTag.Number, value: 2 });
+    ).toEqual({ tag: ValueTag.Number, value: 2 })
 
-    expect(
-      evaluatePlan([{ opcode: "call", callee: "SUM", argc: 1 }, { opcode: "return" }], context),
-    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(evaluatePlan([{ opcode: 'call', callee: 'SUM', argc: 1 }, { opcode: 'return' }], context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
 
-    expect(
-      evaluatePlan(
-        [{ opcode: "call", callee: "DOES_NOT_EXIST", argc: 0 }, { opcode: "return" }],
-        context,
-      ),
-    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+    expect(evaluatePlan([{ opcode: 'call', callee: 'DOES_NOT_EXIST', argc: 0 }, { opcode: 'return' }], context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    })
 
-    expect(evaluatePlan([{ opcode: "push-number", value: 9 }], context)).toEqual({
+    expect(evaluatePlan([{ opcode: 'push-number', value: 9 }], context)).toEqual({
       tag: ValueTag.Number,
       value: 9,
-    });
-  });
+    })
+  })
 
-  it("keeps range shape for lookup/reference builtins", () => {
+  it('keeps range shape for lookup/reference builtins', () => {
     expect(
       evaluatePlan(
         [
-          { opcode: "push-number", value: 3 },
-          { opcode: "push-range", start: "A1", end: "A4", refKind: "cells" },
-          { opcode: "push-number", value: 0 },
-          { opcode: "call", callee: "MATCH", argc: 3 },
-          { opcode: "return" },
+          { opcode: 'push-number', value: 3 },
+          { opcode: 'push-range', start: 'A1', end: 'A4', refKind: 'cells' },
+          { opcode: 'push-number', value: 0 },
+          { opcode: 'call', callee: 'MATCH', argc: 3 },
+          { opcode: 'return' },
         ],
         {
           ...context,
           resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-            if (start === "A1" && end === "A4") {
-              return [num(2), num(3), num(4), num(5)];
+            if (start === 'A1' && end === 'A4') {
+              return [num(2), num(3), num(4), num(5)]
             }
-            return [];
+            return []
           },
         },
       ),
-    ).toEqual({ tag: ValueTag.Number, value: 2 });
+    ).toEqual({ tag: ValueTag.Number, value: 2 })
 
     expect(
       evaluatePlan(
         [
-          { opcode: "push-range", start: "A1", end: "B2", refKind: "cells" },
-          { opcode: "push-number", value: 2 },
-          { opcode: "push-number", value: 2 },
-          { opcode: "call", callee: "INDEX", argc: 3 },
-          { opcode: "return" },
+          { opcode: 'push-range', start: 'A1', end: 'B2', refKind: 'cells' },
+          { opcode: 'push-number', value: 2 },
+          { opcode: 'push-number', value: 2 },
+          { opcode: 'call', callee: 'INDEX', argc: 3 },
+          { opcode: 'return' },
         ],
         context,
       ),
-    ).toEqual({ tag: ValueTag.Empty });
+    ).toEqual({ tag: ValueTag.Empty })
 
     expect(
-      evaluatePlanResult(lowerToPlan(parseFormula("CHOOSE(1,A1:B2,C1:D2)")), {
+      evaluatePlanResult(lowerToPlan(parseFormula('CHOOSE(1,A1:B2,C1:D2)')), {
         ...context,
         resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-          if (start === "A1" && end === "B2") {
-            return [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()];
+          if (start === 'A1' && end === 'B2') {
+            return [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()]
           }
-          if (start === "C1" && end === "D2") {
-            return [num(10), num(11), num(12), num(13)];
+          if (start === 'C1' && end === 'D2') {
+            return [num(10), num(11), num(12), num(13)]
           }
-          return [];
+          return []
         },
       }),
     ).toEqual({
-      kind: "array",
+      kind: 'array',
       rows: 2,
       cols: 2,
       values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()],
-    });
-  });
+    })
+  })
 
-  it("lowers row and column refs into NaN sentinels for the JS path", () => {
-    expect(lowerToPlan({ kind: "RowRef", ref: "3" } as FormulaNode)).toEqual([
-      { opcode: "push-number", value: Number.NaN },
-      { opcode: "return" },
-    ]);
-    expect(lowerToPlan({ kind: "ColumnRef", ref: "C" } as FormulaNode)).toEqual([
-      { opcode: "push-number", value: Number.NaN },
-      { opcode: "return" },
-    ]);
-  });
+  it('lowers row and column refs into NaN sentinels for the JS path', () => {
+    expect(lowerToPlan({ kind: 'RowRef', ref: '3' } as FormulaNode)).toEqual([
+      { opcode: 'push-number', value: Number.NaN },
+      { opcode: 'return' },
+    ])
+    expect(lowerToPlan({ kind: 'ColumnRef', ref: 'C' } as FormulaNode)).toEqual([
+      { opcode: 'push-number', value: Number.NaN },
+      { opcode: 'return' },
+    ])
+  })
 
-  it("resolves scalar defined names and returns #NAME? when missing", () => {
+  it('resolves scalar defined names and returns #NAME? when missing', () => {
     expect(
       evaluatePlan(
         [
-          { opcode: "push-name", name: "TaxRate" },
-          { opcode: "push-number", value: 1 },
-          { opcode: "binary", operator: "+" },
-          { opcode: "return" },
+          { opcode: 'push-name', name: 'TaxRate' },
+          { opcode: 'push-number', value: 1 },
+          { opcode: 'binary', operator: '+' },
+          { opcode: 'return' },
         ],
         {
           ...context,
           resolveName: (name: string): CellValue =>
-            name === "TaxRate"
-              ? { tag: ValueTag.Number, value: 0.5 }
-              : { tag: ValueTag.Error, code: ErrorCode.Name },
+            name === 'TaxRate' ? { tag: ValueTag.Number, value: 0.5 } : { tag: ValueTag.Error, code: ErrorCode.Name },
         },
       ),
-    ).toEqual({ tag: ValueTag.Number, value: 1.5 });
+    ).toEqual({ tag: ValueTag.Number, value: 1.5 })
 
-    expect(
-      evaluatePlan([{ opcode: "push-name", name: "MissingName" }, { opcode: "return" }], context),
-    ).toEqual({
+    expect(evaluatePlan([{ opcode: 'push-name', name: 'MissingName' }, { opcode: 'return' }], context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Name,
-    });
-  });
+    })
+  })
 
-  it("supports LET scopes in lowered plans", () => {
-    expect(evaluatePlan(lowerToPlan(parseFormula("LET(x,2,x+3)")), context)).toEqual({
+  it('supports LET scopes in lowered plans', () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula('LET(x,2,x+3)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 5,
-    });
-  });
+    })
+  })
 
-  it("supports lambda invocation and lambda-array helpers in lowered plans", () => {
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,x+1)(4)")), context)).toEqual({
+  it('supports lambda invocation and lambda-array helpers in lowered plans', () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,x+1)(4)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 5,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4)")), context),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 4,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4,9)")), context),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4,9)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 9,
-    });
+    })
 
-    expect(evaluatePlan(lowerToPlan(parseFormula("LET(fn,LAMBDA(x,x+1),fn(4))")), context)).toEqual(
-      {
-        tag: ValueTag.Number,
-        value: 5,
-      },
-    );
+    expect(evaluatePlan(lowerToPlan(parseFormula('LET(fn,LAMBDA(x,x+1),fn(4))')), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    })
 
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,ISOMITTED(x))()")), context)).toEqual({
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,ISOMITTED(x))()')), context)).toEqual({
       tag: ValueTag.Boolean,
       value: true,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,SUM(x))()")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,SUM(x))()')), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,IF(ISOMITTED(x),9,x))(4)")), context),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,IF(ISOMITTED(x),9,x))(4)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 4,
-    });
-  });
+    })
+  })
 
-  it("evaluates higher-order array helpers on the JS plan runtime", () => {
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")), context),
-    ).toEqual(num(2));
-    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,x+1))")), context)).toEqual(
-      num(3),
-    );
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")), context),
-    ).toEqual(num(5));
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")), context),
-    ).toEqual(num(3));
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("REDUCE(0,A1:B2,LAMBDA(a,x,a+x))")), context),
-    ).toEqual(num(6));
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("SCAN(0,A1:B2,LAMBDA(a,x,a+x))")), context),
-    ).toEqual(num(2));
-  });
+  it('evaluates higher-order array helpers on the JS plan runtime', () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAKEARRAY(2,2,LAMBDA(r,c,r+c))')), context)).toEqual(num(2))
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAP(A1:B2,LAMBDA(x,x+1))')), context)).toEqual(num(3))
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYROW(A1:B2,LAMBDA(r,SUM(r)))')), context)).toEqual(num(5))
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYCOL(A1:B2,LAMBDA(c,SUM(c)))')), context)).toEqual(num(3))
+    expect(evaluatePlan(lowerToPlan(parseFormula('REDUCE(0,A1:B2,LAMBDA(a,x,a+x))')), context)).toEqual(num(6))
+    expect(evaluatePlan(lowerToPlan(parseFormula('SCAN(0,A1:B2,LAMBDA(a,x,a+x))')), context)).toEqual(num(2))
+  })
 
-  it("trims outer empty rows and columns for TRIMRANGE", () => {
+  it('trims outer empty rows and columns for TRIMRANGE', () => {
     const trimContext = {
       ...context,
       resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-        if (start === "A1" && end === "D4") {
+        if (start === 'A1' && end === 'D4') {
           return [
             empty(),
             empty(),
@@ -270,186 +237,165 @@ describe("js evaluator", () => {
             empty(),
             empty(),
             empty(),
-          ];
+          ]
         }
-        if (start === "F1" && end === "G2") {
-          return [empty(), empty(), empty(), empty()];
+        if (start === 'F1' && end === 'G2') {
+          return [empty(), empty(), empty(), empty()]
         }
-        return [];
+        return []
       },
-    };
+    }
 
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4)")), trimContext)).toEqual({
-      kind: "array",
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('TRIMRANGE(A1:D4)')), trimContext)).toEqual({
+      kind: 'array',
       rows: 2,
       cols: 2,
       values: [num(1), num(2), num(3), empty()],
-    });
-    expect(
-      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,1,1)")), trimContext),
-    ).toEqual({
-      kind: "array",
+    })
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,1,1)')), trimContext)).toEqual({
+      kind: 'array',
       rows: 3,
       cols: 3,
       values: [num(1), num(2), empty(), num(3), empty(), empty(), empty(), empty(), empty()],
-    });
-    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2)")), trimContext)).toEqual({
-      kind: "array",
+    })
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('TRIMRANGE(F1:G2)')), trimContext)).toEqual({
+      kind: 'array',
       rows: 1,
       cols: 1,
       values: [empty()],
-    });
-    expect(
-      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2,0,3)")), trimContext),
-    ).toEqual({
-      kind: "array",
+    })
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('TRIMRANGE(F1:G2,0,3)')), trimContext)).toEqual({
+      kind: 'array',
       rows: 1,
       cols: 1,
       values: [empty()],
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,4)")), trimContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,4)')), trimContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,3,"bad")')), trimContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,3,"bad")')), trimContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(1,1)")), trimContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAKEARRAY(1,1)')), trimContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-  });
+    })
+  })
 
-  it("covers special-call rewrites and evaluator guard rails", () => {
-    expect(evaluatePlan(lowerToPlan(parseFormula("IFS(FALSE,1,TRUE,2)")), context)).toEqual({
+  it('covers special-call rewrites and evaluator guard rails', () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula('IFS(FALSE,1,TRUE,2)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('SWITCH("b","a",1,"b",2,9)')), context)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("XOR(TRUE,FALSE,TRUE)")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('XOR(TRUE,FALSE,TRUE)')), context)).toEqual({
       tag: ValueTag.Boolean,
       value: false,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("TRUE(1)")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TRUE(1)')), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("LET(x,1)")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LET(x,1)')), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("LET(1,2,3)")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LET(1,2,3)')), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(
-      evaluatePlan(
-        [{ opcode: "push-range", start: "bad", end: "B2", refKind: "cells" }, { opcode: "return" }],
-        {
-          ...context,
-          resolveRange: () => [num(7), num(8)],
-        },
-      ),
-    ).toEqual({ tag: ValueTag.Number, value: 7 });
-    expect(
-      evaluatePlan([{ opcode: "bind-name", name: "x" }, { opcode: "return" }], context),
-    ).toEqual({
+      evaluatePlan([{ opcode: 'push-range', start: 'bad', end: 'B2', refKind: 'cells' }, { opcode: 'return' }], {
+        ...context,
+        resolveRange: () => [num(7), num(8)],
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 7 })
+    expect(evaluatePlan([{ opcode: 'bind-name', name: 'x' }, { opcode: 'return' }], context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("SUM(LAMBDA(x,x))")), context)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SUM(LAMBDA(x,x))')), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-  });
+    })
+  })
 
-  it("covers contextual reference builtins and array-lambda error paths", () => {
+  it('covers contextual reference builtins and array-lambda error paths', () => {
     const metadataContext = {
       ...context,
-      sheetName: "Sheet2",
-      currentAddress: "C4",
-      listSheetNames: () => ["Sheet1", "Sheet2", "Summary"],
+      sheetName: 'Sheet2',
+      currentAddress: 'C4',
+      listSheetNames: () => ['Sheet1', 'Sheet2', 'Summary'],
       resolveFormula: (sheetName: string, address: string): string | undefined =>
-        sheetName === "Sheet2" && address === "B1"
-          ? "SUM(A1:A2)"
-          : sheetName === "Sheet2" && address === "C1"
-            ? "A1*2"
-            : undefined,
+        sheetName === 'Sheet2' && address === 'B1' ? 'SUM(A1:A2)' : sheetName === 'Sheet2' && address === 'C1' ? 'A1*2' : undefined,
       resolveName: (name: string): CellValue =>
-        name === "TaxRate"
-          ? { tag: ValueTag.Number, value: 0.085 }
-          : { tag: ValueTag.Error, code: ErrorCode.Name },
-    };
+        name === 'TaxRate' ? { tag: ValueTag.Number, value: 0.085 } : { tag: ValueTag.Error, code: ErrorCode.Name },
+    }
 
-    expect(evaluatePlan(lowerToPlan(parseFormula("ROW()")), metadataContext)).toEqual({
+    expect(evaluatePlan(lowerToPlan(parseFormula('ROW()')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 4,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("COLUMN(B:D)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('COLUMN(B:D)')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(Sheet2!B1)")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('FORMULATEXT(Sheet2!B1)')), metadataContext)).toEqual({
       tag: ValueTag.String,
-      value: "=SUM(A1:A2)",
+      value: '=SUM(A1:A2)',
       stringId: 0,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULA(Sheet2!C1)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('FORMULA(Sheet2!C1)')), metadataContext)).toEqual({
       tag: ValueTag.String,
-      value: "=A1*2",
+      value: '=A1*2',
       stringId: 0,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(1)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('FORMULATEXT(1)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(Sheet2!A9)")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('FORMULATEXT(Sheet2!A9)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET()")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET()')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Summary")')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 3,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET(A1)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET(A1)')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Missing")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS()")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS()')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 3,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS(A1)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS(A1)')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 1,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS("Summary")')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 1,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("filename")')), metadataContext)).toEqual({
       tag: ValueTag.String,
-      value: "",
+      value: '',
       stringId: 0,
-    });
+    })
     expect(
       evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), {
         ...metadataContext,
@@ -458,11 +404,11 @@ describe("js evaluator", () => {
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("bogus",A1)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(
       evaluatePlan(lowerToPlan(parseFormula('CELL("address")')), {
         ...metadataContext,
@@ -471,330 +417,269 @@ describe("js evaluator", () => {
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("row",A1)')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 1,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("col",B1)')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
-    const missingSheetContext = { ...metadataContext };
-    Reflect.set(missingSheetContext, "sheetName", undefined);
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula('CELL("contents")')), missingSheetContext),
-    ).toEqual({
+    })
+    const missingSheetContext = { ...metadataContext }
+    Reflect.set(missingSheetContext, 'sheetName', undefined)
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("contents")')), missingSheetContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), missingSheetContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
 
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,x)(1,2)")), metadataContext)).toEqual({
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(x,x)(1,2)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(0,2,LAMBDA(r,c,r+c))")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAKEARRAY(0,2,LAMBDA(r,c,r+c))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,SEQUENCE(2)))")),
-        metadataContext,
-      ),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAKEARRAY(2,2,LAMBDA(r,c,SEQUENCE(2)))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,SEQUENCE(2)))")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAP(A1:B2,LAMBDA(x,SEQUENCE(2)))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,A1:A3,LAMBDA(x,y,x+y))")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAP(A1:B2,A1:A3,LAMBDA(x,y,x+y))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SEQUENCE(2)))")),
-        metadataContext,
-      ),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYROW(A1:B2,LAMBDA(r,SEQUENCE(2)))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("BYROW(A1:B2)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYROW(A1:B2)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("BYCOL(A1:B2)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYCOL(A1:B2)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula("SCAN(A1:B2,LAMBDA(a,x,SEQUENCE(2)))")),
-        metadataContext,
-      ),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SCAN(A1:B2,LAMBDA(a,x,SEQUENCE(2)))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA()")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA()')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(1,1)")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('LAMBDA(1,1)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A1")')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 2,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("TaxRate")+1')), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("TaxRate")+1')), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 1.085,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("R1C1",FALSE())')), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("R1C1",FALSE())')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("INDIRECT()")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT()')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(LAMBDA(x,x))")), metadataContext)).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MAP(LAMBDA(x,x))')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('BYCOL(A1:B2,LAMBDA(c,SEQUENCE(2)))')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('REDUCE(A1:B2)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
     expect(
       evaluatePlan(
-        lowerToPlan(parseFormula("BYCOL(A1:B2,LAMBDA(c,SEQUENCE(2)))")),
+        [{ opcode: 'push-error', code: ErrorCode.Ref }, { opcode: 'call', callee: 'INDIRECT', argc: 1 }, { opcode: 'return' }],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("REDUCE(A1:B2)")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
+      code: ErrorCode.Ref,
+    })
     expect(
       evaluatePlan(
         [
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "call", callee: "INDIRECT", argc: 1 },
-          { opcode: "return" },
+          { opcode: 'push-string', value: 'A1' },
+          { opcode: 'push-error', code: ErrorCode.Ref },
+          { opcode: 'call', callee: 'INDIRECT', argc: 2 },
+          { opcode: 'return' },
         ],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
-    expect(
-      evaluatePlan(
-        [
-          { opcode: "push-string", value: "A1" },
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "call", callee: "INDIRECT", argc: 2 },
-          { opcode: "return" },
-        ],
-        metadataContext,
-      ),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Ref,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A:A")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
-    expect(
-      evaluatePlanResult(lowerToPlan(parseFormula('INDIRECT("A1:B2")')), metadataContext),
-    ).toEqual({
-      kind: "array",
+    })
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('INDIRECT("A1:B2")')), metadataContext)).toEqual({
+      kind: 'array',
       rows: 2,
       cols: 2,
       values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, { tag: ValueTag.Empty }],
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula('TEXTSPLIT("a,b,,c",",","",TRUE(),0,"-")')),
-        metadataContext,
-      ),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("a,b,,c",",","",TRUE(),0,"-")')), metadataContext)).toEqual({
       tag: ValueTag.String,
-      value: "a",
+      value: 'a',
       stringId: 0,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha","")')), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha","")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(
       evaluatePlan(
         [
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "push-string", value: "," },
-          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
-          { opcode: "return" },
+          { opcode: 'push-error', code: ErrorCode.Ref },
+          { opcode: 'push-string', value: ',' },
+          { opcode: 'call', callee: 'TEXTSPLIT', argc: 2 },
+          { opcode: 'return' },
         ],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
+    })
     expect(
       evaluatePlan(
         [
-          { opcode: "push-string", value: "alpha" },
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
-          { opcode: "return" },
+          { opcode: 'push-string', value: 'alpha' },
+          { opcode: 'push-error', code: ErrorCode.Ref },
+          { opcode: 'call', callee: 'TEXTSPLIT', argc: 2 },
+          { opcode: 'return' },
         ],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
+    })
     expect(
       evaluatePlan(
         [
-          { opcode: "push-string", value: "alpha" },
-          { opcode: "push-string", value: "," },
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "call", callee: "TEXTSPLIT", argc: 3 },
-          { opcode: "return" },
+          { opcode: 'push-string', value: 'alpha' },
+          { opcode: 'push-string', value: ',' },
+          { opcode: 'push-error', code: ErrorCode.Ref },
+          { opcode: 'call', callee: 'TEXTSPLIT', argc: 3 },
+          { opcode: 'return' },
         ],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
+    })
     expect(
       evaluatePlan(
         [
-          { opcode: "push-string", value: "alpha" },
-          { opcode: "push-string", value: "," },
-          { opcode: "push-string", value: "" },
-          { opcode: "push-error", code: ErrorCode.Ref },
-          { opcode: "call", callee: "TEXTSPLIT", argc: 4 },
-          { opcode: "return" },
+          { opcode: 'push-string', value: 'alpha' },
+          { opcode: 'push-string', value: ',' },
+          { opcode: 'push-string', value: '' },
+          { opcode: 'push-error', code: ErrorCode.Ref },
+          { opcode: 'call', callee: 'TEXTSPLIT', argc: 4 },
+          { opcode: 'return' },
         ],
         metadataContext,
       ),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),2)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),0,SEQUENCE(2))')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,3,3,0)')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,1,1)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,0,3)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,3,0)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE()')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:B2,1,1,1)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('EXPAND(A1:B2,3,3,SEQUENCE(2))')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
     expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),2)')),
-        metadataContext,
-      ),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),0,SEQUENCE(2))')),
-        metadataContext,
-      ),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,0)")), metadataContext)).toEqual(
-      {
-        tag: ValueTag.Number,
-        value: 2,
-      },
-    );
-    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,1,1)")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2)")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,0,3)")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,0)")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE()")), metadataContext)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:B2,1,1,1)")), metadataContext),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,SEQUENCE(2))")), metadataContext),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:B5,C1:D5,SUM,3,1,-3,E1:E5)")), {
+      evaluatePlanResult(lowerToPlan(parseFormula('GROUPBY(A1:B5,C1:D5,SUM,3,1,-3,E1:E5)')), {
         ...metadataContext,
         resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-          if (start === "A1" && end === "B5") {
+          if (start === 'A1' && end === 'B5') {
             return [
-              { tag: ValueTag.String, value: "Region", stringId: 0 },
-              { tag: ValueTag.String, value: "Product", stringId: 0 },
-              { tag: ValueTag.String, value: "East", stringId: 0 },
-              { tag: ValueTag.String, value: "Widget", stringId: 0 },
-              { tag: ValueTag.String, value: "West", stringId: 0 },
-              { tag: ValueTag.String, value: "Widget", stringId: 0 },
-              { tag: ValueTag.String, value: "East", stringId: 0 },
-              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
-              { tag: ValueTag.String, value: "West", stringId: 0 },
-              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
-            ];
+              { tag: ValueTag.String, value: 'Region', stringId: 0 },
+              { tag: ValueTag.String, value: 'Product', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'Widget', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+              { tag: ValueTag.String, value: 'Widget', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+              { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
+            ]
           }
-          if (start === "C1" && end === "D5") {
+          if (start === 'C1' && end === 'D5') {
             return [
-              { tag: ValueTag.String, value: "Sales", stringId: 0 },
-              { tag: ValueTag.String, value: "Units", stringId: 0 },
+              { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+              { tag: ValueTag.String, value: 'Units', stringId: 0 },
               { tag: ValueTag.Number, value: 10 },
               { tag: ValueTag.Number, value: 2 },
               { tag: ValueTag.Number, value: 7 },
@@ -803,225 +688,207 @@ describe("js evaluator", () => {
               { tag: ValueTag.Number, value: 3 },
               { tag: ValueTag.Number, value: 4 },
               { tag: ValueTag.Number, value: 2 },
-            ];
+            ]
           }
-          if (start === "E1" && end === "E5") {
+          if (start === 'E1' && end === 'E5') {
             return [
-              { tag: ValueTag.String, value: "Include", stringId: 0 },
+              { tag: ValueTag.String, value: 'Include', stringId: 0 },
               { tag: ValueTag.Boolean, value: true },
               { tag: ValueTag.Boolean, value: false },
               { tag: ValueTag.Boolean, value: true },
               { tag: ValueTag.Boolean, value: true },
-            ];
+            ]
           }
-          return [];
+          return []
         },
       }),
     ).toEqual({
-      kind: "array",
+      kind: 'array',
       rows: 5,
       cols: 4,
       values: [
-        { tag: ValueTag.String, value: "Region", stringId: 0 },
-        { tag: ValueTag.String, value: "Product", stringId: 0 },
-        { tag: ValueTag.String, value: "Sales", stringId: 0 },
-        { tag: ValueTag.String, value: "Units", stringId: 0 },
-        { tag: ValueTag.String, value: "East", stringId: 0 },
-        { tag: ValueTag.String, value: "Widget", stringId: 0 },
+        { tag: ValueTag.String, value: 'Region', stringId: 0 },
+        { tag: ValueTag.String, value: 'Product', stringId: 0 },
+        { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+        { tag: ValueTag.String, value: 'Units', stringId: 0 },
+        { tag: ValueTag.String, value: 'East', stringId: 0 },
+        { tag: ValueTag.String, value: 'Widget', stringId: 0 },
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 2 },
-        { tag: ValueTag.String, value: "East", stringId: 0 },
-        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.String, value: 'East', stringId: 0 },
+        { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
         { tag: ValueTag.Number, value: 5 },
         { tag: ValueTag.Number, value: 3 },
-        { tag: ValueTag.String, value: "West", stringId: 0 },
-        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.String, value: 'West', stringId: 0 },
+        { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
         { tag: ValueTag.Number, value: 4 },
         { tag: ValueTag.Number, value: 2 },
-        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.String, value: 'Total', stringId: 0 },
         { tag: ValueTag.Empty },
         { tag: ValueTag.Number, value: 19 },
         { tag: ValueTag.Number, value: 7 },
       ],
-    });
+    })
     expect(
-      evaluatePlanResult(
-        lowerToPlan(parseFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1,0,D1:D5)")),
-        {
-          ...metadataContext,
-          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-            if (start === "A1" && end === "A5") {
-              return [
-                { tag: ValueTag.String, value: "Region", stringId: 0 },
-                { tag: ValueTag.String, value: "East", stringId: 0 },
-                { tag: ValueTag.String, value: "West", stringId: 0 },
-                { tag: ValueTag.String, value: "East", stringId: 0 },
-                { tag: ValueTag.String, value: "West", stringId: 0 },
-              ];
-            }
-            if (start === "B1" && end === "B5") {
-              return [
-                { tag: ValueTag.String, value: "Product", stringId: 0 },
-                { tag: ValueTag.String, value: "Widget", stringId: 0 },
-                { tag: ValueTag.String, value: "Widget", stringId: 0 },
-                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
-                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
-              ];
-            }
-            if (start === "C1" && end === "C5") {
-              return [
-                { tag: ValueTag.String, value: "Sales", stringId: 0 },
-                { tag: ValueTag.Number, value: 10 },
-                { tag: ValueTag.Number, value: 7 },
-                { tag: ValueTag.Number, value: 5 },
-                { tag: ValueTag.Number, value: 4 },
-              ];
-            }
-            if (start === "D1" && end === "D5") {
-              return [
-                { tag: ValueTag.String, value: "Include", stringId: 0 },
-                { tag: ValueTag.Boolean, value: true },
-                { tag: ValueTag.Boolean, value: true },
-                { tag: ValueTag.Boolean, value: true },
-                { tag: ValueTag.Boolean, value: true },
-              ];
-            }
-            return [];
-          },
+      evaluatePlanResult(lowerToPlan(parseFormula('PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1,0,D1:D5)')), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === 'A1' && end === 'A5') {
+            return [
+              { tag: ValueTag.String, value: 'Region', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+            ]
+          }
+          if (start === 'B1' && end === 'B5') {
+            return [
+              { tag: ValueTag.String, value: 'Product', stringId: 0 },
+              { tag: ValueTag.String, value: 'Widget', stringId: 0 },
+              { tag: ValueTag.String, value: 'Widget', stringId: 0 },
+              { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
+              { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
+            ]
+          }
+          if (start === 'C1' && end === 'C5') {
+            return [
+              { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+              { tag: ValueTag.Number, value: 7 },
+              { tag: ValueTag.Number, value: 5 },
+              { tag: ValueTag.Number, value: 4 },
+            ]
+          }
+          if (start === 'D1' && end === 'D5') {
+            return [
+              { tag: ValueTag.String, value: 'Include', stringId: 0 },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: true },
+            ]
+          }
+          return []
         },
-      ),
+      }),
     ).toEqual({
-      kind: "array",
+      kind: 'array',
       rows: 4,
       cols: 4,
       values: [
-        { tag: ValueTag.String, value: "Region", stringId: 0 },
-        { tag: ValueTag.String, value: "Widget", stringId: 0 },
-        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
-        { tag: ValueTag.String, value: "Total", stringId: 0 },
-        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: 'Region', stringId: 0 },
+        { tag: ValueTag.String, value: 'Widget', stringId: 0 },
+        { tag: ValueTag.String, value: 'Gizmo', stringId: 0 },
+        { tag: ValueTag.String, value: 'Total', stringId: 0 },
+        { tag: ValueTag.String, value: 'East', stringId: 0 },
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 5 },
         { tag: ValueTag.Number, value: 15 },
-        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.String, value: 'West', stringId: 0 },
         { tag: ValueTag.Number, value: 7 },
         { tag: ValueTag.Number, value: 4 },
         { tag: ValueTag.Number, value: 11 },
-        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.String, value: 'Total', stringId: 0 },
         { tag: ValueTag.Number, value: 17 },
         { tag: ValueTag.Number, value: 9 },
         { tag: ValueTag.Number, value: 26 },
       ],
-    });
+    })
     expect(
-      evaluatePlanResult(
-        lowerToPlan(parseFormula("GROUPBY(A1:A5,C1:C5,LAMBDA(s,COUNTA(s)),3,1)")),
-        {
-          ...metadataContext,
-          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-            if (start === "A1" && end === "A5") {
-              return [
-                { tag: ValueTag.String, value: "Region", stringId: 0 },
-                { tag: ValueTag.String, value: "East", stringId: 0 },
-                { tag: ValueTag.String, value: "West", stringId: 0 },
-                { tag: ValueTag.String, value: "East", stringId: 0 },
-                { tag: ValueTag.String, value: "West", stringId: 0 },
-              ];
-            }
-            if (start === "C1" && end === "C5") {
-              return [
-                { tag: ValueTag.String, value: "Sales", stringId: 0 },
-                { tag: ValueTag.Number, value: 10 },
-                { tag: ValueTag.Number, value: 7 },
-                { tag: ValueTag.Number, value: 5 },
-                { tag: ValueTag.Number, value: 4 },
-              ];
-            }
-            return [];
-          },
-        },
-      ),
-    ).toEqual({
-      kind: "array",
-      rows: 4,
-      cols: 2,
-      values: [
-        { tag: ValueTag.String, value: "Region", stringId: 0 },
-        { tag: ValueTag.String, value: "Sales", stringId: 0 },
-        { tag: ValueTag.String, value: "East", stringId: 0 },
-        { tag: ValueTag.Number, value: 2 },
-        { tag: ValueTag.String, value: "West", stringId: 0 },
-        { tag: ValueTag.Number, value: 2 },
-        { tag: ValueTag.String, value: "Total", stringId: 0 },
-        { tag: ValueTag.Number, value: 4 },
-      ],
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2)")), metadataContext),
-    ).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    });
-    expect(
-      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2,1)")), {
+      evaluatePlanResult(lowerToPlan(parseFormula('GROUPBY(A1:A5,C1:C5,LAMBDA(s,COUNTA(s)),3,1)')), {
         ...metadataContext,
         resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
-          if (start === "A1" && end === "A2") {
+          if (start === 'A1' && end === 'A5') {
             return [
-              { tag: ValueTag.String, value: "Region", stringId: 0 },
-              { tag: ValueTag.String, value: "East", stringId: 0 },
-            ];
+              { tag: ValueTag.String, value: 'Region', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+              { tag: ValueTag.String, value: 'West', stringId: 0 },
+            ]
           }
-          if (start === "B1" && end === "B2") {
+          if (start === 'C1' && end === 'C5') {
             return [
-              { tag: ValueTag.String, value: "Sales", stringId: 0 },
+              { tag: ValueTag.String, value: 'Sales', stringId: 0 },
               { tag: ValueTag.Number, value: 10 },
-            ];
+              { tag: ValueTag.Number, value: 7 },
+              { tag: ValueTag.Number, value: 5 },
+              { tag: ValueTag.Number, value: 4 },
+            ]
           }
-          return [];
+          return []
         },
       }),
     ).toEqual({
-      kind: "array",
+      kind: 'array',
+      rows: 4,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: 'Region', stringId: 0 },
+        { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+        { tag: ValueTag.String, value: 'East', stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: 'West', stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: 'Total', stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+      ],
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('GROUPBY(A1:A2,B1:B2)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula('GROUPBY(A1:A2,B1:B2,1)')), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === 'A1' && end === 'A2') {
+            return [
+              { tag: ValueTag.String, value: 'Region', stringId: 0 },
+              { tag: ValueTag.String, value: 'East', stringId: 0 },
+            ]
+          }
+          if (start === 'B1' && end === 'B2') {
+            return [
+              { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+            ]
+          }
+          return []
+        },
+      }),
+    ).toEqual({
+      kind: 'array',
       rows: 3,
       cols: 2,
       values: [
-        { tag: ValueTag.String, value: "Region", stringId: 0 },
-        { tag: ValueTag.String, value: "Sales", stringId: 0 },
-        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: 'Region', stringId: 0 },
+        { tag: ValueTag.String, value: 'Sales', stringId: 0 },
+        { tag: ValueTag.String, value: 'East', stringId: 0 },
         { tag: ValueTag.Error, code: ErrorCode.Value },
-        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.String, value: 'Total', stringId: 0 },
         { tag: ValueTag.Error, code: ErrorCode.Value },
       ],
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("PIVOTBY(A1:A2,B1:B2,C1:C2)")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('PIVOTBY(A1:A2,B1:B2,C1:C2)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
-    });
+    })
     expect(
-      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4)")), {
+      evaluatePlan(lowerToPlan(parseFormula('MULTIPLE.OPERATIONS(B5,B3,C4)')), {
         ...metadataContext,
-        resolveMultipleOperations: ({
-          formulaAddress,
-          rowCellAddress,
-          rowReplacementAddress,
-          columnCellAddress,
-        }) =>
-          formulaAddress === "B5" &&
-          rowCellAddress === "B3" &&
-          rowReplacementAddress === "C4" &&
-          columnCellAddress === undefined
+        resolveMultipleOperations: ({ formulaAddress, rowCellAddress, rowReplacementAddress, columnCellAddress }) =>
+          formulaAddress === 'B5' && rowCellAddress === 'B3' && rowReplacementAddress === 'C4' && columnCellAddress === undefined
             ? { tag: ValueTag.Number, value: 17 }
             : { tag: ValueTag.Error, code: ErrorCode.Ref },
       }),
     ).toEqual({
       tag: ValueTag.Number,
       value: 17,
-    });
+    })
     expect(
-      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,D3,E4)")), {
+      evaluatePlan(lowerToPlan(parseFormula('MULTIPLE.OPERATIONS(B5,B3,C4,D3,E4)')), {
         ...metadataContext,
         resolveMultipleOperations: ({
           formulaAddress,
@@ -1030,113 +897,106 @@ describe("js evaluator", () => {
           columnCellAddress,
           columnReplacementAddress,
         }) =>
-          formulaAddress === "B5" &&
-          rowCellAddress === "B3" &&
-          rowReplacementAddress === "C4" &&
-          columnCellAddress === "D3" &&
-          columnReplacementAddress === "E4"
+          formulaAddress === 'B5' &&
+          rowCellAddress === 'B3' &&
+          rowReplacementAddress === 'C4' &&
+          columnCellAddress === 'D3' &&
+          columnReplacementAddress === 'E4'
             ? { tag: ValueTag.Number, value: 19 }
             : { tag: ValueTag.Error, code: ErrorCode.Ref },
       }),
     ).toEqual({
       tag: ValueTag.Number,
       value: 19,
-    });
-    expect(
-      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(1,B3,C4)")), metadataContext),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MULTIPLE.OPERATIONS(1,B3,C4)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
-    expect(
-      evaluatePlan(
-        lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,1,E4)")),
-        metadataContext,
-      ),
-    ).toEqual({
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('MULTIPLE.OPERATIONS(B5,B3,C4,1,E4)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Ref,
-    });
-  });
+    })
+  })
 
-  it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
-    expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
+  it('optimizes unary and conditional expressions while preserving dynamic refs', () => {
+    expect(optimizeFormula(parseFormula('+A1'))).toEqual({ kind: 'CellRef', ref: 'A1' })
     expect(optimizeFormula(parseFormula('-"text"'))).toEqual({
-      kind: "ErrorLiteral",
+      kind: 'ErrorLiteral',
       code: ErrorCode.Value,
-    });
-    expect(optimizeFormula(parseFormula("IF(FALSE, A1, 1+2)"))).toEqual({
-      kind: "NumberLiteral",
+    })
+    expect(optimizeFormula(parseFormula('IF(FALSE, A1, 1+2)'))).toEqual({
+      kind: 'NumberLiteral',
       value: 3,
-    });
+    })
     expect(optimizeFormula(parseFormula('IF("", 1, 2)'))).toEqual({
-      kind: "NumberLiteral",
+      kind: 'NumberLiteral',
       value: 2,
-    });
+    })
     expect(optimizeFormula(parseFormula('"a"&"b"'))).toEqual({
-      kind: "StringLiteral",
-      value: "ab",
-    });
-    expect(optimizeFormula(parseFormula("IF(A1, 1+2, B1)"))).toEqual({
-      kind: "CallExpr",
-      callee: "IF",
+      kind: 'StringLiteral',
+      value: 'ab',
+    })
+    expect(optimizeFormula(parseFormula('IF(A1, 1+2, B1)'))).toEqual({
+      kind: 'CallExpr',
+      callee: 'IF',
       args: [
-        { kind: "CellRef", ref: "A1" },
-        { kind: "NumberLiteral", value: 3 },
-        { kind: "CellRef", ref: "B1" },
+        { kind: 'CellRef', ref: 'A1' },
+        { kind: 'NumberLiteral', value: 3 },
+        { kind: 'CellRef', ref: 'B1' },
       ],
-    });
+    })
 
-    expect(optimizeFormula(parseFormula("LET(x,2,x+3)"))).toEqual({
-      kind: "NumberLiteral",
+    expect(optimizeFormula(parseFormula('LET(x,2,x+3)'))).toEqual({
+      kind: 'NumberLiteral',
       value: 5,
-    });
-    expect(optimizeFormula(parseFormula("LET(x,A1+1,x+3)"))).toEqual({
-      kind: "BinaryExpr",
-      operator: "+",
+    })
+    expect(optimizeFormula(parseFormula('LET(x,A1+1,x+3)'))).toEqual({
+      kind: 'BinaryExpr',
+      operator: '+',
       left: {
-        kind: "BinaryExpr",
-        operator: "+",
-        left: { kind: "CellRef", ref: "A1" },
-        right: { kind: "NumberLiteral", value: 1 },
+        kind: 'BinaryExpr',
+        operator: '+',
+        left: { kind: 'CellRef', ref: 'A1' },
+        right: { kind: 'NumberLiteral', value: 1 },
       },
-      right: { kind: "NumberLiteral", value: 3 },
-    });
-    expect(optimizeFormula(parseFormula("LET(x,1,LET(x,2,x+3)+x)"))).toEqual({
-      kind: "NumberLiteral",
+      right: { kind: 'NumberLiteral', value: 3 },
+    })
+    expect(optimizeFormula(parseFormula('LET(x,1,LET(x,2,x+3)+x)'))).toEqual({
+      kind: 'NumberLiteral',
       value: 6,
-    });
-    expect(optimizeFormula(parseFormula("LAMBDA(x,x+1)(A1)"))).toEqual({
-      kind: "BinaryExpr",
-      operator: "+",
-      left: { kind: "CellRef", ref: "A1" },
-      right: { kind: "NumberLiteral", value: 1 },
-    });
-    expect(optimizeFormula(parseFormula("LET(fn,LAMBDA(x,x+1),fn(A1))"))).toEqual({
-      kind: "BinaryExpr",
-      operator: "+",
-      left: { kind: "CellRef", ref: "A1" },
-      right: { kind: "NumberLiteral", value: 1 },
-    });
-    expect(optimizeFormula(parseFormula("LET(x,10,LAMBDA(x,x+1)(4)+x)"))).toEqual({
-      kind: "NumberLiteral",
+    })
+    expect(optimizeFormula(parseFormula('LAMBDA(x,x+1)(A1)'))).toEqual({
+      kind: 'BinaryExpr',
+      operator: '+',
+      left: { kind: 'CellRef', ref: 'A1' },
+      right: { kind: 'NumberLiteral', value: 1 },
+    })
+    expect(optimizeFormula(parseFormula('LET(fn,LAMBDA(x,x+1),fn(A1))'))).toEqual({
+      kind: 'BinaryExpr',
+      operator: '+',
+      left: { kind: 'CellRef', ref: 'A1' },
+      right: { kind: 'NumberLiteral', value: 1 },
+    })
+    expect(optimizeFormula(parseFormula('LET(x,10,LAMBDA(x,x+1)(4)+x)'))).toEqual({
+      kind: 'NumberLiteral',
       value: 15,
-    });
-    expect(optimizeFormula(parseFormula("LET(1,2,3)"))).toEqual({
-      kind: "ErrorLiteral",
+    })
+    expect(optimizeFormula(parseFormula('LET(1,2,3)'))).toEqual({
+      kind: 'ErrorLiteral',
       code: ErrorCode.Value,
-    });
-    expect(optimizeFormula(parseFormula("LAMBDA(x,x+1)(4,5)"))).toEqual({
-      kind: "ErrorLiteral",
+    })
+    expect(optimizeFormula(parseFormula('LAMBDA(x,x+1)(4,5)'))).toEqual({
+      kind: 'ErrorLiteral',
       code: ErrorCode.Value,
-    });
-  });
-});
+    })
+  })
+})
 
 function num(value: number): CellValue {
-  return { tag: ValueTag.Number, value };
+  return { tag: ValueTag.Number, value }
 }
 
 function empty(): CellValue {
-  return { tag: ValueTag.Empty };
+  return { tag: ValueTag.Empty }
 }

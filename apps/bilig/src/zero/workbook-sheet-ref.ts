@@ -1,41 +1,41 @@
-import type { Queryable } from "./store.js";
+import type { Queryable } from './store.js'
 
 export interface WorkbookSheetRef {
-  readonly sheetId: number | null;
-  readonly sheetName: string | null;
+  readonly sheetId: number | null
+  readonly sheetName: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function parseSheetRefRow(value: unknown): WorkbookSheetRef | null {
   if (!isRecord(value)) {
-    return null;
+    return null
   }
-  const sheetId = value["sheetId"];
-  const sheetName = value["sheetName"];
+  const sheetId = value['sheetId']
+  const sheetName = value['sheetName']
   return {
-    sheetId: typeof sheetId === "number" ? sheetId : null,
-    sheetName: typeof sheetName === "string" ? sheetName : null,
-  };
+    sheetId: typeof sheetId === 'number' ? sheetId : null,
+    sheetName: typeof sheetName === 'string' ? sheetName : null,
+  }
 }
 
 export async function resolveWorkbookSheetRef(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly sheetId?: number | null;
-    readonly sheetName?: string | null;
+    readonly documentId: string
+    readonly sheetId?: number | null
+    readonly sheetName?: string | null
   },
 ): Promise<WorkbookSheetRef> {
   const fallback = {
     sheetId: input.sheetId ?? null,
     sheetName: input.sheetName ?? null,
-  } satisfies WorkbookSheetRef;
+  } satisfies WorkbookSheetRef
 
   if (input.sheetId == null && !input.sheetName) {
-    return fallback;
+    return fallback
   }
 
   const rows = await db.query<{ sheetId?: unknown; sheetName?: unknown }>(
@@ -52,6 +52,6 @@ export async function resolveWorkbookSheetRef(
        LIMIT 1
     `,
     [input.documentId, input.sheetId ?? null, input.sheetName ?? null],
-  );
-  return parseSheetRefRow(rows.rows[0]) ?? fallback;
+  )
+  return parseSheetRefRow(rows.rows[0]) ?? fallback
 }

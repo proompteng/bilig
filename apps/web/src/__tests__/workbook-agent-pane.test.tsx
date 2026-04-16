@@ -1,96 +1,92 @@
 // @vitest-environment jsdom
-import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { toast } from "sonner";
-import {
-  isWorkbookAgentCommandBundle,
-  toWorkbookAgentReviewQueueItem,
-  type WorkbookAgentCommandBundle,
-} from "@bilig/agent-api";
-import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
-import { clearWorkbookAgentPreviewCache } from "../workbook-agent-preview-cache.js";
-import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
+import { isWorkbookAgentCommandBundle, toWorkbookAgentReviewQueueItem, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import { WorkbookToastRegion } from '../WorkbookToastRegion.js'
+import { clearWorkbookAgentPreviewCache } from '../workbook-agent-preview-cache.js'
+import { useWorkbookAgentPane } from '../use-workbook-agent-pane.js'
 
 async function flushToasts(): Promise<void> {
   await act(async () => {
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
 }
 
 class MockEventSource {
-  static latest: MockEventSource | null = null;
-  readonly url: string;
-  private readonly listeners = new Map<string, Set<(event: Event) => void>>();
+  static latest: MockEventSource | null = null
+  readonly url: string
+  private readonly listeners = new Map<string, Set<(event: Event) => void>>()
 
   constructor(url: string) {
-    this.url = url;
-    MockEventSource.latest = this;
+    this.url = url
+    MockEventSource.latest = this
   }
 
   close() {}
 
   addEventListener(type: string, listener: (event: Event) => void): void {
-    const entries = this.listeners.get(type) ?? new Set();
-    entries.add(listener);
-    this.listeners.set(type, entries);
+    const entries = this.listeners.get(type) ?? new Set()
+    entries.add(listener)
+    this.listeners.set(type, entries)
   }
 
   removeEventListener(type: string, listener: (event: Event) => void): void {
-    const entries = this.listeners.get(type);
+    const entries = this.listeners.get(type)
     if (!entries) {
-      return;
+      return
     }
-    entries.delete(listener);
+    entries.delete(listener)
     if (entries.size === 0) {
-      this.listeners.delete(type);
+      this.listeners.delete(type)
     }
   }
 
   emit(data: unknown): void {
-    this.listeners.get("message")?.forEach((listener) => {
+    this.listeners.get('message')?.forEach((listener) => {
       listener(
-        new MessageEvent("message", {
+        new MessageEvent('message', {
           data: JSON.stringify(data),
         }),
-      );
-    });
+      )
+    })
   }
 
   emitError(): void {
-    this.listeners.get("error")?.forEach((listener) => {
-      listener(new Event("error"));
-    });
+    this.listeners.get('error')?.forEach((listener) => {
+      listener(new Event('error'))
+    })
   }
 }
 
 function requestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") {
-    return input;
+  if (typeof input === 'string') {
+    return input
   }
   if (input instanceof URL) {
-    return input.href;
+    return input.href
   }
-  return input.url;
+  return input.url
 }
 
 function requestBody(init: RequestInit | undefined): unknown {
-  if (!init || typeof init.body !== "string") {
-    return null;
+  if (!init || typeof init.body !== 'string') {
+    return null
   }
-  return JSON.parse(init.body) as unknown;
+  return JSON.parse(init.body) as unknown
 }
 
 function requestMethod(init: RequestInit | undefined): string {
-  return init?.method ?? "GET";
+  return init?.method ?? 'GET'
 }
 
 function createDefaultWorkflowContext() {
   return {
     selection: {
-      sheetName: "Sheet1",
-      address: "A1",
+      sheetName: 'Sheet1',
+      address: 'A1',
     },
     viewport: {
       rowStart: 0,
@@ -98,46 +94,46 @@ function createDefaultWorkflowContext() {
       colStart: 0,
       colEnd: 5,
     },
-  };
+  }
 }
 
 function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
   return toWorkbookAgentReviewQueueItem({
     bundle,
-    reviewMode: bundle.sharedReview ? "ownerReview" : "manual",
+    reviewMode: bundle.sharedReview ? 'ownerReview' : 'manual',
     ...(bundle.sharedReview ? { sharedReview: bundle.sharedReview } : {}),
-  });
+  })
 }
 
 function createSnapshot(overrides: Record<string, unknown> = {}) {
-  const reviewBundleOverride = overrides["reviewBundle"];
-  const reviewQueueItemsOverride = overrides["reviewQueueItems"];
-  const { reviewBundle: _reviewBundle, ...restOverrides } = overrides;
-  const overrideEntries = Array.isArray(overrides["entries"])
-    ? overrides["entries"].map((entry) =>
-        typeof entry === "object" && entry !== null && !("citations" in entry)
+  const reviewBundleOverride = overrides['reviewBundle']
+  const reviewQueueItemsOverride = overrides['reviewQueueItems']
+  const { reviewBundle: _reviewBundle, ...restOverrides } = overrides
+  const overrideEntries = Array.isArray(overrides['entries'])
+    ? overrides['entries'].map((entry) =>
+        typeof entry === 'object' && entry !== null && !('citations' in entry)
           ? {
               ...entry,
               citations: [],
             }
           : entry,
       )
-    : undefined;
+    : undefined
   return {
-    documentId: "doc-1",
-    threadId: "thr-1",
-    scope: "private",
-    executionPolicy: "autoApplyAll",
-    status: "idle",
+    documentId: 'doc-1',
+    threadId: 'thr-1',
+    scope: 'private',
+    executionPolicy: 'autoApplyAll',
+    status: 'idle',
     activeTurnId: null,
     lastError: null,
     context: createDefaultWorkflowContext(),
     entries: [
       {
-        id: "assistant-1",
-        kind: "assistant",
-        turnId: "turn-1",
-        text: "",
+        id: 'assistant-1',
+        kind: 'assistant',
+        turnId: 'turn-1',
+        text: '',
         phase: null,
         toolName: null,
         toolStatus: null,
@@ -156,7 +152,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     workflowRuns: [],
     ...restOverrides,
     ...(overrideEntries ? { entries: overrideEntries } : {}),
-  };
+  }
 }
 
 function createPreviewSummary(overrides: Record<string, unknown> = {}) {
@@ -174,82 +170,79 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
       structuralChangeCount: 0,
     },
     ...overrides,
-  };
+  }
 }
 
 function createThreadSummary(overrides: Record<string, unknown> = {}) {
   return {
-    threadId: "thr-1",
-    scope: "private",
-    ownerUserId: "alex@example.com",
+    threadId: 'thr-1',
+    scope: 'private',
+    ownerUserId: 'alex@example.com',
     updatedAtUnixMs: 100,
     entryCount: 1,
-    reviewQueueItemCount:
-      typeof overrides["reviewQueueItemCount"] === "number" ? overrides["reviewQueueItemCount"] : 0,
+    reviewQueueItemCount: typeof overrides['reviewQueueItemCount'] === 'number' ? overrides['reviewQueueItemCount'] : 0,
     latestEntryText: null,
     ...overrides,
-  };
+  }
 }
 
 interface MockZeroAgentHarness {
   readonly zero: {
     materialize(query: unknown): {
-      readonly data: unknown;
-      addListener(listener: (value: unknown) => void): () => void;
-      destroy(): void;
-    };
-  };
+      readonly data: unknown
+      addListener(listener: (value: unknown) => void): () => void
+      destroy(): void
+    }
+  }
 }
 
 function createMockZeroAgentHarness(input: {
-  readonly initialThreadSummaries: unknown;
-  readonly initialWorkflowRuns: unknown;
+  readonly initialThreadSummaries: unknown
+  readonly initialWorkflowRuns: unknown
 }): MockZeroAgentHarness {
-  let threadSummaryValue = input.initialThreadSummaries;
-  let workflowRunValue = input.initialWorkflowRuns;
-  const threadSummaryListeners = new Set<(value: unknown) => void>();
-  const workflowRunListeners = new Set<(value: unknown) => void>();
-  let materializeCallCount = 0;
+  let threadSummaryValue = input.initialThreadSummaries
+  let workflowRunValue = input.initialWorkflowRuns
+  const threadSummaryListeners = new Set<(value: unknown) => void>()
+  const workflowRunListeners = new Set<(value: unknown) => void>()
+  let materializeCallCount = 0
 
   return {
     zero: {
       materialize(_query: unknown) {
-        const isThreadSummaryQuery = materializeCallCount === 0;
-        materializeCallCount += 1;
+        const isThreadSummaryQuery = materializeCallCount === 0
+        materializeCallCount += 1
         return {
           get data() {
-            return isThreadSummaryQuery ? threadSummaryValue : workflowRunValue;
+            return isThreadSummaryQuery ? threadSummaryValue : workflowRunValue
           },
           addListener(listener: (value: unknown) => void) {
-            const listeners = isThreadSummaryQuery ? threadSummaryListeners : workflowRunListeners;
-            listeners.add(listener);
+            const listeners = isThreadSummaryQuery ? threadSummaryListeners : workflowRunListeners
+            listeners.add(listener)
             return () => {
-              listeners.delete(listener);
-            };
+              listeners.delete(listener)
+            }
           },
           destroy() {},
-        };
+        }
       },
     },
-  };
+  }
 }
 
 function AgentHarness(props: {
-  readonly currentUserId?: string;
-  readonly previewCommandBundle?: Parameters<
-    typeof useWorkbookAgentPane
-  >[0]["previewCommandBundle"];
-  readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]["zero"];
-  readonly zeroEnabled?: boolean;
+  readonly currentUserId?: string
+  readonly previewCommandBundle?: Parameters<typeof useWorkbookAgentPane>[0]['previewCommandBundle']
+  readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]['zero']
+  readonly zeroEnabled?: boolean
 }) {
   const { agentError, agentPanel, clearAgentError } = useWorkbookAgentPane({
-    currentUserId: props.currentUserId ?? "alex@example.com",
-    documentId: "doc-1",
+    currentUserId: props.currentUserId ?? 'alex@example.com',
+    documentId: 'doc-1',
     enabled: true,
     getContext: () => ({
       selection: {
-        sheetName: "Sheet1",
-        address: "A1",
+        sheetName: 'Sheet1',
+        address: 'A1',
       },
       viewport: {
         rowStart: 0,
@@ -261,7 +254,7 @@ function AgentHarness(props: {
     previewCommandBundle: props.previewCommandBundle ?? vi.fn(async () => createPreviewSummary()),
     ...(props.zero ? { zero: props.zero } : {}),
     ...(props.zeroEnabled !== undefined ? { zeroEnabled: props.zeroEnabled } : {}),
-  });
+  })
 
   return (
     <div>
@@ -270,8 +263,8 @@ function AgentHarness(props: {
           agentError
             ? [
                 {
-                  id: "agent-error",
-                  tone: "error",
+                  id: 'agent-error',
+                  tone: 'error',
                   message: agentError,
                   onDismiss: clearAgentError,
                 },
@@ -281,177 +274,158 @@ function AgentHarness(props: {
       />
       {agentPanel}
     </div>
-  );
+  )
 }
 
 beforeEach(() => {
-  vi.stubGlobal("EventSource", MockEventSource);
-  window.sessionStorage.clear();
-  clearWorkbookAgentPreviewCache();
-});
+  vi.stubGlobal('EventSource', MockEventSource)
+  window.sessionStorage.clear()
+  clearWorkbookAgentPreviewCache()
+})
 
 afterEach(() => {
-  toast.dismiss();
-  vi.restoreAllMocks();
-  window.sessionStorage.clear();
-  clearWorkbookAgentPreviewCache();
-  document.body.innerHTML = "";
-});
+  toast.dismiss()
+  vi.restoreAllMocks()
+  window.sessionStorage.clear()
+  clearWorkbookAgentPreviewCache()
+  document.body.innerHTML = ''
+})
 
-describe("workbook agent pane", () => {
-  it("renders the assistant panel without the skill-card strip", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+describe('workbook agent pane', () => {
+  it('renders the assistant panel without the skill-card strip', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(JSON.stringify(createSnapshot()), {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           }),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
-    expect(input instanceof HTMLTextAreaElement ? input.value : "").toBe("");
-    expect(host.textContent).not.toContain("Local Skills");
-    expect(host.textContent).not.toContain("Inspect Selection");
-    expect(host.textContent).not.toContain(
-      "Ask the assistant to inspect, edit, or restructure this workbook.",
-    );
-    expect(host.textContent).not.toContain("Sheet1!A1");
-    expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
-      "Ask the workbook assistant",
-    );
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("renders durable thread summaries and workflow runs from Zero projections", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
+    expect(input instanceof HTMLTextAreaElement ? input.value : '').toBe('')
+    expect(host.textContent).not.toContain('Local Skills')
+    expect(host.textContent).not.toContain('Inspect Selection')
+    expect(host.textContent).not.toContain('Ask the assistant to inspect, edit, or restructure this workbook.')
+    expect(host.textContent).not.toContain('Sheet1!A1')
+    expect(input instanceof HTMLTextAreaElement ? input.getAttribute('placeholder') : null).toBe('Ask the workbook assistant')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('renders durable thread summaries and workflow runs from Zero projections', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const zero = createMockZeroAgentHarness({
       initialThreadSummaries: [
         createThreadSummary({
-          threadId: "thr-1",
-          scope: "shared",
-          ownerUserId: "casey@example.com",
-          latestEntryText: "Completed workflow: Summarize Workbook",
+          threadId: 'thr-1',
+          scope: 'shared',
+          ownerUserId: 'casey@example.com',
+          latestEntryText: 'Completed workflow: Summarize Workbook',
         }),
       ],
       initialWorkflowRuns: [
         {
-          runId: "wf-zero-1",
-          threadId: "thr-1",
-          startedByUserId: "casey@example.com",
-          workflowTemplate: "summarizeWorkbook",
-          title: "Summarize Workbook",
-          summary: "Summarized workbook structure across 2 sheets.",
-          status: "completed",
+          runId: 'wf-zero-1',
+          threadId: 'thr-1',
+          startedByUserId: 'casey@example.com',
+          workflowTemplate: 'summarizeWorkbook',
+          title: 'Summarize Workbook',
+          summary: 'Summarized workbook structure across 2 sheets.',
+          status: 'completed',
           createdAtUnixMs: 1,
           updatedAtUnixMs: 2,
           completedAtUnixMs: 2,
           errorMessage: null,
           steps: [
             {
-              stepId: "inspect-workbook",
-              label: "Inspect workbook structure",
-              status: "completed",
-              summary: "Read durable workbook structure across 2 sheets.",
+              stepId: 'inspect-workbook',
+              label: 'Inspect workbook structure',
+              status: 'completed',
+              summary: 'Read durable workbook structure across 2 sheets.',
               updatedAtUnixMs: 1,
             },
           ],
           artifact: {
-            kind: "markdown",
-            title: "Workbook Summary",
-            text: "## Workbook Summary",
+            kind: 'markdown',
+            title: 'Workbook Summary',
+            text: '## Workbook Summary',
           },
         },
       ],
-    });
-    sessionStorage.setItem("bilig:workbook-agent:doc-1", JSON.stringify({ threadId: "thr-1" }));
+    })
+    sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1")) {
-        return new Response(
-          JSON.stringify(createSnapshot({ threadId: "thr-1", workflowRuns: [] })),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1')) {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1', workflowRuns: [] })), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness zero={zero.zero} zeroEnabled />);
-    });
+      root.render(<AgentHarness zero={zero.zero} zeroEnabled />)
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
-    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
-    expect(host.textContent).toContain("Workflows");
-    expect(host.textContent).toContain("Summarize Workbook");
-    expect(host.textContent).toContain("Workbook Summary");
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull()
+    expect(host.textContent).toContain('Workflows')
+    expect(host.textContent).toContain('Summarize Workbook')
+    expect(host.textContent).toContain('Workbook Summary')
     expect(
-      fetchSpy.mock.calls.filter(
-        ([input, init]) =>
-          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
-      ),
-    ).toHaveLength(0);
+      fetchSpy.mock.calls.filter(([input, init]) => requestUrl(input).endsWith('/chat/threads') && requestMethod(init) === 'GET'),
+    ).toHaveLength(0)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("hides applied preview system timeline entries from the assistant panel", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
-      JSON.stringify({ threadId: "thr-1" }),
-    );
+  it('hides applied preview system timeline entries from the assistant panel', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads")) {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads')) {
           return new Response(JSON.stringify([]), {
             status: 200,
-            headers: { "content-type": "application/json" },
-          });
+            headers: { 'content-type': 'application/json' },
+          })
         }
-        if (url.endsWith("/chat/threads/thr-1")) {
+        if (url.endsWith('/chat/threads/thr-1')) {
           return new Response(
             JSON.stringify(
               createSnapshot({
                 entries: [
                   {
-                    id: "system-apply:run-1",
-                    kind: "system",
-                    turnId: "turn-1",
-                    text: "Applied workbook change set at revision r7: Write cells in Sheet1!B2",
+                    id: 'system-apply:run-1',
+                    kind: 'system',
+                    turnId: 'turn-1',
+                    text: 'Applied workbook change set at revision r7: Write cells in Sheet1!B2',
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -460,14 +434,14 @@ describe("workbook agent pane", () => {
                     success: null,
                     citations: [
                       {
-                        kind: "range",
-                        sheetName: "Sheet1",
-                        startAddress: "B2",
-                        endAddress: "B2",
-                        role: "target",
+                        kind: 'range',
+                        sheetName: 'Sheet1',
+                        startAddress: 'B2',
+                        endAddress: 'B2',
+                        role: 'target',
                       },
                       {
-                        kind: "revision",
+                        kind: 'revision',
                         revision: 7,
                       },
                     ],
@@ -477,41 +451,36 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
-          );
+          )
         }
-        throw new Error(`Unexpected fetch to ${url}`);
+        throw new Error(`Unexpected fetch to ${url}`)
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.textContent).not.toContain("Applied workbook change set at revision r7");
-    expect(host.textContent).not.toContain("Sheet1!B2");
-    expect(host.textContent).not.toContain("r7");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("renders durable workflow runs in the assistant panel", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-    window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
-      JSON.stringify({ threadId: "thr-1" }),
-    );
+    expect(host.textContent).not.toContain('Applied workbook change set at revision r7')
+    expect(host.textContent).not.toContain('Sheet1!B2')
+    expect(host.textContent).not.toContain('r7')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('renders durable workflow runs in the assistant panel', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(
@@ -519,37 +488,37 @@ describe("workbook agent pane", () => {
               createSnapshot({
                 workflowRuns: [
                   {
-                    runId: "wf-1",
-                    threadId: "thr-1",
-                    startedByUserId: "alex@example.com",
-                    workflowTemplate: "summarizeWorkbook",
-                    title: "Summarize Workbook",
-                    summary: "Summarized workbook structure across 2 sheets.",
-                    status: "completed",
+                    runId: 'wf-1',
+                    threadId: 'thr-1',
+                    startedByUserId: 'alex@example.com',
+                    workflowTemplate: 'summarizeWorkbook',
+                    title: 'Summarize Workbook',
+                    summary: 'Summarized workbook structure across 2 sheets.',
+                    status: 'completed',
                     createdAtUnixMs: 1,
                     updatedAtUnixMs: 2,
                     completedAtUnixMs: 2,
                     errorMessage: null,
                     steps: [
                       {
-                        stepId: "inspect-workbook",
-                        label: "Inspect workbook structure",
-                        status: "completed",
-                        summary: "Read durable workbook structure across 2 sheets.",
+                        stepId: 'inspect-workbook',
+                        label: 'Inspect workbook structure',
+                        status: 'completed',
+                        summary: 'Read durable workbook structure across 2 sheets.',
                         updatedAtUnixMs: 1,
                       },
                       {
-                        stepId: "draft-summary",
-                        label: "Draft summary artifact",
-                        status: "completed",
-                        summary: "Prepared the durable workbook summary artifact for the thread.",
+                        stepId: 'draft-summary',
+                        label: 'Draft summary artifact',
+                        status: 'completed',
+                        summary: 'Prepared the durable workbook summary artifact for the thread.',
                         updatedAtUnixMs: 2,
                       },
                     ],
                     artifact: {
-                      kind: "markdown",
-                      title: "Workbook Summary",
-                      text: "## Workbook Summary\n\nSheets: 2\n### Sheets\n- Sheet1",
+                      kind: 'markdown',
+                      title: 'Workbook Summary',
+                      text: '## Workbook Summary\n\nSheets: 2\n### Sheets\n- Sheet1',
                     },
                   },
                 ],
@@ -557,339 +526,322 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
           ),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.textContent).toContain("Workflows");
-    expect(host.textContent).toContain("Summarize Workbook");
-    expect(host.textContent).toContain("Inspect workbook structure");
-    expect(host.textContent).toContain("Workbook Summary");
-    expect(host.textContent).toContain("Sheets: 2");
-    expect(host.textContent).toContain("Done");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("loads durable thread summaries into the assistant panel", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.textContent).toContain('Workflows')
+    expect(host.textContent).toContain('Summarize Workbook')
+    expect(host.textContent).toContain('Inspect workbook structure')
+    expect(host.textContent).toContain('Workbook Summary')
+    expect(host.textContent).toContain('Sheets: 2')
+    expect(host.textContent).toContain('Done')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('loads durable thread summaries into the assistant panel', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads")) {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads')) {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               entryCount: 4,
               reviewQueueItemCount: 1,
-              latestEntryText: "Applied workbook change set at revision r7",
+              latestEntryText: 'Applied workbook change set at revision r7',
             }),
             createThreadSummary({
-              threadId: "thr-private",
-              scope: "private",
+              threadId: 'thr-private',
+              scope: 'private',
               entryCount: 2,
-              latestEntryText: "Review item queued",
+              latestEntryText: 'Review item queued',
             }),
           ]),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-shared']")).not.toBeNull();
-    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-private']")).not.toBeNull();
-    expect(host.textContent).toContain("Shared");
-    expect(host.textContent).toContain("Review");
-    expect(host.textContent).toContain("4 items");
-    expect(host.textContent).toContain("Applied workbook change set at revision r7");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("switches to a durable thread from the summary strip", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-shared']")).not.toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-private']")).not.toBeNull()
+    expect(host.textContent).toContain('Shared')
+    expect(host.textContent).toContain('Review')
+    expect(host.textContent).toContain('4 items')
+    expect(host.textContent).toContain('Applied workbook change set at revision r7')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('switches to a durable thread from the summary strip', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-2",
-              scope: "shared",
+              threadId: 'thr-2',
+              scope: 'shared',
               entryCount: 3,
             }),
           ]),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      if (url.endsWith("/chat/threads/thr-2")) {
+      if (url.endsWith('/chat/threads/thr-2')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-2",
-              scope: "shared",
+              threadId: 'thr-2',
+              scope: 'shared',
               entries: [],
             }),
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const threadButton = host.querySelector("[data-testid='workbook-agent-thread-thr-2']");
-    expect(threadButton instanceof HTMLButtonElement).toBe(true);
+    const threadButton = host.querySelector("[data-testid='workbook-agent-thread-thr-2']")
+    expect(threadButton instanceof HTMLButtonElement).toBe(true)
 
     await act(async () => {
       if (!(threadButton instanceof HTMLButtonElement)) {
-        throw new Error("Thread button not found");
+        throw new Error('Thread button not found')
       }
-      threadButton.click();
-    });
+      threadButton.click()
+    })
 
-    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/chat/threads/thr-2/events");
-    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-2']")).toBeNull();
-    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
-    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
-    expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/chat/threads/thr-2");
+    expect(MockEventSource.latest?.url).toBe('/v2/documents/doc-1/chat/threads/thr-2/events')
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-2']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledWith('/v2/documents/doc-1/chat/threads/thr-2')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("hides the summary strip when it would only repeat the active thread", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('hides the summary strip when it would only repeat the active thread', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-1",
-              scope: "private",
+              threadId: 'thr-1',
+              scope: 'private',
               entryCount: 64,
-              latestEntryText: "Done — prepaid expenses now exists as a sheet.",
+              latestEntryText: 'Done — prepaid expenses now exists as a sheet.',
             }),
           ]),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      if (url.endsWith("/chat/threads/thr-1")) {
+      if (url.endsWith('/chat/threads/thr-1')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-1",
-              scope: "private",
+              threadId: 'thr-1',
+              scope: 'private',
             }),
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-1']")).toBeNull();
-    expect(host.textContent).not.toContain("64 items");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("does not render thread scope controls", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.querySelector("[data-testid='workbook-agent-thread-thr-1']")).toBeNull()
+    expect(host.textContent).not.toContain('64 items')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not render thread scope controls', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads') && requestMethod(init) === 'GET') {
           return new Response(JSON.stringify([]), {
             status: 200,
-            headers: { "content-type": "application/json" },
-          });
+            headers: { 'content-type': 'application/json' },
+          })
         }
-        throw new Error(`Unexpected fetch to ${url}`);
+        throw new Error(`Unexpected fetch to ${url}`)
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull();
-    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull();
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("restores a new-thread draft after remount", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.querySelector("[data-testid='workbook-agent-scope-private']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-scope-shared']")).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('restores a new-thread draft after remount', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads")) {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads')) {
           return new Response(JSON.stringify([]), {
             status: 200,
-            headers: { "content-type": "application/json" },
-          });
+            headers: { 'content-type': 'application/json' },
+          })
         }
-        throw new Error(`Unexpected fetch to ${url}`);
+        throw new Error(`Unexpected fetch to ${url}`)
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
 
     await act(async () => {
       if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
+        throw new Error('Agent input not found')
       }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
+      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+      if (typeof valueSetter !== 'function') {
+        throw new Error('Textarea value setter not found')
       }
-      Reflect.apply(valueSetter, input, ["Persisted draft"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+      Reflect.apply(valueSetter, input, ['Persisted draft'])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
 
     await act(async () => {
-      root.unmount();
-    });
+      root.unmount()
+    })
 
-    const remountRoot = createRoot(host);
+    const remountRoot = createRoot(host)
     await act(async () => {
-      remountRoot.render(<AgentHarness />);
-    });
+      remountRoot.render(<AgentHarness />)
+    })
 
-    const restoredInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe(
-      "Persisted draft",
-    );
+    const restoredInput = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe('Persisted draft')
 
     await act(async () => {
-      remountRoot.unmount();
-    });
-  });
+      remountRoot.unmount()
+    })
+  })
 
-  it("submits the draft on Enter from the chat composer", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('submits the draft on Enter from the chat composer', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'POST') {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
-          headers: { "content-type": "application/json" },
-        });
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      if (url.endsWith("/turns")) {
+      if (url.endsWith('/turns')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              status: "inProgress",
-              activeTurnId: "turn-1",
+              status: 'inProgress',
+              activeTurnId: 'turn-1',
               entries: [
                 {
-                  id: "optimistic-user:turn-1",
-                  kind: "user",
-                  turnId: "turn-1",
-                  text: "Summarize this sheet",
+                  id: 'optimistic-user:turn-1',
+                  kind: 'user',
+                  turnId: 'turn-1',
+                  text: 'Summarize this sheet',
                   phase: null,
                   toolName: null,
                   toolStatus: null,
@@ -902,90 +854,83 @@ describe("workbook agent pane", () => {
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
 
     await act(async () => {
       if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
+        throw new Error('Agent input not found')
       }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
+      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+      if (typeof valueSetter !== 'function') {
+        throw new Error('Textarea value setter not found')
       }
-      Reflect.apply(valueSetter, input, ["Summarize this sheet"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      Reflect.apply(valueSetter, input, ['Summarize this sheet'])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
       input.dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
-          key: "Enter",
+          key: 'Enter',
         }),
-      );
-    });
+      )
+    })
 
-    const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
-    );
-    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
-    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
-    const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
+    const turnCall = fetchSpy.mock.calls.find(([requestInput]) => requestUrl(requestInput).endsWith('/chat/threads/thr-1/turns'))
+    expect(turnCall?.[0]).toBe('/v2/documents/doc-1/chat/threads/thr-1/turns')
+    expect(host.textContent).not.toContain('Reviewing workbook context and drafting a response.')
+    const nextInput = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe('')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("submits follow-up prompts through the durable thread route when a thread is already active", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('submits follow-up prompts through the durable thread route when a thread is already active', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "POST") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'POST') {
         return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
           status: 200,
-          headers: { "content-type": "application/json" },
-        });
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      if (url.endsWith("/chat/threads/thr-1/turns")) {
+      if (url.endsWith('/chat/threads/thr-1/turns')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              status: "inProgress",
-              activeTurnId: "turn-2",
+              status: 'inProgress',
+              activeTurnId: 'turn-2',
               entries: [
                 {
-                  id: "optimistic-user:turn-2",
-                  kind: "user",
-                  turnId: "turn-2",
-                  text: "Continue working",
+                  id: 'optimistic-user:turn-2',
+                  kind: 'user',
+                  turnId: 'turn-2',
+                  text: 'Continue working',
                   phase: null,
                   toolName: null,
                   toolStatus: null,
@@ -998,138 +943,128 @@ describe("workbook agent pane", () => {
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
 
     await act(async () => {
       if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
+        throw new Error('Agent input not found')
       }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
+      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+      if (typeof valueSetter !== 'function') {
+        throw new Error('Textarea value setter not found')
       }
-      Reflect.apply(valueSetter, input, ["Continue working"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      Reflect.apply(valueSetter, input, ['Continue working'])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
       input.dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
-          key: "Enter",
+          key: 'Enter',
         }),
-      );
-    });
+      )
+    })
 
-    const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
-      requestUrl(requestInput).endsWith("/chat/threads/thr-1/turns"),
-    );
-    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/turns");
-    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
+    const turnCall = fetchSpy.mock.calls.find(([requestInput]) => requestUrl(requestInput).endsWith('/chat/threads/thr-1/turns'))
+    expect(turnCall?.[0]).toBe('/v2/documents/doc-1/chat/threads/thr-1/turns')
+    expect(host.textContent).not.toContain('Reviewing workbook context and drafting a response.')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("does not inject a synthetic progress row before the turn request resolves", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('does not inject a synthetic progress row before the turn request resolves', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
-    let resolveTurnResponse: ((response: Response) => void) | null = null;
+    )
+    let resolveTurnResponse: ((response: Response) => void) | null = null
     const turnResponse = new Promise<Response>((resolve) => {
-      resolveTurnResponse = resolve;
-    });
+      resolveTurnResponse = resolve
+    })
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
         return new Response(JSON.stringify(createSnapshot()), {
           status: 200,
-          headers: { "content-type": "application/json" },
-        });
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      if (url.endsWith("/chat/threads/thr-1/turns")) {
-        return await turnResponse;
+      if (url.endsWith('/chat/threads/thr-1/turns')) {
+        return await turnResponse
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
 
     await act(async () => {
       if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
+        throw new Error('Agent input not found')
       }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
+      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+      if (typeof valueSetter !== 'function') {
+        throw new Error('Textarea value setter not found')
       }
-      Reflect.apply(valueSetter, input, ["yo"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      Reflect.apply(valueSetter, input, ['yo'])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
       input.dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
-          key: "Enter",
+          key: 'Enter',
         }),
-      );
-      await Promise.resolve();
-    });
+      )
+      await Promise.resolve()
+    })
 
-    expect(host.textContent).toContain("yo");
-    expect(host.textContent).not.toContain("Reviewing workbook context and drafting a response.");
-    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).toBeNull();
+    expect(host.textContent).toContain('yo')
+    expect(host.textContent).not.toContain('Reviewing workbook context and drafting a response.')
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).toBeNull()
 
     await act(async () => {
       resolveTurnResponse?.(
         new Response(
           JSON.stringify(
             createSnapshot({
-              status: "inProgress",
-              activeTurnId: "turn-3",
+              status: 'inProgress',
+              activeTurnId: 'turn-3',
               entries: [
                 {
-                  id: "optimistic-user:turn-3",
-                  kind: "user",
-                  turnId: "turn-3",
-                  text: "yo",
+                  id: 'optimistic-user:turn-3',
+                  kind: 'user',
+                  turnId: 'turn-3',
+                  text: 'yo',
                   phase: null,
                   toolName: null,
                   toolStatus: null,
@@ -1142,45 +1077,43 @@ describe("workbook agent pane", () => {
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
         ),
-      );
-      await Promise.resolve();
-    });
+      )
+      await Promise.resolve()
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
-    expect(host.textContent).toContain("Thinking");
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull()
+    expect(host.textContent).toContain('Thinking')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("uses the composer button to interrupt an active turn", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('uses the composer button to interrupt an active turn', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              status: "inProgress",
-              activeTurnId: "turn-1",
+              status: 'inProgress',
+              activeTurnId: 'turn-1',
               entries: [
                 {
-                  id: "assistant-1",
-                  kind: "assistant",
-                  turnId: "turn-1",
-                  text: "Working",
+                  id: 'assistant-1',
+                  kind: 'assistant',
+                  turnId: 'turn-1',
+                  text: 'Working',
                   phase: null,
                   toolName: null,
                   toolStatus: null,
@@ -1193,22 +1126,22 @@ describe("workbook agent pane", () => {
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      if (url.endsWith("/interrupt")) {
+      if (url.endsWith('/interrupt')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              status: "idle",
+              status: 'idle',
               activeTurnId: null,
               entries: [
                 {
-                  id: "assistant-1",
-                  kind: "assistant",
-                  turnId: "turn-1",
-                  text: "Working",
+                  id: 'assistant-1',
+                  kind: 'assistant',
+                  turnId: 'turn-1',
+                  text: 'Working',
                   phase: null,
                   toolName: null,
                   toolStatus: null,
@@ -1221,57 +1154,51 @@ describe("workbook agent pane", () => {
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const button = host.querySelector("[data-testid='workbook-agent-send']");
-    expect(button instanceof HTMLButtonElement).toBe(true);
-    expect(button instanceof HTMLButtonElement ? button.getAttribute("aria-label") : null).toBe(
-      "Stop",
-    );
+    const button = host.querySelector("[data-testid='workbook-agent-send']")
+    expect(button instanceof HTMLButtonElement).toBe(true)
+    expect(button instanceof HTMLButtonElement ? button.getAttribute('aria-label') : null).toBe('Stop')
 
     await act(async () => {
       if (!(button instanceof HTMLButtonElement)) {
-        throw new Error("Agent button not found");
+        throw new Error('Agent button not found')
       }
-      button.click();
-    });
+      button.click()
+    })
 
-    const interruptCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/chat/threads/thr-1/interrupt"),
-    );
-    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/chat/threads/thr-1/interrupt");
+    const interruptCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/chat/threads/thr-1/interrupt'))
+    expect(interruptCall?.[0]).toBe('/v2/documents/doc-1/chat/threads/thr-1/interrupt')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("renders structured workbook comprehension tool results in the rail", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('renders structured workbook comprehension tool results in the rail', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(
@@ -1279,24 +1206,24 @@ describe("workbook agent pane", () => {
               createSnapshot({
                 entries: [
                   {
-                    id: "tool-search",
-                    kind: "tool",
-                    turnId: "turn-1",
+                    id: 'tool-search',
+                    kind: 'tool',
+                    turnId: 'turn-1',
                     text: null,
                     phase: null,
-                    toolName: "search_workbook",
-                    toolStatus: "completed",
+                    toolName: 'search_workbook',
+                    toolStatus: 'completed',
                     argumentsText: '{"query":"gross margin"}',
                     outputText: JSON.stringify({
-                      query: "gross margin",
+                      query: 'gross margin',
                       summary: { matchCount: 1, truncated: false },
                       matches: [
                         {
-                          kind: "cell",
-                          sheetName: "Sheet1",
-                          address: "A2",
-                          snippet: "Gross Margin",
-                          reasons: ["value"],
+                          kind: 'cell',
+                          sheetName: 'Sheet1',
+                          address: 'A2',
+                          snippet: 'Gross Margin',
+                          reasons: ['value'],
                           score: 65,
                         },
                       ],
@@ -1304,14 +1231,14 @@ describe("workbook agent pane", () => {
                     success: true,
                   },
                   {
-                    id: "tool-issues",
-                    kind: "tool",
-                    turnId: "turn-1",
+                    id: 'tool-issues',
+                    kind: 'tool',
+                    turnId: 'turn-1',
                     text: null,
                     phase: null,
-                    toolName: "find_formula_issues",
-                    toolStatus: "completed",
-                    argumentsText: "{}",
+                    toolName: 'find_formula_issues',
+                    toolStatus: 'completed',
+                    argumentsText: '{}',
                     outputText: JSON.stringify({
                       summary: {
                         issueCount: 1,
@@ -1322,11 +1249,11 @@ describe("workbook agent pane", () => {
                       },
                       issues: [
                         {
-                          sheetName: "Sheet1",
-                          address: "C1",
-                          formula: "=1/0",
-                          valueText: "#DIV/0!",
-                          issueKinds: ["error"],
+                          sheetName: 'Sheet1',
+                          address: 'C1',
+                          formula: '=1/0',
+                          valueText: '#DIV/0!',
+                          issueKinds: ['error'],
                         },
                       ],
                     }),
@@ -1337,70 +1264,59 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
           ),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(
-      host.querySelector("[data-testid='workbook-agent-panel-scroll-viewport']"),
-    ).not.toBeNull();
-    expect(host.textContent).toContain("Search Workbook");
-    expect(host.textContent).toContain("Find Formula Issues");
-    expect(host.textContent).not.toContain("Gross Margin");
-    expect(host.textContent).not.toContain("gross margin");
-    expect(host.textContent).not.toContain("C1");
-
-    const searchToggle = host.querySelector(
-      "[data-testid='workbook-agent-tool-toggle-tool-search']",
-    );
-    const issuesToggle = host.querySelector(
-      "[data-testid='workbook-agent-tool-toggle-tool-issues']",
-    );
-    expect(searchToggle instanceof HTMLButtonElement).toBe(true);
-    expect(issuesToggle instanceof HTMLButtonElement).toBe(true);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      if (
-        !(searchToggle instanceof HTMLButtonElement) ||
-        !(issuesToggle instanceof HTMLButtonElement)
-      ) {
-        throw new Error("Tool toggles not found");
+      root.render(<AgentHarness />)
+    })
+
+    expect(host.querySelector("[data-testid='workbook-agent-panel-scroll-viewport']")).not.toBeNull()
+    expect(host.textContent).toContain('Search Workbook')
+    expect(host.textContent).toContain('Find Formula Issues')
+    expect(host.textContent).not.toContain('Gross Margin')
+    expect(host.textContent).not.toContain('gross margin')
+    expect(host.textContent).not.toContain('C1')
+
+    const searchToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-search']")
+    const issuesToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-issues']")
+    expect(searchToggle instanceof HTMLButtonElement).toBe(true)
+    expect(issuesToggle instanceof HTMLButtonElement).toBe(true)
+
+    await act(async () => {
+      if (!(searchToggle instanceof HTMLButtonElement) || !(issuesToggle instanceof HTMLButtonElement)) {
+        throw new Error('Tool toggles not found')
       }
-      searchToggle.click();
-      issuesToggle.click();
-    });
+      searchToggle.click()
+      issuesToggle.click()
+    })
 
-    expect(host.textContent).toContain("Gross Margin");
-    expect(host.textContent).toContain("gross margin");
-    expect(host.textContent).toContain("C1");
+    expect(host.textContent).toContain('Gross Margin')
+    expect(host.textContent).toContain('gross margin')
+    expect(host.textContent).toContain('C1')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("renders raw workbook tool payloads behind a collapsed human-readable tool row", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('renders raw workbook tool payloads behind a collapsed human-readable tool row', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(
@@ -1408,15 +1324,15 @@ describe("workbook agent pane", () => {
               createSnapshot({
                 entries: [
                   {
-                    id: "tool-read",
-                    kind: "tool",
-                    turnId: "turn-1",
+                    id: 'tool-read',
+                    kind: 'tool',
+                    turnId: 'turn-1',
                     text: null,
                     phase: null,
-                    toolName: "read_workbook",
-                    toolStatus: "completed",
+                    toolName: 'read_workbook',
+                    toolStatus: 'completed',
                     argumentsText: JSON.stringify({
-                      documentId: "bilig-demo",
+                      documentId: 'bilig-demo',
                     }),
                     outputText: JSON.stringify({
                       summary: {
@@ -1431,59 +1347,55 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
           ),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    expect(host.textContent).toContain("Read Workbook");
-    expect(host.textContent).not.toContain('"documentId":"bilig-demo"');
-    expect(host.textContent).not.toContain('"sheetCount":2');
+    expect(host.textContent).toContain('Read Workbook')
+    expect(host.textContent).not.toContain('"documentId":"bilig-demo"')
+    expect(host.textContent).not.toContain('"sheetCount":2')
 
-    const readToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-read']");
-    expect(readToggle instanceof HTMLButtonElement).toBe(true);
+    const readToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-read']")
+    expect(readToggle instanceof HTMLButtonElement).toBe(true)
 
     await act(async () => {
       if (!(readToggle instanceof HTMLButtonElement)) {
-        throw new Error("Read tool toggle not found");
+        throw new Error('Read tool toggle not found')
       }
-      readToggle.click();
-    });
+      readToggle.click()
+    })
 
-    const readPanelViewport = host.querySelector(
-      "[data-testid='workbook-agent-tool-panel-tool-read-viewport']",
-    );
-    expect(readPanelViewport instanceof HTMLDivElement).toBe(true);
-    expect(readPanelViewport?.className).toContain("h-44");
-    expect(host.textContent).toContain('"documentId":"bilig-demo"');
-    expect(host.textContent).toContain('"sheetCount":2');
+    const readPanelViewport = host.querySelector("[data-testid='workbook-agent-tool-panel-tool-read-viewport']")
+    expect(readPanelViewport instanceof HTMLDivElement).toBe(true)
+    expect(readPanelViewport?.className).toContain('h-44')
+    expect(host.textContent).toContain('"documentId":"bilig-demo"')
+    expect(host.textContent).toContain('"sheetCount":2')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("summarizes attached selection ranges in tool rows", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('summarizes attached selection ranges in tool rows', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(
@@ -1491,27 +1403,27 @@ describe("workbook agent pane", () => {
               createSnapshot({
                 entries: [
                   {
-                    id: "tool-context",
-                    kind: "tool",
-                    turnId: "turn-1",
+                    id: 'tool-context',
+                    kind: 'tool',
+                    turnId: 'turn-1',
                     text: null,
                     phase: null,
-                    toolName: "get_context",
-                    toolStatus: "completed",
-                    argumentsText: "{}",
+                    toolName: 'get_context',
+                    toolStatus: 'completed',
+                    argumentsText: '{}',
                     outputText: JSON.stringify({
                       selection: {
-                        sheetName: "Sheet1",
-                        address: "E20",
+                        sheetName: 'Sheet1',
+                        address: 'E20',
                         range: {
-                          startAddress: "C11",
-                          endAddress: "F20",
+                          startAddress: 'C11',
+                          endAddress: 'F20',
                         },
                       },
                       visibleRange: {
-                        sheetName: "Sheet1",
-                        startAddress: "A1",
-                        endAddress: "J20",
+                        sheetName: 'Sheet1',
+                        startAddress: 'A1',
+                        endAddress: 'J20',
                       },
                     }),
                     success: true,
@@ -1521,184 +1433,169 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
           ),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.textContent).toContain("Get Context");
-    expect(host.textContent).toContain("Sheet1!C11:F20");
-    expect(host.textContent).not.toContain("Sheet1!E20");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("hides raw app-server protocol errors behind user-facing copy", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.textContent).toContain('Get Context')
+    expect(host.textContent).toContain('Sheet1!C11:F20')
+    expect(host.textContent).not.toContain('Sheet1!E20')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('hides raw app-server protocol errors behind user-facing copy', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(
         async () =>
           new Response(
             JSON.stringify({
-              error: "WORKBOOK_AGENT_RUNTIME_UNAVAILABLE",
-              message: "thread/start.dynamicTools requires experimentalApi capability",
+              error: 'WORKBOOK_AGENT_RUNTIME_UNAVAILABLE',
+              message: 'thread/start.dynamicTools requires experimentalApi capability',
               retryable: true,
             }),
             {
               status: 503,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
           ),
       ),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    const input = host.querySelector("[data-testid='workbook-agent-input']");
-    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    const input = host.querySelector("[data-testid='workbook-agent-input']")
+    expect(input instanceof HTMLTextAreaElement).toBe(true)
 
     await act(async () => {
       if (!(input instanceof HTMLTextAreaElement)) {
-        throw new Error("Agent input not found");
+        throw new Error('Agent input not found')
       }
-      const valueDescriptor = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      );
-      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
-      if (typeof valueSetter !== "function") {
-        throw new Error("Textarea value setter not found");
+      const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+      if (typeof valueSetter !== 'function') {
+        throw new Error('Textarea value setter not found')
       }
-      Reflect.apply(valueSetter, input, ["Summarize this sheet"]);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+      Reflect.apply(valueSetter, input, ['Summarize this sheet'])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
 
-    const submit = host.querySelector("[data-testid='workbook-agent-send']");
+    const submit = host.querySelector("[data-testid='workbook-agent-send']")
     await act(async () => {
       if (!(submit instanceof HTMLButtonElement)) {
-        throw new Error("Send button not found");
+        throw new Error('Send button not found')
       }
-      submit.click();
-    });
-    await flushToasts();
+      submit.click()
+    })
+    await flushToasts()
 
-    expect(host.textContent).toContain("Retry in a moment.");
-    expect(host.textContent).not.toContain(
-      "thread/start.dynamicTools requires experimentalApi capability",
-    );
+    expect(host.textContent).toContain('Retry in a moment.')
+    expect(host.textContent).not.toContain('thread/start.dynamicTools requires experimentalApi capability')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("bootstraps the assistant session and streams assistant deltas into the rail", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('bootstraps the assistant session and streams assistant deltas into the rail', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
           return new Response(JSON.stringify(createSnapshot()), {
             status: 200,
-            headers: { "content-type": "application/json" },
-          });
+            headers: { 'content-type': 'application/json' },
+          })
         }
         return new Response(
           JSON.stringify({
             ok: true,
           }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
-      "Thinking",
-    );
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain('Thinking')
+    expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
 
     await act(async () => {
       MockEventSource.latest?.emit({
-        type: "entryTextDelta",
-        itemId: "assistant-1",
-        turnId: "turn-1",
-        entryKind: "assistant",
-        delta: "Updated Sheet1",
-      });
-    });
+        type: 'entryTextDelta',
+        itemId: 'assistant-1',
+        turnId: 'turn-1',
+        entryKind: 'assistant',
+        delta: 'Updated Sheet1',
+      })
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
-      "Updated Sheet1",
-    );
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain('Updated Sheet1')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("renders reasoning text immediately from streamed deltas without waiting for a snapshot refresh", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('renders reasoning text immediately from streamed deltas without waiting for a snapshot refresh', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
           return new Response(
             JSON.stringify(
               createSnapshot({
-                status: "inProgress",
-                activeTurnId: "turn-1",
+                status: 'inProgress',
+                activeTurnId: 'turn-1',
                 entries: [
                   {
-                    id: "optimistic-user:turn-1",
-                    kind: "user",
-                    turnId: "turn-1",
-                    text: "Check version issues",
+                    id: 'optimistic-user:turn-1',
+                    kind: 'user',
+                    turnId: 'turn-1',
+                    text: 'Check version issues',
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -1712,93 +1609,85 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
-          );
+          )
         }
         return new Response(
           JSON.stringify({
             ok: true,
           }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
-      "Thought",
-    );
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain('Thought')
 
     await act(async () => {
       MockEventSource.latest?.emit({
-        type: "entryTextDelta",
-        itemId: "reasoning-1",
-        turnId: "turn-1",
-        entryKind: "reasoning",
-        delta: "Examining version issues",
-      });
-    });
+        type: 'entryTextDelta',
+        itemId: 'reasoning-1',
+        turnId: 'turn-1',
+        entryKind: 'reasoning',
+        delta: 'Examining version issues',
+      })
+    })
 
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
-      "Thought",
-    );
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
-      "Examining version issues",
-    );
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain('Thought')
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain('Examining version issues')
 
     await act(async () => {
       MockEventSource.latest?.emit({
-        type: "entryTextDelta",
-        itemId: "reasoning-1",
-        turnId: "turn-1",
-        entryKind: "reasoning",
-        delta: " before deciding whether staged changes must be cleared.",
-      });
-    });
+        type: 'entryTextDelta',
+        itemId: 'reasoning-1',
+        turnId: 'turn-1',
+        entryKind: 'reasoning',
+        delta: ' before deciding whether staged changes must be cleared.',
+      })
+    })
 
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
-      "Examining version issues before deciding whether staged changes must be cleared.",
-    );
+      'Examining version issues before deciding whether staged changes must be cleared.',
+    )
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("keeps the thinking row visible while tool activity is still streaming", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('keeps the thinking row visible while tool activity is still streaming', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
           return new Response(
             JSON.stringify(
               createSnapshot({
-                status: "inProgress",
-                activeTurnId: "turn-1",
+                status: 'inProgress',
+                activeTurnId: 'turn-1',
                 entries: [
                   {
-                    id: "optimistic-user:turn-1",
-                    kind: "user",
-                    turnId: "turn-1",
-                    text: "Build the prepaid template",
+                    id: 'optimistic-user:turn-1',
+                    kind: 'user',
+                    turnId: 'turn-1',
+                    text: 'Build the prepaid template',
                     phase: null,
                     toolName: null,
                     toolStatus: null,
@@ -1808,13 +1697,13 @@ describe("workbook agent pane", () => {
                     citations: [],
                   },
                   {
-                    id: "tool-1",
-                    kind: "tool",
-                    turnId: "turn-1",
-                    text: "",
+                    id: 'tool-1',
+                    kind: 'tool',
+                    turnId: 'turn-1',
+                    text: '',
                     phase: null,
-                    toolName: "bilig_read_workbook",
-                    toolStatus: "completed",
+                    toolName: 'bilig_read_workbook',
+                    toolStatus: 'completed',
                     argumentsText: null,
                     outputText: null,
                     success: true,
@@ -1825,246 +1714,229 @@ describe("workbook agent pane", () => {
             ),
             {
               status: 200,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             },
-          );
+          )
         }
         return new Response(
           JSON.stringify({
             ok: true,
           }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }),
-    );
+    )
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(host.textContent).toContain("Read Workbook");
-    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull();
-    expect(host.textContent).toContain("Thinking");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.render(<AgentHarness />)
+    })
 
-  it("does not refetch thread summaries when stream snapshots arrive", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(host.textContent).toContain('Read Workbook')
+    expect(host.querySelector("[data-testid='workbook-agent-progress-row']")).not.toBeNull()
+    expect(host.textContent).toContain('Thinking')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not refetch thread summaries when stream snapshots arrive', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && requestMethod(init) === "GET") {
-        return new Response(JSON.stringify([createThreadSummary({ threadId: "thr-1" })]), {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify([createThreadSummary({ threadId: 'thr-1' })]), {
           status: 200,
-          headers: { "content-type": "application/json" },
-        });
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
-        return new Response(JSON.stringify(createSnapshot({ threadId: "thr-1" })), {
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1' })), {
           status: 200,
-          headers: { "content-type": "application/json" },
-        });
+          headers: { 'content-type': 'application/json' },
+        })
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
     expect(
-      fetchSpy.mock.calls.filter(
-        ([input, init]) =>
-          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
-      ),
-    ).toHaveLength(1);
+      fetchSpy.mock.calls.filter(([input, init]) => requestUrl(input).endsWith('/chat/threads') && requestMethod(init) === 'GET'),
+    ).toHaveLength(1)
 
     await act(async () => {
       MockEventSource.latest?.emit({
-        type: "snapshot",
+        type: 'snapshot',
         snapshot: createSnapshot({
-          threadId: "thr-1",
-          status: "inProgress",
-          activeTurnId: "turn-2",
+          threadId: 'thr-1',
+          status: 'inProgress',
+          activeTurnId: 'turn-2',
         }),
-      });
-    });
+      })
+    })
 
     expect(
-      fetchSpy.mock.calls.filter(
-        ([input, init]) =>
-          requestUrl(input).endsWith("/chat/threads") && requestMethod(init) === "GET",
-      ),
-    ).toHaveLength(1);
+      fetchSpy.mock.calls.filter(([input, init]) => requestUrl(input).endsWith('/chat/threads') && requestMethod(init) === 'GET'),
+    ).toHaveLength(1)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("recreates the assistant session and reconnects the stream after a stale session error", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('recreates the assistant session and reconnects the stream after a stale session error', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
 
-    let resumeCount = 0;
+    let resumeCount = 0
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
-        resumeCount += 1;
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        resumeCount += 1
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-1",
+              threadId: 'thr-1',
             }),
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness />);
-    });
-
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      MockEventSource.latest?.emitError();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+      root.render(<AgentHarness />)
+    })
+
+    expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
+
+    await act(async () => {
+      MockEventSource.latest?.emitError()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
     const sessionCalls = fetchSpy.mock.calls.filter(
-      ([input, init]) =>
-        requestUrl(input).endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET",
-    );
-    expect(sessionCalls).toHaveLength(2);
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
-    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toBe(
+      ([input, init]) => requestUrl(input).endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET',
+    )
+    expect(sessionCalls).toHaveLength(2)
+    expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
+    expect(window.sessionStorage.getItem('bilig:workbook-agent:doc-1')).toBe(
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("bootstraps from a stored durable thread id without requiring a stored session id", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('bootstraps from a stored durable thread id without requiring a stored session id', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-1",
+              threadId: 'thr-1',
             }),
           ),
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { 'content-type': 'application/json' },
           },
-        );
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(<AgentHarness />);
-    });
+      root.render(<AgentHarness />)
+    })
 
     const bootstrapSessionCall = fetchSpy.mock.calls.find(([input, init]) => {
-      return requestUrl(input).endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET";
-    });
-    expect(bootstrapSessionCall).toBeDefined();
-    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/chat/threads/thr-1/events");
-    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
-      '"threadId":"thr-1"',
-    );
+      return requestUrl(input).endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET'
+    })
+    expect(bootstrapSessionCall).toBeDefined()
+    expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
+    expect(window.sessionStorage.getItem('bilig:workbook-agent:doc-1')).toContain('"threadId":"thr-1"')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("does not render private review controls for restored private review items", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('does not render private review controls for restored private review items', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const preview = createPreviewSummary({
       ranges: [
         {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1",
-          role: "target" as const,
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+          role: 'target' as const,
         },
       ],
       cellDiffs: [
         {
-          sheetName: "Sheet1",
-          address: "A1",
+          sheetName: 'Sheet1',
+          address: 'A1',
           beforeInput: 1,
           beforeFormula: null,
           afterInput: 1,
           afterFormula: null,
-          changeKinds: ["style"],
+          changeKinds: ['style'],
         },
       ],
       effectSummary: {
@@ -2076,29 +1948,29 @@ describe("workbook agent pane", () => {
         numberFormatChangeCount: 0,
         structuralChangeCount: 0,
       },
-    });
-    const previewBundle = vi.fn(async () => preview);
+    })
+    const previewBundle = vi.fn(async () => preview)
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
               reviewBundle: {
-                id: "bundle-1",
-                documentId: "doc-1",
-                threadId: "thr-1",
-                turnId: "turn-1",
-                goalText: "Bold the selected cell",
-                summary: "Format Sheet1!A1",
-                scope: "selection",
-                riskClass: "low",
+                id: 'bundle-1',
+                documentId: 'doc-1',
+                threadId: 'thr-1',
+                turnId: 'turn-1',
+                goalText: 'Bold the selected cell',
+                summary: 'Format Sheet1!A1',
+                scope: 'selection',
+                riskClass: 'low',
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -2109,11 +1981,11 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A1",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A1',
                     },
                     patch: {
                       font: {
@@ -2124,47 +1996,47 @@ describe("workbook agent pane", () => {
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "A1",
-                    endAddress: "A1",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'A1',
+                    endAddress: 'A1',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 1,
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/review-items/bundle-1/apply")) {
+      if (url.endsWith('/review-items/bundle-1/apply')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
               reviewQueueItems: [],
               executionRecords: [
                 {
-                  id: "run-1",
-                  bundleId: "bundle-1",
-                  documentId: "doc-1",
-                  threadId: "thr-1",
-                  turnId: "turn-1",
-                  actorUserId: "user@example.com",
-                  goalText: "Bold the selected cell",
-                  planText: "Apply bold formatting",
-                  summary: "Format Sheet1!A1",
-                  scope: "selection",
-                  riskClass: "low",
-                  acceptedScope: "full",
-                  appliedBy: "auto",
+                  id: 'run-1',
+                  bundleId: 'bundle-1',
+                  documentId: 'doc-1',
+                  threadId: 'thr-1',
+                  turnId: 'turn-1',
+                  actorUserId: 'user@example.com',
+                  goalText: 'Bold the selected cell',
+                  planText: 'Apply bold formatting',
+                  summary: 'Format Sheet1!A1',
+                  scope: 'selection',
+                  riskClass: 'low',
+                  acceptedScope: 'full',
+                  appliedBy: 'auto',
                   baseRevision: 3,
                   appliedRevision: 4,
                   createdAtUnixMs: 10,
                   appliedAtUnixMs: 20,
                   context: {
                     selection: {
-                      sheetName: "Sheet1",
-                      address: "A1",
+                      sheetName: 'Sheet1',
+                      address: 'A1',
                     },
                     viewport: {
                       rowStart: 0,
@@ -2175,11 +2047,11 @@ describe("workbook agent pane", () => {
                   },
                   commands: [
                     {
-                      kind: "formatRange",
+                      kind: 'formatRange',
                       range: {
-                        sheetName: "Sheet1",
-                        startAddress: "A1",
-                        endAddress: "A1",
+                        sheetName: 'Sheet1',
+                        startAddress: 'A1',
+                        endAddress: 'A1',
                       },
                       patch: {
                         font: {
@@ -2193,86 +2065,82 @@ describe("workbook agent pane", () => {
               ],
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
-    });
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(previewBundle).not.toHaveBeenCalled();
-    const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/review-items/bundle-1/apply"),
-    );
-    expect(applyCall).toBeUndefined();
-    expect(host.textContent).not.toContain("Apply");
-    expect(host.textContent).not.toContain("Executions");
-    expect(host.textContent).not.toContain("Replay");
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />)
+    })
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      await Promise.resolve()
+    })
 
-  it("does not auto-apply low-risk review items on shared threads", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+    expect(previewBundle).not.toHaveBeenCalled()
+    const applyCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/review-items/bundle-1/apply'))
+    expect(applyCall).toBeUndefined()
+    expect(host.textContent).not.toContain('Apply')
+    expect(host.textContent).not.toContain('Executions')
+    expect(host.textContent).not.toContain('Replay')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not auto-apply low-risk review items on shared threads', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-shared",
+        threadId: 'thr-shared',
       }),
-    );
+    )
     const preview = createPreviewSummary({
       ranges: [
         {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1",
-          role: "target" as const,
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+          role: 'target' as const,
         },
       ],
-    });
-    const previewBundle = vi.fn(async () => preview);
+    })
+    const previewBundle = vi.fn(async () => preview)
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-shared') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-1",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-1",
-                goalText: "Bold the selected cell",
-                summary: "Format Sheet1!A1",
-                scope: "selection",
-                riskClass: "low",
+                id: 'bundle-shared-1',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-1',
+                goalText: 'Bold the selected cell',
+                summary: 'Format Sheet1!A1',
+                scope: 'selection',
+                riskClass: 'low',
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -2283,11 +2151,11 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A1",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A1',
                     },
                     patch: {
                       font: {
@@ -2298,101 +2166,97 @@ describe("workbook agent pane", () => {
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "A1",
-                    endAddress: "A1",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'A1',
+                    endAddress: 'A1',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 1,
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
-    });
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      await Promise.resolve();
-    });
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />)
+    })
 
-    expect(previewBundle).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(previewBundle).toHaveBeenCalled()
     expect(previewBundle.mock.calls[0]?.[0]).toMatchObject({
-      id: "bundle-shared-1",
-    });
-    const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/review-items/bundle-shared-1/apply"),
-    );
-    expect(applyCall).toBeUndefined();
+      id: 'bundle-shared-1',
+    })
+    const applyCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/review-items/bundle-shared-1/apply'))
+    expect(applyCall).toBeUndefined()
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("blocks collaborator approval of shared medium-risk bundles in the panel", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('blocks collaborator approval of shared medium-risk bundles in the panel', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-shared",
+        threadId: 'thr-shared',
       }),
-    );
+    )
     const preview = createPreviewSummary({
-      structuralChanges: ["Format selected range"],
-    });
-    const previewBundle = vi.fn(async () => preview);
+      structuralChanges: ['Format selected range'],
+    })
+    const previewBundle = vi.fn(async () => preview)
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && (init?.method ?? 'GET') === 'GET') {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-shared",
-              scope: "shared",
-              ownerUserId: "alex@example.com",
+              threadId: 'thr-shared',
+              scope: 'shared',
+              ownerUserId: 'alex@example.com',
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Review item queued",
+              latestEntryText: 'Review item queued',
             }),
           ]),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith('/chat/threads/thr-shared') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-2",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-2",
-                goalText: "Normalize the imported sheet",
-                summary: "Normalize Sheet1!A1:A20",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-shared-2',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-2',
+                goalText: 'Normalize the imported sheet',
+                summary: 'Normalize Sheet1!A1:A20',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -2403,11 +2267,11 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A20",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A20',
                     },
                     patch: {
                       font: {
@@ -2418,16 +2282,16 @@ describe("workbook agent pane", () => {
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "A1",
-                    endAddress: "A20",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'A1',
+                    endAddress: 'A20',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 20,
                 sharedReview: {
-                  ownerUserId: "alex@example.com",
-                  status: "pending",
+                  ownerUserId: 'alex@example.com',
+                  status: 'pending',
                   decidedByUserId: null,
                   decidedAtUnixMs: null,
                   recommendations: [],
@@ -2435,93 +2299,87 @@ describe("workbook agent pane", () => {
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(
-        <AgentHarness currentUserId="casey@example.com" previewCommandBundle={previewBundle} />,
-      );
-    });
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      await Promise.resolve();
-    });
+      root.render(<AgentHarness currentUserId="casey@example.com" previewCommandBundle={previewBundle} />)
+    })
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']")
     if (!(applyButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected apply button to render");
+      throw new Error('Expected apply button to render')
     }
-    expect(applyButton.disabled).toBe(true);
-    expect(host.textContent).toContain(
-      "Owner review routes medium/high-risk changes to Alex on this shared thread.",
-    );
-    expect(host.textContent).toContain("Owner review is in progress with Alex.");
+    expect(applyButton.disabled).toBe(true)
+    expect(host.textContent).toContain('Owner review routes medium/high-risk changes to Alex on this shared thread.')
+    expect(host.textContent).toContain('Owner review is in progress with Alex.')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("lets the shared thread owner approve a medium-risk bundle before apply", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('lets the shared thread owner approve a medium-risk bundle before apply', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-shared",
+        threadId: 'thr-shared',
       }),
-    );
+    )
     const preview = createPreviewSummary({
-      structuralChanges: ["Normalize selected range"],
-    });
+      structuralChanges: ['Normalize selected range'],
+    })
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && (init?.method ?? 'GET') === 'GET') {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-shared",
-              scope: "shared",
-              ownerUserId: "alex@example.com",
+              threadId: 'thr-shared',
+              scope: 'shared',
+              ownerUserId: 'alex@example.com',
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Review item queued",
+              latestEntryText: 'Review item queued',
             }),
           ]),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith('/chat/threads/thr-shared') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-owner",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-2",
-                goalText: "Normalize the imported sheet",
-                summary: "Normalize Sheet1!A1:A20",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-shared-owner',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-2',
+                goalText: 'Normalize the imported sheet',
+                summary: 'Normalize Sheet1!A1:A20',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -2532,11 +2390,11 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A20",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A20',
                     },
                     patch: {
                       font: {
@@ -2547,16 +2405,16 @@ describe("workbook agent pane", () => {
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "A1",
-                    endAddress: "A20",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'A1',
+                    endAddress: 'A20',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 20,
                 sharedReview: {
-                  ownerUserId: "alex@example.com",
-                  status: "pending",
+                  ownerUserId: 'alex@example.com',
+                  status: 'pending',
                   decidedByUserId: null,
                   decidedAtUnixMs: null,
                   recommendations: [],
@@ -2564,34 +2422,34 @@ describe("workbook agent pane", () => {
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/review-items/bundle-shared-owner/review")) {
+      if (url.endsWith('/review-items/bundle-shared-owner/review')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-owner",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-2",
-                goalText: "Normalize the imported sheet",
-                summary: "Normalize Sheet1!A1:A20",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-shared-owner',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-2',
+                goalText: 'Normalize the imported sheet',
+                summary: 'Normalize Sheet1!A1:A20',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A20",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A20',
                     },
                     patch: {
                       font: {
@@ -2603,128 +2461,117 @@ describe("workbook agent pane", () => {
                 affectedRanges: [],
                 estimatedAffectedCells: 20,
                 sharedReview: {
-                  ownerUserId: "alex@example.com",
-                  status: "approved",
-                  decidedByUserId: "alex@example.com",
+                  ownerUserId: 'alex@example.com',
+                  status: 'approved',
+                  decidedByUserId: 'alex@example.com',
                   decidedAtUnixMs: 25,
                   recommendations: [],
                 },
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(
-        <AgentHarness
-          currentUserId="alex@example.com"
-          previewCommandBundle={vi.fn(async () => preview)}
-        />,
-      );
-    });
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      await Promise.resolve();
-    });
+      root.render(<AgentHarness currentUserId="alex@example.com" previewCommandBundle={vi.fn(async () => preview)} />)
+    })
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
-    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']");
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']")
+    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']")
     if (!(applyButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected apply button");
+      throw new Error('Expected apply button')
     }
     if (!(approveButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected approve button");
+      throw new Error('Expected approve button')
     }
-    expect(applyButton.disabled).toBe(true);
+    expect(applyButton.disabled).toBe(true)
 
     await act(async () => {
-      approveButton.click();
-    });
+      approveButton.click()
+    })
 
-    const reviewCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/review-items/bundle-shared-owner/review"),
-    );
+    const reviewCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/review-items/bundle-shared-owner/review'))
     expect(requestBody(reviewCall?.[1])).toEqual({
-      decision: "approved",
-    });
-    expect(host.textContent).toContain("Approved by Alex.");
-    const refreshedApplyButton = host.querySelector(
-      "[data-testid='workbook-agent-apply-review-item']",
-    );
+      decision: 'approved',
+    })
+    expect(host.textContent).toContain('Approved by Alex.')
+    const refreshedApplyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']")
     if (!(refreshedApplyButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected refreshed apply button");
+      throw new Error('Expected refreshed apply button')
     }
-    expect(refreshedApplyButton.disabled).toBe(false);
+    expect(refreshedApplyButton.disabled).toBe(false)
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("lets collaborators recommend approval on shared medium-risk bundles", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('lets collaborators recommend approval on shared medium-risk bundles', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-shared",
+        threadId: 'thr-shared',
       }),
-    );
+    )
     const preview = createPreviewSummary({
-      structuralChanges: ["Normalize selected range"],
-    });
+      structuralChanges: ['Normalize selected range'],
+    })
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads") && (init?.method ?? "GET") === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && (init?.method ?? 'GET') === 'GET') {
         return new Response(
           JSON.stringify([
             createThreadSummary({
-              threadId: "thr-shared",
-              scope: "shared",
-              ownerUserId: "alex@example.com",
+              threadId: 'thr-shared',
+              scope: 'shared',
+              ownerUserId: 'alex@example.com',
               entryCount: 3,
               reviewQueueItemCount: 1,
-              latestEntryText: "Review item queued",
+              latestEntryText: 'Review item queued',
             }),
           ]),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/chat/threads/thr-shared") && requestMethod(init) === "GET") {
+      if (url.endsWith('/chat/threads/thr-shared') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-collab",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-2",
-                goalText: "Normalize the imported sheet",
-                summary: "Normalize Sheet1!A1:A20",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-shared-collab',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-2',
+                goalText: 'Normalize the imported sheet',
+                summary: 'Normalize Sheet1!A1:A20',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A20",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A20',
                     },
                     patch: {
                       font: {
@@ -2736,8 +2583,8 @@ describe("workbook agent pane", () => {
                 affectedRanges: [],
                 estimatedAffectedCells: 20,
                 sharedReview: {
-                  ownerUserId: "alex@example.com",
-                  status: "pending",
+                  ownerUserId: 'alex@example.com',
+                  status: 'pending',
                   decidedByUserId: null,
                   decidedAtUnixMs: null,
                   recommendations: [],
@@ -2745,34 +2592,34 @@ describe("workbook agent pane", () => {
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/review-items/bundle-shared-collab/review")) {
+      if (url.endsWith('/review-items/bundle-shared-collab/review')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              threadId: "thr-shared",
-              scope: "shared",
+              threadId: 'thr-shared',
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-shared-collab",
-                documentId: "doc-1",
-                threadId: "thr-shared",
-                turnId: "turn-2",
-                goalText: "Normalize the imported sheet",
-                summary: "Normalize Sheet1!A1:A20",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-shared-collab',
+                documentId: 'doc-1',
+                threadId: 'thr-shared',
+                turnId: 'turn-2',
+                goalText: 'Normalize the imported sheet',
+                summary: 'Normalize Sheet1!A1:A20',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: null,
                 commands: [
                   {
-                    kind: "formatRange",
+                    kind: 'formatRange',
                     range: {
-                      sheetName: "Sheet1",
-                      startAddress: "A1",
-                      endAddress: "A20",
+                      sheetName: 'Sheet1',
+                      startAddress: 'A1',
+                      endAddress: 'A20',
                     },
                     patch: {
                       font: {
@@ -2784,14 +2631,14 @@ describe("workbook agent pane", () => {
                 affectedRanges: [],
                 estimatedAffectedCells: 20,
                 sharedReview: {
-                  ownerUserId: "alex@example.com",
-                  status: "pending",
+                  ownerUserId: 'alex@example.com',
+                  status: 'pending',
                   decidedByUserId: null,
                   decidedAtUnixMs: null,
                   recommendations: [
                     {
-                      userId: "casey@example.com",
-                      decision: "approved",
+                      userId: 'casey@example.com',
+                      decision: 'approved',
                       decidedAtUnixMs: 30,
                     },
                   ],
@@ -2799,68 +2646,59 @@ describe("workbook agent pane", () => {
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      throw new Error(`Unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      root.render(
-        <AgentHarness
-          currentUserId="casey@example.com"
-          previewCommandBundle={async () => preview}
-        />,
-      );
-    });
+      root.render(<AgentHarness currentUserId="casey@example.com" previewCommandBundle={async () => preview} />)
+    })
 
-    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']");
-    expect(approveButton instanceof HTMLButtonElement).toBe(true);
-    expect(host.textContent).toContain("Owner review is in progress with Alex.");
+    const approveButton = host.querySelector("[data-testid='workbook-agent-review-item-approve']")
+    expect(approveButton instanceof HTMLButtonElement).toBe(true)
+    expect(host.textContent).toContain('Owner review is in progress with Alex.')
 
     await act(async () => {
       if (!(approveButton instanceof HTMLButtonElement)) {
-        throw new Error("Expected recommend approve button");
+        throw new Error('Expected recommend approve button')
       }
-      approveButton.click();
-    });
+      approveButton.click()
+    })
 
-    const reviewCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/review-items/bundle-shared-collab/review"),
-    );
+    const reviewCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/review-items/bundle-shared-collab/review'))
     expect(requestBody(reviewCall?.[1])).toEqual({
-      decision: "approved",
-    });
-    expect(host.textContent).toContain("1 approval recommendation");
-    expect(host.textContent).toContain("You recommended approval.");
+      decision: 'approved',
+    })
+    expect(host.textContent).toContain('1 approval recommendation')
+    expect(host.textContent).toContain('You recommended approval.')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("re-previews and applies only the selected command subset", async () => {
-    (
-      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
+  it('re-previews and applies only the selected command subset', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      "bilig:workbook-agent:doc-1",
+      'bilig:workbook-agent:doc-1',
       JSON.stringify({
-        threadId: "thr-1",
+        threadId: 'thr-1',
       }),
-    );
+    )
     const fullPreview = createPreviewSummary({
       ranges: [
         {
-          sheetName: "Sheet1",
-          startAddress: "B2",
-          endAddress: "C3",
-          role: "target" as const,
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          endAddress: 'C3',
+          role: 'target' as const,
         },
       ],
       effectSummary: {
@@ -2872,25 +2710,25 @@ describe("workbook agent pane", () => {
         numberFormatChangeCount: 0,
         structuralChangeCount: 0,
       },
-    });
+    })
     const subsetPreview = createPreviewSummary({
       ranges: [
         {
-          sheetName: "Sheet1",
-          startAddress: "C3",
-          endAddress: "C3",
-          role: "target" as const,
+          sheetName: 'Sheet1',
+          startAddress: 'C3',
+          endAddress: 'C3',
+          role: 'target' as const,
         },
       ],
       cellDiffs: [
         {
-          sheetName: "Sheet1",
-          address: "C3",
+          sheetName: 'Sheet1',
+          address: 'C3',
           beforeInput: null,
           beforeFormula: null,
           afterInput: 2,
           afterFormula: null,
-          changeKinds: ["input"],
+          changeKinds: ['input'],
         },
       ],
       effectSummary: {
@@ -2902,32 +2740,30 @@ describe("workbook agent pane", () => {
         numberFormatChangeCount: 0,
         structuralChangeCount: 0,
       },
-    });
-    const previewBundle = vi.fn(async (bundle) =>
-      bundle.commands.length === 1 ? subsetPreview : fullPreview,
-    );
+    })
+    const previewBundle = vi.fn(async (bundle) => (bundle.commands.length === 1 ? subsetPreview : fullPreview))
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.endsWith("/chat/threads/thr-1") && requestMethod(init) === "GET") {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              scope: "shared",
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-1",
-                documentId: "doc-1",
-                threadId: "thr-1",
-                turnId: "turn-1",
-                goalText: "Update two cells",
-                summary: "Write cells in Sheet1!B2 and 1 more change",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-1',
+                documentId: 'doc-1',
+                threadId: 'thr-1',
+                turnId: 'turn-1',
+                goalText: 'Update two cells',
+                summary: 'Write cells in Sheet1!B2 and 1 more change',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 3,
                 createdAtUnixMs: 10,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -2938,59 +2774,59 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "writeRange",
-                    sheetName: "Sheet1",
-                    startAddress: "B2",
+                    kind: 'writeRange',
+                    sheetName: 'Sheet1',
+                    startAddress: 'B2',
                     values: [[1]],
                   },
                   {
-                    kind: "writeRange",
-                    sheetName: "Sheet1",
-                    startAddress: "C3",
+                    kind: 'writeRange',
+                    sheetName: 'Sheet1',
+                    startAddress: 'C3',
                     values: [[2]],
                   },
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "B2",
-                    endAddress: "B2",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'B2',
+                    endAddress: 'B2',
+                    role: 'target',
                   },
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "C3",
-                    endAddress: "C3",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'C3',
+                    endAddress: 'C3',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 2,
               },
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
-      if (url.endsWith("/review-items/bundle-1/apply")) {
+      if (url.endsWith('/review-items/bundle-1/apply')) {
         return new Response(
           JSON.stringify(
             createSnapshot({
-              scope: "shared",
+              scope: 'shared',
               reviewBundle: {
-                id: "bundle-2",
-                documentId: "doc-1",
-                threadId: "thr-1",
-                turnId: "turn-1",
-                goalText: "Update two cells",
-                summary: "Write cells in Sheet1!B2",
-                scope: "sheet",
-                riskClass: "medium",
+                id: 'bundle-2',
+                documentId: 'doc-1',
+                threadId: 'thr-1',
+                turnId: 'turn-1',
+                goalText: 'Update two cells',
+                summary: 'Write cells in Sheet1!B2',
+                scope: 'sheet',
+                riskClass: 'medium',
                 baseRevision: 4,
                 createdAtUnixMs: 20,
                 context: {
                   selection: {
-                    sheetName: "Sheet1",
-                    address: "A1",
+                    sheetName: 'Sheet1',
+                    address: 'A1',
                   },
                   viewport: {
                     rowStart: 0,
@@ -3001,45 +2837,45 @@ describe("workbook agent pane", () => {
                 },
                 commands: [
                   {
-                    kind: "writeRange",
-                    sheetName: "Sheet1",
-                    startAddress: "B2",
+                    kind: 'writeRange',
+                    sheetName: 'Sheet1',
+                    startAddress: 'B2',
                     values: [[1]],
                   },
                 ],
                 affectedRanges: [
                   {
-                    sheetName: "Sheet1",
-                    startAddress: "B2",
-                    endAddress: "B2",
-                    role: "target",
+                    sheetName: 'Sheet1',
+                    startAddress: 'B2',
+                    endAddress: 'B2',
+                    role: 'target',
                   },
                 ],
                 estimatedAffectedCells: 1,
               },
               executionRecords: [
                 {
-                  id: "run-1",
-                  bundleId: "bundle-1",
-                  documentId: "doc-1",
-                  threadId: "thr-1",
-                  turnId: "turn-1",
-                  actorUserId: "user@example.com",
-                  goalText: "Update two cells",
-                  planText: "Apply only the second cell",
-                  summary: "Write cells in Sheet1!C3",
-                  scope: "sheet",
-                  riskClass: "medium",
-                  acceptedScope: "partial",
-                  appliedBy: "user",
+                  id: 'run-1',
+                  bundleId: 'bundle-1',
+                  documentId: 'doc-1',
+                  threadId: 'thr-1',
+                  turnId: 'turn-1',
+                  actorUserId: 'user@example.com',
+                  goalText: 'Update two cells',
+                  planText: 'Apply only the second cell',
+                  summary: 'Write cells in Sheet1!C3',
+                  scope: 'sheet',
+                  riskClass: 'medium',
+                  acceptedScope: 'partial',
+                  appliedBy: 'user',
                   baseRevision: 3,
                   appliedRevision: 4,
                   createdAtUnixMs: 10,
                   appliedAtUnixMs: 20,
                   context: {
                     selection: {
-                      sheetName: "Sheet1",
-                      address: "A1",
+                      sheetName: 'Sheet1',
+                      address: 'A1',
                     },
                     viewport: {
                       rowStart: 0,
@@ -3050,9 +2886,9 @@ describe("workbook agent pane", () => {
                   },
                   commands: [
                     {
-                      kind: "writeRange",
-                      sheetName: "Sheet1",
-                      startAddress: "C3",
+                      kind: 'writeRange',
+                      sheetName: 'Sheet1',
+                      startAddress: 'C3',
                       values: [[2]],
                     },
                   ],
@@ -3061,79 +2897,75 @@ describe("workbook agent pane", () => {
               ],
             }),
           ),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
 
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentHarness previewCommandBundle={previewBundle} />);
-    });
-
-    expect(previewBundle).toHaveBeenCalledTimes(1);
-    expect(host.textContent).toContain("2/2");
-
-    const firstToggle = host.querySelector(
-      "[data-testid='workbook-agent-review-command-toggle-0']",
-    );
-    expect(firstToggle instanceof HTMLInputElement).toBe(true);
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
-      firstToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+      root.render(<AgentHarness previewCommandBundle={previewBundle} />)
+    })
+
+    expect(previewBundle).toHaveBeenCalledTimes(1)
+    expect(host.textContent).toContain('2/2')
+
+    const firstToggle = host.querySelector("[data-testid='workbook-agent-review-command-toggle-0']")
+    expect(firstToggle instanceof HTMLInputElement).toBe(true)
 
     await act(async () => {
-      await Promise.resolve();
-    });
+      firstToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
-    expect(previewBundle).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(previewBundle).toHaveBeenCalledTimes(2)
     expect(previewBundle.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
         commands: [
           {
-            kind: "writeRange",
-            sheetName: "Sheet1",
-            startAddress: "C3",
+            kind: 'writeRange',
+            sheetName: 'Sheet1',
+            startAddress: 'C3',
             values: [[2]],
           },
         ],
       }),
-    );
-    expect(host.textContent).toContain("1/2");
+    )
+    expect(host.textContent).toContain('1/2')
 
-    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']");
-    expect(applyButton).toBeTruthy();
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-review-item']")
+    expect(applyButton).toBeTruthy()
 
     await act(async () => {
-      applyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+      applyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
-    const applyCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/review-items/bundle-1/apply"),
-    );
+    const applyCall = fetchSpy.mock.calls.find(([input]) => requestUrl(input).endsWith('/review-items/bundle-1/apply'))
     expect(applyCall?.[1]?.body).toBe(
       JSON.stringify({
-        appliedBy: "user",
+        appliedBy: 'user',
         commandIndexes: [1],
         preview: subsetPreview,
       }),
-    );
-    expect(host.textContent).toContain("Write cells in Sheet1!B2");
-    expect(host.textContent).toContain("Sheet1!C3");
-    expect(host.textContent).not.toContain("Recent changes");
-    expect(host.textContent).not.toContain("Run again");
+    )
+    expect(host.textContent).toContain('Write cells in Sheet1!B2')
+    expect(host.textContent).toContain('Sheet1!C3')
+    expect(host.textContent).not.toContain('Recent changes')
+    expect(host.textContent).not.toContain('Run again')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
-});
+      root.unmount()
+    })
+  })
+})

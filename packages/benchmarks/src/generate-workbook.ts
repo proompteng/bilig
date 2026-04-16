@@ -1,34 +1,34 @@
-import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
-import type { WorkbookSnapshot } from "@bilig/protocol";
-import { buildDenseMixedWorkbookSnapshot } from "./workbook-corpus.js";
+import type { CommitOp, SpreadsheetEngine } from '@bilig/core'
+import type { WorkbookSnapshot } from '@bilig/protocol'
+import { buildDenseMixedWorkbookSnapshot } from './workbook-corpus.js'
 
 export function seedWorkbook(engine: SpreadsheetEngine, materializedCells = 1000): void {
-  seedLoadWorkbook(engine, materializedCells);
+  seedLoadWorkbook(engine, materializedCells)
 }
 
 export function seedLoadWorkbook(engine: SpreadsheetEngine, materializedCells = 1000): void {
-  engine.importSnapshot(buildWorkbookSnapshot(materializedCells));
+  engine.importSnapshot(buildWorkbookSnapshot(materializedCells))
 }
 
 export function buildWorkbookSnapshot(materializedCells = 1000): WorkbookSnapshot {
-  return buildDenseMixedWorkbookSnapshot(materializedCells, "benchmark-load", "Sheet1");
+  return buildDenseMixedWorkbookSnapshot(materializedCells, 'benchmark-load', 'Sheet1')
 }
 
 export function seedDownstreamWorkbook(engine: SpreadsheetEngine, downstreamCount = 1000): void {
-  engine.importSnapshot(buildDownstreamSnapshot(downstreamCount));
+  engine.importSnapshot(buildDownstreamSnapshot(downstreamCount))
 }
 
 export function buildDownstreamSnapshot(downstreamCount = 1000): WorkbookSnapshot {
   return {
     version: 1,
-    workbook: { name: "benchmark-edit" },
+    workbook: { name: 'benchmark-edit' },
     sheets: [
       {
         id: 1,
-        name: "Sheet1",
+        name: 'Sheet1',
         order: 0,
         cells: [
-          { address: "A1", value: 1 },
+          { address: 'A1', value: 1 },
           ...Array.from({ length: downstreamCount }, (_, index) => ({
             address: `B${index + 1}`,
             formula: `A1*2+${index + 1}`,
@@ -36,41 +36,34 @@ export function buildDownstreamSnapshot(downstreamCount = 1000): WorkbookSnapsho
         ],
       },
     ],
-  };
+  }
 }
 
 export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {
   const ops: CommitOp[] = [
-    { kind: "upsertWorkbook", name: "benchmark-renderer" },
-    { kind: "upsertSheet", name: "Sheet1", order: 0 },
-  ];
+    { kind: 'upsertWorkbook', name: 'benchmark-renderer' },
+    { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+  ]
 
   for (let index = 1; index <= cellCount; index += 1) {
-    ops.push({ kind: "upsertCell", sheetName: "Sheet1", addr: `A${index}`, value: index });
+    ops.push({ kind: 'upsertCell', sheetName: 'Sheet1', addr: `A${index}`, value: index })
   }
 
-  return ops;
+  return ops
 }
 
-export function seedRangeAggregateWorkbook(
-  engine: SpreadsheetEngine,
-  sourceCount = 1_024,
-  aggregateCount = 10_000,
-): void {
-  engine.importSnapshot(buildRangeAggregateSnapshot(sourceCount, aggregateCount));
+export function seedRangeAggregateWorkbook(engine: SpreadsheetEngine, sourceCount = 1_024, aggregateCount = 10_000): void {
+  engine.importSnapshot(buildRangeAggregateSnapshot(sourceCount, aggregateCount))
 }
 
-export function buildRangeAggregateSnapshot(
-  sourceCount = 1_024,
-  aggregateCount = 10_000,
-): WorkbookSnapshot {
+export function buildRangeAggregateSnapshot(sourceCount = 1_024, aggregateCount = 10_000): WorkbookSnapshot {
   return {
     version: 1,
-    workbook: { name: "benchmark-range-aggregates" },
+    workbook: { name: 'benchmark-range-aggregates' },
     sheets: [
       {
         id: 1,
-        name: "Sheet1",
+        name: 'Sheet1',
         order: 0,
         cells: [
           ...Array.from({ length: sourceCount }, (_, index) => ({
@@ -84,37 +77,37 @@ export function buildRangeAggregateSnapshot(
         ],
       },
     ],
-  };
+  }
 }
 
 export function seedTopologyEditWorkbook(engine: SpreadsheetEngine, chainLength = 10_000): void {
-  engine.importSnapshot(buildTopologyEditSnapshot(chainLength));
+  engine.importSnapshot(buildTopologyEditSnapshot(chainLength))
 }
 
 export function buildTopologyEditSnapshot(chainLength = 10_000): WorkbookSnapshot {
-  const cells: WorkbookSnapshot["sheets"][number]["cells"] = [
-    { address: "A1", value: 1 },
-    { address: "A2", value: 2 },
-    { address: "B1", formula: "A1*2" },
-  ];
+  const cells: WorkbookSnapshot['sheets'][number]['cells'] = [
+    { address: 'A1', value: 1 },
+    { address: 'A2', value: 2 },
+    { address: 'B1', formula: 'A1*2' },
+  ]
 
   for (let index = 2; index <= chainLength; index += 1) {
     cells.push({
       address: `B${index}`,
       formula: `B${index - 1}+1`,
-    });
+    })
   }
 
   return {
     version: 1,
-    workbook: { name: "benchmark-topology-edit" },
+    workbook: { name: 'benchmark-topology-edit' },
     sheets: [
       {
         id: 1,
-        name: "Sheet1",
+        name: 'Sheet1',
         order: 0,
         cells,
       },
     ],
-  };
+  }
 }

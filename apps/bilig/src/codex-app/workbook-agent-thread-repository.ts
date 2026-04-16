@@ -1,73 +1,64 @@
-import type { WorkbookAgentExecutionRecord, WorkbookAgentReviewQueueItem } from "@bilig/agent-api";
+import type { WorkbookAgentExecutionRecord, WorkbookAgentReviewQueueItem } from '@bilig/agent-api'
 import type {
   WorkbookAgentExecutionPolicy,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
-} from "@bilig/contracts";
-import type { ZeroSyncService } from "../zero/service.js";
-import type { WorkbookAgentThreadStateRecord } from "../zero/workbook-chat-thread-store.js";
+} from '@bilig/contracts'
+import type { ZeroSyncService } from '../zero/service.js'
+import type { WorkbookAgentThreadStateRecord } from '../zero/workbook-chat-thread-store.js'
 
 type WorkbookAgentThreadPersistenceSource = Pick<
   ZeroSyncService,
-  | "loadWorkbookAgentThreadState"
-  | "saveWorkbookAgentThreadState"
-  | "listWorkbookAgentThreadRuns"
-  | "listWorkbookThreadWorkflowRuns"
->;
+  'loadWorkbookAgentThreadState' | 'saveWorkbookAgentThreadState' | 'listWorkbookAgentThreadRuns' | 'listWorkbookThreadWorkflowRuns'
+>
 
 export interface WorkbookAgentPersistedThreadInput {
-  readonly documentId: string;
-  readonly threadId: string;
-  readonly actorUserId: string;
-  readonly scope: "private" | "shared";
-  readonly executionPolicy: WorkbookAgentExecutionPolicy;
-  readonly context: WorkbookAgentUiContext | null;
-  readonly entries: readonly WorkbookAgentTimelineEntry[];
-  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[];
-  readonly updatedAtUnixMs: number;
+  readonly documentId: string
+  readonly threadId: string
+  readonly actorUserId: string
+  readonly scope: 'private' | 'shared'
+  readonly executionPolicy: WorkbookAgentExecutionPolicy
+  readonly context: WorkbookAgentUiContext | null
+  readonly entries: readonly WorkbookAgentTimelineEntry[]
+  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[]
+  readonly updatedAtUnixMs: number
 }
 
 export interface WorkbookAgentLoadedThreadState {
-  readonly threadState: WorkbookAgentThreadStateRecord | null;
-  readonly executionRecords: WorkbookAgentExecutionRecord[];
-  readonly workflowRuns: WorkbookAgentWorkflowRun[];
+  readonly threadState: WorkbookAgentThreadStateRecord | null
+  readonly executionRecords: WorkbookAgentExecutionRecord[]
+  readonly workflowRuns: WorkbookAgentWorkflowRun[]
 }
 
-function persistenceKey(input: {
-  documentId: string;
-  threadId: string;
-  actorUserId: string;
-}): string {
-  return `${input.documentId}\u0000${input.threadId}\u0000${input.actorUserId}`;
+function persistenceKey(input: { documentId: string; threadId: string; actorUserId: string }): string {
+  return `${input.documentId}\u0000${input.threadId}\u0000${input.actorUserId}`
 }
 
-function dedupeTimelineEntries(
-  entries: readonly WorkbookAgentTimelineEntry[],
-): WorkbookAgentTimelineEntry[] {
-  const deduped: WorkbookAgentTimelineEntry[] = [];
-  const indexById = new Map<string, number>();
+function dedupeTimelineEntries(entries: readonly WorkbookAgentTimelineEntry[]): WorkbookAgentTimelineEntry[] {
+  const deduped: WorkbookAgentTimelineEntry[] = []
+  const indexById = new Map<string, number>()
   for (const entry of entries) {
-    const existingIndex = indexById.get(entry.id);
+    const existingIndex = indexById.get(entry.id)
     if (existingIndex === undefined) {
-      indexById.set(entry.id, deduped.length);
-      deduped.push(entry);
-      continue;
+      indexById.set(entry.id, deduped.length)
+      deduped.push(entry)
+      continue
     }
-    deduped[existingIndex] = entry;
+    deduped[existingIndex] = entry
   }
-  return deduped;
+  return deduped
 }
 
 export class WorkbookAgentThreadRepository {
-  private readonly pendingSaves = new Map<string, Promise<void>>();
+  private readonly pendingSaves = new Map<string, Promise<void>>()
 
   constructor(private readonly source: WorkbookAgentThreadPersistenceSource) {}
 
   async saveThreadState(input: WorkbookAgentPersistedThreadInput): Promise<void> {
-    const key = persistenceKey(input);
-    const entries = dedupeTimelineEntries(input.entries);
-    const previous = this.pendingSaves.get(key) ?? Promise.resolve();
+    const key = persistenceKey(input)
+    const entries = dedupeTimelineEntries(input.entries)
+    const previous = this.pendingSaves.get(key) ?? Promise.resolve()
     const next = previous
       .catch(() => undefined)
       .then(async () => {
@@ -81,37 +72,29 @@ export class WorkbookAgentThreadRepository {
           entries,
           reviewQueueItems: input.reviewQueueItems,
           updatedAtUnixMs: input.updatedAtUnixMs,
-        });
-        return undefined;
-      });
-    this.pendingSaves.set(key, next);
+        })
+        return undefined
+      })
+    this.pendingSaves.set(key, next)
     try {
-      await next;
+      await next
     } finally {
       if (this.pendingSaves.get(key) === next) {
-        this.pendingSaves.delete(key);
+        this.pendingSaves.delete(key)
       }
     }
   }
 
-  async loadThreadState(input: {
-    documentId: string;
-    actorUserId: string;
-    threadId: string;
-  }): Promise<WorkbookAgentLoadedThreadState> {
+  async loadThreadState(input: { documentId: string; actorUserId: string; threadId: string }): Promise<WorkbookAgentLoadedThreadState> {
     const [threadState, executionRecords, workflowRuns] = await Promise.all([
       this.source.loadWorkbookAgentThreadState(input.documentId, input.actorUserId, input.threadId),
       this.source.listWorkbookAgentThreadRuns(input.documentId, input.actorUserId, input.threadId),
-      this.source.listWorkbookThreadWorkflowRuns(
-        input.documentId,
-        input.actorUserId,
-        input.threadId,
-      ),
-    ]);
+      this.source.listWorkbookThreadWorkflowRuns(input.documentId, input.actorUserId, input.threadId),
+    ])
     return {
       threadState,
       executionRecords,
       workflowRuns,
-    };
+    }
   }
 }

@@ -1,37 +1,37 @@
-import { SpreadsheetEngine } from "@bilig/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkbookContainer } from "../host-config.js";
+import { SpreadsheetEngine } from '@bilig/core'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorkbookContainer } from '../host-config.js'
 
-const createContainer = vi.fn();
-const updateContainer = vi.fn();
+const createContainer = vi.fn()
+const updateContainer = vi.fn()
 
-vi.mock("../host-config.js", () => ({
+vi.mock('../host-config.js', () => ({
   WorkbookReconciler: {
     createContainer,
     updateContainer,
   },
-}));
+}))
 
-describe("renderer compat", () => {
+describe('renderer compat', () => {
   beforeEach(() => {
-    createContainer.mockReset();
-    updateContainer.mockReset();
-    vi.resetModules();
-  });
+    createContainer.mockReset()
+    updateContainer.mockReset()
+    vi.resetModules()
+  })
 
   async function makeContainer(workbookName: string): Promise<WorkbookContainer> {
-    const engine = new SpreadsheetEngine({ workbookName });
-    await engine.ready();
+    const engine = new SpreadsheetEngine({ workbookName })
+    await engine.ready()
     return {
       engine,
       root: null,
       pendingOps: [],
       shouldSyncSheetOrders: false,
       lastError: null,
-    };
+    }
   }
 
-  it("normalizes non-Error renderer failures into Error instances", async () => {
+  it('normalizes non-Error renderer failures into Error instances', async () => {
     createContainer.mockImplementation(
       (
         container: { lastError: Error | null },
@@ -42,21 +42,21 @@ describe("renderer compat", () => {
         _identifierPrefix: unknown,
         onCaughtError: (error: unknown) => void,
       ) => {
-        onCaughtError("boom");
-        return { kind: "root", container };
+        onCaughtError('boom')
+        return { kind: 'root', container }
       },
-    );
+    )
 
-    const { createFiberRoot } = await import("../compat.js");
-    const container = await makeContainer("renderer-compat-non-error");
+    const { createFiberRoot } = await import('../compat.js')
+    const container = await makeContainer('renderer-compat-non-error')
 
-    expect(createFiberRoot(container)).toEqual({ kind: "root", container });
-    expect(container.lastError).toBeInstanceOf(Error);
-    expect(container.lastError?.message).toBe("boom");
-  });
+    expect(createFiberRoot(container)).toEqual({ kind: 'root', container })
+    expect(container.lastError).toBeInstanceOf(Error)
+    expect(container.lastError?.message).toBe('boom')
+  })
 
-  it("preserves Error instances raised by the reconciler callbacks", async () => {
-    const originalError = new Error("renderer failed");
+  it('preserves Error instances raised by the reconciler callbacks', async () => {
+    const originalError = new Error('renderer failed')
     createContainer.mockImplementation(
       (
         container: { lastError: Error | null },
@@ -68,15 +68,15 @@ describe("renderer compat", () => {
         _onUncaughtError: (error: unknown) => void,
         onCaughtError: (error: unknown) => void,
       ) => {
-        onCaughtError(originalError);
-        return { kind: "root", container };
+        onCaughtError(originalError)
+        return { kind: 'root', container }
       },
-    );
+    )
 
-    const { createFiberRoot } = await import("../compat.js");
-    const container = await makeContainer("renderer-compat-error");
+    const { createFiberRoot } = await import('../compat.js')
+    const container = await makeContainer('renderer-compat-error')
 
-    createFiberRoot(container);
-    expect(container.lastError).toBe(originalError);
-  });
-});
+    createFiberRoot(container)
+    expect(container.lastError).toBe(originalError)
+  })
+})

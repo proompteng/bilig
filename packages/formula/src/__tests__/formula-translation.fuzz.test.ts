@@ -1,18 +1,14 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { parseFormula } from "../parser.js";
-import {
-  rewriteFormulaForStructuralTransform,
-  serializeFormula,
-  translateFormulaReferences,
-} from "../translation.js";
-import { validFormulaArbitrary } from "./formula-fuzz-helpers.js";
-import { runProperty } from "@bilig/test-fuzz";
+import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
+import { parseFormula } from '../parser.js'
+import { rewriteFormulaForStructuralTransform, serializeFormula, translateFormulaReferences } from '../translation.js'
+import { validFormulaArbitrary } from './formula-fuzz-helpers.js'
+import { runProperty } from '@bilig/test-fuzz'
 
-describe("formula translation fuzz", () => {
-  it("reverses translated references back to the canonical formula", async () => {
+describe('formula translation fuzz', () => {
+  it('reverses translated references back to the canonical formula', async () => {
     await runProperty({
-      suite: "formula/translation/reference-reversal",
+      suite: 'formula/translation/reference-reversal',
       arbitrary: fc
         .record({
           formula: validFormulaArbitrary,
@@ -21,39 +17,39 @@ describe("formula translation fuzz", () => {
         })
         .filter((value) => value.rowDelta !== 0 || value.colDelta !== 0),
       predicate: ({ formula, rowDelta, colDelta }) => {
-        const canonical = serializeFormula(parseFormula(formula));
-        const translated = translateFormulaReferences(canonical, rowDelta, colDelta);
-        const restored = translateFormulaReferences(translated, -rowDelta, -colDelta);
-        expect(restored).toBe(canonical);
+        const canonical = serializeFormula(parseFormula(formula))
+        const translated = translateFormulaReferences(canonical, rowDelta, colDelta)
+        const restored = translateFormulaReferences(translated, -rowDelta, -colDelta)
+        expect(restored).toBe(canonical)
       },
-    });
-  });
+    })
+  })
 
-  it("reverses insert transforms through matching delete transforms", async () => {
+  it('reverses insert transforms through matching delete transforms', async () => {
     await runProperty({
-      suite: "formula/translation/structural-insert-delete-reversal",
+      suite: 'formula/translation/structural-insert-delete-reversal',
       arbitrary: fc.record({
         formula: validFormulaArbitrary,
-        axis: fc.constantFrom<"row" | "column">("row", "column"),
+        axis: fc.constantFrom<'row' | 'column'>('row', 'column'),
         start: fc.integer({ min: 0, max: 4 }),
         count: fc.integer({ min: 1, max: 2 }),
       }),
       predicate: ({ formula, axis, start, count }) => {
-        const canonical = serializeFormula(parseFormula(formula));
-        const inserted = rewriteFormulaForStructuralTransform(canonical, "Sheet1", "Sheet1", {
-          kind: "insert",
+        const canonical = serializeFormula(parseFormula(formula))
+        const inserted = rewriteFormulaForStructuralTransform(canonical, 'Sheet1', 'Sheet1', {
+          kind: 'insert',
           axis,
           start,
           count,
-        });
-        const restored = rewriteFormulaForStructuralTransform(inserted, "Sheet1", "Sheet1", {
-          kind: "delete",
+        })
+        const restored = rewriteFormulaForStructuralTransform(inserted, 'Sheet1', 'Sheet1', {
+          kind: 'delete',
           axis,
           start,
           count,
-        });
-        expect(restored).toBe(canonical);
+        })
+        expect(restored).toBe(canonical)
       },
-    });
-  });
-});
+    })
+  })
+})

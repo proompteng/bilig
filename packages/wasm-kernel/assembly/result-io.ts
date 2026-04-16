@@ -1,12 +1,12 @@
-import { ValueTag } from "./protocol";
-import { registerTrackedArrayShape as registerTrackedArrayShapeImpl } from "./dynamic-arrays";
-import { memberScalarValue } from "./operands";
-import { allocateOutputString, encodeOutputStringId, writeOutputStringData } from "./vm";
+import { ValueTag } from './protocol'
+import { registerTrackedArrayShape as registerTrackedArrayShapeImpl } from './dynamic-arrays'
+import { memberScalarValue } from './operands'
+import { allocateOutputString, encodeOutputStringId, writeOutputStringData } from './vm'
 
-export const STACK_KIND_SCALAR: u8 = 0;
-export const STACK_KIND_RANGE: u8 = 1;
-export const STACK_KIND_ARRAY: u8 = 2;
-export const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff;
+export const STACK_KIND_SCALAR: u8 = 0
+export const STACK_KIND_RANGE: u8 = 1
+export const STACK_KIND_ARRAY: u8 = 2
+export const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff
 
 export function writeStringResult(
   base: i32,
@@ -16,9 +16,9 @@ export function writeStringResult(
   tagStack: Uint8Array,
   kindStack: Uint8Array,
 ): i32 {
-  const outputStringId = allocateOutputString(text.length);
+  const outputStringId = allocateOutputString(text.length)
   for (let index = 0; index < text.length; index++) {
-    writeOutputStringData(outputStringId, index, <u16>text.charCodeAt(index));
+    writeOutputStringData(outputStringId, index, <u16>text.charCodeAt(index))
   }
   return writeResult(
     base,
@@ -29,7 +29,7 @@ export function writeStringResult(
     valueStack,
     tagStack,
     kindStack,
-  );
+  )
 }
 
 export function writeMemberResult(
@@ -53,7 +53,7 @@ export function writeMemberResult(
     valueStack,
     tagStack,
     kindStack,
-  );
+  )
 }
 
 export function writeResult(
@@ -66,11 +66,11 @@ export function writeResult(
   tagStack: Uint8Array,
   kindStack: Uint8Array,
 ): i32 {
-  rangeIndexStack[base] = 0;
-  valueStack[base] = value;
-  tagStack[base] = tag;
-  kindStack[base] = kind;
-  return base + 1;
+  rangeIndexStack[base] = 0
+  valueStack[base] = value
+  tagStack[base] = tag
+  kindStack[base] = kind
+  return base + 1
 }
 
 export function writeArrayResult(
@@ -83,12 +83,12 @@ export function writeArrayResult(
   tagStack: Uint8Array,
   kindStack: Uint8Array,
 ): i32 {
-  registerTrackedArrayShapeImpl(arrayIndex, rows, cols);
-  rangeIndexStack[base] = arrayIndex;
-  valueStack[base] = 0;
-  tagStack[base] = ValueTag.Empty;
-  kindStack[base] = STACK_KIND_ARRAY;
-  return base + 1;
+  registerTrackedArrayShapeImpl(arrayIndex, rows, cols)
+  rangeIndexStack[base] = arrayIndex
+  valueStack[base] = 0
+  tagStack[base] = ValueTag.Empty
+  kindStack[base] = STACK_KIND_ARRAY
+  return base + 1
 }
 
 export function copySlotResult(
@@ -99,11 +99,11 @@ export function copySlotResult(
   tagStack: Uint8Array,
   kindStack: Uint8Array,
 ): i32 {
-  kindStack[base] = kindStack[sourceSlot];
-  tagStack[base] = tagStack[sourceSlot];
-  valueStack[base] = valueStack[sourceSlot];
-  rangeIndexStack[base] = rangeIndexStack[sourceSlot];
-  return base + 1;
+  kindStack[base] = kindStack[sourceSlot]
+  tagStack[base] = tagStack[sourceSlot]
+  valueStack[base] = valueStack[sourceSlot]
+  rangeIndexStack[base] = rangeIndexStack[sourceSlot]
+  return base + 1
 }
 
 export function vectorSlotLength(
@@ -115,16 +115,16 @@ export function vectorSlotLength(
   rangeColCounts: Uint32Array,
 ): i32 {
   if (kindStack[slot] == STACK_KIND_SCALAR) {
-    return 1;
+    return 1
   }
   if (kindStack[slot] != STACK_KIND_RANGE) {
-    return i32.MIN_VALUE;
+    return i32.MIN_VALUE
   }
-  const rangeIndex = rangeIndexStack[slot];
-  const rowCount = <i32>rangeRowCounts[rangeIndex];
-  const colCount = <i32>rangeColCounts[rangeIndex];
+  const rangeIndex = rangeIndexStack[slot]
+  const rowCount = <i32>rangeRowCounts[rangeIndex]
+  const colCount = <i32>rangeColCounts[rangeIndex]
   if (rowCount <= 0 || colCount <= 0 || (rowCount != 1 && colCount != 1)) {
-    return i32.MIN_VALUE;
+    return i32.MIN_VALUE
   }
-  return <i32>rangeLengths[rangeIndex];
+  return <i32>rangeLengths[rangeIndex]
 }

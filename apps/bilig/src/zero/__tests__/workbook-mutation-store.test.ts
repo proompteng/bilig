@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { SpreadsheetEngine } from "@bilig/core";
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { SpreadsheetEngine } from '@bilig/core'
 
 const projectionFns = vi.hoisted(() => ({
   buildCalculationSettingsRowFromEngine: vi.fn(),
@@ -11,7 +11,7 @@ const projectionFns = vi.hoisted(() => ({
   buildWorkbookSourceProjectionFromEngine: vi.fn(),
   buildWorkbookStyleRowsFromEngine: vi.fn(),
   materializeCellEvalProjection: vi.fn(),
-}));
+}))
 
 const storeFns = vi.hoisted(() => ({
   applyAxisMetadataDiff: vi.fn(),
@@ -23,13 +23,13 @@ const storeFns = vi.hoisted(() => ({
   persistCellEvalRangeDiff: vi.fn(),
   persistCellSourceRange: vi.fn(),
   upsertWorkbookHeader: vi.fn(),
-}));
+}))
 
 const changeStoreFns = vi.hoisted(() => ({
   appendWorkbookChange: vi.fn(),
-}));
+}))
 
-vi.mock("../projection.js", () => ({
+vi.mock('../projection.js', () => ({
   buildCalculationSettingsRowFromEngine: projectionFns.buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine: projectionFns.buildSheetCellSourceRowsFromEngine,
   buildSheetColumnMetadataRowsFromEngine: projectionFns.buildSheetColumnMetadataRowsFromEngine,
@@ -39,9 +39,9 @@ vi.mock("../projection.js", () => ({
   buildWorkbookSourceProjectionFromEngine: projectionFns.buildWorkbookSourceProjectionFromEngine,
   buildWorkbookStyleRowsFromEngine: projectionFns.buildWorkbookStyleRowsFromEngine,
   materializeCellEvalProjection: projectionFns.materializeCellEvalProjection,
-}));
+}))
 
-vi.mock("../store.js", () => ({
+vi.mock('../store.js', () => ({
   applyAxisMetadataDiff: storeFns.applyAxisMetadataDiff,
   applyCalculationSettings: storeFns.applyCalculationSettings,
   applyCellDiff: storeFns.applyCellDiff,
@@ -50,36 +50,34 @@ vi.mock("../store.js", () => ({
   applyStyleDiff: storeFns.applyStyleDiff,
   persistCellSourceRange: storeFns.persistCellSourceRange,
   upsertWorkbookHeader: storeFns.upsertWorkbookHeader,
-}));
+}))
 
-vi.mock("../workbook-calculation-store.js", () => ({
+vi.mock('../workbook-calculation-store.js', () => ({
   persistCellEvalRangeDiff: storeFns.persistCellEvalRangeDiff,
-}));
+}))
 
-vi.mock("../workbook-change-store.js", () => ({
+vi.mock('../workbook-change-store.js', () => ({
   appendWorkbookChange: changeStoreFns.appendWorkbookChange,
-}));
+}))
 
-import { persistWorkbookMutation } from "../workbook-mutation-store.js";
-import type { PersistWorkbookMutationOptions, Queryable } from "../store.js";
+import { persistWorkbookMutation } from '../workbook-mutation-store.js'
+import type { PersistWorkbookMutationOptions, Queryable } from '../store.js'
 
-function makeBaseOptions(
-  overrides: Partial<PersistWorkbookMutationOptions> = {},
-): PersistWorkbookMutationOptions {
+function makeBaseOptions(overrides: Partial<PersistWorkbookMutationOptions> = {}): PersistWorkbookMutationOptions {
   return {
     previousState: {
       projection: {
         workbook: {
-          id: "book-1",
-          name: "Book",
-          ownerUserId: "owner-1",
+          id: 'book-1',
+          name: 'Book',
+          ownerUserId: 'owner-1',
           headRevision: 1,
           calculatedRevision: 1,
           sourceProjectionVersion: 2,
-          calcMode: "auto",
-          compatibilityMode: "excel",
+          calcMode: 'auto',
+          compatibilityMode: 'excel',
           recalcEpoch: 0,
-          updatedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: '2026-01-01T00:00:00.000Z',
         },
         sheets: [],
         cells: [],
@@ -88,8 +86,8 @@ function makeBaseOptions(
         definedNames: [],
         workbookMetadataEntries: [],
         calculationSettings: {
-          workbookId: "book-1",
-          mode: "auto",
+          workbookId: 'book-1',
+          mode: 'auto',
           recalcEpoch: 0,
         },
         styles: [],
@@ -97,50 +95,50 @@ function makeBaseOptions(
       },
       headRevision: 1,
       calculatedRevision: 1,
-      ownerUserId: "owner-1",
+      ownerUserId: 'owner-1',
     },
     nextEngine: new SpreadsheetEngine({
-      workbookName: "book-1",
-      replicaId: "mutation-test",
+      workbookName: 'book-1',
+      replicaId: 'mutation-test',
     }),
-    updatedBy: "user-1",
-    ownerUserId: "owner-1",
+    updatedBy: 'user-1',
+    ownerUserId: 'owner-1',
     eventPayload: {
-      kind: "setCellValue",
-      sheetName: "Sheet1",
-      address: "A1",
+      kind: 'setCellValue',
+      sheetName: 'Sheet1',
+      address: 'A1',
       value: 123,
     },
     undoBundle: null,
     ...overrides,
-  };
+  }
 }
 
-describe("workbook mutation store", () => {
+describe('workbook mutation store', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.clearAllMocks()
     projectionFns.buildWorkbookHeaderRowFromEngine.mockReturnValue({
-      workbookId: "book-1",
-      id: "book-1",
-      name: "Book",
-      ownerUserId: "owner-1",
+      workbookId: 'book-1',
+      id: 'book-1',
+      name: 'Book',
+      ownerUserId: 'owner-1',
       headRevision: 2,
       calculatedRevision: 2,
       sourceProjectionVersion: 2,
-      calcMode: "auto",
-      compatibilityMode: "excel",
+      calcMode: 'auto',
+      compatibilityMode: 'excel',
       recalcEpoch: 0,
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
     projectionFns.buildCalculationSettingsRowFromEngine.mockReturnValue({
-      workbookId: "book-1",
-      mode: "auto",
+      workbookId: 'book-1',
+      mode: 'auto',
       recalcEpoch: 0,
-    });
+    })
     projectionFns.buildSingleCellSourceRowFromEngine.mockReturnValue({
-      workbookId: "book-1",
-      sheetName: "Sheet1",
-      address: "A1",
+      workbookId: 'book-1',
+      sheetName: 'Sheet1',
+      address: 'A1',
       rowNum: 0,
       colNum: 0,
       inputValue: 123,
@@ -148,79 +146,71 @@ describe("workbook mutation store", () => {
       format: null,
       styleId: null,
       explicitFormatId: null,
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
     projectionFns.buildWorkbookStyleRowsFromEngine.mockReturnValue([
       {
-        workbookId: "book-1",
-        id: "style-1",
-        recordJSON: { id: "style-1" },
-        hash: "hash-1",
-        createdAt: "2026-01-01T00:00:00.000Z",
+        workbookId: 'book-1',
+        id: 'style-1',
+        recordJSON: { id: 'style-1' },
+        hash: 'hash-1',
+        createdAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
+    ])
     projectionFns.buildSheetCellSourceRowsFromEngine.mockReturnValue([
       {
-        workbookId: "book-1",
-        sheetName: "Sheet1",
-        address: "A1",
+        workbookId: 'book-1',
+        sheetName: 'Sheet1',
+        address: 'A1',
         rowNum: 0,
         colNum: 0,
         inputValue: 123,
         formula: null,
         format: null,
-        styleId: "style-1",
+        styleId: 'style-1',
         explicitFormatId: null,
-        updatedAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    projectionFns.materializeCellEvalProjection.mockReturnValue([]);
-  });
+    ])
+    projectionFns.materializeCellEvalProjection.mockReturnValue([])
+  })
 
-  it("queues recalculation work for value mutations", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-    const db: Queryable = { query };
+  it('queues recalculation work for value mutations', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] })
+    const db: Queryable = { query }
 
-    const result = await persistWorkbookMutation(db, "book-1", makeBaseOptions());
+    const result = await persistWorkbookMutation(db, 'book-1', makeBaseOptions())
 
-    expect(result.revision).toBe(2);
-    expect(result.recalcJobId).toBe("book-1:recalc:2");
-    expect(storeFns.applyCellDiff).toHaveBeenCalledOnce();
-    expect(changeStoreFns.appendWorkbookChange).toHaveBeenCalledOnce();
-    expect(
-      query.mock.calls.some(
-        ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO recalc_job"),
-      ),
-    ).toBe(true);
-  });
+    expect(result.revision).toBe(2)
+    expect(result.recalcJobId).toBe('book-1:recalc:2')
+    expect(storeFns.applyCellDiff).toHaveBeenCalledOnce()
+    expect(changeStoreFns.appendWorkbookChange).toHaveBeenCalledOnce()
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO recalc_job'))).toBe(true)
+  })
 
-  it("does not queue recalculation work for formatting-only mutations when revisions are current", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-    const db: Queryable = { query };
+  it('does not queue recalculation work for formatting-only mutations when revisions are current', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] })
+    const db: Queryable = { query }
 
     const result = await persistWorkbookMutation(
       db,
-      "book-1",
+      'book-1',
       makeBaseOptions({
         eventPayload: {
-          kind: "setRangeStyle",
+          kind: 'setRangeStyle',
           range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "B2",
+            sheetName: 'Sheet1',
+            startAddress: 'A1',
+            endAddress: 'B2',
           },
           patch: { font: { bold: true } },
         },
       }),
-    );
+    )
 
-    expect(result.recalcJobId).toBeNull();
-    expect(storeFns.applyStyleDiff).toHaveBeenCalledOnce();
-    expect(storeFns.persistCellSourceRange).toHaveBeenCalledOnce();
-    expect(
-      query.mock.calls.some(
-        ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO recalc_job"),
-      ),
-    ).toBe(false);
-  });
-});
+    expect(result.recalcJobId).toBeNull()
+    expect(storeFns.applyStyleDiff).toHaveBeenCalledOnce()
+    expect(storeFns.persistCellSourceRange).toHaveBeenCalledOnce()
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO recalc_job'))).toBe(false)
+  })
+})

@@ -4,88 +4,81 @@ import {
   isWorkbookAgentCommand,
   type WorkbookAgentCommand,
   type WorkbookAgentExecutionRecord,
-} from "@bilig/agent-api";
-import type { QueryResultRow, Queryable } from "./store.js";
+} from '@bilig/agent-api'
+import type { QueryResultRow, Queryable } from './store.js'
 
 interface WorkbookAgentRunRow extends QueryResultRow {
-  readonly id?: unknown;
-  readonly bundleId?: unknown;
-  readonly workbookId?: unknown;
-  readonly threadId?: unknown;
-  readonly turnId?: unknown;
-  readonly actorUserId?: unknown;
-  readonly goalText?: unknown;
-  readonly planText?: unknown;
-  readonly summary?: unknown;
-  readonly scope?: unknown;
-  readonly riskClass?: unknown;
-  readonly acceptedScope?: unknown;
-  readonly appliedBy?: unknown;
-  readonly baseRevision?: unknown;
-  readonly appliedRevision?: unknown;
-  readonly createdAtUnixMs?: unknown;
-  readonly appliedAtUnixMs?: unknown;
-  readonly contextJson?: unknown;
-  readonly commandsJson?: unknown;
-  readonly previewJson?: unknown;
+  readonly id?: unknown
+  readonly bundleId?: unknown
+  readonly workbookId?: unknown
+  readonly threadId?: unknown
+  readonly turnId?: unknown
+  readonly actorUserId?: unknown
+  readonly goalText?: unknown
+  readonly planText?: unknown
+  readonly summary?: unknown
+  readonly scope?: unknown
+  readonly riskClass?: unknown
+  readonly acceptedScope?: unknown
+  readonly appliedBy?: unknown
+  readonly baseRevision?: unknown
+  readonly appliedRevision?: unknown
+  readonly createdAtUnixMs?: unknown
+  readonly appliedAtUnixMs?: unknown
+  readonly contextJson?: unknown
+  readonly commandsJson?: unknown
+  readonly previewJson?: unknown
 }
 
 function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
   }
-  if (typeof value === "string" && value.length > 0) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : null
   }
-  return null;
+  return null
 }
 
 function parseCommands(value: unknown): WorkbookAgentCommand[] | null {
   if (!Array.isArray(value)) {
-    return null;
+    return null
   }
-  const commands = value.flatMap((entry) => (isWorkbookAgentCommand(entry) ? [entry] : []));
-  return commands.length === value.length ? commands : null;
+  const commands = value.flatMap((entry) => (isWorkbookAgentCommand(entry) ? [entry] : []))
+  return commands.length === value.length ? commands : null
 }
 
 function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecutionRecord | null {
-  const baseRevision = parseNumericValue(row.baseRevision);
-  const appliedRevision = parseNumericValue(row.appliedRevision);
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
-  const appliedAtUnixMs = parseNumericValue(row.appliedAtUnixMs);
-  const commands = parseCommands(row.commandsJson);
+  const baseRevision = parseNumericValue(row.baseRevision)
+  const appliedRevision = parseNumericValue(row.appliedRevision)
+  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
+  const appliedAtUnixMs = parseNumericValue(row.appliedAtUnixMs)
+  const commands = parseCommands(row.commandsJson)
   if (
-    typeof row.id !== "string" ||
-    typeof row.bundleId !== "string" ||
-    typeof row.workbookId !== "string" ||
-    typeof row.threadId !== "string" ||
-    typeof row.turnId !== "string" ||
-    typeof row.actorUserId !== "string" ||
-    typeof row.goalText !== "string" ||
-    typeof row.summary !== "string" ||
-    (row.scope !== "selection" && row.scope !== "sheet" && row.scope !== "workbook") ||
-    (row.riskClass !== "low" && row.riskClass !== "medium" && row.riskClass !== "high") ||
-    (row.acceptedScope !== "full" && row.acceptedScope !== "partial") ||
-    (row.appliedBy !== "user" && row.appliedBy !== "auto") ||
+    typeof row.id !== 'string' ||
+    typeof row.bundleId !== 'string' ||
+    typeof row.workbookId !== 'string' ||
+    typeof row.threadId !== 'string' ||
+    typeof row.turnId !== 'string' ||
+    typeof row.actorUserId !== 'string' ||
+    typeof row.goalText !== 'string' ||
+    typeof row.summary !== 'string' ||
+    (row.scope !== 'selection' && row.scope !== 'sheet' && row.scope !== 'workbook') ||
+    (row.riskClass !== 'low' && row.riskClass !== 'medium' && row.riskClass !== 'high') ||
+    (row.acceptedScope !== 'full' && row.acceptedScope !== 'partial') ||
+    (row.appliedBy !== 'user' && row.appliedBy !== 'auto') ||
     baseRevision === null ||
     appliedRevision === null ||
     createdAtUnixMs === null ||
     appliedAtUnixMs === null ||
     commands === null
   ) {
-    return null;
+    return null
   }
   const context =
-    row.contextJson === null || row.contextJson === undefined
-      ? null
-      : isWorkbookAgentContextRef(row.contextJson)
-        ? row.contextJson
-        : null;
-  const preview =
-    row.previewJson === null || row.previewJson === undefined
-      ? null
-      : decodeWorkbookAgentPreviewSummary(row.previewJson);
+    row.contextJson === null || row.contextJson === undefined ? null : isWorkbookAgentContextRef(row.contextJson) ? row.contextJson : null
+  const preview = row.previewJson === null || row.previewJson === undefined ? null : decodeWorkbookAgentPreviewSummary(row.previewJson)
   return {
     id: row.id,
     bundleId: row.bundleId,
@@ -94,7 +87,7 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
     turnId: row.turnId,
     actorUserId: row.actorUserId,
     goalText: row.goalText,
-    planText: typeof row.planText === "string" ? row.planText : null,
+    planText: typeof row.planText === 'string' ? row.planText : null,
     summary: row.summary,
     scope: row.scope,
     riskClass: row.riskClass,
@@ -107,7 +100,7 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
     context,
     commands,
     preview,
-  };
+  }
 }
 
 export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void> {
@@ -134,26 +127,23 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
       commands_json JSONB NOT NULL,
       preview_json JSONB
     )
-  `);
-  await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`);
+  `)
+  await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`)
   await db.query(`
     ALTER TABLE workbook_agent_run
       ADD COLUMN IF NOT EXISTS accepted_scope TEXT NOT NULL DEFAULT 'full';
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_agent_run
       ADD COLUMN IF NOT EXISTS applied_by TEXT NOT NULL DEFAULT 'user';
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_agent_run_workbook_actor_applied_idx
       ON workbook_agent_run (workbook_id, actor_user_id, applied_at_unix_ms DESC)
-  `);
+  `)
 }
 
-export async function appendWorkbookAgentRun(
-  db: Queryable,
-  record: WorkbookAgentExecutionRecord,
-): Promise<void> {
+export async function appendWorkbookAgentRun(db: Queryable, record: WorkbookAgentExecutionRecord): Promise<void> {
   await db.query(
     `
       INSERT INTO workbook_agent_run (
@@ -225,15 +215,15 @@ export async function appendWorkbookAgentRun(
       JSON.stringify(record.commands),
       JSON.stringify(record.preview),
     ],
-  );
+  )
 }
 
 export async function listWorkbookAgentRuns(
   db: Queryable,
   input: {
-    documentId: string;
-    actorUserId: string;
-    limit?: number;
+    documentId: string
+    actorUserId: string
+    limit?: number
   },
 ): Promise<WorkbookAgentExecutionRecord[]> {
   const result = await db.query<WorkbookAgentRunRow>(
@@ -265,20 +255,20 @@ export async function listWorkbookAgentRuns(
       LIMIT $3
     `,
     [input.documentId, input.actorUserId, input.limit ?? 20],
-  );
+  )
   return result.rows.flatMap((row) => {
-    const record = normalizeExecutionRecord(row);
-    return record ? [record] : [];
-  });
+    const record = normalizeExecutionRecord(row)
+    return record ? [record] : []
+  })
 }
 
 export async function listWorkbookAgentThreadRuns(
   db: Queryable,
   input: {
-    documentId: string;
-    actorUserId: string;
-    threadId: string;
-    limit?: number;
+    documentId: string
+    actorUserId: string
+    threadId: string
+    limit?: number
   },
 ): Promise<WorkbookAgentExecutionRecord[]> {
   const result = await db.query<WorkbookAgentRunRow>(
@@ -321,9 +311,9 @@ export async function listWorkbookAgentThreadRuns(
       LIMIT $4
     `,
     [input.documentId, input.threadId, input.actorUserId, input.limit ?? 20],
-  );
+  )
   return result.rows.flatMap((row) => {
-    const record = normalizeExecutionRecord(row);
-    return record ? [record] : [];
-  });
+    const record = normalizeExecutionRecord(row)
+    return record ? [record] : []
+  })
 }

@@ -1,13 +1,8 @@
-import { ErrorCode, ValueTag } from "./protocol";
-import { scalarText } from "./text-codec";
-import {
-  inputCellScalarValue,
-  inputCellTag,
-  inputColsFromSlot,
-  inputRowsFromSlot,
-} from "./operands";
-import { STACK_KIND_SCALAR, copySlotResult, writeArrayResult, writeResult } from "./result-io";
-import { allocateSpillArrayResult, writeSpillArrayValue } from "./vm";
+import { ErrorCode, ValueTag } from './protocol'
+import { scalarText } from './text-codec'
+import { inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot } from './operands'
+import { STACK_KIND_SCALAR, copySlotResult, writeArrayResult, writeResult } from './result-io'
+import { allocateSpillArrayResult, writeSpillArrayValue } from './vm'
 
 export function copyInputCellToSpill(
   arrayIndex: u32,
@@ -44,7 +39,7 @@ export function copyInputCellToSpill(
     rangeMembers,
     cellTags,
     cellNumbers,
-  );
+  )
   const value = inputCellScalarValue(
     slot,
     row,
@@ -62,12 +57,12 @@ export function copyInputCellToSpill(
     cellNumbers,
     cellStringIds,
     cellErrors,
-  );
+  )
   if (tag == ValueTag.Error && isNaN(value)) {
-    return ErrorCode.Value;
+    return ErrorCode.Value
   }
-  writeSpillArrayValue(arrayIndex, outputOffset, tag, value);
-  return ErrorCode.None;
+  writeSpillArrayValue(arrayIndex, outputOffset, tag, value)
+  return ErrorCode.None
 }
 
 export function materializeSlotResult(
@@ -88,25 +83,16 @@ export function materializeSlotResult(
   cellErrors: Uint16Array,
 ): i32 {
   if (kindStack[sourceSlot] == STACK_KIND_SCALAR) {
-    return copySlotResult(base, sourceSlot, rangeIndexStack, valueStack, tagStack, kindStack);
+    return copySlotResult(base, sourceSlot, rangeIndexStack, valueStack, tagStack, kindStack)
   }
-  const rows = inputRowsFromSlot(sourceSlot, kindStack, rangeIndexStack, rangeRowCounts);
-  const cols = inputColsFromSlot(sourceSlot, kindStack, rangeIndexStack, rangeColCounts);
+  const rows = inputRowsFromSlot(sourceSlot, kindStack, rangeIndexStack, rangeRowCounts)
+  const cols = inputColsFromSlot(sourceSlot, kindStack, rangeIndexStack, rangeColCounts)
   if (rows == i32.MIN_VALUE || cols == i32.MIN_VALUE || rows <= 0 || cols <= 0) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Error,
-      ErrorCode.Value,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
   }
 
-  const arrayIndex = allocateSpillArrayResult(rows, cols);
-  let outputOffset = 0;
+  const arrayIndex = allocateSpillArrayResult(rows, cols)
+  let outputOffset = 0
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const copyError = copyInputCellToSpill(
@@ -128,33 +114,15 @@ export function materializeSlotResult(
         cellNumbers,
         cellStringIds,
         cellErrors,
-      );
+      )
       if (copyError != ErrorCode.None) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          copyError,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      outputOffset += 1;
+      outputOffset += 1
     }
   }
 
-  return writeArrayResult(
-    base,
-    arrayIndex,
-    rows,
-    cols,
-    rangeIndexStack,
-    valueStack,
-    tagStack,
-    kindStack,
-  );
+  return writeArrayResult(base, arrayIndex, rows, cols, rangeIndexStack, valueStack, tagStack, kindStack)
 }
 
 export function uniqueScalarKey(
@@ -168,13 +136,13 @@ export function uniqueScalarKey(
   outputStringData: Uint16Array,
 ): string | null {
   if (tag == ValueTag.Empty) {
-    return "E:";
+    return 'E:'
   }
   if (tag == ValueTag.Number) {
-    return "N:" + value.toString();
+    return 'N:' + value.toString()
   }
   if (tag == ValueTag.Boolean) {
-    return value != 0 ? "B:1" : "B:0";
+    return value != 0 ? 'B:1' : 'B:0'
   }
   if (tag == ValueTag.String) {
     const text = scalarText(
@@ -186,10 +154,10 @@ export function uniqueScalarKey(
       outputStringOffsets,
       outputStringLengths,
       outputStringData,
-    );
-    return text == null ? null : "S:" + text.toUpperCase();
+    )
+    return text == null ? null : 'S:' + text.toUpperCase()
   }
-  return null;
+  return null
 }
 
 export function uniqueRowKey(
@@ -216,7 +184,7 @@ export function uniqueRowKey(
   outputStringLengths: Uint32Array,
   outputStringData: Uint16Array,
 ): string | null {
-  let key = "";
+  let key = ''
   for (let col = 0; col < cols; col++) {
     const tag = inputCellTag(
       slot,
@@ -233,7 +201,7 @@ export function uniqueRowKey(
       rangeMembers,
       cellTags,
       cellNumbers,
-    );
+    )
     const value = inputCellScalarValue(
       slot,
       row,
@@ -251,9 +219,9 @@ export function uniqueRowKey(
       cellNumbers,
       cellStringIds,
       cellErrors,
-    );
+    )
     if (tag == ValueTag.Error) {
-      return null;
+      return null
     }
     const cellKey = uniqueScalarKey(
       tag,
@@ -264,16 +232,16 @@ export function uniqueRowKey(
       outputStringOffsets,
       outputStringLengths,
       outputStringData,
-    );
+    )
     if (cellKey == null) {
-      return null;
+      return null
     }
     if (col > 0) {
-      key += "\u0001";
+      key += '\u0001'
     }
-    key += cellKey;
+    key += cellKey
   }
-  return key;
+  return key
 }
 
 export function uniqueColKey(
@@ -300,7 +268,7 @@ export function uniqueColKey(
   outputStringLengths: Uint32Array,
   outputStringData: Uint16Array,
 ): string | null {
-  let key = "";
+  let key = ''
   for (let row = 0; row < rows; row++) {
     const tag = inputCellTag(
       slot,
@@ -317,7 +285,7 @@ export function uniqueColKey(
       rangeMembers,
       cellTags,
       cellNumbers,
-    );
+    )
     const value = inputCellScalarValue(
       slot,
       row,
@@ -335,9 +303,9 @@ export function uniqueColKey(
       cellNumbers,
       cellStringIds,
       cellErrors,
-    );
+    )
     if (tag == ValueTag.Error) {
-      return null;
+      return null
     }
     const cellKey = uniqueScalarKey(
       tag,
@@ -348,14 +316,14 @@ export function uniqueColKey(
       outputStringOffsets,
       outputStringLengths,
       outputStringData,
-    );
+    )
     if (cellKey == null) {
-      return null;
+      return null
     }
     if (row > 0) {
-      key += "\u0001";
+      key += '\u0001'
     }
-    key += cellKey;
+    key += cellKey
   }
-  return key;
+  return key
 }

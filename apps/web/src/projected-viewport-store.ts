@@ -1,147 +1,135 @@
-import type { GridEngineLike } from "@bilig/grid";
-import type { CellSnapshot, CellStyleRecord, Viewport } from "@bilig/protocol";
-import type { ViewportPatch, WorkerEngineClient } from "@bilig/worker-transport";
-import { ProjectedViewportAxisStore } from "./projected-viewport-axis-store.js";
-import { ProjectedViewportCellCache } from "./projected-viewport-cell-cache.js";
-import { ProjectedViewportPatchCoordinator } from "./projected-viewport-patch-coordinator.js";
+import type { GridEngineLike } from '@bilig/grid'
+import type { CellSnapshot, CellStyleRecord, Viewport } from '@bilig/protocol'
+import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
+import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
+import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
+import { ProjectedViewportPatchCoordinator } from './projected-viewport-patch-coordinator.js'
 
-const MAX_CACHED_CELLS_PER_SHEET = 6000;
-type CellItem = readonly [number, number];
+const MAX_CACHED_CELLS_PER_SHEET = 6000
+type CellItem = readonly [number, number]
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly cellCache = new ProjectedViewportCellCache({
     maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
-  });
-  private readonly axisStore: ProjectedViewportAxisStore;
-  private readonly patchCoordinator: ProjectedViewportPatchCoordinator;
+  })
+  private readonly axisStore: ProjectedViewportAxisStore
+  private readonly patchCoordinator: ProjectedViewportPatchCoordinator
 
   readonly workbook = {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
-  };
+  }
 
   constructor(client?: WorkerEngineClient) {
     this.axisStore = new ProjectedViewportAxisStore({
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),
-    });
+    })
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
       ...(client ? { client } : {}),
-    });
+    })
   }
 
   subscribe(listener: () => void): () => void {
-    return this.cellCache.subscribe(listener);
+    return this.cellCache.subscribe(listener)
   }
 
   peekCell(sheetName: string, address: string): CellSnapshot | undefined {
-    return this.cellCache.peekCell(sheetName, address);
+    return this.cellCache.peekCell(sheetName, address)
   }
 
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
-    return this.axisStore.getColumnWidths(sheetName);
+    return this.axisStore.getColumnWidths(sheetName)
   }
 
   getColumnSizes(sheetName: string): Readonly<Record<number, number>> {
-    return this.axisStore.getColumnSizes(sheetName);
+    return this.axisStore.getColumnSizes(sheetName)
   }
 
   getRowHeights(sheetName: string): Readonly<Record<number, number>> {
-    return this.axisStore.getRowHeights(sheetName);
+    return this.axisStore.getRowHeights(sheetName)
   }
 
   getRowSizes(sheetName: string): Readonly<Record<number, number>> {
-    return this.axisStore.getRowSizes(sheetName);
+    return this.axisStore.getRowSizes(sheetName)
   }
 
   getHiddenColumns(sheetName: string): Readonly<Record<number, true>> {
-    return this.axisStore.getHiddenColumns(sheetName);
+    return this.axisStore.getHiddenColumns(sheetName)
   }
 
   getHiddenRows(sheetName: string): Readonly<Record<number, true>> {
-    return this.axisStore.getHiddenRows(sheetName);
+    return this.axisStore.getHiddenRows(sheetName)
   }
 
   getFreezeRows(sheetName: string): number {
-    return this.axisStore.getFreezeRows(sheetName);
+    return this.axisStore.getFreezeRows(sheetName)
   }
 
   getFreezeCols(sheetName: string): number {
-    return this.axisStore.getFreezeCols(sheetName);
+    return this.axisStore.getFreezeCols(sheetName)
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    return this.cellCache.getCell(sheetName, address);
+    return this.cellCache.getCell(sheetName, address)
   }
 
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
-    return this.cellCache.getCellStyle(styleId);
+    return this.cellCache.getCellStyle(styleId)
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
-    this.cellCache.setCellSnapshot(snapshot);
+    this.cellCache.setCellSnapshot(snapshot)
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
-    this.axisStore.setColumnWidth(sheetName, columnIndex, width);
+    this.axisStore.setColumnWidth(sheetName, columnIndex, width)
   }
 
   ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
-    this.axisStore.ackColumnWidth(sheetName, columnIndex, width);
+    this.axisStore.ackColumnWidth(sheetName, columnIndex, width)
   }
 
   rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
-    this.axisStore.rollbackColumnWidth(sheetName, columnIndex, width);
+    this.axisStore.rollbackColumnWidth(sheetName, columnIndex, width)
   }
 
   setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
-    this.axisStore.setColumnHidden(sheetName, columnIndex, hidden, size);
+    this.axisStore.setColumnHidden(sheetName, columnIndex, hidden, size)
   }
 
-  rollbackColumnHidden(
-    sheetName: string,
-    columnIndex: number,
-    previous: { hidden: boolean; size: number | undefined },
-  ): void {
-    this.axisStore.rollbackColumnHidden(sheetName, columnIndex, previous);
+  rollbackColumnHidden(sheetName: string, columnIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
+    this.axisStore.rollbackColumnHidden(sheetName, columnIndex, previous)
   }
 
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
-    this.axisStore.setRowHeight(sheetName, rowIndex, height);
+    this.axisStore.setRowHeight(sheetName, rowIndex, height)
   }
 
   ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
-    this.axisStore.ackRowHeight(sheetName, rowIndex, height);
+    this.axisStore.ackRowHeight(sheetName, rowIndex, height)
   }
 
   rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
-    this.axisStore.rollbackRowHeight(sheetName, rowIndex, height);
+    this.axisStore.rollbackRowHeight(sheetName, rowIndex, height)
   }
 
   setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
-    this.axisStore.setRowHidden(sheetName, rowIndex, hidden, size);
+    this.axisStore.setRowHidden(sheetName, rowIndex, hidden, size)
   }
 
-  rollbackRowHidden(
-    sheetName: string,
-    rowIndex: number,
-    previous: { hidden: boolean; size: number | undefined },
-  ): void {
-    this.axisStore.rollbackRowHidden(sheetName, rowIndex, previous);
+  rollbackRowHidden(sheetName: string, rowIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
+    this.axisStore.rollbackRowHidden(sheetName, rowIndex, previous)
   }
 
   setKnownSheets(sheetNames: readonly string[]): void {
-    const removedSheets = this.cellCache.setKnownSheets(sheetNames);
-    this.axisStore.dropSheets(removedSheets);
+    const removedSheets = this.cellCache.setKnownSheets(sheetNames)
+    this.axisStore.dropSheets(removedSheets)
   }
 
-  subscribeCells(
-    sheetName: string,
-    addresses: readonly string[],
-    listener: () => void,
-  ): () => void {
-    return this.cellCache.subscribeCells(sheetName, addresses, listener);
+  subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
+    return this.cellCache.subscribeCells(sheetName, addresses, listener)
   }
 
   subscribeViewport(
@@ -149,10 +137,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
   ): () => void {
-    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener);
+    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener)
   }
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
-    return this.patchCoordinator.applyViewportPatch(patch);
+    return this.patchCoordinator.applyViewportPatch(patch)
   }
 }

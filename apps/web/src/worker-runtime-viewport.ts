@@ -1,13 +1,7 @@
-import { formatAddress } from "@bilig/formula";
-import type { WorkbookLocalViewportBase } from "@bilig/storage-browser";
-import {
-  ValueTag,
-  formatCellDisplayValue,
-  type CellSnapshot,
-  type CellStyleRecord,
-  type RecalcMetrics,
-} from "@bilig/protocol";
-import type { ViewportPatch, ViewportPatchedCell } from "@bilig/worker-transport";
+import { formatAddress } from '@bilig/formula'
+import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
+import { ValueTag, formatCellDisplayValue, type CellSnapshot, type CellStyleRecord, type RecalcMetrics } from '@bilig/protocol'
+import type { ViewportPatch, ViewportPatchedCell } from '@bilig/worker-transport'
 import {
   buildAxisPatches,
   collectViewportCells,
@@ -16,54 +10,54 @@ import {
   type SheetViewportImpact,
   type ViewportSubscriptionState,
   type WorkerEngine,
-} from "./worker-runtime-support.js";
+} from './worker-runtime-support.js'
 
-const PRODUCT_COLUMN_WIDTH = 104;
-const PRODUCT_ROW_HEIGHT = 22;
-export const DEFAULT_STYLE_ID = "style-0";
-export const MIN_COLUMN_WIDTH = 44;
-export const MAX_COLUMN_WIDTH = 480;
-export const AUTOFIT_PADDING = 28;
-export const AUTOFIT_CHAR_WIDTH = 8;
+const PRODUCT_COLUMN_WIDTH = 104
+const PRODUCT_ROW_HEIGHT = 22
+export const DEFAULT_STYLE_ID = 'style-0'
+export const MIN_COLUMN_WIDTH = 44
+export const MAX_COLUMN_WIDTH = 480
+export const AUTOFIT_PADDING = 28
+export const AUTOFIT_CHAR_WIDTH = 8
 
 interface PatchedCellContext {
-  readonly state: ViewportSubscriptionState;
-  readonly styles: CellStyleRecord[];
-  readonly cells: ViewportPatchedCell[];
-  readonly getStyleRecord: (styleId: string) => CellStyleRecord;
-  readonly getFormatId: (format: string | undefined) => number;
+  readonly state: ViewportSubscriptionState
+  readonly styles: CellStyleRecord[]
+  readonly cells: ViewportPatchedCell[]
+  readonly getStyleRecord: (styleId: string) => CellStyleRecord
+  readonly getFormatId: (format: string | undefined) => number
 }
 
 function snapshotValueSignature(snapshot: CellSnapshot): string {
   switch (snapshot.value.tag) {
     case ValueTag.Number:
-      return `n:${snapshot.value.value}`;
+      return `n:${snapshot.value.value}`
     case ValueTag.Boolean:
-      return `b:${snapshot.value.value ? 1 : 0}`;
+      return `b:${snapshot.value.value ? 1 : 0}`
     case ValueTag.String:
-      return `s:${snapshot.value.stringId}:${snapshot.value.value}`;
+      return `s:${snapshot.value.stringId}:${snapshot.value.value}`
     case ValueTag.Error:
-      return `e:${snapshot.value.code}`;
+      return `e:${snapshot.value.code}`
     case ValueTag.Empty:
-      return "empty";
+      return 'empty'
   }
 }
 
 function toEditorText(snapshot: CellSnapshot): string {
   if (snapshot.formula) {
-    return `=${snapshot.formula}`;
+    return `=${snapshot.formula}`
   }
   if (snapshot.input === null || snapshot.input === undefined) {
-    return toDisplayText(snapshot);
+    return toDisplayText(snapshot)
   }
-  if (typeof snapshot.input === "boolean") {
-    return snapshot.input ? "TRUE" : "FALSE";
+  if (typeof snapshot.input === 'boolean') {
+    return snapshot.input ? 'TRUE' : 'FALSE'
   }
-  return String(snapshot.input);
+  return String(snapshot.input)
 }
 
 function toDisplayText(snapshot: CellSnapshot): string {
-  return formatCellDisplayValue(snapshot.value, snapshot.format);
+  return formatCellDisplayValue(snapshot.value, snapshot.format)
 }
 
 function buildPatchedCellSignature(
@@ -77,51 +71,34 @@ function buildPatchedCellSignature(
   return [
     snapshot.version,
     snapshot.flags,
-    snapshot.formula ?? "",
-    snapshot.input ?? "",
-    snapshot.format ?? "",
-    snapshot.styleId ?? "",
+    snapshot.formula ?? '',
+    snapshot.input ?? '',
+    snapshot.format ?? '',
+    snapshot.styleId ?? '',
     formatId,
     styleId,
     snapshotValueSignature(snapshot),
     displayText,
     copyText,
     editorText,
-  ].join("|");
+  ].join('|')
 }
 
-function appendPatchedCell(
-  context: PatchedCellContext,
-  row: number,
-  col: number,
-  snapshot: CellSnapshot,
-  force: boolean,
-): void {
-  const key = `${snapshot.sheetName}!${snapshot.address}`;
-  const formatId = context.getFormatId(snapshot.format);
-  const style = context.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID);
-  const nextStyleSignature = styleSignature(style);
-  const previousStyleSignature = context.state.lastStyleSignatures.get(style.id);
-  if (
-    force ||
-    previousStyleSignature !== nextStyleSignature ||
-    !context.state.knownStyleIds.has(style.id)
-  ) {
-    context.state.knownStyleIds.add(style.id);
-    context.state.lastStyleSignatures.set(style.id, nextStyleSignature);
-    context.styles.push(style);
+function appendPatchedCell(context: PatchedCellContext, row: number, col: number, snapshot: CellSnapshot, force: boolean): void {
+  const key = `${snapshot.sheetName}!${snapshot.address}`
+  const formatId = context.getFormatId(snapshot.format)
+  const style = context.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID)
+  const nextStyleSignature = styleSignature(style)
+  const previousStyleSignature = context.state.lastStyleSignatures.get(style.id)
+  if (force || previousStyleSignature !== nextStyleSignature || !context.state.knownStyleIds.has(style.id)) {
+    context.state.knownStyleIds.add(style.id)
+    context.state.lastStyleSignatures.set(style.id, nextStyleSignature)
+    context.styles.push(style)
   }
-  const editorText = toEditorText(snapshot);
-  const displayText = toDisplayText(snapshot);
-  const copyText = snapshot.formula ? editorText : displayText;
-  const signature = buildPatchedCellSignature(
-    snapshot,
-    displayText,
-    copyText,
-    editorText,
-    formatId,
-    style.id,
-  );
+  const editorText = toEditorText(snapshot)
+  const displayText = toDisplayText(snapshot)
+  const copyText = snapshot.formula ? editorText : displayText
+  const signature = buildPatchedCellSignature(snapshot, displayText, copyText, editorText, formatId, style.id)
   if (force || context.state.lastCellSignatures.get(key) !== signature) {
     context.cells.push({
       row,
@@ -132,66 +109,58 @@ function appendPatchedCell(
       editorText,
       formatId,
       styleId: style.id,
-    });
+    })
   }
-  context.state.lastCellSignatures.set(key, signature);
+  context.state.lastCellSignatures.set(key, signature)
 }
 
 export function buildViewportPatchFromEngine(input: {
-  readonly state: ViewportSubscriptionState;
-  readonly event: import("@bilig/protocol").EngineEvent | null;
-  readonly metrics: RecalcMetrics;
-  readonly sheetImpact: SheetViewportImpact | null;
-  readonly engine: WorkerEngine;
-  readonly emptyCellSnapshot: (sheetName: string, address: string) => CellSnapshot;
-  readonly getStyleRecord: (styleId: string) => CellStyleRecord;
-  readonly getFormatId: (format: string | undefined) => number;
+  readonly state: ViewportSubscriptionState
+  readonly event: import('@bilig/protocol').EngineEvent | null
+  readonly metrics: RecalcMetrics
+  readonly sheetImpact: SheetViewportImpact | null
+  readonly engine: WorkerEngine
+  readonly emptyCellSnapshot: (sheetName: string, address: string) => CellSnapshot
+  readonly getStyleRecord: (styleId: string) => CellStyleRecord
+  readonly getFormatId: (format: string | undefined) => number
 }): ViewportPatch {
-  const { state, event, metrics, sheetImpact, engine } = input;
-  const viewport = state.subscription;
-  const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined;
-  const styles: CellStyleRecord[] = [];
-  const cells: ViewportPatchedCell[] = [];
-  const full = event === null || event.invalidation === "full";
-  const invalidatedRanges = sheetImpact?.invalidatedRanges ?? [];
-  const invalidatedRows = sheetImpact?.invalidatedRows ?? [];
-  const invalidatedColumns = sheetImpact?.invalidatedColumns ?? [];
+  const { state, event, metrics, sheetImpact, engine } = input
+  const viewport = state.subscription
+  const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined
+  const styles: CellStyleRecord[] = []
+  const cells: ViewportPatchedCell[] = []
+  const full = event === null || event.invalidation === 'full'
+  const invalidatedRanges = sheetImpact?.invalidatedRanges ?? []
+  const invalidatedRows = sheetImpact?.invalidatedRows ?? []
+  const invalidatedColumns = sheetImpact?.invalidatedColumns ?? []
   const context: PatchedCellContext = {
     state,
     styles,
     cells,
     getStyleRecord: input.getStyleRecord,
     getFormatId: input.getFormatId,
-  };
+  }
 
   if (full) {
-    state.lastCellSignatures.clear();
-    state.lastStyleSignatures.clear();
+    state.lastCellSignatures.clear()
+    state.lastStyleSignatures.clear()
     for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
       for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-        const address = formatAddress(row, col);
-        const snapshot = hasSheet
-          ? engine.getCell(viewport.sheetName, address)
-          : input.emptyCellSnapshot(viewport.sheetName, address);
-        appendPatchedCell(context, row, col, snapshot, true);
+        const address = formatAddress(row, col)
+        const snapshot = hasSheet ? engine.getCell(viewport.sheetName, address) : input.emptyCellSnapshot(viewport.sheetName, address)
+        appendPatchedCell(context, row, col, snapshot, true)
       }
     }
   } else {
-    const targetCells = collectViewportCells(
-      viewport,
-      sheetImpact?.changedCells ?? null,
-      invalidatedRanges,
-    );
+    const targetCells = collectViewportCells(viewport, sheetImpact?.changedCells ?? null, invalidatedRanges)
     for (const cell of targetCells) {
       appendPatchedCell(
         context,
         cell.row,
         cell.col,
-        hasSheet
-          ? engine.getCell(viewport.sheetName, cell.address)
-          : input.emptyCellSnapshot(viewport.sheetName, cell.address),
+        hasSheet ? engine.getCell(viewport.sheetName, cell.address) : input.emptyCellSnapshot(viewport.sheetName, cell.address),
         false,
-      );
+      )
     }
   }
 
@@ -203,7 +172,7 @@ export function buildViewportPatchFromEngine(input: {
     state.lastColumnSignatures,
     full,
     invalidatedColumns,
-  );
+  )
   const { patches: rows, signatures: rowSignatures } = buildAxisPatches(
     viewport.rowStart,
     viewport.rowEnd,
@@ -212,9 +181,9 @@ export function buildViewportPatchFromEngine(input: {
     state.lastRowSignatures,
     full,
     invalidatedRows,
-  );
-  state.lastColumnSignatures = columnSignatures;
-  state.lastRowSignatures = rowSignatures;
+  )
+  state.lastColumnSignatures = columnSignatures
+  state.lastRowSignatures = rowSignatures
 
   return {
     version: state.nextVersion++,
@@ -227,33 +196,33 @@ export function buildViewportPatchFromEngine(input: {
     cells,
     columns,
     rows,
-  };
+  }
 }
 
 export function buildViewportPatchFromLocalBase(input: {
-  readonly state: ViewportSubscriptionState;
-  readonly metrics: RecalcMetrics;
-  readonly base: WorkbookLocalViewportBase;
-  readonly getFormatId: (format: string | undefined) => number;
+  readonly state: ViewportSubscriptionState
+  readonly metrics: RecalcMetrics
+  readonly base: WorkbookLocalViewportBase
+  readonly getFormatId: (format: string | undefined) => number
 }): ViewportPatch {
-  const { state, metrics, base } = input;
-  const viewport = state.subscription;
-  state.lastCellSignatures.clear();
-  state.lastStyleSignatures.clear();
+  const { state, metrics, base } = input
+  const viewport = state.subscription
+  state.lastCellSignatures.clear()
+  state.lastStyleSignatures.clear()
 
-  const styles = [...base.styles];
+  const styles = [...base.styles]
   styles.forEach((style) => {
-    state.knownStyleIds.add(style.id);
-    state.lastStyleSignatures.set(style.id, styleSignature(style));
-  });
+    state.knownStyleIds.add(style.id)
+    state.lastStyleSignatures.set(style.id, styleSignature(style))
+  })
 
-  const cells: ViewportPatchedCell[] = [];
+  const cells: ViewportPatchedCell[] = []
   for (const cell of base.cells) {
-    const editorText = toEditorText(cell.snapshot);
-    const displayText = toDisplayText(cell.snapshot);
-    const copyText = cell.snapshot.formula ? editorText : displayText;
-    const formatId = input.getFormatId(cell.snapshot.format);
-    const styleId = cell.snapshot.styleId ?? DEFAULT_STYLE_ID;
+    const editorText = toEditorText(cell.snapshot)
+    const displayText = toDisplayText(cell.snapshot)
+    const copyText = cell.snapshot.formula ? editorText : displayText
+    const formatId = input.getFormatId(cell.snapshot.format)
+    const styleId = cell.snapshot.styleId ?? DEFAULT_STYLE_ID
     cells.push({
       row: cell.row,
       col: cell.col,
@@ -263,18 +232,11 @@ export function buildViewportPatchFromLocalBase(input: {
       editorText,
       formatId,
       styleId,
-    });
+    })
     state.lastCellSignatures.set(
       `${cell.snapshot.sheetName}!${cell.snapshot.address}`,
-      buildPatchedCellSignature(
-        cell.snapshot,
-        displayText,
-        copyText,
-        editorText,
-        formatId,
-        styleId,
-      ),
-    );
+      buildPatchedCellSignature(cell.snapshot, displayText, copyText, editorText, formatId, styleId),
+    )
   }
 
   const { patches: columns, signatures: columnSignatures } = buildAxisPatches(
@@ -284,7 +246,7 @@ export function buildViewportPatchFromLocalBase(input: {
     PRODUCT_COLUMN_WIDTH,
     state.lastColumnSignatures,
     true,
-  );
+  )
   const { patches: rows, signatures: rowSignatures } = buildAxisPatches(
     viewport.rowStart,
     viewport.rowEnd,
@@ -292,9 +254,9 @@ export function buildViewportPatchFromLocalBase(input: {
     PRODUCT_ROW_HEIGHT,
     state.lastRowSignatures,
     true,
-  );
-  state.lastColumnSignatures = columnSignatures;
-  state.lastRowSignatures = rowSignatures;
+  )
+  state.lastColumnSignatures = columnSignatures
+  state.lastRowSignatures = rowSignatures
 
   return {
     version: state.nextVersion++,
@@ -307,5 +269,5 @@ export function buildViewportPatchFromLocalBase(input: {
     cells,
     columns,
     rows,
-  };
+  }
 }

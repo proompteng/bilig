@@ -1,43 +1,43 @@
-import { SpreadsheetEngine } from "@bilig/core";
+import { SpreadsheetEngine } from '@bilig/core'
 import {
   createWorkbookAgentCommandBundle,
   WORKBOOK_AGENT_TOOL_NAMES,
   type CodexDynamicToolCallResult,
   type WorkbookAgentCommand,
-} from "@bilig/agent-api";
-import { describe, expect, it, vi } from "vitest";
-import type { AuthoritativeWorkbookEventBatch } from "@bilig/zero-sync";
-import { z } from "zod";
-import { buildWorkbookSourceProjectionFromEngine } from "../zero/projection.js";
-import type { ZeroSyncService } from "../zero/service.js";
-import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
-import { handleWorkbookAgentToolCall } from "./workbook-agent-tools.js";
+} from '@bilig/agent-api'
+import { describe, expect, it, vi } from 'vitest'
+import type { AuthoritativeWorkbookEventBatch } from '@bilig/zero-sync'
+import { z } from 'zod'
+import { buildWorkbookSourceProjectionFromEngine } from '../zero/projection.js'
+import type { ZeroSyncService } from '../zero/service.js'
+import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
+import { handleWorkbookAgentToolCall } from './workbook-agent-tools.js'
 
 async function createEngine(): Promise<SpreadsheetEngine> {
   const engine = new SpreadsheetEngine({
-    workbookName: "doc-1",
-    replicaId: "server:chart-test",
-  });
-  await engine.ready();
-  engine.createSheet("Data");
-  engine.createSheet("Dashboard");
-  engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
-    ["Month", "Revenue"],
-    ["Jan", 10],
-    ["Feb", 15],
-    ["Mar", 9],
-  ]);
+    workbookName: 'doc-1',
+    replicaId: 'server:chart-test',
+  })
+  await engine.ready()
+  engine.createSheet('Data')
+  engine.createSheet('Dashboard')
+  engine.setRangeValues({ sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' }, [
+    ['Month', 'Revenue'],
+    ['Jan', 10],
+    ['Feb', 15],
+    ['Mar', 9],
+  ])
   engine.setChart({
-    id: "Revenue Chart",
-    sheetName: "Dashboard",
-    address: "B2",
-    source: { sheetName: "Data", startAddress: "A1", endAddress: "B4" },
-    chartType: "column",
+    id: 'Revenue Chart',
+    sheetName: 'Dashboard',
+    address: 'B2',
+    source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' },
+    chartType: 'column',
     rows: 12,
     cols: 8,
-    title: "Revenue",
-  });
-  return engine;
+    title: 'Revenue',
+  })
+  return engine
 }
 
 function createZeroSyncHarness(engine: SpreadsheetEngine) {
@@ -46,63 +46,63 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
     async initialize() {},
     async close() {},
     async handleQuery() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async handleMutate() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async inspectWorkbook(_documentId, task) {
       const runtime: WorkbookRuntime = {
-        documentId: "doc-1",
+        documentId: 'doc-1',
         engine,
-        projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+        projection: buildWorkbookSourceProjectionFromEngine('doc-1', engine, {
           revision: 1,
           calculatedRevision: 1,
-          ownerUserId: "alex@example.com",
-          updatedBy: "alex@example.com",
-          updatedAt: "2026-04-12T12:00:00.000Z",
+          ownerUserId: 'alex@example.com',
+          updatedBy: 'alex@example.com',
+          updatedAt: '2026-04-12T12:00:00.000Z',
         }),
         headRevision: 1,
         calculatedRevision: 1,
-        ownerUserId: "alex@example.com",
-      };
-      return await task(runtime);
+        ownerUserId: 'alex@example.com',
+      }
+      return await task(runtime)
     },
     async applyServerMutator() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async applyAgentCommandBundle() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async listWorkbookChanges() {
-      return [];
+      return []
     },
     async listWorkbookAgentRuns() {
-      return [];
+      return []
     },
     async appendWorkbookAgentRun() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async listWorkbookAgentThreadRuns() {
-      return [];
+      return []
     },
     async listWorkbookAgentThreadSummaries() {
-      return [];
+      return []
     },
     async loadWorkbookAgentThreadState() {
-      return null;
+      return null
     },
     async saveWorkbookAgentThreadState() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async listWorkbookThreadWorkflowRuns() {
-      return [];
+      return []
     },
     async upsertWorkbookWorkflowRun() {
-      throw new Error("not used");
+      throw new Error('not used')
     },
     async getWorkbookHeadRevision() {
-      return 1;
+      return 1
     },
     async loadAuthoritativeEvents() {
       return {
@@ -110,30 +110,30 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
         headRevision: 1,
         calculatedRevision: 1,
         events: [],
-      } satisfies AuthoritativeWorkbookEventBatch;
+      } satisfies AuthoritativeWorkbookEventBatch
     },
-  };
-  return { zeroSyncService };
+  }
+  return { zeroSyncService }
 }
 
 function createBundle(command: WorkbookAgentCommand) {
   return createWorkbookAgentCommandBundle({
-    documentId: "doc-1",
-    threadId: "thr-1",
-    turnId: "turn-1",
-    goalText: "chart test",
+    documentId: 'doc-1',
+    threadId: 'thr-1',
+    turnId: 'turn-1',
+    goalText: 'chart test',
     baseRevision: 1,
     now: 1,
     context: null,
     commands: [command],
-  });
+  })
 }
 
 function parsePayload(result: CodexDynamicToolCallResult): unknown {
-  expect(result.success).toBe(true);
-  const item = result.contentItems[0];
-  expect(item?.type).toBe("inputText");
-  return JSON.parse(item && "text" in item ? item.text : "");
+  expect(result.success).toBe(true)
+  const item = result.contentItems[0]
+  expect(item?.type).toBe('inputText')
+  return JSON.parse(item && 'text' in item ? item.text : '')
 }
 
 const listChartsPayloadSchema = z.object({
@@ -146,7 +146,7 @@ const listChartsPayloadSchema = z.object({
       chartType: z.string(),
     }),
   ),
-});
+})
 
 const stagedChartPayloadSchema = z.object({
   staged: z.boolean(),
@@ -159,137 +159,137 @@ const stagedChartPayloadSchema = z.object({
       role: z.string(),
     }),
   ),
-});
+})
 
-describe("workbook agent chart tools", () => {
-  it("lists workbook charts from the authoritative runtime", async () => {
-    const engine = await createEngine();
-    const { zeroSyncService } = createZeroSyncHarness(engine);
+describe('workbook agent chart tools', () => {
+  it('lists workbook charts from the authoritative runtime', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
 
     const result = await handleWorkbookAgentToolCall(
       {
-        documentId: "doc-1",
-        session: { userID: "alex@example.com", roles: ["editor"] },
+        documentId: 'doc-1',
+        session: { userID: 'alex@example.com', roles: ['editor'] },
         uiContext: null,
         zeroSyncService,
-        stageCommand: vi.fn(async () => createBundle({ kind: "deleteChart", id: "unused" })),
+        stageCommand: vi.fn(async () => createBundle({ kind: 'deleteChart', id: 'unused' })),
       },
       {
-        threadId: "thr-1",
-        turnId: "turn-1",
-        callId: "call-list-charts",
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-list-charts',
         tool: WORKBOOK_AGENT_TOOL_NAMES.listCharts,
         arguments: {},
       },
-    );
+    )
 
-    const payload = listChartsPayloadSchema.parse(parsePayload(result));
-    expect(payload.chartCount).toBe(1);
+    const payload = listChartsPayloadSchema.parse(parsePayload(result))
+    expect(payload.chartCount).toBe(1)
     expect(payload.charts).toContainEqual(
       expect.objectContaining({
-        id: "Revenue Chart",
-        sheetName: "Dashboard",
-        address: "B2",
-        chartType: "column",
+        id: 'Revenue Chart',
+        sheetName: 'Dashboard',
+        address: 'B2',
+        chartType: 'column',
       }),
-    );
-  });
+    )
+  })
 
-  it("stages create-chart and delete-chart commands", async () => {
-    const engine = await createEngine();
-    const { zeroSyncService } = createZeroSyncHarness(engine);
-    const stageCommand = vi.fn(async (command: WorkbookAgentCommand) => createBundle(command));
+  it('stages create-chart and delete-chart commands', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommand) => createBundle(command))
 
     const createResult = await handleWorkbookAgentToolCall(
       {
-        documentId: "doc-1",
-        session: { userID: "alex@example.com", roles: ["editor"] },
+        documentId: 'doc-1',
+        session: { userID: 'alex@example.com', roles: ['editor'] },
         uiContext: null,
         zeroSyncService,
         stageCommand,
       },
       {
-        threadId: "thr-1",
-        turnId: "turn-1",
-        callId: "call-create-chart",
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-create-chart',
         tool: WORKBOOK_AGENT_TOOL_NAMES.createChart,
         arguments: {
-          id: "Margin Chart",
-          sheetName: "Dashboard",
-          address: "H2",
+          id: 'Margin Chart',
+          sheetName: 'Dashboard',
+          address: 'H2',
           range: {
-            sheetName: "Data",
-            startAddress: "A1",
-            endAddress: "B4",
+            sheetName: 'Data',
+            startAddress: 'A1',
+            endAddress: 'B4',
           },
-          chartType: "line",
-          title: "Margin",
+          chartType: 'line',
+          title: 'Margin',
         },
       },
-    );
+    )
     const deleteResult = await handleWorkbookAgentToolCall(
       {
-        documentId: "doc-1",
-        session: { userID: "alex@example.com", roles: ["editor"] },
+        documentId: 'doc-1',
+        session: { userID: 'alex@example.com', roles: ['editor'] },
         uiContext: null,
         zeroSyncService,
         stageCommand,
       },
       {
-        threadId: "thr-1",
-        turnId: "turn-1",
-        callId: "call-delete-chart",
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-delete-chart',
         tool: WORKBOOK_AGENT_TOOL_NAMES.deleteChart,
         arguments: {
-          id: "Revenue Chart",
+          id: 'Revenue Chart',
         },
       },
-    );
+    )
 
     expect(stageCommand).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        kind: "upsertChart",
+        kind: 'upsertChart',
         chart: expect.objectContaining({
-          id: "Margin Chart",
-          sheetName: "Dashboard",
-          address: "H2",
-          chartType: "line",
+          id: 'Margin Chart',
+          sheetName: 'Dashboard',
+          address: 'H2',
+          chartType: 'line',
           source: {
-            sheetName: "Data",
-            startAddress: "A1",
-            endAddress: "B4",
+            sheetName: 'Data',
+            startAddress: 'A1',
+            endAddress: 'B4',
           },
         }),
       }),
-    );
+    )
     expect(stageCommand).toHaveBeenNthCalledWith(2, {
-      kind: "deleteChart",
-      id: "Revenue Chart",
-    });
+      kind: 'deleteChart',
+      id: 'Revenue Chart',
+    })
 
     expect(stagedChartPayloadSchema.parse(parsePayload(createResult))).toEqual(
       expect.objectContaining({
         staged: true,
         affectedRanges: expect.arrayContaining([
           expect.objectContaining({
-            sheetName: "Data",
-            startAddress: "A1",
-            endAddress: "B4",
-            role: "source",
+            sheetName: 'Data',
+            startAddress: 'A1',
+            endAddress: 'B4',
+            role: 'source',
           }),
           expect.objectContaining({
-            sheetName: "Dashboard",
-            startAddress: "H2",
-            role: "target",
+            sheetName: 'Dashboard',
+            startAddress: 'H2',
+            role: 'target',
           }),
         ]),
       }),
-    );
+    )
     expect(stagedChartPayloadSchema.parse(parsePayload(deleteResult))).toEqual(
       expect.objectContaining({
         staged: true,
       }),
-    );
-  });
-});
+    )
+  })
+})

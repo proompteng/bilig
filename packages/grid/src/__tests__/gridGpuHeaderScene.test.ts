@@ -1,29 +1,29 @@
-import { expect, test } from "vitest";
-import { CompactSelection } from "../gridTypes.js";
-import { getGridMetrics } from "../gridMetrics.js";
-import { parseGpuColor } from "../gridGpuScene.js";
-import { buildGridGpuHeaderScene } from "../gridGpuHeaderScene.js";
+import { expect, test } from 'vitest'
+import { CompactSelection } from '../gridTypes.js'
+import { getGridMetrics } from '../gridMetrics.js'
+import { parseGpuColor } from '../gridGpuScene.js'
+import { buildGridGpuHeaderScene } from '../gridGpuHeaderScene.js'
 
 const palette = {
-  gridLineColor: parseGpuColor("#e3e9f0"),
-  headerFillColor: parseGpuColor("#f8f9fa"),
-  headerSelectedFillColor: parseGpuColor("#e6f4ea"),
-  headerHoverFillColor: parseGpuColor("#f1f3f4"),
-  headerDragAnchorFillColor: parseGpuColor("#d7eadf"),
-  selectionFillColor: parseGpuColor("rgba(31, 122, 67, 0.06)"),
-  resizeGuideColor: parseGpuColor("rgba(121, 105, 123, 0.82)"),
-  resizeGuideGlowColor: parseGpuColor("rgba(168, 158, 169, 0.18)"),
-};
+  gridLineColor: parseGpuColor('#e3e9f0'),
+  headerFillColor: parseGpuColor('#f8f9fa'),
+  headerSelectedFillColor: parseGpuColor('#e6f4ea'),
+  headerHoverFillColor: parseGpuColor('#f1f3f4'),
+  headerDragAnchorFillColor: parseGpuColor('#d7eadf'),
+  selectionFillColor: parseGpuColor('rgba(31, 122, 67, 0.06)'),
+  resizeGuideColor: parseGpuColor('rgba(121, 105, 123, 0.82)'),
+  resizeGuideGlowColor: parseGpuColor('rgba(168, 158, 169, 0.18)'),
+}
 
 function createSelection() {
   return {
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty(),
     current: undefined,
-  };
+  }
 }
 
-test("builds GPU-backed header backgrounds and selection highlights", () => {
+test('builds GPU-backed header backgrounds and selection highlights', () => {
   const scene = buildGridGpuHeaderScene({
     palette,
     columnWidths: {},
@@ -39,7 +39,7 @@ test("builds GPU-backed header backgrounds and selection highlights", () => {
     resizeGuideColumn: null,
     resizeGuideRow: null,
     activeHeaderDrag: null,
-  });
+  })
 
   expect(scene.fillRects).toContainEqual({
     x: 0,
@@ -47,24 +47,24 @@ test("builds GPU-backed header backgrounds and selection highlights", () => {
     width: 46,
     height: 24,
     color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
-  });
+  })
   expect(scene.fillRects).toContainEqual({
     x: 46,
     y: 0,
     width: 104,
     height: 24,
     color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
-  });
+  })
   expect(scene.fillRects).toContainEqual({
     x: 0,
     y: 24,
     width: 46,
     height: 22,
     color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
-  });
-});
+  })
+})
 
-test("builds GPU resize guides for hovered columns", () => {
+test('builds GPU resize guides for hovered columns', () => {
   const scene = buildGridGpuHeaderScene({
     palette,
     columnWidths: {},
@@ -80,7 +80,7 @@ test("builds GPU resize guides for hovered columns", () => {
     resizeGuideColumn: 2,
     resizeGuideRow: null,
     activeHeaderDrag: null,
-  });
+  })
 
   expect(scene.fillRects).toContainEqual({
     x: 148,
@@ -88,17 +88,17 @@ test("builds GPU resize guides for hovered columns", () => {
     width: 3,
     height: 68,
     color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
-  });
+  })
   expect(scene.borderRects).toContainEqual({
     x: 149,
     y: 0,
     width: 1,
     height: 68,
     color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
-  });
-});
+  })
+})
 
-test("builds GPU drag guides for active column header drags", () => {
+test('builds GPU drag guides for active column header drags', () => {
   const scene = buildGridGpuHeaderScene({
     palette,
     columnWidths: {},
@@ -120,8 +120,8 @@ test("builds GPU drag guides for active column header drags", () => {
     hoveredHeader: null,
     resizeGuideColumn: null,
     resizeGuideRow: null,
-    activeHeaderDrag: { kind: "column", index: 1 },
-  });
+    activeHeaderDrag: { kind: 'column', index: 1 },
+  })
 
   expect(scene.borderRects).toContainEqual({
     x: 46,
@@ -129,19 +129,19 @@ test("builds GPU drag guides for active column header drags", () => {
     width: 1,
     height: 68,
     color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
-  });
+  })
   expect(scene.borderRects).toContainEqual({
     x: 253,
     y: 0,
     width: 1,
     height: 68,
     color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
-  });
+  })
   expect(scene.fillRects).toContainEqual({
     x: 46,
     y: 21,
     width: 104,
     height: 3,
     color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
-  });
-});
+  })
+})

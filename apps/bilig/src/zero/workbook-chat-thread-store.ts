@@ -4,7 +4,7 @@ import {
   normalizeWorkbookAgentToolName,
   type WorkbookAgentContextRef,
   type WorkbookAgentReviewQueueItem,
-} from "@bilig/agent-api";
+} from '@bilig/agent-api'
 import type {
   WorkbookAgentExecutionPolicy,
   WorkbookAgentTimelineCitation,
@@ -12,159 +12,155 @@ import type {
   WorkbookAgentTimelineEntry,
   WorkbookAgentToolStatus,
   WorkbookAgentUiContext,
-} from "@bilig/contracts";
-import type { QueryResultRow, Queryable } from "./store.js";
+} from '@bilig/contracts'
+import type { QueryResultRow, Queryable } from './store.js'
 
-export type WorkbookChatThreadScope = "private" | "shared";
+export type WorkbookChatThreadScope = 'private' | 'shared'
 
 export interface WorkbookAgentThreadStateRecord {
-  readonly documentId: string;
-  readonly threadId: string;
-  readonly actorUserId: string;
-  readonly scope: WorkbookChatThreadScope;
-  readonly executionPolicy: WorkbookAgentExecutionPolicy;
-  readonly context: WorkbookAgentUiContext | null;
-  readonly entries: readonly WorkbookAgentTimelineEntry[];
-  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[];
-  readonly updatedAtUnixMs: number;
+  readonly documentId: string
+  readonly threadId: string
+  readonly actorUserId: string
+  readonly scope: WorkbookChatThreadScope
+  readonly executionPolicy: WorkbookAgentExecutionPolicy
+  readonly context: WorkbookAgentUiContext | null
+  readonly entries: readonly WorkbookAgentTimelineEntry[]
+  readonly reviewQueueItems: readonly WorkbookAgentReviewQueueItem[]
+  readonly updatedAtUnixMs: number
 }
 
 interface WorkbookChatThreadRow extends QueryResultRow {
-  readonly workbookId?: unknown;
-  readonly threadId?: unknown;
-  readonly actorUserId?: unknown;
-  readonly scope?: unknown;
-  readonly executionPolicy?: unknown;
-  readonly contextJson?: unknown;
-  readonly updatedAtUnixMs?: unknown;
-  readonly entryCount?: unknown;
-  readonly latestEntryText?: unknown;
+  readonly workbookId?: unknown
+  readonly threadId?: unknown
+  readonly actorUserId?: unknown
+  readonly scope?: unknown
+  readonly executionPolicy?: unknown
+  readonly contextJson?: unknown
+  readonly updatedAtUnixMs?: unknown
+  readonly entryCount?: unknown
+  readonly latestEntryText?: unknown
 }
 
 interface WorkbookChatItemRow extends QueryResultRow {
-  readonly entryId?: unknown;
-  readonly turnId?: unknown;
-  readonly kind?: unknown;
-  readonly text?: unknown;
-  readonly phase?: unknown;
-  readonly toolName?: unknown;
-  readonly toolStatus?: unknown;
-  readonly argumentsText?: unknown;
-  readonly outputText?: unknown;
-  readonly success?: unknown;
-  readonly citationsJson?: unknown;
-  readonly sortOrder?: unknown;
+  readonly entryId?: unknown
+  readonly turnId?: unknown
+  readonly kind?: unknown
+  readonly text?: unknown
+  readonly phase?: unknown
+  readonly toolName?: unknown
+  readonly toolStatus?: unknown
+  readonly argumentsText?: unknown
+  readonly outputText?: unknown
+  readonly success?: unknown
+  readonly citationsJson?: unknown
+  readonly sortOrder?: unknown
 }
 
 interface WorkbookChatToolCallRow extends QueryResultRow {
-  readonly entryId?: unknown;
-  readonly turnId?: unknown;
-  readonly toolName?: unknown;
-  readonly toolStatus?: unknown;
-  readonly argumentsText?: unknown;
-  readonly outputText?: unknown;
-  readonly success?: unknown;
-  readonly sortOrder?: unknown;
+  readonly entryId?: unknown
+  readonly turnId?: unknown
+  readonly toolName?: unknown
+  readonly toolStatus?: unknown
+  readonly argumentsText?: unknown
+  readonly outputText?: unknown
+  readonly success?: unknown
+  readonly sortOrder?: unknown
 }
 
 interface WorkbookReviewQueueItemRow extends QueryResultRow {
-  readonly reviewItemId?: unknown;
-  readonly workbookId?: unknown;
-  readonly threadId?: unknown;
-  readonly actorUserId?: unknown;
-  readonly turnId?: unknown;
-  readonly goalText?: unknown;
-  readonly summary?: unknown;
-  readonly scope?: unknown;
-  readonly riskClass?: unknown;
-  readonly reviewMode?: unknown;
-  readonly ownerUserId?: unknown;
-  readonly status?: unknown;
-  readonly decidedByUserId?: unknown;
-  readonly decidedAtUnixMs?: unknown;
-  readonly baseRevision?: unknown;
-  readonly createdAtUnixMs?: unknown;
-  readonly contextJson?: unknown;
-  readonly commandsJson?: unknown;
-  readonly affectedRangesJson?: unknown;
-  readonly estimatedAffectedCells?: unknown;
-  readonly recommendationsJson?: unknown;
+  readonly reviewItemId?: unknown
+  readonly workbookId?: unknown
+  readonly threadId?: unknown
+  readonly actorUserId?: unknown
+  readonly turnId?: unknown
+  readonly goalText?: unknown
+  readonly summary?: unknown
+  readonly scope?: unknown
+  readonly riskClass?: unknown
+  readonly reviewMode?: unknown
+  readonly ownerUserId?: unknown
+  readonly status?: unknown
+  readonly decidedByUserId?: unknown
+  readonly decidedAtUnixMs?: unknown
+  readonly baseRevision?: unknown
+  readonly createdAtUnixMs?: unknown
+  readonly contextJson?: unknown
+  readonly commandsJson?: unknown
+  readonly affectedRangesJson?: unknown
+  readonly estimatedAffectedCells?: unknown
+  readonly recommendationsJson?: unknown
 }
 
 interface WorkbookChatThreadSummaryRow extends QueryResultRow {
-  readonly threadId?: unknown;
-  readonly scope?: unknown;
-  readonly ownerUserId?: unknown;
-  readonly updatedAtUnixMs?: unknown;
-  readonly entryCount?: unknown;
-  readonly reviewQueueItemCount?: unknown;
-  readonly latestEntryText?: unknown;
+  readonly threadId?: unknown
+  readonly scope?: unknown
+  readonly ownerUserId?: unknown
+  readonly updatedAtUnixMs?: unknown
+  readonly entryCount?: unknown
+  readonly reviewQueueItemCount?: unknown
+  readonly latestEntryText?: unknown
 }
 
 function isExecutionPolicy(value: unknown): value is WorkbookAgentExecutionPolicy {
-  return value === "autoApplySafe" || value === "autoApplyAll" || value === "ownerReview";
+  return value === 'autoApplySafe' || value === 'autoApplyAll' || value === 'ownerReview'
 }
 
-function dedupeTimelineEntries(
-  entries: readonly WorkbookAgentTimelineEntry[],
-): WorkbookAgentTimelineEntry[] {
-  const deduped: WorkbookAgentTimelineEntry[] = [];
-  const indexById = new Map<string, number>();
+function dedupeTimelineEntries(entries: readonly WorkbookAgentTimelineEntry[]): WorkbookAgentTimelineEntry[] {
+  const deduped: WorkbookAgentTimelineEntry[] = []
+  const indexById = new Map<string, number>()
   for (const entry of entries) {
-    const existingIndex = indexById.get(entry.id);
+    const existingIndex = indexById.get(entry.id)
     if (existingIndex === undefined) {
-      indexById.set(entry.id, deduped.length);
-      deduped.push(entry);
-      continue;
+      indexById.set(entry.id, deduped.length)
+      deduped.push(entry)
+      continue
     }
-    deduped[existingIndex] = entry;
+    deduped[existingIndex] = entry
   }
-  return deduped;
+  return deduped
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
   }
-  if (typeof value === "string" && value.length > 0) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : null
   }
-  return null;
+  return null
 }
 
 function normalizeTimelineToolName(toolName: string | null): string | null {
-  if (typeof toolName !== "string") {
-    return null;
+  if (typeof toolName !== 'string') {
+    return null
   }
-  return normalizeWorkbookAgentToolName(toolName);
+  return normalizeWorkbookAgentToolName(toolName)
 }
 
 function isWorkbookAgentUiContext(value: unknown): value is WorkbookAgentUiContext {
   return (
     isRecord(value) &&
-    isRecord(value["selection"]) &&
-    typeof value["selection"]["sheetName"] === "string" &&
-    typeof value["selection"]["address"] === "string" &&
-    (value["selection"]["range"] === undefined ||
-      (isRecord(value["selection"]["range"]) &&
-        typeof value["selection"]["range"]["startAddress"] === "string" &&
-        typeof value["selection"]["range"]["endAddress"] === "string")) &&
-    isRecord(value["viewport"]) &&
-    typeof value["viewport"]["rowStart"] === "number" &&
-    typeof value["viewport"]["rowEnd"] === "number" &&
-    typeof value["viewport"]["colStart"] === "number" &&
-    typeof value["viewport"]["colEnd"] === "number"
-  );
+    isRecord(value['selection']) &&
+    typeof value['selection']['sheetName'] === 'string' &&
+    typeof value['selection']['address'] === 'string' &&
+    (value['selection']['range'] === undefined ||
+      (isRecord(value['selection']['range']) &&
+        typeof value['selection']['range']['startAddress'] === 'string' &&
+        typeof value['selection']['range']['endAddress'] === 'string')) &&
+    isRecord(value['viewport']) &&
+    typeof value['viewport']['rowStart'] === 'number' &&
+    typeof value['viewport']['rowEnd'] === 'number' &&
+    typeof value['viewport']['colStart'] === 'number' &&
+    typeof value['viewport']['colEnd'] === 'number'
+  )
 }
 
-function toBundleContextRef(
-  context: WorkbookAgentUiContext | null,
-): WorkbookAgentContextRef | null {
+function toBundleContextRef(context: WorkbookAgentUiContext | null): WorkbookAgentContextRef | null {
   return context
     ? {
         selection: {
@@ -183,158 +179,127 @@ function toBundleContextRef(
           ...context.viewport,
         },
       }
-    : null;
+    : null
 }
 
 function isToolStatus(value: unknown): value is WorkbookAgentToolStatus {
-  return value === "inProgress" || value === "completed" || value === "failed" || value === null;
+  return value === 'inProgress' || value === 'completed' || value === 'failed' || value === null
 }
 
-function isTimelineKind(value: unknown): value is WorkbookAgentTimelineEntry["kind"] {
-  return (
-    value === "user" ||
-    value === "assistant" ||
-    value === "plan" ||
-    value === "reasoning" ||
-    value === "tool" ||
-    value === "system"
-  );
+function isTimelineKind(value: unknown): value is WorkbookAgentTimelineEntry['kind'] {
+  return value === 'user' || value === 'assistant' || value === 'plan' || value === 'reasoning' || value === 'tool' || value === 'system'
 }
 
 function isTimelineCitation(value: unknown): value is WorkbookAgentTimelineCitation {
   return (
     (isRecord(value) &&
-      value["kind"] === "range" &&
-      typeof value["sheetName"] === "string" &&
-      typeof value["startAddress"] === "string" &&
-      typeof value["endAddress"] === "string" &&
-      (value["role"] === "target" || value["role"] === "source")) ||
-    (isRecord(value) && value["kind"] === "revision" && typeof value["revision"] === "number")
-  );
+      value['kind'] === 'range' &&
+      typeof value['sheetName'] === 'string' &&
+      typeof value['startAddress'] === 'string' &&
+      typeof value['endAddress'] === 'string' &&
+      (value['role'] === 'target' || value['role'] === 'source')) ||
+    (isRecord(value) && value['kind'] === 'revision' && typeof value['revision'] === 'number')
+  )
 }
 
 function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimelineEntry | null {
   if (
-    typeof row.entryId !== "string" ||
+    typeof row.entryId !== 'string' ||
     !isTimelineKind(row.kind) ||
-    (row.turnId !== null && row.turnId !== undefined && typeof row.turnId !== "string") ||
-    (row.text !== null && row.text !== undefined && typeof row.text !== "string") ||
-    (row.phase !== null && row.phase !== undefined && typeof row.phase !== "string") ||
-    (row.toolName !== null && row.toolName !== undefined && typeof row.toolName !== "string") ||
+    (row.turnId !== null && row.turnId !== undefined && typeof row.turnId !== 'string') ||
+    (row.text !== null && row.text !== undefined && typeof row.text !== 'string') ||
+    (row.phase !== null && row.phase !== undefined && typeof row.phase !== 'string') ||
+    (row.toolName !== null && row.toolName !== undefined && typeof row.toolName !== 'string') ||
     !isToolStatus(row.toolStatus ?? null) ||
-    (row.argumentsText !== null &&
-      row.argumentsText !== undefined &&
-      typeof row.argumentsText !== "string") ||
-    (row.outputText !== null &&
-      row.outputText !== undefined &&
-      typeof row.outputText !== "string") ||
-    (row.success !== null && row.success !== undefined && typeof row.success !== "boolean") ||
+    (row.argumentsText !== null && row.argumentsText !== undefined && typeof row.argumentsText !== 'string') ||
+    (row.outputText !== null && row.outputText !== undefined && typeof row.outputText !== 'string') ||
+    (row.success !== null && row.success !== undefined && typeof row.success !== 'boolean') ||
     (row.citationsJson !== null &&
       row.citationsJson !== undefined &&
-      (!Array.isArray(row.citationsJson) ||
-        !row.citationsJson.every((entry) => isTimelineCitation(entry))))
+      (!Array.isArray(row.citationsJson) || !row.citationsJson.every((entry) => isTimelineCitation(entry))))
   ) {
-    return null;
+    return null
   }
   const toolStatus: WorkbookAgentToolStatus =
-    row.toolStatus === "inProgress" || row.toolStatus === "completed" || row.toolStatus === "failed"
-      ? row.toolStatus
-      : null;
+    row.toolStatus === 'inProgress' || row.toolStatus === 'completed' || row.toolStatus === 'failed' ? row.toolStatus : null
   return {
     id: row.entryId,
     kind: row.kind,
-    turnId: typeof row.turnId === "string" ? row.turnId : null,
-    text: typeof row.text === "string" ? row.text : null,
-    phase: typeof row.phase === "string" ? row.phase : null,
-    toolName: normalizeTimelineToolName(typeof row.toolName === "string" ? row.toolName : null),
+    turnId: typeof row.turnId === 'string' ? row.turnId : null,
+    text: typeof row.text === 'string' ? row.text : null,
+    phase: typeof row.phase === 'string' ? row.phase : null,
+    toolName: normalizeTimelineToolName(typeof row.toolName === 'string' ? row.toolName : null),
     toolStatus,
-    argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
-    outputText: typeof row.outputText === "string" ? row.outputText : null,
-    success: typeof row.success === "boolean" ? row.success : null,
+    argumentsText: typeof row.argumentsText === 'string' ? row.argumentsText : null,
+    outputText: typeof row.outputText === 'string' ? row.outputText : null,
+    success: typeof row.success === 'boolean' ? row.success : null,
     citations: Array.isArray(row.citationsJson) ? [...row.citationsJson] : [],
-  };
+  }
 }
 
 function normalizeToolCallRow(row: WorkbookChatToolCallRow): {
-  readonly entryId: string;
-  readonly turnId: string | null;
-  readonly toolName: string | null;
-  readonly toolStatus: WorkbookAgentToolStatus;
-  readonly argumentsText: string | null;
-  readonly outputText: string | null;
-  readonly success: boolean | null;
+  readonly entryId: string
+  readonly turnId: string | null
+  readonly toolName: string | null
+  readonly toolStatus: WorkbookAgentToolStatus
+  readonly argumentsText: string | null
+  readonly outputText: string | null
+  readonly success: boolean | null
 } | null {
   if (
-    typeof row.entryId !== "string" ||
-    (row.turnId !== null && row.turnId !== undefined && typeof row.turnId !== "string") ||
-    (row.toolName !== null && row.toolName !== undefined && typeof row.toolName !== "string") ||
+    typeof row.entryId !== 'string' ||
+    (row.turnId !== null && row.turnId !== undefined && typeof row.turnId !== 'string') ||
+    (row.toolName !== null && row.toolName !== undefined && typeof row.toolName !== 'string') ||
     !isToolStatus(row.toolStatus ?? null) ||
-    (row.argumentsText !== null &&
-      row.argumentsText !== undefined &&
-      typeof row.argumentsText !== "string") ||
-    (row.outputText !== null &&
-      row.outputText !== undefined &&
-      typeof row.outputText !== "string") ||
-    (row.success !== null && row.success !== undefined && typeof row.success !== "boolean")
+    (row.argumentsText !== null && row.argumentsText !== undefined && typeof row.argumentsText !== 'string') ||
+    (row.outputText !== null && row.outputText !== undefined && typeof row.outputText !== 'string') ||
+    (row.success !== null && row.success !== undefined && typeof row.success !== 'boolean')
   ) {
-    return null;
+    return null
   }
   const toolStatus: WorkbookAgentToolStatus =
-    row.toolStatus === "inProgress" || row.toolStatus === "completed" || row.toolStatus === "failed"
-      ? row.toolStatus
-      : null;
+    row.toolStatus === 'inProgress' || row.toolStatus === 'completed' || row.toolStatus === 'failed' ? row.toolStatus : null
   return {
     entryId: row.entryId,
-    turnId: typeof row.turnId === "string" ? row.turnId : null,
-    toolName: normalizeTimelineToolName(typeof row.toolName === "string" ? row.toolName : null),
+    turnId: typeof row.turnId === 'string' ? row.turnId : null,
+    toolName: normalizeTimelineToolName(typeof row.toolName === 'string' ? row.toolName : null),
     toolStatus,
-    argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
-    outputText: typeof row.outputText === "string" ? row.outputText : null,
-    success: typeof row.success === "boolean" ? row.success : null,
-  };
+    argumentsText: typeof row.argumentsText === 'string' ? row.argumentsText : null,
+    outputText: typeof row.outputText === 'string' ? row.outputText : null,
+    success: typeof row.success === 'boolean' ? row.success : null,
+  }
 }
 
 function hasToolCallState(entry: WorkbookAgentTimelineEntry): boolean {
   return (
-    entry.kind === "tool" ||
+    entry.kind === 'tool' ||
     entry.toolName !== null ||
     entry.toolStatus !== null ||
     entry.argumentsText !== null ||
     entry.outputText !== null ||
     entry.success !== null
-  );
+  )
 }
 
-function normalizeReviewQueueItem(
-  row: WorkbookReviewQueueItemRow,
-): WorkbookAgentReviewQueueItem | null {
-  const baseRevision = parseNumericValue(row.baseRevision);
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
-  const decidedAtUnixMs =
-    row.decidedAtUnixMs === null || row.decidedAtUnixMs === undefined
-      ? null
-      : parseNumericValue(row.decidedAtUnixMs);
+function normalizeReviewQueueItem(row: WorkbookReviewQueueItemRow): WorkbookAgentReviewQueueItem | null {
+  const baseRevision = parseNumericValue(row.baseRevision)
+  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
+  const decidedAtUnixMs = row.decidedAtUnixMs === null || row.decidedAtUnixMs === undefined ? null : parseNumericValue(row.decidedAtUnixMs)
   const estimatedAffectedCells =
-    row.estimatedAffectedCells === null || row.estimatedAffectedCells === undefined
-      ? null
-      : parseNumericValue(row.estimatedAffectedCells);
+    row.estimatedAffectedCells === null || row.estimatedAffectedCells === undefined ? null : parseNumericValue(row.estimatedAffectedCells)
   if (
-    typeof row.reviewItemId !== "string" ||
-    typeof row.workbookId !== "string" ||
-    typeof row.threadId !== "string" ||
-    typeof row.turnId !== "string" ||
-    typeof row.goalText !== "string" ||
-    typeof row.summary !== "string" ||
-    (row.scope !== "selection" && row.scope !== "sheet" && row.scope !== "workbook") ||
-    (row.riskClass !== "low" && row.riskClass !== "medium" && row.riskClass !== "high") ||
-    (row.reviewMode !== "manual" && row.reviewMode !== "ownerReview") ||
-    (row.ownerUserId !== null &&
-      row.ownerUserId !== undefined &&
-      typeof row.ownerUserId !== "string") ||
-    (row.status !== "pending" && row.status !== "approved" && row.status !== "rejected") ||
-    (row.decidedByUserId !== null &&
-      row.decidedByUserId !== undefined &&
-      typeof row.decidedByUserId !== "string") ||
+    typeof row.reviewItemId !== 'string' ||
+    typeof row.workbookId !== 'string' ||
+    typeof row.threadId !== 'string' ||
+    typeof row.turnId !== 'string' ||
+    typeof row.goalText !== 'string' ||
+    typeof row.summary !== 'string' ||
+    (row.scope !== 'selection' && row.scope !== 'sheet' && row.scope !== 'workbook') ||
+    (row.riskClass !== 'low' && row.riskClass !== 'medium' && row.riskClass !== 'high') ||
+    (row.reviewMode !== 'manual' && row.reviewMode !== 'ownerReview') ||
+    (row.ownerUserId !== null && row.ownerUserId !== undefined && typeof row.ownerUserId !== 'string') ||
+    (row.status !== 'pending' && row.status !== 'approved' && row.status !== 'rejected') ||
+    (row.decidedByUserId !== null && row.decidedByUserId !== undefined && typeof row.decidedByUserId !== 'string') ||
     baseRevision === null ||
     createdAtUnixMs === null ||
     !Array.isArray(row.commandsJson) ||
@@ -342,7 +307,7 @@ function normalizeReviewQueueItem(
     !Array.isArray(row.affectedRangesJson) ||
     !Array.isArray(row.recommendationsJson)
   ) {
-    return null;
+    return null
   }
   const reviewItem = {
     id: row.reviewItemId,
@@ -354,9 +319,9 @@ function normalizeReviewQueueItem(
     scope: row.scope,
     riskClass: row.riskClass,
     reviewMode: row.reviewMode,
-    ownerUserId: typeof row.ownerUserId === "string" ? row.ownerUserId : null,
+    ownerUserId: typeof row.ownerUserId === 'string' ? row.ownerUserId : null,
     status: row.status,
-    decidedByUserId: typeof row.decidedByUserId === "string" ? row.decidedByUserId : null,
+    decidedByUserId: typeof row.decidedByUserId === 'string' ? row.decidedByUserId : null,
     decidedAtUnixMs,
     recommendations: [...row.recommendationsJson],
     baseRevision,
@@ -365,8 +330,8 @@ function normalizeReviewQueueItem(
     commands: [...row.commandsJson],
     affectedRanges: [...row.affectedRangesJson],
     estimatedAffectedCells,
-  } satisfies WorkbookAgentReviewQueueItem;
-  return isWorkbookAgentReviewQueueItem(reviewItem) ? reviewItem : null;
+  } satisfies WorkbookAgentReviewQueueItem
+  return isWorkbookAgentReviewQueueItem(reviewItem) ? reviewItem : null
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {
@@ -383,32 +348,32 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
     )
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS execution_policy TEXT;
-  `);
+  `)
   await db.query(`
     UPDATE workbook_chat_thread
     SET execution_policy = CASE WHEN scope = 'shared' THEN 'ownerReview' ELSE 'autoApplyAll' END
     WHERE execution_policy IS NULL;
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ALTER COLUMN execution_policy SET DEFAULT 'autoApplyAll';
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ALTER COLUMN execution_policy SET NOT NULL;
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS entry_count BIGINT NOT NULL DEFAULT 0;
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS latest_entry_text TEXT;
-  `);
+  `)
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_chat_item (
       workbook_id TEXT NOT NULL,
@@ -428,7 +393,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       citations_json JSONB,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
     )
-  `);
+  `)
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_chat_tool_call (
       workbook_id TEXT NOT NULL,
@@ -444,11 +409,11 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       success BOOLEAN,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
     )
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_chat_item
       ADD COLUMN IF NOT EXISTS citations_json JSONB;
-  `);
+  `)
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_review_queue_item (
       workbook_id TEXT NOT NULL,
@@ -474,39 +439,35 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       recommendations_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id, review_item_id)
     )
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_tool_call_thread_order_idx
       ON workbook_chat_tool_call (workbook_id, thread_id, actor_user_id, sort_order ASC)
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_review_queue_item_thread_created_idx
       ON workbook_review_queue_item (workbook_id, thread_id, actor_user_id, created_at_unix_ms ASC)
-  `);
+  `)
 }
 
-function normalizeThreadSummary(
-  row: WorkbookChatThreadSummaryRow,
-): WorkbookAgentThreadSummary | null {
-  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
-  const entryCount = parseNumericValue(row.entryCount);
-  const reviewQueueItemCount = parseNumericValue(row.reviewQueueItemCount);
+function normalizeThreadSummary(row: WorkbookChatThreadSummaryRow): WorkbookAgentThreadSummary | null {
+  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
+  const entryCount = parseNumericValue(row.entryCount)
+  const reviewQueueItemCount = parseNumericValue(row.reviewQueueItemCount)
   if (
-    typeof row.threadId !== "string" ||
-    (row.scope !== "private" && row.scope !== "shared") ||
-    typeof row.ownerUserId !== "string" ||
+    typeof row.threadId !== 'string' ||
+    (row.scope !== 'private' && row.scope !== 'shared') ||
+    typeof row.ownerUserId !== 'string' ||
     updatedAtUnixMs === null ||
     entryCount === null ||
     reviewQueueItemCount === null ||
-    (row.latestEntryText !== null &&
-      row.latestEntryText !== undefined &&
-      typeof row.latestEntryText !== "string")
+    (row.latestEntryText !== null && row.latestEntryText !== undefined && typeof row.latestEntryText !== 'string')
   ) {
-    return null;
+    return null
   }
   return {
     threadId: row.threadId,
@@ -515,26 +476,18 @@ function normalizeThreadSummary(
     updatedAtUnixMs,
     entryCount,
     reviewQueueItemCount,
-    latestEntryText: typeof row.latestEntryText === "string" ? row.latestEntryText : null,
-  };
+    latestEntryText: typeof row.latestEntryText === 'string' ? row.latestEntryText : null,
+  }
 }
 
-function defaultExecutionPolicyForScope(
-  scope: WorkbookChatThreadScope,
-): WorkbookAgentExecutionPolicy {
-  return scope === "shared" ? "ownerReview" : "autoApplyAll";
+function defaultExecutionPolicyForScope(scope: WorkbookChatThreadScope): WorkbookAgentExecutionPolicy {
+  return scope === 'shared' ? 'ownerReview' : 'autoApplyAll'
 }
 
-export async function saveWorkbookAgentThreadState(
-  db: Queryable,
-  record: WorkbookAgentThreadStateRecord,
-): Promise<void> {
-  const persistedEntries = dedupeTimelineEntries(record.entries);
+export async function saveWorkbookAgentThreadState(db: Queryable, record: WorkbookAgentThreadStateRecord): Promise<void> {
+  const persistedEntries = dedupeTimelineEntries(record.entries)
   const latestEntryText =
-    [...persistedEntries]
-      .toReversed()
-      .find((entry) => typeof entry.text === "string" && entry.text.trim().length > 0)?.text ??
-    null;
+    [...persistedEntries].toReversed().find((entry) => typeof entry.text === 'string' && entry.text.trim().length > 0)?.text ?? null
   await db.query(
     `
       INSERT INTO workbook_chat_thread (
@@ -569,21 +522,21 @@ export async function saveWorkbookAgentThreadState(
       latestEntryText,
       record.updatedAtUnixMs,
     ],
-  );
+  )
   await db.query(
     `
       DELETE FROM workbook_chat_item
       WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
     `,
     [record.documentId, record.threadId, record.actorUserId],
-  );
+  )
   await db.query(
     `
       DELETE FROM workbook_chat_tool_call
       WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
     `,
     [record.documentId, record.threadId, record.actorUserId],
-  );
+  )
   await Promise.all(
     persistedEntries.map(async (entry, index) => {
       await db.query(
@@ -639,9 +592,9 @@ export async function saveWorkbookAgentThreadState(
           entry.success,
           JSON.stringify(entry.citations),
         ],
-      );
+      )
       if (!hasToolCallState(entry)) {
-        return;
+        return
       }
       await db.query(
         `
@@ -684,16 +637,16 @@ export async function saveWorkbookAgentThreadState(
           entry.outputText,
           entry.success,
         ],
-      );
+      )
     }),
-  );
+  )
   await db.query(
     `
       DELETE FROM workbook_review_queue_item
       WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
     `,
     [record.documentId, record.threadId, record.actorUserId],
-  );
+  )
   await Promise.all(
     record.reviewQueueItems.map(async (reviewItem) => {
       await db.query(
@@ -748,17 +701,17 @@ export async function saveWorkbookAgentThreadState(
           reviewItem.estimatedAffectedCells,
           JSON.stringify(reviewItem.recommendations),
         ],
-      );
+      )
     }),
-  );
+  )
 }
 
 export async function loadWorkbookAgentThreadState(
   db: Queryable,
   input: {
-    documentId: string;
-    threadId: string;
-    actorUserId: string;
+    documentId: string
+    threadId: string
+    actorUserId: string
   },
 ): Promise<WorkbookAgentThreadStateRecord | null> {
   const threadResult = await db.query<WorkbookChatThreadRow>(
@@ -781,24 +734,24 @@ export async function loadWorkbookAgentThreadState(
       LIMIT 1
     `,
     [input.documentId, input.threadId, input.actorUserId],
-  );
-  const thread = threadResult.rows[0];
-  const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs);
+  )
+  const thread = threadResult.rows[0]
+  const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs)
   const executionPolicy = isExecutionPolicy(thread?.executionPolicy)
     ? thread.executionPolicy
-    : thread?.scope === "private" || thread?.scope === "shared"
+    : thread?.scope === 'private' || thread?.scope === 'shared'
       ? defaultExecutionPolicyForScope(thread.scope)
-      : null;
+      : null
   if (
     !thread ||
-    typeof thread.workbookId !== "string" ||
-    typeof thread.threadId !== "string" ||
-    typeof thread.actorUserId !== "string" ||
-    (thread.scope !== "private" && thread.scope !== "shared") ||
+    typeof thread.workbookId !== 'string' ||
+    typeof thread.threadId !== 'string' ||
+    typeof thread.actorUserId !== 'string' ||
+    (thread.scope !== 'private' && thread.scope !== 'shared') ||
     updatedAtUnixMs === null ||
     executionPolicy === null
   ) {
-    return null;
+    return null
   }
   const [itemResult, toolCallResult, reviewQueueItemResult] = await Promise.all([
     db.query<WorkbookChatItemRow>(
@@ -869,25 +822,25 @@ export async function loadWorkbookAgentThreadState(
       `,
       [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
-  ]);
+  ])
   const toolCallsByEntryId = new Map(
     toolCallResult.rows.flatMap((row) => {
-      const normalized = normalizeToolCallRow(row);
-      return normalized ? [[normalized.entryId, normalized] as const] : [];
+      const normalized = normalizeToolCallRow(row)
+      return normalized ? [[normalized.entryId, normalized] as const] : []
     }),
-  );
+  )
   const entries = itemResult.rows
     .map((row) =>
       normalizeTimelineEntry({
         ...row,
-        ...(typeof row.entryId === "string" ? toolCallsByEntryId.get(row.entryId) : undefined),
+        ...(typeof row.entryId === 'string' ? toolCallsByEntryId.get(row.entryId) : undefined),
       }),
     )
-    .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null);
+    .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null)
   const reviewQueueItems = reviewQueueItemResult.rows.flatMap((row) => {
-    const normalized = normalizeReviewQueueItem(row);
-    return normalized ? [normalized] : [];
-  });
+    const normalized = normalizeReviewQueueItem(row)
+    return normalized ? [normalized] : []
+  })
   return {
     documentId: thread.workbookId,
     threadId: thread.threadId,
@@ -898,14 +851,14 @@ export async function loadWorkbookAgentThreadState(
     entries,
     reviewQueueItems,
     updatedAtUnixMs,
-  };
+  }
 }
 
 export async function listWorkbookAgentThreadSummaries(
   db: Queryable,
   input: {
-    documentId: string;
-    actorUserId: string;
+    documentId: string
+    actorUserId: string
   },
 ): Promise<WorkbookAgentThreadSummary[]> {
   const result = await db.query<WorkbookChatThreadSummaryRow>(
@@ -971,8 +924,6 @@ export async function listWorkbookAgentThreadSummaries(
       ORDER BY thread.updated_at_unix_ms DESC
     `,
     [input.documentId, input.actorUserId],
-  );
-  return result.rows
-    .map((row) => normalizeThreadSummary(row))
-    .filter((row): row is WorkbookAgentThreadSummary => row !== null);
+  )
+  return result.rows.map((row) => normalizeThreadSummary(row)).filter((row): row is WorkbookAgentThreadSummary => row !== null)
 }

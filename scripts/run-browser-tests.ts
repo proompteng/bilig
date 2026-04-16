@@ -1,399 +1,385 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync } from "node:fs";
-import net from "node:net";
+import { existsSync, readFileSync } from 'node:fs'
+import net from 'node:net'
 
-const textDecoder = new TextDecoder();
-const playwrightArgs = process.argv.slice(2);
-const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "auto";
+const textDecoder = new TextDecoder()
+const playwrightArgs = process.argv.slice(2)
+const requestedBrowserStack = process.env['BILIG_BROWSER_STACK'] ?? 'auto'
 const normalizedBrowserStack =
-  requestedBrowserStack === "compose" ||
-  requestedBrowserStack === "local" ||
-  requestedBrowserStack === "auto"
+  requestedBrowserStack === 'compose' || requestedBrowserStack === 'local' || requestedBrowserStack === 'auto'
     ? requestedBrowserStack
-    : "local";
-const isCi = process.env["CI"] === "1" || process.env["CI"] === "true";
+    : 'local'
+const isCi = process.env['CI'] === '1' || process.env['CI'] === 'true'
 if (requestedBrowserStack !== normalizedBrowserStack) {
-  console.warn(
-    `Unknown BILIG_BROWSER_STACK "${requestedBrowserStack}", defaulting to "local" stack.`,
-  );
+  console.warn(`Unknown BILIG_BROWSER_STACK "${requestedBrowserStack}", defaulting to "local" stack.`)
 }
 type ComposeInvocation = {
-  label: string;
-  command: string[];
-  version: string;
-};
+  label: string
+  command: string[]
+  version: string
+}
 
-let composeInvocation: ComposeInvocation | null = null;
-let composeInvocationProbed = false;
-let composeInvocationLogged = false;
+let composeInvocation: ComposeInvocation | null = null
+let composeInvocationProbed = false
+let composeInvocationLogged = false
 
 function commandExists(command: string): boolean {
-  return Bun.which(command) !== null;
+  return Bun.which(command) !== null
 }
 
 function parseProcRouteGateway(hexValue: string): string | null {
   if (!/^[0-9a-fA-F]{8}$/.test(hexValue)) {
-    return null;
+    return null
   }
   const octets = hexValue
     .match(/../g)
     ?.map((chunk) => Number.parseInt(chunk, 16))
-    .toReversed();
+    .toReversed()
   if (!octets || octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) {
-    return null;
+    return null
   }
-  return octets.join(".");
+  return octets.join('.')
 }
 
 function resolvePublishedServiceHosts(): string[] {
-  const explicitHost = process.env["BILIG_E2E_HOST"]?.trim();
+  const explicitHost = process.env['BILIG_E2E_HOST']?.trim()
   if (explicitHost) {
-    return [explicitHost];
+    return [explicitHost]
   }
 
-  const hosts = ["127.0.0.1", "host.docker.internal", "host.containers.internal"];
+  const hosts = ['127.0.0.1', 'host.docker.internal', 'host.containers.internal']
 
-  if (process.platform !== "linux" || !existsSync("/proc/net/route")) {
-    return hosts;
+  if (process.platform !== 'linux' || !existsSync('/proc/net/route')) {
+    return hosts
   }
 
   try {
-    const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
+    const routes = readFileSync('/proc/net/route', 'utf8').trim().split('\n').slice(1)
     for (const route of routes) {
-      const fields = route.trim().split(/\s+/);
-      const destination = fields[1] ?? "";
-      const gateway = fields[2] ?? "";
-      if (destination !== "00000000") {
-        continue;
+      const fields = route.trim().split(/\s+/)
+      const destination = fields[1] ?? ''
+      const gateway = fields[2] ?? ''
+      if (destination !== '00000000') {
+        continue
       }
-      const parsedGateway = parseProcRouteGateway(gateway);
+      const parsedGateway = parseProcRouteGateway(gateway)
       if (parsedGateway) {
-        hosts.push(parsedGateway);
+        hosts.push(parsedGateway)
       }
-      break;
+      break
     }
   } catch {}
 
-  return Array.from(new Set(hosts));
+  return Array.from(new Set(hosts))
 }
 
 function probeComposeInvocation(): ComposeInvocation | null {
   const composeCandidates = [
     {
-      label: "docker compose",
-      command: ["docker", "compose"],
-      runtimeProbe: ["docker", "ps"],
+      label: 'docker compose',
+      command: ['docker', 'compose'],
+      runtimeProbe: ['docker', 'ps'],
     },
     {
-      label: "podman compose",
-      command: ["podman", "compose"],
-      runtimeProbe: ["podman", "ps"],
+      label: 'podman compose',
+      command: ['podman', 'compose'],
+      runtimeProbe: ['podman', 'ps'],
     },
     {
-      label: "docker-compose",
-      command: ["docker-compose"],
-      runtimeProbe: ["docker", "ps"],
+      label: 'docker-compose',
+      command: ['docker-compose'],
+      runtimeProbe: ['docker', 'ps'],
     },
     {
-      label: "podman-compose",
-      command: ["podman-compose"],
-      runtimeProbe: ["podman", "ps"],
+      label: 'podman-compose',
+      command: ['podman-compose'],
+      runtimeProbe: ['podman', 'ps'],
     },
-  ];
+  ]
 
   for (const candidate of composeCandidates) {
     if (!commandExists(candidate.command[0])) {
-      continue;
+      continue
     }
 
-    const result = Bun.spawnSync([...candidate.command, "version"], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = Bun.spawnSync([...candidate.command, 'version'], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
     if (result.exitCode !== 0) {
-      continue;
+      continue
     }
 
     const runtimeProbe = Bun.spawnSync(candidate.runtimeProbe, {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
     if (runtimeProbe.exitCode !== 0) {
-      continue;
+      continue
     }
 
-    const version = [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)]
-      .join("")
-      .trim();
+    const version = [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join('').trim()
     return {
       label: candidate.label,
       command: candidate.command,
       version,
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
 function resolveComposeInvocation(): ComposeInvocation | null {
   if (!composeInvocationProbed) {
-    composeInvocation = probeComposeInvocation();
-    composeInvocationProbed = true;
+    composeInvocation = probeComposeInvocation()
+    composeInvocationProbed = true
   }
 
-  return composeInvocation;
+  return composeInvocation
 }
 
 function requireComposeInvocation(required: boolean): ComposeInvocation | null {
-  const invocation = resolveComposeInvocation();
+  const invocation = resolveComposeInvocation()
 
   if (!invocation && required) {
     throw new Error(
-      "container compose is required for BILIG_BROWSER_STACK=compose, but none of `docker compose`, `podman compose`, `docker-compose`, or `podman-compose` is available.",
-    );
+      'container compose is required for BILIG_BROWSER_STACK=compose, but none of `docker compose`, `podman compose`, `docker-compose`, or `podman-compose` is available.',
+    )
   }
 
   if (invocation && !composeInvocationLogged) {
-    const version = invocation.version ? ` (${invocation.version})` : "";
-    console.info(`compose is available via "${invocation.label}"${version}.`);
-    composeInvocationLogged = true;
+    const version = invocation.version ? ` (${invocation.version})` : ''
+    console.info(`compose is available via "${invocation.label}"${version}.`)
+    composeInvocationLogged = true
   }
 
-  return invocation;
+  return invocation
 }
 
-const compose = resolveComposeInvocation();
-const composeLabel = compose ? compose.label : "unavailable";
-const browserStack = normalizedBrowserStack === "compose" && compose ? "compose" : "local";
+const compose = resolveComposeInvocation()
+const composeLabel = compose ? compose.label : 'unavailable'
+const browserStack = normalizedBrowserStack === 'compose' && compose ? 'compose' : 'local'
 
-if (normalizedBrowserStack === "compose" && compose) {
-  console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`);
+if (normalizedBrowserStack === 'compose' && compose) {
+  console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`)
 }
 
-if (normalizedBrowserStack === "compose" && !compose && isCi) {
-  throw new Error(
-    "BILIG_BROWSER_STACK=compose is required in CI, but no supported compose command is available.",
-  );
+if (normalizedBrowserStack === 'compose' && !compose && isCi) {
+  throw new Error('BILIG_BROWSER_STACK=compose is required in CI, but no supported compose command is available.')
 }
 
-if (normalizedBrowserStack === "compose" && !compose && !isCi) {
-  const fallbackCommand =
-    "`docker compose`, `podman compose`, `docker-compose`, or `podman-compose`";
+if (normalizedBrowserStack === 'compose' && !compose && !isCi) {
+  const fallbackCommand = '`docker compose`, `podman compose`, `docker-compose`, or `podman-compose`'
   console.warn(
     `compose unavailable in this environment, falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
-  );
+  )
 }
-const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
-const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
-const composeStartupTimeoutMs = resolveTimeoutMs(
-  process.env["BILIG_E2E_STARTUP_TIMEOUT_MS"],
-  isCi ? 300_000 : 120_000,
-);
+const composeFile = process.env['BILIG_E2E_COMPOSE_FILE'] ?? 'compose.yaml'
+const composeProject = process.env['BILIG_E2E_COMPOSE_PROJECT'] ?? `bilig-e2e-${Date.now()}`
+const composeStartupTimeoutMs = resolveTimeoutMs(process.env['BILIG_E2E_STARTUP_TIMEOUT_MS'], isCi ? 300_000 : 120_000)
 
-const PREVIEW_PORTS = [4179, 4180];
+const PREVIEW_PORTS = [4179, 4180]
 
 function resolveTimeoutMs(value: string | undefined, fallbackMs: number): number {
   if (!value) {
-    return fallbackMs;
+    return fallbackMs
   }
 
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number.parseInt(value, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallbackMs;
+    return fallbackMs
   }
 
-  return parsed;
+  return parsed
 }
 
 function parsePidList(output: string): number[] {
   if (!output) {
-    return [];
+    return []
   }
   return output
     .split(/\s+/)
     .map((value) => Number.parseInt(value, 10))
-    .filter((value) => Number.isInteger(value));
+    .filter((value) => Number.isInteger(value))
 }
 
 function parseSsPids(output: string): number[] {
-  const matches = output.matchAll(/pid=(\d+)/g);
-  const pids: number[] = [];
+  const matches = output.matchAll(/pid=(\d+)/g)
+  const pids: number[] = []
   for (const match of matches) {
-    const pid = Number.parseInt(match[1] ?? "", 10);
+    const pid = Number.parseInt(match[1] ?? '', 10)
     if (Number.isInteger(pid)) {
-      pids.push(pid);
+      pids.push(pid)
     }
   }
-  return pids;
+  return pids
 }
 
 function getListeningPids(port: number): number[] {
-  if (commandExists("lsof")) {
-    const result = Bun.spawnSync(["lsof", "-tiTCP:" + String(port), "-sTCP:LISTEN"], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+  if (commandExists('lsof')) {
+    const result = Bun.spawnSync(['lsof', '-tiTCP:' + String(port), '-sTCP:LISTEN'], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    })
     if (result.exitCode !== 0) {
-      return [];
+      return []
     }
-    return parsePidList(textDecoder.decode(result.stdout).trim());
+    return parsePidList(textDecoder.decode(result.stdout).trim())
   }
 
-  if (commandExists("ss")) {
-    const result = Bun.spawnSync(["ss", "-ltnp", "sport = :" + String(port)], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+  if (commandExists('ss')) {
+    const result = Bun.spawnSync(['ss', '-ltnp', 'sport = :' + String(port)], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    })
     if (result.exitCode !== 0) {
-      return [];
+      return []
     }
-    return parseSsPids(textDecoder.decode(result.stdout));
+    return parseSsPids(textDecoder.decode(result.stdout))
   }
 
-  if (commandExists("netstat")) {
-    const result = Bun.spawnSync(["netstat", "-ltnp"], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+  if (commandExists('netstat')) {
+    const result = Bun.spawnSync(['netstat', '-ltnp'], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    })
     if (result.exitCode !== 0) {
-      return [];
+      return []
     }
     const lines = textDecoder
       .decode(result.stdout)
-      .split("\n")
-      .filter((line) => line.includes(":" + String(port)) && line.includes("LISTEN"));
-    const pids: number[] = [];
+      .split('\n')
+      .filter((line) => line.includes(':' + String(port)) && line.includes('LISTEN'))
+    const pids: number[] = []
     for (const line of lines) {
-      const fields = line.trim().split(/\s+/);
-      const program = fields.at(-1) ?? "";
-      const pid = Number.parseInt(program.split("/", 1)[0] ?? "", 10);
+      const fields = line.trim().split(/\s+/)
+      const program = fields.at(-1) ?? ''
+      const pid = Number.parseInt(program.split('/', 1)[0] ?? '', 10)
       if (Number.isInteger(pid)) {
-        pids.push(pid);
+        pids.push(pid)
       }
     }
-    return pids;
+    return pids
   }
 
-  if (commandExists("fuser")) {
-    const result = Bun.spawnSync(["fuser", "-n", "tcp", String(port)], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+  if (commandExists('fuser')) {
+    const result = Bun.spawnSync(['fuser', '-n', 'tcp', String(port)], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    })
     if (result.exitCode !== 0) {
-      return [];
+      return []
     }
-    return parsePidList(textDecoder.decode(result.stdout).trim());
+    return parsePidList(textDecoder.decode(result.stdout).trim())
   }
 
-  return [];
+  return []
 }
 
 function sleep(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
 async function reservePort(port: number): Promise<number | null> {
   return await new Promise<number | null>((resolve) => {
-    const server = net.createServer();
+    const server = net.createServer()
 
-    server.unref();
-    server.once("error", () => {
-      resolve(null);
-    });
+    server.unref()
+    server.once('error', () => {
+      resolve(null)
+    })
     server.listen(port, () => {
-      const address = server.address();
+      const address = server.address()
       server.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port);
-          return;
+        if (address && typeof address === 'object') {
+          resolve(address.port)
+          return
         }
-        resolve(null);
-      });
-    });
-  });
+        resolve(null)
+      })
+    })
+  })
 }
 
 async function resolvePort(envValue: string | undefined, preferredPort: number): Promise<string> {
   if (envValue) {
-    return envValue;
+    return envValue
   }
 
-  const preferred = await reservePort(preferredPort);
+  const preferred = await reservePort(preferredPort)
   if (preferred !== null) {
-    return String(preferred);
+    return String(preferred)
   }
 
-  const ephemeral = await reservePort(0);
+  const ephemeral = await reservePort(0)
   if (ephemeral !== null) {
-    return String(ephemeral);
+    return String(ephemeral)
   }
 
-  throw new Error(`Unable to allocate a free TCP port for browser tests near ${preferredPort}.`);
+  throw new Error(`Unable to allocate a free TCP port for browser tests near ${preferredPort}.`)
 }
 
-const e2eWebPort = await resolvePort(process.env["BILIG_E2E_WEB_PORT"], 4180);
-const e2eSyncServerPort = await resolvePort(process.env["BILIG_E2E_SYNC_SERVER_PORT"], 54422);
-const e2eZeroPort = await resolvePort(process.env["BILIG_E2E_ZERO_PORT"], 54849);
-const e2ePostgresPort = await resolvePort(process.env["BILIG_E2E_POSTGRES_PORT"], 55433);
-const e2eHostCandidates = resolvePublishedServiceHosts();
-const configuredE2eBaseUrl = process.env["BILIG_E2E_BASE_URL"];
-const configuredE2eSyncServerUrl = process.env["BILIG_E2E_SYNC_SERVER_URL"];
-const configuredE2eZeroKeepaliveUrl = process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"];
-let e2eHost = e2eHostCandidates[0] ?? "127.0.0.1";
+const e2eWebPort = await resolvePort(process.env['BILIG_E2E_WEB_PORT'], 4180)
+const e2eSyncServerPort = await resolvePort(process.env['BILIG_E2E_SYNC_SERVER_PORT'], 54422)
+const e2eZeroPort = await resolvePort(process.env['BILIG_E2E_ZERO_PORT'], 54849)
+const e2ePostgresPort = await resolvePort(process.env['BILIG_E2E_POSTGRES_PORT'], 55433)
+const e2eHostCandidates = resolvePublishedServiceHosts()
+const configuredE2eBaseUrl = process.env['BILIG_E2E_BASE_URL']
+const configuredE2eSyncServerUrl = process.env['BILIG_E2E_SYNC_SERVER_URL']
+const configuredE2eZeroKeepaliveUrl = process.env['BILIG_E2E_ZERO_KEEPALIVE_URL']
+let e2eHost = e2eHostCandidates[0] ?? '127.0.0.1'
 
 function getE2eBaseUrl(): string {
-  return configuredE2eBaseUrl ?? `http://${e2eHost}:${e2eWebPort}`;
+  return configuredE2eBaseUrl ?? `http://${e2eHost}:${e2eWebPort}`
 }
 
 function getE2eSyncServerUrl(): string {
-  return configuredE2eSyncServerUrl ?? `http://${e2eHost}:${e2eSyncServerPort}`;
+  return configuredE2eSyncServerUrl ?? `http://${e2eHost}:${e2eSyncServerPort}`
 }
 
 function getE2eZeroKeepaliveUrl(): string {
-  return configuredE2eZeroKeepaliveUrl ?? `${getE2eBaseUrl()}/zero/keepalive`;
+  return configuredE2eZeroKeepaliveUrl ?? `${getE2eBaseUrl()}/zero/keepalive`
 }
 
 function terminatePreviewServers(): void {
-  const pids = Array.from(new Set(PREVIEW_PORTS.flatMap((port) => getListeningPids(port))));
+  const pids = Array.from(new Set(PREVIEW_PORTS.flatMap((port) => getListeningPids(port))))
   if (pids.length === 0) {
-    return;
+    return
   }
 
   for (const pid of pids) {
     try {
-      process.kill(pid, "SIGTERM");
+      process.kill(pid, 'SIGTERM')
     } catch {}
   }
 
-  sleep(300);
+  sleep(300)
 
   for (const pid of pids) {
     try {
-      process.kill(pid, 0);
-      process.kill(pid, "SIGKILL");
+      process.kill(pid, 0)
+      process.kill(pid, 'SIGKILL')
     } catch {}
   }
 }
 
 function runPlaywright(args: string[]): void {
-  const result = Bun.spawnSync(["pnpm", "exec", "playwright", "test", ...args], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+  const result = Bun.spawnSync(['pnpm', 'exec', 'playwright', 'test', ...args], {
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
     env: {
       ...process.env,
       BILIG_BROWSER_STACK: browserStack,
-      BILIG_DEV_DISABLE_COMPOSE:
-        browserStack === "local" ? "1" : (process.env["BILIG_DEV_DISABLE_COMPOSE"] ?? "0"),
-      BILIG_E2E_REMOTE_SYNC:
-        browserStack === "local" ? "0" : (process.env["BILIG_E2E_REMOTE_SYNC"] ?? "1"),
+      BILIG_DEV_DISABLE_COMPOSE: browserStack === 'local' ? '1' : (process.env['BILIG_DEV_DISABLE_COMPOSE'] ?? '0'),
+      BILIG_E2E_REMOTE_SYNC: browserStack === 'local' ? '0' : (process.env['BILIG_E2E_REMOTE_SYNC'] ?? '1'),
       BILIG_E2E_WEB_PORT: e2eWebPort,
       BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
       BILIG_E2E_ZERO_PORT: e2eZeroPort,
@@ -403,40 +389,35 @@ function runPlaywright(args: string[]): void {
       BILIG_E2E_SYNC_SERVER_URL: getE2eSyncServerUrl(),
       BILIG_E2E_ZERO_KEEPALIVE_URL: getE2eZeroKeepaliveUrl(),
     },
-  });
+  })
   if (result.exitCode !== 0) {
-    process.exit(result.exitCode ?? 1);
+    process.exit(result.exitCode ?? 1)
   }
 }
 
-async function pollHttp(url: string, deadline: number, lastError = "unknown error"): Promise<void> {
+async function pollHttp(url: string, deadline: number, lastError = 'unknown error'): Promise<void> {
   if (Date.now() >= deadline) {
-    throw new Error(`Timed out waiting for ${url}: ${lastError}`);
+    throw new Error(`Timed out waiting for ${url}: ${lastError}`)
   }
   try {
-    const response = await fetch(url);
+    const response = await fetch(url)
     if (response.ok) {
-      return;
+      return
     }
-    lastError = `HTTP ${response.status}`;
+    lastError = `HTTP ${response.status}`
   } catch (error) {
-    lastError = error instanceof Error ? error.message : String(error);
+    lastError = error instanceof Error ? error.message : String(error)
   }
-  await Bun.sleep(250);
-  await pollHttp(url, deadline, lastError);
+  await Bun.sleep(250)
+  await pollHttp(url, deadline, lastError)
 }
 
 async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
-  await pollHttp(url, Date.now() + timeoutMs);
+  await pollHttp(url, Date.now() + timeoutMs)
 }
 
-async function resolveReachableHttpHost(
-  hosts: readonly string[],
-  port: string,
-  pathname: string,
-  timeoutMs: number,
-): Promise<string> {
-  return pollReachableHttpHost(hosts, port, pathname, Date.now() + timeoutMs);
+async function resolveReachableHttpHost(hosts: readonly string[], port: string, pathname: string, timeoutMs: number): Promise<string> {
+  return pollReachableHttpHost(hosts, port, pathname, Date.now() + timeoutMs)
 }
 
 async function pollReachableHttpHost(
@@ -444,175 +425,148 @@ async function pollReachableHttpHost(
   port: string,
   pathname: string,
   deadline: number,
-  lastError = "unknown error",
+  lastError = 'unknown error',
 ): Promise<string> {
   if (Date.now() >= deadline) {
-    throw new Error(
-      `Timed out waiting for a reachable host on port ${port} (${hosts.join(", ")}): ${lastError}`,
-    );
+    throw new Error(`Timed out waiting for a reachable host on port ${port} (${hosts.join(', ')}): ${lastError}`)
   }
 
-  const requestTimeoutMs = Math.max(250, Math.min(2_000, deadline - Date.now()));
+  const requestTimeoutMs = Math.max(250, Math.min(2_000, deadline - Date.now()))
 
   try {
     return await Promise.any(
       hosts.map(async (host) => {
-        const url = `http://${host}:${port}${pathname}`;
-        let response: Response;
+        const url = `http://${host}:${port}${pathname}`
+        let response: Response
         try {
-          response = await fetch(url, { signal: AbortSignal.timeout(requestTimeoutMs) });
+          response = await fetch(url, { signal: AbortSignal.timeout(requestTimeoutMs) })
         } catch (error) {
           throw new Error(`${url}: ${error instanceof Error ? error.message : String(error)}`, {
             cause: error,
-          });
+          })
         }
         if (!response.ok) {
-          throw new Error(`${url}: HTTP ${response.status}`);
+          throw new Error(`${url}: HTTP ${response.status}`)
         }
-        return host;
+        return host
       }),
-    );
+    )
   } catch (error) {
     const nextLastError =
       error instanceof AggregateError && error.errors.length > 0
-        ? error.errors
-            .map((entry) => (entry instanceof Error ? entry.message : String(entry)))
-            .join("; ")
+        ? error.errors.map((entry) => (entry instanceof Error ? entry.message : String(entry))).join('; ')
         : error instanceof Error
           ? error.message
-          : String(error);
-    await Bun.sleep(250);
-    return pollReachableHttpHost(hosts, port, pathname, deadline, nextLastError);
+          : String(error)
+    await Bun.sleep(250)
+    return pollReachableHttpHost(hosts, port, pathname, deadline, nextLastError)
   }
 }
 
-async function pollTcp(
-  host: string,
-  port: number,
-  deadline: number,
-  lastError = "unknown error",
-): Promise<void> {
+async function pollTcp(host: string, port: number, deadline: number, lastError = 'unknown error'): Promise<void> {
   if (Date.now() >= deadline) {
-    throw new Error(`Timed out waiting for ${host}:${port}: ${lastError}`);
+    throw new Error(`Timed out waiting for ${host}:${port}: ${lastError}`)
   }
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection({ host, port });
+      const socket = net.createConnection({ host, port })
       const cleanup = () => {
-        socket.removeAllListeners();
-        socket.destroy();
-      };
+        socket.removeAllListeners()
+        socket.destroy()
+      }
 
-      socket.once("connect", () => {
-        cleanup();
-        resolve();
-      });
-      socket.once("error", (error) => {
-        cleanup();
-        reject(error);
-      });
-    });
-    return;
+      socket.once('connect', () => {
+        cleanup()
+        resolve()
+      })
+      socket.once('error', (error) => {
+        cleanup()
+        reject(error)
+      })
+    })
+    return
   } catch (error) {
-    lastError = error instanceof Error ? error.message : String(error);
+    lastError = error instanceof Error ? error.message : String(error)
   }
 
-  await Bun.sleep(250);
-  await pollTcp(host, port, deadline, lastError);
+  await Bun.sleep(250)
+  await pollTcp(host, port, deadline, lastError)
 }
 
 async function waitForTcp(host: string, port: number, timeoutMs = 120_000): Promise<void> {
-  await pollTcp(host, port, Date.now() + timeoutMs);
+  await pollTcp(host, port, Date.now() + timeoutMs)
 }
 
 function runDockerCompose(args: string[], env = process.env): void {
-  const invocation = requireComposeInvocation(true);
+  const invocation = requireComposeInvocation(true)
   if (!invocation) {
-    throw new Error("compose command is unavailable; cannot run compose stack.");
+    throw new Error('compose command is unavailable; cannot run compose stack.')
   }
 
-  const result = Bun.spawnSync(
-    [...invocation.command, "-f", composeFile, "-p", composeProject, ...args],
-    {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-      env: {
-        ...env,
-        BILIG_E2E_WEB_PORT: e2eWebPort,
-        BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
-        BILIG_E2E_ZERO_PORT: e2eZeroPort,
-        BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
-      },
+  const result = Bun.spawnSync([...invocation.command, '-f', composeFile, '-p', composeProject, ...args], {
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+    env: {
+      ...env,
+      BILIG_E2E_WEB_PORT: e2eWebPort,
+      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
+      BILIG_E2E_ZERO_PORT: e2eZeroPort,
+      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
     },
-  );
+  })
   if (result.exitCode !== 0) {
-    throw new Error(
-      `${invocation.label} ${args.join(" ")} failed with exit code ${result.exitCode ?? 1}`,
-    );
+    throw new Error(`${invocation.label} ${args.join(' ')} failed with exit code ${result.exitCode ?? 1}`)
   }
 }
 
 function collectComposeLogs(): string {
-  const invocation = requireComposeInvocation(false);
+  const invocation = requireComposeInvocation(false)
   if (!invocation) {
-    return "compose command is unavailable; compose logs were not collected.";
+    return 'compose command is unavailable; compose logs were not collected.'
   }
 
-  const result = Bun.spawnSync(
-    [...invocation.command, "-f", composeFile, "-p", composeProject, "logs", "--no-color"],
-    {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
+  const result = Bun.spawnSync([...invocation.command, '-f', composeFile, '-p', composeProject, 'logs', '--no-color'], {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join('').trim()
 }
 
 async function runComposePlaywright(): Promise<void> {
-  requireComposeInvocation(true);
+  requireComposeInvocation(true)
 
-  terminatePreviewServers();
-  runDockerCompose(["up", "-d", "--build", "postgres", "bilig-app", "zero-cache"]);
+  terminatePreviewServers()
+  runDockerCompose(['up', '-d', '--build', 'postgres', 'bilig-app', 'zero-cache'])
   try {
     console.info(
-      `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(",")}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
-    );
-    if (
-      !process.env["BILIG_E2E_HOST"] &&
-      !configuredE2eBaseUrl &&
-      !configuredE2eSyncServerUrl &&
-      !configuredE2eZeroKeepaliveUrl
-    ) {
-      e2eHost = await resolveReachableHttpHost(
-        e2eHostCandidates,
-        e2eWebPort,
-        "/healthz",
-        composeStartupTimeoutMs,
-      );
-      console.info(`compose browser stack resolved host=${e2eHost}`);
+      `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(',')}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
+    )
+    if (!process.env['BILIG_E2E_HOST'] && !configuredE2eBaseUrl && !configuredE2eSyncServerUrl && !configuredE2eZeroKeepaliveUrl) {
+      e2eHost = await resolveReachableHttpHost(e2eHostCandidates, e2eWebPort, '/healthz', composeStartupTimeoutMs)
+      console.info(`compose browser stack resolved host=${e2eHost}`)
     }
-    await waitForHttp(`${getE2eBaseUrl()}/healthz`, composeStartupTimeoutMs);
-    await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs);
-    await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs);
-    await waitForHttp(getE2eZeroKeepaliveUrl(), composeStartupTimeoutMs);
-    runPlaywright(playwrightArgs);
+    await waitForHttp(`${getE2eBaseUrl()}/healthz`, composeStartupTimeoutMs)
+    await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs)
+    await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs)
+    await waitForHttp(getE2eZeroKeepaliveUrl(), composeStartupTimeoutMs)
+    runPlaywright(playwrightArgs)
   } catch (error) {
-    const logs = collectComposeLogs();
+    const logs = collectComposeLogs()
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
       cause: error,
-    });
+    })
   } finally {
-    runDockerCompose(["down", "-v", "--remove-orphans"]);
+    runDockerCompose(['down', '-v', '--remove-orphans'])
   }
 }
 
-if (browserStack === "compose") {
-  await runComposePlaywright();
+if (browserStack === 'compose') {
+  await runComposePlaywright()
 } else {
-  terminatePreviewServers();
-  runPlaywright(playwrightArgs);
-  terminatePreviewServers();
+  terminatePreviewServers()
+  runPlaywright(playwrightArgs)
+  terminatePreviewServers()
 }

@@ -1,72 +1,72 @@
 #!/usr/bin/env bun
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 interface MemorySnapshot {
-  readonly rssBytes: number;
-  readonly heapUsedBytes: number;
-  readonly heapTotalBytes: number;
-  readonly externalBytes: number;
-  readonly arrayBuffersBytes: number;
+  readonly rssBytes: number
+  readonly heapUsedBytes: number
+  readonly heapTotalBytes: number
+  readonly externalBytes: number
+  readonly arrayBuffersBytes: number
 }
 
 interface MemoryMeasurement {
-  readonly before: MemorySnapshot;
-  readonly after: MemorySnapshot;
-  readonly delta: MemorySnapshot;
+  readonly before: MemorySnapshot
+  readonly after: MemorySnapshot
+  readonly delta: MemorySnapshot
 }
 
 interface RecalcMetrics {
-  readonly recalcMs: number;
-  readonly wasmFormulaCount: number;
-  readonly jsFormulaCount: number;
+  readonly recalcMs: number
+  readonly wasmFormulaCount: number
+  readonly jsFormulaCount: number
 }
 
 interface LoadBenchmarkResult {
-  readonly materializedCells: number;
-  readonly elapsedMs: number;
-  readonly memory: MemoryMeasurement;
+  readonly materializedCells: number
+  readonly elapsedMs: number
+  readonly memory: MemoryMeasurement
 }
 
 interface EditBenchmarkResult {
-  readonly elapsedMs: number;
-  readonly metrics: RecalcMetrics;
-  readonly memory: MemoryMeasurement;
+  readonly elapsedMs: number
+  readonly metrics: RecalcMetrics
+  readonly memory: MemoryMeasurement
 }
 
 interface RangeAggregateBenchmarkResult {
-  readonly elapsedMs: number;
-  readonly metrics: RecalcMetrics;
-  readonly memory: MemoryMeasurement;
+  readonly elapsedMs: number
+  readonly metrics: RecalcMetrics
+  readonly memory: MemoryMeasurement
 }
 
 interface TopologyEditBenchmarkResult {
-  readonly elapsedMs: number;
-  readonly metrics: RecalcMetrics;
-  readonly memory: MemoryMeasurement;
+  readonly elapsedMs: number
+  readonly metrics: RecalcMetrics
+  readonly memory: MemoryMeasurement
 }
 
 interface RenderCommitBenchmarkResult {
-  readonly elapsedMs: number;
-  readonly memory: MemoryMeasurement;
+  readonly elapsedMs: number
+  readonly memory: MemoryMeasurement
 }
 
 interface WorkerWarmStartBenchmarkResult {
-  readonly materializedCells: number;
-  readonly elapsedMs: number;
-  readonly memory: MemoryMeasurement;
+  readonly materializedCells: number
+  readonly elapsedMs: number
+  readonly memory: MemoryMeasurement
 }
 
 interface WorkerVisibleEditBenchmarkResult {
-  readonly visiblePatchMs: number;
-  readonly commitMs: number;
+  readonly visiblePatchMs: number
+  readonly commitMs: number
 }
 
 interface WorkerReconnectCatchUpBenchmarkResult {
-  readonly catchUpMs: number;
-  readonly rebaseMs: number;
-  readonly submitDrainMs: number;
-  readonly ackMs: number;
+  readonly catchUpMs: number
+  readonly rebaseMs: number
+  readonly submitDrainMs: number
+  readonly ackMs: number
 }
 
 const baseBudgets = {
@@ -85,49 +85,43 @@ const baseBudgets = {
   workerWarmStart250kP95Ms: 700,
   workerVisibleEdit10kP95Ms: 16,
   workerReconnectCatchUp100PendingP95Ms: 2000,
-};
-const toleranceMultiplier = Number.parseFloat(
-  process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"),
-);
-const budgets = Object.fromEntries(
-  Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier]),
-);
+}
+const toleranceMultiplier = Number.parseFloat(process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? '1.5' : '1'))
+const budgets = Object.fromEntries(Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier]))
 
 function assertBudget(label, actual, threshold, formatter = formatMs) {
   if (actual > threshold) {
-    throw new Error(`${label} exceeded budget: ${formatter(actual)} > ${formatter(threshold)}`);
+    throw new Error(`${label} exceeded budget: ${formatter(actual)} > ${formatter(threshold)}`)
   }
 }
 
 function assertAllRunsUseWasmFastPath(label, runs, expectedWasmFormulaCount) {
   const degradedRun = runs.find((run) => {
-    return (
-      run.metrics.wasmFormulaCount < expectedWasmFormulaCount || run.metrics.jsFormulaCount !== 0
-    );
-  });
+    return run.metrics.wasmFormulaCount < expectedWasmFormulaCount || run.metrics.jsFormulaCount !== 0
+  })
   if (!degradedRun) {
-    return;
+    return
   }
   throw new Error(
     `${label} did not stay on the wasm fast path: wasm=${degradedRun.metrics.wasmFormulaCount}, js=${degradedRun.metrics.jsFormulaCount}`,
-  );
+  )
 }
 
 function formatMs(value) {
-  return `${value.toFixed(2)}ms`;
+  return `${value.toFixed(2)}ms`
 }
 
 function formatBytes(value) {
-  return `${(value / (1024 * 1024)).toFixed(2)}MB`;
+  return `${(value / (1024 * 1024)).toFixed(2)}MB`
 }
 
 function summarizeNumbers(values) {
   if (values.length === 0) {
-    throw new Error("Cannot summarize empty benchmark samples");
+    throw new Error('Cannot summarize empty benchmark samples')
   }
-  const samples = [...values].toSorted((left, right) => left - right);
+  const samples = [...values].toSorted((left, right) => left - right)
 
-  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length
   return {
     samples,
     min: samples[0],
@@ -135,33 +129,29 @@ function summarizeNumbers(values) {
     p95: quantile(samples, 0.95),
     max: samples[samples.length - 1],
     mean,
-  };
+  }
 }
 
 function quantile(sortedValues, percentile) {
   if (percentile <= 0) {
-    return sortedValues[0];
+    return sortedValues[0]
   }
   if (percentile >= 1) {
-    return sortedValues[sortedValues.length - 1];
+    return sortedValues[sortedValues.length - 1]
   }
-  const index = Math.ceil(percentile * sortedValues.length) - 1;
-  return sortedValues[Math.max(0, Math.min(sortedValues.length - 1, index))];
+  const index = Math.ceil(percentile * sortedValues.length) - 1
+  return sortedValues[Math.max(0, Math.min(sortedValues.length - 1, index))]
 }
 
 function collectGarbage(): void {
-  const bunGc = Reflect.get(globalThis, "Bun");
-  if (
-    typeof bunGc === "object" &&
-    bunGc !== null &&
-    typeof Reflect.get(bunGc, "gc") === "function"
-  ) {
-    Reflect.get(bunGc, "gc").call(bunGc, true);
-    return;
+  const bunGc = Reflect.get(globalThis, 'Bun')
+  if (typeof bunGc === 'object' && bunGc !== null && typeof Reflect.get(bunGc, 'gc') === 'function') {
+    Reflect.get(bunGc, 'gc').call(bunGc, true)
+    return
   }
-  const gc = Reflect.get(globalThis, "gc");
-  if (typeof gc === "function") {
-    gc();
+  const gc = Reflect.get(globalThis, 'gc')
+  if (typeof gc === 'function') {
+    gc()
   }
 }
 
@@ -171,292 +161,203 @@ async function sampleBenchmark<T>(
   { warmupIterations = 0 }: { warmupIterations?: number } = {},
 ): Promise<T[]> {
   const run = async () => {
-    collectGarbage();
-    const result = await runner();
-    collectGarbage();
-    return result;
-  };
+    collectGarbage()
+    const result = await runner()
+    collectGarbage()
+    return result
+  }
 
   await Array.from({ length: warmupIterations }).reduce((previous) => {
-    return previous.then(() => run());
-  }, Promise.resolve());
+    return previous.then(() => run())
+  }, Promise.resolve())
 
-  const runs = [];
+  const runs = []
   await Array.from({ length: iterations }).reduce((previous) => {
     return previous.then(() =>
       run().then((result) => {
-        return runs.push(result);
+        return runs.push(result)
       }),
-    );
-  }, Promise.resolve());
-  return runs;
+    )
+  }, Promise.resolve())
+  return runs
 }
 
 function benchmarkScriptPath(relativePath: string): string {
-  return fileURLToPath(new URL(`../${relativePath}`, import.meta.url));
+  return fileURLToPath(new URL(`../${relativePath}`, import.meta.url))
 }
 
 async function runIsolatedBenchmark<T>(scriptPath: string, args: readonly string[]): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const child = spawn("node", ["--import", "tsx", scriptPath, ...args], {
+    const child = spawn('node', ['--import', 'tsx', scriptPath, ...args], {
       cwd: process.cwd(),
       env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
 
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString()
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString()
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(stderr || stdout || `Benchmark process exited with code ${String(code)}`));
-        return;
+        reject(new Error(stderr || stdout || `Benchmark process exited with code ${String(code)}`))
+        return
       }
       try {
-        resolve(JSON.parse(stdout));
+        resolve(JSON.parse(stdout))
       } catch (error) {
-        reject(
-          new Error(
-            `Failed to parse benchmark output from ${scriptPath}: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
+        reject(new Error(`Failed to parse benchmark output from ${scriptPath}: ${error instanceof Error ? error.message : String(error)}`))
       }
-    });
-  });
+    })
+  })
 }
 
 export function runIsolatedLoadBenchmark(input: number | string): Promise<LoadBenchmarkResult> {
-  return runIsolatedBenchmark<LoadBenchmarkResult>(
-    benchmarkScriptPath("packages/benchmarks/src/benchmark-load.ts"),
-    [String(input)],
-  );
+  return runIsolatedBenchmark<LoadBenchmarkResult>(benchmarkScriptPath('packages/benchmarks/src/benchmark-load.ts'), [String(input)])
 }
 
 export function runIsolatedEditBenchmark(downstreamCount = 10_000): Promise<EditBenchmarkResult> {
-  return runIsolatedBenchmark<EditBenchmarkResult>(
-    benchmarkScriptPath("packages/benchmarks/src/benchmark-edit.ts"),
-    [String(downstreamCount)],
-  );
+  return runIsolatedBenchmark<EditBenchmarkResult>(benchmarkScriptPath('packages/benchmarks/src/benchmark-edit.ts'), [
+    String(downstreamCount),
+  ])
 }
 
-export function runIsolatedRangeAggregateBenchmark(
-  sourceCount = 1_024,
-  aggregateCount = 10_000,
-): Promise<RangeAggregateBenchmarkResult> {
-  return runIsolatedBenchmark<RangeAggregateBenchmarkResult>(
-    benchmarkScriptPath("packages/benchmarks/src/benchmark-range-heavy.ts"),
-    [String(sourceCount), String(aggregateCount)],
-  );
+export function runIsolatedRangeAggregateBenchmark(sourceCount = 1_024, aggregateCount = 10_000): Promise<RangeAggregateBenchmarkResult> {
+  return runIsolatedBenchmark<RangeAggregateBenchmarkResult>(benchmarkScriptPath('packages/benchmarks/src/benchmark-range-heavy.ts'), [
+    String(sourceCount),
+    String(aggregateCount),
+  ])
 }
 
-export function runIsolatedTopologyEditBenchmark(
-  chainLength = 10_000,
-): Promise<TopologyEditBenchmarkResult> {
-  return runIsolatedBenchmark<TopologyEditBenchmarkResult>(
-    benchmarkScriptPath("packages/benchmarks/src/benchmark-topology-edit.ts"),
-    [String(chainLength)],
-  );
+export function runIsolatedTopologyEditBenchmark(chainLength = 10_000): Promise<TopologyEditBenchmarkResult> {
+  return runIsolatedBenchmark<TopologyEditBenchmarkResult>(benchmarkScriptPath('packages/benchmarks/src/benchmark-topology-edit.ts'), [
+    String(chainLength),
+  ])
 }
 
-export function runIsolatedRenderCommitBenchmark(
-  declaredCells = 10_000,
-): Promise<RenderCommitBenchmarkResult> {
-  return runIsolatedBenchmark<RenderCommitBenchmarkResult>(
-    benchmarkScriptPath("packages/benchmarks/src/benchmark-renderer.ts"),
-    [String(declaredCells)],
-  );
+export function runIsolatedRenderCommitBenchmark(declaredCells = 10_000): Promise<RenderCommitBenchmarkResult> {
+  return runIsolatedBenchmark<RenderCommitBenchmarkResult>(benchmarkScriptPath('packages/benchmarks/src/benchmark-renderer.ts'), [
+    String(declaredCells),
+  ])
 }
 
-export function runIsolatedWorkerWarmStartBenchmark(
-  input: number | string,
-): Promise<WorkerWarmStartBenchmarkResult> {
-  return runIsolatedBenchmark<WorkerWarmStartBenchmarkResult>(
-    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
-    ["warm-start", String(input)],
-  );
+export function runIsolatedWorkerWarmStartBenchmark(input: number | string): Promise<WorkerWarmStartBenchmarkResult> {
+  return runIsolatedBenchmark<WorkerWarmStartBenchmarkResult>(benchmarkScriptPath('scripts/bench-worker-runtime.ts'), [
+    'warm-start',
+    String(input),
+  ])
 }
 
-export function runIsolatedWorkerVisibleEditBenchmark(
-  materializedCells = 10_000,
-): Promise<WorkerVisibleEditBenchmarkResult> {
-  return runIsolatedBenchmark<WorkerVisibleEditBenchmarkResult>(
-    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
-    ["visible-edit", String(materializedCells)],
-  );
+export function runIsolatedWorkerVisibleEditBenchmark(materializedCells = 10_000): Promise<WorkerVisibleEditBenchmarkResult> {
+  return runIsolatedBenchmark<WorkerVisibleEditBenchmarkResult>(benchmarkScriptPath('scripts/bench-worker-runtime.ts'), [
+    'visible-edit',
+    String(materializedCells),
+  ])
 }
 
 export function runIsolatedWorkerReconnectCatchUpBenchmark(
   materializedCells = 10_000,
   pendingMutationCount = 100,
 ): Promise<WorkerReconnectCatchUpBenchmarkResult> {
-  return runIsolatedBenchmark<WorkerReconnectCatchUpBenchmarkResult>(
-    benchmarkScriptPath("scripts/bench-worker-runtime.ts"),
-    ["reconnect-catch-up", String(materializedCells), String(pendingMutationCount)],
-  );
+  return runIsolatedBenchmark<WorkerReconnectCatchUpBenchmarkResult>(benchmarkScriptPath('scripts/bench-worker-runtime.ts'), [
+    'reconnect-catch-up',
+    String(materializedCells),
+    String(pendingMutationCount),
+  ])
 }
 
 export async function runBenchContracts(): Promise<void> {
-  const loadRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-100k"), 5, {
+  const loadRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark('dense-mixed-100k'), 5, {
     warmupIterations: 1,
-  });
-  const load250kRuns = await sampleBenchmark(
-    () => runIsolatedLoadBenchmark("dense-mixed-250k"),
-    3,
-    {
-      warmupIterations: 1,
-    },
-  );
+  })
+  const load250kRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark('dense-mixed-250k'), 3, {
+    warmupIterations: 1,
+  })
   const editRuns = await sampleBenchmark(() => runIsolatedEditBenchmark(10_000), 5, {
     warmupIterations: 1,
-  });
-  const rangeRuns = await sampleBenchmark(
-    () => runIsolatedRangeAggregateBenchmark(1_024, 10_000),
-    3,
-    {
-      warmupIterations: 1,
-    },
-  );
+  })
+  const rangeRuns = await sampleBenchmark(() => runIsolatedRangeAggregateBenchmark(1_024, 10_000), 3, {
+    warmupIterations: 1,
+  })
   const topologyRuns = await sampleBenchmark(() => runIsolatedTopologyEditBenchmark(10_000), 3, {
     warmupIterations: 1,
-  });
+  })
   const renderRuns = await sampleBenchmark(() => runIsolatedRenderCommitBenchmark(10_000), 5, {
     warmupIterations: 1,
-  });
-  const workerWarmStartRuns = await sampleBenchmark(
-    () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-100k"),
-    3,
-    {
-      warmupIterations: 1,
-    },
-  );
-  const workerWarmStart250kRuns = await sampleBenchmark(
-    () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-250k"),
-    3,
-    {
-      warmupIterations: 1,
-    },
-  );
-  const workerVisibleEditRuns = await sampleBenchmark(
-    () => runIsolatedWorkerVisibleEditBenchmark(10_000),
-    5,
-    {
-      warmupIterations: 1,
-    },
-  );
-  const workerReconnectCatchUpRuns = await sampleBenchmark(
-    () => runIsolatedWorkerReconnectCatchUpBenchmark(10_000, 100),
-    3,
-    {
-      warmupIterations: 1,
-    },
-  );
+  })
+  const workerWarmStartRuns = await sampleBenchmark(() => runIsolatedWorkerWarmStartBenchmark('dense-mixed-100k'), 3, {
+    warmupIterations: 1,
+  })
+  const workerWarmStart250kRuns = await sampleBenchmark(() => runIsolatedWorkerWarmStartBenchmark('dense-mixed-250k'), 3, {
+    warmupIterations: 1,
+  })
+  const workerVisibleEditRuns = await sampleBenchmark(() => runIsolatedWorkerVisibleEditBenchmark(10_000), 5, {
+    warmupIterations: 1,
+  })
+  const workerReconnectCatchUpRuns = await sampleBenchmark(() => runIsolatedWorkerReconnectCatchUpBenchmark(10_000, 100), 3, {
+    warmupIterations: 1,
+  })
 
-  const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
-  const load250kElapsed = summarizeNumbers(load250kRuns.map((run) => run.elapsedMs));
-  const loadWorkingSetDelta = summarizeNumbers(
-    loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
-  );
-  const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.after.heapUsedBytes));
+  const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs))
+  const load250kElapsed = summarizeNumbers(load250kRuns.map((run) => run.elapsedMs))
+  const loadWorkingSetDelta = summarizeNumbers(loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes))
+  const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.after.heapUsedBytes))
 
-  const editElapsed = summarizeNumbers(editRuns.map((run) => run.elapsedMs));
-  const editRecalc = summarizeNumbers(editRuns.map((run) => run.metrics.recalcMs));
-  const editRssAfter = summarizeNumbers(editRuns.map((run) => run.memory.after.rssBytes));
+  const editElapsed = summarizeNumbers(editRuns.map((run) => run.elapsedMs))
+  const editRecalc = summarizeNumbers(editRuns.map((run) => run.metrics.recalcMs))
+  const editRssAfter = summarizeNumbers(editRuns.map((run) => run.memory.after.rssBytes))
 
-  const rangeElapsed = summarizeNumbers(rangeRuns.map((run) => run.elapsedMs));
-  const rangeRecalc = summarizeNumbers(rangeRuns.map((run) => run.metrics.recalcMs));
-  const rangeRssAfter = summarizeNumbers(rangeRuns.map((run) => run.memory.after.rssBytes));
+  const rangeElapsed = summarizeNumbers(rangeRuns.map((run) => run.elapsedMs))
+  const rangeRecalc = summarizeNumbers(rangeRuns.map((run) => run.metrics.recalcMs))
+  const rangeRssAfter = summarizeNumbers(rangeRuns.map((run) => run.memory.after.rssBytes))
 
-  const topologyElapsed = summarizeNumbers(topologyRuns.map((run) => run.elapsedMs));
-  const topologyRecalc = summarizeNumbers(topologyRuns.map((run) => run.metrics.recalcMs));
-  const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.after.rssBytes));
+  const topologyElapsed = summarizeNumbers(topologyRuns.map((run) => run.elapsedMs))
+  const topologyRecalc = summarizeNumbers(topologyRuns.map((run) => run.metrics.recalcMs))
+  const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.after.rssBytes))
 
-  const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
-  const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
-  const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs));
-  const workerWarmStart250kElapsed = summarizeNumbers(
-    workerWarmStart250kRuns.map((run) => run.elapsedMs),
-  );
+  const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs))
+  const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes))
+  const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs))
+  const workerWarmStart250kElapsed = summarizeNumbers(workerWarmStart250kRuns.map((run) => run.elapsedMs))
   const workerWarmStartWorkingSetDelta = summarizeNumbers(
-    workerWarmStartRuns.map(
-      (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
-    ),
-  );
+    workerWarmStartRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
+  )
   const workerWarmStart250kWorkingSetDelta = summarizeNumbers(
-    workerWarmStart250kRuns.map(
-      (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
-    ),
-  );
-  const workerVisibleEditElapsed = summarizeNumbers(
-    workerVisibleEditRuns.map((run) => run.visiblePatchMs),
-  );
-  const workerVisibleEditCommitElapsed = summarizeNumbers(
-    workerVisibleEditRuns.map((run) => run.commitMs),
-  );
-  const workerReconnectCatchUpElapsed = summarizeNumbers(
-    workerReconnectCatchUpRuns.map((run) => run.catchUpMs),
-  );
-  const workerReconnectRebaseElapsed = summarizeNumbers(
-    workerReconnectCatchUpRuns.map((run) => run.rebaseMs),
-  );
-  const workerReconnectSubmitDrainElapsed = summarizeNumbers(
-    workerReconnectCatchUpRuns.map((run) => run.submitDrainMs),
-  );
-  const workerReconnectAckElapsed = summarizeNumbers(
-    workerReconnectCatchUpRuns.map((run) => run.ackMs),
-  );
+    workerWarmStart250kRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
+  )
+  const workerVisibleEditElapsed = summarizeNumbers(workerVisibleEditRuns.map((run) => run.visiblePatchMs))
+  const workerVisibleEditCommitElapsed = summarizeNumbers(workerVisibleEditRuns.map((run) => run.commitMs))
+  const workerReconnectCatchUpElapsed = summarizeNumbers(workerReconnectCatchUpRuns.map((run) => run.catchUpMs))
+  const workerReconnectRebaseElapsed = summarizeNumbers(workerReconnectCatchUpRuns.map((run) => run.rebaseMs))
+  const workerReconnectSubmitDrainElapsed = summarizeNumbers(workerReconnectCatchUpRuns.map((run) => run.submitDrainMs))
+  const workerReconnectAckElapsed = summarizeNumbers(workerReconnectCatchUpRuns.map((run) => run.ackMs))
 
-  assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
+  assertAllRunsUseWasmFastPath('10k range aggregate benchmark', rangeRuns, 10_000)
 
-  assertBudget("100k snapshot load p95", loadElapsed.p95, budgets.load100kP95Ms);
-  assertBudget("250k snapshot load p95", load250kElapsed.p95, budgets.load250kP95Ms);
+  assertBudget('100k snapshot load p95', loadElapsed.p95, budgets.load100kP95Ms)
+  assertBudget('250k snapshot load p95', load250kElapsed.p95, budgets.load250kP95Ms)
+  assertBudget('100k snapshot load working-set delta', loadWorkingSetDelta.max, budgets.load100kWorkingSetDeltaBytes, formatBytes)
+  assertBudget('10k downstream edit p95', editElapsed.p95, budgets.edit10kElapsedP95Ms)
+  assertBudget('10k downstream recalc median', editRecalc.median, budgets.edit10kRecalcMedianMs)
+  assertBudget('10k downstream recalc p95', editRecalc.p95, budgets.edit10kRecalcP95Ms)
+  assertBudget('10k range aggregate edit p95', rangeElapsed.p95, budgets.rangeAggregates10kElapsedP95Ms)
+  assertBudget('10k range aggregate recalc p95', rangeRecalc.p95, budgets.rangeAggregates10kRecalcP95Ms)
+  assertBudget('10k topology edit p95', topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms)
+  assertBudget('10k topology recalc p95', topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms)
+  assertBudget('10k render commit p95', renderElapsed.p95, budgets.renderCommit10kP95Ms)
+  assertBudget('100k worker warm-start p95', workerWarmStartElapsed.p95, budgets.workerWarmStart100kP95Ms)
+  assertBudget('250k worker warm-start p95', workerWarmStart250kElapsed.p95, budgets.workerWarmStart250kP95Ms)
+  assertBudget('10k worker local visible edit p95', workerVisibleEditElapsed.p95, budgets.workerVisibleEdit10kP95Ms)
   assertBudget(
-    "100k snapshot load working-set delta",
-    loadWorkingSetDelta.max,
-    budgets.load100kWorkingSetDeltaBytes,
-    formatBytes,
-  );
-  assertBudget("10k downstream edit p95", editElapsed.p95, budgets.edit10kElapsedP95Ms);
-  assertBudget("10k downstream recalc median", editRecalc.median, budgets.edit10kRecalcMedianMs);
-  assertBudget("10k downstream recalc p95", editRecalc.p95, budgets.edit10kRecalcP95Ms);
-  assertBudget(
-    "10k range aggregate edit p95",
-    rangeElapsed.p95,
-    budgets.rangeAggregates10kElapsedP95Ms,
-  );
-  assertBudget(
-    "10k range aggregate recalc p95",
-    rangeRecalc.p95,
-    budgets.rangeAggregates10kRecalcP95Ms,
-  );
-  assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
-  assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
-  assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
-  assertBudget(
-    "100k worker warm-start p95",
-    workerWarmStartElapsed.p95,
-    budgets.workerWarmStart100kP95Ms,
-  );
-  assertBudget(
-    "250k worker warm-start p95",
-    workerWarmStart250kElapsed.p95,
-    budgets.workerWarmStart250kP95Ms,
-  );
-  assertBudget(
-    "10k worker local visible edit p95",
-    workerVisibleEditElapsed.p95,
-    budgets.workerVisibleEdit10kP95Ms,
-  );
-  assertBudget(
-    "100 pending worker reconnect catch-up p95",
+    '100 pending worker reconnect catch-up p95',
     workerReconnectCatchUpElapsed.p95,
     budgets.workerReconnectCatchUp100PendingP95Ms,
-  );
+  )
 
   console.log(
     JSON.stringify(
@@ -478,8 +379,8 @@ export async function runBenchContracts(): Promise<void> {
         },
         results: {
           load100k: {
-            scenario: "load",
-            corpusCaseId: "dense-mixed-100k",
+            scenario: 'load',
+            corpusCaseId: 'dense-mixed-100k',
             materializedCells: loadRuns[0]?.materializedCells ?? 100_000,
             elapsedMs: loadElapsed,
             workingSetDeltaBytes: loadWorkingSetDelta,
@@ -487,14 +388,14 @@ export async function runBenchContracts(): Promise<void> {
             runs: loadRuns,
           },
           load250k: {
-            scenario: "load",
-            corpusCaseId: "dense-mixed-250k",
+            scenario: 'load',
+            corpusCaseId: 'dense-mixed-250k',
             materializedCells: load250kRuns[0]?.materializedCells ?? 250_000,
             elapsedMs: load250kElapsed,
             runs: load250kRuns,
           },
           edit10k: {
-            scenario: "single-edit",
+            scenario: 'single-edit',
             downstreamCount: 10_000,
             elapsedMs: editElapsed,
             recalcMs: editRecalc,
@@ -502,7 +403,7 @@ export async function runBenchContracts(): Promise<void> {
             runs: editRuns,
           },
           rangeAggregates10k: {
-            scenario: "range-aggregates",
+            scenario: 'range-aggregates',
             sourceCount: 1_024,
             aggregateCount: 10_000,
             elapsedMs: rangeElapsed,
@@ -511,7 +412,7 @@ export async function runBenchContracts(): Promise<void> {
             runs: rangeRuns,
           },
           topologyEdit10k: {
-            scenario: "topology-edit",
+            scenario: 'topology-edit',
             chainLength: 10_000,
             elapsedMs: topologyElapsed,
             recalcMs: topologyRecalc,
@@ -519,37 +420,37 @@ export async function runBenchContracts(): Promise<void> {
             runs: topologyRuns,
           },
           renderCommit10k: {
-            scenario: "render-commit",
+            scenario: 'render-commit',
             declaredCells: 10_000,
             elapsedMs: renderElapsed,
             rssAfterBytes: renderRssAfter,
             runs: renderRuns,
           },
           workerWarmStart100k: {
-            scenario: "worker-warm-start",
-            corpusCaseId: "dense-mixed-100k",
+            scenario: 'worker-warm-start',
+            corpusCaseId: 'dense-mixed-100k',
             materializedCells: workerWarmStartRuns[0]?.materializedCells ?? 100_000,
             elapsedMs: workerWarmStartElapsed,
             workingSetDeltaBytes: workerWarmStartWorkingSetDelta,
             runs: workerWarmStartRuns,
           },
           workerWarmStart250k: {
-            scenario: "worker-warm-start",
-            corpusCaseId: "dense-mixed-250k",
+            scenario: 'worker-warm-start',
+            corpusCaseId: 'dense-mixed-250k',
             materializedCells: workerWarmStart250kRuns[0]?.materializedCells ?? 250_000,
             elapsedMs: workerWarmStart250kElapsed,
             workingSetDeltaBytes: workerWarmStart250kWorkingSetDelta,
             runs: workerWarmStart250kRuns,
           },
           workerVisibleEdit10k: {
-            scenario: "worker-visible-edit",
+            scenario: 'worker-visible-edit',
             materializedCells: 10_000,
             visiblePatchMs: workerVisibleEditElapsed,
             commitMs: workerVisibleEditCommitElapsed,
             runs: workerVisibleEditRuns,
           },
           workerReconnectCatchUp100Pending: {
-            scenario: "worker-reconnect-catch-up",
+            scenario: 'worker-reconnect-catch-up',
             materializedCells: 10_000,
             pendingMutationCount: 100,
             catchUpMs: workerReconnectCatchUpElapsed,
@@ -563,9 +464,9 @@ export async function runBenchContracts(): Promise<void> {
       null,
       2,
     ),
-  );
+  )
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  await runBenchContracts();
+  await runBenchContracts()
 }

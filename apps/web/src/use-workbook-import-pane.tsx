@@ -1,27 +1,27 @@
-import { useCallback, useMemo, useState } from "react";
-import { Button } from "@base-ui/react/button";
-import type { WorkbookLoadedResponse } from "@bilig/agent-api";
-import type { ImportedWorkbookPreview } from "@bilig/excel-import";
-import { WorkbookImportPanel } from "./WorkbookImportPanel.js";
-import { workbookHeaderActionButtonClass } from "./workbook-header-controls.js";
+import { useCallback, useMemo, useState } from 'react'
+import { Button } from '@base-ui/react/button'
+import type { WorkbookLoadedResponse } from '@bilig/agent-api'
+import type { ImportedWorkbookPreview } from '@bilig/excel-import'
+import { WorkbookImportPanel } from './WorkbookImportPanel.js'
+import { workbookHeaderActionButtonClass } from './workbook-header-controls.js'
 import {
   finalizeWorkbookImport,
   previewWorkbookImport,
   resolveImportedWorkbookNavigationUrl,
   resolveWorkbookImportContentType,
-} from "./workbook-import-client.js";
+} from './workbook-import-client.js'
 
 interface StagedWorkbookImport {
-  file: File;
-  preview: ImportedWorkbookPreview;
+  file: File
+  preview: ImportedWorkbookPreview
 }
 
 export function useWorkbookImportPane(input: {
-  readonly currentDocumentId: string;
-  readonly enabled: boolean;
-  readonly previewFile?: typeof previewWorkbookImport;
-  readonly finalizeImport?: typeof finalizeWorkbookImport;
-  readonly navigateToWorkbook?: (result: WorkbookLoadedResponse) => void;
+  readonly currentDocumentId: string
+  readonly enabled: boolean
+  readonly previewFile?: typeof previewWorkbookImport
+  readonly finalizeImport?: typeof finalizeWorkbookImport
+  readonly navigateToWorkbook?: (result: WorkbookLoadedResponse) => void
 }) {
   const {
     currentDocumentId,
@@ -29,72 +29,72 @@ export function useWorkbookImportPane(input: {
     previewFile = previewWorkbookImport,
     finalizeImport = finalizeWorkbookImport,
     navigateToWorkbook = (result: WorkbookLoadedResponse) => {
-      window.location.assign(resolveImportedWorkbookNavigationUrl(result));
+      window.location.assign(resolveImportedWorkbookNavigationUrl(result))
     },
-  } = input;
-  const [isOpen, setIsOpen] = useState(false);
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [stagedImport, setStagedImport] = useState<StagedWorkbookImport | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  } = input
+  const [isOpen, setIsOpen] = useState(false)
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [stagedImport, setStagedImport] = useState<StagedWorkbookImport | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const stageFile = useCallback(
     async (file: File | null) => {
       if (!enabled || file === null) {
-        return;
+        return
       }
-      const contentType = resolveWorkbookImportContentType(file);
+      const contentType = resolveWorkbookImportContentType(file)
       if (!contentType) {
-        setStagedImport(null);
-        setError("Only local CSV and XLSX files can be staged for workbook import.");
-        setIsOpen(true);
-        return;
+        setStagedImport(null)
+        setError('Only local CSV and XLSX files can be staged for workbook import.')
+        setIsOpen(true)
+        return
       }
-      setIsOpen(true);
-      setError(null);
-      setIsPreviewing(true);
+      setIsOpen(true)
+      setError(null)
+      setIsPreviewing(true)
       try {
         const preview = await previewFile({
           file,
           contentType,
-        });
+        })
         setStagedImport({
           file,
           preview,
-        });
+        })
       } catch (nextError) {
-        setStagedImport(null);
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setStagedImport(null)
+        setError(nextError instanceof Error ? nextError.message : String(nextError))
       } finally {
-        setIsPreviewing(false);
+        setIsPreviewing(false)
       }
     },
     [enabled, previewFile],
-  );
+  )
 
   const importStagedFile = useCallback(
-    async (openMode: "create" | "replace") => {
+    async (openMode: 'create' | 'replace') => {
       if (!enabled || !stagedImport || isImporting) {
-        return;
+        return
       }
-      setError(null);
-      setIsImporting(true);
+      setError(null)
+      setIsImporting(true)
       try {
         const result = await finalizeImport({
           file: stagedImport.file,
           contentType: stagedImport.preview.contentType,
           openMode,
-          ...(openMode === "replace" ? { documentId: currentDocumentId } : {}),
-        });
-        navigateToWorkbook(result);
+          ...(openMode === 'replace' ? { documentId: currentDocumentId } : {}),
+        })
+        navigateToWorkbook(result)
       } catch (nextError) {
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setError(nextError instanceof Error ? nextError.message : String(nextError))
       } finally {
-        setIsImporting(false);
+        setIsImporting(false)
       }
     },
     [currentDocumentId, enabled, finalizeImport, isImporting, navigateToWorkbook, stagedImport],
-  );
+  )
 
   const importToggle = useMemo(
     () => (
@@ -107,14 +107,14 @@ export function useWorkbookImportPane(input: {
         disabled={!enabled}
         type="button"
         onClick={() => {
-          setIsOpen((current) => !current);
+          setIsOpen((current) => !current)
         }}
       >
         Import
       </Button>
     ),
     [enabled, isOpen],
-  );
+  )
 
   const importPanel = useMemo(
     () => (
@@ -125,38 +125,30 @@ export function useWorkbookImportPane(input: {
         isPreviewing={isPreviewing}
         stagedPreview={stagedImport?.preview ?? null}
         onClose={() => {
-          setIsOpen(false);
+          setIsOpen(false)
         }}
         onFileSelected={(file) => {
-          void stageFile(file);
+          void stageFile(file)
         }}
         onImportAsNew={() => {
-          void importStagedFile("create");
+          void importStagedFile('create')
         }}
         onReplaceCurrent={() => {
-          void importStagedFile("replace");
+          void importStagedFile('replace')
         }}
       />
     ),
-    [
-      enabled,
-      importStagedFile,
-      isImporting,
-      isOpen,
-      isPreviewing,
-      stageFile,
-      stagedImport?.preview,
-    ],
-  );
+    [enabled, importStagedFile, isImporting, isOpen, isPreviewing, stageFile, stagedImport?.preview],
+  )
 
   const clearImportError = useCallback(() => {
-    setError(null);
-  }, []);
+    setError(null)
+  }, [])
 
   return {
     clearImportError,
     importError: error,
     importPanel,
     importToggle,
-  };
+  }
 }

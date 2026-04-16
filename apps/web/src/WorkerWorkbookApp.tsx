@@ -1,31 +1,24 @@
-import { useMemo } from "react";
-import { WorkbookView } from "@bilig/grid";
-import type { BiligRuntimeConfig } from "@bilig/zero-sync";
-import { resolveRuntimeConfig } from "./runtime-config.js";
-import type { ZeroClient } from "./runtime-session.js";
-import { parseSelectionTarget, type ZeroConnectionState } from "./worker-workbook-app-model.js";
-import { WorkbookToastRegion } from "./WorkbookToastRegion.js";
-import { useWorkbookImportPane } from "./use-workbook-import-pane.js";
-import { useWorkbookShortcutDialog } from "./use-workbook-shortcut-dialog.js";
-import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
+import { useMemo } from 'react'
+import { WorkbookView } from '@bilig/grid'
+import type { BiligRuntimeConfig } from '@bilig/zero-sync'
+import { resolveRuntimeConfig } from './runtime-config.js'
+import type { ZeroClient } from './runtime-session.js'
+import { parseSelectionTarget, type ZeroConnectionState } from './worker-workbook-app-model.js'
+import { WorkbookToastRegion } from './WorkbookToastRegion.js'
+import { useWorkbookImportPane } from './use-workbook-import-pane.js'
+import { useWorkbookShortcutDialog } from './use-workbook-shortcut-dialog.js'
+import { useWorkerWorkbookAppState } from './use-worker-workbook-app-state.js'
 
 function formatFailedPendingMutationMessage(input: { failureMessage: string }): string {
-  return `A local change could not be synced. ${input.failureMessage}`;
+  return `A local change could not be synced. ${input.failureMessage}`
 }
 
 const persistenceBannerButtonClass =
-  "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1";
+  'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1'
 
-export function WorkerWorkbookApp(props: {
-  config: BiligRuntimeConfig;
-  connectionState: ZeroConnectionState;
-  zero?: ZeroClient;
-}) {
-  const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config]);
-  const runtimeKey = [
-    runtimeConfig.documentId,
-    runtimeConfig.persistState ? "persist" : "memory",
-  ].join("|");
+export function WorkerWorkbookApp(props: { config: BiligRuntimeConfig; connectionState: ZeroConnectionState; zero?: ZeroClient }) {
+  const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config])
+  const runtimeKey = [runtimeConfig.documentId, runtimeConfig.persistState ? 'persist' : 'memory'].join('|')
 
   return (
     <WorkerWorkbookAppInner
@@ -34,7 +27,7 @@ export function WorkerWorkbookApp(props: {
       connectionState={props.connectionState}
       {...(props.zero ? { zero: props.zero } : {})}
     />
-  );
+  )
 }
 
 function WorkerWorkbookAppInner({
@@ -42,15 +35,15 @@ function WorkerWorkbookAppInner({
   connectionState,
   zero,
 }: {
-  runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
-  connectionState: ZeroConnectionState;
-  zero?: ZeroClient;
+  runtimeConfig: ReturnType<typeof resolveRuntimeConfig>
+  connectionState: ZeroConnectionState
+  zero?: ZeroClient
 }) {
   const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
-  });
-  const shortcuts = useWorkbookShortcutDialog();
+  })
+  const shortcuts = useWorkbookShortcutDialog()
   const app = useWorkerWorkbookAppState({
     runtimeConfig,
     connectionState,
@@ -61,7 +54,7 @@ function WorkerWorkbookAppInner({
       </>
     ),
     ...(zero ? { zero } : {}),
-  });
+  })
   const {
     agentError,
     clearAgentError,
@@ -70,16 +63,15 @@ function WorkerWorkbookAppInner({
     reportRuntimeError,
     retryFailedPendingMutation,
     runtimeError,
-  } = app;
-  const showFollowerPersistenceBanner =
-    app.localPersistenceMode === "follower" && (app.transferRequested || !app.remoteSyncAvailable);
+  } = app
+  const showFollowerPersistenceBanner = app.localPersistenceMode === 'follower' && (app.transferRequested || !app.remoteSyncAvailable)
   const toasts = useMemo(
     () =>
       [
         runtimeError
           ? {
-              id: "runtime-error",
-              tone: "error" as const,
+              id: 'runtime-error',
+              tone: 'error' as const,
               message: runtimeError,
               onDismiss: clearRuntimeError,
             }
@@ -87,28 +79,28 @@ function WorkerWorkbookAppInner({
         failedPendingMutation
           ? {
               id: `pending-mutation-${failedPendingMutation.id}`,
-              tone: "error" as const,
+              tone: 'error' as const,
               message: formatFailedPendingMutationMessage(failedPendingMutation),
               action: {
-                label: "Retry",
+                label: 'Retry',
                 onAction: () => {
-                  void Promise.resolve(retryFailedPendingMutation()).catch(reportRuntimeError);
+                  void Promise.resolve(retryFailedPendingMutation()).catch(reportRuntimeError)
                 },
               },
             }
           : null,
         agentError
           ? {
-              id: "agent-error",
-              tone: "error" as const,
+              id: 'agent-error',
+              tone: 'error' as const,
               message: agentError,
               onDismiss: clearAgentError,
             }
           : null,
         importError
           ? {
-              id: "import-error",
-              tone: "error" as const,
+              id: 'import-error',
+              tone: 'error' as const,
               message: importError,
               onDismiss: clearImportError,
             }
@@ -125,14 +117,13 @@ function WorkerWorkbookAppInner({
       retryFailedPendingMutation,
       runtimeError,
     ],
-  );
+  )
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
       {app.runtimeReady && app.zeroConfigured && !app.remoteSyncAvailable ? (
         <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
-          Zero is {app.statusModeLabel.toLowerCase()}. Local edits remain available while sync is
-          degraded.
+          Zero is {app.statusModeLabel.toLowerCase()}. Local edits remain available while sync is degraded.
         </div>
       ) : null}
       {showFollowerPersistenceBanner ? (
@@ -142,35 +133,34 @@ function WorkerWorkbookAppInner({
               Another tab is the local writer.
               {app.transferRequested ? (
                 <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-                  Writer handoff requested. This tab will retry as soon as the writer releases the
-                  local store.
+                  Writer handoff requested. This tab will retry as soon as the writer releases the local store.
                 </div>
               ) : null}
             </div>
             <button
               className={persistenceBannerButtonClass}
               onClick={() => {
-                app.requestPersistenceTransfer();
+                app.requestPersistenceTransfer()
               }}
               type="button"
             >
-              {app.transferRequested ? "Retry writer" : "Become writer"}
+              {app.transferRequested ? 'Retry writer' : 'Become writer'}
             </button>
           </div>
         </div>
       ) : null}
-      {app.localPersistenceMode === "persistent" && app.pendingTransferRequest ? (
+      {app.localPersistenceMode === 'persistent' && app.pendingTransferRequest ? (
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="max-w-[72ch]">
-              Another tab wants writer ownership for local storage. If you transfer it, this tab
-              stays live but loses offline persistence until it becomes the writer again.
+              Another tab wants writer ownership for local storage. If you transfer it, this tab stays live but loses offline persistence
+              until it becomes the writer again.
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 className={persistenceBannerButtonClass}
                 onClick={() => {
-                  app.approvePersistenceTransfer();
+                  app.approvePersistenceTransfer()
                 }}
                 type="button"
               >
@@ -179,7 +169,7 @@ function WorkerWorkbookAppInner({
               <button
                 className={persistenceBannerButtonClass}
                 onClick={() => {
-                  app.dismissPersistenceTransferRequest();
+                  app.dismissPersistenceTransferRequest()
                 }}
                 type="button"
               >
@@ -203,13 +193,9 @@ function WorkerWorkbookAppInner({
               isEditing={Boolean(app.writesAllowed && app.isEditing)}
               isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
               onAddressCommit={(input) => {
-                const nextTarget = parseSelectionTarget(
-                  input,
-                  app.selection.sheetName,
-                  app.definedNames,
-                );
+                const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
                 if (nextTarget) {
-                  app.selectAddress(nextTarget.sheetName, nextTarget.address);
+                  app.selectAddress(nextTarget.sheetName, nextTarget.address)
                 }
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
@@ -218,58 +204,38 @@ function WorkerWorkbookAppInner({
                     flush: true,
                   })
                   .then(() => undefined)
-                  .catch(app.reportRuntimeError);
+                  .catch(app.reportRuntimeError)
               }}
               onBeginEdit={app.beginEditing}
-              onBeginFormulaEdit={(seed?: string) =>
-                app.beginEditing(seed, "select-all", "formula")
-              }
+              onBeginFormulaEdit={(seed?: string) => app.beginEditing(seed, 'select-all', 'formula')}
               onCancelEdit={app.cancelEditor}
               onClearCell={app.clearSelectedCell}
               onColumnWidthChange={(columnIndex: number, newSize: number) => {
-                void app
-                  .invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize)
-                  .catch(app.reportRuntimeError);
+                void app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize).catch(app.reportRuntimeError)
               }}
               onRowHeightChange={(rowIndex: number, newSize: number) => {
-                void app
-                  .invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize)
-                  .catch(app.reportRuntimeError);
+                void app.invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize).catch(app.reportRuntimeError)
               }}
               onSetColumnHidden={(columnIndex: number, hidden: boolean) => {
-                void app
-                  .invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden)
-                  .catch(app.reportRuntimeError);
+                void app.invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden).catch(app.reportRuntimeError)
               }}
               onInsertColumns={(startCol: number, count: number) => {
-                void app
-                  .invokeInsertColumnsMutation(app.selection.sheetName, startCol, count)
-                  .catch(app.reportRuntimeError);
+                void app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count).catch(app.reportRuntimeError)
               }}
               onDeleteColumns={(startCol: number, count: number) => {
-                void app
-                  .invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count)
-                  .catch(app.reportRuntimeError);
+                void app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count).catch(app.reportRuntimeError)
               }}
               onSetRowHidden={(rowIndex: number, hidden: boolean) => {
-                void app
-                  .invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden)
-                  .catch(app.reportRuntimeError);
+                void app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden).catch(app.reportRuntimeError)
               }}
               onInsertRows={(startRow: number, count: number) => {
-                void app
-                  .invokeInsertRowsMutation(app.selection.sheetName, startRow, count)
-                  .catch(app.reportRuntimeError);
+                void app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count).catch(app.reportRuntimeError)
               }}
               onDeleteRows={(startRow: number, count: number) => {
-                void app
-                  .invokeDeleteRowsMutation(app.selection.sheetName, startRow, count)
-                  .catch(app.reportRuntimeError);
+                void app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count).catch(app.reportRuntimeError)
               }}
               onSetFreezePane={(rows: number, cols: number) => {
-                void app
-                  .invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols)
-                  .catch(app.reportRuntimeError);
+                void app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols).catch(app.reportRuntimeError)
               }}
               onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}
@@ -285,7 +251,7 @@ function WorkerWorkbookAppInner({
               onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
               onSelectionRangeChange={app.handleSelectionRangeChange}
               onSelect={(addr) => app.selectAddress(app.selection.sheetName, addr)}
-              onSelectSheet={(sheetName) => app.selectAddress(sheetName, "A1")}
+              onSelectSheet={(sheetName) => app.selectAddress(sheetName, 'A1')}
               resolvedValue={app.resolvedValue}
               selectedAddr={app.selection.address}
               selectedCellSnapshot={app.selectedCell}
@@ -309,5 +275,5 @@ function WorkerWorkbookAppInner({
         {shortcuts.shortcutDialog}
       </div>
     </div>
-  );
+  )
 }

@@ -1,64 +1,42 @@
-import type {
-  AckFrame,
-  CursorWatermarkFrame,
-  HeartbeatFrame,
-  ProtocolFrame,
-} from "@bilig/binary-protocol";
+import type { AckFrame, CursorWatermarkFrame, HeartbeatFrame, ProtocolFrame } from '@bilig/binary-protocol'
 
-export type AppendBatchFrame = Extract<ProtocolFrame, { kind: "appendBatch" }>;
+export type AppendBatchFrame = Extract<ProtocolFrame, { kind: 'appendBatch' }>
 
-export function createAppendBatchFrame(
-  documentId: string,
-  cursor: number,
-  batch: AppendBatchFrame["batch"],
-): AppendBatchFrame {
+export function createAppendBatchFrame(documentId: string, cursor: number, batch: AppendBatchFrame['batch']): AppendBatchFrame {
   return {
-    kind: "appendBatch",
+    kind: 'appendBatch',
     documentId,
     cursor,
     batch,
-  };
+  }
 }
 
-export function createAckFrame(
-  documentId: string,
-  batchId: string,
-  cursor: number,
-  acceptedAtUnixMs = Date.now(),
-): AckFrame {
+export function createAckFrame(documentId: string, batchId: string, cursor: number, acceptedAtUnixMs = Date.now()): AckFrame {
   return {
-    kind: "ack",
+    kind: 'ack',
     documentId,
     batchId,
     cursor,
     acceptedAtUnixMs,
-  };
+  }
 }
 
-export function createHeartbeatFrame(
-  documentId: string,
-  cursor: number,
-  sentAtUnixMs = Date.now(),
-): HeartbeatFrame {
+export function createHeartbeatFrame(documentId: string, cursor: number, sentAtUnixMs = Date.now()): HeartbeatFrame {
   return {
-    kind: "heartbeat",
+    kind: 'heartbeat',
     documentId,
     cursor,
     sentAtUnixMs,
-  };
+  }
 }
 
-export function createCursorWatermarkFrame(
-  documentId: string,
-  cursor: number,
-  compactedCursor: number,
-): CursorWatermarkFrame {
+export function createCursorWatermarkFrame(documentId: string, cursor: number, compactedCursor: number): CursorWatermarkFrame {
   return {
-    kind: "cursorWatermark",
+    kind: 'cursorWatermark',
     documentId,
     cursor,
     compactedCursor,
-  };
+  }
 }
 
 export function createHelloReplayFrames(
@@ -66,5 +44,5 @@ export function createHelloReplayFrames(
   missedFrames: AppendBatchFrame[],
   watermark: CursorWatermarkFrame,
 ): ProtocolFrame[] {
-  return [...snapshotFrames, ...missedFrames, watermark];
+  return [...snapshotFrames, ...missedFrames, watermark]
 }

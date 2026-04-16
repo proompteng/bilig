@@ -1,13 +1,13 @@
-import type { SchedulerResult } from "../../scheduler.js";
-import type { EngineRuntimeState, U32 } from "../runtime-state.js";
+import type { SchedulerResult } from '../../scheduler.js'
+import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 
 export interface EngineDirtyFrontierSchedulerService {
-  readonly collectDirty: (changedRoots: readonly number[] | U32) => SchedulerResult;
+  readonly collectDirty: (changedRoots: readonly number[] | U32) => SchedulerResult
 }
 
 export function createEngineDirtyFrontierSchedulerService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "formulas" | "ranges" | "scheduler">;
-  readonly getEntityDependents: (entityId: number) => Uint32Array;
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'ranges' | 'scheduler'>
+  readonly getEntityDependents: (entityId: number) => Uint32Array
 }): EngineDirtyFrontierSchedulerService {
   return {
     collectDirty(changedRoots) {
@@ -17,7 +17,7 @@ export function createEngineDirtyFrontierSchedulerService(args: {
         args.state.workbook.cellStore,
         (cellIndex) => args.state.formulas.has(cellIndex),
         args.state.ranges.size,
-      );
+      )
     },
-  };
+  }
 }

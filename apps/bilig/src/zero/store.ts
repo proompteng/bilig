@@ -1,11 +1,11 @@
-import type { EngineReplicaSnapshot, SpreadsheetEngine } from "@bilig/core";
-import type { CellRangeRef, WorkbookSnapshot } from "@bilig/protocol";
+import type { EngineReplicaSnapshot, SpreadsheetEngine } from '@bilig/core'
+import type { CellRangeRef, WorkbookSnapshot } from '@bilig/protocol'
 import {
   type AuthoritativeWorkbookEventRecord,
   isWorkbookEventPayload,
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
-} from "@bilig/zero-sync";
+} from '@bilig/zero-sync'
 import {
   diffProjectionRows,
   type AxisMetadataSourceRow,
@@ -18,7 +18,7 @@ import {
   type WorkbookMetadataSourceRow,
   type WorkbookSourceProjection,
   sourceProjectionKeys,
-} from "./projection.js";
+} from './projection.js'
 import {
   axisSignature,
   cellSignature,
@@ -31,110 +31,107 @@ import {
   sheetSignature,
   styleSignature,
   workbookMetadataSignature,
-} from "./store-support.js";
+} from './store-support.js'
 
 export interface QueryResultRow {
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 export interface Queryable {
-  query<T extends QueryResultRow = QueryResultRow>(
-    text: string,
-    values?: unknown[],
-  ): Promise<{ rows: T[] }>;
+  query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }>
 }
 
 export interface WorkbookRuntimeState {
-  snapshot: WorkbookSnapshot;
-  replicaSnapshot: EngineReplicaSnapshot | null;
-  headRevision: number;
-  calculatedRevision: number;
-  ownerUserId: string;
+  snapshot: WorkbookSnapshot
+  replicaSnapshot: EngineReplicaSnapshot | null
+  headRevision: number
+  calculatedRevision: number
+  ownerUserId: string
 }
 
 export interface WorkbookRuntimeMetadata {
-  headRevision: number;
-  calculatedRevision: number;
-  ownerUserId: string;
+  headRevision: number
+  calculatedRevision: number
+  ownerUserId: string
 }
 
 export interface ReplaceWorkbookDocumentInput {
-  readonly documentId: string;
-  readonly snapshot: WorkbookSnapshot;
-  readonly ownerUserId: string;
-  readonly revision: number;
-  readonly calculatedRevision: number;
-  readonly updatedBy: string;
-  readonly updatedAt?: string;
+  readonly documentId: string
+  readonly snapshot: WorkbookSnapshot
+  readonly ownerUserId: string
+  readonly revision: number
+  readonly calculatedRevision: number
+  readonly updatedBy: string
+  readonly updatedAt?: string
 }
 
 export interface WorkbookProjectionState {
-  projection: WorkbookSourceProjection;
-  headRevision: number;
-  calculatedRevision: number;
-  ownerUserId: string;
+  projection: WorkbookSourceProjection
+  headRevision: number
+  calculatedRevision: number
+  ownerUserId: string
 }
 
 export type WorkbookProjectionCommit =
   | {
-      kind: "replace";
-      projection: WorkbookSourceProjection;
+      kind: 'replace'
+      projection: WorkbookSourceProjection
     }
   | {
-      kind: "focused-cell";
-      workbook: WorkbookSourceProjection["workbook"];
-      calculationSettings: CalculationSettingsSourceRow;
-      sheetName: string;
-      address: string;
-      cell: CellSourceRow | null;
+      kind: 'focused-cell'
+      workbook: WorkbookSourceProjection['workbook']
+      calculationSettings: CalculationSettingsSourceRow
+      sheetName: string
+      address: string
+      cell: CellSourceRow | null
     }
   | {
-      kind: "cell-range";
-      workbook: WorkbookSourceProjection["workbook"];
-      calculationSettings: CalculationSettingsSourceRow;
-      range: CellRangeRef;
-      cells: readonly CellSourceRow[];
-      styles?: readonly StyleSourceRow[];
-      numberFormats?: readonly NumberFormatSourceRow[];
+      kind: 'cell-range'
+      workbook: WorkbookSourceProjection['workbook']
+      calculationSettings: CalculationSettingsSourceRow
+      range: CellRangeRef
+      cells: readonly CellSourceRow[]
+      styles?: readonly StyleSourceRow[]
+      numberFormats?: readonly NumberFormatSourceRow[]
     }
   | {
-      kind: "column-metadata";
-      workbook: WorkbookSourceProjection["workbook"];
-      calculationSettings: CalculationSettingsSourceRow;
-      sheetName: string;
-      columnMetadata: readonly AxisMetadataSourceRow[];
+      kind: 'column-metadata'
+      workbook: WorkbookSourceProjection['workbook']
+      calculationSettings: CalculationSettingsSourceRow
+      sheetName: string
+      columnMetadata: readonly AxisMetadataSourceRow[]
     }
   | {
-      kind: "row-metadata";
-      workbook: WorkbookSourceProjection["workbook"];
-      calculationSettings: CalculationSettingsSourceRow;
-      sheetName: string;
-      rowMetadata: readonly AxisMetadataSourceRow[];
-    };
+      kind: 'row-metadata'
+      workbook: WorkbookSourceProjection['workbook']
+      calculationSettings: CalculationSettingsSourceRow
+      sheetName: string
+      rowMetadata: readonly AxisMetadataSourceRow[]
+    }
 
 export interface PersistWorkbookMutationOptions {
-  previousState: WorkbookProjectionState;
-  nextEngine: SpreadsheetEngine;
-  updatedBy: string;
-  ownerUserId: string;
-  eventPayload: WorkbookEventPayload;
-  undoBundle: WorkbookChangeUndoBundle | null;
-  clientMutationId?: string | null;
+  previousState: WorkbookProjectionState
+  nextEngine: SpreadsheetEngine
+  updatedBy: string
+  ownerUserId: string
+  eventPayload: WorkbookEventPayload
+  undoBundle: WorkbookChangeUndoBundle | null
+  clientMutationId?: string | null
 }
 
 export interface PersistWorkbookMutationResult {
-  revision: number;
-  calculatedRevision: number;
-  updatedAt: string;
-  recalcJobId: string | null;
-  projectionCommit: WorkbookProjectionCommit;
+  revision: number
+  calculatedRevision: number
+  updatedAt: string
+  recalcJobId: string | null
+  projectionCommit: WorkbookProjectionCommit
 }
 
-const WORKBOOK_CHECKPOINT_INTERVAL = 64;
-const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
+const WORKBOOK_CHECKPOINT_INTERVAL = 64
+const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2
 
 export function shouldPersistWorkbookCheckpointRevision(revision: number): boolean {
-  return revision === 1 || revision % WORKBOOK_CHECKPOINT_INTERVAL === 0;
+  return revision === 1 || revision % WORKBOOK_CHECKPOINT_INTERVAL === 0
 }
 
 export async function loadWorkbookEventRecordsAfter(
@@ -143,9 +140,9 @@ export async function loadWorkbookEventRecordsAfter(
   revision: number,
 ): Promise<readonly AuthoritativeWorkbookEventRecord[]> {
   const result = await db.query<{
-    revision: number | string | null;
-    client_mutation_id: string | null;
-    txn_json: unknown;
+    revision: number | string | null
+    client_mutation_id: string | null
+    txn_json: unknown
   }>(
     `
       SELECT revision, client_mutation_id, txn_json
@@ -155,7 +152,7 @@ export async function loadWorkbookEventRecordsAfter(
       ORDER BY revision ASC
     `,
     [documentId, revision],
-  );
+  )
   return result.rows.flatMap((row) =>
     parseInteger(row.revision) > revision && isWorkbookEventPayload(row.txn_json)
       ? [
@@ -166,13 +163,13 @@ export async function loadWorkbookEventRecordsAfter(
           } satisfies AuthoritativeWorkbookEventRecord,
         ]
       : [],
-  );
+  )
 }
 
 export async function upsertWorkbookHeader(
   db: Queryable,
   documentId: string,
-  projection: WorkbookSourceProjection["workbook"],
+  projection: WorkbookSourceProjection['workbook'],
   checkpointPayload: WorkbookSnapshot | null,
   replicaState: EngineReplicaSnapshot | null,
 ): Promise<void> {
@@ -221,13 +218,13 @@ export async function upsertWorkbookHeader(
       JSON.stringify(replicaState),
       projection.updatedAt,
     ],
-  );
+  )
 }
 
 export async function insertWorkbookHeaderIfMissing(
   db: Queryable,
   documentId: string,
-  projection: WorkbookSourceProjection["workbook"],
+  projection: WorkbookSourceProjection['workbook'],
   checkpointPayload: WorkbookSnapshot | null,
   replicaState: EngineReplicaSnapshot | null,
 ): Promise<boolean> {
@@ -266,8 +263,8 @@ export async function insertWorkbookHeaderIfMissing(
       JSON.stringify(replicaState),
       projection.updatedAt,
     ],
-  );
-  return result.rows.length > 0;
+  )
+  return result.rows.length > 0
 }
 
 export async function applySheetDiff(
@@ -275,25 +272,15 @@ export async function applySheetDiff(
   previousRows: readonly SheetSourceRow[],
   nextRows: readonly SheetSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.sheet,
-    sheetSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.sheet, sheetSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, sheetId] = parseJsonKey(key);
-    if (typeof sheetId !== "number") {
-      continue;
+    const [, sheetId] = parseJsonKey(key)
+    if (typeof sheetId !== 'number') {
+      continue
     }
-    tasks.push(
-      db.query(`DELETE FROM sheets WHERE workbook_id = $1 AND sheet_id = $2`, [
-        workbookId,
-        sheetId,
-      ]),
-    );
+    tasks.push(db.query(`DELETE FROM sheets WHERE workbook_id = $1 AND sheet_id = $2`, [workbookId, sheetId]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -317,19 +304,11 @@ export async function applySheetDiff(
           freeze_cols = EXCLUDED.freeze_cols,
           updated_at = EXCLUDED.updated_at
       `,
-        [
-          row.workbookId,
-          row.sheetId,
-          row.name,
-          row.sortOrder,
-          row.freezeRows,
-          row.freezeCols,
-          row.updatedAt,
-        ],
+        [row.workbookId, row.sheetId, row.name, row.sortOrder, row.freezeRows, row.freezeCols, row.updatedAt],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function applyCellDiff(
@@ -337,18 +316,12 @@ export async function applyCellDiff(
   previousRows: readonly CellSourceRow[],
   nextRows: readonly CellSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.cell, cellSignature);
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.cell, cellSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, sheetName, address] = parseJsonKey(key);
-    tasks.push(
-      db.query(`DELETE FROM cells WHERE workbook_id = $1 AND sheet_name = $2 AND address = $3`, [
-        workbookId,
-        sheetName,
-        address,
-      ]),
-    );
+    const [, sheetName, address] = parseJsonKey(key)
+    tasks.push(db.query(`DELETE FROM cells WHERE workbook_id = $1 AND sheet_name = $2 AND address = $3`, [workbookId, sheetName, address]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -399,9 +372,9 @@ export async function applyCellDiff(
           row.updatedAt,
         ],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function persistCellSourceRange(
@@ -410,8 +383,8 @@ export async function persistCellSourceRange(
   range: CellRangeRef,
   nextRows: readonly CellSourceRow[],
 ): Promise<void> {
-  const bounds = normalizeRangeBounds(range);
-  const nextRowsInRange = nextRows.filter((row) => cellSourceRowInRange(row, range));
+  const bounds = normalizeRangeBounds(range)
+  const nextRowsInRange = nextRows.filter((row) => cellSourceRowInRange(row, range))
   await db.query(
     `
       DELETE FROM cells
@@ -421,35 +394,31 @@ export async function persistCellSourceRange(
         AND col_num BETWEEN $5 AND $6
     `,
     [documentId, bounds.sheetName, bounds.rowStart, bounds.rowEnd, bounds.colStart, bounds.colEnd],
-  );
+  )
   if (nextRowsInRange.length === 0) {
-    return;
+    return
   }
-  await applyCellDiff(db, [], nextRowsInRange);
+  await applyCellDiff(db, [], nextRowsInRange)
 }
 
 export async function applyAxisMetadataDiff(
   db: Queryable,
-  tableName: "row_metadata" | "column_metadata",
+  tableName: 'row_metadata' | 'column_metadata',
   previousRows: readonly AxisMetadataSourceRow[],
   nextRows: readonly AxisMetadataSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.axisMetadata,
-    axisSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.axisMetadata, axisSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, sheetName, startIndex] = parseJsonKey(key);
+    const [, sheetName, startIndex] = parseJsonKey(key)
     tasks.push(
-      db.query(
-        `DELETE FROM ${tableName} WHERE workbook_id = $1 AND sheet_name = $2 AND start_index = $3`,
-        [workbookId, sheetName, startIndex],
-      ),
-    );
+      db.query(`DELETE FROM ${tableName} WHERE workbook_id = $1 AND sheet_name = $2 AND start_index = $3`, [
+        workbookId,
+        sheetName,
+        startIndex,
+      ]),
+    )
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -474,20 +443,11 @@ export async function applyAxisMetadataDiff(
           source_revision = EXCLUDED.source_revision,
           updated_at = EXCLUDED.updated_at
       `,
-        [
-          row.workbookId,
-          row.sheetName,
-          row.startIndex,
-          row.count,
-          row.size,
-          row.hidden,
-          row.sourceRevision,
-          row.updatedAt,
-        ],
+        [row.workbookId, row.sheetName, row.startIndex, row.count, row.size, row.hidden, row.sourceRevision, row.updatedAt],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function applyDefinedNameDiff(
@@ -495,22 +455,12 @@ export async function applyDefinedNameDiff(
   previousRows: readonly DefinedNameSourceRow[],
   nextRows: readonly DefinedNameSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.definedName,
-    definedNameSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.definedName, definedNameSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, name] = parseJsonKey(key);
-    tasks.push(
-      db.query(`DELETE FROM defined_names WHERE workbook_id = $1 AND name = $2`, [
-        workbookId,
-        name,
-      ]),
-    );
+    const [, name] = parseJsonKey(key)
+    tasks.push(db.query(`DELETE FROM defined_names WHERE workbook_id = $1 AND name = $2`, [workbookId, name]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -523,9 +473,9 @@ export async function applyDefinedNameDiff(
       `,
         [row.workbookId, row.name, JSON.stringify(row.value)],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function applyWorkbookMetadataDiff(
@@ -533,22 +483,12 @@ export async function applyWorkbookMetadataDiff(
   previousRows: readonly WorkbookMetadataSourceRow[],
   nextRows: readonly WorkbookMetadataSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.workbookMetadata,
-    workbookMetadataSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.workbookMetadata, workbookMetadataSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, metadataKey] = parseJsonKey(key);
-    tasks.push(
-      db.query(`DELETE FROM workbook_metadata WHERE workbook_id = $1 AND key = $2`, [
-        workbookId,
-        metadataKey,
-      ]),
-    );
+    const [, metadataKey] = parseJsonKey(key)
+    tasks.push(db.query(`DELETE FROM workbook_metadata WHERE workbook_id = $1 AND key = $2`, [workbookId, metadataKey]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -561,15 +501,12 @@ export async function applyWorkbookMetadataDiff(
       `,
         [row.workbookId, row.key, JSON.stringify(row.value)],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
-export async function applyCalculationSettings(
-  db: Queryable,
-  projection: WorkbookSourceProjection["calculationSettings"],
-): Promise<void> {
+export async function applyCalculationSettings(db: Queryable, projection: WorkbookSourceProjection['calculationSettings']): Promise<void> {
   await db.query(
     `
       INSERT INTO calculation_settings (workbook_id, mode, recalc_epoch)
@@ -580,7 +517,7 @@ export async function applyCalculationSettings(
         recalc_epoch = EXCLUDED.recalc_epoch
     `,
     [projection.workbookId, projection.mode, projection.recalcEpoch],
-  );
+  )
 }
 
 export async function applyStyleDiff(
@@ -588,22 +525,12 @@ export async function applyStyleDiff(
   previousRows: readonly StyleSourceRow[],
   nextRows: readonly StyleSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.style,
-    styleSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.style, styleSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, styleId] = parseJsonKey(key);
-    tasks.push(
-      db.query(`DELETE FROM cell_styles WHERE workbook_id = $1 AND style_id = $2`, [
-        workbookId,
-        styleId,
-      ]),
-    );
+    const [, styleId] = parseJsonKey(key)
+    tasks.push(db.query(`DELETE FROM cell_styles WHERE workbook_id = $1 AND style_id = $2`, [workbookId, styleId]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -618,9 +545,9 @@ export async function applyStyleDiff(
       `,
         [row.workbookId, row.id, JSON.stringify(row.recordJSON), row.hash, row.createdAt],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function applyNumberFormatDiff(
@@ -628,22 +555,12 @@ export async function applyNumberFormatDiff(
   previousRows: readonly NumberFormatSourceRow[],
   nextRows: readonly NumberFormatSourceRow[],
 ): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.numberFormat,
-    numberFormatSignature,
-  );
-  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
-  const tasks: Promise<unknown>[] = [];
+  const diff = diffProjectionRows(previousRows, nextRows, sourceProjectionKeys.numberFormat, numberFormatSignature)
+  const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId
+  const tasks: Promise<unknown>[] = []
   for (const key of diff.deletes) {
-    const [, formatId] = parseJsonKey(key);
-    tasks.push(
-      db.query(`DELETE FROM cell_number_formats WHERE workbook_id = $1 AND format_id = $2`, [
-        workbookId,
-        formatId,
-      ]),
-    );
+    const [, formatId] = parseJsonKey(key)
+    tasks.push(db.query(`DELETE FROM cell_number_formats WHERE workbook_id = $1 AND format_id = $2`, [workbookId, formatId]))
   }
   for (const row of diff.upserts) {
     tasks.push(
@@ -658,9 +575,9 @@ export async function applyNumberFormatDiff(
       `,
         [row.workbookId, row.id, row.code, row.kind, row.createdAt],
       ),
-    );
+    )
   }
-  await Promise.all(tasks);
+  await Promise.all(tasks)
 }
 
 export async function applySourceProjectionDiff(
@@ -668,27 +585,13 @@ export async function applySourceProjectionDiff(
   previousProjection: WorkbookSourceProjection,
   nextProjection: WorkbookSourceProjection,
 ): Promise<void> {
-  await applySheetDiff(db, previousProjection.sheets, nextProjection.sheets);
-  await applyCellDiff(db, previousProjection.cells, nextProjection.cells);
-  await applyAxisMetadataDiff(
-    db,
-    "row_metadata",
-    previousProjection.rowMetadata,
-    nextProjection.rowMetadata,
-  );
-  await applyAxisMetadataDiff(
-    db,
-    "column_metadata",
-    previousProjection.columnMetadata,
-    nextProjection.columnMetadata,
-  );
-  await applyDefinedNameDiff(db, previousProjection.definedNames, nextProjection.definedNames);
-  await applyWorkbookMetadataDiff(
-    db,
-    previousProjection.workbookMetadataEntries,
-    nextProjection.workbookMetadataEntries,
-  );
-  await applyCalculationSettings(db, nextProjection.calculationSettings);
-  await applyStyleDiff(db, previousProjection.styles, nextProjection.styles);
-  await applyNumberFormatDiff(db, previousProjection.numberFormats, nextProjection.numberFormats);
+  await applySheetDiff(db, previousProjection.sheets, nextProjection.sheets)
+  await applyCellDiff(db, previousProjection.cells, nextProjection.cells)
+  await applyAxisMetadataDiff(db, 'row_metadata', previousProjection.rowMetadata, nextProjection.rowMetadata)
+  await applyAxisMetadataDiff(db, 'column_metadata', previousProjection.columnMetadata, nextProjection.columnMetadata)
+  await applyDefinedNameDiff(db, previousProjection.definedNames, nextProjection.definedNames)
+  await applyWorkbookMetadataDiff(db, previousProjection.workbookMetadataEntries, nextProjection.workbookMetadataEntries)
+  await applyCalculationSettings(db, nextProjection.calculationSettings)
+  await applyStyleDiff(db, previousProjection.styles, nextProjection.styles)
+  await applyNumberFormatDiff(db, previousProjection.numberFormats, nextProjection.numberFormats)
 }

@@ -9,10 +9,6 @@
       "@bilig/contracts": ["../contracts/src/index.ts"]
     }
   },
-  "references": [
-    { "path": "../agent-api" },
-    { "path": "../binary-protocol" },
-    { "path": "../contracts" }
-  ],
+  "references": [{ "path": "../agent-api" }, { "path": "../binary-protocol" }, { "path": "../contracts" }],
   "include": ["src/**/*"]
 }

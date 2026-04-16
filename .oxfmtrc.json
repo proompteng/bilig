@@ -1,5 +1,9 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 140,
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
   "ignorePatterns": [
     "**/node_modules/**",
     "**/dist/**",

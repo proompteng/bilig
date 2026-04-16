@@ -1,20 +1,20 @@
-import { useMemo } from "react";
-import { parseCellAddress } from "@bilig/formula";
-import { CellEditorOverlay } from "./CellEditorOverlay.js";
-import { GridGpuSurface } from "./GridGpuSurface.js";
-import { GridTextOverlay } from "./GridTextOverlay.js";
-import { WorkbookGridContextMenu } from "./WorkbookGridContextMenu.js";
-import { useWorkbookGridInteractions } from "./useWorkbookGridInteractions.js";
-import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
-import type { WorkbookGridSurfaceProps } from "./workbookGridSurfaceTypes.js";
-export { hasSelectionTargetChanged } from "./workbookGridViewport.js";
+import { useMemo } from 'react'
+import { parseCellAddress } from '@bilig/formula'
+import { CellEditorOverlay } from './CellEditorOverlay.js'
+import { GridGpuSurface } from './GridGpuSurface.js'
+import { GridTextOverlay } from './GridTextOverlay.js'
+import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
+import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
+import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
+import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
+export { hasSelectionTargetChanged } from './workbookGridViewport.js'
 export type {
   EditMovement,
   EditSelectionBehavior,
   SheetGridViewportSubscription,
   WorkbookGridPreviewRange,
   WorkbookGridSurfaceProps,
-} from "./workbookGridSurfaceTypes.js";
+} from './workbookGridSurfaceTypes.js'
 
 export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   const renderState = useWorkbookGridRenderState({
@@ -33,7 +33,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onColumnWidthChange: props.onColumnWidthChange,
     onRowHeightChange: props.onRowHeightChange,
     restoreViewportTarget: props.restoreViewportTarget,
-  });
+  })
   const interactions = useWorkbookGridInteractions({
     engine: props.engine,
     sheetName: props.sheetName,
@@ -66,32 +66,26 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onToggleBooleanCell: props.onToggleBooleanCell,
     onRowHeightChange: props.onRowHeightChange,
     renderState,
-  });
-  const visibleRange = renderState.visibleRegion.range;
-  const getCellLocalBounds = renderState.getCellLocalBounds;
+  })
+  const visibleRange = renderState.visibleRegion.range
+  const getCellLocalBounds = renderState.getCellLocalBounds
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])
       .filter((range) => range.sheetName === props.sheetName)
       .flatMap((range) => {
-        const start = parseCellAddress(range.startAddress, range.sheetName);
-        const end = parseCellAddress(range.endAddress, range.sheetName);
-        const colStart = Math.max(Math.min(start.col, end.col), visibleRange.x);
-        const colEnd = Math.min(
-          Math.max(start.col, end.col),
-          visibleRange.x + visibleRange.width - 1,
-        );
-        const rowStart = Math.max(Math.min(start.row, end.row), visibleRange.y);
-        const rowEnd = Math.min(
-          Math.max(start.row, end.row),
-          visibleRange.y + visibleRange.height - 1,
-        );
+        const start = parseCellAddress(range.startAddress, range.sheetName)
+        const end = parseCellAddress(range.endAddress, range.sheetName)
+        const colStart = Math.max(Math.min(start.col, end.col), visibleRange.x)
+        const colEnd = Math.min(Math.max(start.col, end.col), visibleRange.x + visibleRange.width - 1)
+        const rowStart = Math.max(Math.min(start.row, end.row), visibleRange.y)
+        const rowEnd = Math.min(Math.max(start.row, end.row), visibleRange.y + visibleRange.height - 1)
         if (colStart > colEnd || rowStart > rowEnd) {
-          return [];
+          return []
         }
-        const topLeft = getCellLocalBounds(colStart, rowStart);
-        const bottomRight = getCellLocalBounds(colEnd, rowEnd);
+        const topLeft = getCellLocalBounds(colStart, rowStart)
+        const bottomRight = getCellLocalBounds(colEnd, rowEnd)
         if (!topLeft || !bottomRight) {
-          return [];
+          return []
         }
         return [
           {
@@ -104,17 +98,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
               height: bottomRight.y + bottomRight.height - topLeft.y,
             },
           },
-        ];
-      });
-  }, [
-    props.previewRanges,
-    props.sheetName,
-    getCellLocalBounds,
-    visibleRange.height,
-    visibleRange.width,
-    visibleRange.x,
-    visibleRange.y,
-  ]);
+        ]
+      })
+  }, [props.previewRanges, props.sheetName, getCellLocalBounds, visibleRange.height, visibleRange.width, visibleRange.x, visibleRange.y])
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
@@ -147,18 +133,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           ref={renderState.focusTargetRef}
           tabIndex={-1}
         />
-        <div
-          ref={renderState.scrollViewportRef}
-          aria-hidden="true"
-          className="absolute inset-0 overflow-auto"
-        >
+        <div ref={renderState.scrollViewportRef} aria-hidden="true" className="absolute inset-0 overflow-auto">
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        <GridGpuSurface
-          host={renderState.hostElement}
-          scene={renderState.gpuScene}
-          onActiveChange={renderState.setIsWebGpuActive}
-        />
+        <GridGpuSurface host={renderState.hostElement} scene={renderState.gpuScene} onActiveChange={renderState.setIsWebGpuActive} />
         <GridTextOverlay active={renderState.hostElement !== null} scene={renderState.textScene} />
         <button
           aria-label="Select entire sheet"
@@ -177,8 +155,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
             aria-hidden="true"
             className="block h-0 w-0 border-t-[11px] border-r-[11px] border-t-transparent border-r-current opacity-80"
             style={{
-              color: renderState.isEntireSheetSelected ? "var(--wb-accent)" : "currentColor",
-              transform: "translate(2px, 1px)",
+              color: renderState.isEntireSheetSelected ? 'var(--wb-accent)' : 'currentColor',
+              transform: 'translate(2px, 1px)',
             }}
           />
         </button>
@@ -188,14 +166,14 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
             className="absolute z-30 cursor-crosshair rounded-full border-0 bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)] outline-none"
             data-grid-fill-handle="true"
             onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
+              event.preventDefault()
+              event.stopPropagation()
             }}
             onPointerDown={interactions.handleFillHandlePointerDown}
             style={{
               height: renderState.fillHandleBounds.height,
               left: renderState.fillHandleBounds.x,
-              touchAction: "none",
+              touchAction: 'none',
               top: renderState.fillHandleBounds.y,
               width: renderState.fillHandleBounds.width,
             }}
@@ -222,14 +200,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
             aria-hidden="true"
             className="pointer-events-none absolute z-20 box-border border border-dashed"
             style={{
-              backgroundColor:
-                previewRect.role === "target"
-                  ? "rgba(56, 189, 248, 0.08)"
-                  : "rgba(148, 163, 184, 0.06)",
-              borderColor:
-                previewRect.role === "target"
-                  ? "rgba(14, 116, 144, 0.9)"
-                  : "rgba(100, 116, 139, 0.9)",
+              backgroundColor: previewRect.role === 'target' ? 'rgba(56, 189, 248, 0.08)' : 'rgba(148, 163, 184, 0.06)',
+              borderColor: previewRect.role === 'target' ? 'rgba(14, 116, 144, 0.9)' : 'rgba(100, 116, 139, 0.9)',
               height: previewRect.bounds.height,
               left: previewRect.bounds.x,
               top: previewRect.bounds.y,
@@ -272,5 +244,5 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         />
       ) : null}
     </div>
-  );
+  )
 }

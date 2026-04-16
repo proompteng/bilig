@@ -1,361 +1,331 @@
-import sqlite3InitModule, {
-  type Database,
-  type SAHPoolUtil,
-  type SqlValue,
-  type Sqlite3Static,
-} from "@sqlite.org/sqlite-wasm";
+import sqlite3InitModule, { type Database, type SAHPoolUtil, type SqlValue, type Sqlite3Static } from '@sqlite.org/sqlite-wasm'
 import type {
   WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalProjectionOverlay,
   WorkbookLocalViewportBase,
-} from "./workbook-local-base.js";
+} from './workbook-local-base.js'
 import {
   readWorkbookViewportProjection,
   writeWorkbookAuthoritativeBase,
   writeWorkbookAuthoritativeDelta,
   writeWorkbookProjectionOverlay,
-} from "./workbook-local-store-projection.js";
-import { initializeWorkbookLocalStoreSchema } from "./workbook-local-store-schema.js";
+} from './workbook-local-store-projection.js'
+import { initializeWorkbookLocalStoreSchema } from './workbook-local-store-schema.js'
 
-const WORKBOOK_VFS_NAME = "bilig-opfs-sahpool";
-const WORKBOOK_VFS_DIRECTORY = "/bilig/workbooks";
-const WORKBOOK_VFS_INITIAL_CAPACITY = 12;
-const WORKBOOK_VFS_VERBOSITY = 0;
+const WORKBOOK_VFS_NAME = 'bilig-opfs-sahpool'
+const WORKBOOK_VFS_DIRECTORY = '/bilig/workbooks'
+const WORKBOOK_VFS_INITIAL_CAPACITY = 12
+const WORKBOOK_VFS_VERBOSITY = 0
 
-let sqliteRuntimePromise: Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> | null = null;
-let memorySqliteRuntimePromise: Promise<Sqlite3Static> | null = null;
+let sqliteRuntimePromise: Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> | null = null
+let memorySqliteRuntimePromise: Promise<Sqlite3Static> | null = null
 
 export class WorkbookLocalStoreLockedError extends Error {
-  override readonly name = "WorkbookLocalStoreLockedError";
+  override readonly name = 'WorkbookLocalStoreLockedError'
 }
 
 export interface WorkbookStoredState {
-  readonly snapshot: unknown;
-  readonly replica: unknown;
-  readonly authoritativeRevision: number;
-  readonly appliedPendingLocalSeq: number;
+  readonly snapshot: unknown
+  readonly replica: unknown
+  readonly authoritativeRevision: number
+  readonly appliedPendingLocalSeq: number
 }
 
 export interface WorkbookBootstrapState {
-  readonly workbookName: string;
-  readonly sheetNames: readonly string[];
-  readonly materializedCellCount: number;
-  readonly authoritativeRevision: number;
-  readonly appliedPendingLocalSeq: number;
+  readonly workbookName: string
+  readonly sheetNames: readonly string[]
+  readonly materializedCellCount: number
+  readonly authoritativeRevision: number
+  readonly appliedPendingLocalSeq: number
 }
 
 export interface WorkbookLocalMutationRecord {
-  readonly id: string;
-  readonly localSeq: number;
-  readonly baseRevision: number;
-  readonly method: string;
-  readonly args: unknown[];
-  readonly enqueuedAtUnixMs: number;
-  readonly submittedAtUnixMs: number | null;
-  readonly lastAttemptedAtUnixMs: number | null;
-  readonly ackedAtUnixMs: number | null;
-  readonly rebasedAtUnixMs: number | null;
-  readonly failedAtUnixMs: number | null;
-  readonly attemptCount: number;
-  readonly failureMessage: string | null;
-  readonly status: "local" | "submitted" | "acked" | "rebased" | "failed";
+  readonly id: string
+  readonly localSeq: number
+  readonly baseRevision: number
+  readonly method: string
+  readonly args: unknown[]
+  readonly enqueuedAtUnixMs: number
+  readonly submittedAtUnixMs: number | null
+  readonly lastAttemptedAtUnixMs: number | null
+  readonly ackedAtUnixMs: number | null
+  readonly rebasedAtUnixMs: number | null
+  readonly failedAtUnixMs: number | null
+  readonly attemptCount: number
+  readonly failureMessage: string | null
+  readonly status: 'local' | 'submitted' | 'acked' | 'rebased' | 'failed'
 }
 
 export interface WorkbookLocalStore {
-  loadBootstrapState(): Promise<WorkbookBootstrapState | null>;
-  loadState(): Promise<WorkbookStoredState | null>;
+  loadBootstrapState(): Promise<WorkbookBootstrapState | null>
+  loadState(): Promise<WorkbookStoredState | null>
   persistProjectionState(input: {
-    readonly state: WorkbookStoredState;
-    readonly authoritativeBase: WorkbookLocalAuthoritativeBase;
-    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
-  }): Promise<void>;
+    readonly state: WorkbookStoredState
+    readonly authoritativeBase: WorkbookLocalAuthoritativeBase
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay
+  }): Promise<void>
   ingestAuthoritativeDelta(input: {
-    readonly state: WorkbookStoredState;
-    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta;
-    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
-    readonly removePendingMutationIds?: readonly string[];
-  }): Promise<void>;
-  listPendingMutations(): Promise<WorkbookLocalMutationRecord[]>;
-  listMutationJournalEntries(): Promise<WorkbookLocalMutationRecord[]>;
-  appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
-  updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
-  removePendingMutation(id: string): Promise<void>;
+    readonly state: WorkbookStoredState
+    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay
+    readonly removePendingMutationIds?: readonly string[]
+  }): Promise<void>
+  listPendingMutations(): Promise<WorkbookLocalMutationRecord[]>
+  listMutationJournalEntries(): Promise<WorkbookLocalMutationRecord[]>
+  appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>
+  updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>
+  removePendingMutation(id: string): Promise<void>
   readViewportProjection(
     sheetName: string,
     viewport: {
-      rowStart: number;
-      rowEnd: number;
-      colStart: number;
-      colEnd: number;
+      rowStart: number
+      rowEnd: number
+      colStart: number
+      colEnd: number
     },
-  ): WorkbookLocalViewportBase | null;
-  close(): void;
+  ): WorkbookLocalViewportBase | null
+  close(): void
 }
 
 export interface WorkbookLocalStoreFactory {
-  open(documentId: string): Promise<WorkbookLocalStore>;
+  open(documentId: string): Promise<WorkbookLocalStore>
 }
 
 export interface OpfsWorkbookLocalStoreFactoryOptions {
-  vfsName?: string;
-  directory?: string;
-  initialCapacity?: number;
+  vfsName?: string
+  directory?: string
+  initialCapacity?: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function supportsWorkerOpfs(): boolean {
   const scope = globalThis as typeof globalThis & {
-    navigator?: Navigator;
-    document?: Document;
-  };
-  if (typeof scope.document !== "undefined") {
-    return false;
+    navigator?: Navigator
+    document?: Document
   }
-  return typeof scope.navigator?.storage?.getDirectory === "function";
+  if (typeof scope.document !== 'undefined') {
+    return false
+  }
+  return typeof scope.navigator?.storage?.getDirectory === 'function'
 }
 
 function sanitizeDocumentId(documentId: string): string {
-  return encodeURIComponent(documentId).replaceAll("%", "_");
+  return encodeURIComponent(documentId).replaceAll('%', '_')
 }
 
 function getErrorName(error: unknown): string | null {
-  return isRecord(error) && typeof error["name"] === "string" ? error["name"] : null;
+  return isRecord(error) && typeof error['name'] === 'string' ? error['name'] : null
 }
 
 function getErrorMessage(error: unknown): string | null {
-  return isRecord(error) && typeof error["message"] === "string" ? error["message"] : null;
+  return isRecord(error) && typeof error['message'] === 'string' ? error['message'] : null
 }
 
 function stringifyConsoleArg(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
+  if (typeof value === 'string') {
+    return value
   }
-  const errorName = getErrorName(value);
-  const errorMessage = getErrorMessage(value);
+  const errorName = getErrorName(value)
+  const errorMessage = getErrorMessage(value)
   if (errorName && errorMessage) {
-    return `${errorName}: ${errorMessage}`;
+    return `${errorName}: ${errorMessage}`
   }
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value)
   } catch {
-    return String(value);
+    return String(value)
   }
 }
 
 function isOpfsLockDiagnostic(args: readonly unknown[], vfsName: string): boolean {
-  const message = args.map((value) => stringifyConsoleArg(value)).join(" ");
+  const message = args.map((value) => stringifyConsoleArg(value)).join(' ')
   if (!message.includes(vfsName)) {
-    return false;
+    return false
   }
-  return (
-    message.includes("removeVfs() failed with no recovery strategy") ||
-    message.includes("Access Handles cannot be created")
-  );
+  return message.includes('removeVfs() failed with no recovery strategy') || message.includes('Access Handles cannot be created')
 }
 
-type SqliteLogger = (...args: unknown[]) => void;
+type SqliteLogger = (...args: unknown[]) => void
 
-function getSqliteConfigLogger(
-  sqlite3: Sqlite3Static,
-  key: "error" | "warn",
-): SqliteLogger | null {
-  if (!isRecord(sqlite3) || !isRecord(sqlite3["config"])) {
-    return null;
+function getSqliteConfigLogger(sqlite3: Sqlite3Static, key: 'error' | 'warn'): SqliteLogger | null {
+  if (!isRecord(sqlite3) || !isRecord(sqlite3['config'])) {
+    return null
   }
-  const logger = sqlite3["config"][key];
-  return typeof logger === "function" ? (logger as SqliteLogger) : null;
+  const logger = sqlite3['config'][key]
+  return typeof logger === 'function' ? (logger as SqliteLogger) : null
 }
 
-function setSqliteConfigLogger(
-  sqlite3: Sqlite3Static,
-  key: "error" | "warn",
-  logger: SqliteLogger | null,
-): void {
-  if (!logger || !isRecord(sqlite3) || !isRecord(sqlite3["config"])) {
-    return;
+function setSqliteConfigLogger(sqlite3: Sqlite3Static, key: 'error' | 'warn', logger: SqliteLogger | null): void {
+  if (!logger || !isRecord(sqlite3) || !isRecord(sqlite3['config'])) {
+    return
   }
-  sqlite3["config"][key] = logger;
+  sqlite3['config'][key] = logger
 }
 
-async function withSuppressedOpfsLockDiagnostics<T>(
-  sqlite3: Sqlite3Static,
-  vfsName: string,
-  task: () => Promise<T>,
-): Promise<T> {
-  const originalError = console.error;
-  const originalWarn = console.warn;
-  const originalSqliteError = getSqliteConfigLogger(sqlite3, "error");
-  const originalSqliteWarn = getSqliteConfigLogger(sqlite3, "warn");
+async function withSuppressedOpfsLockDiagnostics<T>(sqlite3: Sqlite3Static, vfsName: string, task: () => Promise<T>): Promise<T> {
+  const originalError = console.error
+  const originalWarn = console.warn
+  const originalSqliteError = getSqliteConfigLogger(sqlite3, 'error')
+  const originalSqliteWarn = getSqliteConfigLogger(sqlite3, 'warn')
   console.error = ((...args: unknown[]) => {
     if (!isOpfsLockDiagnostic(args, vfsName)) {
-      originalError(...args);
+      originalError(...args)
     }
-  }) as typeof console.error;
+  }) as typeof console.error
   console.warn = ((...args: unknown[]) => {
     if (!isOpfsLockDiagnostic(args, vfsName)) {
-      originalWarn(...args);
+      originalWarn(...args)
     }
-  }) as typeof console.warn;
+  }) as typeof console.warn
   if (originalSqliteError) {
-    setSqliteConfigLogger(sqlite3, "error", (...args: unknown[]) => {
+    setSqliteConfigLogger(sqlite3, 'error', (...args: unknown[]) => {
       if (!isOpfsLockDiagnostic(args, vfsName)) {
-        originalSqliteError(...args);
+        originalSqliteError(...args)
       }
-    });
+    })
   }
   if (originalSqliteWarn) {
-    setSqliteConfigLogger(sqlite3, "warn", (...args: unknown[]) => {
+    setSqliteConfigLogger(sqlite3, 'warn', (...args: unknown[]) => {
       if (!isOpfsLockDiagnostic(args, vfsName)) {
-        originalSqliteWarn(...args);
+        originalSqliteWarn(...args)
       }
-    });
+    })
   }
   try {
-    return await task();
+    return await task()
   } finally {
-    console.error = originalError;
-    console.warn = originalWarn;
-    setSqliteConfigLogger(sqlite3, "error", originalSqliteError);
-    setSqliteConfigLogger(sqlite3, "warn", originalSqliteWarn);
+    console.error = originalError
+    console.warn = originalWarn
+    setSqliteConfigLogger(sqlite3, 'error', originalSqliteError)
+    setSqliteConfigLogger(sqlite3, 'warn', originalSqliteWarn)
   }
 }
 
 function isAccessHandleConflict(error: unknown): boolean {
-  const message = getErrorMessage(error);
-  const name = getErrorName(error);
+  const message = getErrorMessage(error)
+  const name = getErrorName(error)
   if (!message || !name) {
-    return false;
+    return false
   }
   return (
-    (message.includes("createSyncAccessHandle") &&
-      message.includes("Access Handles cannot be created")) ||
-    (name === "NoModificationAllowedError" &&
-      (message.includes("Access Handles cannot be created") ||
-        (message.includes("removeEntry") && message.includes("FileSystemDirectoryHandle"))))
-  );
+    (message.includes('createSyncAccessHandle') && message.includes('Access Handles cannot be created')) ||
+    (name === 'NoModificationAllowedError' &&
+      (message.includes('Access Handles cannot be created') ||
+        (message.includes('removeEntry') && message.includes('FileSystemDirectoryHandle'))))
+  )
 }
 
-function toWorkbookLocalStoreLockedError(
-  documentId: string | null,
-  cause?: unknown,
-): WorkbookLocalStoreLockedError {
-  const suffix = documentId ? ` for ${documentId}` : "";
-  const error = new WorkbookLocalStoreLockedError(
-    `Workbook local store is locked by another tab${suffix}`,
-  );
+function toWorkbookLocalStoreLockedError(documentId: string | null, cause?: unknown): WorkbookLocalStoreLockedError {
+  const suffix = documentId ? ` for ${documentId}` : ''
+  const error = new WorkbookLocalStoreLockedError(`Workbook local store is locked by another tab${suffix}`)
   if (cause !== undefined) {
-    Object.defineProperty(error, "cause", {
+    Object.defineProperty(error, 'cause', {
       configurable: true,
       enumerable: false,
       value: cause,
       writable: true,
-    });
+    })
   }
-  return error;
+  return error
 }
 
 function parseWorkbookStoredState(value: unknown): WorkbookStoredState | null {
   if (
     !isRecord(value) ||
-    typeof value["authoritativeRevision"] !== "number" ||
-    typeof value["appliedPendingLocalSeq"] !== "number" ||
-    !isRecord(value["snapshot"]) ||
-    !isRecord(value["replica"])
+    typeof value['authoritativeRevision'] !== 'number' ||
+    typeof value['appliedPendingLocalSeq'] !== 'number' ||
+    !isRecord(value['snapshot']) ||
+    !isRecord(value['replica'])
   ) {
-    return null;
+    return null
   }
   return {
-    snapshot: value["snapshot"],
-    replica: value["replica"],
-    authoritativeRevision: value["authoritativeRevision"],
-    appliedPendingLocalSeq: value["appliedPendingLocalSeq"],
-  };
+    snapshot: value['snapshot'],
+    replica: value['replica'],
+    authoritativeRevision: value['authoritativeRevision'],
+    appliedPendingLocalSeq: value['appliedPendingLocalSeq'],
+  }
 }
 
 function parseWorkbookBootstrapState(value: unknown): WorkbookBootstrapState | null {
   if (
     !isRecord(value) ||
-    typeof value["workbookName"] !== "string" ||
-    !Array.isArray(value["sheetNames"]) ||
-    !value["sheetNames"].every((sheetName) => typeof sheetName === "string") ||
-    typeof value["materializedCellCount"] !== "number" ||
-    typeof value["authoritativeRevision"] !== "number" ||
-    typeof value["appliedPendingLocalSeq"] !== "number"
+    typeof value['workbookName'] !== 'string' ||
+    !Array.isArray(value['sheetNames']) ||
+    !value['sheetNames'].every((sheetName) => typeof sheetName === 'string') ||
+    typeof value['materializedCellCount'] !== 'number' ||
+    typeof value['authoritativeRevision'] !== 'number' ||
+    typeof value['appliedPendingLocalSeq'] !== 'number'
   ) {
-    return null;
+    return null
   }
   return {
-    workbookName: value["workbookName"],
-    sheetNames: [...value["sheetNames"]],
-    materializedCellCount: value["materializedCellCount"],
-    authoritativeRevision: value["authoritativeRevision"],
-    appliedPendingLocalSeq: value["appliedPendingLocalSeq"],
-  };
+    workbookName: value['workbookName'],
+    sheetNames: [...value['sheetNames']],
+    materializedCellCount: value['materializedCellCount'],
+    authoritativeRevision: value['authoritativeRevision'],
+    appliedPendingLocalSeq: value['appliedPendingLocalSeq'],
+  }
 }
 
 function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutationRecord | null {
   if (
     !isRecord(value) ||
-    typeof value["id"] !== "string" ||
-    typeof value["localSeq"] !== "number" ||
-    typeof value["baseRevision"] !== "number" ||
-    typeof value["method"] !== "string" ||
-    !Array.isArray(value["args"]) ||
-    typeof value["enqueuedAtUnixMs"] !== "number" ||
-    (value["submittedAtUnixMs"] !== null && typeof value["submittedAtUnixMs"] !== "number") ||
-    (value["lastAttemptedAtUnixMs"] !== null &&
-      typeof value["lastAttemptedAtUnixMs"] !== "number") ||
-    (value["ackedAtUnixMs"] !== null && typeof value["ackedAtUnixMs"] !== "number") ||
-    (value["rebasedAtUnixMs"] !== null && typeof value["rebasedAtUnixMs"] !== "number") ||
-    (value["failedAtUnixMs"] !== null && typeof value["failedAtUnixMs"] !== "number") ||
-    typeof value["attemptCount"] !== "number" ||
-    (value["failureMessage"] !== null && typeof value["failureMessage"] !== "string") ||
-    (value["status"] !== "local" &&
-      value["status"] !== "submitted" &&
-      value["status"] !== "acked" &&
-      value["status"] !== "rebased" &&
-      value["status"] !== "failed")
+    typeof value['id'] !== 'string' ||
+    typeof value['localSeq'] !== 'number' ||
+    typeof value['baseRevision'] !== 'number' ||
+    typeof value['method'] !== 'string' ||
+    !Array.isArray(value['args']) ||
+    typeof value['enqueuedAtUnixMs'] !== 'number' ||
+    (value['submittedAtUnixMs'] !== null && typeof value['submittedAtUnixMs'] !== 'number') ||
+    (value['lastAttemptedAtUnixMs'] !== null && typeof value['lastAttemptedAtUnixMs'] !== 'number') ||
+    (value['ackedAtUnixMs'] !== null && typeof value['ackedAtUnixMs'] !== 'number') ||
+    (value['rebasedAtUnixMs'] !== null && typeof value['rebasedAtUnixMs'] !== 'number') ||
+    (value['failedAtUnixMs'] !== null && typeof value['failedAtUnixMs'] !== 'number') ||
+    typeof value['attemptCount'] !== 'number' ||
+    (value['failureMessage'] !== null && typeof value['failureMessage'] !== 'string') ||
+    (value['status'] !== 'local' &&
+      value['status'] !== 'submitted' &&
+      value['status'] !== 'acked' &&
+      value['status'] !== 'rebased' &&
+      value['status'] !== 'failed')
   ) {
-    return null;
+    return null
   }
   return {
-    id: value["id"],
-    localSeq: value["localSeq"],
-    baseRevision: value["baseRevision"],
-    method: value["method"],
-    args: [...value["args"]],
-    enqueuedAtUnixMs: value["enqueuedAtUnixMs"],
-    submittedAtUnixMs: value["submittedAtUnixMs"] ?? null,
-    lastAttemptedAtUnixMs: value["lastAttemptedAtUnixMs"] ?? null,
-    ackedAtUnixMs: value["ackedAtUnixMs"] ?? null,
-    rebasedAtUnixMs: value["rebasedAtUnixMs"] ?? null,
-    failedAtUnixMs: value["failedAtUnixMs"] ?? null,
-    attemptCount: value["attemptCount"],
-    failureMessage: value["failureMessage"] ?? null,
-    status: value["status"],
-  };
+    id: value['id'],
+    localSeq: value['localSeq'],
+    baseRevision: value['baseRevision'],
+    method: value['method'],
+    args: [...value['args']],
+    enqueuedAtUnixMs: value['enqueuedAtUnixMs'],
+    submittedAtUnixMs: value['submittedAtUnixMs'] ?? null,
+    lastAttemptedAtUnixMs: value['lastAttemptedAtUnixMs'] ?? null,
+    ackedAtUnixMs: value['ackedAtUnixMs'] ?? null,
+    rebasedAtUnixMs: value['rebasedAtUnixMs'] ?? null,
+    failedAtUnixMs: value['failedAtUnixMs'] ?? null,
+    attemptCount: value['attemptCount'],
+    failureMessage: value['failureMessage'] ?? null,
+    status: value['status'],
+  }
 }
 
-function readSingleObjectRow(
-  db: Database,
-  sql: string,
-  bind?: readonly SqlValue[],
-): Record<string, SqlValue> | null {
-  const statement = db.prepare(sql);
+function readSingleObjectRow(db: Database, sql: string, bind?: readonly SqlValue[]): Record<string, SqlValue> | null {
+  const statement = db.prepare(sql)
   try {
     if (bind) {
-      statement.bind([...bind]);
+      statement.bind([...bind])
     }
     if (!statement.step()) {
-      return null;
+      return null
     }
-    return statement.get({});
+    return statement.get({})
   } finally {
-    statement.finalize();
+    statement.finalize()
   }
 }
 
@@ -363,11 +333,11 @@ async function getSqliteRuntime(
   options: Required<OpfsWorkbookLocalStoreFactoryOptions>,
 ): Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> {
   if (!supportsWorkerOpfs()) {
-    throw new Error("Workbook local storage requires a worker with OPFS support");
+    throw new Error('Workbook local storage requires a worker with OPFS support')
   }
   if (!sqliteRuntimePromise) {
     sqliteRuntimePromise = (async () => {
-      const sqlite3 = await sqlite3InitModule();
+      const sqlite3 = await sqlite3InitModule()
       try {
         const poolUtil = await withSuppressedOpfsLockDiagnostics(
           sqlite3,
@@ -380,36 +350,32 @@ async function getSqliteRuntime(
               // The app translates lock conflicts into its own persistence-state path.
               // Keep sqlite-wasm from spamming expected pool diagnostics into the console.
               verbosity: WORKBOOK_VFS_VERBOSITY,
-            } as Parameters<Sqlite3Static["installOpfsSAHPoolVfs"]>[0] & { verbosity: number }),
-        );
-        return { sqlite3, poolUtil };
+            } as Parameters<Sqlite3Static['installOpfsSAHPoolVfs']>[0] & { verbosity: number }),
+        )
+        return { sqlite3, poolUtil }
       } catch (error) {
         if (isAccessHandleConflict(error)) {
-          throw toWorkbookLocalStoreLockedError(null, error);
+          throw toWorkbookLocalStoreLockedError(null, error)
         }
-        throw error;
+        throw error
       }
-    })();
+    })()
   }
   try {
-    return await sqliteRuntimePromise;
+    return await sqliteRuntimePromise
   } catch (error) {
     if (!(error instanceof WorkbookLocalStoreLockedError)) {
-      sqliteRuntimePromise = null;
+      sqliteRuntimePromise = null
     }
-    throw error;
+    throw error
   }
 }
 
 function extractWorkbookName(snapshot: unknown): string | null {
-  if (
-    isRecord(snapshot) &&
-    isRecord(snapshot["workbook"]) &&
-    typeof snapshot["workbook"]["name"] === "string"
-  ) {
-    return snapshot["workbook"]["name"];
+  if (isRecord(snapshot) && isRecord(snapshot['workbook']) && typeof snapshot['workbook']['name'] === 'string') {
+    return snapshot['workbook']['name']
   }
-  return null;
+  return null
 }
 
 class SqliteWorkbookLocalStore implements WorkbookLocalStore {
@@ -430,41 +396,38 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
           FROM runtime_state
          WHERE id = 1
       `,
-    );
+    )
     if (!row) {
-      return null;
+      return null
     }
 
-    const sheetNames: string[] = [];
+    const sheetNames: string[] = []
     const statement = this.db.prepare(
       `
         SELECT name
           FROM authoritative_sheet
          ORDER BY sort_order ASC, name ASC
       `,
-    );
+    )
     try {
       while (statement.step()) {
-        const sheet = statement.get({});
-        if (typeof sheet["name"] === "string") {
-          sheetNames.push(sheet["name"]);
+        const sheet = statement.get({})
+        if (typeof sheet['name'] === 'string') {
+          sheetNames.push(sheet['name'])
         }
       }
     } finally {
-      statement.finalize();
+      statement.finalize()
     }
 
     return parseWorkbookBootstrapState({
       workbookName:
-        typeof row["workbookName"] === "string" && row["workbookName"].length > 0
-          ? row["workbookName"]
-          : this.defaultWorkbookName,
+        typeof row['workbookName'] === 'string' && row['workbookName'].length > 0 ? row['workbookName'] : this.defaultWorkbookName,
       sheetNames,
-      materializedCellCount:
-        typeof row["materializedCellCount"] === "number" ? row["materializedCellCount"] : 0,
-      authoritativeRevision: row["authoritativeRevision"],
-      appliedPendingLocalSeq: row["appliedPendingLocalSeq"],
-    });
+      materializedCellCount: typeof row['materializedCellCount'] === 'number' ? row['materializedCellCount'] : 0,
+      authoritativeRevision: row['authoritativeRevision'],
+      appliedPendingLocalSeq: row['appliedPendingLocalSeq'],
+    })
   }
 
   async loadState(): Promise<WorkbookStoredState | null> {
@@ -478,21 +441,21 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
           FROM runtime_state
          WHERE id = 1
       `,
-    );
+    )
     if (!row) {
-      return null;
+      return null
     }
-    const snapshotJson = row["snapshotJson"];
-    const replicaJson = row["replicaJson"];
-    const authoritativeRevision = row["authoritativeRevision"];
-    const appliedPendingLocalSeq = row["appliedPendingLocalSeq"];
+    const snapshotJson = row['snapshotJson']
+    const replicaJson = row['replicaJson']
+    const authoritativeRevision = row['authoritativeRevision']
+    const appliedPendingLocalSeq = row['appliedPendingLocalSeq']
     if (
-      typeof snapshotJson !== "string" ||
-      typeof replicaJson !== "string" ||
-      typeof authoritativeRevision !== "number" ||
-      typeof appliedPendingLocalSeq !== "number"
+      typeof snapshotJson !== 'string' ||
+      typeof replicaJson !== 'string' ||
+      typeof authoritativeRevision !== 'number' ||
+      typeof appliedPendingLocalSeq !== 'number'
     ) {
-      return null;
+      return null
     }
     try {
       return parseWorkbookStoredState({
@@ -500,20 +463,20 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
         replica: JSON.parse(replicaJson) as unknown,
         authoritativeRevision,
         appliedPendingLocalSeq,
-      });
+      })
     } catch {
-      return null;
+      return null
     }
   }
 
   async persistProjectionState(input: {
-    readonly state: WorkbookStoredState;
-    readonly authoritativeBase: WorkbookLocalAuthoritativeBase;
-    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
+    readonly state: WorkbookStoredState
+    readonly authoritativeBase: WorkbookLocalAuthoritativeBase
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay
   }): Promise<void> {
     this.db.transaction((db) => {
-      writeWorkbookAuthoritativeBase(db, input.authoritativeBase);
-      writeWorkbookProjectionOverlay(db, input.projectionOverlay);
+      writeWorkbookAuthoritativeBase(db, input.authoritativeBase)
+      writeWorkbookProjectionOverlay(db, input.projectionOverlay)
       db.exec(
         `
           INSERT INTO runtime_state (
@@ -544,15 +507,15 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
             Date.now(),
           ],
         },
-      );
-    });
+      )
+    })
   }
 
   async ingestAuthoritativeDelta(input: {
-    readonly state: WorkbookStoredState;
-    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta;
-    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
-    readonly removePendingMutationIds?: readonly string[];
+    readonly state: WorkbookStoredState
+    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay
+    readonly removePendingMutationIds?: readonly string[]
   }): Promise<void> {
     this.db.transaction((db) => {
       if ((input.removePendingMutationIds?.length ?? 0) > 0) {
@@ -565,20 +528,20 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
                    failure_message = NULL
              WHERE op_id = ?
           `,
-        );
-        const ackedAtUnixMs = Date.now();
+        )
+        const ackedAtUnixMs = Date.now()
         try {
           input.removePendingMutationIds?.forEach((id) => {
-            ackPendingMutation.bind([ackedAtUnixMs, id]);
-            ackPendingMutation.step();
-            ackPendingMutation.reset();
-          });
+            ackPendingMutation.bind([ackedAtUnixMs, id])
+            ackPendingMutation.step()
+            ackPendingMutation.reset()
+          })
         } finally {
-          ackPendingMutation.finalize();
+          ackPendingMutation.finalize()
         }
       }
-      writeWorkbookAuthoritativeDelta(db, input.authoritativeDelta);
-      writeWorkbookProjectionOverlay(db, input.projectionOverlay);
+      writeWorkbookAuthoritativeDelta(db, input.authoritativeDelta)
+      writeWorkbookProjectionOverlay(db, input.projectionOverlay)
       db.exec(
         `
           INSERT INTO runtime_state (
@@ -609,8 +572,8 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
             Date.now(),
           ],
         },
-      );
-    });
+      )
+    })
   }
 
   async listPendingMutations(): Promise<WorkbookLocalMutationRecord[]> {
@@ -634,7 +597,7 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
          WHERE status != 'acked'
          ORDER BY local_seq ASC
       `,
-    );
+    )
   }
 
   async listMutationJournalEntries(): Promise<WorkbookLocalMutationRecord[]> {
@@ -657,34 +620,34 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
           FROM pending_op
          ORDER BY local_seq ASC
       `,
-    );
+    )
   }
 
   private readMutationRows(sql: string): WorkbookLocalMutationRecord[] {
-    const rows: Record<string, SqlValue>[] = [];
-    const statement = this.db.prepare(sql);
+    const rows: Record<string, SqlValue>[] = []
+    const statement = this.db.prepare(sql)
     try {
       while (statement.step()) {
-        rows.push(statement.get({}));
+        rows.push(statement.get({}))
       }
     } finally {
-      statement.finalize();
+      statement.finalize()
     }
     return rows.flatMap((row) => {
-      const argsJson = row["argsJson"];
-      if (typeof argsJson !== "string") {
-        return [];
+      const argsJson = row['argsJson']
+      if (typeof argsJson !== 'string') {
+        return []
       }
       try {
         const parsed = parseWorkbookLocalMutationRecord({
           ...row,
           args: JSON.parse(argsJson) as unknown,
-        });
-        return parsed ? [parsed] : [];
+        })
+        return parsed ? [parsed] : []
       } catch {
-        return [];
+        return []
       }
-    });
+    })
   }
 
   async appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void> {
@@ -727,8 +690,8 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
             mutation.status,
           ],
         },
-      );
-    });
+      )
+    })
   }
 
   async updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void> {
@@ -766,30 +729,30 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
           mutation.id,
         ],
       },
-    );
+    )
   }
 
   async removePendingMutation(id: string): Promise<void> {
-    this.db.exec("DELETE FROM pending_op WHERE op_id = ?", {
+    this.db.exec('DELETE FROM pending_op WHERE op_id = ?', {
       bind: [id],
-    });
+    })
   }
 
   readViewportProjection(
     sheetName: string,
     viewport: {
-      rowStart: number;
-      rowEnd: number;
-      colStart: number;
-      colEnd: number;
+      rowStart: number
+      rowEnd: number
+      colStart: number
+      colEnd: number
     },
   ): WorkbookLocalViewportBase | null {
-    return readWorkbookViewportProjection(this.db, sheetName, viewport);
+    return readWorkbookViewportProjection(this.db, sheetName, viewport)
   }
 
   close(): void {
     if (this.closeDbOnClose) {
-      this.db.close();
+      this.db.close()
     }
   }
 }
@@ -798,56 +761,54 @@ async function getMemorySqliteRuntime(): Promise<Sqlite3Static> {
   if (!memorySqliteRuntimePromise) {
     memorySqliteRuntimePromise = (async () => {
       try {
-        return await sqlite3InitModule();
+        return await sqlite3InitModule()
       } catch (error) {
-        memorySqliteRuntimePromise = null;
-        throw error;
+        memorySqliteRuntimePromise = null
+        throw error
       }
-    })();
+    })()
   }
-  return await memorySqliteRuntimePromise;
+  return await memorySqliteRuntimePromise
 }
 
-export function createOpfsWorkbookLocalStoreFactory(
-  options: OpfsWorkbookLocalStoreFactoryOptions = {},
-): WorkbookLocalStoreFactory {
+export function createOpfsWorkbookLocalStoreFactory(options: OpfsWorkbookLocalStoreFactoryOptions = {}): WorkbookLocalStoreFactory {
   const resolvedOptions: Required<OpfsWorkbookLocalStoreFactoryOptions> = {
     vfsName: options.vfsName ?? WORKBOOK_VFS_NAME,
     directory: options.directory ?? WORKBOOK_VFS_DIRECTORY,
     initialCapacity: options.initialCapacity ?? WORKBOOK_VFS_INITIAL_CAPACITY,
-  };
+  }
 
   return {
     async open(documentId: string): Promise<WorkbookLocalStore> {
       try {
-        const { poolUtil } = await getSqliteRuntime(resolvedOptions);
-        const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`;
-        const db = new poolUtil.OpfsSAHPoolDb(path);
-        initializeWorkbookLocalStoreSchema(db);
-        return new SqliteWorkbookLocalStore(db, documentId);
+        const { poolUtil } = await getSqliteRuntime(resolvedOptions)
+        const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`
+        const db = new poolUtil.OpfsSAHPoolDb(path)
+        initializeWorkbookLocalStoreSchema(db)
+        return new SqliteWorkbookLocalStore(db, documentId)
       } catch (error) {
         if (error instanceof WorkbookLocalStoreLockedError || isAccessHandleConflict(error)) {
-          throw toWorkbookLocalStoreLockedError(documentId, error);
+          throw toWorkbookLocalStoreLockedError(documentId, error)
         }
-        throw error;
+        throw error
       }
     },
-  };
+  }
 }
 
 export function createMemoryWorkbookLocalStoreFactory(): WorkbookLocalStoreFactory {
-  const databases = new Map<string, Database>();
+  const databases = new Map<string, Database>()
 
   return {
     async open(documentId: string): Promise<WorkbookLocalStore> {
-      let db = databases.get(documentId);
+      let db = databases.get(documentId)
       if (!db) {
-        const sqlite3 = await getMemorySqliteRuntime();
-        db = new sqlite3.oo1.DB(":memory:", "c");
-        initializeWorkbookLocalStoreSchema(db);
-        databases.set(documentId, db);
+        const sqlite3 = await getMemorySqliteRuntime()
+        db = new sqlite3.oo1.DB(':memory:', 'c')
+        initializeWorkbookLocalStoreSchema(db)
+        databases.set(documentId, db)
       }
-      return new SqliteWorkbookLocalStore(db, documentId, false);
+      return new SqliteWorkbookLocalStore(db, documentId, false)
     },
-  };
+  }
 }

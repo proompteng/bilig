@@ -1,19 +1,15 @@
-import { describe, expect, test } from "vitest";
-import {
-  resolveBodyDoubleClickIntent,
-  resolveHeaderClickIntent,
-  shouldSkipGridSelectionChange,
-} from "../gridEventPolicy.js";
+import { describe, expect, test } from 'vitest'
+import { resolveBodyDoubleClickIntent, resolveHeaderClickIntent, shouldSkipGridSelectionChange } from '../gridEventPolicy.js'
 
-describe("gridEventPolicy", () => {
-  test("resolves body double click into ignore, edit, or autofit intent", () => {
+describe('gridEventPolicy', () => {
+  test('resolves body double click into ignore, edit, or autofit intent', () => {
     expect(
       resolveBodyDoubleClickIntent({
         resizeTarget: null,
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 3],
       }),
-    ).toEqual({ kind: "ignore" });
+    ).toEqual({ kind: 'ignore' })
 
     expect(
       resolveBodyDoubleClickIntent({
@@ -21,7 +17,7 @@ describe("gridEventPolicy", () => {
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 4],
       }),
-    ).toEqual({ kind: "autofit-column", columnIndex: 3 });
+    ).toEqual({ kind: 'autofit-column', columnIndex: 3 })
 
     expect(
       resolveBodyDoubleClickIntent({
@@ -29,7 +25,7 @@ describe("gridEventPolicy", () => {
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 4],
       }),
-    ).toEqual({ kind: "edit-cell", cell: [2, 4] });
+    ).toEqual({ kind: 'edit-cell', cell: [2, 4] })
 
     expect(
       resolveBodyDoubleClickIntent({
@@ -37,10 +33,10 @@ describe("gridEventPolicy", () => {
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 3],
       }),
-    ).toEqual({ kind: "ignore" });
-  });
+    ).toEqual({ kind: 'ignore' })
+  })
 
-  test("resolves header click into ignore, autofit, or selection intent", () => {
+  test('resolves header click into ignore, autofit, or selection intent', () => {
     expect(
       resolveHeaderClickIntent({
         isEdge: true,
@@ -49,7 +45,7 @@ describe("gridEventPolicy", () => {
         columnIndex: 4,
         selectedRow: 7,
       }),
-    ).toEqual({ kind: "autofit-column", columnIndex: 4 });
+    ).toEqual({ kind: 'autofit-column', columnIndex: 4 })
 
     expect(
       resolveHeaderClickIntent({
@@ -59,7 +55,7 @@ describe("gridEventPolicy", () => {
         columnIndex: 4,
         selectedRow: 7,
       }),
-    ).toEqual({ kind: "ignore" });
+    ).toEqual({ kind: 'ignore' })
 
     expect(
       resolveHeaderClickIntent({
@@ -69,10 +65,10 @@ describe("gridEventPolicy", () => {
         columnIndex: 4,
         selectedRow: 7,
       }),
-    ).toEqual({ kind: "select-column", addr: "E8", columnIndex: 4, selectedRow: 7 });
-  });
+    ).toEqual({ kind: 'select-column', addr: 'E8', columnIndex: 4, selectedRow: 7 })
+  })
 
-  test("marks grid selection changes that should be skipped", () => {
+  test('marks grid selection changes that should be skipped', () => {
     expect(
       shouldSkipGridSelectionChange({
         columnResizeActive: true,
@@ -85,7 +81,7 @@ describe("gridEventPolicy", () => {
       skip: true,
       consumeIgnoreNextPointerSelection: false,
       clearPostDragSelectionExpiry: false,
-    });
+    })
 
     expect(
       shouldSkipGridSelectionChange({
@@ -99,7 +95,7 @@ describe("gridEventPolicy", () => {
       skip: true,
       consumeIgnoreNextPointerSelection: false,
       clearPostDragSelectionExpiry: true,
-    });
+    })
 
     expect(
       shouldSkipGridSelectionChange({
@@ -113,7 +109,7 @@ describe("gridEventPolicy", () => {
       skip: true,
       consumeIgnoreNextPointerSelection: true,
       clearPostDragSelectionExpiry: false,
-    });
+    })
 
     expect(
       shouldSkipGridSelectionChange({
@@ -127,6 +123,6 @@ describe("gridEventPolicy", () => {
       skip: false,
       consumeIgnoreNextPointerSelection: false,
       clearPostDragSelectionExpiry: false,
-    });
-  });
-});
+    })
+  })
+})

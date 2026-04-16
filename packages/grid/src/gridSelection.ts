@@ -1,6 +1,6 @@
-import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
-import { formatAddress, indexToColumn } from "@bilig/formula";
-import { CompactSelection, type GridSelection, type Item, type Rectangle } from "./gridTypes.js";
+import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
+import { formatAddress, indexToColumn } from '@bilig/formula'
+import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
 
 export function createGridSelection(col: number, row: number): GridSelection {
   return {
@@ -11,95 +11,86 @@ export function createGridSelection(col: number, row: number): GridSelection {
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty(),
-  };
+  }
 }
 
 export function clampCell([col, row]: Item): Item {
-  return [Math.min(MAX_COLS - 1, Math.max(0, col)), Math.min(MAX_ROWS - 1, Math.max(0, row))];
+  return [Math.min(MAX_COLS - 1, Math.max(0, col)), Math.min(MAX_ROWS - 1, Math.max(0, row))]
 }
 
 export function clampSelectionRange(range: Rectangle): Rectangle {
-  const x = Math.min(MAX_COLS - 1, Math.max(0, range.x));
-  const y = Math.min(MAX_ROWS - 1, Math.max(0, range.y));
-  const maxWidth = MAX_COLS - x;
-  const maxHeight = MAX_ROWS - y;
+  const x = Math.min(MAX_COLS - 1, Math.max(0, range.x))
+  const y = Math.min(MAX_ROWS - 1, Math.max(0, range.y))
+  const maxWidth = MAX_COLS - x
+  const maxHeight = MAX_ROWS - y
   return {
     x,
     y,
     width: Math.max(1, Math.min(maxWidth, range.width)),
     height: Math.max(1, Math.min(maxHeight, range.height)),
-  };
+  }
 }
 
 export function rectangleToAddresses(range: Rectangle): {
-  startAddress: string;
-  endAddress: string;
+  startAddress: string
+  endAddress: string
 } {
-  const clamped = clampSelectionRange(range);
+  const clamped = clampSelectionRange(range)
   return {
     startAddress: formatAddress(clamped.y, clamped.x),
     endAddress: formatAddress(clamped.y + clamped.height - 1, clamped.x + clamped.width - 1),
-  };
+  }
 }
 
 export function selectionToAddresses(
   selection: GridSelection,
   fallbackAddress: string,
 ): {
-  startAddress: string;
-  endAddress: string;
+  startAddress: string
+  endAddress: string
 } {
-  const selectedColumnStart = selection.columns.first();
-  const selectedColumnEnd = selection.columns.last();
-  const selectedRowStart = selection.rows.first();
-  const selectedRowEnd = selection.rows.last();
+  const selectedColumnStart = selection.columns.first()
+  const selectedColumnEnd = selection.columns.last()
+  const selectedRowStart = selection.rows.first()
+  const selectedRowEnd = selection.rows.last()
 
-  if (
-    selectedColumnStart === 0 &&
-    selectedColumnEnd === MAX_COLS - 1 &&
-    selectedRowStart === 0 &&
-    selectedRowEnd === MAX_ROWS - 1
-  ) {
+  if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
     return {
-      startAddress: "A1",
+      startAddress: 'A1',
       endAddress: formatAddress(MAX_ROWS - 1, MAX_COLS - 1),
-    };
+    }
   }
 
   if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
     return {
       startAddress: formatAddress(0, Math.min(selectedColumnStart, selectedColumnEnd)),
       endAddress: formatAddress(MAX_ROWS - 1, Math.max(selectedColumnStart, selectedColumnEnd)),
-    };
+    }
   }
 
   if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
     return {
       startAddress: formatAddress(Math.min(selectedRowStart, selectedRowEnd), 0),
       endAddress: formatAddress(Math.max(selectedRowStart, selectedRowEnd), MAX_COLS - 1),
-    };
+    }
   }
 
-  const range = selection.current?.range;
+  const range = selection.current?.range
   if (!range) {
     return {
       startAddress: fallbackAddress,
       endAddress: fallbackAddress,
-    };
+    }
   }
 
-  return rectangleToAddresses(range);
+  return rectangleToAddresses(range)
 }
 
-export function createRangeSelection(
-  base: GridSelection,
-  anchor: Item,
-  target: Item,
-): GridSelection {
-  const startCol = Math.min(anchor[0], target[0]);
-  const endCol = Math.max(anchor[0], target[0]);
-  const startRow = Math.min(anchor[1], target[1]);
-  const endRow = Math.max(anchor[1], target[1]);
+export function createRangeSelection(base: GridSelection, anchor: Item, target: Item): GridSelection {
+  const startCol = Math.min(anchor[0], target[0])
+  const endCol = Math.max(anchor[0], target[0])
+  const startRow = Math.min(anchor[1], target[1])
+  const endRow = Math.max(anchor[1], target[1])
 
   return {
     ...base,
@@ -113,7 +104,7 @@ export function createRangeSelection(
       },
       rangeStack: [],
     },
-  };
+  }
 }
 
 export function createRectangleSelectionFromRange(range: Rectangle): GridSelection {
@@ -125,45 +116,40 @@ export function createRectangleSelectionFromRange(range: Rectangle): GridSelecti
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty(),
-  };
+  }
 }
 
 export function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
-  const selectedColumnStart = selection.columns.first();
-  const selectedColumnEnd = selection.columns.last();
-  const selectedRowStart = selection.rows.first();
-  const selectedRowEnd = selection.rows.last();
-  if (
-    selectedColumnStart === 0 &&
-    selectedColumnEnd === MAX_COLS - 1 &&
-    selectedRowStart === 0 &&
-    selectedRowEnd === MAX_ROWS - 1
-  ) {
-    return "All";
+  const selectedColumnStart = selection.columns.first()
+  const selectedColumnEnd = selection.columns.last()
+  const selectedRowStart = selection.rows.first()
+  const selectedRowEnd = selection.rows.last()
+  if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
+    return 'All'
   }
 
   if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
-    const start = indexToColumn(selectedColumnStart);
-    const end = indexToColumn(selectedColumnEnd);
-    return start === end ? `${start}:${start}` : `${start}:${end}`;
+    const start = indexToColumn(selectedColumnStart)
+    const end = indexToColumn(selectedColumnEnd)
+    return start === end ? `${start}:${start}` : `${start}:${end}`
   }
 
   if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
-    const start = String(selectedRowStart + 1);
-    const end = String(selectedRowEnd + 1);
-    return start === end ? `${start}:${start}` : `${start}:${end}`;
+    const start = String(selectedRowStart + 1)
+    const end = String(selectedRowEnd + 1)
+    return start === end ? `${start}:${start}` : `${start}:${end}`
   }
 
-  const range = selection.current?.range;
+  const range = selection.current?.range
   if (!range) {
-    return fallbackAddress;
+    return fallbackAddress
   }
-  const start = formatAddress(range.y, range.x);
+  const start = formatAddress(range.y, range.x)
   if (range.width === 1 && range.height === 1) {
-    return start;
+    return start
   }
-  const end = formatAddress(range.y + range.height - 1, range.x + range.width - 1);
-  return `${start}:${end}`;
+  const end = formatAddress(range.y + range.height - 1, range.x + range.width - 1)
+  return `${start}:${end}`
 }
 
 export function createColumnSelection(col: number, row: number): GridSelection {
@@ -175,16 +161,12 @@ export function createColumnSelection(col: number, row: number): GridSelection {
     },
     columns: CompactSelection.fromSingleSelection(col),
     rows: CompactSelection.empty(),
-  };
+  }
 }
 
-export function createColumnSliceSelection(
-  startCol: number,
-  endCol: number,
-  row: number,
-): GridSelection {
-  const left = Math.min(startCol, endCol);
-  const right = Math.max(startCol, endCol);
+export function createColumnSliceSelection(startCol: number, endCol: number, row: number): GridSelection {
+  const left = Math.min(startCol, endCol)
+  const right = Math.max(startCol, endCol)
   return {
     current: {
       cell: [startCol, row],
@@ -193,7 +175,7 @@ export function createColumnSliceSelection(
     },
     columns: CompactSelection.fromSingleSelection([left, right + 1]),
     rows: CompactSelection.empty(),
-  };
+  }
 }
 
 export function createRowSelection(col: number, row: number): GridSelection {
@@ -205,16 +187,12 @@ export function createRowSelection(col: number, row: number): GridSelection {
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.fromSingleSelection(row),
-  };
+  }
 }
 
-export function createRowSliceSelection(
-  col: number,
-  startRow: number,
-  endRow: number,
-): GridSelection {
-  const top = Math.min(startRow, endRow);
-  const bottom = Math.max(startRow, endRow);
+export function createRowSliceSelection(col: number, startRow: number, endRow: number): GridSelection {
+  const top = Math.min(startRow, endRow)
+  const bottom = Math.max(startRow, endRow)
   return {
     current: {
       cell: [col, startRow],
@@ -223,7 +201,7 @@ export function createRowSliceSelection(
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.fromSingleSelection([top, bottom + 1]),
-  };
+  }
 }
 
 export function createSheetSelection(): GridSelection {
@@ -235,7 +213,7 @@ export function createSheetSelection(): GridSelection {
     },
     columns: CompactSelection.fromSingleSelection([0, MAX_COLS]),
     rows: CompactSelection.fromSingleSelection([0, MAX_ROWS]),
-  };
+  }
 }
 
 export function isSheetSelection(selection: GridSelection): boolean {
@@ -244,9 +222,9 @@ export function isSheetSelection(selection: GridSelection): boolean {
     selection.columns.last() === MAX_COLS - 1 &&
     selection.rows.first() === 0 &&
     selection.rows.last() === MAX_ROWS - 1
-  );
+  )
 }
 
 export function sameItem(left: Item | null, right: Item | null): boolean {
-  return left !== null && right !== null && left[0] === right[0] && left[1] === right[1];
+  return left !== null && right !== null && left[0] === right[0] && left[1] === right[1]
 }

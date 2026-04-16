@@ -5,5 +5,5 @@ export {
   type EditMovement,
   type EditSelectionBehavior,
   type SheetGridViewportSubscription,
-} from "./WorkbookGridSurface.js";
-export { WorkbookGridSurface as SheetGridView } from "./WorkbookGridSurface.js";
+} from './WorkbookGridSurface.js'
+export { WorkbookGridSurface as SheetGridView } from './WorkbookGridSurface.js'

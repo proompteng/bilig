@@ -6,67 +6,57 @@ import {
   type AgentResponse,
   type LoadWorkbookFileRequest,
   type WorkbookLoadedResponse,
-} from "@bilig/agent-api";
-import { importWorkbookFile, type ImportedWorkbook } from "@bilig/excel-import";
-import {
-  buildBrowserUrl,
-  createImportedDocumentId,
-  decodeWorkbookBase64,
-  normalizeBaseUrl,
-} from "./session-shared.js";
+} from '@bilig/agent-api'
+import { importWorkbookFile, type ImportedWorkbook } from '@bilig/excel-import'
+import { buildBrowserUrl, createImportedDocumentId, decodeWorkbookBase64, normalizeBaseUrl } from './session-shared.js'
 
 export interface AgentFrameContext {
-  serverUrl?: string;
-  browserAppBaseUrl?: string;
+  serverUrl?: string
+  browserAppBaseUrl?: string
 }
 
 export interface WorkbookLoadPreparationOptions {
-  maxImportBytes?: number;
-  publicServerUrl?: string;
-  browserAppBaseUrl?: string;
-  defaultServerUrl?: string;
+  maxImportBytes?: number
+  publicServerUrl?: string
+  browserAppBaseUrl?: string
+  defaultServerUrl?: string
 }
 
 export interface PreparedWorkbookLoad {
-  imported: ImportedWorkbook;
-  documentId: string;
-  sessionId: string;
-  serverUrl: string;
-  browserUrl?: string;
+  imported: ImportedWorkbook
+  documentId: string
+  sessionId: string
+  serverUrl: string
+  browserUrl?: string
 }
 
 export type WorksheetAgentRequest = Exclude<
   AgentRequest,
-  | LoadWorkbookFileRequest
-  | { kind: "openWorkbookSession" }
-  | { kind: "closeWorkbookSession" }
-  | { kind: "getMetrics" }
->;
+  LoadWorkbookFileRequest | { kind: 'openWorkbookSession' } | { kind: 'closeWorkbookSession' } | { kind: 'getMetrics' }
+>
 
 interface AgentFrameRouterOptions {
-  invalidFrameMessage: string;
-  errorCode: string;
+  invalidFrameMessage: string
+  errorCode: string
   loadWorkbookFile: (
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
-  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>;
+  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>
   openWorkbookSession: (
-    request: Extract<AgentRequest, { kind: "openWorkbookSession" }>,
-  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>;
+    request: Extract<AgentRequest, { kind: 'openWorkbookSession' }>,
+  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>
   closeWorkbookSession: (
-    request: Extract<AgentRequest, { kind: "closeWorkbookSession" }>,
-  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>;
-  getMetrics: (
-    request: Extract<AgentRequest, { kind: "getMetrics" }>,
-  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>;
+    request: Extract<AgentRequest, { kind: 'closeWorkbookSession' }>,
+  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>
+  getMetrics: (request: Extract<AgentRequest, { kind: 'getMetrics' }>) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>
   handleWorksheetRequest?: (
-    frame: Extract<AgentFrame, { kind: "request" }>,
+    frame: Extract<AgentFrame, { kind: 'request' }>,
     request: WorksheetAgentRequest,
-  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>;
+  ) => AgentResponse | AgentFrame | Promise<AgentResponse | AgentFrame>
 }
 
 export function normalizeSessionId(documentId: string, replicaId: string): string {
-  return `${documentId}:${replicaId}`;
+  return `${documentId}:${replicaId}`
 }
 
 export function prepareWorkbookLoad(
@@ -75,32 +65,23 @@ export function prepareWorkbookLoad(
   options: WorkbookLoadPreparationOptions = {},
 ): PreparedWorkbookLoad {
   if (request.contentType !== XLSX_CONTENT_TYPE && request.contentType !== CSV_CONTENT_TYPE) {
-    throw new Error("Unsupported workbook upload content type");
+    throw new Error('Unsupported workbook upload content type')
   }
-  if (request.openMode === "replace" && !request.documentId) {
-    throw new Error("Workbook replace uploads require documentId");
+  if (request.openMode === 'replace' && !request.documentId) {
+    throw new Error('Workbook replace uploads require documentId')
   }
 
-  const bytes = decodeWorkbookBase64(request.bytesBase64);
-  const maxImportBytes = options.maxImportBytes ?? 10 * 1024 * 1024;
+  const bytes = decodeWorkbookBase64(request.bytesBase64)
+  const maxImportBytes = options.maxImportBytes ?? 10 * 1024 * 1024
   if (bytes.byteLength > maxImportBytes) {
-    throw new Error(`Workbook upload exceeds ${maxImportBytes} bytes`);
+    throw new Error(`Workbook upload exceeds ${maxImportBytes} bytes`)
   }
 
-  const imported = importWorkbookFile(bytes, request.fileName, request.contentType);
-  const documentId = request.documentId ?? createImportedDocumentId(request.contentType);
-  const sessionId = normalizeSessionId(documentId, request.replicaId);
-  const serverUrl = normalizeBaseUrl(
-    context.serverUrl ??
-      options.publicServerUrl ??
-      options.defaultServerUrl ??
-      "http://127.0.0.1:4321",
-  );
-  const browserUrl = buildBrowserUrl(
-    context.browserAppBaseUrl ?? options.browserAppBaseUrl,
-    serverUrl,
-    documentId,
-  );
+  const imported = importWorkbookFile(bytes, request.fileName, request.contentType)
+  const documentId = request.documentId ?? createImportedDocumentId(request.contentType)
+  const sessionId = normalizeSessionId(documentId, request.replicaId)
+  const serverUrl = normalizeBaseUrl(context.serverUrl ?? options.publicServerUrl ?? options.defaultServerUrl ?? 'http://127.0.0.1:4321')
+  const browserUrl = buildBrowserUrl(context.browserAppBaseUrl ?? options.browserAppBaseUrl, serverUrl, documentId)
 
   return {
     imported,
@@ -108,15 +89,12 @@ export function prepareWorkbookLoad(
     sessionId,
     serverUrl,
     ...(browserUrl ? { browserUrl } : {}),
-  };
+  }
 }
 
-export function createWorkbookLoadedResponse(
-  requestId: string,
-  prepared: PreparedWorkbookLoad,
-): WorkbookLoadedResponse {
+export function createWorkbookLoadedResponse(requestId: string, prepared: PreparedWorkbookLoad): WorkbookLoadedResponse {
   return {
-    kind: "workbookLoaded",
+    kind: 'workbookLoaded',
     id: requestId,
     documentId: prepared.documentId,
     sessionId: prepared.sessionId,
@@ -125,7 +103,7 @@ export function createWorkbookLoadedResponse(
     serverUrl: prepared.serverUrl,
     ...(prepared.browserUrl ? { browserUrl: prepared.browserUrl } : {}),
     warnings: prepared.imported.warnings,
-  };
+  }
 }
 
 export async function routeAgentFrame(
@@ -133,66 +111,64 @@ export async function routeAgentFrame(
   context: AgentFrameContext,
   options: AgentFrameRouterOptions,
 ): Promise<AgentFrame> {
-  if (frame.kind !== "request") {
+  if (frame.kind !== 'request') {
     return responseFrame({
-      kind: "error",
-      id: "unknown",
-      code: "INVALID_AGENT_FRAME",
+      kind: 'error',
+      id: 'unknown',
+      code: 'INVALID_AGENT_FRAME',
       message: options.invalidFrameMessage,
       retryable: false,
-    });
+    })
   }
 
-  const request = frame.request;
+  const request = frame.request
   try {
-    if (request.kind === "loadWorkbookFile") {
-      return normalizeAgentHandlerResult(await options.loadWorkbookFile(request, context));
+    if (request.kind === 'loadWorkbookFile') {
+      return normalizeAgentHandlerResult(await options.loadWorkbookFile(request, context))
     }
-    if (request.kind === "openWorkbookSession") {
-      return normalizeAgentHandlerResult(await options.openWorkbookSession(request));
+    if (request.kind === 'openWorkbookSession') {
+      return normalizeAgentHandlerResult(await options.openWorkbookSession(request))
     }
-    if (request.kind === "closeWorkbookSession") {
-      return normalizeAgentHandlerResult(await options.closeWorkbookSession(request));
+    if (request.kind === 'closeWorkbookSession') {
+      return normalizeAgentHandlerResult(await options.closeWorkbookSession(request))
     }
-    if (request.kind === "getMetrics") {
-      return normalizeAgentHandlerResult(await options.getMetrics(request));
+    if (request.kind === 'getMetrics') {
+      return normalizeAgentHandlerResult(await options.getMetrics(request))
     }
 
-    const worksheetRequest = request as WorksheetAgentRequest;
+    const worksheetRequest = request as WorksheetAgentRequest
     if (!options.handleWorksheetRequest) {
-      return responseFrame(worksheetHostUnavailableResponse(worksheetRequest));
+      return responseFrame(worksheetHostUnavailableResponse(worksheetRequest))
     }
-    return normalizeAgentHandlerResult(
-      await options.handleWorksheetRequest(frame, worksheetRequest),
-    );
+    return normalizeAgentHandlerResult(await options.handleWorksheetRequest(frame, worksheetRequest))
   } catch (error) {
     return responseFrame({
-      kind: "error",
+      kind: 'error',
       id: request.id,
       code: options.errorCode,
       message: error instanceof Error ? error.message : String(error),
       retryable: false,
-    });
+    })
   }
 }
 
 export function worksheetHostUnavailableResponse(request: WorksheetAgentRequest): AgentResponse {
   return {
-    kind: "error",
+    kind: 'error',
     id: request.id,
-    code: "WORKSHEET_HOST_UNAVAILABLE",
+    code: 'WORKSHEET_HOST_UNAVAILABLE',
     message: `${request.kind} requires a live worksheet executor, but none is configured for this server`,
     retryable: true,
-  };
+  }
 }
 
 function responseFrame(response: AgentResponse): AgentFrame {
-  return { kind: "response", response };
+  return { kind: 'response', response }
 }
 
 function normalizeAgentHandlerResult(result: AgentResponse | AgentFrame): AgentFrame {
-  if (result.kind === "request" || result.kind === "response" || result.kind === "event") {
-    return result;
+  if (result.kind === 'request' || result.kind === 'response' || result.kind === 'event') {
+    return result
   }
-  return responseFrame(result);
+  return responseFrame(result)
 }

@@ -1,15 +1,8 @@
-import { BuiltinId, ErrorCode, ValueTag } from "./protocol";
-import {
-  inputCellNumeric,
-  inputCellScalarValue,
-  inputCellTag,
-  inputColsFromSlot,
-  inputRowsFromSlot,
-  toNumberOrNaN,
-} from "./operands";
-import { rangeSupportedScalarOnly } from "./builtin-args";
-import { STACK_KIND_SCALAR, writeArrayResult, writeResult } from "./result-io";
-import { allocateSpillArrayResult, writeSpillArrayNumber, writeSpillArrayValue } from "./vm";
+import { BuiltinId, ErrorCode, ValueTag } from './protocol'
+import { inputCellNumeric, inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberOrNaN } from './operands'
+import { rangeSupportedScalarOnly } from './builtin-args'
+import { STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
+import { allocateSpillArrayResult, writeSpillArrayNumber, writeSpillArrayValue } from './vm'
 import {
   collectPairedNumericStats,
   pairedCenteredCrossProducts,
@@ -18,7 +11,7 @@ import {
   pairedSampleCount,
   pairedSumX,
   pairedSumY,
-} from "./statistics-tests";
+} from './statistics-tests'
 
 export function tryApplyRegressionBuiltin(
   builtinId: i32,
@@ -66,23 +59,14 @@ export function tryApplyRegressionBuiltin(
       cellNumbers,
       cellStringIds,
       cellErrors,
-    );
+    )
     if (statsError != 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        <f64>statsError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, <f64>statsError, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const centeredSumSquaresX = pairedCenteredSumSquaresX();
-    const centeredSumSquaresY = pairedCenteredSumSquaresY();
-    const centeredCrossProducts = pairedCenteredCrossProducts();
+    const centeredSumSquaresX = pairedCenteredSumSquaresX()
+    const centeredSumSquaresY = pairedCenteredSumSquaresY()
+    const centeredCrossProducts = pairedCenteredCrossProducts()
 
     if (builtinId == BuiltinId.Covar || builtinId == BuiltinId.CovarianceP) {
       return writeResult(
@@ -94,21 +78,12 @@ export function tryApplyRegressionBuiltin(
         valueStack,
         tagStack,
         kindStack,
-      );
+      )
     }
 
     if (builtinId == BuiltinId.CovarianceS) {
       if (pairedSampleCount < 2) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       return writeResult(
         base,
@@ -119,28 +94,15 @@ export function tryApplyRegressionBuiltin(
         valueStack,
         tagStack,
         kindStack,
-      );
+      )
     }
 
-    if (
-      builtinId == BuiltinId.Correl ||
-      builtinId == BuiltinId.Pearson ||
-      builtinId == BuiltinId.Rsq
-    ) {
-      const denominator = Math.sqrt(centeredSumSquaresX * centeredSumSquaresY);
+    if (builtinId == BuiltinId.Correl || builtinId == BuiltinId.Pearson || builtinId == BuiltinId.Rsq) {
+      const denominator = Math.sqrt(centeredSumSquaresX * centeredSumSquaresY)
       if (pairedSampleCount < 2 || denominator <= 0 || !isFinite(denominator)) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      const correlation = centeredCrossProducts / denominator;
+      const correlation = centeredCrossProducts / denominator
       return writeResult(
         base,
         STACK_KIND_SCALAR,
@@ -150,65 +112,28 @@ export function tryApplyRegressionBuiltin(
         valueStack,
         tagStack,
         kindStack,
-      );
+      )
     }
 
     if (centeredSumSquaresX == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Div0,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const slope = centeredCrossProducts / centeredSumSquaresX;
+    const slope = centeredCrossProducts / centeredSumSquaresX
     if (builtinId == BuiltinId.Slope) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Number,
-        slope,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, slope, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const intercept =
-      pairedSampleCount == 0 ? NaN : (pairedSumY - slope * pairedSumX) / <f64>pairedSampleCount;
+    const intercept = pairedSampleCount == 0 ? NaN : (pairedSumY - slope * pairedSumX) / <f64>pairedSampleCount
     if (builtinId == BuiltinId.Intercept) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Number,
-        intercept,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, intercept, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
     if (builtinId == BuiltinId.Steyx) {
       if (pairedSampleCount <= 2) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      const residualSumSquares = max<f64>(0, centeredSumSquaresY - slope * centeredCrossProducts);
+      const residualSumSquares = max<f64>(0, centeredSumSquaresY - slope * centeredCrossProducts)
       return writeResult(
         base,
         STACK_KIND_SCALAR,
@@ -218,49 +143,22 @@ export function tryApplyRegressionBuiltin(
         valueStack,
         tagStack,
         kindStack,
-      );
+      )
     }
 
-    return -1;
+    return -1
   }
 
   if (builtinId == BuiltinId.Forecast && argc == 3) {
     if (kindStack[base] != STACK_KIND_SCALAR) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
     if (tagStack[base] == ValueTag.Error) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        valueStack[base],
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, valueStack[base], rangeIndexStack, valueStack, tagStack, kindStack)
     }
-    const targetX = toNumberOrNaN(tagStack[base], valueStack[base]);
+    const targetX = toNumberOrNaN(tagStack[base], valueStack[base])
     if (!isFinite(targetX)) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
     const statsError = collectPairedNumericStats(
@@ -279,36 +177,17 @@ export function tryApplyRegressionBuiltin(
       cellNumbers,
       cellStringIds,
       cellErrors,
-    );
+    )
     if (statsError != 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        <f64>statsError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, <f64>statsError, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const centeredSumSquaresX = pairedCenteredSumSquaresX();
+    const centeredSumSquaresX = pairedCenteredSumSquaresX()
     if (centeredSumSquaresX == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Div0,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
     }
-    const slope = pairedCenteredCrossProducts() / centeredSumSquaresX;
-    const intercept =
-      pairedSampleCount == 0 ? NaN : (pairedSumY - slope * pairedSumX) / <f64>pairedSampleCount;
+    const slope = pairedCenteredCrossProducts() / centeredSumSquaresX
+    const intercept = pairedSampleCount == 0 ? NaN : (pairedSumY - slope * pairedSumX) / <f64>pairedSampleCount
     return writeResult(
       base,
       STACK_KIND_SCALAR,
@@ -318,23 +197,14 @@ export function tryApplyRegressionBuiltin(
       valueStack,
       tagStack,
       kindStack,
-    );
+    )
   }
 
   if ((builtinId == BuiltinId.Trend || builtinId == BuiltinId.Growth) && argc >= 1 && argc <= 4) {
-    let includeIntercept = true;
+    let includeIntercept = true
     if (argc == 4) {
       if (kindStack[base + 3] != STACK_KIND_SCALAR) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       if (tagStack[base + 3] == ValueTag.Error) {
         return writeResult(
@@ -346,43 +216,25 @@ export function tryApplyRegressionBuiltin(
           valueStack,
           tagStack,
           kindStack,
-        );
+        )
       }
       if (tagStack[base + 3] == ValueTag.Boolean || tagStack[base + 3] == ValueTag.Number) {
-        includeIntercept = valueStack[base + 3] != 0;
+        includeIntercept = valueStack[base + 3] != 0
       } else if (tagStack[base + 3] == ValueTag.Empty) {
-        includeIntercept = false;
+        includeIntercept = false
       } else {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
     }
 
-    const knownYRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts);
-    const knownYCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts);
-    const sampleCount = knownYRows * knownYCols;
+    const knownYRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts)
+    const knownYCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts)
+    const sampleCount = knownYRows * knownYCols
     if (knownYRows < 1 || knownYCols < 1 || sampleCount < 1) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const knownYValues = new Array<f64>();
+    const knownYValues = new Array<f64>()
     for (let row = 0; row < knownYRows; row += 1) {
       for (let col = 0; col < knownYCols; col += 1) {
         const yTag = inputCellTag(
@@ -400,7 +252,7 @@ export function tryApplyRegressionBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
-        );
+        )
         const yRaw = inputCellScalarValue(
           base,
           row,
@@ -418,53 +270,26 @@ export function tryApplyRegressionBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        );
+        )
         if (yTag == ValueTag.Error) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            yRaw,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, yRaw, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        const numeric = toNumberOrNaN(yTag, yRaw);
+        const numeric = toNumberOrNaN(yTag, yRaw)
         if (!isFinite(numeric) || (builtinId == BuiltinId.Growth && numeric <= 0.0)) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            ErrorCode.Value,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        knownYValues.push(builtinId == BuiltinId.Growth ? Math.log(numeric) : numeric);
+        knownYValues.push(builtinId == BuiltinId.Growth ? Math.log(numeric) : numeric)
       }
     }
 
-    let knownXRows = knownYRows;
-    let knownXCols = knownYCols;
-    const knownXValues = new Array<f64>();
+    let knownXRows = knownYRows
+    let knownXCols = knownYCols
+    const knownXValues = new Array<f64>()
     if (argc >= 2) {
-      knownXRows = inputRowsFromSlot(base + 1, kindStack, rangeIndexStack, rangeRowCounts);
-      knownXCols = inputColsFromSlot(base + 1, kindStack, rangeIndexStack, rangeColCounts);
+      knownXRows = inputRowsFromSlot(base + 1, kindStack, rangeIndexStack, rangeRowCounts)
+      knownXCols = inputColsFromSlot(base + 1, kindStack, rangeIndexStack, rangeColCounts)
       if (knownXRows < 1 || knownXCols < 1 || knownXRows * knownXCols != sampleCount) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       for (let row = 0; row < knownXRows; row += 1) {
         for (let col = 0; col < knownXCols; col += 1) {
@@ -483,7 +308,7 @@ export function tryApplyRegressionBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
-          );
+          )
           if (!isFinite(numeric)) {
             return writeResult(
               base,
@@ -494,99 +319,72 @@ export function tryApplyRegressionBuiltin(
               valueStack,
               tagStack,
               kindStack,
-            );
+            )
           }
-          knownXValues.push(numeric);
+          knownXValues.push(numeric)
         }
       }
     } else {
       for (let index = 0; index < sampleCount; index += 1) {
-        knownXValues.push(<f64>(index + 1));
+        knownXValues.push(<f64>(index + 1))
       }
     }
 
-    let slope = 0.0;
-    let intercept = 0.0;
+    let slope = 0.0
+    let intercept = 0.0
     if (includeIntercept) {
-      let sumX = 0.0;
-      let sumY = 0.0;
+      let sumX = 0.0
+      let sumY = 0.0
       for (let index = 0; index < sampleCount; index += 1) {
-        sumX += unchecked(knownXValues[index]);
-        sumY += unchecked(knownYValues[index]);
+        sumX += unchecked(knownXValues[index])
+        sumY += unchecked(knownYValues[index])
       }
-      const meanX = sumX / <f64>sampleCount;
-      const meanY = sumY / <f64>sampleCount;
-      let sumSquaresX = 0.0;
-      let sumCrossProducts = 0.0;
+      const meanX = sumX / <f64>sampleCount
+      const meanY = sumY / <f64>sampleCount
+      let sumSquaresX = 0.0
+      let sumCrossProducts = 0.0
       for (let index = 0; index < sampleCount; index += 1) {
-        const xDeviation = unchecked(knownXValues[index]) - meanX;
-        const yDeviation = unchecked(knownYValues[index]) - meanY;
-        sumSquaresX += xDeviation * xDeviation;
-        sumCrossProducts += xDeviation * yDeviation;
+        const xDeviation = unchecked(knownXValues[index]) - meanX
+        const yDeviation = unchecked(knownYValues[index]) - meanY
+        sumSquaresX += xDeviation * xDeviation
+        sumCrossProducts += xDeviation * yDeviation
       }
       if (sumSquaresX == 0.0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      slope = sumCrossProducts / sumSquaresX;
-      intercept = meanY - slope * meanX;
+      slope = sumCrossProducts / sumSquaresX
+      intercept = meanY - slope * meanX
     } else {
-      let sumSquaresX = 0.0;
-      let sumCrossProducts = 0.0;
+      let sumSquaresX = 0.0
+      let sumCrossProducts = 0.0
       for (let index = 0; index < sampleCount; index += 1) {
-        const xValue = unchecked(knownXValues[index]);
-        const yValue = unchecked(knownYValues[index]);
-        sumSquaresX += xValue * xValue;
-        sumCrossProducts += xValue * yValue;
+        const xValue = unchecked(knownXValues[index])
+        const yValue = unchecked(knownYValues[index])
+        sumSquaresX += xValue * xValue
+        sumCrossProducts += xValue * yValue
       }
       if (sumSquaresX == 0.0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      slope = sumCrossProducts / sumSquaresX;
+      slope = sumCrossProducts / sumSquaresX
     }
 
-    let predictionRows = knownYRows;
-    let predictionCols = knownYCols;
+    let predictionRows = knownYRows
+    let predictionCols = knownYCols
     if (argc >= 3) {
-      predictionRows = inputRowsFromSlot(base + 2, kindStack, rangeIndexStack, rangeRowCounts);
-      predictionCols = inputColsFromSlot(base + 2, kindStack, rangeIndexStack, rangeColCounts);
+      predictionRows = inputRowsFromSlot(base + 2, kindStack, rangeIndexStack, rangeRowCounts)
+      predictionCols = inputColsFromSlot(base + 2, kindStack, rangeIndexStack, rangeColCounts)
       if (predictionRows < 1 || predictionCols < 1) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
     } else if (argc >= 2) {
-      predictionRows = knownXRows;
-      predictionCols = knownXCols;
+      predictionRows = knownXRows
+      predictionCols = knownXCols
     }
 
-    const predictionCount = predictionRows * predictionCols;
+    const predictionCount = predictionRows * predictionCols
     if (predictionCount == 1) {
-      let predictionX = argc >= 2 ? unchecked(knownXValues[0]) : 1.0;
+      let predictionX = argc >= 2 ? unchecked(knownXValues[0]) : 1.0
       if (argc >= 3) {
         predictionX = inputCellNumeric(
           base + 2,
@@ -603,51 +401,24 @@ export function tryApplyRegressionBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
-        );
+        )
         if (!isFinite(predictionX)) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            ErrorCode.Value,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
         }
       }
-      let result = intercept + slope * predictionX;
+      let result = intercept + slope * predictionX
       if (builtinId == BuiltinId.Growth) {
-        result = Math.exp(result);
+        result = Math.exp(result)
       }
       if (!isFinite(result)) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Number,
-        result,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, result, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const arrayIndex = allocateSpillArrayResult(predictionRows, predictionCols);
+    const arrayIndex = allocateSpillArrayResult(predictionRows, predictionCols)
     if (argc >= 3) {
-      let cursor = 0;
+      let cursor = 0
       for (let row = 0; row < predictionRows; row += 1) {
         for (let col = 0; col < predictionCols; col += 1) {
           const predictionX = inputCellNumeric(
@@ -665,7 +436,7 @@ export function tryApplyRegressionBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
-          );
+          )
           if (!isFinite(predictionX)) {
             return writeResult(
               base,
@@ -676,11 +447,11 @@ export function tryApplyRegressionBuiltin(
               valueStack,
               tagStack,
               kindStack,
-            );
+            )
           }
-          let result = intercept + slope * predictionX;
+          let result = intercept + slope * predictionX
           if (builtinId == BuiltinId.Growth) {
-            result = Math.exp(result);
+            result = Math.exp(result)
           }
           if (!isFinite(result)) {
             return writeResult(
@@ -692,61 +463,34 @@ export function tryApplyRegressionBuiltin(
               valueStack,
               tagStack,
               kindStack,
-            );
+            )
           }
-          writeSpillArrayNumber(arrayIndex, cursor, result);
-          cursor += 1;
+          writeSpillArrayNumber(arrayIndex, cursor, result)
+          cursor += 1
         }
       }
     } else {
       for (let index = 0; index < predictionCount; index += 1) {
-        let result = intercept + slope * unchecked(knownXValues[index]);
+        let result = intercept + slope * unchecked(knownXValues[index])
         if (builtinId == BuiltinId.Growth) {
-          result = Math.exp(result);
+          result = Math.exp(result)
         }
         if (!isFinite(result)) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            ErrorCode.Value,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, index, result);
+        writeSpillArrayNumber(arrayIndex, index, result)
       }
     }
 
-    return writeArrayResult(
-      base,
-      arrayIndex,
-      predictionRows,
-      predictionCols,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+    return writeArrayResult(base, arrayIndex, predictionRows, predictionCols, rangeIndexStack, valueStack, tagStack, kindStack)
   }
 
   if ((builtinId == BuiltinId.Linest || builtinId == BuiltinId.Logest) && argc >= 1 && argc <= 4) {
-    let includeIntercept = true;
-    let includeStats = false;
+    let includeIntercept = true
+    let includeStats = false
     if (argc >= 3) {
       if (kindStack[base + 2] != STACK_KIND_SCALAR) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       if (tagStack[base + 2] == ValueTag.Error) {
         return writeResult(
@@ -758,37 +502,19 @@ export function tryApplyRegressionBuiltin(
           valueStack,
           tagStack,
           kindStack,
-        );
+        )
       }
       if (tagStack[base + 2] == ValueTag.Boolean || tagStack[base + 2] == ValueTag.Number) {
-        includeIntercept = valueStack[base + 2] != 0;
+        includeIntercept = valueStack[base + 2] != 0
       } else if (tagStack[base + 2] == ValueTag.Empty) {
-        includeIntercept = false;
+        includeIntercept = false
       } else {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
     }
     if (argc == 4) {
       if (kindStack[base + 3] != STACK_KIND_SCALAR) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       if (tagStack[base + 3] == ValueTag.Error) {
         return writeResult(
@@ -800,43 +526,25 @@ export function tryApplyRegressionBuiltin(
           valueStack,
           tagStack,
           kindStack,
-        );
+        )
       }
       if (tagStack[base + 3] == ValueTag.Boolean || tagStack[base + 3] == ValueTag.Number) {
-        includeStats = valueStack[base + 3] != 0;
+        includeStats = valueStack[base + 3] != 0
       } else if (tagStack[base + 3] == ValueTag.Empty) {
-        includeStats = false;
+        includeStats = false
       } else {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
     }
 
-    const knownYRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts);
-    const knownYCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts);
-    const sampleCount = knownYRows * knownYCols;
+    const knownYRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts)
+    const knownYCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts)
+    const sampleCount = knownYRows * knownYCols
     if (sampleCount < 1) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const knownYValues = new Array<f64>();
+    const knownYValues = new Array<f64>()
     for (let row = 0; row < knownYRows; row += 1) {
       for (let col = 0; col < knownYCols; col += 1) {
         const yTag = inputCellTag(
@@ -854,7 +562,7 @@ export function tryApplyRegressionBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
-        );
+        )
         const yRaw = inputCellScalarValue(
           base,
           row,
@@ -872,51 +580,24 @@ export function tryApplyRegressionBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        );
+        )
         if (yTag == ValueTag.Error) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            yRaw,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, yRaw, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        const numeric = toNumberOrNaN(yTag, yRaw);
+        const numeric = toNumberOrNaN(yTag, yRaw)
         if (!isFinite(numeric) || (builtinId == BuiltinId.Logest && numeric <= 0.0)) {
-          return writeResult(
-            base,
-            STACK_KIND_SCALAR,
-            <u8>ValueTag.Error,
-            ErrorCode.Value,
-            rangeIndexStack,
-            valueStack,
-            tagStack,
-            kindStack,
-          );
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        knownYValues.push(builtinId == BuiltinId.Logest ? Math.log(numeric) : numeric);
+        knownYValues.push(builtinId == BuiltinId.Logest ? Math.log(numeric) : numeric)
       }
     }
 
-    const knownXValues = new Array<f64>();
+    const knownXValues = new Array<f64>()
     if (argc >= 2) {
-      const knownXRows = inputRowsFromSlot(base + 1, kindStack, rangeIndexStack, rangeRowCounts);
-      const knownXCols = inputColsFromSlot(base + 1, kindStack, rangeIndexStack, rangeColCounts);
+      const knownXRows = inputRowsFromSlot(base + 1, kindStack, rangeIndexStack, rangeRowCounts)
+      const knownXCols = inputColsFromSlot(base + 1, kindStack, rangeIndexStack, rangeColCounts)
       if (knownXRows * knownXCols != sampleCount) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       for (let row = 0; row < knownXRows; row += 1) {
         for (let col = 0; col < knownXCols; col += 1) {
@@ -935,7 +616,7 @@ export function tryApplyRegressionBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
-          );
+          )
           if (!isFinite(numeric)) {
             return writeResult(
               base,
@@ -946,193 +627,147 @@ export function tryApplyRegressionBuiltin(
               valueStack,
               tagStack,
               kindStack,
-            );
+            )
           }
-          knownXValues.push(numeric);
+          knownXValues.push(numeric)
         }
       }
     } else {
       for (let index = 0; index < sampleCount; index += 1) {
-        knownXValues.push(<f64>(index + 1));
+        knownXValues.push(<f64>(index + 1))
       }
     }
 
-    let sumX = 0.0;
-    let sumY = 0.0;
+    let sumX = 0.0
+    let sumY = 0.0
     for (let index = 0; index < sampleCount; index += 1) {
-      sumX += unchecked(knownXValues[index]);
-      sumY += unchecked(knownYValues[index]);
+      sumX += unchecked(knownXValues[index])
+      sumY += unchecked(knownYValues[index])
     }
 
-    let slope = 0.0;
-    let intercept = 0.0;
-    let totalSumSquares = 0.0;
-    let sumSquaresX = 0.0;
-    let sumCrossProducts = 0.0;
+    let slope = 0.0
+    let intercept = 0.0
+    let totalSumSquares = 0.0
+    let sumSquaresX = 0.0
+    let sumCrossProducts = 0.0
     if (includeIntercept) {
-      const meanX = sumX / <f64>sampleCount;
-      const meanY = sumY / <f64>sampleCount;
+      const meanX = sumX / <f64>sampleCount
+      const meanY = sumY / <f64>sampleCount
       for (let index = 0; index < sampleCount; index += 1) {
-        const xDeviation = unchecked(knownXValues[index]) - meanX;
-        const yDeviation = unchecked(knownYValues[index]) - meanY;
-        sumSquaresX += xDeviation * xDeviation;
-        sumCrossProducts += xDeviation * yDeviation;
-        totalSumSquares += yDeviation * yDeviation;
+        const xDeviation = unchecked(knownXValues[index]) - meanX
+        const yDeviation = unchecked(knownYValues[index]) - meanY
+        sumSquaresX += xDeviation * xDeviation
+        sumCrossProducts += xDeviation * yDeviation
+        totalSumSquares += yDeviation * yDeviation
       }
       if (sumSquaresX == 0.0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      slope = sumCrossProducts / sumSquaresX;
-      intercept = meanY - slope * meanX;
+      slope = sumCrossProducts / sumSquaresX
+      intercept = meanY - slope * meanX
     } else {
       for (let index = 0; index < sampleCount; index += 1) {
-        const xValue = unchecked(knownXValues[index]);
-        const yValue = unchecked(knownYValues[index]);
-        sumSquaresX += xValue * xValue;
-        sumCrossProducts += xValue * yValue;
-        totalSumSquares += yValue * yValue;
+        const xValue = unchecked(knownXValues[index])
+        const yValue = unchecked(knownYValues[index])
+        sumSquaresX += xValue * xValue
+        sumCrossProducts += xValue * yValue
+        totalSumSquares += yValue * yValue
       }
       if (sumSquaresX == 0.0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Div0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      slope = sumCrossProducts / sumSquaresX;
+      slope = sumCrossProducts / sumSquaresX
     }
 
-    let residualSumSquares = 0.0;
+    let residualSumSquares = 0.0
     for (let index = 0; index < sampleCount; index += 1) {
-      const residual =
-        unchecked(knownYValues[index]) - (intercept + slope * unchecked(knownXValues[index]));
-      residualSumSquares += residual * residual;
+      const residual = unchecked(knownYValues[index]) - (intercept + slope * unchecked(knownXValues[index]))
+      residualSumSquares += residual * residual
     }
-    residualSumSquares = max<f64>(0.0, residualSumSquares);
-    const regressionSumSquares = max<f64>(0.0, totalSumSquares - residualSumSquares);
+    residualSumSquares = max<f64>(0.0, residualSumSquares)
+    const regressionSumSquares = max<f64>(0.0, totalSumSquares - residualSumSquares)
 
-    const leading = builtinId == BuiltinId.Logest ? Math.exp(slope) : slope;
-    const trailing =
-      builtinId == BuiltinId.Logest
-        ? includeIntercept
-          ? Math.exp(intercept)
-          : 1.0
-        : includeIntercept
-          ? intercept
-          : 0.0;
+    const leading = builtinId == BuiltinId.Logest ? Math.exp(slope) : slope
+    const trailing = builtinId == BuiltinId.Logest ? (includeIntercept ? Math.exp(intercept) : 1.0) : includeIntercept ? intercept : 0.0
     if (!isFinite(leading) || !isFinite(trailing)) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const resultRows = includeStats ? 5 : 1;
-    const arrayIndex = allocateSpillArrayResult(resultRows, 2);
-    writeSpillArrayNumber(arrayIndex, 0, leading);
-    writeSpillArrayNumber(arrayIndex, 1, trailing);
+    const resultRows = includeStats ? 5 : 1
+    const arrayIndex = allocateSpillArrayResult(resultRows, 2)
+    writeSpillArrayNumber(arrayIndex, 0, leading)
+    writeSpillArrayNumber(arrayIndex, 1, trailing)
 
     if (includeStats) {
-      const degreesFreedom = sampleCount - (includeIntercept ? 2 : 1);
-      let slopeStandardError = NaN;
-      let interceptStandardError = NaN;
-      let rSquared = NaN;
-      let standardErrorY = NaN;
-      let fStatistic = NaN;
+      const degreesFreedom = sampleCount - (includeIntercept ? 2 : 1)
+      let slopeStandardError = NaN
+      let interceptStandardError = NaN
+      let rSquared = NaN
+      let standardErrorY = NaN
+      let fStatistic = NaN
 
       if (degreesFreedom > 0) {
-        const meanSquaredError = residualSumSquares / <f64>degreesFreedom;
-        standardErrorY = Math.sqrt(meanSquaredError);
+        const meanSquaredError = residualSumSquares / <f64>degreesFreedom
+        standardErrorY = Math.sqrt(meanSquaredError)
         if (includeIntercept) {
-          const meanX = sumX / <f64>sampleCount;
+          const meanX = sumX / <f64>sampleCount
           if (sumSquaresX > 0.0) {
-            slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX);
-            interceptStandardError = Math.sqrt(
-              meanSquaredError * (1.0 / <f64>sampleCount + (meanX * meanX) / sumSquaresX),
-            );
+            slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX)
+            interceptStandardError = Math.sqrt(meanSquaredError * (1.0 / <f64>sampleCount + (meanX * meanX) / sumSquaresX))
           }
         } else if (sumSquaresX > 0.0) {
-          slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX);
-          interceptStandardError = 0.0;
+          slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX)
+          interceptStandardError = 0.0
         }
         if (residualSumSquares == 0.0) {
-          fStatistic = Infinity;
+          fStatistic = Infinity
         } else {
-          fStatistic = regressionSumSquares / (residualSumSquares / <f64>degreesFreedom);
+          fStatistic = regressionSumSquares / (residualSumSquares / <f64>degreesFreedom)
         }
       }
 
       if (totalSumSquares == 0.0) {
-        rSquared = residualSumSquares == 0.0 ? 1.0 : NaN;
+        rSquared = residualSumSquares == 0.0 ? 1.0 : NaN
       } else {
-        rSquared = 1.0 - residualSumSquares / totalSumSquares;
+        rSquared = 1.0 - residualSumSquares / totalSumSquares
       }
 
       if (isFinite(slopeStandardError)) {
-        writeSpillArrayNumber(arrayIndex, 2, slopeStandardError);
+        writeSpillArrayNumber(arrayIndex, 2, slopeStandardError)
       } else {
-        writeSpillArrayValue(arrayIndex, 2, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 2, <u8>ValueTag.Error, ErrorCode.Div0)
       }
       if (isFinite(interceptStandardError)) {
-        writeSpillArrayNumber(arrayIndex, 3, interceptStandardError);
+        writeSpillArrayNumber(arrayIndex, 3, interceptStandardError)
       } else {
-        writeSpillArrayValue(arrayIndex, 3, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 3, <u8>ValueTag.Error, ErrorCode.Div0)
       }
       if (isFinite(rSquared)) {
-        writeSpillArrayNumber(arrayIndex, 4, rSquared);
+        writeSpillArrayNumber(arrayIndex, 4, rSquared)
       } else {
-        writeSpillArrayValue(arrayIndex, 4, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 4, <u8>ValueTag.Error, ErrorCode.Div0)
       }
       if (isFinite(standardErrorY)) {
-        writeSpillArrayNumber(arrayIndex, 5, standardErrorY);
+        writeSpillArrayNumber(arrayIndex, 5, standardErrorY)
       } else {
-        writeSpillArrayValue(arrayIndex, 5, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 5, <u8>ValueTag.Error, ErrorCode.Div0)
       }
       if (isFinite(fStatistic)) {
-        writeSpillArrayNumber(arrayIndex, 6, fStatistic);
+        writeSpillArrayNumber(arrayIndex, 6, fStatistic)
       } else {
-        writeSpillArrayValue(arrayIndex, 6, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 6, <u8>ValueTag.Error, ErrorCode.Div0)
       }
       if (degreesFreedom > 0) {
-        writeSpillArrayNumber(arrayIndex, 7, <f64>degreesFreedom);
+        writeSpillArrayNumber(arrayIndex, 7, <f64>degreesFreedom)
       } else {
-        writeSpillArrayValue(arrayIndex, 7, <u8>ValueTag.Error, ErrorCode.Div0);
+        writeSpillArrayValue(arrayIndex, 7, <u8>ValueTag.Error, ErrorCode.Div0)
       }
-      writeSpillArrayNumber(arrayIndex, 8, regressionSumSquares);
-      writeSpillArrayNumber(arrayIndex, 9, residualSumSquares);
+      writeSpillArrayNumber(arrayIndex, 8, regressionSumSquares)
+      writeSpillArrayNumber(arrayIndex, 9, residualSumSquares)
     }
 
-    return writeArrayResult(
-      base,
-      arrayIndex,
-      resultRows,
-      2,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+    return writeArrayResult(base, arrayIndex, resultRows, 2, rangeIndexStack, valueStack, tagStack, kindStack)
   }
 
-  return -1;
+  return -1
 }

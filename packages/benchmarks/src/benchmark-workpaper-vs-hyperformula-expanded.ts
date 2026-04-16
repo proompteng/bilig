@@ -1,24 +1,21 @@
-import { performance } from "node:perf_hooks";
-import { WorkPaper } from "@bilig/headless";
-import { ValueTag } from "@bilig/protocol";
-import type {
-  RawCellContent as HyperFormulaRawCellContent,
-  Sheet as HyperFormulaSheet,
-} from "hyperformula";
+import { performance } from 'node:perf_hooks'
+import { WorkPaper } from '@bilig/headless'
+import { ValueTag } from '@bilig/protocol'
+import type { RawCellContent as HyperFormulaRawCellContent, Sheet as HyperFormulaSheet } from 'hyperformula'
 import type {
   ComparativeBenchmarkSuiteOptions,
   ComparativeMeasuredEngineResult,
   ComparativeMemorySummary,
   ComparativeUnsupportedEngineResult,
-} from "./benchmark-workpaper-vs-hyperformula.js";
+} from './benchmark-workpaper-vs-hyperformula.js'
 import {
   DEFAULT_COMPETITIVE_SAMPLE_COUNT,
   DEFAULT_COMPETITIVE_WARMUP_COUNT,
   HYPERFORMULA_LICENSE_KEY,
-} from "./benchmark-workpaper-vs-hyperformula.js";
-import type { MemoryMeasurement } from "./metrics.js";
-import { measureMemory, sampleMemory } from "./metrics.js";
-import { summarizeNumbers } from "./stats.js";
+} from './benchmark-workpaper-vs-hyperformula.js'
+import type { MemoryMeasurement } from './metrics.js'
+import { measureMemory, sampleMemory } from './metrics.js'
+import { summarizeNumbers } from './stats.js'
 import {
   address,
   buildApproxLookupSheet,
@@ -34,7 +31,7 @@ import {
   buildTextLookupSheet,
   buildValueFormulaRows,
   range,
-} from "./workpaper-benchmark-fixtures.js";
+} from './workpaper-benchmark-fixtures.js'
 import {
   measureHyperFormulaConditionalAggregationCriteriaEditSample,
   measureHyperFormulaBatchSingleColumnUndoSample,
@@ -80,395 +77,393 @@ import {
   measureWorkPaperStructuralInsertRowsSample,
   measureWorkPaperSuspendedBatchMultiColumnEditSample,
   measureWorkPaperSuspendedBatchSingleColumnEditSample,
-} from "./benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js";
+} from './benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js'
 
-const { HyperFormula } = await import("hyperformula");
-type HyperFormulaInstance = ReturnType<typeof HyperFormula.buildFromSheets>;
+const { HyperFormula } = await import('hyperformula')
+type HyperFormulaInstance = ReturnType<typeof HyperFormula.buildFromSheets>
 
 export type ExpandedComparativeBenchmarkWorkload =
-  | "build-dense-literals"
-  | "build-mixed-content"
-  | "build-parser-cache-row-templates"
-  | "build-parser-cache-mixed-templates"
-  | "build-many-sheets"
-  | "rebuild-and-recalculate"
-  | "rebuild-config-toggle"
-  | "rebuild-runtime-from-snapshot"
-  | "single-edit-chain"
-  | "single-edit-fanout"
-  | "partial-recompute-mixed-frontier"
-  | "single-formula-edit-recalc"
-  | "batch-edit-single-column"
-  | "batch-edit-multi-column"
-  | "batch-edit-single-column-with-undo"
-  | "batch-suspended-single-column"
-  | "batch-suspended-multi-column"
-  | "structural-insert-rows"
-  | "structural-delete-rows"
-  | "structural-move-rows"
-  | "structural-insert-columns"
-  | "structural-delete-columns"
-  | "structural-move-columns"
-  | "range-read-dense"
-  | "aggregate-overlapping-ranges"
-  | "aggregate-overlapping-sliding-window"
-  | "conditional-aggregation-reused-ranges"
-  | "conditional-aggregation-criteria-cell-edit"
-  | "lookup-no-column-index"
-  | "lookup-with-column-index"
-  | "lookup-with-column-index-after-column-write"
-  | "lookup-with-column-index-after-batch-write"
-  | "lookup-approximate-sorted"
-  | "lookup-approximate-sorted-after-column-write"
-  | "lookup-text-exact"
-  | "dynamic-array-filter";
+  | 'build-dense-literals'
+  | 'build-mixed-content'
+  | 'build-parser-cache-row-templates'
+  | 'build-parser-cache-mixed-templates'
+  | 'build-many-sheets'
+  | 'rebuild-and-recalculate'
+  | 'rebuild-config-toggle'
+  | 'rebuild-runtime-from-snapshot'
+  | 'single-edit-chain'
+  | 'single-edit-fanout'
+  | 'partial-recompute-mixed-frontier'
+  | 'single-formula-edit-recalc'
+  | 'batch-edit-single-column'
+  | 'batch-edit-multi-column'
+  | 'batch-edit-single-column-with-undo'
+  | 'batch-suspended-single-column'
+  | 'batch-suspended-multi-column'
+  | 'structural-insert-rows'
+  | 'structural-delete-rows'
+  | 'structural-move-rows'
+  | 'structural-insert-columns'
+  | 'structural-delete-columns'
+  | 'structural-move-columns'
+  | 'range-read-dense'
+  | 'aggregate-overlapping-ranges'
+  | 'aggregate-overlapping-sliding-window'
+  | 'conditional-aggregation-reused-ranges'
+  | 'conditional-aggregation-criteria-cell-edit'
+  | 'lookup-no-column-index'
+  | 'lookup-with-column-index'
+  | 'lookup-with-column-index-after-column-write'
+  | 'lookup-with-column-index-after-batch-write'
+  | 'lookup-approximate-sorted'
+  | 'lookup-approximate-sorted-after-column-write'
+  | 'lookup-text-exact'
+  | 'dynamic-array-filter'
 
 export const EXPANDED_COMPARATIVE_WORKLOADS = [
-  "build-dense-literals",
-  "build-mixed-content",
-  "build-parser-cache-row-templates",
-  "build-parser-cache-mixed-templates",
-  "build-many-sheets",
-  "rebuild-and-recalculate",
-  "rebuild-config-toggle",
-  "rebuild-runtime-from-snapshot",
-  "single-edit-chain",
-  "single-edit-fanout",
-  "partial-recompute-mixed-frontier",
-  "single-formula-edit-recalc",
-  "batch-edit-single-column",
-  "batch-edit-multi-column",
-  "batch-edit-single-column-with-undo",
-  "batch-suspended-single-column",
-  "batch-suspended-multi-column",
-  "structural-insert-rows",
-  "structural-delete-rows",
-  "structural-move-rows",
-  "structural-insert-columns",
-  "structural-delete-columns",
-  "structural-move-columns",
-  "range-read-dense",
-  "aggregate-overlapping-ranges",
-  "aggregate-overlapping-sliding-window",
-  "conditional-aggregation-reused-ranges",
-  "conditional-aggregation-criteria-cell-edit",
-  "lookup-no-column-index",
-  "lookup-with-column-index",
-  "lookup-with-column-index-after-column-write",
-  "lookup-with-column-index-after-batch-write",
-  "lookup-approximate-sorted",
-  "lookup-approximate-sorted-after-column-write",
-  "lookup-text-exact",
-  "dynamic-array-filter",
-] as const satisfies readonly ExpandedComparativeBenchmarkWorkload[];
+  'build-dense-literals',
+  'build-mixed-content',
+  'build-parser-cache-row-templates',
+  'build-parser-cache-mixed-templates',
+  'build-many-sheets',
+  'rebuild-and-recalculate',
+  'rebuild-config-toggle',
+  'rebuild-runtime-from-snapshot',
+  'single-edit-chain',
+  'single-edit-fanout',
+  'partial-recompute-mixed-frontier',
+  'single-formula-edit-recalc',
+  'batch-edit-single-column',
+  'batch-edit-multi-column',
+  'batch-edit-single-column-with-undo',
+  'batch-suspended-single-column',
+  'batch-suspended-multi-column',
+  'structural-insert-rows',
+  'structural-delete-rows',
+  'structural-move-rows',
+  'structural-insert-columns',
+  'structural-delete-columns',
+  'structural-move-columns',
+  'range-read-dense',
+  'aggregate-overlapping-ranges',
+  'aggregate-overlapping-sliding-window',
+  'conditional-aggregation-reused-ranges',
+  'conditional-aggregation-criteria-cell-edit',
+  'lookup-no-column-index',
+  'lookup-with-column-index',
+  'lookup-with-column-index-after-column-write',
+  'lookup-with-column-index-after-batch-write',
+  'lookup-approximate-sorted',
+  'lookup-approximate-sorted-after-column-write',
+  'lookup-text-exact',
+  'dynamic-array-filter',
+] as const satisfies readonly ExpandedComparativeBenchmarkWorkload[]
 
 export interface ExpandedComparativeComparableResult {
-  workload: ExpandedComparativeBenchmarkWorkload;
-  category: "directly-comparable";
-  comparable: true;
-  fixture: Record<string, unknown>;
+  workload: ExpandedComparativeBenchmarkWorkload
+  category: 'directly-comparable'
+  comparable: true
+  fixture: Record<string, unknown>
   comparison: {
-    fasterEngine: "workpaper" | "hyperformula";
-    meanSpeedup: number;
-    verificationEquivalent: true;
-  };
+    fasterEngine: 'workpaper' | 'hyperformula'
+    meanSpeedup: number
+    verificationEquivalent: true
+  }
   engines: {
-    workpaper: ComparativeMeasuredEngineResult;
-    hyperformula: ComparativeMeasuredEngineResult;
-  };
+    workpaper: ComparativeMeasuredEngineResult
+    hyperformula: ComparativeMeasuredEngineResult
+  }
 }
 
 export interface ExpandedComparativeLeadershipResult {
-  workload: ExpandedComparativeBenchmarkWorkload;
-  category: "leadership";
-  comparable: false;
-  fixture: Record<string, unknown>;
-  note: string;
+  workload: ExpandedComparativeBenchmarkWorkload
+  category: 'leadership'
+  comparable: false
+  fixture: Record<string, unknown>
+  note: string
   engines: {
-    workpaper: ComparativeMeasuredEngineResult;
-    hyperformula: ComparativeUnsupportedEngineResult;
-  };
+    workpaper: ComparativeMeasuredEngineResult
+    hyperformula: ComparativeUnsupportedEngineResult
+  }
 }
 
 interface BenchmarkSample {
-  elapsedMs: number;
-  memory: MemoryMeasurement;
-  verification: Record<string, unknown>;
+  elapsedMs: number
+  memory: MemoryMeasurement
+  verification: Record<string, unknown>
 }
 
-export type ExpandedComparativeBenchmarkResult =
-  | ExpandedComparativeComparableResult
-  | ExpandedComparativeLeadershipResult;
+export type ExpandedComparativeBenchmarkResult = ExpandedComparativeComparableResult | ExpandedComparativeLeadershipResult
 
 export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
   options: ComparativeBenchmarkSuiteOptions = {},
 ): ExpandedComparativeBenchmarkResult[] {
-  const runtimeOptions = resolveSuiteOptions(options);
+  const runtimeOptions = resolveSuiteOptions(options)
   return [
     runComparableScenario(
-      "build-dense-literals",
+      'build-dense-literals',
       { cols: 24, rows: 160, materializedCells: 160 * 24 },
       runtimeOptions,
       () => measureWorkPaperDenseBuildSample(160, 24),
       () => measureHyperFormulaDenseBuildSample(160, 24),
     ),
     runComparableScenario(
-      "build-mixed-content",
+      'build-mixed-content',
       { cols: 6, rows: 750 },
       runtimeOptions,
       () => measureWorkPaperMixedBuildSample(750),
       () => measureHyperFormulaMixedBuildSample(750),
     ),
     runComparableScenario(
-      "build-parser-cache-row-templates",
+      'build-parser-cache-row-templates',
       { cols: 6, rows: 1_500 },
       runtimeOptions,
       () => measureWorkPaperParserCacheTemplateSample(1_500),
       () => measureHyperFormulaParserCacheTemplateSample(1_500),
     ),
     runComparableScenario(
-      "build-parser-cache-mixed-templates",
+      'build-parser-cache-mixed-templates',
       { cols: 6, rows: 1_500, templateShapes: 3 },
       runtimeOptions,
       () => measureWorkPaperParserCacheMixedTemplateSample(1_500),
       () => measureHyperFormulaParserCacheMixedTemplateSample(1_500),
     ),
     runComparableScenario(
-      "build-many-sheets",
+      'build-many-sheets',
       { sheetCount: 8, rowsPerSheet: 120, colsPerSheet: 12 },
       runtimeOptions,
       () => measureWorkPaperManySheetsBuildSample(8, 120, 12),
       () => measureHyperFormulaManySheetsBuildSample(8, 120, 12),
     ),
     runComparableScenario(
-      "rebuild-and-recalculate",
+      'rebuild-and-recalculate',
       { cols: 6, rows: 1_500 },
       runtimeOptions,
       () => measureWorkPaperRebuildAndRecalculateSample(1_500),
       () => measureHyperFormulaRebuildAndRecalculateSample(1_500),
     ),
     runComparableScenario(
-      "rebuild-config-toggle",
-      { rowCount: 5_000, config: "useColumnIndex:false->true" },
+      'rebuild-config-toggle',
+      { rowCount: 5_000, config: 'useColumnIndex:false->true' },
       runtimeOptions,
       () => measureWorkPaperConfigToggleSample(5_000),
       () => measureHyperFormulaConfigToggleSample(5_000),
     ),
     runComparableScenario(
-      "rebuild-runtime-from-snapshot",
-      { rowCount: 1_500, source: "serialized-sheets" },
+      'rebuild-runtime-from-snapshot',
+      { rowCount: 1_500, source: 'serialized-sheets' },
       runtimeOptions,
       () => measureWorkPaperRebuildRuntimeFromSnapshotSample(1_500),
       () => measureHyperFormulaRebuildRuntimeFromSnapshotSample(1_500),
     ),
     runComparableScenario(
-      "single-edit-chain",
+      'single-edit-chain',
       { downstreamCount: 2_000 },
       runtimeOptions,
       () => measureWorkPaperSingleChainEditSample(2_000),
       () => measureHyperFormulaSingleChainEditSample(2_000),
     ),
     runComparableScenario(
-      "single-edit-fanout",
+      'single-edit-fanout',
       { downstreamCount: 2_000 },
       runtimeOptions,
       () => measureWorkPaperSingleFanoutEditSample(2_000),
       () => measureHyperFormulaSingleFanoutEditSample(2_000),
     ),
     runComparableScenario(
-      "partial-recompute-mixed-frontier",
-      { rowCount: 1_500, graphShape: "scalar+range+fanout" },
+      'partial-recompute-mixed-frontier',
+      { rowCount: 1_500, graphShape: 'scalar+range+fanout' },
       runtimeOptions,
       () => measureWorkPaperMixedFrontierSample(1_500),
       () => measureHyperFormulaMixedFrontierSample(1_500),
     ),
     runComparableScenario(
-      "single-formula-edit-recalc",
+      'single-formula-edit-recalc',
       { downstreamCount: 1_500 },
       runtimeOptions,
       () => measureWorkPaperFormulaEditSample(1_500),
       () => measureHyperFormulaFormulaEditSample(1_500),
     ),
     runComparableScenario(
-      "batch-edit-single-column",
+      'batch-edit-single-column',
       { editCount: 500 },
       runtimeOptions,
       () => measureWorkPaperBatchSingleColumnEditSample(500),
       () => measureHyperFormulaBatchSingleColumnEditSample(500),
     ),
     runComparableScenario(
-      "batch-edit-multi-column",
+      'batch-edit-multi-column',
       { rowCount: 250, editsPerRow: 2 },
       runtimeOptions,
       () => measureWorkPaperBatchMultiColumnEditSample(250),
       () => measureHyperFormulaBatchMultiColumnEditSample(250),
     ),
     runComparableScenario(
-      "batch-edit-single-column-with-undo",
+      'batch-edit-single-column-with-undo',
       { editCount: 500, includesUndo: true },
       runtimeOptions,
       () => measureWorkPaperBatchSingleColumnUndoSample(500),
       () => measureHyperFormulaBatchSingleColumnUndoSample(500),
     ),
     runComparableScenario(
-      "batch-suspended-single-column",
-      { editCount: 500, mode: "suspend-resume" },
+      'batch-suspended-single-column',
+      { editCount: 500, mode: 'suspend-resume' },
       runtimeOptions,
       () => measureWorkPaperSuspendedBatchSingleColumnEditSample(500),
       () => measureHyperFormulaSuspendedBatchSingleColumnEditSample(500),
     ),
     runComparableScenario(
-      "batch-suspended-multi-column",
-      { rowCount: 250, editsPerRow: 2, mode: "suspend-resume" },
+      'batch-suspended-multi-column',
+      { rowCount: 250, editsPerRow: 2, mode: 'suspend-resume' },
       runtimeOptions,
       () => measureWorkPaperSuspendedBatchMultiColumnEditSample(250),
       () => measureHyperFormulaSuspendedBatchMultiColumnEditSample(250),
     ),
     runComparableScenario(
-      "structural-insert-rows",
+      'structural-insert-rows',
       { rowCount: 1_500, insertIndex: 750 },
       runtimeOptions,
       () => measureWorkPaperStructuralInsertRowsSample(1_500),
       () => measureHyperFormulaStructuralInsertRowsSample(1_500),
     ),
     runComparableScenario(
-      "structural-delete-rows",
+      'structural-delete-rows',
       { rowCount: 1_500, deleteIndex: 750 },
       runtimeOptions,
       () => measureWorkPaperStructuralDeleteRowsSample(1_500),
       () => measureHyperFormulaStructuralDeleteRowsSample(1_500),
     ),
     runComparableScenario(
-      "structural-move-rows",
+      'structural-move-rows',
       { rowCount: 1_500, start: 750, target: 0 },
       runtimeOptions,
       () => measureWorkPaperStructuralMoveRowsSample(1_500),
       () => measureHyperFormulaStructuralMoveRowsSample(1_500),
     ),
     runComparableScenario(
-      "structural-insert-columns",
+      'structural-insert-columns',
       { rowCount: 1_500, insertIndex: 1 },
       runtimeOptions,
       () => measureWorkPaperStructuralInsertColumnsSample(1_500),
       () => measureHyperFormulaStructuralInsertColumnsSample(1_500),
     ),
     runComparableScenario(
-      "structural-delete-columns",
+      'structural-delete-columns',
       { rowCount: 1_500, deleteIndex: 1 },
       runtimeOptions,
       () => measureWorkPaperStructuralDeleteColumnsSample(1_500),
       () => measureHyperFormulaStructuralDeleteColumnsSample(1_500),
     ),
     runComparableScenario(
-      "structural-move-columns",
+      'structural-move-columns',
       { rowCount: 1_500, start: 1, target: 0 },
       runtimeOptions,
       () => measureWorkPaperStructuralMoveColumnsSample(1_500),
       () => measureHyperFormulaStructuralMoveColumnsSample(1_500),
     ),
     runComparableScenario(
-      "range-read-dense",
+      'range-read-dense',
       { cols: 24, rows: 240, materializedCells: 240 * 24 },
       runtimeOptions,
       () => measureWorkPaperRangeReadSample(240, 24),
       () => measureHyperFormulaRangeReadSample(240, 24),
     ),
     runComparableScenario(
-      "aggregate-overlapping-ranges",
-      { rowCount: 1_500, functionName: "SUM" },
+      'aggregate-overlapping-ranges',
+      { rowCount: 1_500, functionName: 'SUM' },
       runtimeOptions,
       () => measureWorkPaperOverlappingAggregateSample(1_500),
       () => measureHyperFormulaOverlappingAggregateSample(1_500),
     ),
     runComparableScenario(
-      "aggregate-overlapping-sliding-window",
-      { rowCount: 1_500, functionName: "SUM", window: 32 },
+      'aggregate-overlapping-sliding-window',
+      { rowCount: 1_500, functionName: 'SUM', window: 32 },
       runtimeOptions,
       () => measureWorkPaperSlidingAggregateSample(1_500, 32),
       () => measureHyperFormulaSlidingAggregateSample(1_500, 32),
     ),
     runComparableScenario(
-      "conditional-aggregation-reused-ranges",
+      'conditional-aggregation-reused-ranges',
       { rowCount: 2_000, formulaCopies: 32 },
       runtimeOptions,
       () => measureWorkPaperConditionalAggregationSample(2_000, 32),
       () => measureHyperFormulaConditionalAggregationSample(2_000, 32),
     ),
     runComparableScenario(
-      "conditional-aggregation-criteria-cell-edit",
-      { rowCount: 2_000, formulaCopies: 32, mutate: "criteria-cell" },
+      'conditional-aggregation-criteria-cell-edit',
+      { rowCount: 2_000, formulaCopies: 32, mutate: 'criteria-cell' },
       runtimeOptions,
       () => measureWorkPaperConditionalAggregationCriteriaEditSample(2_000, 32),
       () => measureHyperFormulaConditionalAggregationCriteriaEditSample(2_000, 32),
     ),
     runComparableScenario(
-      "lookup-no-column-index",
+      'lookup-no-column-index',
       { rowCount: 5_000, useColumnIndex: false },
       runtimeOptions,
       () => measureWorkPaperLookupSample(5_000, false),
       () => measureHyperFormulaLookupSample(5_000, false),
     ),
     runComparableScenario(
-      "lookup-with-column-index",
+      'lookup-with-column-index',
       { rowCount: 5_000, useColumnIndex: true },
       runtimeOptions,
       () => measureWorkPaperLookupSample(5_000, true),
       () => measureHyperFormulaLookupSample(5_000, true),
     ),
     runComparableScenario(
-      "lookup-with-column-index-after-column-write",
-      { rowCount: 5_000, useColumnIndex: true, mutate: "lookup-column" },
+      'lookup-with-column-index-after-column-write',
+      { rowCount: 5_000, useColumnIndex: true, mutate: 'lookup-column' },
       runtimeOptions,
       () => measureWorkPaperIndexedLookupAfterColumnWriteSample(5_000),
       () => measureHyperFormulaIndexedLookupAfterColumnWriteSample(5_000),
     ),
     runComparableScenario(
-      "lookup-with-column-index-after-batch-write",
-      { rowCount: 5_000, useColumnIndex: true, mutate: "lookup-column-batch", editCount: 256 },
+      'lookup-with-column-index-after-batch-write',
+      { rowCount: 5_000, useColumnIndex: true, mutate: 'lookup-column-batch', editCount: 256 },
       runtimeOptions,
       () => measureWorkPaperIndexedLookupAfterBatchWriteSample(5_000, 256),
       () => measureHyperFormulaIndexedLookupAfterBatchWriteSample(5_000, 256),
     ),
     runComparableScenario(
-      "lookup-approximate-sorted",
+      'lookup-approximate-sorted',
       { rowCount: 5_000 },
       runtimeOptions,
       () => measureWorkPaperApproximateLookupSample(5_000),
       () => measureHyperFormulaApproximateLookupSample(5_000),
     ),
     runComparableScenario(
-      "lookup-approximate-sorted-after-column-write",
-      { rowCount: 5_000, mutate: "sorted-column-tail" },
+      'lookup-approximate-sorted-after-column-write',
+      { rowCount: 5_000, mutate: 'sorted-column-tail' },
       runtimeOptions,
       () => measureWorkPaperApproximateLookupAfterColumnWriteSample(5_000),
       () => measureHyperFormulaApproximateLookupAfterColumnWriteSample(5_000),
     ),
     runComparableScenario(
-      "lookup-text-exact",
+      'lookup-text-exact',
       { rowCount: 5_000 },
       runtimeOptions,
       () => measureWorkPaperTextLookupSample(5_000),
       () => measureHyperFormulaTextLookupSample(5_000),
     ),
     runLeadershipScenario(
-      "dynamic-array-filter",
-      { rowCount: 750, formula: "=FILTER(A2:A751,A2:A751>B1)" },
+      'dynamic-array-filter',
+      { rowCount: 750, formula: '=FILTER(A2:A751,A2:A751>B1)' },
       runtimeOptions,
       () => measureWorkPaperDynamicArraySample(750),
       {
-        status: "unsupported",
+        status: 'unsupported',
         evidence: [
-          "/Users/gregkonush/github.com/hyperformula/docs/guide/known-limitations.md",
-          "/Users/gregkonush/github.com/hyperformula/src/HyperFormula.ts",
+          '/Users/gregkonush/github.com/hyperformula/docs/guide/known-limitations.md',
+          '/Users/gregkonush/github.com/hyperformula/src/HyperFormula.ts',
         ],
-        reason: "HyperFormula 3.2.0 documents dynamic arrays as unsupported.",
+        reason: 'HyperFormula 3.2.0 documents dynamic arrays as unsupported.',
       },
     ),
-  ];
+  ]
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const cliOptions = parseExpandedBenchmarkCliOptions(process.argv.slice(2));
+  const cliOptions = parseExpandedBenchmarkCliOptions(process.argv.slice(2))
   console.log(
     JSON.stringify(
       runWorkPaperVsHyperFormulaExpandedBenchmarkSuite({
@@ -478,7 +473,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       null,
       2,
     ),
-  );
+  )
 }
 
 function runComparableScenario(
@@ -488,26 +483,23 @@ function runComparableScenario(
   runWorkPaperSample: () => BenchmarkSample,
   runHyperFormulaSample: () => BenchmarkSample,
 ): ExpandedComparativeComparableResult {
-  const workpaper = benchmarkSupportedEngine(runWorkPaperSample, options);
-  const hyperformula = benchmarkSupportedEngine(runHyperFormulaSample, options);
-  const workPaperVerification = JSON.stringify(workpaper.verification);
-  const hyperFormulaVerification = JSON.stringify(hyperformula.verification);
+  const workpaper = benchmarkSupportedEngine(runWorkPaperSample, options)
+  const hyperformula = benchmarkSupportedEngine(runHyperFormulaSample, options)
+  const workPaperVerification = JSON.stringify(workpaper.verification)
+  const hyperFormulaVerification = JSON.stringify(hyperformula.verification)
   if (workPaperVerification !== hyperFormulaVerification) {
     throw new Error(
       `Verification mismatch for ${workload}: WorkPaper ${workPaperVerification} !== HyperFormula ${hyperFormulaVerification}`,
-    );
+    )
   }
 
-  const fasterEngine =
-    workpaper.elapsedMs.mean <= hyperformula.elapsedMs.mean ? "workpaper" : "hyperformula";
-  const fasterMean =
-    fasterEngine === "workpaper" ? workpaper.elapsedMs.mean : hyperformula.elapsedMs.mean;
-  const slowerMean =
-    fasterEngine === "workpaper" ? hyperformula.elapsedMs.mean : workpaper.elapsedMs.mean;
+  const fasterEngine = workpaper.elapsedMs.mean <= hyperformula.elapsedMs.mean ? 'workpaper' : 'hyperformula'
+  const fasterMean = fasterEngine === 'workpaper' ? workpaper.elapsedMs.mean : hyperformula.elapsedMs.mean
+  const slowerMean = fasterEngine === 'workpaper' ? hyperformula.elapsedMs.mean : workpaper.elapsedMs.mean
 
   return {
     workload,
-    category: "directly-comparable",
+    category: 'directly-comparable',
     comparable: true,
     fixture,
     comparison: {
@@ -519,7 +511,7 @@ function runComparableScenario(
       workpaper,
       hyperformula,
     },
-  };
+  }
 }
 
 function runLeadershipScenario(
@@ -531,15 +523,15 @@ function runLeadershipScenario(
 ): ExpandedComparativeLeadershipResult {
   return {
     workload,
-    category: "leadership",
+    category: 'leadership',
     comparable: false,
     fixture,
-    note: "This workload demonstrates capability leadership and is not an apples-to-apples speed comparison.",
+    note: 'This workload demonstrates capability leadership and is not an apples-to-apples speed comparison.',
     engines: {
       workpaper: benchmarkSupportedEngine(runWorkPaperSample, options),
       hyperformula,
     },
-  };
+  }
 }
 
 function benchmarkSupportedEngine(
@@ -547,459 +539,404 @@ function benchmarkSupportedEngine(
   options: Required<ComparativeBenchmarkSuiteOptions>,
 ): ComparativeMeasuredEngineResult {
   for (let warmup = 0; warmup < options.warmupCount; warmup += 1) {
-    runSample();
+    runSample()
   }
 
-  const samples: BenchmarkSample[] = [];
+  const samples: BenchmarkSample[] = []
   for (let sample = 0; sample < options.sampleCount; sample += 1) {
-    samples.push(runSample());
+    samples.push(runSample())
   }
 
-  const verificationStrings = new Set(samples.map((sample) => JSON.stringify(sample.verification)));
+  const verificationStrings = new Set(samples.map((sample) => JSON.stringify(sample.verification)))
   if (verificationStrings.size !== 1) {
-    throw new Error("Benchmark verification drifted across samples");
+    throw new Error('Benchmark verification drifted across samples')
   }
 
   return {
-    status: "supported",
+    status: 'supported',
     elapsedMs: summarizeNumbers(samples.map((sample) => sample.elapsedMs)),
     memoryDeltaBytes: summarizeMemory(samples.map((sample) => sample.memory)),
     verification: samples[0]?.verification ?? {},
-  };
+  }
 }
 
 function measureWorkPaperDenseBuildSample(rows: number, cols: number): BenchmarkSample {
-  const sheet = buildDenseLiteralSheet(rows, cols);
+  const sheet = buildDenseLiteralSheet(rows, cols)
   return measureWorkPaperBuildFromSheets({ Bench: sheet }, (workbook) => {
-    const sheetId = workbook.getSheetId("Bench")!;
+    const sheetId = workbook.getSheetId('Bench')!
     return {
       dimensions: workbook.getSheetDimensions(sheetId),
-      terminalValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, rows - 1, cols - 1)),
-      ),
-    };
-  });
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rows - 1, cols - 1))),
+    }
+  })
 }
 
 function measureHyperFormulaDenseBuildSample(rows: number, cols: number): BenchmarkSample {
-  return measureHyperFormulaBuildFromSheets(
-    { Bench: toHyperFormulaSheet(buildDenseLiteralSheet(rows, cols)) },
-    (workbook) => {
-      const sheetId = workbook.getSheetId("Bench")!;
-      return {
-        dimensions: workbook.getSheetDimensions(sheetId),
-        terminalValue: normalizeHyperFormulaValue(
-          workbook.getCellValue(address(sheetId, rows - 1, cols - 1)),
-        ),
-      };
-    },
-  );
+  return measureHyperFormulaBuildFromSheets({ Bench: toHyperFormulaSheet(buildDenseLiteralSheet(rows, cols)) }, (workbook) => {
+    const sheetId = workbook.getSheetId('Bench')!
+    return {
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rows - 1, cols - 1))),
+    }
+  })
 }
 
 function measureWorkPaperMixedBuildSample(rowCount: number): BenchmarkSample {
-  const sheet = buildMixedContentSheet(rowCount);
+  const sheet = buildMixedContentSheet(rowCount)
   return measureWorkPaperBuildFromSheets({ Bench: sheet }, (workbook) => {
-    const sheetId = workbook.getSheetId("Bench")!;
+    const sheetId = workbook.getSheetId('Bench')!
     return {
       dimensions: workbook.getSheetDimensions(sheetId),
-      terminalFormulaValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, rowCount - 1, 5)),
-      ),
-    };
-  });
+      terminalFormulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rowCount - 1, 5))),
+    }
+  })
 }
 
 function measureHyperFormulaMixedBuildSample(rowCount: number): BenchmarkSample {
-  return measureHyperFormulaBuildFromSheets(
-    { Bench: toHyperFormulaSheet(buildMixedContentSheet(rowCount)) },
-    (workbook) => {
-      const sheetId = workbook.getSheetId("Bench")!;
-      return {
-        dimensions: workbook.getSheetDimensions(sheetId),
-        terminalFormulaValue: normalizeHyperFormulaValue(
-          workbook.getCellValue(address(sheetId, rowCount - 1, 5)),
-        ),
-      };
-    },
-  );
+  return measureHyperFormulaBuildFromSheets({ Bench: toHyperFormulaSheet(buildMixedContentSheet(rowCount)) }, (workbook) => {
+    const sheetId = workbook.getSheetId('Bench')!
+    return {
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalFormulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rowCount - 1, 5))),
+    }
+  })
 }
 
-function measureWorkPaperManySheetsBuildSample(
-  sheetCount: number,
-  rows: number,
-  cols: number,
-): BenchmarkSample {
-  const sheets = buildMultiSheetLiteralSheets(sheetCount, rows, cols);
+function measureWorkPaperManySheetsBuildSample(sheetCount: number, rows: number, cols: number): BenchmarkSample {
+  const sheets = buildMultiSheetLiteralSheets(sheetCount, rows, cols)
   return measureWorkPaperBuildFromSheets(sheets, (workbook) => {
-    const sheetId = workbook.getSheetId(`Sheet${sheetCount}`)!;
+    const sheetId = workbook.getSheetId(`Sheet${sheetCount}`)!
     return {
       sheetCount: workbook.countSheets(),
-      terminalValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, rows - 1, cols - 1)),
-      ),
-    };
-  });
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rows - 1, cols - 1))),
+    }
+  })
 }
 
-function measureHyperFormulaManySheetsBuildSample(
-  sheetCount: number,
-  rows: number,
-  cols: number,
-): BenchmarkSample {
+function measureHyperFormulaManySheetsBuildSample(sheetCount: number, rows: number, cols: number): BenchmarkSample {
   const sheets = Object.fromEntries(
-    Object.entries(buildMultiSheetLiteralSheets(sheetCount, rows, cols)).map(
-      ([sheetName, sheet]) => [sheetName, toHyperFormulaSheet(sheet)],
-    ),
-  );
+    Object.entries(buildMultiSheetLiteralSheets(sheetCount, rows, cols)).map(([sheetName, sheet]) => [
+      sheetName,
+      toHyperFormulaSheet(sheet),
+    ]),
+  )
   return measureHyperFormulaBuildFromSheets(sheets, (workbook) => {
-    const sheetId = workbook.getSheetId(`Sheet${sheetCount}`)!;
+    const sheetId = workbook.getSheetId(`Sheet${sheetCount}`)!
     return {
       sheetCount: workbook.countSheets(),
-      terminalValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, rows - 1, cols - 1)),
-      ),
-    };
-  });
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rows - 1, cols - 1))),
+    }
+  })
 }
 
 function measureWorkPaperSingleChainEditSample(downstreamCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaChainRow(downstreamCount)] });
-  const sheetId = workbook.getSheetId("Bench")!;
+  const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaChainRow(downstreamCount)] })
+  const sheetId = workbook.getSheetId('Bench')!
   return measureMutationSample(
     workbook,
     () => workbook.setCellContents(address(sheetId, 0, 0), 99),
     (changes) => ({
       changeCount: Array.isArray(changes) ? changes.length : 0,
-      terminalValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, 0, downstreamCount)),
-      ),
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, downstreamCount))),
     }),
-  );
+  )
 }
 
 function measureHyperFormulaSingleChainEditSample(downstreamCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet([buildFormulaChainRow(downstreamCount)]) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
+  )
+  const sheetId = workbook.getSheetId('Bench')!
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.setCellContents(address(sheetId, 0, 0), 99),
     (changes) => ({
       changeCount: Array.isArray(changes) ? changes.length : 0,
-      terminalValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, 0, downstreamCount)),
-      ),
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, downstreamCount))),
     }),
-  );
+  )
 }
 
 function measureWorkPaperSingleFanoutEditSample(fanoutCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaFanoutRow(fanoutCount)] });
-  const sheetId = workbook.getSheetId("Bench")!;
+  const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaFanoutRow(fanoutCount)] })
+  const sheetId = workbook.getSheetId('Bench')!
   return measureMutationSample(
     workbook,
     () => workbook.setCellContents(address(sheetId, 0, 0), 99),
     () => ({
-      terminalValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, 0, fanoutCount)),
-      ),
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, fanoutCount))),
       width: workbook.getSheetDimensions(sheetId).width,
     }),
-  );
+  )
 }
 
 function measureHyperFormulaSingleFanoutEditSample(fanoutCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet([buildFormulaFanoutRow(fanoutCount)]) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
+  )
+  const sheetId = workbook.getSheetId('Bench')!
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.setCellContents(address(sheetId, 0, 0), 99),
     () => ({
-      terminalValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, 0, fanoutCount)),
-      ),
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, fanoutCount))),
       width: workbook.getSheetDimensions(sheetId).width,
     }),
-  );
+  )
 }
 
 function measureWorkPaperFormulaEditSample(downstreamCount: number): BenchmarkSample {
   const workbook = WorkPaper.buildFromSheets({
     Bench: [buildFormulaEditChainRow(downstreamCount)],
-  });
-  const sheetId = workbook.getSheetId("Bench")!;
+  })
+  const sheetId = workbook.getSheetId('Bench')!
   return measureMutationSample(
     workbook,
-    () => workbook.setCellContents(address(sheetId, 0, 2), "=A1*B1"),
+    () => workbook.setCellContents(address(sheetId, 0, 2), '=A1*B1'),
     () => ({
       editedFormula: workbook.getCellFormula(address(sheetId, 0, 2)) ?? null,
-      terminalValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, 0, downstreamCount + 2)),
-      ),
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, downstreamCount + 2))),
     }),
-  );
+  )
 }
 
 function measureHyperFormulaFormulaEditSample(downstreamCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet([buildFormulaEditChainRow(downstreamCount)]) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
+  )
+  const sheetId = workbook.getSheetId('Bench')!
   return measureHyperFormulaMutationSample(
     workbook,
-    () => workbook.setCellContents(address(sheetId, 0, 2), "=A1*B1"),
+    () => workbook.setCellContents(address(sheetId, 0, 2), '=A1*B1'),
     () => ({
       editedFormula: workbook.getCellFormula(address(sheetId, 0, 2)) ?? null,
-      terminalValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, 0, downstreamCount + 2)),
-      ),
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, downstreamCount + 2))),
     }),
-  );
+  )
 }
 
 function measureWorkPaperBatchSingleColumnEditSample(editCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildValueFormulaRows(editCount) });
-  const sheetId = workbook.getSheetId("Bench")!;
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildValueFormulaRows(editCount) })
+  const sheetId = workbook.getSheetId('Bench')!
   return measureMutationSample(
     workbook,
     () =>
       workbook.batch(() => {
         for (let row = 0; row < editCount; row += 1) {
-          workbook.setCellContents(address(sheetId, row, 0), row * 3);
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
         }
       }),
     () => ({
-      sampleFormulaValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, editCount - 1, 1)),
-      ),
+      sampleFormulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, editCount - 1, 1))),
       width: workbook.getSheetDimensions(sheetId).width,
     }),
-  );
+  )
 }
 
 function measureHyperFormulaBatchSingleColumnEditSample(editCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildValueFormulaRows(editCount)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
+  )
+  const sheetId = workbook.getSheetId('Bench')!
   return measureHyperFormulaMutationSample(
     workbook,
     () =>
       workbook.batch(() => {
         for (let row = 0; row < editCount; row += 1) {
-          workbook.setCellContents(address(sheetId, row, 0), row * 3);
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
         }
       }),
     () => ({
-      sampleFormulaValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, editCount - 1, 1)),
-      ),
+      sampleFormulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, editCount - 1, 1))),
       width: workbook.getSheetDimensions(sheetId).width,
     }),
-  );
+  )
 }
 
 function measureWorkPaperBatchMultiColumnEditSample(rowCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildBatchMultiColumnRows(rowCount) });
-  const sheetId = workbook.getSheetId("Bench")!;
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildBatchMultiColumnRows(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
   return measureMutationSample(
     workbook,
     () =>
       workbook.batch(() => {
         for (let row = 0; row < rowCount; row += 1) {
-          workbook.setCellContents(address(sheetId, row, 0), row * 3);
-          workbook.setCellContents(address(sheetId, row, 1), row * 5);
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
+          workbook.setCellContents(address(sheetId, row, 1), row * 5)
         }
       }),
     () => ({
-      sampleSumValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, rowCount - 1, 2)),
-      ),
-      sampleProductValue: normalizeWorkPaperValue(
-        workbook.getCellValue(address(sheetId, rowCount - 1, 3)),
-      ),
+      sampleSumValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rowCount - 1, 2))),
+      sampleProductValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rowCount - 1, 3))),
     }),
-  );
+  )
 }
 
 function measureHyperFormulaBatchMultiColumnEditSample(rowCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildBatchMultiColumnRows(rowCount)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
+  )
+  const sheetId = workbook.getSheetId('Bench')!
   return measureHyperFormulaMutationSample(
     workbook,
     () =>
       workbook.batch(() => {
         for (let row = 0; row < rowCount; row += 1) {
-          workbook.setCellContents(address(sheetId, row, 0), row * 3);
-          workbook.setCellContents(address(sheetId, row, 1), row * 5);
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
+          workbook.setCellContents(address(sheetId, row, 1), row * 5)
         }
       }),
     () => ({
-      sampleSumValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, rowCount - 1, 2)),
-      ),
-      sampleProductValue: normalizeHyperFormulaValue(
-        workbook.getCellValue(address(sheetId, rowCount - 1, 3)),
-      ),
+      sampleSumValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rowCount - 1, 2))),
+      sampleProductValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rowCount - 1, 3))),
     }),
-  );
+  )
 }
 
 function measureWorkPaperRangeReadSample(rows: number, cols: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildDenseLiteralSheet(rows, cols) });
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetRange = range(sheetId, 0, 0, rows - 1, cols - 1);
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildDenseLiteralSheet(rows, cols) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetRange = range(sheetId, 0, 0, rows - 1, cols - 1)
   return measureMutationSample(
     workbook,
     () => workbook.getRangeValues(targetRange),
     (values) => {
-      const lastRow = values.at(-1);
+      const lastRow = values.at(-1)
       return {
         readCols: values[0]?.length ?? 0,
         readRows: values.length,
         terminalValue: normalizeWorkPaperValue(lastRow?.at(-1)),
         topLeftValue: normalizeWorkPaperValue(values[0]?.[0]),
-      };
+      }
     },
-  );
+  )
 }
 
 function measureHyperFormulaRangeReadSample(rows: number, cols: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildDenseLiteralSheet(rows, cols)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetRange = range(sheetId, 0, 0, rows - 1, cols - 1);
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetRange = range(sheetId, 0, 0, rows - 1, cols - 1)
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.getRangeValues(targetRange),
     (values) => {
-      const lastRow = values.at(-1);
+      const lastRow = values.at(-1)
       return {
         readCols: values[0]?.length ?? 0,
         readRows: values.length,
         terminalValue: normalizeHyperFormulaValue(lastRow?.at(-1)),
         topLeftValue: normalizeHyperFormulaValue(values[0]?.[0]),
-      };
+      }
     },
-  );
+  )
 }
 
 function measureWorkPaperLookupSample(rowCount: number, useColumnIndex: boolean): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets(
-    { Bench: buildLookupSheet(rowCount) },
-    { useColumnIndex },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildLookupSheet(rowCount) }, { useColumnIndex })
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureMutationSample(
     workbook,
     () => workbook.setCellContents(targetAddress, rowCount),
     () => ({
       formulaValue: normalizeWorkPaperValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
-function measureHyperFormulaLookupSample(
-  rowCount: number,
-  useColumnIndex: boolean,
-): BenchmarkSample {
+function measureHyperFormulaLookupSample(rowCount: number, useColumnIndex: boolean): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildLookupSheet(rowCount)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY, useColumnIndex },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.setCellContents(targetAddress, rowCount),
     () => ({
       formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
 function measureWorkPaperApproximateLookupSample(rowCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildApproxLookupSheet(rowCount) });
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildApproxLookupSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureMutationSample(
     workbook,
     () => workbook.setCellContents(targetAddress, rowCount - 0.5),
     () => ({
       formulaValue: normalizeWorkPaperValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
 function measureHyperFormulaApproximateLookupSample(rowCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildApproxLookupSheet(rowCount)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureHyperFormulaMutationSample(
     workbook,
     () => workbook.setCellContents(targetAddress, rowCount - 0.5),
     () => ({
       formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
 function measureWorkPaperTextLookupSample(rowCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildTextLookupSheet(rowCount) });
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildTextLookupSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureMutationSample(
     workbook,
-    () => workbook.setCellContents(targetAddress, "KEY-04999"),
+    () => workbook.setCellContents(targetAddress, 'KEY-04999'),
     () => ({
       formulaValue: normalizeWorkPaperValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
 function measureHyperFormulaTextLookupSample(rowCount: number): BenchmarkSample {
   const workbook = HyperFormula.buildFromSheets(
     { Bench: toHyperFormulaSheet(buildTextLookupSheet(rowCount)) },
     { licenseKey: HYPERFORMULA_LICENSE_KEY },
-  );
-  const sheetId = workbook.getSheetId("Bench")!;
-  const targetAddress = address(sheetId, 0, 3);
-  const formulaAddress = address(sheetId, 0, 4);
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  const targetAddress = address(sheetId, 0, 3)
+  const formulaAddress = address(sheetId, 0, 4)
   return measureHyperFormulaMutationSample(
     workbook,
-    () => workbook.setCellContents(targetAddress, "KEY-04999"),
+    () => workbook.setCellContents(targetAddress, 'KEY-04999'),
     () => ({
       formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(formulaAddress)),
     }),
-  );
+  )
 }
 
 function measureWorkPaperDynamicArraySample(rowCount: number): BenchmarkSample {
-  const workbook = WorkPaper.buildFromSheets({ Bench: buildDynamicArraySheet(rowCount) });
-  const sheetId = workbook.getSheetId("Bench")!;
-  const thresholdAddress = address(sheetId, 0, 1);
-  const spillAnchor = address(sheetId, 0, 2);
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildDynamicArraySheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const thresholdAddress = address(sheetId, 0, 1)
+  const spillAnchor = address(sheetId, 0, 2)
   return measureMutationSample(
     workbook,
     () => workbook.setCellContents(thresholdAddress, rowCount - 10),
@@ -1008,45 +945,45 @@ function measureWorkPaperDynamicArraySample(rowCount: number): BenchmarkSample {
       spillIsArray: workbook.isCellPartOfArray(spillAnchor),
       spillValue: normalizeWorkPaperValue(workbook.getCellValue(spillAnchor)),
     }),
-  );
+  )
 }
 
 function measureWorkPaperBuildFromSheets(
   sheets: Record<string, ReturnType<typeof buildDenseLiteralSheet>>,
   verification: (workbook: WorkPaper) => Record<string, unknown>,
 ): BenchmarkSample {
-  const memoryBefore = sampleMemory();
-  const started = performance.now();
-  const workbook = WorkPaper.buildFromSheets(sheets);
-  const elapsedMs = performance.now() - started;
-  const memoryAfter = sampleMemory();
-  const result = verification(workbook);
-  workbook.dispose();
+  const memoryBefore = sampleMemory()
+  const started = performance.now()
+  const workbook = WorkPaper.buildFromSheets(sheets)
+  const elapsedMs = performance.now() - started
+  const memoryAfter = sampleMemory()
+  const result = verification(workbook)
+  workbook.dispose()
   return {
     elapsedMs,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: result,
-  };
+  }
 }
 
 function measureHyperFormulaBuildFromSheets(
   sheets: Record<string, HyperFormulaSheet>,
   verification: (workbook: HyperFormulaInstance) => Record<string, unknown>,
 ): BenchmarkSample {
-  const memoryBefore = sampleMemory();
-  const started = performance.now();
+  const memoryBefore = sampleMemory()
+  const started = performance.now()
   const workbook = HyperFormula.buildFromSheets(sheets, {
     licenseKey: HYPERFORMULA_LICENSE_KEY,
-  });
-  const elapsedMs = performance.now() - started;
-  const memoryAfter = sampleMemory();
-  const result = verification(workbook);
-  workbook.destroy();
+  })
+  const elapsedMs = performance.now() - started
+  const memoryAfter = sampleMemory()
+  const result = verification(workbook)
+  workbook.destroy()
   return {
     elapsedMs,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: result,
-  };
+  }
 }
 
 function measureMutationSample<Result>(
@@ -1054,18 +991,18 @@ function measureMutationSample<Result>(
   execute: () => Result,
   verification: (result: Result) => Record<string, unknown>,
 ): BenchmarkSample {
-  const memoryBefore = sampleMemory();
-  const started = performance.now();
-  const result = execute();
-  const elapsedMs = performance.now() - started;
-  const memoryAfter = sampleMemory();
-  const resolvedVerification = verification(result);
-  workbook.dispose();
+  const memoryBefore = sampleMemory()
+  const started = performance.now()
+  const result = execute()
+  const elapsedMs = performance.now() - started
+  const memoryAfter = sampleMemory()
+  const resolvedVerification = verification(result)
+  workbook.dispose()
   return {
     elapsedMs,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: resolvedVerification,
-  };
+  }
 }
 
 function measureHyperFormulaMutationSample<Result>(
@@ -1073,18 +1010,18 @@ function measureHyperFormulaMutationSample<Result>(
   execute: () => Result,
   verification: (result: Result) => Record<string, unknown>,
 ): BenchmarkSample {
-  const memoryBefore = sampleMemory();
-  const started = performance.now();
-  const result = execute();
-  const elapsedMs = performance.now() - started;
-  const memoryAfter = sampleMemory();
-  const resolvedVerification = verification(result);
-  workbook.destroy();
+  const memoryBefore = sampleMemory()
+  const started = performance.now()
+  const result = execute()
+  const elapsedMs = performance.now() - started
+  const memoryAfter = sampleMemory()
+  const resolvedVerification = verification(result)
+  workbook.destroy()
   return {
     elapsedMs,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: resolvedVerification,
-  };
+  }
 }
 
 function summarizeMemory(samples: readonly MemoryMeasurement[]): ComparativeMemorySummary {
@@ -1094,115 +1031,89 @@ function summarizeMemory(samples: readonly MemoryMeasurement[]): ComparativeMemo
     heapTotalBytes: summarizeNumbers(samples.map((sample) => sample.delta.heapTotalBytes)),
     externalBytes: summarizeNumbers(samples.map((sample) => sample.delta.externalBytes)),
     arrayBuffersBytes: summarizeNumbers(samples.map((sample) => sample.delta.arrayBuffersBytes)),
-  };
+  }
 }
 
-function normalizeWorkPaperValue(
-  value: unknown,
-): boolean | number | string | null | { error: unknown } {
+function normalizeWorkPaperValue(value: unknown): boolean | number | string | null | { error: unknown } {
   if (!isProtocolValueLike(value)) {
-    return null;
+    return null
   }
 
   switch (value.tag) {
     case ValueTag.Empty:
-      return null;
+      return null
     case ValueTag.Number:
     case ValueTag.Boolean:
     case ValueTag.String:
-      return value.value ?? null;
+      return value.value ?? null
     case ValueTag.Error:
-      return { error: value.code ?? "ERROR" };
+      return { error: value.code ?? 'ERROR' }
     default:
-      return { error: `UNKNOWN_TAG_${String(value.tag)}` };
+      return { error: `UNKNOWN_TAG_${String(value.tag)}` }
   }
 }
 
-function normalizeHyperFormulaValue(
-  value: unknown,
-): boolean | number | string | null | { error: unknown } {
-  if (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "number" ||
-    typeof value === "string"
-  ) {
-    return value;
+function normalizeHyperFormulaValue(value: unknown): boolean | number | string | null | { error: unknown } {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+    return value
   }
   if (isHyperFormulaErrorLike(value)) {
-    return { error: value.value };
+    return { error: value.value }
   }
-  return { error: "UNKNOWN_VALUE" };
+  return { error: 'UNKNOWN_VALUE' }
 }
 
-function resolveSuiteOptions(
-  options: ComparativeBenchmarkSuiteOptions,
-): Required<ComparativeBenchmarkSuiteOptions> {
+function resolveSuiteOptions(options: ComparativeBenchmarkSuiteOptions): Required<ComparativeBenchmarkSuiteOptions> {
   return {
     sampleCount: options.sampleCount ?? DEFAULT_COMPETITIVE_SAMPLE_COUNT,
     warmupCount: options.warmupCount ?? DEFAULT_COMPETITIVE_WARMUP_COUNT,
-  };
+  }
 }
 
-function isProtocolValueLike(
-  value: unknown,
-): value is { code?: unknown; tag: ValueTag; value?: boolean | number | string } {
-  if (!value || typeof value !== "object") {
-    return false;
+function isProtocolValueLike(value: unknown): value is { code?: unknown; tag: ValueTag; value?: boolean | number | string } {
+  if (!value || typeof value !== 'object') {
+    return false
   }
-  const tag = Reflect.get(value, "tag");
-  return (
-    tag === ValueTag.Empty ||
-    tag === ValueTag.Number ||
-    tag === ValueTag.Boolean ||
-    tag === ValueTag.String ||
-    tag === ValueTag.Error
-  );
+  const tag = Reflect.get(value, 'tag')
+  return tag === ValueTag.Empty || tag === ValueTag.Number || tag === ValueTag.Boolean || tag === ValueTag.String || tag === ValueTag.Error
 }
 
 function isHyperFormulaErrorLike(value: unknown): value is { value: unknown } {
-  return value !== null && typeof value === "object" && "value" in value;
+  return value !== null && typeof value === 'object' && 'value' in value
 }
 
-function parseExpandedBenchmarkCliOptions(
-  args: readonly string[],
-): ComparativeBenchmarkSuiteOptions {
-  const options: ComparativeBenchmarkSuiteOptions = {};
+function parseExpandedBenchmarkCliOptions(args: readonly string[]): ComparativeBenchmarkSuiteOptions {
+  const options: ComparativeBenchmarkSuiteOptions = {}
   for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
-    if (arg === "--sample-count") {
-      const raw = args[index + 1];
+    const arg = args[index]!
+    if (arg === '--sample-count') {
+      const raw = args[index + 1]
       if (raw === undefined) {
-        throw new Error("Missing value for --sample-count");
+        throw new Error('Missing value for --sample-count')
       }
-      options.sampleCount = Number.parseInt(raw, 10);
-      index += 1;
-      continue;
+      options.sampleCount = Number.parseInt(raw, 10)
+      index += 1
+      continue
     }
-    if (arg === "--warmup-count") {
-      const raw = args[index + 1];
+    if (arg === '--warmup-count') {
+      const raw = args[index + 1]
       if (raw === undefined) {
-        throw new Error("Missing value for --warmup-count");
+        throw new Error('Missing value for --warmup-count')
       }
-      options.warmupCount = Number.parseInt(raw, 10);
-      index += 1;
+      options.warmupCount = Number.parseInt(raw, 10)
+      index += 1
     }
   }
-  return options;
+  return options
 }
 
 function toHyperFormulaSheet(sheet: ReadonlyArray<ReadonlyArray<unknown>>): HyperFormulaSheet {
-  return sheet.map((row) => row.map((cell) => toHyperFormulaCell(cell)));
+  return sheet.map((row) => row.map((cell) => toHyperFormulaCell(cell)))
 }
 
 function toHyperFormulaCell(cell: unknown): HyperFormulaRawCellContent {
-  if (
-    cell === null ||
-    typeof cell === "boolean" ||
-    typeof cell === "number" ||
-    typeof cell === "string"
-  ) {
-    return cell;
+  if (cell === null || typeof cell === 'boolean' || typeof cell === 'number' || typeof cell === 'string') {
+    return cell
   }
-  throw new Error(`Unsupported HyperFormula benchmark cell type: ${typeof cell}`);
+  throw new Error(`Unsupported HyperFormula benchmark cell type: ${typeof cell}`)
 }

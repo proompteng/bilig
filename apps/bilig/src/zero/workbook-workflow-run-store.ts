@@ -1,126 +1,116 @@
-import type {
-  WorkbookAgentWorkflowArtifact,
-  WorkbookAgentWorkflowRun,
-  WorkbookAgentWorkflowStep,
-} from "@bilig/contracts";
-import type { QueryResultRow, Queryable } from "./store.js";
+import type { WorkbookAgentWorkflowArtifact, WorkbookAgentWorkflowRun, WorkbookAgentWorkflowStep } from '@bilig/contracts'
+import type { QueryResultRow, Queryable } from './store.js'
 
 interface WorkbookWorkflowRunRow extends QueryResultRow {
-  readonly runId?: unknown;
-  readonly workbookId?: unknown;
-  readonly threadId?: unknown;
-  readonly actorUserId?: unknown;
-  readonly workflowTemplate?: unknown;
-  readonly title?: unknown;
-  readonly summary?: unknown;
-  readonly status?: unknown;
-  readonly createdAtUnixMs?: unknown;
-  readonly updatedAtUnixMs?: unknown;
-  readonly completedAtUnixMs?: unknown;
-  readonly errorMessage?: unknown;
-  readonly stepsJson?: unknown;
-  readonly artifactJson?: unknown;
+  readonly runId?: unknown
+  readonly workbookId?: unknown
+  readonly threadId?: unknown
+  readonly actorUserId?: unknown
+  readonly workflowTemplate?: unknown
+  readonly title?: unknown
+  readonly summary?: unknown
+  readonly status?: unknown
+  readonly createdAtUnixMs?: unknown
+  readonly updatedAtUnixMs?: unknown
+  readonly completedAtUnixMs?: unknown
+  readonly errorMessage?: unknown
+  readonly stepsJson?: unknown
+  readonly artifactJson?: unknown
 }
 
 interface WorkbookWorkflowStepRow extends QueryResultRow {
-  readonly runId?: unknown;
-  readonly stepId?: unknown;
-  readonly stepOrder?: unknown;
-  readonly label?: unknown;
-  readonly status?: unknown;
-  readonly summary?: unknown;
-  readonly updatedAtUnixMs?: unknown;
+  readonly runId?: unknown
+  readonly stepId?: unknown
+  readonly stepOrder?: unknown
+  readonly label?: unknown
+  readonly status?: unknown
+  readonly summary?: unknown
+  readonly updatedAtUnixMs?: unknown
 }
 
 interface WorkbookWorkflowArtifactRow extends QueryResultRow {
-  readonly runId?: unknown;
-  readonly kind?: unknown;
-  readonly title?: unknown;
-  readonly text?: unknown;
+  readonly runId?: unknown
+  readonly kind?: unknown
+  readonly title?: unknown
+  readonly text?: unknown
 }
 
 function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
   }
-  if (typeof value === "string" && value.length > 0) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : null
   }
-  return null;
+  return null
 }
 
 function isMarkdownArtifact(value: unknown): value is WorkbookAgentWorkflowArtifact {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "kind" in value &&
-    value.kind === "markdown" &&
-    "title" in value &&
-    typeof value.title === "string" &&
-    "text" in value &&
-    typeof value.text === "string"
-  );
+    'kind' in value &&
+    value.kind === 'markdown' &&
+    'title' in value &&
+    typeof value.title === 'string' &&
+    'text' in value &&
+    typeof value.text === 'string'
+  )
 }
 
-function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["workflowTemplate"] {
+function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun['workflowTemplate'] {
   return (
-    value === "summarizeWorkbook" ||
-    value === "summarizeCurrentSheet" ||
-    value === "describeRecentChanges" ||
-    value === "findFormulaIssues" ||
-    value === "highlightFormulaIssues" ||
-    value === "repairFormulaIssues" ||
-    value === "highlightCurrentSheetOutliers" ||
-    value === "styleCurrentSheetHeaders" ||
-    value === "normalizeCurrentSheetHeaders" ||
-    value === "normalizeCurrentSheetNumberFormats" ||
-    value === "normalizeCurrentSheetWhitespace" ||
-    value === "fillCurrentSheetFormulasDown" ||
-    value === "traceSelectionDependencies" ||
-    value === "explainSelectionCell" ||
-    value === "searchWorkbookQuery" ||
-    value === "createCurrentSheetRollup" ||
-    value === "createCurrentSheetReviewTab" ||
-    value === "createSheet" ||
-    value === "renameCurrentSheet" ||
-    value === "hideCurrentRow" ||
-    value === "hideCurrentColumn" ||
-    value === "unhideCurrentRow" ||
-    value === "unhideCurrentColumn"
-  );
+    value === 'summarizeWorkbook' ||
+    value === 'summarizeCurrentSheet' ||
+    value === 'describeRecentChanges' ||
+    value === 'findFormulaIssues' ||
+    value === 'highlightFormulaIssues' ||
+    value === 'repairFormulaIssues' ||
+    value === 'highlightCurrentSheetOutliers' ||
+    value === 'styleCurrentSheetHeaders' ||
+    value === 'normalizeCurrentSheetHeaders' ||
+    value === 'normalizeCurrentSheetNumberFormats' ||
+    value === 'normalizeCurrentSheetWhitespace' ||
+    value === 'fillCurrentSheetFormulasDown' ||
+    value === 'traceSelectionDependencies' ||
+    value === 'explainSelectionCell' ||
+    value === 'searchWorkbookQuery' ||
+    value === 'createCurrentSheetRollup' ||
+    value === 'createCurrentSheetReviewTab' ||
+    value === 'createSheet' ||
+    value === 'renameCurrentSheet' ||
+    value === 'hideCurrentRow' ||
+    value === 'hideCurrentColumn' ||
+    value === 'unhideCurrentRow' ||
+    value === 'unhideCurrentColumn'
+  )
 }
 
-function isWorkflowStepStatus(value: unknown): value is WorkbookAgentWorkflowStep["status"] {
-  return (
-    value === "pending" ||
-    value === "running" ||
-    value === "completed" ||
-    value === "failed" ||
-    value === "cancelled"
-  );
+function isWorkflowStepStatus(value: unknown): value is WorkbookAgentWorkflowStep['status'] {
+  return value === 'pending' || value === 'running' || value === 'completed' || value === 'failed' || value === 'cancelled'
 }
 
 function isWorkflowStep(value: unknown): value is WorkbookAgentWorkflowStep {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "stepId" in value &&
-    typeof value.stepId === "string" &&
-    "label" in value &&
-    typeof value.label === "string" &&
-    "status" in value &&
+    'stepId' in value &&
+    typeof value.stepId === 'string' &&
+    'label' in value &&
+    typeof value.label === 'string' &&
+    'status' in value &&
     isWorkflowStepStatus(value.status) &&
-    "summary" in value &&
-    typeof value.summary === "string" &&
-    "updatedAtUnixMs" in value &&
+    'summary' in value &&
+    typeof value.summary === 'string' &&
+    'updatedAtUnixMs' in value &&
     parseNumericValue(value.updatedAtUnixMs) !== null
-  );
+  )
 }
 
 function normalizeWorkflowSteps(value: unknown): WorkbookAgentWorkflowStep[] | null {
   if (!Array.isArray(value) || !value.every((entry) => isWorkflowStep(entry))) {
-    return null;
+    return null
   }
   return value.map((entry) => ({
     stepId: entry.stepId,
@@ -128,26 +118,26 @@ function normalizeWorkflowSteps(value: unknown): WorkbookAgentWorkflowStep[] | n
     status: entry.status,
     summary: entry.summary,
     updatedAtUnixMs: parseNumericValue(entry.updatedAtUnixMs) ?? 0,
-  }));
+  }))
 }
 
 function normalizeWorkflowStepRow(row: WorkbookWorkflowStepRow): {
-  readonly runId: string;
-  readonly step: WorkbookAgentWorkflowStep;
-  readonly stepOrder: number;
+  readonly runId: string
+  readonly step: WorkbookAgentWorkflowStep
+  readonly stepOrder: number
 } | null {
-  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
-  const stepOrder = parseNumericValue(row.stepOrder);
+  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
+  const stepOrder = parseNumericValue(row.stepOrder)
   if (
-    typeof row.runId !== "string" ||
-    typeof row.stepId !== "string" ||
-    typeof row.label !== "string" ||
+    typeof row.runId !== 'string' ||
+    typeof row.stepId !== 'string' ||
+    typeof row.label !== 'string' ||
     !isWorkflowStepStatus(row.status) ||
-    typeof row.summary !== "string" ||
+    typeof row.summary !== 'string' ||
     updatedAtUnixMs === null ||
     stepOrder === null
   ) {
-    return null;
+    return null
   }
   return {
     runId: row.runId,
@@ -159,65 +149,57 @@ function normalizeWorkflowStepRow(row: WorkbookWorkflowStepRow): {
       summary: row.summary,
       updatedAtUnixMs,
     },
-  };
+  }
 }
 
 function normalizeWorkflowArtifactRow(row: WorkbookWorkflowArtifactRow): {
-  readonly runId: string;
-  readonly artifact: WorkbookAgentWorkflowArtifact;
+  readonly runId: string
+  readonly artifact: WorkbookAgentWorkflowArtifact
 } | null {
   const artifact = {
     kind: row.kind,
     title: row.title,
     text: row.text,
-  };
-  if (typeof row.runId !== "string" || !isMarkdownArtifact(artifact)) {
-    return null;
+  }
+  if (typeof row.runId !== 'string' || !isMarkdownArtifact(artifact)) {
+    return null
   }
   return {
     runId: row.runId,
     artifact,
-  };
+  }
 }
 
 function normalizeWorkflowRun(
   row: WorkbookWorkflowRunRow,
   hydrated: {
-    readonly steps?: WorkbookAgentWorkflowStep[] | null;
-    readonly artifact?: WorkbookAgentWorkflowArtifact | null;
+    readonly steps?: WorkbookAgentWorkflowStep[] | null
+    readonly artifact?: WorkbookAgentWorkflowArtifact | null
   } = {},
 ): WorkbookAgentWorkflowRun | null {
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
-  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
+  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
+  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
   const completedAtUnixMs =
-    row.completedAtUnixMs === null || row.completedAtUnixMs === undefined
-      ? null
-      : parseNumericValue(row.completedAtUnixMs);
-  const fallbackSteps = normalizeWorkflowSteps(row.stepsJson ?? []);
-  const steps = hydrated.steps ?? fallbackSteps;
-  const artifact =
-    hydrated.artifact ?? (isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null);
+    row.completedAtUnixMs === null || row.completedAtUnixMs === undefined ? null : parseNumericValue(row.completedAtUnixMs)
+  const fallbackSteps = normalizeWorkflowSteps(row.stepsJson ?? [])
+  const steps = hydrated.steps ?? fallbackSteps
+  const artifact = hydrated.artifact ?? (isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null)
   if (
-    typeof row.runId !== "string" ||
-    typeof row.threadId !== "string" ||
-    typeof row.actorUserId !== "string" ||
+    typeof row.runId !== 'string' ||
+    typeof row.threadId !== 'string' ||
+    typeof row.actorUserId !== 'string' ||
     !isWorkflowTemplate(row.workflowTemplate) ||
-    typeof row.title !== "string" ||
-    typeof row.summary !== "string" ||
-    (row.status !== "running" &&
-      row.status !== "completed" &&
-      row.status !== "failed" &&
-      row.status !== "cancelled") ||
+    typeof row.title !== 'string' ||
+    typeof row.summary !== 'string' ||
+    (row.status !== 'running' && row.status !== 'completed' && row.status !== 'failed' && row.status !== 'cancelled') ||
     createdAtUnixMs === null ||
     updatedAtUnixMs === null ||
     completedAtUnixMs === undefined ||
     steps === null ||
-    (row.errorMessage !== null &&
-      row.errorMessage !== undefined &&
-      typeof row.errorMessage !== "string") ||
+    (row.errorMessage !== null && row.errorMessage !== undefined && typeof row.errorMessage !== 'string') ||
     (artifact !== null && !isMarkdownArtifact(artifact))
   ) {
-    return null;
+    return null
   }
   return {
     runId: row.runId,
@@ -230,10 +212,10 @@ function normalizeWorkflowRun(
     createdAtUnixMs,
     updatedAtUnixMs,
     completedAtUnixMs,
-    errorMessage: typeof row.errorMessage === "string" ? row.errorMessage : null,
+    errorMessage: typeof row.errorMessage === 'string' ? row.errorMessage : null,
     steps,
     artifact,
-  };
+  }
 }
 
 async function loadDurableWorkflowSteps(
@@ -242,7 +224,7 @@ async function loadDurableWorkflowSteps(
   runIds: readonly string[],
 ): Promise<Map<string, WorkbookAgentWorkflowStep[]>> {
   if (runIds.length === 0) {
-    return new Map();
+    return new Map()
   }
   const result = await db.query<WorkbookWorkflowStepRow>(
     `
@@ -260,21 +242,21 @@ async function loadDurableWorkflowSteps(
       ORDER BY step.run_id ASC, step.step_order ASC
     `,
     [documentId, runIds],
-  );
-  const stepsByRunId = new Map<string, WorkbookAgentWorkflowStep[]>();
+  )
+  const stepsByRunId = new Map<string, WorkbookAgentWorkflowStep[]>()
   for (const row of result.rows) {
-    const normalized = normalizeWorkflowStepRow(row);
+    const normalized = normalizeWorkflowStepRow(row)
     if (!normalized) {
-      continue;
+      continue
     }
-    const steps = stepsByRunId.get(normalized.runId);
+    const steps = stepsByRunId.get(normalized.runId)
     if (steps) {
-      steps.push(normalized.step);
-      continue;
+      steps.push(normalized.step)
+      continue
     }
-    stepsByRunId.set(normalized.runId, [normalized.step]);
+    stepsByRunId.set(normalized.runId, [normalized.step])
   }
-  return stepsByRunId;
+  return stepsByRunId
 }
 
 async function loadDurableWorkflowArtifacts(
@@ -283,7 +265,7 @@ async function loadDurableWorkflowArtifacts(
   runIds: readonly string[],
 ): Promise<Map<string, WorkbookAgentWorkflowArtifact>> {
   if (runIds.length === 0) {
-    return new Map();
+    return new Map()
   }
   const result = await db.query<WorkbookWorkflowArtifactRow>(
     `
@@ -297,16 +279,16 @@ async function loadDurableWorkflowArtifacts(
         AND artifact.run_id = ANY($2::text[])
     `,
     [documentId, runIds],
-  );
-  const artifactsByRunId = new Map<string, WorkbookAgentWorkflowArtifact>();
+  )
+  const artifactsByRunId = new Map<string, WorkbookAgentWorkflowArtifact>()
   for (const row of result.rows) {
-    const normalized = normalizeWorkflowArtifactRow(row);
+    const normalized = normalizeWorkflowArtifactRow(row)
     if (!normalized) {
-      continue;
+      continue
     }
-    artifactsByRunId.set(normalized.runId, normalized.artifact);
+    artifactsByRunId.set(normalized.runId, normalized.artifact)
   }
-  return artifactsByRunId;
+  return artifactsByRunId
 }
 
 export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<void> {
@@ -327,7 +309,7 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       steps_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       artifact_json JSONB
     )
-  `);
+  `)
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_workflow_step (
       workbook_id TEXT NOT NULL,
@@ -340,7 +322,7 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (run_id, step_id)
     )
-  `);
+  `)
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_workflow_artifact (
       run_id TEXT PRIMARY KEY,
@@ -350,30 +332,30 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       text TEXT NOT NULL,
       updated_at_unix_ms BIGINT NOT NULL
     )
-  `);
+  `)
   await db.query(`
     ALTER TABLE workbook_workflow_run
       ADD COLUMN IF NOT EXISTS steps_json JSONB NOT NULL DEFAULT '[]'::jsonb
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_run_thread_updated_idx
       ON workbook_workflow_run (workbook_id, thread_id, updated_at_unix_ms DESC)
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_step_run_order_idx
       ON workbook_workflow_step (workbook_id, run_id, step_order ASC)
-  `);
+  `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_artifact_run_idx
       ON workbook_workflow_artifact (workbook_id, run_id)
-  `);
+  `)
 }
 
 export async function upsertWorkbookWorkflowRun(
   db: Queryable,
   input: {
-    documentId: string;
-    run: WorkbookAgentWorkflowRun;
+    documentId: string
+    run: WorkbookAgentWorkflowRun
   },
 ): Promise<void> {
   await db.query(
@@ -429,7 +411,7 @@ export async function upsertWorkbookWorkflowRun(
       JSON.stringify(input.run.steps),
       JSON.stringify(input.run.artifact),
     ],
-  );
+  )
   await db.query(
     `
       DELETE FROM workbook_workflow_step
@@ -437,7 +419,7 @@ export async function upsertWorkbookWorkflowRun(
         AND run_id = $2
     `,
     [input.documentId, input.run.runId],
-  );
+  )
   await Promise.all(
     input.run.steps.map((step, stepOrder) =>
       db.query(
@@ -454,19 +436,10 @@ export async function upsertWorkbookWorkflowRun(
           )
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
-        [
-          input.documentId,
-          input.run.runId,
-          step.stepId,
-          stepOrder,
-          step.label,
-          step.status,
-          step.summary,
-          step.updatedAtUnixMs,
-        ],
+        [input.documentId, input.run.runId, step.stepId, stepOrder, step.label, step.status, step.summary, step.updatedAtUnixMs],
       ),
     ),
-  );
+  )
   if (input.run.artifact) {
     await db.query(
       `
@@ -495,8 +468,8 @@ export async function upsertWorkbookWorkflowRun(
         input.run.artifact.text,
         input.run.updatedAtUnixMs,
       ],
-    );
-    return;
+    )
+    return
   }
   await db.query(
     `
@@ -505,16 +478,16 @@ export async function upsertWorkbookWorkflowRun(
         AND run_id = $2
     `,
     [input.documentId, input.run.runId],
-  );
+  )
 }
 
 export async function listWorkbookThreadWorkflowRuns(
   db: Queryable,
   input: {
-    documentId: string;
-    actorUserId: string;
-    threadId: string;
-    limit?: number;
+    documentId: string
+    actorUserId: string
+    threadId: string
+    limit?: number
   },
 ): Promise<WorkbookAgentWorkflowRun[]> {
   const result = await db.query<WorkbookWorkflowRunRow>(
@@ -551,29 +524,29 @@ export async function listWorkbookThreadWorkflowRuns(
       LIMIT $4
     `,
     [input.documentId, input.threadId, input.actorUserId, input.limit ?? 20],
-  );
-  const runIds = result.rows.flatMap((row) => (typeof row.runId === "string" ? [row.runId] : []));
+  )
+  const runIds = result.rows.flatMap((row) => (typeof row.runId === 'string' ? [row.runId] : []))
   const [durableSteps, durableArtifacts] = await Promise.all([
     loadDurableWorkflowSteps(db, input.documentId, runIds),
     loadDurableWorkflowArtifacts(db, input.documentId, runIds),
-  ]);
+  ])
   return result.rows.flatMap((row) => {
-    const runId = typeof row.runId === "string" ? row.runId : null;
+    const runId = typeof row.runId === 'string' ? row.runId : null
     const hydrated: {
-      steps?: WorkbookAgentWorkflowStep[] | null;
-      artifact?: WorkbookAgentWorkflowArtifact | null;
-    } = {};
+      steps?: WorkbookAgentWorkflowStep[] | null
+      artifact?: WorkbookAgentWorkflowArtifact | null
+    } = {}
     if (runId) {
-      const steps = durableSteps.get(runId);
+      const steps = durableSteps.get(runId)
       if (steps) {
-        hydrated.steps = steps;
+        hydrated.steps = steps
       }
-      const artifact = durableArtifacts.get(runId);
+      const artifact = durableArtifacts.get(runId)
       if (artifact) {
-        hydrated.artifact = artifact;
+        hydrated.artifact = artifact
       }
     }
-    const run = normalizeWorkflowRun(row, hydrated);
-    return run ? [run] : [];
-  });
+    const run = normalizeWorkflowRun(row, hydrated)
+    return run ? [run] : []
+  })
 }

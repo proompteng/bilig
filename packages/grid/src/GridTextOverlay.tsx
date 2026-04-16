@@ -1,22 +1,18 @@
-import type { CSSProperties } from "react";
-import type { GridTextScene } from "./gridTextScene.js";
+import type { CSSProperties } from 'react'
+import type { GridTextScene } from './gridTextScene.js'
 
 interface GridTextOverlayProps {
-  readonly active: boolean;
-  readonly scene: GridTextScene;
+  readonly active: boolean
+  readonly scene: GridTextScene
 }
 
 export function GridTextOverlay({ active, scene }: GridTextOverlayProps) {
   if (!active) {
-    return null;
+    return null
   }
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
-      data-testid="grid-text-overlay"
-    >
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20 overflow-hidden" data-testid="grid-text-overlay">
       {scene.items.map((item) => (
         <div
           className="absolute box-border overflow-hidden px-2"
@@ -28,16 +24,11 @@ export function GridTextOverlay({ active, scene }: GridTextOverlayProps) {
             style={{
               clipPath: `inset(${item.clipInsetTop}px ${item.clipInsetRight}px ${item.clipInsetBottom}px ${item.clipInsetLeft}px)`,
               lineHeight: 1.2,
-              overflow: "hidden",
-              textDecorationLine: [
-                item.underline ? "underline" : null,
-                item.strike ? "line-through" : null,
-              ]
-                .filter(Boolean)
-                .join(" "),
-              textOverflow: item.wrap ? undefined : "clip",
-              whiteSpace: item.wrap ? "pre-wrap" : "pre",
-              wordBreak: item.wrap ? "break-word" : "normal",
+              overflow: 'hidden',
+              textDecorationLine: [item.underline ? 'underline' : null, item.strike ? 'line-through' : null].filter(Boolean).join(' '),
+              textOverflow: item.wrap ? undefined : 'clip',
+              whiteSpace: item.wrap ? 'pre-wrap' : 'pre',
+              wordBreak: item.wrap ? 'break-word' : 'normal',
             }}
           >
             {item.text}
@@ -45,23 +36,22 @@ export function GridTextOverlay({ active, scene }: GridTextOverlayProps) {
         </div>
       ))}
     </div>
-  );
+  )
 }
 
-function getTextItemStyle(item: GridTextScene["items"][number]): CSSProperties {
+function getTextItemStyle(item: GridTextScene['items'][number]): CSSProperties {
   return {
-    alignItems: item.wrap ? "flex-start" : "center",
+    alignItems: item.wrap ? 'flex-start' : 'center',
     color: item.color,
-    display: "flex",
+    display: 'flex',
     font: item.font,
     fontSize: item.fontSize,
     height: item.height,
-    justifyContent:
-      item.align === "right" ? "flex-end" : item.align === "center" ? "center" : "flex-start",
+    justifyContent: item.align === 'right' ? 'flex-end' : item.align === 'center' ? 'center' : 'flex-start',
     left: item.x,
     paddingTop: item.wrap ? 4 : 0,
     textAlign: item.align,
     top: item.y,
     width: item.width,
-  };
+  }
 }

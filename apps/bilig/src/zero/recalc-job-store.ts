@@ -1,37 +1,30 @@
-import type { EngineReplicaSnapshot } from "@bilig/core";
-import type { WorkbookSnapshot } from "@bilig/protocol";
-import type { CellEvalRow } from "./projection.js";
-import { isDirtyRegion, parseInteger } from "./store-support.js";
-import { shouldPersistWorkbookCheckpointRevision, type Queryable } from "./store.js";
-import {
-  persistCellEvalDiff,
-  persistCellEvalIncremental,
-  persistWorkbookCheckpoint,
-} from "./workbook-calculation-store.js";
+import type { EngineReplicaSnapshot } from '@bilig/core'
+import type { WorkbookSnapshot } from '@bilig/protocol'
+import type { CellEvalRow } from './projection.js'
+import { isDirtyRegion, parseInteger } from './store-support.js'
+import { shouldPersistWorkbookCheckpointRevision, type Queryable } from './store.js'
+import { persistCellEvalDiff, persistCellEvalIncremental, persistWorkbookCheckpoint } from './workbook-calculation-store.js'
 
-const RECALC_LEASE_MS = 30_000;
-const MAX_RECALC_ATTEMPTS = 3;
+const RECALC_LEASE_MS = 30_000
+const MAX_RECALC_ATTEMPTS = 3
 
 export interface RecalcJobLease {
-  id: string;
-  workbookId: string;
-  fromRevision: number;
-  toRevision: number;
-  dirtyRegions: import("@bilig/zero-sync").DirtyRegion[] | null;
-  attempts: number;
+  id: string
+  workbookId: string
+  fromRevision: number
+  toRevision: number
+  dirtyRegions: import('@bilig/zero-sync').DirtyRegion[] | null
+  attempts: number
 }
 
-export async function leaseNextRecalcJob(
-  db: Queryable,
-  workerId: string,
-): Promise<RecalcJobLease | null> {
+export async function leaseNextRecalcJob(db: Queryable, workerId: string): Promise<RecalcJobLease | null> {
   const result = await db.query<{
-    id: string;
-    workbook_id: string;
-    from_revision: number | string | null;
-    to_revision: number | string | null;
-    dirty_regions_json: unknown;
-    attempts: number | string | null;
+    id: string
+    workbook_id: string
+    from_revision: number | string | null
+    to_revision: number | string | null
+    dirty_regions_json: unknown
+    attempts: number | string | null
   }>(
     `
       WITH candidate AS (
@@ -53,14 +46,12 @@ export async function leaseNextRecalcJob(
       RETURNING id, workbook_id, from_revision, to_revision, dirty_regions_json, attempts
     `,
     [workerId, RECALC_LEASE_MS],
-  );
-  const row = result.rows[0];
+  )
+  const row = result.rows[0]
   if (!row) {
-    return null;
+    return null
   }
-  const dirtyRegions = Array.isArray(row.dirty_regions_json)
-    ? row.dirty_regions_json.filter(isDirtyRegion)
-    : null;
+  const dirtyRegions = Array.isArray(row.dirty_regions_json) ? row.dirty_regions_json.filter(isDirtyRegion) : null
   return {
     id: row.id,
     workbookId: row.workbook_id,
@@ -68,7 +59,7 @@ export async function leaseNextRecalcJob(
     toRevision: parseInteger(row.to_revision),
     dirtyRegions: dirtyRegions && dirtyRegions.length > 0 ? dirtyRegions : null,
     attempts: parseInteger(row.attempts),
-  };
+  }
 }
 
 export async function markRecalcJobCompleted(
@@ -82,16 +73,16 @@ export async function markRecalcJobCompleted(
   const revisionResult = await db.query<{ head_revision: number | string | null }>(
     `SELECT head_revision FROM workbooks WHERE id = $1 LIMIT 1`,
     [lease.workbookId],
-  );
+  )
   if (parseInteger(revisionResult.rows[0]?.head_revision) !== lease.toRevision) {
-    await markRecalcJobSuperseded(db, lease);
-    return false;
+    await markRecalcJobSuperseded(db, lease)
+    return false
   }
 
   if (isIncremental) {
-    await persistCellEvalIncremental(db, lease.workbookId, nextRows);
+    await persistCellEvalIncremental(db, lease.workbookId, nextRows)
   } else {
-    await persistCellEvalDiff(db, lease.workbookId, nextRows);
+    await persistCellEvalDiff(db, lease.workbookId, nextRows)
   }
   await db.query(
     `
@@ -100,7 +91,7 @@ export async function markRecalcJobCompleted(
       WHERE id = $1 AND head_revision = $2
     `,
     [lease.workbookId, lease.toRevision],
-  );
+  )
   await db.query(
     `
       UPDATE recalc_job
@@ -111,18 +102,12 @@ export async function markRecalcJobCompleted(
       WHERE id = $1
     `,
     [lease.id],
-  );
+  )
 
   if (shouldPersistWorkbookCheckpointRevision(lease.toRevision) && snapshot) {
-    await persistWorkbookCheckpoint(
-      db,
-      lease.workbookId,
-      lease.toRevision,
-      snapshot,
-      replicaSnapshot,
-    );
+    await persistWorkbookCheckpoint(db, lease.workbookId, lease.toRevision, snapshot, replicaSnapshot)
   }
-  return true;
+  return true
 }
 
 export async function markRecalcJobSuperseded(db: Queryable, lease: RecalcJobLease): Promise<void> {
@@ -136,16 +121,12 @@ export async function markRecalcJobSuperseded(db: Queryable, lease: RecalcJobLea
       WHERE id = $1
     `,
     [lease.id],
-  );
+  )
 }
 
-export async function markRecalcJobFailed(
-  db: Queryable,
-  lease: RecalcJobLease,
-  error: unknown,
-): Promise<void> {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  const exhausted = lease.attempts >= MAX_RECALC_ATTEMPTS;
+export async function markRecalcJobFailed(db: Queryable, lease: RecalcJobLease, error: unknown): Promise<void> {
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error)
+  const exhausted = lease.attempts >= MAX_RECALC_ATTEMPTS
   await db.query(
     `
       UPDATE recalc_job
@@ -156,6 +137,6 @@ export async function markRecalcJobFailed(
           updated_at = NOW()
       WHERE id = $1
     `,
-    [lease.id, exhausted ? "failed" : "pending", message],
-  );
+    [lease.id, exhausted ? 'failed' : 'pending', message],
+  )
 }

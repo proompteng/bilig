@@ -1,4 +1,4 @@
-import { appendWorkbookChange } from "./workbook-change-store.js";
+import { appendWorkbookChange } from './workbook-change-store.js'
 import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
@@ -10,8 +10,8 @@ import {
   buildWorkbookSourceProjectionFromEngine,
   buildWorkbookStyleRowsFromEngine,
   materializeCellEvalProjection,
-} from "./projection.js";
-import { deriveDirtyRegions, type DirtyRegion } from "@bilig/zero-sync";
+} from './projection.js'
+import { deriveDirtyRegions, type DirtyRegion } from '@bilig/zero-sync'
 import {
   eventRequiresRecalc,
   isColumnMetadataEventPayload,
@@ -20,7 +20,7 @@ import {
   isRowMetadataEventPayload,
   isStyleRangeEventPayload,
   nowIso,
-} from "./store-support.js";
+} from './store-support.js'
 import {
   applyAxisMetadataDiff,
   applyCalculationSettings,
@@ -34,40 +34,32 @@ import {
   type PersistWorkbookMutationResult,
   type Queryable,
   type WorkbookProjectionCommit,
-} from "./store.js";
-import { persistCellEvalRangeDiff } from "./workbook-calculation-store.js";
+} from './store.js'
+import { persistCellEvalRangeDiff } from './workbook-calculation-store.js'
 
 function buildFocusedProjectionCellRows(
-  projection: PersistWorkbookMutationOptions["previousState"]["projection"],
-  payload: Extract<
-    PersistWorkbookMutationOptions["eventPayload"],
-    { kind: "setCellValue" | "setCellFormula" | "clearCell" }
-  >,
-): readonly import("./projection.js").CellSourceRow[] {
-  const row = projection.cells.find(
-    (entry) => entry.sheetName === payload.sheetName && entry.address === payload.address,
-  );
-  return row ? [row] : [];
+  projection: PersistWorkbookMutationOptions['previousState']['projection'],
+  payload: Extract<PersistWorkbookMutationOptions['eventPayload'], { kind: 'setCellValue' | 'setCellFormula' | 'clearCell' }>,
+): readonly import('./projection.js').CellSourceRow[] {
+  const row = projection.cells.find((entry) => entry.sheetName === payload.sheetName && entry.address === payload.address)
+  return row ? [row] : []
 }
 
 function buildSheetColumnMetadataRowsFromProjection(
-  projection: PersistWorkbookMutationOptions["previousState"]["projection"],
+  projection: PersistWorkbookMutationOptions['previousState']['projection'],
   sheetName: string,
-): readonly import("./projection.js").AxisMetadataSourceRow[] {
-  return projection.columnMetadata.filter((entry) => entry.sheetName === sheetName);
+): readonly import('./projection.js').AxisMetadataSourceRow[] {
+  return projection.columnMetadata.filter((entry) => entry.sheetName === sheetName)
 }
 
 function buildSheetRowMetadataRowsFromProjection(
-  projection: PersistWorkbookMutationOptions["previousState"]["projection"],
+  projection: PersistWorkbookMutationOptions['previousState']['projection'],
   sheetName: string,
-): readonly import("./projection.js").AxisMetadataSourceRow[] {
-  return projection.rowMetadata.filter((entry) => entry.sheetName === sheetName);
+): readonly import('./projection.js').AxisMetadataSourceRow[] {
+  return projection.rowMetadata.filter((entry) => entry.sheetName === sheetName)
 }
 
-async function appendWorkbookEvent(
-  db: Queryable,
-  event: import("@bilig/zero-sync").WorkbookEventRecord,
-): Promise<void> {
+async function appendWorkbookEvent(db: Queryable, event: import('@bilig/zero-sync').WorkbookEventRecord): Promise<void> {
   await db.query(
     `
       INSERT INTO workbook_event (
@@ -80,22 +72,11 @@ async function appendWorkbookEvent(
       )
       VALUES ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
     `,
-    [
-      event.workbookId,
-      event.revision,
-      event.actorUserId,
-      event.clientMutationId,
-      JSON.stringify(event.payload),
-      event.createdAt,
-    ],
-  );
+    [event.workbookId, event.revision, event.actorUserId, event.clientMutationId, JSON.stringify(event.payload), event.createdAt],
+  )
 }
 
-async function supersedePendingRecalcJobs(
-  db: Queryable,
-  documentId: string,
-  toRevision: number,
-): Promise<void> {
+async function supersedePendingRecalcJobs(db: Queryable, documentId: string, toRevision: number): Promise<void> {
   await db.query(
     `
       UPDATE recalc_job
@@ -108,7 +89,7 @@ async function supersedePendingRecalcJobs(
         AND to_revision < $2
     `,
     [documentId, toRevision],
-  );
+  )
 }
 
 async function enqueueRecalcJob(
@@ -119,7 +100,7 @@ async function enqueueRecalcJob(
   dirtyRegions: DirtyRegion[] | null,
   updatedAt: string,
 ): Promise<string> {
-  const jobId = `${documentId}:recalc:${toRevision}`;
+  const jobId = `${documentId}:recalc:${toRevision}`
   await db.query(
     `
       INSERT INTO recalc_job (
@@ -145,8 +126,8 @@ async function enqueueRecalcJob(
         updated_at = EXCLUDED.updated_at
     `,
     [jobId, documentId, fromRevision, toRevision, JSON.stringify(dirtyRegions), updatedAt],
-  );
-  return jobId;
+  )
+  return jobId
 }
 
 export async function persistWorkbookMutation(
@@ -154,186 +135,143 @@ export async function persistWorkbookMutation(
   documentId: string,
   options: PersistWorkbookMutationOptions,
 ): Promise<PersistWorkbookMutationResult> {
-  const updatedAt = nowIso();
-  const revision = options.previousState.headRevision + 1;
+  const updatedAt = nowIso()
+  const revision = options.previousState.headRevision + 1
   const needsRecalc =
-    options.previousState.calculatedRevision < options.previousState.headRevision ||
-    eventRequiresRecalc(options.eventPayload);
+    options.previousState.calculatedRevision < options.previousState.headRevision || eventRequiresRecalc(options.eventPayload)
   const nextProjectionOptions = {
     revision,
     calculatedRevision: needsRecalc ? options.previousState.calculatedRevision : revision,
     ownerUserId: options.ownerUserId,
     updatedBy: options.updatedBy,
     updatedAt,
-  };
-  const nextWorkbookRow = buildWorkbookHeaderRowFromEngine(
-    documentId,
-    options.nextEngine,
-    nextProjectionOptions,
-  );
-  const nextCalculationSettings = buildCalculationSettingsRowFromEngine(
-    documentId,
-    options.nextEngine,
-  );
-  let projectionCommit: WorkbookProjectionCommit;
+  }
+  const nextWorkbookRow = buildWorkbookHeaderRowFromEngine(documentId, options.nextEngine, nextProjectionOptions)
+  const nextCalculationSettings = buildCalculationSettingsRowFromEngine(documentId, options.nextEngine)
+  let projectionCommit: WorkbookProjectionCommit
 
-  await upsertWorkbookHeader(db, documentId, nextWorkbookRow, null, null);
+  await upsertWorkbookHeader(db, documentId, nextWorkbookRow, null, null)
   if (isFocusedCellEventPayload(options.eventPayload)) {
-    const previousCellRows = buildFocusedProjectionCellRows(
-      options.previousState.projection,
-      options.eventPayload,
-    );
+    const previousCellRows = buildFocusedProjectionCellRows(options.previousState.projection, options.eventPayload)
     const nextCellRow = buildSingleCellSourceRowFromEngine(
       documentId,
       options.nextEngine,
       options.eventPayload.sheetName,
       options.eventPayload.address,
       nextProjectionOptions,
-    );
-    const nextCellRows = nextCellRow ? [nextCellRow] : [];
-    await applyCalculationSettings(db, nextCalculationSettings);
-    await applyCellDiff(db, previousCellRows, nextCellRows);
+    )
+    const nextCellRows = nextCellRow ? [nextCellRow] : []
+    await applyCalculationSettings(db, nextCalculationSettings)
+    await applyCellDiff(db, previousCellRows, nextCellRows)
     projectionCommit = {
-      kind: "focused-cell",
+      kind: 'focused-cell',
       workbook: nextWorkbookRow,
       calculationSettings: nextCalculationSettings,
       sheetName: options.eventPayload.sheetName,
       address: options.eventPayload.address,
       cell: nextCellRow,
-    };
+    }
   } else if (isStyleRangeEventPayload(options.eventPayload)) {
-    const nextStyleRows = buildWorkbookStyleRowsFromEngine(
-      documentId,
-      options.nextEngine,
-      nextProjectionOptions,
-    );
+    const nextStyleRows = buildWorkbookStyleRowsFromEngine(documentId, options.nextEngine, nextProjectionOptions)
     const nextCellRows = buildSheetCellSourceRowsFromEngine(
       documentId,
       options.nextEngine,
       options.eventPayload.range.sheetName,
       nextProjectionOptions,
       options.eventPayload.range,
-    );
-    await applyCalculationSettings(db, nextCalculationSettings);
-    await applyStyleDiff(db, options.previousState.projection.styles, nextStyleRows);
-    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows);
+    )
+    await applyCalculationSettings(db, nextCalculationSettings)
+    await applyStyleDiff(db, options.previousState.projection.styles, nextStyleRows)
+    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows)
     await persistCellEvalRangeDiff(
       db,
       documentId,
       options.eventPayload.range,
-      materializeCellEvalProjection(
-        options.nextEngine,
-        documentId,
-        nextProjectionOptions.calculatedRevision,
-        updatedAt,
-      ),
-    );
+      materializeCellEvalProjection(options.nextEngine, documentId, nextProjectionOptions.calculatedRevision, updatedAt),
+    )
     projectionCommit = {
-      kind: "cell-range",
+      kind: 'cell-range',
       workbook: nextWorkbookRow,
       calculationSettings: nextCalculationSettings,
       range: options.eventPayload.range,
       cells: nextCellRows,
       styles: nextStyleRows,
-    };
+    }
   } else if (isNumberFormatRangeEventPayload(options.eventPayload)) {
-    const nextNumberFormatRows = buildWorkbookNumberFormatRowsFromEngine(
-      documentId,
-      options.nextEngine,
-      nextProjectionOptions,
-    );
+    const nextNumberFormatRows = buildWorkbookNumberFormatRowsFromEngine(documentId, options.nextEngine, nextProjectionOptions)
     const nextCellRows = buildSheetCellSourceRowsFromEngine(
       documentId,
       options.nextEngine,
       options.eventPayload.range.sheetName,
       nextProjectionOptions,
       options.eventPayload.range,
-    );
-    await applyCalculationSettings(db, nextCalculationSettings);
-    await applyNumberFormatDiff(
-      db,
-      options.previousState.projection.numberFormats,
-      nextNumberFormatRows,
-    );
-    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows);
+    )
+    await applyCalculationSettings(db, nextCalculationSettings)
+    await applyNumberFormatDiff(db, options.previousState.projection.numberFormats, nextNumberFormatRows)
+    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows)
     await persistCellEvalRangeDiff(
       db,
       documentId,
       options.eventPayload.range,
-      materializeCellEvalProjection(
-        options.nextEngine,
-        documentId,
-        nextProjectionOptions.calculatedRevision,
-        updatedAt,
-      ),
-    );
+      materializeCellEvalProjection(options.nextEngine, documentId, nextProjectionOptions.calculatedRevision, updatedAt),
+    )
     projectionCommit = {
-      kind: "cell-range",
+      kind: 'cell-range',
       workbook: nextWorkbookRow,
       calculationSettings: nextCalculationSettings,
       range: options.eventPayload.range,
       cells: nextCellRows,
       numberFormats: nextNumberFormatRows,
-    };
+    }
   } else if (isColumnMetadataEventPayload(options.eventPayload)) {
     const nextColumnMetadataRows = buildSheetColumnMetadataRowsFromEngine(
       documentId,
       options.nextEngine,
       options.eventPayload.sheetName,
       nextProjectionOptions,
-    );
-    await applyCalculationSettings(db, nextCalculationSettings);
+    )
+    await applyCalculationSettings(db, nextCalculationSettings)
     await applyAxisMetadataDiff(
       db,
-      "column_metadata",
-      buildSheetColumnMetadataRowsFromProjection(
-        options.previousState.projection,
-        options.eventPayload.sheetName,
-      ),
+      'column_metadata',
+      buildSheetColumnMetadataRowsFromProjection(options.previousState.projection, options.eventPayload.sheetName),
       nextColumnMetadataRows,
-    );
+    )
     projectionCommit = {
-      kind: "column-metadata",
+      kind: 'column-metadata',
       workbook: nextWorkbookRow,
       calculationSettings: nextCalculationSettings,
       sheetName: options.eventPayload.sheetName,
       columnMetadata: nextColumnMetadataRows,
-    };
+    }
   } else if (isRowMetadataEventPayload(options.eventPayload)) {
     const nextRowMetadataRows = buildSheetRowMetadataRowsFromEngine(
       documentId,
       options.nextEngine,
       options.eventPayload.sheetName,
       nextProjectionOptions,
-    );
-    await applyCalculationSettings(db, nextCalculationSettings);
+    )
+    await applyCalculationSettings(db, nextCalculationSettings)
     await applyAxisMetadataDiff(
       db,
-      "row_metadata",
-      buildSheetRowMetadataRowsFromProjection(
-        options.previousState.projection,
-        options.eventPayload.sheetName,
-      ),
+      'row_metadata',
+      buildSheetRowMetadataRowsFromProjection(options.previousState.projection, options.eventPayload.sheetName),
       nextRowMetadataRows,
-    );
+    )
     projectionCommit = {
-      kind: "row-metadata",
+      kind: 'row-metadata',
       workbook: nextWorkbookRow,
       calculationSettings: nextCalculationSettings,
       sheetName: options.eventPayload.sheetName,
       rowMetadata: nextRowMetadataRows,
-    };
+    }
   } else {
-    const nextProjection = buildWorkbookSourceProjectionFromEngine(
-      documentId,
-      options.nextEngine,
-      nextProjectionOptions,
-    );
-    await applySourceProjectionDiff(db, options.previousState.projection, nextProjection);
+    const nextProjection = buildWorkbookSourceProjectionFromEngine(documentId, options.nextEngine, nextProjectionOptions)
+    await applySourceProjectionDiff(db, options.previousState.projection, nextProjection)
     projectionCommit = {
-      kind: "replace",
+      kind: 'replace',
       projection: nextProjection,
-    };
+    }
   }
 
   await appendWorkbookEvent(db, {
@@ -343,7 +281,7 @@ export async function persistWorkbookMutation(
     clientMutationId: options.clientMutationId ?? null,
     payload: options.eventPayload,
     createdAt: updatedAt,
-  });
+  })
   await appendWorkbookChange(db, {
     documentId,
     revision,
@@ -352,9 +290,9 @@ export async function persistWorkbookMutation(
     payload: options.eventPayload,
     undoBundle: options.undoBundle,
     createdAtUnixMs: Date.parse(updatedAt),
-  });
+  })
 
-  await supersedePendingRecalcJobs(db, documentId, revision);
+  await supersedePendingRecalcJobs(db, documentId, revision)
   const recalcJobId = needsRecalc
     ? await enqueueRecalcJob(
         db,
@@ -364,7 +302,7 @@ export async function persistWorkbookMutation(
         eventRequiresRecalc(options.eventPayload) ? deriveDirtyRegions(options.eventPayload) : null,
         updatedAt,
       )
-    : null;
+    : null
 
   return {
     revision,
@@ -372,5 +310,5 @@ export async function persistWorkbookMutation(
     updatedAt,
     recalcJobId,
     projectionCommit,
-  };
+  }
 }

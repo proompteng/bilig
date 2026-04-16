@@ -1,5 +1,5 @@
-import type { SpreadsheetEngine } from "@bilig/core";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import type { SpreadsheetEngine } from '@bilig/core'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type {
   CellNumberFormatInput,
   CellRangeRef,
@@ -17,7 +17,7 @@ import type {
   WorkbookSheetProtectionSnapshot,
   WorkbookShapeSnapshot,
   WorkbookTableSnapshot,
-} from "@bilig/protocol";
+} from '@bilig/protocol'
 import {
   applyWorkbookAgentAnnotationCommand,
   deriveWorkbookAgentAnnotationCommandPreviewRanges,
@@ -27,7 +27,7 @@ import {
   isWorkbookAgentAnnotationCommand,
   isWorkbookAgentAnnotationCommandValue,
   isWorkbookScopeAnnotationCommand,
-} from "./workbook-agent-annotation-commands.js";
+} from './workbook-agent-annotation-commands.js'
 import {
   applyWorkbookAgentConditionalFormatCommand,
   deriveWorkbookAgentConditionalFormatCommandPreviewRanges,
@@ -37,7 +37,7 @@ import {
   isWorkbookAgentConditionalFormatCommand,
   isWorkbookAgentConditionalFormatCommandValue,
   isWorkbookScopeConditionalFormatCommand,
-} from "./workbook-agent-conditional-format-commands.js";
+} from './workbook-agent-conditional-format-commands.js'
 import {
   applyWorkbookAgentMediaCommand,
   deriveWorkbookAgentMediaCommandPreviewRanges,
@@ -47,7 +47,7 @@ import {
   isWorkbookAgentMediaCommand,
   isWorkbookAgentMediaCommandValue,
   isWorkbookScopeMediaCommand,
-} from "./workbook-agent-media-commands.js";
+} from './workbook-agent-media-commands.js'
 import {
   applyWorkbookAgentObjectCommand,
   deriveWorkbookAgentObjectCommandPreviewRanges,
@@ -57,7 +57,7 @@ import {
   isWorkbookAgentObjectCommand,
   isWorkbookAgentObjectCommandValue,
   isWorkbookScopeObjectCommand,
-} from "./workbook-agent-object-commands.js";
+} from './workbook-agent-object-commands.js'
 import {
   applyWorkbookAgentProtectionCommand,
   deriveWorkbookAgentProtectionCommandPreviewRanges,
@@ -67,7 +67,7 @@ import {
   isWorkbookAgentProtectionCommand,
   isWorkbookAgentProtectionCommandValue,
   isWorkbookScopeProtectionCommand,
-} from "./workbook-agent-protection-commands.js";
+} from './workbook-agent-protection-commands.js'
 import {
   applyWorkbookAgentStructuralCommand,
   describeWorkbookAgentStructuralCommand,
@@ -77,7 +77,7 @@ import {
   isWorkbookAgentStructuralCommand,
   isWorkbookAgentStructuralCommandValue,
   isWorkbookScopeStructuralCommand,
-} from "./workbook-agent-structural-commands.js";
+} from './workbook-agent-structural-commands.js'
 import {
   applyWorkbookAgentValidationCommand,
   deriveWorkbookAgentValidationCommandPreviewRanges,
@@ -87,615 +87,589 @@ import {
   isWorkbookAgentValidationCommand,
   isWorkbookAgentValidationCommandValue,
   isWorkbookScopeValidationCommand,
-} from "./workbook-agent-validation-commands.js";
+} from './workbook-agent-validation-commands.js'
 
 export interface WorkbookAgentUiSelectionRef {
-  sheetName: string;
-  address: string;
+  sheetName: string
+  address: string
   range?: {
-    startAddress: string;
-    endAddress: string;
-  };
+    startAddress: string
+    endAddress: string
+  }
 }
 
 export interface WorkbookAgentViewportRef {
-  rowStart: number;
-  rowEnd: number;
-  colStart: number;
-  colEnd: number;
+  rowStart: number
+  rowEnd: number
+  colStart: number
+  colEnd: number
 }
 
 export interface WorkbookAgentContextRef {
-  selection: WorkbookAgentUiSelectionRef;
-  viewport: WorkbookAgentViewportRef;
+  selection: WorkbookAgentUiSelectionRef
+  viewport: WorkbookAgentViewportRef
 }
 
 export type WorkbookAgentWriteCellInput =
   | LiteralInput
   | {
-      value: LiteralInput;
+      value: LiteralInput
     }
   | {
-      formula: string;
-    };
+      formula: string
+    }
 
 export type WorkbookAgentCommand =
   | {
-      kind: "writeRange";
-      sheetName: string;
-      startAddress: string;
-      values: WorkbookAgentWriteCellInput[][];
+      kind: 'writeRange'
+      sheetName: string
+      startAddress: string
+      values: WorkbookAgentWriteCellInput[][]
     }
   | {
-      kind: "setRangeFormulas";
-      range: CellRangeRef;
-      formulas: string[][];
+      kind: 'setRangeFormulas'
+      range: CellRangeRef
+      formulas: string[][]
     }
   | {
-      kind: "clearRange";
-      range: CellRangeRef;
+      kind: 'clearRange'
+      range: CellRangeRef
     }
   | {
-      kind: "formatRange";
-      range: CellRangeRef;
-      patch?: CellStylePatch;
-      numberFormat?: CellNumberFormatInput;
+      kind: 'formatRange'
+      range: CellRangeRef
+      patch?: CellStylePatch
+      numberFormat?: CellNumberFormatInput
     }
   | {
-      kind: "fillRange";
-      source: CellRangeRef;
-      target: CellRangeRef;
+      kind: 'fillRange'
+      source: CellRangeRef
+      target: CellRangeRef
     }
   | {
-      kind: "copyRange";
-      source: CellRangeRef;
-      target: CellRangeRef;
+      kind: 'copyRange'
+      source: CellRangeRef
+      target: CellRangeRef
     }
   | {
-      kind: "moveRange";
-      source: CellRangeRef;
-      target: CellRangeRef;
+      kind: 'moveRange'
+      source: CellRangeRef
+      target: CellRangeRef
     }
   | {
-      kind: "upsertDefinedName";
-      name: string;
-      value: WorkbookDefinedNameValueSnapshot;
+      kind: 'upsertDefinedName'
+      name: string
+      value: WorkbookDefinedNameValueSnapshot
     }
   | {
-      kind: "deleteDefinedName";
-      name: string;
+      kind: 'deleteDefinedName'
+      name: string
     }
   | {
-      kind: "upsertTable";
-      table: WorkbookTableSnapshot;
+      kind: 'upsertTable'
+      table: WorkbookTableSnapshot
     }
   | {
-      kind: "deleteTable";
-      name: string;
+      kind: 'deleteTable'
+      name: string
     }
   | {
-      kind: "upsertPivotTable";
-      pivot: WorkbookPivotSnapshot;
+      kind: 'upsertPivotTable'
+      pivot: WorkbookPivotSnapshot
     }
   | {
-      kind: "deletePivotTable";
-      sheetName: string;
-      address: string;
+      kind: 'deletePivotTable'
+      sheetName: string
+      address: string
     }
   | {
-      kind: "upsertChart";
-      chart: WorkbookChartSnapshot;
+      kind: 'upsertChart'
+      chart: WorkbookChartSnapshot
     }
   | {
-      kind: "deleteChart";
-      id: string;
+      kind: 'deleteChart'
+      id: string
     }
   | {
-      kind: "upsertImage";
-      image: WorkbookImageSnapshot;
+      kind: 'upsertImage'
+      image: WorkbookImageSnapshot
     }
   | {
-      kind: "deleteImage";
-      id: string;
+      kind: 'deleteImage'
+      id: string
     }
   | {
-      kind: "upsertShape";
-      shape: WorkbookShapeSnapshot;
+      kind: 'upsertShape'
+      shape: WorkbookShapeSnapshot
     }
   | {
-      kind: "deleteShape";
-      id: string;
+      kind: 'deleteShape'
+      id: string
     }
   | {
-      kind: "createSheet";
-      name: string;
+      kind: 'createSheet'
+      name: string
     }
   | {
-      kind: "renameSheet";
-      currentName: string;
-      nextName: string;
+      kind: 'renameSheet'
+      currentName: string
+      nextName: string
     }
   | {
-      kind: "deleteSheet";
-      name: string;
+      kind: 'deleteSheet'
+      name: string
     }
   | {
-      kind: "insertRows";
-      sheetName: string;
-      start: number;
-      count: number;
+      kind: 'insertRows'
+      sheetName: string
+      start: number
+      count: number
     }
   | {
-      kind: "deleteRows";
-      sheetName: string;
-      start: number;
-      count: number;
+      kind: 'deleteRows'
+      sheetName: string
+      start: number
+      count: number
     }
   | {
-      kind: "insertColumns";
-      sheetName: string;
-      start: number;
-      count: number;
+      kind: 'insertColumns'
+      sheetName: string
+      start: number
+      count: number
     }
   | {
-      kind: "deleteColumns";
-      sheetName: string;
-      start: number;
-      count: number;
+      kind: 'deleteColumns'
+      sheetName: string
+      start: number
+      count: number
     }
   | {
-      kind: "setFreezePane";
-      sheetName: string;
-      rows: number;
-      cols: number;
+      kind: 'setFreezePane'
+      sheetName: string
+      rows: number
+      cols: number
     }
   | {
-      kind: "setFilter";
-      range: CellRangeRef;
+      kind: 'setFilter'
+      range: CellRangeRef
     }
   | {
-      kind: "clearFilter";
-      range: CellRangeRef;
+      kind: 'clearFilter'
+      range: CellRangeRef
     }
   | {
-      kind: "setSort";
-      range: CellRangeRef;
+      kind: 'setSort'
+      range: CellRangeRef
       keys: {
-        keyAddress: string;
-        direction: "asc" | "desc";
-      }[];
+        keyAddress: string
+        direction: 'asc' | 'desc'
+      }[]
     }
   | {
-      kind: "clearSort";
-      range: CellRangeRef;
+      kind: 'clearSort'
+      range: CellRangeRef
     }
   | {
-      kind: "setDataValidation";
-      validation: WorkbookDataValidationSnapshot;
+      kind: 'setDataValidation'
+      validation: WorkbookDataValidationSnapshot
     }
   | {
-      kind: "clearDataValidation";
-      range: CellRangeRef;
+      kind: 'clearDataValidation'
+      range: CellRangeRef
     }
   | {
-      kind: "upsertConditionalFormat";
-      format: WorkbookConditionalFormatSnapshot;
+      kind: 'upsertConditionalFormat'
+      format: WorkbookConditionalFormatSnapshot
     }
   | {
-      kind: "deleteConditionalFormat";
-      id: string;
-      range: CellRangeRef;
+      kind: 'deleteConditionalFormat'
+      id: string
+      range: CellRangeRef
     }
   | {
-      kind: "setSheetProtection";
-      protection: WorkbookSheetProtectionSnapshot;
+      kind: 'setSheetProtection'
+      protection: WorkbookSheetProtectionSnapshot
     }
   | {
-      kind: "clearSheetProtection";
-      sheetName: string;
+      kind: 'clearSheetProtection'
+      sheetName: string
     }
   | {
-      kind: "upsertRangeProtection";
-      protection: WorkbookRangeProtectionSnapshot;
+      kind: 'upsertRangeProtection'
+      protection: WorkbookRangeProtectionSnapshot
     }
   | {
-      kind: "deleteRangeProtection";
-      id: string;
-      range: CellRangeRef;
+      kind: 'deleteRangeProtection'
+      id: string
+      range: CellRangeRef
     }
   | {
-      kind: "upsertCommentThread";
-      thread: WorkbookCommentThreadSnapshot;
+      kind: 'upsertCommentThread'
+      thread: WorkbookCommentThreadSnapshot
     }
   | {
-      kind: "deleteCommentThread";
-      sheetName: string;
-      address: string;
+      kind: 'deleteCommentThread'
+      sheetName: string
+      address: string
     }
   | {
-      kind: "upsertNote";
-      note: WorkbookNoteSnapshot;
+      kind: 'upsertNote'
+      note: WorkbookNoteSnapshot
     }
   | {
-      kind: "deleteNote";
-      sheetName: string;
-      address: string;
+      kind: 'deleteNote'
+      sheetName: string
+      address: string
     }
   | {
-      kind: "updateRowMetadata";
-      sheetName: string;
-      startRow: number;
-      count: number;
-      height?: number | null;
-      hidden?: boolean | null;
+      kind: 'updateRowMetadata'
+      sheetName: string
+      startRow: number
+      count: number
+      height?: number | null
+      hidden?: boolean | null
     }
   | {
-      kind: "updateColumnMetadata";
-      sheetName: string;
-      startCol: number;
-      count: number;
-      width?: number | null;
-      hidden?: boolean | null;
-    };
+      kind: 'updateColumnMetadata'
+      sheetName: string
+      startCol: number
+      count: number
+      width?: number | null
+      hidden?: boolean | null
+    }
 
-export type WorkbookAgentRiskClass = "low" | "medium" | "high";
-export type WorkbookAgentBundleScope = "selection" | "sheet" | "workbook";
-export type WorkbookAgentAppliedBy = "user" | "auto";
-export type WorkbookAgentAcceptedScope = "full" | "partial";
-export type WorkbookAgentSharedReviewStatus = "pending" | "approved" | "rejected";
-export type WorkbookAgentPreviewRangeRole = "target" | "source";
-export type WorkbookAgentPreviewChangeKind = "input" | "formula" | "style" | "numberFormat";
+export type WorkbookAgentRiskClass = 'low' | 'medium' | 'high'
+export type WorkbookAgentBundleScope = 'selection' | 'sheet' | 'workbook'
+export type WorkbookAgentAppliedBy = 'user' | 'auto'
+export type WorkbookAgentAcceptedScope = 'full' | 'partial'
+export type WorkbookAgentSharedReviewStatus = 'pending' | 'approved' | 'rejected'
+export type WorkbookAgentPreviewRangeRole = 'target' | 'source'
+export type WorkbookAgentPreviewChangeKind = 'input' | 'formula' | 'style' | 'numberFormat'
 
 export interface WorkbookAgentPreviewRange {
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
-  role: WorkbookAgentPreviewRangeRole;
+  sheetName: string
+  startAddress: string
+  endAddress: string
+  role: WorkbookAgentPreviewRangeRole
 }
 
 export interface WorkbookAgentPreviewCellDiff {
-  sheetName: string;
-  address: string;
-  beforeInput: LiteralInput | null;
-  beforeFormula: string | null;
-  afterInput: LiteralInput | null;
-  afterFormula: string | null;
-  changeKinds: WorkbookAgentPreviewChangeKind[];
+  sheetName: string
+  address: string
+  beforeInput: LiteralInput | null
+  beforeFormula: string | null
+  afterInput: LiteralInput | null
+  afterFormula: string | null
+  changeKinds: WorkbookAgentPreviewChangeKind[]
 }
 
 export interface WorkbookAgentPreviewEffectSummary {
-  displayedCellDiffCount: number;
-  truncatedCellDiffs: boolean;
-  inputChangeCount: number;
-  formulaChangeCount: number;
-  styleChangeCount: number;
-  numberFormatChangeCount: number;
-  structuralChangeCount: number;
+  displayedCellDiffCount: number
+  truncatedCellDiffs: boolean
+  inputChangeCount: number
+  formulaChangeCount: number
+  styleChangeCount: number
+  numberFormatChangeCount: number
+  structuralChangeCount: number
 }
 
 export interface WorkbookAgentPreviewSummary {
-  ranges: WorkbookAgentPreviewRange[];
-  structuralChanges: string[];
-  cellDiffs: WorkbookAgentPreviewCellDiff[];
-  effectSummary: WorkbookAgentPreviewEffectSummary;
+  ranges: WorkbookAgentPreviewRange[]
+  structuralChanges: string[]
+  cellDiffs: WorkbookAgentPreviewCellDiff[]
+  effectSummary: WorkbookAgentPreviewEffectSummary
 }
 
 export interface WorkbookAgentCommandBundle {
-  id: string;
-  documentId: string;
-  threadId: string;
-  turnId: string;
-  goalText: string;
-  summary: string;
-  scope: WorkbookAgentBundleScope;
-  riskClass: WorkbookAgentRiskClass;
-  baseRevision: number;
-  createdAtUnixMs: number;
-  context: WorkbookAgentContextRef | null;
-  commands: WorkbookAgentCommand[];
-  affectedRanges: WorkbookAgentPreviewRange[];
-  estimatedAffectedCells: number | null;
-  sharedReview?: WorkbookAgentSharedReviewState | null;
+  id: string
+  documentId: string
+  threadId: string
+  turnId: string
+  goalText: string
+  summary: string
+  scope: WorkbookAgentBundleScope
+  riskClass: WorkbookAgentRiskClass
+  baseRevision: number
+  createdAtUnixMs: number
+  context: WorkbookAgentContextRef | null
+  commands: WorkbookAgentCommand[]
+  affectedRanges: WorkbookAgentPreviewRange[]
+  estimatedAffectedCells: number | null
+  sharedReview?: WorkbookAgentSharedReviewState | null
 }
 
 export interface WorkbookAgentSharedReviewState {
-  ownerUserId: string;
-  status: WorkbookAgentSharedReviewStatus;
-  decidedByUserId: string | null;
-  decidedAtUnixMs: number | null;
-  recommendations: WorkbookAgentSharedReviewRecommendation[];
+  ownerUserId: string
+  status: WorkbookAgentSharedReviewStatus
+  decidedByUserId: string | null
+  decidedAtUnixMs: number | null
+  recommendations: WorkbookAgentSharedReviewRecommendation[]
 }
 
 export interface WorkbookAgentSharedReviewRecommendation {
-  userId: string;
-  decision: Extract<WorkbookAgentSharedReviewStatus, "approved" | "rejected">;
-  decidedAtUnixMs: number;
+  userId: string
+  decision: Extract<WorkbookAgentSharedReviewStatus, 'approved' | 'rejected'>
+  decidedAtUnixMs: number
 }
 
 export interface WorkbookAgentExecutionRecord {
-  id: string;
-  bundleId: string;
-  documentId: string;
-  threadId: string;
-  turnId: string;
-  actorUserId: string;
-  goalText: string;
-  planText: string | null;
-  summary: string;
-  scope: WorkbookAgentBundleScope;
-  riskClass: WorkbookAgentRiskClass;
-  acceptedScope: WorkbookAgentAcceptedScope;
-  appliedBy: WorkbookAgentAppliedBy;
-  baseRevision: number;
-  appliedRevision: number;
-  createdAtUnixMs: number;
-  appliedAtUnixMs: number;
-  context: WorkbookAgentContextRef | null;
-  commands: WorkbookAgentCommand[];
-  preview: WorkbookAgentPreviewSummary | null;
+  id: string
+  bundleId: string
+  documentId: string
+  threadId: string
+  turnId: string
+  actorUserId: string
+  goalText: string
+  planText: string | null
+  summary: string
+  scope: WorkbookAgentBundleScope
+  riskClass: WorkbookAgentRiskClass
+  acceptedScope: WorkbookAgentAcceptedScope
+  appliedBy: WorkbookAgentAppliedBy
+  baseRevision: number
+  appliedRevision: number
+  createdAtUnixMs: number
+  appliedAtUnixMs: number
+  context: WorkbookAgentContextRef | null
+  commands: WorkbookAgentCommand[]
+  preview: WorkbookAgentPreviewSummary | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function isLiteralInputValue(value: unknown): value is LiteralInput {
-  return (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
+  return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 }
 
 function isCellRangeRef(value: unknown): value is CellRangeRef {
   return (
     isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["startAddress"] === "string" &&
-    typeof value["endAddress"] === "string"
-  );
+    typeof value['sheetName'] === 'string' &&
+    typeof value['startAddress'] === 'string' &&
+    typeof value['endAddress'] === 'string'
+  )
 }
 
 function isWriteCellInput(value: unknown): value is WorkbookAgentWriteCellInput {
   return (
     isLiteralInputValue(value) ||
-    (isRecord(value) && isLiteralInputValue(value["value"])) ||
-    (isRecord(value) && typeof value["formula"] === "string" && value["formula"].length > 0)
-  );
+    (isRecord(value) && isLiteralInputValue(value['value'])) ||
+    (isRecord(value) && typeof value['formula'] === 'string' && value['formula'].length > 0)
+  )
 }
 
 function isCommandArray(value: unknown): value is WorkbookAgentCommand[] {
-  return Array.isArray(value) && value.every((entry) => isWorkbookAgentCommand(entry));
+  return Array.isArray(value) && value.every((entry) => isWorkbookAgentCommand(entry))
 }
 
 function isAppliedBy(value: unknown): value is WorkbookAgentAppliedBy {
-  return value === "user" || value === "auto";
+  return value === 'user' || value === 'auto'
 }
 
 function isSharedReviewStatus(value: unknown): value is WorkbookAgentSharedReviewStatus {
-  return value === "pending" || value === "approved" || value === "rejected";
+  return value === 'pending' || value === 'approved' || value === 'rejected'
 }
 
-function isSharedReviewRecommendation(
-  value: unknown,
-): value is WorkbookAgentSharedReviewRecommendation {
+function isSharedReviewRecommendation(value: unknown): value is WorkbookAgentSharedReviewRecommendation {
   return (
     isRecord(value) &&
-    typeof value["userId"] === "string" &&
-    (value["decision"] === "approved" || value["decision"] === "rejected") &&
-    typeof value["decidedAtUnixMs"] === "number"
-  );
+    typeof value['userId'] === 'string' &&
+    (value['decision'] === 'approved' || value['decision'] === 'rejected') &&
+    typeof value['decidedAtUnixMs'] === 'number'
+  )
 }
 
 function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReviewState {
   return (
     isRecord(value) &&
-    typeof value["ownerUserId"] === "string" &&
-    isSharedReviewStatus(value["status"]) &&
-    (value["decidedByUserId"] === null || typeof value["decidedByUserId"] === "string") &&
-    (value["decidedAtUnixMs"] === null || typeof value["decidedAtUnixMs"] === "number") &&
-    Array.isArray(value["recommendations"]) &&
-    value["recommendations"].every((entry) => isSharedReviewRecommendation(entry))
-  );
+    typeof value['ownerUserId'] === 'string' &&
+    isSharedReviewStatus(value['status']) &&
+    (value['decidedByUserId'] === null || typeof value['decidedByUserId'] === 'string') &&
+    (value['decidedAtUnixMs'] === null || typeof value['decidedAtUnixMs'] === 'number') &&
+    Array.isArray(value['recommendations']) &&
+    value['recommendations'].every((entry) => isSharedReviewRecommendation(entry))
+  )
 }
 
 function isAcceptedScope(value: unknown): value is WorkbookAgentAcceptedScope {
-  return value === "full" || value === "partial";
+  return value === 'full' || value === 'partial'
 }
 
 function isPreviewChangeKind(value: unknown): value is WorkbookAgentPreviewChangeKind {
-  return value === "input" || value === "formula" || value === "style" || value === "numberFormat";
+  return value === 'input' || value === 'formula' || value === 'style' || value === 'numberFormat'
 }
 
 export function isWorkbookAgentContextRef(value: unknown): value is WorkbookAgentContextRef {
   return (
     isRecord(value) &&
-    isRecord(value["selection"]) &&
-    typeof value["selection"]["sheetName"] === "string" &&
-    typeof value["selection"]["address"] === "string" &&
-    (value["selection"]["range"] === undefined ||
-      (isRecord(value["selection"]["range"]) &&
-        typeof value["selection"]["range"]["startAddress"] === "string" &&
-        typeof value["selection"]["range"]["endAddress"] === "string")) &&
-    isRecord(value["viewport"]) &&
-    typeof value["viewport"]["rowStart"] === "number" &&
-    typeof value["viewport"]["rowEnd"] === "number" &&
-    typeof value["viewport"]["colStart"] === "number" &&
-    typeof value["viewport"]["colEnd"] === "number"
-  );
+    isRecord(value['selection']) &&
+    typeof value['selection']['sheetName'] === 'string' &&
+    typeof value['selection']['address'] === 'string' &&
+    (value['selection']['range'] === undefined ||
+      (isRecord(value['selection']['range']) &&
+        typeof value['selection']['range']['startAddress'] === 'string' &&
+        typeof value['selection']['range']['endAddress'] === 'string')) &&
+    isRecord(value['viewport']) &&
+    typeof value['viewport']['rowStart'] === 'number' &&
+    typeof value['viewport']['rowEnd'] === 'number' &&
+    typeof value['viewport']['colStart'] === 'number' &&
+    typeof value['viewport']['colEnd'] === 'number'
+  )
 }
 
 export function isWorkbookAgentPreviewRange(value: unknown): value is WorkbookAgentPreviewRange {
   return (
     isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["startAddress"] === "string" &&
-    typeof value["endAddress"] === "string" &&
-    (value["role"] === "target" || value["role"] === "source")
-  );
+    typeof value['sheetName'] === 'string' &&
+    typeof value['startAddress'] === 'string' &&
+    typeof value['endAddress'] === 'string' &&
+    (value['role'] === 'target' || value['role'] === 'source')
+  )
 }
 
-export function isWorkbookAgentPreviewCellDiff(
-  value: unknown,
-): value is WorkbookAgentPreviewCellDiff {
+export function isWorkbookAgentPreviewCellDiff(value: unknown): value is WorkbookAgentPreviewCellDiff {
   return (
     isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["address"] === "string" &&
-    (value["beforeInput"] === null || isLiteralInputValue(value["beforeInput"])) &&
-    (value["beforeFormula"] === null || typeof value["beforeFormula"] === "string") &&
-    (value["afterInput"] === null || isLiteralInputValue(value["afterInput"])) &&
-    (value["afterFormula"] === null || typeof value["afterFormula"] === "string") &&
-    Array.isArray(value["changeKinds"]) &&
-    value["changeKinds"].every((entry) => isPreviewChangeKind(entry))
-  );
+    typeof value['sheetName'] === 'string' &&
+    typeof value['address'] === 'string' &&
+    (value['beforeInput'] === null || isLiteralInputValue(value['beforeInput'])) &&
+    (value['beforeFormula'] === null || typeof value['beforeFormula'] === 'string') &&
+    (value['afterInput'] === null || isLiteralInputValue(value['afterInput'])) &&
+    (value['afterFormula'] === null || typeof value['afterFormula'] === 'string') &&
+    Array.isArray(value['changeKinds']) &&
+    value['changeKinds'].every((entry) => isPreviewChangeKind(entry))
+  )
 }
 
-export function isWorkbookAgentPreviewEffectSummary(
-  value: unknown,
-): value is WorkbookAgentPreviewEffectSummary {
+export function isWorkbookAgentPreviewEffectSummary(value: unknown): value is WorkbookAgentPreviewEffectSummary {
   return (
     isRecord(value) &&
-    typeof value["displayedCellDiffCount"] === "number" &&
-    Number.isFinite(value["displayedCellDiffCount"]) &&
-    typeof value["truncatedCellDiffs"] === "boolean" &&
-    typeof value["inputChangeCount"] === "number" &&
-    Number.isFinite(value["inputChangeCount"]) &&
-    typeof value["formulaChangeCount"] === "number" &&
-    Number.isFinite(value["formulaChangeCount"]) &&
-    typeof value["styleChangeCount"] === "number" &&
-    Number.isFinite(value["styleChangeCount"]) &&
-    typeof value["numberFormatChangeCount"] === "number" &&
-    Number.isFinite(value["numberFormatChangeCount"]) &&
-    typeof value["structuralChangeCount"] === "number" &&
-    Number.isFinite(value["structuralChangeCount"])
-  );
+    typeof value['displayedCellDiffCount'] === 'number' &&
+    Number.isFinite(value['displayedCellDiffCount']) &&
+    typeof value['truncatedCellDiffs'] === 'boolean' &&
+    typeof value['inputChangeCount'] === 'number' &&
+    Number.isFinite(value['inputChangeCount']) &&
+    typeof value['formulaChangeCount'] === 'number' &&
+    Number.isFinite(value['formulaChangeCount']) &&
+    typeof value['styleChangeCount'] === 'number' &&
+    Number.isFinite(value['styleChangeCount']) &&
+    typeof value['numberFormatChangeCount'] === 'number' &&
+    Number.isFinite(value['numberFormatChangeCount']) &&
+    typeof value['structuralChangeCount'] === 'number' &&
+    Number.isFinite(value['structuralChangeCount'])
+  )
 }
 
-export function isWorkbookAgentPreviewSummary(
-  value: unknown,
-): value is WorkbookAgentPreviewSummary {
+export function isWorkbookAgentPreviewSummary(value: unknown): value is WorkbookAgentPreviewSummary {
   return (
     isRecord(value) &&
-    Array.isArray(value["ranges"]) &&
-    value["ranges"].every((entry) => isWorkbookAgentPreviewRange(entry)) &&
-    Array.isArray(value["structuralChanges"]) &&
-    value["structuralChanges"].every((entry) => typeof entry === "string") &&
-    Array.isArray(value["cellDiffs"]) &&
-    value["cellDiffs"].every((entry) => isWorkbookAgentPreviewCellDiff(entry)) &&
-    isWorkbookAgentPreviewEffectSummary(value["effectSummary"])
-  );
+    Array.isArray(value['ranges']) &&
+    value['ranges'].every((entry) => isWorkbookAgentPreviewRange(entry)) &&
+    Array.isArray(value['structuralChanges']) &&
+    value['structuralChanges'].every((entry) => typeof entry === 'string') &&
+    Array.isArray(value['cellDiffs']) &&
+    value['cellDiffs'].every((entry) => isWorkbookAgentPreviewCellDiff(entry)) &&
+    isWorkbookAgentPreviewEffectSummary(value['effectSummary'])
+  )
 }
 
 function derivePreviewEffectSummary(input: {
-  cellDiffs: readonly WorkbookAgentPreviewCellDiff[];
-  structuralChanges: readonly string[];
-  truncatedCellDiffs: boolean;
+  cellDiffs: readonly WorkbookAgentPreviewCellDiff[]
+  structuralChanges: readonly string[]
+  truncatedCellDiffs: boolean
 }): WorkbookAgentPreviewEffectSummary {
   return {
     displayedCellDiffCount: input.cellDiffs.length,
     truncatedCellDiffs: input.truncatedCellDiffs,
-    inputChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes("input")).length,
-    formulaChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes("formula"))
-      .length,
-    styleChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes("style")).length,
-    numberFormatChangeCount: input.cellDiffs.filter((diff) =>
-      diff.changeKinds.includes("numberFormat"),
-    ).length,
+    inputChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes('input')).length,
+    formulaChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes('formula')).length,
+    styleChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes('style')).length,
+    numberFormatChangeCount: input.cellDiffs.filter((diff) => diff.changeKinds.includes('numberFormat')).length,
     structuralChangeCount: input.structuralChanges.length,
-  };
+  }
 }
 
 function decodeWorkbookAgentPreviewCellDiff(value: unknown): WorkbookAgentPreviewCellDiff | null {
   if (!isRecord(value)) {
-    return null;
+    return null
   }
   if (
-    typeof value["sheetName"] !== "string" ||
-    typeof value["address"] !== "string" ||
-    (value["beforeInput"] !== null && !isLiteralInputValue(value["beforeInput"])) ||
-    (value["beforeFormula"] !== null && typeof value["beforeFormula"] !== "string") ||
-    (value["afterInput"] !== null && !isLiteralInputValue(value["afterInput"])) ||
-    (value["afterFormula"] !== null && typeof value["afterFormula"] !== "string")
+    typeof value['sheetName'] !== 'string' ||
+    typeof value['address'] !== 'string' ||
+    (value['beforeInput'] !== null && !isLiteralInputValue(value['beforeInput'])) ||
+    (value['beforeFormula'] !== null && typeof value['beforeFormula'] !== 'string') ||
+    (value['afterInput'] !== null && !isLiteralInputValue(value['afterInput'])) ||
+    (value['afterFormula'] !== null && typeof value['afterFormula'] !== 'string')
   ) {
-    return null;
+    return null
   }
-  const explicitChangeKinds = Array.isArray(value["changeKinds"])
-    ? value["changeKinds"].flatMap((entry) => (isPreviewChangeKind(entry) ? [entry] : []))
-    : [];
+  const explicitChangeKinds = Array.isArray(value['changeKinds'])
+    ? value['changeKinds'].flatMap((entry) => (isPreviewChangeKind(entry) ? [entry] : []))
+    : []
   const derivedChangeKinds = explicitChangeKinds.length
     ? explicitChangeKinds
     : [
-        ...(value["beforeFormula"] !== value["afterFormula"] ? (["formula"] as const) : []),
-        ...(value["beforeInput"] !== value["afterInput"] ? (["input"] as const) : []),
-      ];
+        ...(value['beforeFormula'] !== value['afterFormula'] ? (['formula'] as const) : []),
+        ...(value['beforeInput'] !== value['afterInput'] ? (['input'] as const) : []),
+      ]
   return {
-    sheetName: value["sheetName"],
-    address: value["address"],
-    beforeInput: (value["beforeInput"] as LiteralInput | null | undefined) ?? null,
-    beforeFormula: (value["beforeFormula"] as string | null | undefined) ?? null,
-    afterInput: (value["afterInput"] as LiteralInput | null | undefined) ?? null,
-    afterFormula: (value["afterFormula"] as string | null | undefined) ?? null,
+    sheetName: value['sheetName'],
+    address: value['address'],
+    beforeInput: (value['beforeInput'] as LiteralInput | null | undefined) ?? null,
+    beforeFormula: (value['beforeFormula'] as string | null | undefined) ?? null,
+    afterInput: (value['afterInput'] as LiteralInput | null | undefined) ?? null,
+    afterFormula: (value['afterFormula'] as string | null | undefined) ?? null,
     changeKinds: [...new Set(derivedChangeKinds)],
-  };
+  }
 }
 
-export function decodeWorkbookAgentPreviewSummary(
-  value: unknown,
-): WorkbookAgentPreviewSummary | null {
+export function decodeWorkbookAgentPreviewSummary(value: unknown): WorkbookAgentPreviewSummary | null {
   if (!isRecord(value)) {
-    return null;
+    return null
   }
   if (
-    !Array.isArray(value["ranges"]) ||
-    !value["ranges"].every((entry) => isWorkbookAgentPreviewRange(entry)) ||
-    !Array.isArray(value["structuralChanges"]) ||
-    !value["structuralChanges"].every((entry) => typeof entry === "string") ||
-    !Array.isArray(value["cellDiffs"])
+    !Array.isArray(value['ranges']) ||
+    !value['ranges'].every((entry) => isWorkbookAgentPreviewRange(entry)) ||
+    !Array.isArray(value['structuralChanges']) ||
+    !value['structuralChanges'].every((entry) => typeof entry === 'string') ||
+    !Array.isArray(value['cellDiffs'])
   ) {
-    return null;
+    return null
   }
-  const cellDiffs = value["cellDiffs"].flatMap((entry) => {
-    const decoded = decodeWorkbookAgentPreviewCellDiff(entry);
-    return decoded ? [decoded] : [];
-  });
-  if (cellDiffs.length !== value["cellDiffs"].length) {
-    return null;
+  const cellDiffs = value['cellDiffs'].flatMap((entry) => {
+    const decoded = decodeWorkbookAgentPreviewCellDiff(entry)
+    return decoded ? [decoded] : []
+  })
+  if (cellDiffs.length !== value['cellDiffs'].length) {
+    return null
   }
-  const truncatedCellDiffs = isWorkbookAgentPreviewEffectSummary(value["effectSummary"])
-    ? value["effectSummary"].truncatedCellDiffs
-    : false;
+  const truncatedCellDiffs = isWorkbookAgentPreviewEffectSummary(value['effectSummary']) ? value['effectSummary'].truncatedCellDiffs : false
   return {
-    ranges: value["ranges"].map((range) => ({ ...range })),
-    structuralChanges: [...value["structuralChanges"]],
+    ranges: value['ranges'].map((range) => ({ ...range })),
+    structuralChanges: [...value['structuralChanges']],
     cellDiffs,
-    effectSummary: isWorkbookAgentPreviewEffectSummary(value["effectSummary"])
-      ? { ...value["effectSummary"] }
+    effectSummary: isWorkbookAgentPreviewEffectSummary(value['effectSummary'])
+      ? { ...value['effectSummary'] }
       : derivePreviewEffectSummary({
           cellDiffs,
-          structuralChanges: value["structuralChanges"],
+          structuralChanges: value['structuralChanges'],
           truncatedCellDiffs,
         }),
-  };
+  }
 }
 
-function samePreviewRange(
-  left: WorkbookAgentPreviewRange,
-  right: WorkbookAgentPreviewRange,
-): boolean {
+function samePreviewRange(left: WorkbookAgentPreviewRange, right: WorkbookAgentPreviewRange): boolean {
   return (
     left.sheetName === right.sheetName &&
     left.startAddress === right.startAddress &&
     left.endAddress === right.endAddress &&
     left.role === right.role
-  );
+  )
 }
 
-function samePreviewCellDiff(
-  left: WorkbookAgentPreviewCellDiff,
-  right: WorkbookAgentPreviewCellDiff,
-): boolean {
+function samePreviewCellDiff(left: WorkbookAgentPreviewCellDiff, right: WorkbookAgentPreviewCellDiff): boolean {
   return (
     left.sheetName === right.sheetName &&
     left.address === right.address &&
@@ -705,25 +679,22 @@ function samePreviewCellDiff(
     left.afterFormula === right.afterFormula &&
     left.changeKinds.length === right.changeKinds.length &&
     left.changeKinds.every((kind, index) => kind === right.changeKinds[index])
-  );
+  )
 }
 
-export function areWorkbookAgentPreviewSummariesEqual(
-  left: WorkbookAgentPreviewSummary,
-  right: WorkbookAgentPreviewSummary,
-): boolean {
+export function areWorkbookAgentPreviewSummariesEqual(left: WorkbookAgentPreviewSummary, right: WorkbookAgentPreviewSummary): boolean {
   return (
     left.ranges.length === right.ranges.length &&
     left.ranges.every((range, index) => {
-      const other = right.ranges[index];
-      return other ? samePreviewRange(range, other) : false;
+      const other = right.ranges[index]
+      return other ? samePreviewRange(range, other) : false
     }) &&
     left.structuralChanges.length === right.structuralChanges.length &&
     left.structuralChanges.every((change, index) => change === right.structuralChanges[index]) &&
     left.cellDiffs.length === right.cellDiffs.length &&
     left.cellDiffs.every((diff, index) => {
-      const other = right.cellDiffs[index];
-      return other ? samePreviewCellDiff(diff, other) : false;
+      const other = right.cellDiffs[index]
+      return other ? samePreviewCellDiff(diff, other) : false
     }) &&
     left.effectSummary.displayedCellDiffCount === right.effectSummary.displayedCellDiffCount &&
     left.effectSummary.truncatedCellDiffs === right.effectSummary.truncatedCellDiffs &&
@@ -732,112 +703,105 @@ export function areWorkbookAgentPreviewSummariesEqual(
     left.effectSummary.styleChangeCount === right.effectSummary.styleChangeCount &&
     left.effectSummary.numberFormatChangeCount === right.effectSummary.numberFormatChangeCount &&
     left.effectSummary.structuralChangeCount === right.effectSummary.structuralChangeCount
-  );
+  )
 }
 
 function rangeLabel(range: WorkbookAgentPreviewRange): string {
   return range.startAddress === range.endAddress
     ? `${range.sheetName}!${range.startAddress}`
-    : `${range.sheetName}!${range.startAddress}:${range.endAddress}`;
+    : `${range.sheetName}!${range.startAddress}:${range.endAddress}`
 }
 
 export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): string {
   if (isWorkbookAgentStructuralCommand(command)) {
-    return describeWorkbookAgentStructuralCommand(command);
+    return describeWorkbookAgentStructuralCommand(command)
   }
   if (isWorkbookAgentObjectCommand(command)) {
-    return describeWorkbookAgentObjectCommand(command);
+    return describeWorkbookAgentObjectCommand(command)
   }
   if (isWorkbookAgentMediaCommand(command)) {
-    return describeWorkbookAgentMediaCommand(command);
+    return describeWorkbookAgentMediaCommand(command)
   }
   if (isWorkbookAgentProtectionCommand(command)) {
-    return describeWorkbookAgentProtectionCommand(command);
+    return describeWorkbookAgentProtectionCommand(command)
   }
   if (isWorkbookAgentValidationCommand(command)) {
-    return describeWorkbookAgentValidationCommand(command);
+    return describeWorkbookAgentValidationCommand(command)
   }
   if (isWorkbookAgentConditionalFormatCommand(command)) {
-    return describeWorkbookAgentConditionalFormatCommand(command);
+    return describeWorkbookAgentConditionalFormatCommand(command)
   }
   if (isWorkbookAgentAnnotationCommand(command)) {
-    return describeWorkbookAgentAnnotationCommand(command);
+    return describeWorkbookAgentAnnotationCommand(command)
   }
   switch (command.kind) {
-    case "writeRange": {
-      const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
-      return ranges[0] ? `Write cells in ${rangeLabel(ranges[0])}` : "Write cells";
+    case 'writeRange': {
+      const ranges = deriveWorkbookAgentCommandPreviewRanges(command)
+      return ranges[0] ? `Write cells in ${rangeLabel(ranges[0])}` : 'Write cells'
     }
-    case "setRangeFormulas":
-      return `Set formulas in ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
-    case "clearRange":
-      return `Clear ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
-    case "formatRange":
-      return `Format ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
-    case "fillRange":
-      return `Fill ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
-    case "copyRange":
-      return `Copy into ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
-    case "moveRange":
-      return `Move cells to ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
+    case 'setRangeFormulas':
+      return `Set formulas in ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`
+    case 'clearRange':
+      return `Clear ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`
+    case 'formatRange':
+      return `Format ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`
+    case 'fillRange':
+      return `Fill ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`
+    case 'copyRange':
+      return `Copy into ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`
+    case 'moveRange':
+      return `Move cells to ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`
     default: {
-      const exhaustive: never = command;
-      return String(exhaustive);
+      const exhaustive: never = command
+      return String(exhaustive)
     }
   }
 }
 
-function dedupePreviewRanges(
-  ranges: readonly WorkbookAgentPreviewRange[],
-): WorkbookAgentPreviewRange[] {
-  const nextRanges: WorkbookAgentPreviewRange[] = [];
+function dedupePreviewRanges(ranges: readonly WorkbookAgentPreviewRange[]): WorkbookAgentPreviewRange[] {
+  const nextRanges: WorkbookAgentPreviewRange[] = []
   ranges.forEach((range) => {
     if (!nextRanges.some((existing) => samePreviewRange(existing, range))) {
-      nextRanges.push(range);
+      nextRanges.push(range)
     }
-  });
-  return nextRanges;
+  })
+  return nextRanges
 }
 
 function summarizeCommands(commands: readonly WorkbookAgentCommand[]): string {
   if (commands.length === 0) {
-    return "No workbook changes staged";
+    return 'No workbook changes staged'
   }
   if (commands.length === 1) {
-    return describeWorkbookAgentCommand(commands[0]!);
+    return describeWorkbookAgentCommand(commands[0]!)
   }
-  const firstSummary = describeWorkbookAgentCommand(commands[0]!);
-  return `${firstSummary} and ${String(commands.length - 1)} more change${
-    commands.length === 2 ? "" : "s"
-  }`;
+  const firstSummary = describeWorkbookAgentCommand(commands[0]!)
+  return `${firstSummary} and ${String(commands.length - 1)} more change${commands.length === 2 ? '' : 's'}`
 }
 
-function isSelectionOnlyCommand(
-  command: WorkbookAgentCommand,
-  context: WorkbookAgentContextRef | null,
-): boolean {
+function isSelectionOnlyCommand(command: WorkbookAgentCommand, context: WorkbookAgentContextRef | null): boolean {
   if (!context) {
-    return false;
+    return false
   }
-  const selectionSheet = context.selection.sheetName;
+  const selectionSheet = context.selection.sheetName
   const selectionRange = context.selection.range ?? {
     startAddress: context.selection.address,
     endAddress: context.selection.address,
-  };
-  const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
-  if (ranges.length !== 1) {
-    return false;
   }
-  const range = ranges[0];
+  const ranges = deriveWorkbookAgentCommandPreviewRanges(command)
+  if (ranges.length !== 1) {
+    return false
+  }
+  const range = ranges[0]
   if (!range) {
-    return false;
+    return false
   }
   return (
-    range.role === "target" &&
+    range.role === 'target' &&
     range.sheetName === selectionSheet &&
     range.startAddress === selectionRange.startAddress &&
     range.endAddress === selectionRange.endAddress
-  );
+  )
 }
 
 function deriveWorkbookAgentRiskClass(
@@ -847,30 +811,21 @@ function deriveWorkbookAgentRiskClass(
   if (
     commands.some(
       (command) =>
-        (isWorkbookAgentStructuralCommand(command) &&
-          isHighRiskWorkbookAgentStructuralCommand(command)) ||
+        (isWorkbookAgentStructuralCommand(command) && isHighRiskWorkbookAgentStructuralCommand(command)) ||
         (isWorkbookAgentObjectCommand(command) && isHighRiskWorkbookAgentObjectCommand(command)) ||
         (isWorkbookAgentMediaCommand(command) && isHighRiskWorkbookAgentMediaCommand(command)) ||
-        (isWorkbookAgentProtectionCommand(command) &&
-          isHighRiskWorkbookAgentProtectionCommand(command)) ||
-        (isWorkbookAgentValidationCommand(command) &&
-          isHighRiskWorkbookAgentValidationCommand(command)) ||
-        (isWorkbookAgentConditionalFormatCommand(command) &&
-          isHighRiskWorkbookAgentConditionalFormatCommand(command)) ||
-        (isWorkbookAgentAnnotationCommand(command) &&
-          isHighRiskWorkbookAgentAnnotationCommand(command)),
+        (isWorkbookAgentProtectionCommand(command) && isHighRiskWorkbookAgentProtectionCommand(command)) ||
+        (isWorkbookAgentValidationCommand(command) && isHighRiskWorkbookAgentValidationCommand(command)) ||
+        (isWorkbookAgentConditionalFormatCommand(command) && isHighRiskWorkbookAgentConditionalFormatCommand(command)) ||
+        (isWorkbookAgentAnnotationCommand(command) && isHighRiskWorkbookAgentAnnotationCommand(command)),
     )
   ) {
-    return "high";
+    return 'high'
   }
-  if (
-    commands.every(
-      (command) => command.kind === "formatRange" && isSelectionOnlyCommand(command, context),
-    )
-  ) {
-    return "low";
+  if (commands.every((command) => command.kind === 'formatRange' && isSelectionOnlyCommand(command, context))) {
+    return 'low'
   }
-  return "medium";
+  return 'medium'
 }
 
 function deriveWorkbookAgentBundleScope(
@@ -885,61 +840,58 @@ function deriveWorkbookAgentBundleScope(
         (isWorkbookAgentMediaCommand(command) && isWorkbookScopeMediaCommand(command)) ||
         (isWorkbookAgentProtectionCommand(command) && isWorkbookScopeProtectionCommand(command)) ||
         (isWorkbookAgentValidationCommand(command) && isWorkbookScopeValidationCommand(command)) ||
-        (isWorkbookAgentConditionalFormatCommand(command) &&
-          isWorkbookScopeConditionalFormatCommand(command)) ||
+        (isWorkbookAgentConditionalFormatCommand(command) && isWorkbookScopeConditionalFormatCommand(command)) ||
         (isWorkbookAgentAnnotationCommand(command) && isWorkbookScopeAnnotationCommand(command)),
     )
   ) {
-    return "workbook";
+    return 'workbook'
   }
 
-  const ranges = commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command));
+  const ranges = commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command))
   if (ranges.length === 0) {
-    return "sheet";
+    return 'sheet'
   }
 
-  const distinctSheets = new Set(ranges.map((range) => range.sheetName));
+  const distinctSheets = new Set(ranges.map((range) => range.sheetName))
   if (distinctSheets.size > 1) {
-    return "workbook";
+    return 'workbook'
   }
 
   if (context && commands.every((command) => isSelectionOnlyCommand(command, context))) {
-    return "selection";
+    return 'selection'
   }
 
-  return "sheet";
+  return 'sheet'
 }
 
-function estimateWorkbookAgentAffectedCells(
-  commands: readonly WorkbookAgentCommand[],
-): number | null {
-  let total = 0;
-  let sawCount = false;
+function estimateWorkbookAgentAffectedCells(commands: readonly WorkbookAgentCommand[]): number | null {
+  let total = 0
+  let sawCount = false
   commands.forEach((command) => {
-    const next = estimateWorkbookAgentCommandAffectedCells(command);
+    const next = estimateWorkbookAgentCommandAffectedCells(command)
     if (next !== null) {
-      total += next;
-      sawCount = true;
+      total += next
+      sawCount = true
     }
-  });
-  return sawCount ? total : null;
+  })
+  return sawCount ? total : null
 }
 
 export function createWorkbookAgentCommandBundle(input: {
-  bundleId?: string;
-  documentId: string;
-  threadId: string;
-  turnId: string;
-  goalText: string;
-  baseRevision: number;
-  context: WorkbookAgentContextRef | null;
-  commands: readonly WorkbookAgentCommand[];
-  now: number;
-  sharedReview?: WorkbookAgentSharedReviewState | null;
+  bundleId?: string
+  documentId: string
+  threadId: string
+  turnId: string
+  goalText: string
+  baseRevision: number
+  context: WorkbookAgentContextRef | null
+  commands: readonly WorkbookAgentCommand[]
+  now: number
+  sharedReview?: WorkbookAgentSharedReviewState | null
 }): WorkbookAgentCommandBundle {
-  const commands = [...input.commands];
-  const scope = deriveWorkbookAgentBundleScope(commands, input.context);
-  const riskClass = deriveWorkbookAgentRiskClass(commands, input.context);
+  const commands = [...input.commands]
+  const scope = deriveWorkbookAgentBundleScope(commands, input.context)
+  const riskClass = deriveWorkbookAgentRiskClass(commands, input.context)
   return {
     id: input.bundleId ?? crypto.randomUUID(),
     documentId: input.documentId,
@@ -953,31 +905,27 @@ export function createWorkbookAgentCommandBundle(input: {
     createdAtUnixMs: input.now,
     context: input.context ? structuredClone(input.context) : null,
     commands: commands.map((command) => structuredClone(command)),
-    affectedRanges: dedupePreviewRanges(
-      commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command)),
-    ),
+    affectedRanges: dedupePreviewRanges(commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command))),
     estimatedAffectedCells: estimateWorkbookAgentAffectedCells(commands),
     sharedReview: input.sharedReview ? structuredClone(input.sharedReview) : null,
-  };
+  }
 }
 
 export function appendWorkbookAgentCommandToBundle(input: {
-  previousBundle: WorkbookAgentCommandBundle | null;
-  documentId: string;
-  threadId: string;
-  turnId: string;
-  goalText: string;
-  baseRevision: number;
-  context: WorkbookAgentContextRef | null;
-  command: WorkbookAgentCommand;
-  now: number;
+  previousBundle: WorkbookAgentCommandBundle | null
+  documentId: string
+  threadId: string
+  turnId: string
+  goalText: string
+  baseRevision: number
+  context: WorkbookAgentContextRef | null
+  command: WorkbookAgentCommand
+  now: number
 }): WorkbookAgentCommandBundle {
   const previousBundle =
-    input.previousBundle &&
-    input.previousBundle.threadId === input.threadId &&
-    input.previousBundle.turnId === input.turnId
+    input.previousBundle && input.previousBundle.threadId === input.threadId && input.previousBundle.turnId === input.turnId
       ? input.previousBundle
-      : null;
+      : null
   return createWorkbookAgentCommandBundle({
     ...(previousBundle ? { bundleId: previousBundle.id } : {}),
     documentId: input.documentId,
@@ -989,59 +937,54 @@ export function appendWorkbookAgentCommandToBundle(input: {
     commands: [...(previousBundle?.commands ?? []), input.command],
     now: previousBundle ? previousBundle.createdAtUnixMs : input.now,
     sharedReview: previousBundle?.sharedReview ?? null,
-  });
+  })
 }
 
 export function describeWorkbookAgentBundle(bundle: WorkbookAgentCommandBundle): string {
   const affectedCells =
     bundle.estimatedAffectedCells === null
-      ? "unknown affected cell count"
-      : `${String(bundle.estimatedAffectedCells)} affected cell${
-          bundle.estimatedAffectedCells === 1 ? "" : "s"
-        }`;
+      ? 'unknown affected cell count'
+      : `${String(bundle.estimatedAffectedCells)} affected cell${bundle.estimatedAffectedCells === 1 ? '' : 's'}`
   return [
     `Prepared workbook review item: ${bundle.summary}.`,
     `Risk: ${bundle.riskClass}. Scope: ${bundle.scope}.`,
     `Change target: ${affectedCells}.`,
-  ].join(" ");
+  ].join(' ')
 }
 
 export function normalizeWorkbookAgentCommandIndexes(
-  bundle: Pick<WorkbookAgentCommandBundle, "commands">,
+  bundle: Pick<WorkbookAgentCommandBundle, 'commands'>,
   commandIndexes: readonly number[] | null | undefined,
 ): number[] {
   if (commandIndexes === null || commandIndexes === undefined) {
-    return bundle.commands.map((_command, index) => index);
+    return bundle.commands.map((_command, index) => index)
   }
-  const requested = new Set<number>();
+  const requested = new Set<number>()
   commandIndexes.forEach((index) => {
     if (Number.isInteger(index) && index >= 0 && index < bundle.commands.length) {
-      requested.add(index);
+      requested.add(index)
     }
-  });
-  return bundle.commands.flatMap((_command, index) => (requested.has(index) ? [index] : []));
+  })
+  return bundle.commands.flatMap((_command, index) => (requested.has(index) ? [index] : []))
 }
 
 export function isFullWorkbookAgentCommandSelection(input: {
-  bundle: Pick<WorkbookAgentCommandBundle, "commands">;
-  commandIndexes: readonly number[] | null | undefined;
+  bundle: Pick<WorkbookAgentCommandBundle, 'commands'>
+  commandIndexes: readonly number[] | null | undefined
 }): boolean {
-  return (
-    normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes).length ===
-    input.bundle.commands.length
-  );
+  return normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes).length === input.bundle.commands.length
 }
 
 export function projectWorkbookAgentBundle(input: {
-  bundle: WorkbookAgentCommandBundle;
-  commandIndexes: readonly number[] | null | undefined;
-  bundleId?: string;
-  baseRevision?: number;
-  now?: number;
+  bundle: WorkbookAgentCommandBundle
+  commandIndexes: readonly number[] | null | undefined
+  bundleId?: string
+  baseRevision?: number
+  now?: number
 }): WorkbookAgentCommandBundle | null {
-  const selectedIndexes = normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes);
+  const selectedIndexes = normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes)
   if (selectedIndexes.length === 0) {
-    return null;
+    return null
   }
   if (selectedIndexes.length === input.bundle.commands.length) {
     return {
@@ -1049,7 +992,7 @@ export function projectWorkbookAgentBundle(input: {
       ...(input.bundleId ? { id: input.bundleId } : {}),
       ...(input.baseRevision !== undefined ? { baseRevision: input.baseRevision } : {}),
       ...(input.now !== undefined ? { createdAtUnixMs: input.now } : {}),
-    };
+    }
   }
   return createWorkbookAgentCommandBundle({
     ...(input.bundleId ? { bundleId: input.bundleId } : {}),
@@ -1062,37 +1005,32 @@ export function projectWorkbookAgentBundle(input: {
     commands: selectedIndexes.map((index) => input.bundle.commands[index]!),
     now: input.now ?? input.bundle.createdAtUnixMs,
     sharedReview: input.bundle.sharedReview ?? null,
-  });
+  })
 }
 
 export function splitWorkbookAgentCommandBundle(input: {
-  bundle: WorkbookAgentCommandBundle;
-  acceptedCommandIndexes: readonly number[] | null | undefined;
-  remainingBaseRevision?: number;
-  remainingBundleId?: string;
-  now?: number;
+  bundle: WorkbookAgentCommandBundle
+  acceptedCommandIndexes: readonly number[] | null | undefined
+  remainingBaseRevision?: number
+  remainingBundleId?: string
+  now?: number
 }): {
-  acceptedBundle: WorkbookAgentCommandBundle | null;
-  remainingBundle: WorkbookAgentCommandBundle | null;
-  acceptedScope: WorkbookAgentAcceptedScope | null;
-  acceptedCommandIndexes: number[];
+  acceptedBundle: WorkbookAgentCommandBundle | null
+  remainingBundle: WorkbookAgentCommandBundle | null
+  acceptedScope: WorkbookAgentAcceptedScope | null
+  acceptedCommandIndexes: number[]
 } {
-  const acceptedCommandIndexes = normalizeWorkbookAgentCommandIndexes(
-    input.bundle,
-    input.acceptedCommandIndexes,
-  );
+  const acceptedCommandIndexes = normalizeWorkbookAgentCommandIndexes(input.bundle, input.acceptedCommandIndexes)
   if (acceptedCommandIndexes.length === 0) {
     return {
       acceptedBundle: null,
       remainingBundle: structuredClone(input.bundle),
       acceptedScope: null,
       acceptedCommandIndexes,
-    };
+    }
   }
-  const acceptedSet = new Set(acceptedCommandIndexes);
-  const remainingCommandIndexes = input.bundle.commands.flatMap((_command, index) =>
-    acceptedSet.has(index) ? [] : [index],
-  );
+  const acceptedSet = new Set(acceptedCommandIndexes)
+  const remainingCommandIndexes = input.bundle.commands.flatMap((_command, index) => (acceptedSet.has(index) ? [] : [index]))
   return {
     acceptedBundle: projectWorkbookAgentBundle({
       bundle: input.bundle,
@@ -1103,26 +1041,23 @@ export function splitWorkbookAgentCommandBundle(input: {
       bundle: input.bundle,
       commandIndexes: remainingCommandIndexes,
       ...(input.remainingBundleId ? { bundleId: input.remainingBundleId } : {}),
-      ...(input.remainingBaseRevision !== undefined
-        ? { baseRevision: input.remainingBaseRevision }
-        : {}),
+      ...(input.remainingBaseRevision !== undefined ? { baseRevision: input.remainingBaseRevision } : {}),
       ...(input.now !== undefined ? { now: input.now } : {}),
     }),
-    acceptedScope:
-      acceptedCommandIndexes.length === input.bundle.commands.length ? "full" : "partial",
+    acceptedScope: acceptedCommandIndexes.length === input.bundle.commands.length ? 'full' : 'partial',
     acceptedCommandIndexes,
-  };
+  }
 }
 
 export function buildWorkbookAgentExecutionRecord(input: {
-  bundle: WorkbookAgentCommandBundle;
-  actorUserId: string;
-  planText: string | null;
-  preview: WorkbookAgentExecutionRecord["preview"];
-  appliedRevision: number;
-  appliedBy: WorkbookAgentAppliedBy;
-  acceptedScope: WorkbookAgentAcceptedScope;
-  now: number;
+  bundle: WorkbookAgentCommandBundle
+  actorUserId: string
+  planText: string | null
+  preview: WorkbookAgentExecutionRecord['preview']
+  appliedRevision: number
+  appliedBy: WorkbookAgentAppliedBy
+  acceptedScope: WorkbookAgentAcceptedScope
+  now: number
 }): WorkbookAgentExecutionRecord {
   return {
     id: crypto.randomUUID(),
@@ -1145,154 +1080,132 @@ export function buildWorkbookAgentExecutionRecord(input: {
     context: input.bundle.context ? structuredClone(input.bundle.context) : null,
     commands: input.bundle.commands.map((command) => structuredClone(command)),
     preview: input.preview ? structuredClone(input.preview) : null,
-  };
+  }
 }
 
 export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCommand {
-  if (!isRecord(value) || typeof value["kind"] !== "string") {
-    return false;
+  if (!isRecord(value) || typeof value['kind'] !== 'string') {
+    return false
   }
   if (isWorkbookAgentStructuralCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentObjectCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentMediaCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentProtectionCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentValidationCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentConditionalFormatCommandValue(value)) {
-    return true;
+    return true
   }
   if (isWorkbookAgentAnnotationCommandValue(value)) {
-    return true;
+    return true
   }
-  switch (value["kind"]) {
-    case "writeRange":
-    case "setRangeFormulas":
-      return value["kind"] === "writeRange"
-        ? typeof value["sheetName"] === "string" &&
-            typeof value["startAddress"] === "string" &&
-            Array.isArray(value["values"]) &&
-            value["values"].every(
+  switch (value['kind']) {
+    case 'writeRange':
+    case 'setRangeFormulas':
+      return value['kind'] === 'writeRange'
+        ? typeof value['sheetName'] === 'string' &&
+            typeof value['startAddress'] === 'string' &&
+            Array.isArray(value['values']) &&
+            value['values'].every((row) => Array.isArray(row) && row.length > 0 && row.every((cellValue) => isWriteCellInput(cellValue)))
+        : isCellRangeRef(value['range']) &&
+            Array.isArray(value['formulas']) &&
+            value['formulas'].every(
               (row) =>
-                Array.isArray(row) &&
-                row.length > 0 &&
-                row.every((cellValue) => isWriteCellInput(cellValue)),
+                Array.isArray(row) && row.length > 0 && row.every((formula) => typeof formula === 'string' && formula.trim().length > 0),
             )
-        : isCellRangeRef(value["range"]) &&
-            Array.isArray(value["formulas"]) &&
-            value["formulas"].every(
-              (row) =>
-                Array.isArray(row) &&
-                row.length > 0 &&
-                row.every((formula) => typeof formula === "string" && formula.trim().length > 0),
-            );
-    case "clearRange":
-      return isCellRangeRef(value["range"]);
-    case "formatRange":
+    case 'clearRange':
+      return isCellRangeRef(value['range'])
+    case 'formatRange':
       return (
-        isCellRangeRef(value["range"]) &&
-        (value["patch"] === undefined || isRecord(value["patch"])) &&
-        (value["numberFormat"] === undefined ||
-          typeof value["numberFormat"] === "string" ||
-          isRecord(value["numberFormat"]))
-      );
-    case "fillRange":
-    case "copyRange":
-    case "moveRange":
-      return isCellRangeRef(value["source"]) && isCellRangeRef(value["target"]);
+        isCellRangeRef(value['range']) &&
+        (value['patch'] === undefined || isRecord(value['patch'])) &&
+        (value['numberFormat'] === undefined || typeof value['numberFormat'] === 'string' || isRecord(value['numberFormat']))
+      )
+    case 'fillRange':
+    case 'copyRange':
+    case 'moveRange':
+      return isCellRangeRef(value['source']) && isCellRangeRef(value['target'])
     default:
-      return false;
+      return false
   }
 }
 
 export function isWorkbookAgentCommandBundle(value: unknown): value is WorkbookAgentCommandBundle {
   return (
     isRecord(value) &&
-    typeof value["id"] === "string" &&
-    typeof value["documentId"] === "string" &&
-    typeof value["threadId"] === "string" &&
-    typeof value["turnId"] === "string" &&
-    typeof value["goalText"] === "string" &&
-    typeof value["summary"] === "string" &&
-    (value["scope"] === "selection" ||
-      value["scope"] === "sheet" ||
-      value["scope"] === "workbook") &&
-    (value["riskClass"] === "low" ||
-      value["riskClass"] === "medium" ||
-      value["riskClass"] === "high") &&
-    typeof value["baseRevision"] === "number" &&
-    typeof value["createdAtUnixMs"] === "number" &&
-    (value["context"] === null || isWorkbookAgentContextRef(value["context"])) &&
-    isCommandArray(value["commands"]) &&
-    Array.isArray(value["affectedRanges"]) &&
-    value["affectedRanges"].every((entry) => isWorkbookAgentPreviewRange(entry)) &&
-    (value["sharedReview"] === undefined ||
-      value["sharedReview"] === null ||
-      isSharedReviewState(value["sharedReview"])) &&
-    (value["estimatedAffectedCells"] === null ||
-      typeof value["estimatedAffectedCells"] === "number")
-  );
+    typeof value['id'] === 'string' &&
+    typeof value['documentId'] === 'string' &&
+    typeof value['threadId'] === 'string' &&
+    typeof value['turnId'] === 'string' &&
+    typeof value['goalText'] === 'string' &&
+    typeof value['summary'] === 'string' &&
+    (value['scope'] === 'selection' || value['scope'] === 'sheet' || value['scope'] === 'workbook') &&
+    (value['riskClass'] === 'low' || value['riskClass'] === 'medium' || value['riskClass'] === 'high') &&
+    typeof value['baseRevision'] === 'number' &&
+    typeof value['createdAtUnixMs'] === 'number' &&
+    (value['context'] === null || isWorkbookAgentContextRef(value['context'])) &&
+    isCommandArray(value['commands']) &&
+    Array.isArray(value['affectedRanges']) &&
+    value['affectedRanges'].every((entry) => isWorkbookAgentPreviewRange(entry)) &&
+    (value['sharedReview'] === undefined || value['sharedReview'] === null || isSharedReviewState(value['sharedReview'])) &&
+    (value['estimatedAffectedCells'] === null || typeof value['estimatedAffectedCells'] === 'number')
+  )
 }
 
-export function isWorkbookAgentExecutionRecord(
-  value: unknown,
-): value is WorkbookAgentExecutionRecord {
+export function isWorkbookAgentExecutionRecord(value: unknown): value is WorkbookAgentExecutionRecord {
   return (
     isRecord(value) &&
-    typeof value["id"] === "string" &&
-    typeof value["bundleId"] === "string" &&
-    typeof value["documentId"] === "string" &&
-    typeof value["threadId"] === "string" &&
-    typeof value["turnId"] === "string" &&
-    typeof value["actorUserId"] === "string" &&
-    typeof value["goalText"] === "string" &&
-    (value["planText"] === null || typeof value["planText"] === "string") &&
-    typeof value["summary"] === "string" &&
-    (value["scope"] === "selection" ||
-      value["scope"] === "sheet" ||
-      value["scope"] === "workbook") &&
-    (value["riskClass"] === "low" ||
-      value["riskClass"] === "medium" ||
-      value["riskClass"] === "high") &&
-    isAcceptedScope(value["acceptedScope"]) &&
-    isAppliedBy(value["appliedBy"]) &&
-    typeof value["baseRevision"] === "number" &&
-    typeof value["appliedRevision"] === "number" &&
-    typeof value["createdAtUnixMs"] === "number" &&
-    typeof value["appliedAtUnixMs"] === "number" &&
-    (value["context"] === null || isWorkbookAgentContextRef(value["context"])) &&
-    isCommandArray(value["commands"]) &&
-    (value["preview"] === null || isWorkbookAgentPreviewSummary(value["preview"]))
-  );
+    typeof value['id'] === 'string' &&
+    typeof value['bundleId'] === 'string' &&
+    typeof value['documentId'] === 'string' &&
+    typeof value['threadId'] === 'string' &&
+    typeof value['turnId'] === 'string' &&
+    typeof value['actorUserId'] === 'string' &&
+    typeof value['goalText'] === 'string' &&
+    (value['planText'] === null || typeof value['planText'] === 'string') &&
+    typeof value['summary'] === 'string' &&
+    (value['scope'] === 'selection' || value['scope'] === 'sheet' || value['scope'] === 'workbook') &&
+    (value['riskClass'] === 'low' || value['riskClass'] === 'medium' || value['riskClass'] === 'high') &&
+    isAcceptedScope(value['acceptedScope']) &&
+    isAppliedBy(value['appliedBy']) &&
+    typeof value['baseRevision'] === 'number' &&
+    typeof value['appliedRevision'] === 'number' &&
+    typeof value['createdAtUnixMs'] === 'number' &&
+    typeof value['appliedAtUnixMs'] === 'number' &&
+    (value['context'] === null || isWorkbookAgentContextRef(value['context'])) &&
+    isCommandArray(value['commands']) &&
+    (value['preview'] === null || isWorkbookAgentPreviewSummary(value['preview']))
+  )
 }
 
 function normalizeFormula(formula: string): string {
-  return formula.startsWith("=") ? formula.slice(1) : formula;
+  return formula.startsWith('=') ? formula.slice(1) : formula
 }
 
 function normalizeRangeBounds(range: CellRangeRef): {
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
+  sheetName: string
+  startAddress: string
+  endAddress: string
+  startRow: number
+  endRow: number
+  startCol: number
+  endCol: number
 } {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
-  const startRow = Math.min(start.row, end.row);
-  const endRow = Math.max(start.row, end.row);
-  const startCol = Math.min(start.col, end.col);
-  const endCol = Math.max(start.col, end.col);
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
+  const startRow = Math.min(start.row, end.row)
+  const endRow = Math.max(start.row, end.row)
+  const startCol = Math.min(start.col, end.col)
+  const endCol = Math.max(start.col, end.col)
   return {
     sheetName: range.sheetName,
     startAddress: formatAddress(startRow, startCol),
@@ -1301,233 +1214,217 @@ function normalizeRangeBounds(range: CellRangeRef): {
     endRow,
     startCol,
     endCol,
-  };
+  }
 }
 
 function countRangeCells(range: CellRangeRef): number {
-  const bounds = normalizeRangeBounds(range);
-  return (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+  const bounds = normalizeRangeBounds(range)
+  return (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1)
 }
 
-function writeRangeToRange(
-  command: Extract<WorkbookAgentCommand, { kind: "writeRange" }>,
-): CellRangeRef {
-  const start = parseCellAddress(command.startAddress, command.sheetName);
-  const width = command.values.reduce((maxWidth, row) => Math.max(maxWidth, row.length), 0);
+function writeRangeToRange(command: Extract<WorkbookAgentCommand, { kind: 'writeRange' }>): CellRangeRef {
+  const start = parseCellAddress(command.startAddress, command.sheetName)
+  const width = command.values.reduce((maxWidth, row) => Math.max(maxWidth, row.length), 0)
   return {
     sheetName: command.sheetName,
     startAddress: command.startAddress,
     endAddress: formatAddress(start.row + command.values.length - 1, start.col + width - 1),
-  };
+  }
 }
 
-export function estimateWorkbookAgentCommandAffectedCells(
-  command: WorkbookAgentCommand,
-): number | null {
+export function estimateWorkbookAgentCommandAffectedCells(command: WorkbookAgentCommand): number | null {
   if (isWorkbookAgentStructuralCommand(command)) {
-    return estimateWorkbookAgentStructuralCommandAffectedCells(command);
+    return estimateWorkbookAgentStructuralCommandAffectedCells(command)
   }
   if (isWorkbookAgentObjectCommand(command)) {
-    return estimateWorkbookAgentObjectCommandAffectedCells(command);
+    return estimateWorkbookAgentObjectCommandAffectedCells(command)
   }
   if (isWorkbookAgentMediaCommand(command)) {
-    return estimateWorkbookAgentMediaCommandAffectedCells(command);
+    return estimateWorkbookAgentMediaCommandAffectedCells(command)
   }
   if (isWorkbookAgentProtectionCommand(command)) {
-    return estimateWorkbookAgentProtectionCommandAffectedCells(command);
+    return estimateWorkbookAgentProtectionCommandAffectedCells(command)
   }
   if (isWorkbookAgentValidationCommand(command)) {
-    return estimateWorkbookAgentValidationCommandAffectedCells(command);
+    return estimateWorkbookAgentValidationCommandAffectedCells(command)
   }
   if (isWorkbookAgentConditionalFormatCommand(command)) {
-    return estimateWorkbookAgentConditionalFormatCommandAffectedCells(command);
+    return estimateWorkbookAgentConditionalFormatCommandAffectedCells(command)
   }
   if (isWorkbookAgentAnnotationCommand(command)) {
-    return estimateWorkbookAgentAnnotationCommandAffectedCells(command);
+    return estimateWorkbookAgentAnnotationCommandAffectedCells(command)
   }
   switch (command.kind) {
-    case "writeRange":
-      return command.values.reduce((sum, row) => sum + row.length, 0);
-    case "setRangeFormulas":
-      return command.formulas.reduce((sum, row) => sum + row.length, 0);
-    case "clearRange":
-    case "formatRange":
-      return countRangeCells(command.range);
-    case "fillRange":
-    case "copyRange":
-    case "moveRange":
-      return countRangeCells(command.target);
+    case 'writeRange':
+      return command.values.reduce((sum, row) => sum + row.length, 0)
+    case 'setRangeFormulas':
+      return command.formulas.reduce((sum, row) => sum + row.length, 0)
+    case 'clearRange':
+    case 'formatRange':
+      return countRangeCells(command.range)
+    case 'fillRange':
+    case 'copyRange':
+    case 'moveRange':
+      return countRangeCells(command.target)
     default: {
-      const exhaustive: never = command;
-      return exhaustive;
+      const exhaustive: never = command
+      return exhaustive
     }
   }
 }
 
-export function deriveWorkbookAgentCommandPreviewRanges(
-  command: WorkbookAgentCommand,
-): WorkbookAgentPreviewRange[] {
+export function deriveWorkbookAgentCommandPreviewRanges(command: WorkbookAgentCommand): WorkbookAgentPreviewRange[] {
   if (isWorkbookAgentStructuralCommand(command)) {
-    return deriveWorkbookAgentStructuralCommandPreviewRanges(command);
+    return deriveWorkbookAgentStructuralCommandPreviewRanges(command)
   }
   if (isWorkbookAgentObjectCommand(command)) {
-    return deriveWorkbookAgentObjectCommandPreviewRanges(command);
+    return deriveWorkbookAgentObjectCommandPreviewRanges(command)
   }
   if (isWorkbookAgentMediaCommand(command)) {
-    return deriveWorkbookAgentMediaCommandPreviewRanges(command);
+    return deriveWorkbookAgentMediaCommandPreviewRanges(command)
   }
   if (isWorkbookAgentProtectionCommand(command)) {
-    return deriveWorkbookAgentProtectionCommandPreviewRanges(command);
+    return deriveWorkbookAgentProtectionCommandPreviewRanges(command)
   }
   if (isWorkbookAgentValidationCommand(command)) {
-    return deriveWorkbookAgentValidationCommandPreviewRanges(command);
+    return deriveWorkbookAgentValidationCommandPreviewRanges(command)
   }
   if (isWorkbookAgentConditionalFormatCommand(command)) {
-    return deriveWorkbookAgentConditionalFormatCommandPreviewRanges(command);
+    return deriveWorkbookAgentConditionalFormatCommandPreviewRanges(command)
   }
   if (isWorkbookAgentAnnotationCommand(command)) {
-    return deriveWorkbookAgentAnnotationCommandPreviewRanges(command);
+    return deriveWorkbookAgentAnnotationCommandPreviewRanges(command)
   }
   switch (command.kind) {
-    case "writeRange":
+    case 'writeRange':
       return [
         {
           ...writeRangeToRange(command),
-          role: "target",
+          role: 'target',
         },
-      ];
-    case "setRangeFormulas":
+      ]
+    case 'setRangeFormulas':
       return [
         {
           ...normalizeRangeBounds(command.range),
-          role: "target",
+          role: 'target',
         },
-      ];
-    case "clearRange":
-    case "formatRange":
+      ]
+    case 'clearRange':
+    case 'formatRange':
       return [
         {
           ...normalizeRangeBounds(command.range),
-          role: "target",
+          role: 'target',
         },
-      ];
-    case "fillRange":
-    case "copyRange":
-    case "moveRange":
+      ]
+    case 'fillRange':
+    case 'copyRange':
+    case 'moveRange':
       return [
         {
           ...normalizeRangeBounds(command.source),
-          role: "source",
+          role: 'source',
         },
         {
           ...normalizeRangeBounds(command.target),
-          role: "target",
+          role: 'target',
         },
-      ];
+      ]
     default: {
-      const exhaustive: never = command;
-      return exhaustive;
+      const exhaustive: never = command
+      return exhaustive
     }
   }
 }
 
-export function applyWorkbookAgentCommand(
-  engine: SpreadsheetEngine,
-  command: WorkbookAgentCommand,
-): void {
+export function applyWorkbookAgentCommand(engine: SpreadsheetEngine, command: WorkbookAgentCommand): void {
   if (isWorkbookAgentStructuralCommand(command)) {
-    applyWorkbookAgentStructuralCommand(engine, command);
-    return;
+    applyWorkbookAgentStructuralCommand(engine, command)
+    return
   }
   if (isWorkbookAgentObjectCommand(command)) {
-    applyWorkbookAgentObjectCommand(engine, command);
-    return;
+    applyWorkbookAgentObjectCommand(engine, command)
+    return
   }
   if (isWorkbookAgentMediaCommand(command)) {
-    applyWorkbookAgentMediaCommand(engine, command);
-    return;
+    applyWorkbookAgentMediaCommand(engine, command)
+    return
   }
   if (isWorkbookAgentProtectionCommand(command)) {
-    applyWorkbookAgentProtectionCommand(engine, command);
-    return;
+    applyWorkbookAgentProtectionCommand(engine, command)
+    return
   }
   if (isWorkbookAgentValidationCommand(command)) {
-    applyWorkbookAgentValidationCommand(engine, command);
-    return;
+    applyWorkbookAgentValidationCommand(engine, command)
+    return
   }
   if (isWorkbookAgentConditionalFormatCommand(command)) {
-    applyWorkbookAgentConditionalFormatCommand(engine, command);
-    return;
+    applyWorkbookAgentConditionalFormatCommand(engine, command)
+    return
   }
   if (isWorkbookAgentAnnotationCommand(command)) {
-    applyWorkbookAgentAnnotationCommand(engine, command);
-    return;
+    applyWorkbookAgentAnnotationCommand(engine, command)
+    return
   }
   switch (command.kind) {
-    case "writeRange": {
-      const start = parseCellAddress(command.startAddress, command.sheetName);
+    case 'writeRange': {
+      const start = parseCellAddress(command.startAddress, command.sheetName)
       command.values.forEach((rowValues, rowOffset) => {
         rowValues.forEach((cellInput, colOffset) => {
-          const address = formatAddress(start.row + rowOffset, start.col + colOffset);
+          const address = formatAddress(start.row + rowOffset, start.col + colOffset)
           if (cellInput === null) {
-            engine.clearCell(command.sheetName, address);
-            return;
+            engine.clearCell(command.sheetName, address)
+            return
           }
-          if (
-            typeof cellInput === "string" ||
-            typeof cellInput === "number" ||
-            typeof cellInput === "boolean"
-          ) {
-            engine.setCellValue(command.sheetName, address, cellInput);
-            return;
+          if (typeof cellInput === 'string' || typeof cellInput === 'number' || typeof cellInput === 'boolean') {
+            engine.setCellValue(command.sheetName, address, cellInput)
+            return
           }
-          if ("formula" in cellInput) {
-            engine.setCellFormula(command.sheetName, address, normalizeFormula(cellInput.formula));
-            return;
+          if ('formula' in cellInput) {
+            engine.setCellFormula(command.sheetName, address, normalizeFormula(cellInput.formula))
+            return
           }
-          engine.setCellValue(command.sheetName, address, cellInput.value);
-        });
-      });
-      return;
+          engine.setCellValue(command.sheetName, address, cellInput.value)
+        })
+      })
+      return
     }
-    case "setRangeFormulas":
+    case 'setRangeFormulas':
       engine.setRangeFormulas(
         command.range,
         command.formulas.map((row) => row.map((formula) => normalizeFormula(formula))),
-      );
-      return;
-    case "clearRange":
-      engine.clearRange(command.range);
-      return;
-    case "formatRange":
+      )
+      return
+    case 'clearRange':
+      engine.clearRange(command.range)
+      return
+    case 'formatRange':
       if (command.patch !== undefined) {
-        engine.setRangeStyle(command.range, command.patch);
+        engine.setRangeStyle(command.range, command.patch)
       }
       if (command.numberFormat !== undefined) {
-        engine.setRangeNumberFormat(command.range, command.numberFormat);
+        engine.setRangeNumberFormat(command.range, command.numberFormat)
       }
-      return;
-    case "fillRange":
-      engine.fillRange(command.source, command.target);
-      return;
-    case "copyRange":
-      engine.copyRange(command.source, command.target);
-      return;
-    case "moveRange":
-      engine.moveRange(command.source, command.target);
-      return;
+      return
+    case 'fillRange':
+      engine.fillRange(command.source, command.target)
+      return
+    case 'copyRange':
+      engine.copyRange(command.source, command.target)
+      return
+    case 'moveRange':
+      engine.moveRange(command.source, command.target)
+      return
     default: {
-      const exhaustive: never = command;
-      throw new Error(`Unhandled workbook agent command: ${JSON.stringify(exhaustive)}`);
+      const exhaustive: never = command
+      throw new Error(`Unhandled workbook agent command: ${JSON.stringify(exhaustive)}`)
     }
   }
 }
 
-export function applyWorkbookAgentCommandBundle(
-  engine: SpreadsheetEngine,
-  bundle: Pick<WorkbookAgentCommandBundle, "commands">,
-): void {
+export function applyWorkbookAgentCommandBundle(engine: SpreadsheetEngine, bundle: Pick<WorkbookAgentCommandBundle, 'commands'>): void {
   bundle.commands.forEach((command) => {
-    applyWorkbookAgentCommand(engine, command);
-  });
+    applyWorkbookAgentCommand(engine, command)
+  })
 }

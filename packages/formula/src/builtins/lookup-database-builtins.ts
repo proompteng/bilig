@@ -1,51 +1,46 @@
-import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import type { LookupBuiltin, LookupBuiltinArgument, RangeBuiltinArgument } from "./lookup.js";
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import type { LookupBuiltin, LookupBuiltinArgument, RangeBuiltinArgument } from './lookup.js'
 
 interface LookupDatabaseBuiltinDeps {
-  errorValue: (code: ErrorCode) => CellValue;
-  numberResult: (value: number) => CellValue;
-  isError: (
-    value: LookupBuiltinArgument | undefined,
-  ) => value is Extract<CellValue, { tag: ValueTag.Error }>;
-  isRangeArg: (value: LookupBuiltinArgument | undefined) => value is RangeBuiltinArgument;
-  toNumber: (value: CellValue) => number | undefined;
-  toStringValue: (value: CellValue) => string;
-  requireCellRange: (arg: LookupBuiltinArgument) => RangeBuiltinArgument | CellValue;
-  getRangeValue: (range: RangeBuiltinArgument, row: number, col: number) => CellValue;
-  matchesCriteria: (value: CellValue, criteria: CellValue) => boolean;
+  errorValue: (code: ErrorCode) => CellValue
+  numberResult: (value: number) => CellValue
+  isError: (value: LookupBuiltinArgument | undefined) => value is Extract<CellValue, { tag: ValueTag.Error }>
+  isRangeArg: (value: LookupBuiltinArgument | undefined) => value is RangeBuiltinArgument
+  toNumber: (value: CellValue) => number | undefined
+  toStringValue: (value: CellValue) => string
+  requireCellRange: (arg: LookupBuiltinArgument) => RangeBuiltinArgument | CellValue
+  getRangeValue: (range: RangeBuiltinArgument, row: number, col: number) => CellValue
+  matchesCriteria: (value: CellValue, criteria: CellValue) => boolean
 }
 
 type DatabaseCriteriaClause = {
-  columnIndex: number;
-  criteria: CellValue;
-};
-
-type DatabaseCriteriaRow = {
-  clauses: DatabaseCriteriaClause[];
-  blocked: boolean;
-};
-
-type DatabaseSelection = {
-  database: RangeBuiltinArgument;
-  matchingRows: number[];
-  fieldIndex?: number;
-};
-
-function normalizeHeaderLabel(value: CellValue, deps: LookupDatabaseBuiltinDeps): string {
-  return deps.toStringValue(value).trim().toUpperCase();
+  columnIndex: number
+  criteria: CellValue
 }
 
-function scalarFromLookupArgument(
-  arg: LookupBuiltinArgument,
-  deps: LookupDatabaseBuiltinDeps,
-): CellValue {
+type DatabaseCriteriaRow = {
+  clauses: DatabaseCriteriaClause[]
+  blocked: boolean
+}
+
+type DatabaseSelection = {
+  database: RangeBuiltinArgument
+  matchingRows: number[]
+  fieldIndex?: number
+}
+
+function normalizeHeaderLabel(value: CellValue, deps: LookupDatabaseBuiltinDeps): string {
+  return deps.toStringValue(value).trim().toUpperCase()
+}
+
+function scalarFromLookupArgument(arg: LookupBuiltinArgument, deps: LookupDatabaseBuiltinDeps): CellValue {
   if (!deps.isRangeArg(arg)) {
-    return arg;
+    return arg
   }
-  if (arg.refKind !== "cells" || arg.values.length !== 1) {
-    return deps.errorValue(ErrorCode.Value);
+  if (arg.refKind !== 'cells' || arg.values.length !== 1) {
+    return deps.errorValue(ErrorCode.Value)
   }
-  return arg.values[0] ?? { tag: ValueTag.Empty };
+  return arg.values[0] ?? { tag: ValueTag.Empty }
 }
 
 function resolveDatabaseFieldIndex(
@@ -54,33 +49,33 @@ function resolveDatabaseFieldIndex(
   allowOmitted: boolean,
   deps: LookupDatabaseBuiltinDeps,
 ): number | undefined | CellValue {
-  const field = scalarFromLookupArgument(fieldArg, deps);
+  const field = scalarFromLookupArgument(fieldArg, deps)
   if (deps.isError(field)) {
-    return field;
+    return field
   }
   if (field.tag === ValueTag.Empty) {
-    return allowOmitted ? undefined : deps.errorValue(ErrorCode.Value);
+    return allowOmitted ? undefined : deps.errorValue(ErrorCode.Value)
   }
 
   if (field.tag === ValueTag.Number) {
-    const position = Math.trunc(field.value);
-    return position >= 1 && position <= database.cols ? position - 1 : deps.errorValue(ErrorCode.Value);
+    const position = Math.trunc(field.value)
+    return position >= 1 && position <= database.cols ? position - 1 : deps.errorValue(ErrorCode.Value)
   }
 
   if (field.tag !== ValueTag.String) {
-    return deps.errorValue(ErrorCode.Value);
+    return deps.errorValue(ErrorCode.Value)
   }
 
-  const normalizedField = normalizeHeaderLabel(field, deps);
-  if (normalizedField === "") {
-    return allowOmitted ? undefined : deps.errorValue(ErrorCode.Value);
+  const normalizedField = normalizeHeaderLabel(field, deps)
+  if (normalizedField === '') {
+    return allowOmitted ? undefined : deps.errorValue(ErrorCode.Value)
   }
   for (let col = 0; col < database.cols; col += 1) {
     if (normalizeHeaderLabel(deps.getRangeValue(database, 0, col), deps) === normalizedField) {
-      return col;
+      return col
     }
   }
-  return deps.errorValue(ErrorCode.Value);
+  return deps.errorValue(ErrorCode.Value)
 }
 
 function buildDatabaseCriteriaRows(
@@ -89,58 +84,58 @@ function buildDatabaseCriteriaRows(
   deps: LookupDatabaseBuiltinDeps,
 ): DatabaseCriteriaRow[] | CellValue {
   if (criteria.rows < 2 || criteria.cols < 1) {
-    return deps.errorValue(ErrorCode.Value);
+    return deps.errorValue(ErrorCode.Value)
   }
 
-  const headerColumns: number[] = [];
-  const headerBlocked: boolean[] = [];
+  const headerColumns: number[] = []
+  const headerBlocked: boolean[] = []
   for (let col = 0; col < criteria.cols; col += 1) {
-    const header = deps.getRangeValue(criteria, 0, col);
+    const header = deps.getRangeValue(criteria, 0, col)
     if (header.tag === ValueTag.Error) {
-      return header;
+      return header
     }
-    const normalized = normalizeHeaderLabel(header, deps);
-    if (normalized === "") {
-      headerColumns.push(-1);
-      headerBlocked.push(true);
-      continue;
+    const normalized = normalizeHeaderLabel(header, deps)
+    if (normalized === '') {
+      headerColumns.push(-1)
+      headerBlocked.push(true)
+      continue
     }
-    let matchedColumn = -1;
+    let matchedColumn = -1
     for (let databaseCol = 0; databaseCol < database.cols; databaseCol += 1) {
       if (normalizeHeaderLabel(deps.getRangeValue(database, 0, databaseCol), deps) === normalized) {
-        matchedColumn = databaseCol;
-        break;
+        matchedColumn = databaseCol
+        break
       }
     }
-    headerColumns.push(matchedColumn);
-    headerBlocked.push(matchedColumn < 0);
+    headerColumns.push(matchedColumn)
+    headerBlocked.push(matchedColumn < 0)
   }
 
-  const rows: DatabaseCriteriaRow[] = [];
+  const rows: DatabaseCriteriaRow[] = []
   for (let row = 1; row < criteria.rows; row += 1) {
-    const clauses: DatabaseCriteriaClause[] = [];
-    let blocked = false;
+    const clauses: DatabaseCriteriaClause[] = []
+    let blocked = false
     for (let col = 0; col < criteria.cols; col += 1) {
-      const value = deps.getRangeValue(criteria, row, col);
+      const value = deps.getRangeValue(criteria, row, col)
       if (value.tag === ValueTag.Empty) {
-        continue;
+        continue
       }
       if (value.tag === ValueTag.Error) {
-        return value;
+        return value
       }
       if (headerBlocked[col]) {
-        blocked = true;
-        continue;
+        blocked = true
+        continue
       }
-      const databaseColumn = headerColumns[col];
+      const databaseColumn = headerColumns[col]
       if (databaseColumn === undefined || databaseColumn < 0) {
-        continue;
+        continue
       }
-      clauses.push({ columnIndex: databaseColumn, criteria: value });
+      clauses.push({ columnIndex: databaseColumn, criteria: value })
     }
-    rows.push({ clauses, blocked });
+    rows.push({ clauses, blocked })
   }
-  return rows;
+  return rows
 }
 
 function recordMatchesDatabaseCriteria(
@@ -151,20 +146,17 @@ function recordMatchesDatabaseCriteria(
 ): boolean {
   for (const criteriaRow of criteriaRows) {
     if (criteriaRow.blocked) {
-      continue;
+      continue
     }
     if (
       criteriaRow.clauses.every((clause) =>
-        deps.matchesCriteria(
-          deps.getRangeValue(database, databaseRow, clause.columnIndex),
-          clause.criteria,
-        ),
+        deps.matchesCriteria(deps.getRangeValue(database, databaseRow, clause.columnIndex), clause.criteria),
       )
     ) {
-      return true;
+      return true
     }
   }
-  return false;
+  return false
 }
 
 function matchingDatabaseRows(
@@ -172,30 +164,30 @@ function matchingDatabaseRows(
   criteriaArg: LookupBuiltinArgument,
   deps: LookupDatabaseBuiltinDeps,
 ): { database: RangeBuiltinArgument; matchingRows: number[] } | CellValue {
-  const database = deps.requireCellRange(databaseArg);
+  const database = deps.requireCellRange(databaseArg)
   if (!deps.isRangeArg(database)) {
-    return database;
+    return database
   }
-  const criteria = deps.requireCellRange(criteriaArg);
+  const criteria = deps.requireCellRange(criteriaArg)
   if (!deps.isRangeArg(criteria)) {
-    return criteria;
+    return criteria
   }
   if (database.rows < 1 || database.cols < 1) {
-    return deps.errorValue(ErrorCode.Value);
+    return deps.errorValue(ErrorCode.Value)
   }
 
-  const criteriaRows = buildDatabaseCriteriaRows(database, criteria, deps);
+  const criteriaRows = buildDatabaseCriteriaRows(database, criteria, deps)
   if (!Array.isArray(criteriaRows)) {
-    return criteriaRows;
+    return criteriaRows
   }
 
-  const matchingRows: number[] = [];
+  const matchingRows: number[] = []
   for (let row = 1; row < database.rows; row += 1) {
     if (recordMatchesDatabaseCriteria(database, row, criteriaRows, deps)) {
-      matchingRows.push(row);
+      matchingRows.push(row)
     }
   }
-  return { database, matchingRows };
+  return { database, matchingRows }
 }
 
 function selectedDatabaseFieldValues(
@@ -205,13 +197,13 @@ function selectedDatabaseFieldValues(
   allowOmittedField: boolean,
   deps: LookupDatabaseBuiltinDeps,
 ): DatabaseSelection | CellValue {
-  const matches = matchingDatabaseRows(databaseArg, criteriaArg, deps);
-  if ("tag" in matches) {
-    return matches;
+  const matches = matchingDatabaseRows(databaseArg, criteriaArg, deps)
+  if ('tag' in matches) {
+    return matches
   }
-  const fieldIndex = resolveDatabaseFieldIndex(matches.database, fieldArg, allowOmittedField, deps);
-  if (typeof fieldIndex !== "number" && fieldIndex !== undefined) {
-    return fieldIndex;
+  const fieldIndex = resolveDatabaseFieldIndex(matches.database, fieldArg, allowOmittedField, deps)
+  if (typeof fieldIndex !== 'number' && fieldIndex !== undefined) {
+    return fieldIndex
   }
   return fieldIndex === undefined
     ? {
@@ -222,165 +214,152 @@ function selectedDatabaseFieldValues(
         database: matches.database,
         matchingRows: matches.matchingRows,
         fieldIndex,
-      };
+      }
 }
 
 function sampleVariance(numbers: readonly number[]): number | undefined {
   if (numbers.length < 2) {
-    return undefined;
+    return undefined
   }
-  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
-  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (numbers.length - 1);
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (numbers.length - 1)
 }
 
 function populationVariance(numbers: readonly number[]): number | undefined {
   if (numbers.length === 0) {
-    return undefined;
+    return undefined
   }
-  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
-  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / numbers.length;
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / numbers.length
 }
 
-function collectSelectionNumbers(
-  selection: DatabaseSelection,
-  deps: LookupDatabaseBuiltinDeps,
-): number[] {
-  const values: number[] = [];
+function collectSelectionNumbers(selection: DatabaseSelection, deps: LookupDatabaseBuiltinDeps): number[] {
+  const values: number[] = []
   for (const row of selection.matchingRows) {
-    const numeric = deps.toNumber(
-      deps.getRangeValue(selection.database, row, selection.fieldIndex ?? 0),
-    );
+    const numeric = deps.toNumber(deps.getRangeValue(selection.database, row, selection.fieldIndex ?? 0))
     if (numeric !== undefined) {
-      values.push(numeric);
+      values.push(numeric)
     }
   }
-  return values;
+  return values
 }
 
-export function createLookupDatabaseBuiltins(
-  deps: LookupDatabaseBuiltinDeps,
-): Record<string, LookupBuiltin> {
+export function createLookupDatabaseBuiltins(deps: LookupDatabaseBuiltinDeps): Record<string, LookupBuiltin> {
   return {
     DAVERAGE: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
 
-      const values = collectSelectionNumbers(selection, deps);
+      const values = collectSelectionNumbers(selection, deps)
       if (values.length === 0) {
-        return deps.errorValue(ErrorCode.Div0);
+        return deps.errorValue(ErrorCode.Div0)
       }
-      const sum = values.reduce((total, value) => total + value, 0);
-      return deps.numberResult(sum / values.length);
+      const sum = values.reduce((total, value) => total + value, 0)
+      return deps.numberResult(sum / values.length)
     },
     DCOUNT: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true, deps)
+      if ('tag' in selection) {
+        return selection
       }
       if (selection.fieldIndex === undefined) {
-        return deps.numberResult(selection.matchingRows.length);
+        return deps.numberResult(selection.matchingRows.length)
       }
-      return deps.numberResult(collectSelectionNumbers(selection, deps).length);
+      return deps.numberResult(collectSelectionNumbers(selection, deps).length)
     },
     DCOUNTA: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true, deps)
+      if ('tag' in selection) {
+        return selection
       }
       if (selection.fieldIndex === undefined) {
-        return deps.numberResult(selection.matchingRows.length);
+        return deps.numberResult(selection.matchingRows.length)
       }
-      let count = 0;
+      let count = 0
       for (const row of selection.matchingRows) {
         if (deps.getRangeValue(selection.database, row, selection.fieldIndex).tag !== ValueTag.Empty) {
-          count += 1;
+          count += 1
         }
       }
-      return deps.numberResult(count);
+      return deps.numberResult(count)
     },
     DGET: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
       if (selection.matchingRows.length !== 1) {
-        return deps.errorValue(ErrorCode.Value);
+        return deps.errorValue(ErrorCode.Value)
       }
-      return deps.getRangeValue(selection.database, selection.matchingRows[0]!, selection.fieldIndex ?? 0);
+      return deps.getRangeValue(selection.database, selection.matchingRows[0]!, selection.fieldIndex ?? 0)
     },
     DMAX: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const values = collectSelectionNumbers(selection, deps);
-      return deps.numberResult(values.length === 0 ? 0 : Math.max(...values));
+      const values = collectSelectionNumbers(selection, deps)
+      return deps.numberResult(values.length === 0 ? 0 : Math.max(...values))
     },
     DMIN: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const values = collectSelectionNumbers(selection, deps);
-      return deps.numberResult(values.length === 0 ? 0 : Math.min(...values));
+      const values = collectSelectionNumbers(selection, deps)
+      return deps.numberResult(values.length === 0 ? 0 : Math.min(...values))
     },
     DPRODUCT: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const values = collectSelectionNumbers(selection, deps);
+      const values = collectSelectionNumbers(selection, deps)
       if (values.length === 0) {
-        return deps.numberResult(0);
+        return deps.numberResult(0)
       }
-      return deps.numberResult(values.reduce((product, value) => product * value, 1));
+      return deps.numberResult(values.reduce((product, value) => product * value, 1))
     },
     DSTDEV: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const variance = sampleVariance(collectSelectionNumbers(selection, deps));
-      return variance === undefined
-        ? deps.errorValue(ErrorCode.Div0)
-        : deps.numberResult(Math.sqrt(variance));
+      const variance = sampleVariance(collectSelectionNumbers(selection, deps))
+      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(Math.sqrt(variance))
     },
     DSTDEVP: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const variance = populationVariance(collectSelectionNumbers(selection, deps));
-      return variance === undefined
-        ? deps.errorValue(ErrorCode.Div0)
-        : deps.numberResult(Math.sqrt(variance));
+      const variance = populationVariance(collectSelectionNumbers(selection, deps))
+      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(Math.sqrt(variance))
     },
     DSUM: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      return deps.numberResult(
-        collectSelectionNumbers(selection, deps).reduce((sum, value) => sum + value, 0),
-      );
+      return deps.numberResult(collectSelectionNumbers(selection, deps).reduce((sum, value) => sum + value, 0))
     },
     DVAR: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const variance = sampleVariance(collectSelectionNumbers(selection, deps));
-      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(variance);
+      const variance = sampleVariance(collectSelectionNumbers(selection, deps))
+      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(variance)
     },
     DVARP: (databaseArg, fieldArg, criteriaArg) => {
-      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps);
-      if ("tag" in selection) {
-        return selection;
+      const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false, deps)
+      if ('tag' in selection) {
+        return selection
       }
-      const variance = populationVariance(collectSelectionNumbers(selection, deps));
-      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(variance);
+      const variance = populationVariance(collectSelectionNumbers(selection, deps))
+      return variance === undefined ? deps.errorValue(ErrorCode.Div0) : deps.numberResult(variance)
     },
-  };
+  }
 }

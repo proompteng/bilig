@@ -1,28 +1,25 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
-import type { RefObject } from "react";
-import { Toaster, toast } from "sonner";
-import type { ExternalToast } from "sonner";
-import "sonner/dist/styles.css";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react'
+import type { RefObject } from 'react'
+import { Toaster, toast } from 'sonner'
+import type { ExternalToast } from 'sonner'
+import 'sonner/dist/styles.css'
 
 export interface WorkbookToastAction {
-  readonly label: string;
-  readonly onAction: () => void;
+  readonly label: string
+  readonly onAction: () => void
 }
 
 export interface WorkbookToast {
-  readonly id: string;
-  readonly tone?: "error" | "neutral";
-  readonly message: string;
-  readonly action?: WorkbookToastAction;
-  readonly onDismiss?: () => void;
+  readonly id: string
+  readonly tone?: 'error' | 'neutral'
+  readonly message: string
+  readonly action?: WorkbookToastAction
+  readonly onDismiss?: () => void
 }
 
-const WORKBOOK_TOASTER_ID = "workbook";
+const WORKBOOK_TOASTER_ID = 'workbook'
 
-function buildToastOptions(
-  workbookToast: WorkbookToast,
-  ignoredDismissIdsRef: RefObject<Set<string>>,
-): ExternalToast {
+function buildToastOptions(workbookToast: WorkbookToast, ignoredDismissIdsRef: RefObject<Set<string>>): ExternalToast {
   return {
     id: workbookToast.id,
     toasterId: WORKBOOK_TOASTER_ID,
@@ -35,7 +32,7 @@ function buildToastOptions(
           action: {
             label: workbookToast.action.label,
             onClick: () => {
-              workbookToast.action?.onAction();
+              workbookToast.action?.onAction()
             },
           },
         }
@@ -44,60 +41,57 @@ function buildToastOptions(
       ? {
           onDismiss: () => {
             if (ignoredDismissIdsRef.current?.delete(workbookToast.id)) {
-              return;
+              return
             }
-            workbookToast.onDismiss?.();
+            workbookToast.onDismiss?.()
           },
         }
       : {}),
-  };
+  }
 }
 
-function dismissToastProgrammatically(
-  id: string,
-  ignoredDismissIdsRef: RefObject<Set<string>>,
-): void {
-  ignoredDismissIdsRef.current?.add(id);
-  toast.dismiss(id);
+function dismissToastProgrammatically(id: string, ignoredDismissIdsRef: RefObject<Set<string>>): void {
+  ignoredDismissIdsRef.current?.add(id)
+  toast.dismiss(id)
 }
 
 export function WorkbookToastRegion(props: { readonly toasts: readonly WorkbookToast[] }) {
-  const activeIdsRef = useRef(new Set<string>());
-  const ignoredDismissIdsRef = useRef(new Set<string>());
+  const activeIdsRef = useRef(new Set<string>())
+  const ignoredDismissIdsRef = useRef(new Set<string>())
 
   const dismissActiveToasts = useEffectEvent(() => {
     for (const activeId of activeIdsRef.current) {
-      dismissToastProgrammatically(activeId, ignoredDismissIdsRef);
+      dismissToastProgrammatically(activeId, ignoredDismissIdsRef)
     }
-    activeIdsRef.current.clear();
-  });
+    activeIdsRef.current.clear()
+  })
 
   useLayoutEffect(() => {
-    const nextIds = new Set(props.toasts.map((workbookToast) => workbookToast.id));
+    const nextIds = new Set(props.toasts.map((workbookToast) => workbookToast.id))
     for (const activeId of activeIdsRef.current) {
       if (nextIds.has(activeId)) {
-        continue;
+        continue
       }
-      dismissToastProgrammatically(activeId, ignoredDismissIdsRef);
-      activeIdsRef.current.delete(activeId);
+      dismissToastProgrammatically(activeId, ignoredDismissIdsRef)
+      activeIdsRef.current.delete(activeId)
     }
 
     for (const workbookToast of props.toasts) {
-      const options = buildToastOptions(workbookToast, ignoredDismissIdsRef);
-      if (workbookToast.tone === "error") {
-        toast.error(workbookToast.message, options);
+      const options = buildToastOptions(workbookToast, ignoredDismissIdsRef)
+      if (workbookToast.tone === 'error') {
+        toast.error(workbookToast.message, options)
       } else {
-        toast(workbookToast.message, options);
+        toast(workbookToast.message, options)
       }
-      activeIdsRef.current.add(workbookToast.id);
+      activeIdsRef.current.add(workbookToast.id)
     }
-  }, [props.toasts]);
+  }, [props.toasts])
 
   useEffect(() => {
     return () => {
-      dismissActiveToasts();
-    };
-  }, []);
+      dismissActiveToasts()
+    }
+  }, [])
 
   return (
     <Toaster
@@ -107,9 +101,9 @@ export function WorkbookToastRegion(props: { readonly toasts: readonly WorkbookT
       offset={12}
       position="top-right"
       toastOptions={{
-        closeButtonAriaLabel: "Dismiss",
+        closeButtonAriaLabel: 'Dismiss',
       }}
       visibleToasts={4}
     />
-  );
+  )
 }

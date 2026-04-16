@@ -17,14 +17,14 @@ built from packed runtime tarballs.
 ## Usage
 
 ```ts
-import { WorkPaper } from "@bilig/headless";
+import { WorkPaper } from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
-  Sheet1: [[1, "=A1*2"]],
-});
+  Sheet1: [[1, '=A1*2']],
+})
 
-const sheetId = workbook.getSheetId("Sheet1")!;
-const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 });
+const sheetId = workbook.getSheetId('Sheet1')!
+const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 })
 ```
 
 ## Supported Workflows

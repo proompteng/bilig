@@ -1,44 +1,43 @@
-import { isHandledGridKey } from "./gridKeyboard.js";
-import { getNormalizedGridKeyboardKey } from "./gridClipboardKeyboardController.js";
+import { isHandledGridKey } from './gridKeyboard.js'
+import { getNormalizedGridKeyboardKey } from './gridClipboardKeyboardController.js'
 
 interface KeyboardEventLike {
-  altKey: boolean;
-  code: string;
-  ctrlKey: boolean;
-  defaultPrevented: boolean;
-  key: string;
-  metaKey: boolean;
-  shiftKey: boolean;
-  preventDefault(): void;
-  stopPropagation(): void;
+  altKey: boolean
+  code: string
+  ctrlKey: boolean
+  defaultPrevented: boolean
+  key: string
+  metaKey: boolean
+  shiftKey: boolean
+  preventDefault(): void
+  stopPropagation(): void
 }
 
 interface HandledGridKeyEvent {
-  altKey: boolean;
-  cancel(): void;
-  ctrlKey: boolean;
-  key: string;
-  metaKey: boolean;
-  preventDefault(): void;
-  shiftKey: boolean;
+  altKey: boolean
+  cancel(): void
+  ctrlKey: boolean
+  key: string
+  metaKey: boolean
+  preventDefault(): void
+  shiftKey: boolean
 }
 
 export function handleWorkbookGridKeyDownCapture(input: {
-  event: KeyboardEventLike;
-  handleGridKey: (event: HandledGridKeyEvent) => void;
-  openHeaderContextMenuFromKeyboard: () => boolean;
-  resetPointerInteraction: () => void;
+  event: KeyboardEventLike
+  handleGridKey: (event: HandledGridKeyEvent) => void
+  openHeaderContextMenuFromKeyboard: () => boolean
+  resetPointerInteraction: () => void
 }): void {
-  const { event, handleGridKey, openHeaderContextMenuFromKeyboard, resetPointerInteraction } =
-    input;
-  const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
-  resetPointerInteraction();
-  if (normalizedKey === "ContextMenu" || (event.shiftKey && normalizedKey === "F10")) {
+  const { event, handleGridKey, openHeaderContextMenuFromKeyboard, resetPointerInteraction } = input
+  const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code)
+  resetPointerInteraction()
+  if (normalizedKey === 'ContextMenu' || (event.shiftKey && normalizedKey === 'F10')) {
     if (openHeaderContextMenuFromKeyboard()) {
-      event.preventDefault();
-      event.stopPropagation();
+      event.preventDefault()
+      event.stopPropagation()
     }
-    return;
+    return
   }
 
   if (
@@ -49,7 +48,7 @@ export function handleWorkbookGridKeyDownCapture(input: {
       metaKey: event.metaKey,
     })
   ) {
-    return;
+    return
   }
 
   handleGridKey({
@@ -60,8 +59,8 @@ export function handleWorkbookGridKeyDownCapture(input: {
     metaKey: event.metaKey,
     shiftKey: event.shiftKey,
     preventDefault: () => event.preventDefault(),
-  });
+  })
   if (event.defaultPrevented) {
-    event.stopPropagation();
+    event.stopPropagation()
   }
 }

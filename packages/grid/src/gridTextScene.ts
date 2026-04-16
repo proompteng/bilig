@@ -1,66 +1,66 @@
-import { ValueTag, type CellSnapshot } from "@bilig/protocol";
-import type { GridEngineLike } from "./grid-engine.js";
-import { getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
-import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from "./gridMetrics.js";
-import { indexToColumn } from "@bilig/formula";
-import type { HeaderSelection } from "./gridPointer.js";
-import type { Item, Rectangle } from "./gridTypes.js";
-import { collectVisibleColumnBounds, collectVisibleRowBounds } from "./visibleGridAxes.js";
+import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import type { GridEngineLike } from './grid-engine.js'
+import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
+import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from './gridMetrics.js'
+import { indexToColumn } from '@bilig/formula'
+import type { HeaderSelection } from './gridPointer.js'
+import type { Item, Rectangle } from './gridTypes.js'
+import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGridAxes.js'
 
 export interface GridTextItem {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly clipInsetTop: number;
-  readonly clipInsetRight: number;
-  readonly clipInsetBottom: number;
-  readonly clipInsetLeft: number;
-  readonly text: string;
-  readonly align: "left" | "center" | "right";
-  readonly wrap: boolean;
-  readonly color: string;
-  readonly font: string;
-  readonly fontSize: number;
-  readonly underline: boolean;
-  readonly strike: boolean;
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly clipInsetTop: number
+  readonly clipInsetRight: number
+  readonly clipInsetBottom: number
+  readonly clipInsetLeft: number
+  readonly text: string
+  readonly align: 'left' | 'center' | 'right'
+  readonly wrap: boolean
+  readonly color: string
+  readonly font: string
+  readonly fontSize: number
+  readonly underline: boolean
+  readonly strike: boolean
 }
 
 export interface GridTextScene {
-  readonly items: readonly GridTextItem[];
+  readonly items: readonly GridTextItem[]
 }
 
 interface BuildGridTextSceneOptions {
-  readonly engine: GridEngineLike;
-  readonly sheetName: string;
-  readonly visibleItems: readonly Item[];
+  readonly engine: GridEngineLike
+  readonly sheetName: string
+  readonly visibleItems: readonly Item[]
   readonly visibleRegion: {
-    readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
-    readonly tx: number;
-    readonly ty: number;
-    readonly freezeRows?: number;
-    readonly freezeCols?: number;
-  };
-  readonly gridMetrics: GridMetrics;
-  readonly columnWidths: Readonly<Record<number, number>>;
-  readonly rowHeights?: Readonly<Record<number, number>>;
-  readonly editingCell?: Item | null;
-  readonly selectedCell: Item;
-  readonly selectedCellSnapshot?: CellSnapshot | null;
-  readonly selectionRange?: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
-  readonly hoveredHeader?: HeaderSelection | null;
-  readonly activeHeaderDrag?: HeaderSelection | null;
-  readonly resizeGuideColumn?: number | null;
-  readonly hostBounds: Pick<DOMRect, "left" | "top" | "width" | "height">;
-  readonly getCellBounds: (col: number, row: number) => Rectangle | undefined;
+    readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+    readonly tx: number
+    readonly ty: number
+    readonly freezeRows?: number
+    readonly freezeCols?: number
+  }
+  readonly gridMetrics: GridMetrics
+  readonly columnWidths: Readonly<Record<number, number>>
+  readonly rowHeights?: Readonly<Record<number, number>>
+  readonly editingCell?: Item | null
+  readonly selectedCell: Item
+  readonly selectedCellSnapshot?: CellSnapshot | null
+  readonly selectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
+  readonly hoveredHeader?: HeaderSelection | null
+  readonly activeHeaderDrag?: HeaderSelection | null
+  readonly resizeGuideColumn?: number | null
+  readonly hostBounds: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  readonly getCellBounds: (col: number, row: number) => Rectangle | undefined
 }
 
-const HEADER_TEXT_COLOR = "#5f6368";
-const HEADER_HOVER_TEXT_COLOR = "#3c4043";
-const HEADER_SELECTED_TEXT_COLOR = "#1f7a43";
-const HEADER_DRAG_ANCHOR_TEXT_COLOR = "#176239";
-const HEADER_RESIZE_TEXT_COLOR = "#176239";
-const HEADER_FONT = `500 11px ${getResolvedCellFontFamily()}`;
+const HEADER_TEXT_COLOR = '#5f6368'
+const HEADER_HOVER_TEXT_COLOR = '#3c4043'
+const HEADER_SELECTED_TEXT_COLOR = '#1f7a43'
+const HEADER_DRAG_ANCHOR_TEXT_COLOR = '#176239'
+const HEADER_RESIZE_TEXT_COLOR = '#176239'
+const HEADER_FONT = `500 11px ${getResolvedCellFontFamily()}`
 
 export function buildGridTextScene({
   engine,
@@ -80,7 +80,7 @@ export function buildGridTextScene({
   hostBounds,
   getCellBounds,
 }: BuildGridTextSceneOptions): GridTextScene {
-  const items: GridTextItem[] = [];
+  const items: GridTextItem[] = []
 
   pushHeaderTextItems({
     columnWidths,
@@ -95,11 +95,11 @@ export function buildGridTextScene({
     visibleRegion,
     visibleItems,
     getCellBounds,
-  });
+  })
 
   for (const [col, row] of visibleItems) {
     if (editingCell && editingCell[0] === col && editingCell[1] === row) {
-      continue;
+      continue
     }
 
     const item = buildCellTextItem({
@@ -110,19 +110,16 @@ export function buildGridTextScene({
       hostBounds,
       getCellBounds,
       visibleColumnEnd: Math.max(...visibleItems.map(([visibleCol]) => visibleCol)),
-      selectedAddress:
-        col === selectedCell[0] && row === selectedCell[1]
-          ? `${indexToColumn(col)}${row + 1}`
-          : null,
+      selectedAddress: col === selectedCell[0] && row === selectedCell[1] ? `${indexToColumn(col)}${row + 1}` : null,
       snapshotOverride: selectedCellSnapshot,
       gridMetrics,
-    });
+    })
     if (item) {
-      items.push(item);
+      items.push(item)
     }
   }
 
-  return { items };
+  return { items }
 }
 
 function buildCellTextItem({
@@ -137,37 +134,37 @@ function buildCellTextItem({
   snapshotOverride = null,
   gridMetrics,
 }: {
-  engine: GridEngineLike;
-  sheetName: string;
-  col: number;
-  row: number;
-  hostBounds: Pick<DOMRect, "left" | "top" | "width" | "height">;
-  getCellBounds: (col: number, row: number) => Rectangle | undefined;
-  visibleColumnEnd: number;
-  selectedAddress?: string | null;
-  snapshotOverride?: CellSnapshot | null;
-  gridMetrics: GridMetrics;
+  engine: GridEngineLike
+  sheetName: string
+  col: number
+  row: number
+  hostBounds: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  getCellBounds: (col: number, row: number) => Rectangle | undefined
+  visibleColumnEnd: number
+  selectedAddress?: string | null
+  snapshotOverride?: CellSnapshot | null
+  gridMetrics: GridMetrics
 }): GridTextItem | null {
-  const bounds = getCellBounds(col, row);
+  const bounds = getCellBounds(col, row)
   if (!bounds) {
-    return null;
+    return null
   }
 
-  const address = `${indexToColumn(col)}${row + 1}`;
+  const address = `${indexToColumn(col)}${row + 1}`
   const snapshot = resolveCellTextSnapshot({
     address,
     engine,
     sheetName,
     selectedAddress,
     snapshotOverride,
-  });
+  })
   if (snapshot.value.tag === ValueTag.Boolean) {
-    return null;
+    return null
   }
 
-  const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId));
+  const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId))
   if (renderCell.displayText.length === 0) {
-    return null;
+    return null
   }
 
   const renderBounds = resolveTextRenderBounds({
@@ -179,14 +176,14 @@ function buildCellTextItem({
     visibleColumnEnd,
     getCellBounds,
     renderCell,
-  });
+  })
 
   const localBounds = {
     x: renderBounds.x - hostBounds.left,
     y: renderBounds.y - hostBounds.top,
     width: renderBounds.width,
     height: renderBounds.height,
-  };
+  }
 
   return {
     ...localBounds,
@@ -207,20 +204,20 @@ function buildCellTextItem({
     fontSize: renderCell.fontSize,
     underline: renderCell.underline,
     strike: false,
-  };
+  }
 }
 
 function resolveClipInsets(options: {
-  bounds: Rectangle;
-  clipRect: Rectangle;
-}): Pick<GridTextItem, "clipInsetTop" | "clipInsetRight" | "clipInsetBottom" | "clipInsetLeft"> {
-  const { bounds, clipRect } = options;
+  bounds: Rectangle
+  clipRect: Rectangle
+}): Pick<GridTextItem, 'clipInsetTop' | 'clipInsetRight' | 'clipInsetBottom' | 'clipInsetLeft'> {
+  const { bounds, clipRect } = options
   return {
     clipInsetTop: Math.max(0, clipRect.y - bounds.y),
     clipInsetRight: Math.max(0, bounds.x + bounds.width - (clipRect.x + clipRect.width)),
     clipInsetBottom: Math.max(0, bounds.y + bounds.height - (clipRect.y + clipRect.height)),
     clipInsetLeft: Math.max(0, clipRect.x - bounds.x),
-  };
+  }
 }
 
 function resolveCellTextSnapshot({
@@ -230,103 +227,89 @@ function resolveCellTextSnapshot({
   selectedAddress,
   snapshotOverride,
 }: {
-  address: string;
-  engine: GridEngineLike;
-  sheetName: string;
-  selectedAddress: string | null;
-  snapshotOverride: CellSnapshot | null;
+  address: string
+  engine: GridEngineLike
+  sheetName: string
+  selectedAddress: string | null
+  snapshotOverride: CellSnapshot | null
 }): CellSnapshot {
-  const engineSnapshot = engine.getCell(sheetName, address);
+  const engineSnapshot = engine.getCell(sheetName, address)
   if (!snapshotOverride || selectedAddress !== address || snapshotOverride.address !== address) {
-    return engineSnapshot;
+    return engineSnapshot
   }
 
-  const engineRenderCell = snapshotToRenderCell(
-    engineSnapshot,
-    engine.getCellStyle(engineSnapshot.styleId),
-  );
-  const overrideRenderCell = snapshotToRenderCell(
-    snapshotOverride,
-    engine.getCellStyle(snapshotOverride.styleId),
-  );
+  const engineRenderCell = snapshotToRenderCell(engineSnapshot, engine.getCellStyle(engineSnapshot.styleId))
+  const overrideRenderCell = snapshotToRenderCell(snapshotOverride, engine.getCellStyle(snapshotOverride.styleId))
 
   if (engineRenderCell.displayText.length > 0 && overrideRenderCell.displayText.length === 0) {
-    return engineSnapshot;
+    return engineSnapshot
   }
   if (overrideRenderCell.displayText.length > 0 && engineRenderCell.displayText.length === 0) {
-    return snapshotOverride;
+    return snapshotOverride
   }
 
-  return snapshotOverride;
+  return snapshotOverride
 }
 
 function resolveTextRenderBounds(options: {
-  engine: GridEngineLike;
-  sheetName: string;
-  row: number;
-  col: number;
-  bounds: Rectangle;
-  visibleColumnEnd: number;
-  getCellBounds: (col: number, row: number) => Rectangle | undefined;
-  renderCell: ReturnType<typeof snapshotToRenderCell>;
+  engine: GridEngineLike
+  sheetName: string
+  row: number
+  col: number
+  bounds: Rectangle
+  visibleColumnEnd: number
+  getCellBounds: (col: number, row: number) => Rectangle | undefined
+  renderCell: ReturnType<typeof snapshotToRenderCell>
 }): Rectangle {
-  const { engine, sheetName, row, col, bounds, visibleColumnEnd, getCellBounds, renderCell } =
-    options;
+  const { engine, sheetName, row, col, bounds, visibleColumnEnd, getCellBounds, renderCell } = options
 
-  if (
-    renderCell.wrap ||
-    renderCell.align !== "left" ||
-    (renderCell.kind !== "string" && renderCell.kind !== "error")
-  ) {
-    return bounds;
+  if (renderCell.wrap || renderCell.align !== 'left' || (renderCell.kind !== 'string' && renderCell.kind !== 'error')) {
+    return bounds
   }
 
-  let spillWidth = bounds.width;
+  let spillWidth = bounds.width
   for (let spillCol = col + 1; spillCol <= visibleColumnEnd; spillCol += 1) {
-    const spillBounds = getCellBounds(spillCol, row);
+    const spillBounds = getCellBounds(spillCol, row)
     if (!spillBounds) {
-      break;
+      break
     }
-    const spillSnapshot = engine.getCell(sheetName, `${indexToColumn(spillCol)}${row + 1}`);
-    const spillRenderCell = snapshotToRenderCell(
-      spillSnapshot,
-      engine.getCellStyle(spillSnapshot.styleId),
-    );
+    const spillSnapshot = engine.getCell(sheetName, `${indexToColumn(spillCol)}${row + 1}`)
+    const spillRenderCell = snapshotToRenderCell(spillSnapshot, engine.getCellStyle(spillSnapshot.styleId))
     if (spillRenderCell.displayText.length > 0) {
-      break;
+      break
     }
-    spillWidth = spillBounds.x + spillBounds.width - bounds.x;
+    spillWidth = spillBounds.x + spillBounds.width - bounds.x
   }
 
   if (spillWidth === bounds.width) {
-    return bounds;
+    return bounds
   }
 
   return {
     ...bounds,
     width: spillWidth,
-  };
+  }
 }
 
 function pushHeaderTextItems(options: {
-  columnWidths: Readonly<Record<number, number>>;
-  gridMetrics: GridMetrics;
-  items: GridTextItem[];
-  rowHeights: Readonly<Record<number, number>>;
-  selectedCell: Item;
-  selectionRange: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
-  hoveredHeader: HeaderSelection | null;
-  activeHeaderDrag: HeaderSelection | null;
-  resizeGuideColumn: number | null;
+  columnWidths: Readonly<Record<number, number>>
+  gridMetrics: GridMetrics
+  items: GridTextItem[]
+  rowHeights: Readonly<Record<number, number>>
+  selectedCell: Item
+  selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
+  hoveredHeader: HeaderSelection | null
+  activeHeaderDrag: HeaderSelection | null
+  resizeGuideColumn: number | null
   visibleRegion: {
-    readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
-    readonly tx: number;
-    readonly ty: number;
-    readonly freezeRows?: number;
-    readonly freezeCols?: number;
-  };
-  visibleItems: readonly Item[];
-  getCellBounds: (col: number, row: number) => Rectangle | undefined;
+    readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+    readonly tx: number
+    readonly ty: number
+    readonly freezeRows?: number
+    readonly freezeCols?: number
+  }
+  visibleItems: readonly Item[]
+  getCellBounds: (col: number, row: number) => Rectangle | undefined
 }) {
   const {
     columnWidths,
@@ -341,17 +324,17 @@ function pushHeaderTextItems(options: {
     visibleRegion,
     visibleItems,
     getCellBounds,
-  } = options;
+  } = options
   const selectedColumns = resolveSelectionRange(
     selectionRange?.x ?? selectedCell[0],
     selectionRange ? selectionRange.x + selectionRange.width - 1 : selectedCell[0],
-  );
+  )
   const selectedRows = resolveSelectionRange(
     selectionRange?.y ?? selectedCell[1],
     selectionRange ? selectionRange.y + selectionRange.height - 1 : selectedCell[1],
-  );
+  )
 
-  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0;
+  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
   const visibleColumns = hasFrozenAxes
     ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
     : getVisibleColumnBounds(
@@ -360,7 +343,7 @@ function pushHeaderTextItems(options: {
         Number.MAX_SAFE_INTEGER,
         columnWidths,
         gridMetrics.columnWidth,
-      );
+      )
   for (const column of visibleColumns) {
     items.push({
       x: column.left,
@@ -372,21 +355,21 @@ function pushHeaderTextItems(options: {
       clipInsetBottom: 0,
       clipInsetLeft: Math.max(0, gridMetrics.rowMarkerWidth - column.left),
       text: indexToColumn(column.index),
-      align: "center",
+      align: 'center',
       wrap: false,
       color: resolveHeaderTextColor({
         activeHeaderDrag,
         hoveredHeader,
         index: column.index,
         isSelected: column.index >= selectedColumns.start && column.index <= selectedColumns.end,
-        kind: "column",
+        kind: 'column',
         resizeGuideColumn,
       }),
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
   }
 
   const visibleRows = hasFrozenAxes
@@ -397,7 +380,7 @@ function pushHeaderTextItems(options: {
         Number.MAX_SAFE_INTEGER,
         rowHeights,
         gridMetrics.rowHeight,
-      );
+      )
   for (const row of visibleRows) {
     items.push({
       x: 0,
@@ -409,48 +392,48 @@ function pushHeaderTextItems(options: {
       clipInsetBottom: 0,
       clipInsetLeft: 0,
       text: String(row.index + 1),
-      align: "right",
+      align: 'right',
       wrap: false,
       color: resolveHeaderTextColor({
         activeHeaderDrag,
         hoveredHeader,
         index: row.index,
         isSelected: row.index >= selectedRows.start && row.index <= selectedRows.end,
-        kind: "row",
+        kind: 'row',
         resizeGuideColumn,
       }),
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
   }
 }
 
 function resolveSelectionRange(start: number, end: number): { start: number; end: number } {
-  return { start, end };
+  return { start, end }
 }
 
 function resolveHeaderTextColor(options: {
-  activeHeaderDrag: HeaderSelection | null;
-  hoveredHeader: HeaderSelection | null;
-  index: number;
-  isSelected: boolean;
-  kind: HeaderSelection["kind"];
-  resizeGuideColumn: number | null;
+  activeHeaderDrag: HeaderSelection | null
+  hoveredHeader: HeaderSelection | null
+  index: number
+  isSelected: boolean
+  kind: HeaderSelection['kind']
+  resizeGuideColumn: number | null
 }): string {
-  const { activeHeaderDrag, hoveredHeader, index, isSelected, kind, resizeGuideColumn } = options;
-  if (kind === "column" && resizeGuideColumn === index) {
-    return HEADER_RESIZE_TEXT_COLOR;
+  const { activeHeaderDrag, hoveredHeader, index, isSelected, kind, resizeGuideColumn } = options
+  if (kind === 'column' && resizeGuideColumn === index) {
+    return HEADER_RESIZE_TEXT_COLOR
   }
   if (isSelected) {
     if (activeHeaderDrag?.kind === kind && activeHeaderDrag.index === index) {
-      return HEADER_DRAG_ANCHOR_TEXT_COLOR;
+      return HEADER_DRAG_ANCHOR_TEXT_COLOR
     }
-    return HEADER_SELECTED_TEXT_COLOR;
+    return HEADER_SELECTED_TEXT_COLOR
   }
   if (hoveredHeader?.kind === kind && hoveredHeader.index === index) {
-    return HEADER_HOVER_TEXT_COLOR;
+    return HEADER_HOVER_TEXT_COLOR
   }
-  return HEADER_TEXT_COLOR;
+  return HEADER_TEXT_COLOR
 }

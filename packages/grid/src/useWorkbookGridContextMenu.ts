@@ -1,41 +1,29 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
-import { formatAddress } from "@bilig/formula";
-import { createColumnSliceSelection, createRowSliceSelection } from "./gridSelection.js";
-import type { HeaderSelection, VisibleRegionState } from "./gridPointer.js";
-import type { Item, GridSelection } from "./gridTypes.js";
-import type { WorkbookGridContextMenuState } from "./WorkbookGridContextMenu.js";
-import type { WorkbookGridContextMenuTarget } from "./workbookGridContextMenuTarget.js";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { formatAddress } from '@bilig/formula'
+import { createColumnSliceSelection, createRowSliceSelection } from './gridSelection.js'
+import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
+import type { Item, GridSelection } from './gridTypes.js'
+import type { WorkbookGridContextMenuState } from './WorkbookGridContextMenu.js'
+import type { WorkbookGridContextMenuTarget } from './workbookGridContextMenuTarget.js'
 
 export function useWorkbookGridContextMenu(input: {
-  focusGrid(this: void): void;
-  hiddenColumnsByIndex?: Readonly<Record<number, true>> | undefined;
-  hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined;
-  isEditingCell: boolean;
-  onCommitEdit(this: void): void;
-  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined;
-  onDeleteRows?: ((startRow: number, count: number) => void) | undefined;
-  onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
-  onInsertRows?: ((startRow: number, count: number) => void) | undefined;
-  onSelect(this: void, addr: string): void;
-  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined;
-  onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
-  onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
-  resolveHeaderSelectionAtPointer(
-    this: void,
-    clientX: number,
-    clientY: number,
-    region?: VisibleRegionState,
-  ): HeaderSelection | null;
-  selectedCell: Item;
-  setGridSelection(this: void, selection: GridSelection): void;
-  visibleRegion: VisibleRegionState;
+  focusGrid(this: void): void
+  hiddenColumnsByIndex?: Readonly<Record<number, true>> | undefined
+  hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined
+  isEditingCell: boolean
+  onCommitEdit(this: void): void
+  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined
+  onDeleteRows?: ((startRow: number, count: number) => void) | undefined
+  onInsertColumns?: ((startCol: number, count: number) => void) | undefined
+  onInsertRows?: ((startRow: number, count: number) => void) | undefined
+  onSelect(this: void, addr: string): void
+  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined
+  onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined
+  onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined
+  resolveHeaderSelectionAtPointer(this: void, clientX: number, clientY: number, region?: VisibleRegionState): HeaderSelection | null
+  selectedCell: Item
+  setGridSelection(this: void, selection: GridSelection): void
+  visibleRegion: VisibleRegionState
 }) {
   const {
     focusGrid,
@@ -55,159 +43,143 @@ export function useWorkbookGridContextMenu(input: {
     selectedCell,
     setGridSelection,
     visibleRegion,
-  } = input;
-  const [contextMenuState, setContextMenuState] = useState<WorkbookGridContextMenuState | null>(
-    null,
-  );
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  } = input
+  const [contextMenuState, setContextMenuState] = useState<WorkbookGridContextMenuState | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
   const isTargetHidden = useCallback(
-    (target: { kind: "row" | "column"; index: number }) =>
-      target.kind === "row"
-        ? hiddenRowsByIndex?.[target.index] === true
-        : hiddenColumnsByIndex?.[target.index] === true,
+    (target: { kind: 'row' | 'column'; index: number }) =>
+      target.kind === 'row' ? hiddenRowsByIndex?.[target.index] === true : hiddenColumnsByIndex?.[target.index] === true,
     [hiddenColumnsByIndex, hiddenRowsByIndex],
-  );
+  )
 
   const closeContextMenu = useCallback(() => {
-    setContextMenuState(null);
-    focusGrid();
-  }, [focusGrid]);
+    setContextMenuState(null)
+    focusGrid()
+  }, [focusGrid])
 
   useEffect(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
-    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
-    firstMenuItem?.focus();
-  }, [contextMenuState]);
+    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    firstMenuItem?.focus()
+  }, [contextMenuState])
 
   useEffect(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (
-        menuRef.current &&
-        event.target instanceof Node &&
-        menuRef.current.contains(event.target)
-      ) {
-        return;
+      if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) {
+        return
       }
-      closeContextMenu();
-    };
+      closeContextMenu()
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeContextMenu();
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeContextMenu()
       }
-    };
+    }
 
-    window.addEventListener("pointerdown", handlePointerDown, true);
-    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener('pointerdown', handlePointerDown, true)
+    window.addEventListener('keydown', handleKeyDown, true)
     return () => {
-      window.removeEventListener("pointerdown", handlePointerDown, true);
-      window.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [closeContextMenu, contextMenuState]);
+      window.removeEventListener('pointerdown', handlePointerDown, true)
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [closeContextMenu, contextMenuState])
 
   const toggleTargetHidden = useCallback(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
-    if (contextMenuState.target.kind === "row") {
-      onSetRowHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden);
+    if (contextMenuState.target.kind === 'row') {
+      onSetRowHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden)
     } else {
-      onSetColumnHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden);
+      onSetColumnHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden)
     }
-    closeContextMenu();
-  }, [closeContextMenu, contextMenuState, onSetColumnHidden, onSetRowHidden]);
+    closeContextMenu()
+  }, [closeContextMenu, contextMenuState, onSetColumnHidden, onSetRowHidden])
 
   const insertBeforeTarget = useCallback(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
-    if (contextMenuState.target.kind === "row") {
-      onInsertRows?.(contextMenuState.target.index, 1);
+    if (contextMenuState.target.kind === 'row') {
+      onInsertRows?.(contextMenuState.target.index, 1)
     } else {
-      onInsertColumns?.(contextMenuState.target.index, 1);
+      onInsertColumns?.(contextMenuState.target.index, 1)
     }
-    closeContextMenu();
-  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows]);
+    closeContextMenu()
+  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows])
 
   const insertAfterTarget = useCallback(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
-    if (contextMenuState.target.kind === "row") {
-      onInsertRows?.(contextMenuState.target.index + 1, 1);
+    if (contextMenuState.target.kind === 'row') {
+      onInsertRows?.(contextMenuState.target.index + 1, 1)
     } else {
-      onInsertColumns?.(contextMenuState.target.index + 1, 1);
+      onInsertColumns?.(contextMenuState.target.index + 1, 1)
     }
-    closeContextMenu();
-  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows]);
+    closeContextMenu()
+  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows])
 
   const deleteTarget = useCallback(() => {
     if (!contextMenuState) {
-      return;
+      return
     }
-    if (contextMenuState.target.kind === "row") {
-      onDeleteRows?.(contextMenuState.target.index, 1);
+    if (contextMenuState.target.kind === 'row') {
+      onDeleteRows?.(contextMenuState.target.index, 1)
     } else {
-      onDeleteColumns?.(contextMenuState.target.index, 1);
+      onDeleteColumns?.(contextMenuState.target.index, 1)
     }
-    closeContextMenu();
-  }, [closeContextMenu, contextMenuState, onDeleteColumns, onDeleteRows]);
+    closeContextMenu()
+  }, [closeContextMenu, contextMenuState, onDeleteColumns, onDeleteRows])
 
   const freezeTarget = useCallback(() => {
     if (!contextMenuState || !onSetFreezePane) {
-      return;
+      return
     }
-    if (contextMenuState.target.kind === "row") {
-      onSetFreezePane(contextMenuState.target.index + 1, visibleRegion.freezeCols ?? 0);
+    if (contextMenuState.target.kind === 'row') {
+      onSetFreezePane(contextMenuState.target.index + 1, visibleRegion.freezeCols ?? 0)
     } else {
-      onSetFreezePane(visibleRegion.freezeRows ?? 0, contextMenuState.target.index + 1);
+      onSetFreezePane(visibleRegion.freezeRows ?? 0, contextMenuState.target.index + 1)
     }
-    closeContextMenu();
-  }, [
-    closeContextMenu,
-    contextMenuState,
-    onSetFreezePane,
-    visibleRegion.freezeCols,
-    visibleRegion.freezeRows,
-  ]);
+    closeContextMenu()
+  }, [closeContextMenu, contextMenuState, onSetFreezePane, visibleRegion.freezeCols, visibleRegion.freezeRows])
 
   const unfreezePanes = useCallback(() => {
     if (!onSetFreezePane) {
-      return;
+      return
     }
-    onSetFreezePane(0, 0);
-    closeContextMenu();
-  }, [closeContextMenu, onSetFreezePane]);
+    onSetFreezePane(0, 0)
+    closeContextMenu()
+  }, [closeContextMenu, onSetFreezePane])
 
   const openContextMenuForTarget = useCallback(
     ({ target, x, y }: WorkbookGridContextMenuTarget): boolean => {
       const canOpen =
-        (target.kind === "row" &&
-          (onSetRowHidden || onInsertRows || onDeleteRows || onSetFreezePane)) ||
-        (target.kind === "column" &&
-          (onSetColumnHidden || onInsertColumns || onDeleteColumns || onSetFreezePane));
+        (target.kind === 'row' && (onSetRowHidden || onInsertRows || onDeleteRows || onSetFreezePane)) ||
+        (target.kind === 'column' && (onSetColumnHidden || onInsertColumns || onDeleteColumns || onSetFreezePane))
       if (!canOpen) {
-        return false;
+        return false
       }
 
       if (isEditingCell) {
-        onCommitEdit();
+        onCommitEdit()
       }
-      focusGrid();
-      if (target.kind === "row") {
-        setGridSelection(createRowSliceSelection(selectedCell[0], target.index, target.index));
-        onSelect(formatAddress(target.index, selectedCell[0]));
+      focusGrid()
+      if (target.kind === 'row') {
+        setGridSelection(createRowSliceSelection(selectedCell[0], target.index, target.index))
+        onSelect(formatAddress(target.index, selectedCell[0]))
       } else {
-        setGridSelection(createColumnSliceSelection(target.index, target.index, selectedCell[1]));
-        onSelect(formatAddress(selectedCell[1], target.index));
+        setGridSelection(createColumnSliceSelection(target.index, target.index, selectedCell[1]))
+        onSelect(formatAddress(selectedCell[1], target.index))
       }
       setContextMenuState({
         x,
@@ -216,8 +188,8 @@ export function useWorkbookGridContextMenu(input: {
           ...target,
           hidden: isTargetHidden(target),
         },
-      });
-      return true;
+      })
+      return true
     },
     [
       focusGrid,
@@ -235,18 +207,14 @@ export function useWorkbookGridContextMenu(input: {
       selectedCell,
       setGridSelection,
     ],
-  );
+  )
 
   const handleHostContextMenuCapture = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      const headerSelection = resolveHeaderSelectionAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-      );
+      const headerSelection = resolveHeaderSelectionAtPointer(event.clientX, event.clientY, visibleRegion)
       if (!headerSelection) {
-        closeContextMenu();
-        return;
+        closeContextMenu()
+        return
       }
       if (
         !openContextMenuForTarget({
@@ -255,14 +223,14 @@ export function useWorkbookGridContextMenu(input: {
           y: event.clientY,
         })
       ) {
-        return;
+        return
       }
 
-      event.preventDefault();
-      event.stopPropagation();
+      event.preventDefault()
+      event.stopPropagation()
     },
     [closeContextMenu, openContextMenuForTarget, resolveHeaderSelectionAtPointer, visibleRegion],
-  );
+  )
 
   return useMemo(
     () => ({
@@ -293,5 +261,5 @@ export function useWorkbookGridContextMenu(input: {
       visibleRegion.freezeCols,
       visibleRegion.freezeRows,
     ],
-  );
+  )
 }

@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Button } from "@base-ui/react/button";
-import { Tabs } from "@base-ui/react/tabs";
-import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
-import type { WorkerRuntimeSelection } from "./runtime-session.js";
-import {
-  workbookHeaderActionButtonClass,
-  workbookHeaderCountClass,
-} from "./workbook-header-controls.js";
-import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { Button } from '@base-ui/react/button'
+import { Tabs } from '@base-ui/react/tabs'
+import type { WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { WorkerRuntimeSelection } from './runtime-session.js'
+import { workbookHeaderActionButtonClass, workbookHeaderCountClass } from './workbook-header-controls.js'
+import { WorkbookPresenceBar } from './WorkbookPresenceBar.js'
 import {
   panelCountClass,
   panelIndicatorClass,
@@ -16,35 +13,35 @@ import {
   panelRootClass,
   panelTabClass,
   type WorkbookSidePanelTabDefinition,
-} from "./WorkbookSidePanelTabs.js";
-import { cn } from "./cn.js";
-import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
-import { useWorkbookPresence } from "./use-workbook-presence.js";
-import { useWorkbookShellLayout } from "./use-workbook-shell-layout.js";
+} from './WorkbookSidePanelTabs.js'
+import { cn } from './cn.js'
+import { useWorkbookAgentPane } from './use-workbook-agent-pane.js'
+import { useWorkbookPresence } from './use-workbook-presence.js'
+import { useWorkbookShellLayout } from './use-workbook-shell-layout.js'
 
-type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]["zero"];
+type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]['zero']
 
-type WorkbookAgentContextGetter = Parameters<typeof useWorkbookAgentPane>[0]["getContext"];
+type WorkbookAgentContextGetter = Parameters<typeof useWorkbookAgentPane>[0]['getContext']
 type WorkbookAgentPreviewCommandBundle = (
   bundle: WorkbookAgentCommandBundle,
-) => ReturnType<Parameters<typeof useWorkbookAgentPane>[0]["previewCommandBundle"]>;
+) => ReturnType<Parameters<typeof useWorkbookAgentPane>[0]['previewCommandBundle']>
 
 export function useWorkbookAppPanels(input: {
-  documentId: string;
-  currentUserId: string;
-  presenceClientId: string;
-  replicaId: string;
-  selection: WorkerRuntimeSelection;
-  sheetNames: readonly string[];
-  zero: WorkbookPanelsZeroSource;
-  runtimeReady: boolean;
-  zeroConfigured: boolean;
-  remoteSyncAvailable: boolean;
-  changeCount: number;
-  changesPanel: ReactNode;
-  selectAddress: (sheetName: string, address: string) => void;
-  getAgentContext: WorkbookAgentContextGetter;
-  previewAgentCommandBundle: WorkbookAgentPreviewCommandBundle;
+  documentId: string
+  currentUserId: string
+  presenceClientId: string
+  replicaId: string
+  selection: WorkerRuntimeSelection
+  sheetNames: readonly string[]
+  zero: WorkbookPanelsZeroSource
+  runtimeReady: boolean
+  zeroConfigured: boolean
+  remoteSyncAvailable: boolean
+  changeCount: number
+  changesPanel: ReactNode
+  selectAddress: (sheetName: string, address: string) => void
+  getAgentContext: WorkbookAgentContextGetter
+  previewAgentCommandBundle: WorkbookAgentPreviewCommandBundle
 }) {
   const {
     changeCount,
@@ -62,7 +59,7 @@ export function useWorkbookAppPanels(input: {
     sheetNames,
     zero,
     zeroConfigured,
-  } = input;
+  } = input
 
   const collaborators = useWorkbookPresence({
     documentId,
@@ -73,16 +70,9 @@ export function useWorkbookAppPanels(input: {
     sheetNames,
     zero,
     enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
-  });
+  })
 
-  const {
-    agentPanel,
-    agentError,
-    clearAgentError,
-    pendingCommandCount,
-    previewRanges,
-    startNewThread,
-  } = useWorkbookAgentPane({
+  const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges, startNewThread } = useWorkbookAgentPane({
     currentUserId,
     documentId,
     enabled: runtimeReady,
@@ -90,58 +80,48 @@ export function useWorkbookAppPanels(input: {
     previewCommandBundle: previewAgentCommandBundle,
     zero,
     zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
-  });
+  })
 
   const sidePanelTabs = useMemo<readonly WorkbookSidePanelTabDefinition[]>(
     () => [
       {
-        value: "assistant",
-        label: "Assistant",
+        value: 'assistant',
+        label: 'Assistant',
         count: pendingCommandCount > 0 ? pendingCommandCount : undefined,
         panel: agentPanel,
       },
       {
-        value: "changes",
-        label: "Changes",
+        value: 'changes',
+        label: 'Changes',
         count: changeCount > 0 ? changeCount : undefined,
         panel: changesPanel,
       },
     ],
     [agentPanel, changeCount, changesPanel, pendingCommandCount],
-  );
-  const visibleSidePanelTabs = useMemo(
-    () => sidePanelTabs.filter((tab) => tab.panel != null),
-    [sidePanelTabs],
-  );
-  const {
-    activeSidePanelTab,
-    isSidePanelOpen,
-    openSidePanel,
-    setActiveSidePanelTab,
-    setSidePanelWidth,
-    sidePanelWidth,
-    toggleSidePanel,
-  } = useWorkbookShellLayout({
-    documentId,
-    persistenceKey: `${documentId}:${currentUserId}`,
-    availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
-    defaultTab: null,
-  });
-  const sidePanelId = `workbook-side-panel-${documentId}`;
-  const previousPendingCommandCountRef = useRef(pendingCommandCount);
+  )
+  const visibleSidePanelTabs = useMemo(() => sidePanelTabs.filter((tab) => tab.panel != null), [sidePanelTabs])
+  const { activeSidePanelTab, isSidePanelOpen, openSidePanel, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth, toggleSidePanel } =
+    useWorkbookShellLayout({
+      documentId,
+      persistenceKey: `${documentId}:${currentUserId}`,
+      availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
+      defaultTab: null,
+    })
+  const sidePanelId = `workbook-side-panel-${documentId}`
+  const previousPendingCommandCountRef = useRef(pendingCommandCount)
 
   useEffect(() => {
-    const hadPendingCommands = previousPendingCommandCountRef.current > 0;
-    const hasPendingCommands = pendingCommandCount > 0;
-    previousPendingCommandCountRef.current = pendingCommandCount;
+    const hadPendingCommands = previousPendingCommandCountRef.current > 0
+    const hasPendingCommands = pendingCommandCount > 0
+    previousPendingCommandCountRef.current = pendingCommandCount
     if (!hasPendingCommands || hadPendingCommands) {
-      return;
+      return
     }
-    if (!visibleSidePanelTabs.some((tab) => tab.value === "assistant")) {
-      return;
+    if (!visibleSidePanelTabs.some((tab) => tab.value === 'assistant')) {
+      return
     }
-    openSidePanel("assistant");
-  }, [openSidePanel, pendingCommandCount, visibleSidePanelTabs]);
+    openSidePanel('assistant')
+  }, [openSidePanel, pendingCommandCount, visibleSidePanelTabs])
 
   const sidePanelToggleControls = useMemo(
     () => (
@@ -150,7 +130,7 @@ export function useWorkbookAppPanels(input: {
         data-testid="workbook-side-panel-toggle-group"
       >
         {visibleSidePanelTabs.map((tab) => {
-          const active = isSidePanelOpen && activeSidePanelTab === tab.value;
+          const active = isSidePanelOpen && activeSidePanelTab === tab.value
           return (
             <Button
               aria-controls={sidePanelId}
@@ -164,24 +144,22 @@ export function useWorkbookAppPanels(input: {
               key={tab.value}
               type="button"
               onClick={() => {
-                toggleSidePanel(tab.value);
+                toggleSidePanel(tab.value)
               }}
             >
               <span>{tab.label}</span>
-              {typeof tab.count === "number" ? (
-                <span className={workbookHeaderCountClass}>{String(Math.min(tab.count, 99))}</span>
-              ) : null}
+              {typeof tab.count === 'number' ? <span className={workbookHeaderCountClass}>{String(Math.min(tab.count, 99))}</span> : null}
             </Button>
-          );
+          )
         })}
       </div>
     ),
     [activeSidePanelTab, isSidePanelOpen, sidePanelId, toggleSidePanel, visibleSidePanelTabs],
-  );
+  )
 
   const toolbarTrailingContent = useMemo(() => {
     if (visibleSidePanelTabs.length === 0 && collaborators.length === 0) {
-      return null;
+      return null
     }
     return (
       <>
@@ -190,24 +168,22 @@ export function useWorkbookAppPanels(input: {
           <WorkbookPresenceBar
             collaborators={collaborators}
             onJump={(sheetName, address) => {
-              selectAddress(sheetName, address);
+              selectAddress(sheetName, address)
             }}
           />
         ) : null}
       </>
-    );
-  }, [collaborators, selectAddress, sidePanelToggleControls, visibleSidePanelTabs.length]);
+    )
+  }, [collaborators, selectAddress, sidePanelToggleControls, visibleSidePanelTabs.length])
 
   const sidePanel = useMemo(
     () =>
-      isSidePanelOpen &&
-      activeSidePanelTab &&
-      visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
+      isSidePanelOpen && activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
         <Tabs.Root
           className={panelRootClass()}
           value={activeSidePanelTab}
           onValueChange={(nextValue) => {
-            setActiveSidePanelTab(String(nextValue));
+            setActiveSidePanelTab(String(nextValue))
           }}
         >
           <Tabs.List aria-label="Workbook panels" className={panelListClass()}>
@@ -220,7 +196,7 @@ export function useWorkbookAppPanels(input: {
                   value={tab.value}
                 >
                   <span>{tab.label}</span>
-                  {typeof tab.count === "number" ? (
+                  {typeof tab.count === 'number' ? (
                     <span
                       className={cn(
                         panelCountClass({
@@ -235,10 +211,7 @@ export function useWorkbookAppPanels(input: {
               ))}
             </div>
             <Button
-              className={cn(
-                workbookHeaderActionButtonClass({ active: false }),
-                "ml-auto shrink-0 self-center",
-              )}
+              className={cn(workbookHeaderActionButtonClass({ active: false }), 'ml-auto shrink-0 self-center')}
               data-testid="workbook-agent-new-thread"
               type="button"
               onClick={startNewThread}
@@ -260,14 +233,8 @@ export function useWorkbookAppPanels(input: {
           ))}
         </Tabs.Root>
       ) : null,
-    [
-      activeSidePanelTab,
-      isSidePanelOpen,
-      setActiveSidePanelTab,
-      startNewThread,
-      visibleSidePanelTabs,
-    ],
-  );
+    [activeSidePanelTab, isSidePanelOpen, setActiveSidePanelTab, startNewThread, visibleSidePanelTabs],
+  )
 
   return {
     agentError,
@@ -280,5 +247,5 @@ export function useWorkbookAppPanels(input: {
     setSidePanelWidth,
     sidePanelWidth,
     toolbarTrailingContent,
-  };
+  }
 }

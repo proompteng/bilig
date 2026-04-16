@@ -1,73 +1,71 @@
-import { describe, expect, test } from "vitest";
-import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
-import { buildGridTextScene } from "../gridTextScene.js";
-import { getResolvedCellFontFamily } from "../gridCells.js";
-import type { GridEngineLike } from "../grid-engine.js";
-import { getGridMetrics } from "../gridMetrics.js";
+import { describe, expect, test } from 'vitest'
+import { ValueTag, type CellStyleRecord } from '@bilig/protocol'
+import { buildGridTextScene } from '../gridTextScene.js'
+import { getResolvedCellFontFamily } from '../gridCells.js'
+import type { GridEngineLike } from '../grid-engine.js'
+import { getGridMetrics } from '../gridMetrics.js'
 
 type TestCellValue =
   | { tag: ValueTag.Empty }
   | { tag: ValueTag.Number; value: number }
   | { tag: ValueTag.Boolean; value: boolean }
   | { tag: ValueTag.String; value: string; stringId?: number }
-  | { tag: ValueTag.Error; code: number };
+  | { tag: ValueTag.Error; code: number }
 
-function createCellSnapshot(value: TestCellValue, styleId: string | undefined = "style-1") {
+function createCellSnapshot(value: TestCellValue, styleId: string | undefined = 'style-1') {
   return {
-    sheetName: "Sheet1",
-    address: "A1",
-    input: "",
+    sheetName: 'Sheet1',
+    address: 'A1',
+    input: '',
     value,
     flags: 0,
     version: 0,
     ...(styleId ? { styleId } : {}),
-  };
+  }
 }
 
-type TestCellSnapshot = ReturnType<typeof createCellSnapshot>;
-const CELL_FONT_FAMILY = getResolvedCellFontFamily();
-const HEADER_FONT = `500 11px ${CELL_FONT_FAMILY}`;
+type TestCellSnapshot = ReturnType<typeof createCellSnapshot>
+const CELL_FONT_FAMILY = getResolvedCellFontFamily()
+const HEADER_FONT = `500 11px ${CELL_FONT_FAMILY}`
 
 function makeEngine(
   styles: Record<string, CellStyleRecord>,
   snapshots: TestCellSnapshot | Record<string, TestCellSnapshot> = createCellSnapshot({
     tag: ValueTag.String,
-    value: "hello",
+    value: 'hello',
   }),
 ): GridEngineLike {
   return {
     getCell: (_sheetName, address) =>
-      "address" in snapshots
-        ? snapshots
-        : (snapshots[address] ?? createCellSnapshot({ tag: ValueTag.Empty }, undefined)),
+      'address' in snapshots ? snapshots : (snapshots[address] ?? createCellSnapshot({ tag: ValueTag.Empty }, undefined)),
     getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
     subscribeCells: () => () => {},
     workbook: {
       getSheet: () => undefined,
     },
-  };
+  }
 }
 
-describe("gridTextScene", () => {
-  test("builds cell text items with resolved alignment and style", () => {
+describe('gridTextScene', () => {
+  test('builds cell text items with resolved alignment and style', () => {
     const engine = makeEngine({
-      "style-1": {
-        alignment: { horizontal: "right" },
-        font: { bold: true, color: "#ff0000", italic: true, size: 14 },
+      'style-1': {
+        alignment: { horizontal: 'right' },
+        font: { bold: true, color: '#ff0000', italic: true, size: 14 },
       },
-    });
+    })
 
     const scene = buildGridTextScene({
       engine,
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       selectedCell: [0, 0],
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[0, 0]],
       visibleRegion: { range: { x: 0, y: 0, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 100, top: 200, width: 300, height: 200 },
       getCellBounds: () => ({ x: 110, y: 220, width: 90, height: 22 }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 10,
@@ -78,30 +76,30 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 36,
-      text: "hello",
-      align: "right",
+      text: 'hello',
+      align: 'right',
       wrap: false,
-      color: "#ff0000",
+      color: '#ff0000',
       font: `italic 700 14px ${CELL_FONT_FAMILY}`,
       fontSize: 14,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("adds column headers and row markers with selected header emphasis", () => {
+  test('adds column headers and row markers with selected header emphasis', () => {
     const scene = buildGridTextScene({
       engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       selectedCell: [2, 3],
       selectionRange: { x: 2, y: 3, width: 1, height: 1 },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 3]],
       visibleRegion: { range: { x: 2, y: 3, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 90, width: 104, height: 22 }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 46,
@@ -112,15 +110,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "C",
-      align: "center",
+      text: 'C',
+      align: 'center',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 0,
       y: 24,
@@ -130,32 +128,32 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "4",
-      align: "right",
+      text: '4',
+      align: 'right',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("adds hovered and active-drag header text emphasis", () => {
+  test('adds hovered and active-drag header text emphasis', () => {
     const scene = buildGridTextScene({
       engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
-      activeHeaderDrag: { kind: "column", index: 2 },
-      hoveredHeader: { kind: "row", index: 4 },
+      activeHeaderDrag: { kind: 'column', index: 2 },
+      hoveredHeader: { kind: 'row', index: 4 },
       selectedCell: [2, 3],
       selectionRange: { x: 2, y: 3, width: 1, height: 1 },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 3]],
       visibleRegion: { range: { x: 2, y: 3, width: 1, height: 2 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 90, width: 104, height: 22 }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 46,
@@ -166,15 +164,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "C",
-      align: "center",
+      text: 'C',
+      align: 'center',
       wrap: false,
-      color: "#176239",
+      color: '#176239',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 0,
       y: 24,
@@ -184,15 +182,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "4",
-      align: "right",
+      text: '4',
+      align: 'right',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 0,
       y: 46,
@@ -202,25 +200,25 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "5",
-      align: "right",
+      text: '5',
+      align: 'right',
       wrap: false,
-      color: "#3c4043",
+      color: '#3c4043',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("renders frozen header labels beside the scrollable pane", () => {
+  test('renders frozen header labels beside the scrollable pane', () => {
     const scene = buildGridTextScene({
       engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       selectedCell: [0, 0],
       selectionRange: { x: 0, y: 0, width: 1, height: 1 },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [
         [0, 0],
         [2, 0],
@@ -241,7 +239,7 @@ describe("gridTextScene", () => {
         width: 104,
         height: 22,
       }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 46,
@@ -252,15 +250,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "A",
-      align: "center",
+      text: 'A',
+      align: 'center',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 150,
       y: 0,
@@ -270,15 +268,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "C",
-      align: "center",
+      text: 'C',
+      align: 'center',
       wrap: false,
-      color: "#5f6368",
+      color: '#5f6368',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 0,
       y: 24,
@@ -288,15 +286,15 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "1",
-      align: "right",
+      text: '1',
+      align: 'right',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
+    })
     expect(scene.items).toContainEqual({
       x: 0,
       y: 46,
@@ -306,30 +304,30 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "4",
-      align: "right",
+      text: '4',
+      align: 'right',
       wrap: false,
-      color: "#5f6368",
+      color: '#5f6368',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("adds resize-guide emphasis to the active column header label", () => {
+  test('adds resize-guide emphasis to the active column header label', () => {
     const scene = buildGridTextScene({
       engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       resizeGuideColumn: 2,
       selectedCell: [0, 0],
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 3]],
       visibleRegion: { range: { x: 2, y: 3, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 90, width: 104, height: 22 }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 46,
@@ -340,32 +338,32 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "C",
-      align: "center",
+      text: 'C',
+      align: 'center',
       wrap: false,
-      color: "#176239",
+      color: '#176239',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("omits the active editing cell text item while preserving headers", () => {
+  test('omits the active editing cell text item while preserving headers', () => {
     const scene = buildGridTextScene({
-      engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.String, value: "editing" })),
+      engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.String, value: 'editing' })),
       columnWidths: {},
       editingCell: [2, 3],
       gridMetrics: getGridMetrics(),
       selectedCell: [2, 3],
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 3]],
       visibleRegion: { range: { x: 2, y: 3, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 90, width: 104, height: 22 }),
-    });
+    })
 
-    expect(scene.items.some((item) => item.text === "editing")).toBe(false);
+    expect(scene.items.some((item) => item.text === 'editing')).toBe(false)
     expect(scene.items).toContainEqual({
       x: 46,
       y: 0,
@@ -375,18 +373,18 @@ describe("gridTextScene", () => {
       clipInsetRight: 0,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "C",
-      align: "center",
+      text: 'C',
+      align: 'center',
       wrap: false,
-      color: "#1f7a43",
+      color: '#1f7a43',
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("renders the selected cell from the authoritative snapshot when the engine cache lags", () => {
+  test('renders the selected cell from the authoritative snapshot when the engine cache lags', () => {
     const scene = buildGridTextScene({
       engine: makeEngine(
         {},
@@ -398,17 +396,17 @@ describe("gridTextScene", () => {
       gridMetrics: getGridMetrics(),
       selectedCell: [2, 4],
       selectedCellSnapshot: {
-        ...createCellSnapshot({ tag: ValueTag.String, value: "selected" }),
-        address: "C5",
+        ...createCellSnapshot({ tag: ValueTag.String, value: 'selected' }),
+        address: 'C5',
       },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 4]],
       visibleRegion: { range: { x: 2, y: 4, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 112, width: 104, height: 22 }),
-    });
+    })
 
-    expect(scene.items.find((item) => item.text === "selected")).toEqual({
+    expect(scene.items.find((item) => item.text === 'selected')).toEqual({
       x: 254,
       y: 112,
       width: 104,
@@ -417,48 +415,48 @@ describe("gridTextScene", () => {
       clipInsetRight: 38,
       clipInsetBottom: 0,
       clipInsetLeft: 0,
-      text: "selected",
-      align: "left",
+      text: 'selected',
+      align: 'left',
       wrap: false,
-      color: "#202124",
+      color: '#202124',
       font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,
       strike: false,
-    });
-  });
+    })
+  })
 
-  test("falls back to the engine cell when the selected snapshot address does not match", () => {
+  test('falls back to the engine cell when the selected snapshot address does not match', () => {
     const scene = buildGridTextScene({
       engine: makeEngine(
         {},
         {
-          C5: createCellSnapshot({ tag: ValueTag.String, value: "engine text" }),
+          C5: createCellSnapshot({ tag: ValueTag.String, value: 'engine text' }),
         },
       ),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       selectedCell: [2, 4],
       selectedCellSnapshot: {
-        ...createCellSnapshot({ tag: ValueTag.String, value: "stale text" }),
-        address: "B4",
+        ...createCellSnapshot({ tag: ValueTag.String, value: 'stale text' }),
+        address: 'B4',
       },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 4]],
       visibleRegion: { range: { x: 2, y: 4, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 112, width: 104, height: 22 }),
-    });
+    })
 
-    expect(scene.items.at(-1)?.text).toBe("engine text");
-  });
+    expect(scene.items.at(-1)?.text).toBe('engine text')
+  })
 
-  test("keeps the engine text when the selected snapshot is temporarily empty", () => {
+  test('keeps the engine text when the selected snapshot is temporarily empty', () => {
     const scene = buildGridTextScene({
       engine: makeEngine(
         {},
         {
-          C5: createCellSnapshot({ tag: ValueTag.String, value: "engine text" }),
+          C5: createCellSnapshot({ tag: ValueTag.String, value: 'engine text' }),
         },
       ),
       columnWidths: {},
@@ -466,24 +464,24 @@ describe("gridTextScene", () => {
       selectedCell: [2, 4],
       selectedCellSnapshot: {
         ...createCellSnapshot({ tag: ValueTag.Empty }, undefined),
-        address: "C5",
+        address: 'C5',
       },
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [[2, 4]],
       visibleRegion: { range: { x: 2, y: 4, width: 1, height: 1 }, tx: 0, ty: 0 },
       hostBounds: { left: 0, top: 0, width: 320, height: 240 },
       getCellBounds: () => ({ x: 254, y: 112, width: 104, height: 22 }),
-    });
+    })
 
-    expect(scene.items.at(-1)?.text).toBe("engine text");
-  });
+    expect(scene.items.at(-1)?.text).toBe('engine text')
+  })
 
-  test("spills left-aligned string text across contiguous empty cells", () => {
+  test('spills left-aligned string text across contiguous empty cells', () => {
     const scene = buildGridTextScene({
       engine: makeEngine(
         {},
         {
-          B12: createCellSnapshot({ tag: ValueTag.String, value: "spill text" }),
+          B12: createCellSnapshot({ tag: ValueTag.String, value: 'spill text' }),
           C12: createCellSnapshot({ tag: ValueTag.Empty }, undefined),
           D12: createCellSnapshot({ tag: ValueTag.Empty }, undefined),
         },
@@ -491,7 +489,7 @@ describe("gridTextScene", () => {
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       selectedCell: [0, 0],
-      sheetName: "Sheet1",
+      sheetName: 'Sheet1',
       visibleItems: [
         [1, 11],
         [2, 11],
@@ -505,7 +503,7 @@ describe("gridTextScene", () => {
         width: 104,
         height: 22,
       }),
-    });
+    })
 
     expect(scene.items).toContainEqual({
       x: 150,
@@ -516,14 +514,14 @@ describe("gridTextScene", () => {
       clipInsetRight: 142,
       clipInsetBottom: 48,
       clipInsetLeft: 0,
-      text: "spill text",
-      align: "left",
+      text: 'spill text',
+      align: 'left',
       wrap: false,
-      color: "#202124",
+      color: '#202124',
       font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,
       strike: false,
-    });
-  });
-});
+    })
+  })
+})

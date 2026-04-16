@@ -44,7 +44,7 @@ export {
   getConstantCapacity,
   getRangeCapacity,
   getMemberCapacity,
-} from "./vm";
+} from './vm'
 
 export {
   materializePivotTable,
@@ -54,4 +54,4 @@ export {
   getPivotResultErrorsPtr,
   pivotResultRows,
   pivotResultCols,
-} from "./pivot";
+} from './pivot'

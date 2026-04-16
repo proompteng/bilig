@@ -1,13 +1,13 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
-import fastifyStatic from "@fastify/static";
-import httpProxy from "@fastify/http-proxy";
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import fastifyStatic from '@fastify/static'
+import httpProxy from '@fastify/http-proxy'
 
-import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
-import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
-import type { RuntimeSession } from "@bilig/contracts";
+import { decodeAgentFrame, encodeAgentFrame } from '@bilig/agent-api'
+import { decodeFrame, encodeFrame } from '@bilig/binary-protocol'
+import type { RuntimeSession } from '@bilig/contracts'
 import {
   createErrorEnvelope,
   createRuntimeSession,
@@ -15,93 +15,82 @@ import {
   resolveRequestBaseUrl,
   resolveServerRuntimeConfig,
   runPromise,
-} from "@bilig/runtime-kernel";
-import type { BiligRuntimeConfig } from "@bilig/zero-sync";
+} from '@bilig/runtime-kernel'
+import type { BiligRuntimeConfig } from '@bilig/zero-sync'
 
-import { DocumentSessionManager } from "../workbook-runtime/document-session-manager.js";
-import { SyncDocumentSupervisor } from "../workbook-runtime/sync-document-supervisor.js";
-import { resolveRequestSession, resolveSessionIdentity } from "./session.js";
-import type { WorksheetExecutor } from "../workbook-runtime/worksheet-executor.js";
-import type { ZeroSyncService } from "../zero/service.js";
-import type { WorkbookAgentService } from "../codex-app/workbook-agent-service.js";
-import type { WorkbookAgentStreamEvent } from "@bilig/contracts";
-import { isWorkbookAgentServiceError } from "../workbook-agent-errors.js";
+import { DocumentSessionManager } from '../workbook-runtime/document-session-manager.js'
+import { SyncDocumentSupervisor } from '../workbook-runtime/sync-document-supervisor.js'
+import { resolveRequestSession, resolveSessionIdentity } from './session.js'
+import type { WorksheetExecutor } from '../workbook-runtime/worksheet-executor.js'
+import type { ZeroSyncService } from '../zero/service.js'
+import type { WorkbookAgentService } from '../codex-app/workbook-agent-service.js'
+import type { WorkbookAgentStreamEvent } from '@bilig/contracts'
+import { isWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 
-const SPA_FALLBACK_PREFIXES = [
-  "/api/",
-  "/v1/",
-  "/v2/",
-  "/zero",
-  "/healthz",
-  "/runtime-config.json",
-] as const;
+const SPA_FALLBACK_PREFIXES = ['/api/', '/v1/', '/v2/', '/zero', '/healthz', '/runtime-config.json'] as const
 
 export interface SyncServerOptions {
-  sessionManager?: DocumentSessionManager;
-  documentService?: DocumentControlService;
-  worksheetExecutor?: WorksheetExecutor | null;
-  zeroSyncService?: ZeroSyncService;
-  workbookAgentService?: WorkbookAgentService;
-  logger?: boolean;
+  sessionManager?: DocumentSessionManager
+  documentService?: DocumentControlService
+  worksheetExecutor?: WorksheetExecutor | null
+  zeroSyncService?: ZeroSyncService
+  workbookAgentService?: WorkbookAgentService
+  logger?: boolean
 }
 
 function resolveZeroKeepaliveUrl(upstream: string): URL {
-  const url = new URL(upstream);
-  url.pathname = "/keepalive";
-  url.search = "";
-  url.hash = "";
-  return url;
+  const url = new URL(upstream)
+  url.pathname = '/keepalive'
+  url.search = ''
+  url.hash = ''
+  return url
 }
 
 function resolveBooleanEnv(value: string | undefined, fallback: boolean): boolean {
-  const normalized = value?.trim().toLowerCase();
+  const normalized = value?.trim().toLowerCase()
   if (!normalized) {
-    return fallback;
+    return fallback
   }
-  if (normalized === "true" || normalized === "1") {
-    return true;
+  if (normalized === 'true' || normalized === '1') {
+    return true
   }
-  if (normalized === "false" || normalized === "0") {
-    return false;
+  if (normalized === 'false' || normalized === '0') {
+    return false
   }
-  throw new Error(`Invalid boolean environment value: ${value}`);
+  throw new Error(`Invalid boolean environment value: ${value}`)
 }
 
-function resolveWebRuntimeConfig(
-  env: Record<string, string | undefined>,
-): Omit<BiligRuntimeConfig, "currentUserId"> {
-  const zeroCacheUrl = env["BILIG_ZERO_CACHE_URL"]?.trim() || "/zero";
-  const defaultDocumentId = env["BILIG_DEFAULT_DOCUMENT_ID"]?.trim() || "bilig-demo";
+function resolveWebRuntimeConfig(env: Record<string, string | undefined>): Omit<BiligRuntimeConfig, 'currentUserId'> {
+  const zeroCacheUrl = env['BILIG_ZERO_CACHE_URL']?.trim() || '/zero'
+  const defaultDocumentId = env['BILIG_DEFAULT_DOCUMENT_ID']?.trim() || 'bilig-demo'
 
   return {
     zeroCacheUrl,
     defaultDocumentId,
-    persistState: resolveBooleanEnv(env["BILIG_PERSIST_STATE"], true),
-  };
+    persistState: resolveBooleanEnv(env['BILIG_PERSIST_STATE'], true),
+  }
 }
 
 function resolveWebDistRoot(): string | null {
-  const candidate = join(dirname(fileURLToPath(import.meta.url)), "../../public");
-  return existsSync(candidate) ? candidate : null;
+  const candidate = join(dirname(fileURLToPath(import.meta.url)), '../../public')
+  return existsSync(candidate) ? candidate : null
 }
 
 function shouldServeSpaFallback(method: string, url: string): boolean {
-  if (method !== "GET" && method !== "HEAD") {
-    return false;
+  if (method !== 'GET' && method !== 'HEAD') {
+    return false
   }
 
-  const pathname = url.split("?", 1)[0] ?? url;
-  if (pathname.includes(".", pathname.lastIndexOf("/") + 1)) {
-    return false;
+  const pathname = url.split('?', 1)[0] ?? url
+  if (pathname.includes('.', pathname.lastIndexOf('/') + 1)) {
+    return false
   }
 
-  return !SPA_FALLBACK_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix),
-  );
+  return !SPA_FALLBACK_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 async function loadWorkbookAgentThreadSession(
@@ -116,75 +105,62 @@ async function loadWorkbookAgentThreadSession(
     body: {
       threadId,
     },
-  });
+  })
 }
 
 function readWorkbookAgentThreadRouteParams(request: FastifyRequest): {
-  documentId: string;
-  threadId: string;
+  documentId: string
+  threadId: string
 } {
-  const params: unknown = request.params;
-  if (
-    !isRecord(params) ||
-    typeof params["documentId"] !== "string" ||
-    typeof params["threadId"] !== "string"
-  ) {
-    throw new Error("Expected workbook agent thread route params");
+  const params: unknown = request.params
+  if (!isRecord(params) || typeof params['documentId'] !== 'string' || typeof params['threadId'] !== 'string') {
+    throw new Error('Expected workbook agent thread route params')
   }
   return {
-    documentId: params["documentId"],
-    threadId: params["threadId"],
-  };
+    documentId: params['documentId'],
+    threadId: params['threadId'],
+  }
 }
 
 export function createSyncServer(options: SyncServerOptions = {}) {
-  const runtimeConfig = resolveServerRuntimeConfig(process.env);
-  const webRuntimeConfig = resolveWebRuntimeConfig(process.env);
-  const webDistRoot = resolveWebDistRoot();
-  const zeroProxyUpstream = process.env["BILIG_ZERO_PROXY_UPSTREAM"]?.trim();
-  const sessionManager =
-    options.sessionManager ??
-    new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
-  const documentService = options.documentService ?? new SyncDocumentSupervisor(sessionManager);
-  const zeroSyncService = options.zeroSyncService;
-  const workbookAgentService = options.workbookAgentService;
-  const app = Fastify({ logger: options.logger ?? true });
+  const runtimeConfig = resolveServerRuntimeConfig(process.env)
+  const webRuntimeConfig = resolveWebRuntimeConfig(process.env)
+  const webDistRoot = resolveWebDistRoot()
+  const zeroProxyUpstream = process.env['BILIG_ZERO_PROXY_UPSTREAM']?.trim()
+  const sessionManager = options.sessionManager ?? new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null)
+  const documentService = options.documentService ?? new SyncDocumentSupervisor(sessionManager)
+  const zeroSyncService = options.zeroSyncService
+  const workbookAgentService = options.workbookAgentService
+  const app = Fastify({ logger: options.logger ?? true })
 
-  app.addHook("onSend", async (_request, reply, payload) => {
-    reply.header("Cross-Origin-Opener-Policy", "same-origin");
-    reply.header("Cross-Origin-Embedder-Policy", "require-corp");
-    reply.header("Origin-Agent-Cluster", "?1");
-    return payload;
-  });
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin')
+    reply.header('Cross-Origin-Embedder-Policy', 'require-corp')
+    reply.header('Origin-Agent-Cluster', '?1')
+    return payload
+  })
 
   const handleWorkbookAgentRequest = async <T>(
     request: FastifyRequest,
     reply: FastifyReply,
-    task: (
-      service: WorkbookAgentService,
-      session: ReturnType<typeof resolveSessionIdentity>,
-    ) => Promise<T>,
+    task: (service: WorkbookAgentService, session: ReturnType<typeof resolveSessionIdentity>) => Promise<T>,
   ): Promise<T | ReturnType<typeof createErrorEnvelope>> => {
     if (!workbookAgentService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope(
-        "WORKBOOK_AGENT_DISABLED",
-        "Workbook agent service is not configured",
-        true,
-      );
+      reply.code(503)
+      return createErrorEnvelope('WORKBOOK_AGENT_DISABLED', 'Workbook agent service is not configured', true)
     }
-    const session = resolveSessionIdentity(request, reply);
-    reply.header("cache-control", "no-store");
+    const session = resolveSessionIdentity(request, reply)
+    reply.header('cache-control', 'no-store')
     try {
-      return await task(workbookAgentService, session);
+      return await task(workbookAgentService, session)
     } catch (error) {
       if (isWorkbookAgentServiceError(error)) {
-        reply.code(error.statusCode);
-        return createErrorEnvelope(error.code, error.message, error.retryable);
+        reply.code(error.statusCode)
+        return createErrorEnvelope(error.code, error.message, error.retryable)
       }
-      throw error;
+      throw error
     }
-  };
+  }
 
   const handleWorkbookAgentThreadRequest = async <T>(
     request: FastifyRequest,
@@ -192,185 +168,147 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     task: (
       service: WorkbookAgentService,
       session: ReturnType<typeof resolveSessionIdentity>,
-      sessionSnapshot: Awaited<ReturnType<WorkbookAgentService["createSession"]>>,
+      sessionSnapshot: Awaited<ReturnType<WorkbookAgentService['createSession']>>,
     ) => Promise<T>,
   ): Promise<T | ReturnType<typeof createErrorEnvelope>> => {
     return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
-      const { documentId, threadId } = readWorkbookAgentThreadRouteParams(request);
-      const sessionSnapshot = await loadWorkbookAgentThreadSession(
-        service,
-        documentId,
-        threadId,
-        session,
-      );
-      return await task(service, session, sessionSnapshot);
-    });
-  };
+      const { documentId, threadId } = readWorkbookAgentThreadRouteParams(request)
+      const sessionSnapshot = await loadWorkbookAgentThreadSession(service, documentId, threadId, session)
+      return await task(service, session, sessionSnapshot)
+    })
+  }
 
-  app.addHook("onClose", async () => {
-    await workbookAgentService?.close().catch(() => undefined);
-  });
+  app.addHook('onClose', async () => {
+    await workbookAgentService?.close().catch(() => undefined)
+  })
 
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_request, body, done) => {
-      done(null, body);
-    },
-  );
+  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_request, body, done) => {
+    done(null, body)
+  })
 
   if (zeroProxyUpstream) {
     app.route({
-      method: ["GET", "HEAD"],
-      url: "/zero/keepalive",
+      method: ['GET', 'HEAD'],
+      url: '/zero/keepalive',
       async handler(request, reply) {
         try {
           const upstreamResponse = await fetch(resolveZeroKeepaliveUrl(zeroProxyUpstream), {
             method: request.method,
-            cache: "no-store",
+            cache: 'no-store',
             signal: AbortSignal.timeout(2_000),
-          });
-          reply.code(upstreamResponse.status);
-          reply.header("cache-control", "no-store");
-          const contentType = upstreamResponse.headers.get("content-type");
+          })
+          reply.code(upstreamResponse.status)
+          reply.header('cache-control', 'no-store')
+          const contentType = upstreamResponse.headers.get('content-type')
           if (contentType) {
-            reply.header("content-type", contentType);
+            reply.header('content-type', contentType)
           }
-          if (request.method === "HEAD") {
-            return reply.send();
+          if (request.method === 'HEAD') {
+            return reply.send()
           }
-          return Buffer.from(await upstreamResponse.arrayBuffer());
+          return Buffer.from(await upstreamResponse.arrayBuffer())
         } catch {
-          reply.code(503);
-          reply.header("cache-control", "no-store");
-          return createErrorEnvelope(
-            "ZERO_CACHE_UNAVAILABLE",
-            "Zero cache keepalive probe failed",
-            true,
-          );
+          reply.code(503)
+          reply.header('cache-control', 'no-store')
+          return createErrorEnvelope('ZERO_CACHE_UNAVAILABLE', 'Zero cache keepalive probe failed', true)
         }
       },
-    });
-    app.get("/zero", async (_request, reply) => {
-      return reply.redirect("/zero/");
-    });
+    })
+    app.get('/zero', async (_request, reply) => {
+      return reply.redirect('/zero/')
+    })
     app.register(httpProxy, {
       upstream: zeroProxyUpstream,
-      prefix: "/zero/",
-      rewritePrefix: "/",
+      prefix: '/zero/',
+      rewritePrefix: '/',
       websocket: true,
       http2: false,
-    });
+    })
   }
 
-  app.get("/healthz", async () => ({
+  app.get('/healthz', async () => ({
     ok: true,
-    service: "bilig-app",
+    service: 'bilig-app',
     zeroSync: zeroSyncService?.enabled ?? false,
     web: webDistRoot !== null,
     workbookAgent: workbookAgentService?.getObservabilitySnapshot() ?? { enabled: false },
-  }));
+  }))
 
-  app.get("/v2/agent/observability", async (request, reply) => {
-    return await handleWorkbookAgentRequest(request, reply, async (service) =>
-      service.getObservabilitySnapshot(),
-    );
-  });
+  app.get('/v2/agent/observability', async (request, reply) => {
+    return await handleWorkbookAgentRequest(request, reply, async (service) => service.getObservabilitySnapshot())
+  })
 
-  app.get("/runtime-config.json", async (_request, reply) => {
-    const session = resolveSessionIdentity(_request, reply);
-    reply.header("cache-control", "no-store");
+  app.get('/runtime-config.json', async (_request, reply) => {
+    const session = resolveSessionIdentity(_request, reply)
+    reply.header('cache-control', 'no-store')
     return {
       ...webRuntimeConfig,
       currentUserId: session.userID,
-    } satisfies BiligRuntimeConfig;
-  });
+    } satisfies BiligRuntimeConfig
+  })
+
+  app.get('/v2/documents/:documentId/state', async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
+    return await runPromise(documentService.getDocumentState(request.params.documentId))
+  })
 
   app.get(
-    "/v2/documents/:documentId/state",
-    async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-      return await runPromise(documentService.getDocumentState(request.params.documentId));
-    },
-  );
-
-  app.get(
-    "/v2/documents/:documentId/snapshot/latest",
+    '/v2/documents/:documentId/snapshot/latest',
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
-      const snapshot = await runPromise(
-        documentService.getLatestSnapshot(request.params.documentId),
-      );
+      const snapshot = await runPromise(documentService.getLatestSnapshot(request.params.documentId))
       if (!snapshot) {
-        reply.code(204);
-        return reply.send();
+        reply.code(204)
+        return reply.send()
       }
 
-      reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
-      reply.header("content-type", snapshot.contentType);
-      return Buffer.from(snapshot.bytes);
+      reply.header('x-bilig-snapshot-cursor', String(snapshot.cursor))
+      reply.header('content-type', snapshot.contentType)
+      return Buffer.from(snapshot.bytes)
     },
-  );
+  )
 
   app.get(
-    "/v2/documents/:documentId/events",
+    '/v2/documents/:documentId/events',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string };
-        Querystring: { afterRevision?: string };
+        Params: { documentId: string }
+        Querystring: { afterRevision?: string }
       }>,
       reply: FastifyReply,
     ) => {
       if (!zeroSyncService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "ZERO_SYNC_DISABLED",
-          "Authoritative workbook events require Zero sync",
-          true,
-        );
+        reply.code(503)
+        return createErrorEnvelope('ZERO_SYNC_DISABLED', 'Authoritative workbook events require Zero sync', true)
       }
-      const rawAfterRevision = request.query.afterRevision?.trim() ?? "0";
-      const afterRevision = Number.parseInt(rawAfterRevision, 10);
+      const rawAfterRevision = request.query.afterRevision?.trim() ?? '0'
+      const afterRevision = Number.parseInt(rawAfterRevision, 10)
       if (!Number.isFinite(afterRevision) || afterRevision < 0) {
-        reply.code(400);
-        return createErrorEnvelope(
-          "INVALID_AFTER_REVISION",
-          "afterRevision must be a non-negative integer",
-          false,
-        );
+        reply.code(400)
+        return createErrorEnvelope('INVALID_AFTER_REVISION', 'afterRevision must be a non-negative integer', false)
       }
-      reply.header("cache-control", "no-store");
-      return await zeroSyncService.loadAuthoritativeEvents(
-        request.params.documentId,
-        afterRevision,
-      );
+      reply.header('cache-control', 'no-store')
+      return await zeroSyncService.loadAuthoritativeEvents(request.params.documentId, afterRevision)
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/frames",
-    async (
-      request: FastifyRequest<{ Params: { documentId: string }; Body: Buffer }>,
-      reply: FastifyReply,
-    ) => {
-      const frame = decodeFrame(request.body);
+    '/v2/documents/:documentId/frames',
+    async (request: FastifyRequest<{ Params: { documentId: string }; Body: Buffer }>, reply: FastifyReply) => {
+      const frame = decodeFrame(request.body)
       if (frame.documentId !== request.params.documentId) {
-        reply.code(400);
-        return createErrorEnvelope(
-          "DOCUMENT_ID_MISMATCH",
-          "Frame document id does not match route document id",
-          false,
-        );
+        reply.code(400)
+        return createErrorEnvelope('DOCUMENT_ID_MISMATCH', 'Frame document id does not match route document id', false)
       }
-      const response = await runPromise(documentService.handleSyncFrame(frame));
-      reply.header("content-type", "application/octet-stream");
-      return Buffer.from(encodeFrame(Array.isArray(response) ? (response[0] ?? frame) : response));
+      const response = await runPromise(documentService.handleSyncFrame(frame))
+      reply.header('content-type', 'application/octet-stream')
+      return Buffer.from(encodeFrame(Array.isArray(response) ? (response[0] ?? frame) : response))
     },
-  );
+  )
 
   app.get(
-    "/v2/documents/:documentId/chat/threads",
+    '/v2/documents/:documentId/chat/threads',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string };
+        Params: { documentId: string }
       }>,
       reply: FastifyReply,
     ) => {
@@ -378,17 +316,17 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         return await service.listThreads({
           documentId: request.params.documentId,
           session,
-        });
-      });
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads",
+    '/v2/documents/:documentId/chat/threads',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string };
-        Body: Record<string, unknown>;
+        Params: { documentId: string }
+        Body: Record<string, unknown>
       }>,
       reply: FastifyReply,
     ) => {
@@ -397,397 +335,343 @@ export function createSyncServer(options: SyncServerOptions = {}) {
           documentId: request.params.documentId,
           session,
           body: request.body ?? {},
-        });
-      });
+        })
+      })
     },
-  );
+  )
 
   app.get(
-    "/v2/documents/:documentId/chat/threads/:threadId",
+    '/v2/documents/:documentId/chat/threads/:threadId',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
+        Params: { documentId: string; threadId: string }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (_service, _session, snapshot) => {
-          return snapshot;
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (_service, _session, snapshot) => {
+        return snapshot
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/turns",
+    '/v2/documents/:documentId/chat/threads/:threadId/turns',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
+        Params: { documentId: string; threadId: string }
+        Body: Record<string, unknown>
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.startTurn({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            session,
-            body: request.body ?? {},
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.startTurn({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          session,
+          body: request.body ?? {},
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/context",
+    '/v2/documents/:documentId/chat/threads/:threadId/context',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
+        Params: { documentId: string; threadId: string }
+        Body: Record<string, unknown>
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.updateContext({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            session,
-            body: request.body ?? {},
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.updateContext({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          session,
+          body: request.body ?? {},
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/workflows",
+    '/v2/documents/:documentId/chat/threads/:threadId/workflows',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
-        Body: Record<string, unknown>;
+        Params: { documentId: string; threadId: string }
+        Body: Record<string, unknown>
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.startWorkflow({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            session,
-            body: request.body ?? {},
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.startWorkflow({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          session,
+          body: request.body ?? {},
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/workflows/:runId/cancel",
+    '/v2/documents/:documentId/chat/threads/:threadId/workflows/:runId/cancel',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; runId: string };
+        Params: { documentId: string; threadId: string; runId: string }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.cancelWorkflow({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            runId: request.params.runId,
-            session,
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.cancelWorkflow({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          runId: request.params.runId,
+          session,
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/interrupt",
+    '/v2/documents/:documentId/chat/threads/:threadId/interrupt',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
+        Params: { documentId: string; threadId: string }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.interruptTurn({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            session,
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.interruptTurn({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          session,
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/apply",
+    '/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/apply',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; reviewItemId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string }
         Body: {
-          appliedBy?: "user" | "auto";
-          commandIndexes?: number[];
-          preview?: unknown;
-        };
+          appliedBy?: 'user' | 'auto'
+          commandIndexes?: number[]
+          preview?: unknown
+        }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          const commandIndexes =
-            request.body &&
-            typeof request.body === "object" &&
-            Array.isArray(request.body.commandIndexes)
-              ? request.body.commandIndexes
-              : undefined;
-          return await service.applyReviewItem({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            reviewItemId: request.params.reviewItemId,
-            session,
-            appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
-            ...(commandIndexes ? { commandIndexes } : {}),
-            preview:
-              request.body && typeof request.body === "object" && "preview" in request.body
-                ? (request.body.preview ?? null)
-                : null,
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        const commandIndexes =
+          request.body && typeof request.body === 'object' && Array.isArray(request.body.commandIndexes)
+            ? request.body.commandIndexes
+            : undefined
+        return await service.applyReviewItem({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          reviewItemId: request.params.reviewItemId,
+          session,
+          appliedBy: request.body && request.body.appliedBy === 'auto' ? 'auto' : 'user',
+          ...(commandIndexes ? { commandIndexes } : {}),
+          preview: request.body && typeof request.body === 'object' && 'preview' in request.body ? (request.body.preview ?? null) : null,
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/review",
+    '/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/review',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; reviewItemId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string }
         Body: {
-          decision?: "approved" | "rejected";
-        };
+          decision?: 'approved' | 'rejected'
+        }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.reviewReviewItem({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            reviewItemId: request.params.reviewItemId,
-            session,
-            body: request.body ?? {},
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.reviewReviewItem({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          reviewItemId: request.params.reviewItemId,
+          session,
+          body: request.body ?? {},
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/dismiss",
+    '/v2/documents/:documentId/chat/threads/:threadId/review-items/:reviewItemId/dismiss',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; reviewItemId: string };
+        Params: { documentId: string; threadId: string; reviewItemId: string }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.dismissReviewItem({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            reviewItemId: request.params.reviewItemId,
-            session,
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.dismissReviewItem({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          reviewItemId: request.params.reviewItemId,
+          session,
+        })
+      })
     },
-  );
+  )
 
   app.post(
-    "/v2/documents/:documentId/chat/threads/:threadId/runs/:recordId/replay",
+    '/v2/documents/:documentId/chat/threads/:threadId/runs/:recordId/replay',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string; recordId: string };
+        Params: { documentId: string; threadId: string; recordId: string }
       }>,
       reply: FastifyReply,
     ) => {
-      return await handleWorkbookAgentThreadRequest(
-        request,
-        reply,
-        async (service, session, sessionSnapshot) => {
-          return await service.replayExecutionRecord({
-            documentId: request.params.documentId,
-            threadId: sessionSnapshot.threadId,
-            recordId: request.params.recordId,
-            session,
-          });
-        },
-      );
+      return await handleWorkbookAgentThreadRequest(request, reply, async (service, session, sessionSnapshot) => {
+        return await service.replayExecutionRecord({
+          documentId: request.params.documentId,
+          threadId: sessionSnapshot.threadId,
+          recordId: request.params.recordId,
+          session,
+        })
+      })
     },
-  );
+  )
 
   app.get(
-    "/v2/documents/:documentId/chat/threads/:threadId/events",
+    '/v2/documents/:documentId/chat/threads/:threadId/events',
     async (
       request: FastifyRequest<{
-        Params: { documentId: string; threadId: string };
+        Params: { documentId: string; threadId: string }
       }>,
       reply: FastifyReply,
     ) => {
       if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
+        reply.code(503)
+        return createErrorEnvelope('WORKBOOK_AGENT_DISABLED', 'Workbook agent service is not configured', true)
       }
-      const session = resolveSessionIdentity(request, reply);
-      let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>;
+      const session = resolveSessionIdentity(request, reply)
+      let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>
       try {
         sessionSnapshot = await loadWorkbookAgentThreadSession(
           workbookAgentService,
           request.params.documentId,
           request.params.threadId,
           session,
-        );
+        )
       } catch (error) {
         if (isWorkbookAgentServiceError(error)) {
-          reply.code(error.statusCode);
-          return createErrorEnvelope(error.code, error.message, error.retryable);
+          reply.code(error.statusCode)
+          return createErrorEnvelope(error.code, error.message, error.retryable)
         }
-        throw error;
+        throw error
       }
 
-      reply.hijack();
-      const raw = reply.raw;
+      reply.hijack()
+      const raw = reply.raw
       raw.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        connection: "keep-alive",
-      });
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      })
 
       const writeEvent = (event: WorkbookAgentStreamEvent) => {
-        raw.write(`data: ${JSON.stringify(event)}\n\n`);
-      };
+        raw.write(`data: ${JSON.stringify(event)}\n\n`)
+      }
 
       writeEvent({
-        type: "snapshot",
+        type: 'snapshot',
         snapshot: sessionSnapshot,
-      });
+      })
 
       const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
-        writeEvent(event);
-      });
+        writeEvent(event)
+      })
       const keepalive = setInterval(() => {
-        raw.write(":keepalive\n\n");
-      }, 15_000);
+        raw.write(':keepalive\n\n')
+      }, 15_000)
 
-      request.raw.on("close", () => {
-        clearInterval(keepalive);
-        unsubscribe();
-      });
-      return reply;
+      request.raw.on('close', () => {
+        clearInterval(keepalive)
+        unsubscribe()
+      })
+      return reply
     },
-  );
+  )
 
   const handleZeroQuery = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      reply.code(503)
+      return createErrorEnvelope('ZERO_SYNC_DISABLED', 'Zero sync is not configured', true)
     }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleQuery(request);
-  };
+    resolveSessionIdentity(request, reply)
+    return await zeroSyncService.handleQuery(request)
+  }
 
   const handleZeroMutate = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      reply.code(503)
+      return createErrorEnvelope('ZERO_SYNC_DISABLED', 'Zero sync is not configured', true)
     }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleMutate(request);
-  };
+    resolveSessionIdentity(request, reply)
+    return await zeroSyncService.handleMutate(request)
+  }
 
-  app.post("/api/zero/v2/query", handleZeroQuery);
-  app.post("/api/zero/v2/mutate", handleZeroMutate);
+  app.post('/api/zero/v2/query', handleZeroQuery)
+  app.post('/api/zero/v2/mutate', handleZeroMutate)
 
   const handleSessionRequest = async (request: FastifyRequest, reply: FastifyReply) => {
-    const session = resolveSessionIdentity(request, reply);
-    const requestSession = resolveRequestSession(request);
+    const session = resolveSessionIdentity(request, reply)
+    const requestSession = resolveRequestSession(request)
     return createRuntimeSession({
       authToken: session.userID,
       userId: session.userID,
       roles: requestSession.roles,
       isAuthenticated: requestSession.isAuthenticated,
       authSource: requestSession.authSource,
-    }) satisfies RuntimeSession;
-  };
-  app.get("/v2/session", handleSessionRequest);
+    }) satisfies RuntimeSession
+  }
+  app.get('/v2/session', handleSessionRequest)
 
-  app.post(
-    "/v2/agent/frames",
-    async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-      const response = await runPromise(
-        documentService.handleAgentFrame(decodeAgentFrame(request.body), {
-          serverUrl: resolveRequestBaseUrl(request, "127.0.0.1:4321"),
-          ...(runtimeConfig.browserAppBaseUrl
-            ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl }
-            : {}),
-        }),
-      );
-      reply.header("content-type", "application/octet-stream");
-      return Buffer.from(encodeAgentFrame(response));
-    },
-  );
+  app.post('/v2/agent/frames', async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
+    const response = await runPromise(
+      documentService.handleAgentFrame(decodeAgentFrame(request.body), {
+        serverUrl: resolveRequestBaseUrl(request, '127.0.0.1:4321'),
+        ...(runtimeConfig.browserAppBaseUrl ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl } : {}),
+      }),
+    )
+    reply.header('content-type', 'application/octet-stream')
+    return Buffer.from(encodeAgentFrame(response))
+  })
 
   if (webDistRoot) {
     app.register(fastifyStatic, {
       root: webDistRoot,
-      prefix: "/",
-      maxAge: "30d",
+      prefix: '/',
+      maxAge: '30d',
       immutable: true,
-    });
+    })
 
-    app.get("/", async (_request, reply) => {
-      reply.header("cache-control", "no-store");
-      return reply.sendFile("index.html", { maxAge: 0, immutable: false });
-    });
+    app.get('/', async (_request, reply) => {
+      reply.header('cache-control', 'no-store')
+      return reply.sendFile('index.html', { maxAge: 0, immutable: false })
+    })
 
     app.setNotFoundHandler(async (request, reply) => {
       if (!shouldServeSpaFallback(request.method, request.url)) {
-        reply.code(404);
-        return createErrorEnvelope("NOT_FOUND", "Route not found", false);
+        reply.code(404)
+        return createErrorEnvelope('NOT_FOUND', 'Route not found', false)
       }
 
-      reply.header("cache-control", "no-store");
-      return reply.sendFile("index.html", { maxAge: 0, immutable: false });
-    });
+      reply.header('cache-control', 'no-store')
+      return reply.sendFile('index.html', { maxAge: 0, immutable: false })
+    })
   }
 
-  return { app, sessionManager, documentService };
+  return { app, sessionManager, documentService }
 }

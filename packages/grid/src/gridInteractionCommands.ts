@@ -1,80 +1,67 @@
-import { formatAddress } from "@bilig/formula";
-import { ValueTag } from "@bilig/protocol";
-import { cellToEditorSeed } from "./gridCells.js";
-import type { GridEngineLike } from "./grid-engine.js";
-import { createSheetSelection } from "./gridSelection.js";
-import type { GridSelection, Item, Rectangle } from "./gridTypes.js";
-import {
-  resolveKeyboardHeaderContextMenuTarget,
-  type WorkbookGridContextMenuTarget,
-} from "./workbookGridContextMenuTarget.js";
-import type {
-  EditSelectionBehavior,
-  WorkbookGridSurfaceProps,
-} from "./workbookGridSurfaceTypes.js";
+import { formatAddress } from '@bilig/formula'
+import { ValueTag } from '@bilig/protocol'
+import { cellToEditorSeed } from './gridCells.js'
+import type { GridEngineLike } from './grid-engine.js'
+import { createSheetSelection } from './gridSelection.js'
+import type { GridSelection, Item, Rectangle } from './gridTypes.js'
+import { resolveKeyboardHeaderContextMenuTarget, type WorkbookGridContextMenuTarget } from './workbookGridContextMenuTarget.js'
+import type { EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 
 export function beginWorkbookGridEdit(input: {
-  engine: GridEngineLike;
-  onBeginEdit: WorkbookGridSurfaceProps["onBeginEdit"];
-  sheetName: string;
-  address: string;
-  seed?: string | undefined;
-  selectionBehavior?: EditSelectionBehavior | undefined;
+  engine: GridEngineLike
+  onBeginEdit: WorkbookGridSurfaceProps['onBeginEdit']
+  sheetName: string
+  address: string
+  seed?: string | undefined
+  selectionBehavior?: EditSelectionBehavior | undefined
 }): void {
-  const { address, engine, onBeginEdit, seed, selectionBehavior = "caret-end", sheetName } = input;
-  onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, address)), selectionBehavior);
+  const { address, engine, onBeginEdit, seed, selectionBehavior = 'caret-end', sheetName } = input
+  onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, address)), selectionBehavior)
 }
 
 export function toggleWorkbookGridBooleanCell(input: {
-  engine: GridEngineLike;
-  onToggleBooleanCell: WorkbookGridSurfaceProps["onToggleBooleanCell"];
-  sheetName: string;
-  col: number;
-  row: number;
+  engine: GridEngineLike
+  onToggleBooleanCell: WorkbookGridSurfaceProps['onToggleBooleanCell']
+  sheetName: string
+  col: number
+  row: number
 }): boolean {
-  const { col, engine, onToggleBooleanCell, row, sheetName } = input;
+  const { col, engine, onToggleBooleanCell, row, sheetName } = input
   if (!onToggleBooleanCell) {
-    return false;
+    return false
   }
-  const address = formatAddress(row, col);
-  const snapshot = engine.getCell(sheetName, address);
+  const address = formatAddress(row, col)
+  const snapshot = engine.getCell(sheetName, address)
   if (snapshot.value.tag !== ValueTag.Boolean) {
-    return false;
+    return false
   }
-  onToggleBooleanCell(sheetName, address, !snapshot.value.value);
-  return true;
+  onToggleBooleanCell(sheetName, address, !snapshot.value.value)
+  return true
 }
 
 export function openWorkbookGridHeaderContextMenuFromKeyboard(input: {
-  hostBounds: { left: number; top: number } | null | undefined;
-  gridSelection: GridSelection;
-  selectedCell: Item;
-  getCellScreenBounds: (col: number, row: number) => Rectangle | undefined;
+  hostBounds: { left: number; top: number } | null | undefined
+  gridSelection: GridSelection
+  selectedCell: Item
+  getCellScreenBounds: (col: number, row: number) => Rectangle | undefined
   gridMetrics: {
-    rowMarkerWidth: number;
-    headerHeight: number;
-  };
-  openContextMenuForTarget: (target: WorkbookGridContextMenuTarget) => boolean;
+    rowMarkerWidth: number
+    headerHeight: number
+  }
+  openContextMenuForTarget: (target: WorkbookGridContextMenuTarget) => boolean
 }): boolean {
-  const {
-    getCellScreenBounds,
-    gridMetrics,
-    gridSelection,
-    hostBounds,
-    openContextMenuForTarget,
-    selectedCell,
-  } = input;
+  const { getCellScreenBounds, gridMetrics, gridSelection, hostBounds, openContextMenuForTarget, selectedCell } = input
   if (!hostBounds) {
-    return false;
+    return false
   }
 
-  const currentCell = gridSelection.current?.cell ?? selectedCell;
+  const currentCell = gridSelection.current?.cell ?? selectedCell
   const targetCellBounds =
     gridSelection.rows.length > 0 && gridSelection.columns.length === 0
       ? getCellScreenBounds(currentCell[0], gridSelection.rows.first() ?? currentCell[1])
       : gridSelection.columns.length > 0 && gridSelection.rows.length === 0
         ? getCellScreenBounds(gridSelection.columns.first() ?? currentCell[0], currentCell[1])
-        : undefined;
+        : undefined
   const target = resolveKeyboardHeaderContextMenuTarget({
     gridSelection,
     targetCellBounds,
@@ -82,25 +69,25 @@ export function openWorkbookGridHeaderContextMenuFromKeyboard(input: {
     hostTop: hostBounds.top,
     rowMarkerWidth: gridMetrics.rowMarkerWidth,
     headerHeight: gridMetrics.headerHeight,
-  });
+  })
   if (!target) {
-    return false;
+    return false
   }
-  return openContextMenuForTarget(target);
+  return openContextMenuForTarget(target)
 }
 
 export function selectEntireWorkbookSheet(input: {
-  isEditingCell: boolean;
-  onCommitEdit: WorkbookGridSurfaceProps["onCommitEdit"];
-  setGridSelection: (selection: GridSelection) => void;
-  onSelect: WorkbookGridSurfaceProps["onSelect"];
-  focusGrid: () => void;
+  isEditingCell: boolean
+  onCommitEdit: WorkbookGridSurfaceProps['onCommitEdit']
+  setGridSelection: (selection: GridSelection) => void
+  onSelect: WorkbookGridSurfaceProps['onSelect']
+  focusGrid: () => void
 }): void {
-  const { focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection } = input;
+  const { focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection } = input
   if (isEditingCell) {
-    onCommitEdit();
+    onCommitEdit()
   }
-  setGridSelection(createSheetSelection());
-  onSelect(formatAddress(0, 0));
-  focusGrid();
+  setGridSelection(createSheetSelection())
+  onSelect(formatAddress(0, 0))
+  focusGrid()
 }

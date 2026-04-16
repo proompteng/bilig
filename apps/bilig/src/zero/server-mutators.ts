@@ -1,6 +1,6 @@
-import { SpreadsheetEngine } from "@bilig/core";
-import { applyWorkbookAgentCommandBundle } from "@bilig/agent-api";
-import type { EngineOp } from "@bilig/workbook-domain";
+import { SpreadsheetEngine } from '@bilig/core'
+import { applyWorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { EngineOp } from '@bilig/workbook-domain'
 import type {
   CellBorderSidePatch,
   CellNumberFormatInput,
@@ -10,7 +10,7 @@ import type {
   CellStyleFillPatch,
   CellStyleFontPatch,
   CellStylePatch,
-} from "@bilig/protocol";
+} from '@bilig/protocol'
 import {
   applyAgentCommandBundleArgsSchema,
   clearRangeArgsSchema,
@@ -35,237 +35,219 @@ import {
   updateRowMetadataArgsSchema,
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
-} from "@bilig/zero-sync";
-import { z } from "zod";
-import type { SessionIdentity } from "../http/session.js";
-import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
-import type { Queryable } from "./store.js";
-import { acquireWorkbookMutationLock } from "./workbook-runtime-store.js";
-import { ensureWorkbookDocumentExists } from "./workbook-migration-store.js";
-import { persistWorkbookMutation } from "./workbook-mutation-store.js";
-import { upsertWorkbookPresence } from "./presence-store.js";
-import {
-  loadLatestRedoableWorkbookChange,
-  loadLatestUndoableWorkbookChange,
-  loadWorkbookChange,
-} from "./workbook-change-store.js";
+} from '@bilig/zero-sync'
+import { z } from 'zod'
+import type { SessionIdentity } from '../http/session.js'
+import { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
+import type { Queryable } from './store.js'
+import { acquireWorkbookMutationLock } from './workbook-runtime-store.js'
+import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
+import { persistWorkbookMutation } from './workbook-mutation-store.js'
+import { upsertWorkbookPresence } from './presence-store.js'
+import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
 
 interface ServerTransactionLike {
   dbTransaction: {
-    wrappedTransaction: Queryable;
-  };
+    wrappedTransaction: Queryable
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function isQueryable(value: unknown): value is Queryable {
-  return isRecord(value) && typeof value["query"] === "function";
+  return isRecord(value) && typeof value['query'] === 'function'
 }
 
 function requireServerTransaction(tx: unknown): ServerTransactionLike {
-  if (
-    !isRecord(tx) ||
-    !isRecord(tx["dbTransaction"]) ||
-    !isQueryable(tx["dbTransaction"]["wrappedTransaction"])
-  ) {
-    throw new Error("Expected a server-side Zero transaction");
+  if (!isRecord(tx) || !isRecord(tx['dbTransaction']) || !isQueryable(tx['dbTransaction']['wrappedTransaction'])) {
+    throw new Error('Expected a server-side Zero transaction')
   }
 
   return {
     dbTransaction: {
-      wrappedTransaction: tx["dbTransaction"]["wrappedTransaction"],
+      wrappedTransaction: tx['dbTransaction']['wrappedTransaction'],
     },
-  };
+  }
 }
 
 function normalizeBorderSidePatch(
   patch: {
-    style?: CellBorderSidePatch["style"] | undefined;
-    weight?: CellBorderSidePatch["weight"] | undefined;
-    color?: CellBorderSidePatch["color"] | undefined;
+    style?: CellBorderSidePatch['style'] | undefined
+    weight?: CellBorderSidePatch['weight'] | undefined
+    color?: CellBorderSidePatch['color'] | undefined
   } | null,
 ): CellBorderSidePatch | null {
   if (patch === null) {
-    return null;
+    return null
   }
-  const normalized: CellBorderSidePatch = {};
+  const normalized: CellBorderSidePatch = {}
   if (patch.style !== undefined) {
-    normalized.style = patch.style;
+    normalized.style = patch.style
   }
   if (patch.weight !== undefined) {
-    normalized.weight = patch.weight;
+    normalized.weight = patch.weight
   }
   if (patch.color !== undefined) {
-    normalized.color = patch.color;
+    normalized.color = patch.color
   }
-  return normalized;
+  return normalized
 }
 
-function normalizeStylePatch(
-  patch: z.infer<typeof setRangeStyleArgsSchema>["patch"],
-): CellStylePatch {
-  const normalized: CellStylePatch = {};
+function normalizeStylePatch(patch: z.infer<typeof setRangeStyleArgsSchema>['patch']): CellStylePatch {
+  const normalized: CellStylePatch = {}
 
   if (patch.fill !== undefined) {
     if (patch.fill === null) {
-      normalized.fill = null;
+      normalized.fill = null
     } else {
-      const fill: CellStyleFillPatch = {};
+      const fill: CellStyleFillPatch = {}
       if (patch.fill.backgroundColor !== undefined) {
-        fill.backgroundColor = patch.fill.backgroundColor;
+        fill.backgroundColor = patch.fill.backgroundColor
       }
-      normalized.fill = fill;
+      normalized.fill = fill
     }
   }
   if (patch.font !== undefined) {
     if (patch.font === null) {
-      normalized.font = null;
+      normalized.font = null
     } else {
-      const font: CellStyleFontPatch = {};
+      const font: CellStyleFontPatch = {}
       if (patch.font.family !== undefined) {
-        font.family = patch.font.family;
+        font.family = patch.font.family
       }
       if (patch.font.size !== undefined) {
-        font.size = patch.font.size;
+        font.size = patch.font.size
       }
       if (patch.font.bold !== undefined) {
-        font.bold = patch.font.bold;
+        font.bold = patch.font.bold
       }
       if (patch.font.italic !== undefined) {
-        font.italic = patch.font.italic;
+        font.italic = patch.font.italic
       }
       if (patch.font.underline !== undefined) {
-        font.underline = patch.font.underline;
+        font.underline = patch.font.underline
       }
       if (patch.font.color !== undefined) {
-        font.color = patch.font.color;
+        font.color = patch.font.color
       }
-      normalized.font = font;
+      normalized.font = font
     }
   }
   if (patch.alignment !== undefined) {
     if (patch.alignment === null) {
-      normalized.alignment = null;
+      normalized.alignment = null
     } else {
-      const alignment: CellStyleAlignmentPatch = {};
+      const alignment: CellStyleAlignmentPatch = {}
       if (patch.alignment.horizontal !== undefined) {
-        alignment.horizontal = patch.alignment.horizontal;
+        alignment.horizontal = patch.alignment.horizontal
       }
       if (patch.alignment.vertical !== undefined) {
-        alignment.vertical = patch.alignment.vertical;
+        alignment.vertical = patch.alignment.vertical
       }
       if (patch.alignment.wrap !== undefined) {
-        alignment.wrap = patch.alignment.wrap;
+        alignment.wrap = patch.alignment.wrap
       }
       if (patch.alignment.indent !== undefined) {
-        alignment.indent = patch.alignment.indent;
+        alignment.indent = patch.alignment.indent
       }
-      normalized.alignment = alignment;
+      normalized.alignment = alignment
     }
   }
   if (patch.borders !== undefined) {
     if (patch.borders === null) {
-      normalized.borders = null;
+      normalized.borders = null
     } else {
-      const borders: CellStyleBordersPatch = {};
+      const borders: CellStyleBordersPatch = {}
       if (patch.borders.top !== undefined) {
-        borders.top = normalizeBorderSidePatch(patch.borders.top);
+        borders.top = normalizeBorderSidePatch(patch.borders.top)
       }
       if (patch.borders.right !== undefined) {
-        borders.right = normalizeBorderSidePatch(patch.borders.right);
+        borders.right = normalizeBorderSidePatch(patch.borders.right)
       }
       if (patch.borders.bottom !== undefined) {
-        borders.bottom = normalizeBorderSidePatch(patch.borders.bottom);
+        borders.bottom = normalizeBorderSidePatch(patch.borders.bottom)
       }
       if (patch.borders.left !== undefined) {
-        borders.left = normalizeBorderSidePatch(patch.borders.left);
+        borders.left = normalizeBorderSidePatch(patch.borders.left)
       }
-      normalized.borders = borders;
+      normalized.borders = borders
     }
   }
 
-  return normalized;
+  return normalized
 }
 
-function normalizeNumberFormatInput(
-  format: z.infer<typeof setRangeNumberFormatArgsSchema>["format"],
-): CellNumberFormatInput {
-  if (typeof format === "string") {
-    return format;
+function normalizeNumberFormatInput(format: z.infer<typeof setRangeNumberFormatArgsSchema>['format']): CellNumberFormatInput {
+  if (typeof format === 'string') {
+    return format
   }
 
   const normalized: CellNumberFormatPreset = {
     kind: format.kind,
-  };
+  }
   if (format.currency !== undefined) {
-    normalized.currency = format.currency;
+    normalized.currency = format.currency
   }
   if (format.decimals !== undefined) {
-    normalized.decimals = format.decimals;
+    normalized.decimals = format.decimals
   }
   if (format.useGrouping !== undefined) {
-    normalized.useGrouping = format.useGrouping;
+    normalized.useGrouping = format.useGrouping
   }
   if (format.negativeStyle !== undefined) {
-    normalized.negativeStyle = format.negativeStyle;
+    normalized.negativeStyle = format.negativeStyle
   }
   if (format.zeroStyle !== undefined) {
-    normalized.zeroStyle = format.zeroStyle;
+    normalized.zeroStyle = format.zeroStyle
   }
   if (format.dateStyle !== undefined) {
-    normalized.dateStyle = format.dateStyle;
+    normalized.dateStyle = format.dateStyle
   }
-  return normalized;
+  return normalized
 }
 
 function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIdentity): string {
-  if (state.ownerUserId !== "system" || !session?.userID) {
-    return state.ownerUserId;
+  if (state.ownerUserId !== 'system' || !session?.userID) {
+    return state.ownerUserId
   }
-  return session.userID;
+  return session.userID
 }
 
 function toEngineUndoBundle(undoOps: readonly EngineOp[] | null): WorkbookChangeUndoBundle | null {
   if (!undoOps || undoOps.length === 0) {
-    return null;
+    return null
   }
   return {
-    kind: "engineOps",
+    kind: 'engineOps',
     ops: structuredClone([...undoOps]),
-  };
+  }
 }
 
-function captureEngineUndoBundle(
-  engine: SpreadsheetEngine,
-  mutate: (engine: SpreadsheetEngine) => void,
-): WorkbookChangeUndoBundle | null {
+function captureEngineUndoBundle(engine: SpreadsheetEngine, mutate: (engine: SpreadsheetEngine) => void): WorkbookChangeUndoBundle | null {
   return toEngineUndoBundle(
     engine.captureUndoOps(() => {
-      mutate(engine);
+      mutate(engine)
     }).undoOps,
-  );
+  )
 }
 
-function applyWorkbookChangeUndoBundle(
-  engine: SpreadsheetEngine,
-  undoBundle: WorkbookChangeUndoBundle,
-): WorkbookChangeUndoBundle | null {
+function applyWorkbookChangeUndoBundle(engine: SpreadsheetEngine, undoBundle: WorkbookChangeUndoBundle): WorkbookChangeUndoBundle | null {
   switch (undoBundle.kind) {
-    case "engineOps":
-      return toEngineUndoBundle(engine.applyOps(undoBundle.ops, { captureUndo: true }));
-    case "snapshot": {
-      const redoSnapshot = engine.exportSnapshot();
-      engine.importSnapshot(undoBundle.snapshot);
+    case 'engineOps':
+      return toEngineUndoBundle(engine.applyOps(undoBundle.ops, { captureUndo: true }))
+    case 'snapshot': {
+      const redoSnapshot = engine.exportSnapshot()
+      engine.importSnapshot(undoBundle.snapshot)
       return {
-        kind: "snapshot",
+        kind: 'snapshot',
         snapshot: redoSnapshot,
-      };
+      }
     }
     default: {
-      const exhaustive: never = undoBundle;
-      return exhaustive;
+      const exhaustive: never = undoBundle
+      return exhaustive
     }
   }
 }
@@ -278,15 +260,15 @@ async function commitWorkbookMutation(
   mutate: (engine: SpreadsheetEngine) => WorkbookChangeUndoBundle | null,
   clientMutationId?: string,
   session?: SessionIdentity,
-  updatedBy = session?.userID ?? "system",
+  updatedBy = session?.userID ?? 'system',
 ) {
   return await runtimeManager.runExclusive(documentId, async () => {
-    const db = tx.dbTransaction.wrappedTransaction;
-    await acquireWorkbookMutationLock(db, documentId);
-    const state = await runtimeManager.loadRuntime(db, documentId);
+    const db = tx.dbTransaction.wrappedTransaction
+    await acquireWorkbookMutationLock(db, documentId)
+    const state = await runtimeManager.loadRuntime(db, documentId)
     try {
-      const undoBundle = mutate(state.engine);
-      const ownerUserId = resolveOwnerUserId(state, session);
+      const undoBundle = mutate(state.engine)
+      const ownerUserId = resolveOwnerUserId(state, session)
       const result = await persistWorkbookMutation(db, documentId, {
         previousState: state,
         nextEngine: state.engine,
@@ -295,54 +277,46 @@ async function commitWorkbookMutation(
         eventPayload,
         undoBundle,
         ...(clientMutationId !== undefined ? { clientMutationId } : {}),
-      });
+      })
       runtimeManager.commitMutation(documentId, {
         projectionCommit: result.projectionCommit,
         headRevision: result.revision,
         calculatedRevision: result.calculatedRevision,
         ownerUserId,
-      });
+      })
       return {
         documentId,
         revision: result.revision,
         updatedAt: result.updatedAt,
-      };
+      }
     } catch (error) {
-      runtimeManager.invalidate(documentId);
-      throw error;
+      runtimeManager.invalidate(documentId)
+      throw error
     }
-  });
+  })
 }
 
 async function commitWorkbookHistoryMutation(input: {
-  documentId: string;
-  serverTx: ServerTransactionLike;
-  runtimeManager: WorkbookRuntimeManager;
-  session?: SessionIdentity;
-  clientMutationId?: string;
+  documentId: string
+  serverTx: ServerTransactionLike
+  runtimeManager: WorkbookRuntimeManager
+  session?: SessionIdentity
+  clientMutationId?: string
   targetChange: {
-    revision: number;
-    summary: string;
-    sheetName: string | null;
-    anchorAddress: string | null;
-    range: import("./workbook-change-store.js").WorkbookChangeRange | null;
-    undoBundle: WorkbookChangeUndoBundle;
-  };
-  eventKind: "revertChange" | "redoChange";
+    revision: number
+    summary: string
+    sheetName: string | null
+    anchorAddress: string | null
+    range: import('./workbook-change-store.js').WorkbookChangeRange | null
+    undoBundle: WorkbookChangeUndoBundle
+  }
+  eventKind: 'revertChange' | 'redoChange'
 }): Promise<void> {
-  const {
-    clientMutationId,
-    documentId,
-    eventKind,
-    runtimeManager,
-    serverTx,
-    session,
-    targetChange,
-  } = input;
+  const { clientMutationId, documentId, eventKind, runtimeManager, serverTx, session, targetChange } = input
   await runtimeManager.runExclusive(documentId, async () => {
-    const db = serverTx.dbTransaction.wrappedTransaction;
-    await acquireWorkbookMutationLock(db, documentId);
-    const state = await runtimeManager.loadRuntime(db, documentId);
+    const db = serverTx.dbTransaction.wrappedTransaction
+    await acquireWorkbookMutationLock(db, documentId)
+    const state = await runtimeManager.loadRuntime(db, documentId)
     const eventPayload: WorkbookEventPayload = {
       kind: eventKind,
       targetRevision: targetChange.revision,
@@ -351,30 +325,30 @@ async function commitWorkbookHistoryMutation(input: {
       ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
       ...(targetChange.range ? { range: targetChange.range } : {}),
       appliedBundle: targetChange.undoBundle,
-    };
+    }
     try {
-      const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle);
-      const ownerUserId = resolveOwnerUserId(state, session);
+      const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle)
+      const ownerUserId = resolveOwnerUserId(state, session)
       const result = await persistWorkbookMutation(db, documentId, {
         previousState: state,
         nextEngine: state.engine,
-        updatedBy: session?.userID ?? "system",
+        updatedBy: session?.userID ?? 'system',
         ownerUserId,
         eventPayload,
         undoBundle,
         ...(clientMutationId !== undefined ? { clientMutationId } : {}),
-      });
+      })
       runtimeManager.commitMutation(documentId, {
         projectionCommit: result.projectionCommit,
         headRevision: result.revision,
         calculatedRevision: result.calculatedRevision,
         ownerUserId,
-      });
+      })
     } catch (error) {
-      runtimeManager.invalidate(documentId);
-      throw error;
+      runtimeManager.invalidate(documentId)
+      throw error
     }
-  });
+  })
 }
 
 export async function handleServerMutator(
@@ -384,60 +358,57 @@ export async function handleServerMutator(
   runtimeManager: WorkbookRuntimeManager,
   session?: SessionIdentity,
 ): Promise<void> {
-  const serverTx = requireServerTransaction(tx);
+  const serverTx = requireServerTransaction(tx)
 
   switch (name) {
-    case "workbook.applyBatch": {
-      const parsed = parseApplyBatchArgs(args);
+    case 'workbook.applyBatch': {
+      const parsed = parseApplyBatchArgs(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "applyBatch",
+          kind: 'applyBatch',
           batch: parsed.batch,
         },
         runtimeManager,
         (engine) => {
-          return toEngineUndoBundle(engine.applyOps(parsed.batch.ops, { captureUndo: true }));
+          return toEngineUndoBundle(engine.applyOps(parsed.batch.ops, { captureUndo: true }))
         },
         parsed.clientMutationId,
         session,
-        session?.userID ??
-          (isRecord(parsed.batch) && typeof parsed.batch["replicaId"] === "string"
-            ? parsed.batch["replicaId"]
-            : "system"),
-      );
-      return;
+        session?.userID ?? (isRecord(parsed.batch) && typeof parsed.batch['replicaId'] === 'string' ? parsed.batch['replicaId'] : 'system'),
+      )
+      return
     }
 
-    case "workbook.applyAgentCommandBundle": {
-      const parsed = applyAgentCommandBundleArgsSchema.parse(args);
+    case 'workbook.applyAgentCommandBundle': {
+      const parsed = applyAgentCommandBundleArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "applyAgentCommandBundle",
+          kind: 'applyAgentCommandBundle',
           bundle: parsed.bundle,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            applyWorkbookAgentCommandBundle(draft, parsed.bundle);
-          });
+            applyWorkbookAgentCommandBundle(draft, parsed.bundle)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.setCellValue": {
-      const parsed = setCellValueArgsSchema.parse(args);
+    case 'workbook.setCellValue': {
+      const parsed = setCellValueArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "setCellValue",
+          kind: 'setCellValue',
           sheetName: parsed.sheetName,
           address: parsed.address,
           value: parsed.value,
@@ -445,22 +416,22 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.setCellValue(parsed.sheetName, parsed.address, parsed.value);
-          });
+            draft.setCellValue(parsed.sheetName, parsed.address, parsed.value)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.setCellFormula": {
-      const parsed = setCellFormulaArgsSchema.parse(args);
+    case 'workbook.setCellFormula': {
+      const parsed = setCellFormulaArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "setCellFormula",
+          kind: 'setCellFormula',
           sheetName: parsed.sheetName,
           address: parsed.address,
           formula: parsed.formula,
@@ -468,152 +439,152 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
-          });
+            draft.setCellFormula(parsed.sheetName, parsed.address, parsed.formula)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.clearCell": {
-      const parsed = clearCellArgsSchema.parse(args);
+    case 'workbook.clearCell': {
+      const parsed = clearCellArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "clearCell",
+          kind: 'clearCell',
           sheetName: parsed.sheetName,
           address: parsed.address,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.clearCell(parsed.sheetName, parsed.address);
-          });
+            draft.clearCell(parsed.sheetName, parsed.address)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.clearRange": {
-      const parsed = clearRangeArgsSchema.parse(args);
+    case 'workbook.clearRange': {
+      const parsed = clearRangeArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "clearRange",
+          kind: 'clearRange',
           range: parsed.range,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.clearRange(parsed.range);
-          });
+            draft.clearRange(parsed.range)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.renderCommit": {
-      const parsed = parseRenderCommitArgs(args);
+    case 'workbook.renderCommit': {
+      const parsed = parseRenderCommitArgs(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "renderCommit",
+          kind: 'renderCommit',
           ops: parsed.ops,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.renderCommit(parsed.ops);
-          });
+            draft.renderCommit(parsed.ops)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.fillRange": {
-      const parsed = rangeMutationArgsSchema.parse(args);
+    case 'workbook.fillRange': {
+      const parsed = rangeMutationArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "fillRange",
+          kind: 'fillRange',
           source: parsed.source,
           target: parsed.target,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.fillRange(parsed.source, parsed.target);
-          });
+            draft.fillRange(parsed.source, parsed.target)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.copyRange": {
-      const parsed = rangeMutationArgsSchema.parse(args);
+    case 'workbook.copyRange': {
+      const parsed = rangeMutationArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "copyRange",
+          kind: 'copyRange',
           source: parsed.source,
           target: parsed.target,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.copyRange(parsed.source, parsed.target);
-          });
+            draft.copyRange(parsed.source, parsed.target)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.moveRange": {
-      const parsed = rangeMutationArgsSchema.parse(args);
+    case 'workbook.moveRange': {
+      const parsed = rangeMutationArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "moveRange",
+          kind: 'moveRange',
           source: parsed.source,
           target: parsed.target,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.moveRange(parsed.source, parsed.target);
-          });
+            draft.moveRange(parsed.source, parsed.target)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.updateRowMetadata": {
-      const parsed = updateRowMetadataArgsSchema.parse(args);
+    case 'workbook.updateRowMetadata': {
+      const parsed = updateRowMetadataArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "updateRowMetadata",
+          kind: 'updateRowMetadata',
           sheetName: parsed.sheetName,
           startRow: parsed.startRow,
           count: parsed.count,
@@ -623,34 +594,28 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.updateRowMetadata(
-              parsed.sheetName,
-              parsed.startRow,
-              parsed.count,
-              parsed.height,
-              parsed.hidden,
-            );
-          });
+            draft.updateRowMetadata(parsed.sheetName, parsed.startRow, parsed.count, parsed.height, parsed.hidden)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.insertRows":
-    case "workbook.deleteRows":
-    case "workbook.insertColumns":
-    case "workbook.deleteColumns": {
-      const parsed = structuralAxisMutationArgsSchema.parse(args);
+    case 'workbook.insertRows':
+    case 'workbook.deleteRows':
+    case 'workbook.insertColumns':
+    case 'workbook.deleteColumns': {
+      const parsed = structuralAxisMutationArgsSchema.parse(args)
       const kind =
-        name === "workbook.insertRows"
-          ? "insertRows"
-          : name === "workbook.deleteRows"
-            ? "deleteRows"
-            : name === "workbook.insertColumns"
-              ? "insertColumns"
-              : "deleteColumns";
+        name === 'workbook.insertRows'
+          ? 'insertRows'
+          : name === 'workbook.deleteRows'
+            ? 'deleteRows'
+            : name === 'workbook.insertColumns'
+              ? 'insertColumns'
+              : 'deleteColumns'
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
@@ -664,34 +629,34 @@ export async function handleServerMutator(
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
             switch (kind) {
-              case "insertRows":
-                draft.insertRows(parsed.sheetName, parsed.start, parsed.count);
-                break;
-              case "deleteRows":
-                draft.deleteRows(parsed.sheetName, parsed.start, parsed.count);
-                break;
-              case "insertColumns":
-                draft.insertColumns(parsed.sheetName, parsed.start, parsed.count);
-                break;
-              case "deleteColumns":
-                draft.deleteColumns(parsed.sheetName, parsed.start, parsed.count);
-                break;
+              case 'insertRows':
+                draft.insertRows(parsed.sheetName, parsed.start, parsed.count)
+                break
+              case 'deleteRows':
+                draft.deleteRows(parsed.sheetName, parsed.start, parsed.count)
+                break
+              case 'insertColumns':
+                draft.insertColumns(parsed.sheetName, parsed.start, parsed.count)
+                break
+              case 'deleteColumns':
+                draft.deleteColumns(parsed.sheetName, parsed.start, parsed.count)
+                break
             }
-          });
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.updateColumnMetadata": {
-      const parsed = updateColumnMetadataArgsSchema.parse(args);
+    case 'workbook.updateColumnMetadata': {
+      const parsed = updateColumnMetadataArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "updateColumnMetadata",
+          kind: 'updateColumnMetadata',
           sheetName: parsed.sheetName,
           startCol: parsed.startCol,
           count: parsed.count,
@@ -701,28 +666,22 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.updateColumnMetadata(
-              parsed.sheetName,
-              parsed.startCol,
-              parsed.count,
-              parsed.width,
-              parsed.hidden,
-            );
-          });
+            draft.updateColumnMetadata(parsed.sheetName, parsed.startCol, parsed.count, parsed.width, parsed.hidden)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.updateColumnWidth": {
-      const parsed = updateColumnWidthArgsSchema.parse(args);
+    case 'workbook.updateColumnWidth': {
+      const parsed = updateColumnWidthArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "updateColumnWidth",
+          kind: 'updateColumnWidth',
           sheetName: parsed.sheetName,
           columnIndex: parsed.columnIndex,
           width: parsed.width,
@@ -730,22 +689,22 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
-          });
+            draft.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.setFreezePane": {
-      const parsed = setFreezePaneArgsSchema.parse(args);
+    case 'workbook.setFreezePane': {
+      const parsed = setFreezePaneArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "setFreezePane",
+          kind: 'setFreezePane',
           sheetName: parsed.sheetName,
           rows: parsed.rows,
           cols: parsed.cols,
@@ -753,51 +712,51 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.setFreezePane(parsed.sheetName, parsed.rows, parsed.cols);
-          });
+            draft.setFreezePane(parsed.sheetName, parsed.rows, parsed.cols)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.setRangeStyle": {
-      const parsed = setRangeStyleArgsSchema.parse(args);
-      const patch = normalizeStylePatch(parsed.patch);
+    case 'workbook.setRangeStyle': {
+      const parsed = setRangeStyleArgsSchema.parse(args)
+      const patch = normalizeStylePatch(parsed.patch)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "setRangeStyle",
+          kind: 'setRangeStyle',
           range: parsed.range,
           patch,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.setRangeStyle(parsed.range, patch);
-          });
+            draft.setRangeStyle(parsed.range, patch)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.clearRangeStyle": {
-      const parsed = clearRangeStyleArgsSchema.parse(args);
+    case 'workbook.clearRangeStyle': {
+      const parsed = clearRangeStyleArgsSchema.parse(args)
       const eventPayload =
         parsed.fields === undefined
           ? {
-              kind: "clearRangeStyle" as const,
+              kind: 'clearRangeStyle' as const,
               range: parsed.range,
             }
           : {
-              kind: "clearRangeStyle" as const,
+              kind: 'clearRangeStyle' as const,
               range: parsed.range,
               fields: parsed.fields,
-            };
+            }
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
@@ -805,105 +764,97 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.clearRangeStyle(parsed.range, parsed.fields);
-          });
+            draft.clearRangeStyle(parsed.range, parsed.fields)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.setRangeNumberFormat": {
-      const parsed = setRangeNumberFormatArgsSchema.parse(args);
-      const format = normalizeNumberFormatInput(parsed.format);
+    case 'workbook.setRangeNumberFormat': {
+      const parsed = setRangeNumberFormatArgsSchema.parse(args)
+      const format = normalizeNumberFormatInput(parsed.format)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "setRangeNumberFormat",
+          kind: 'setRangeNumberFormat',
           range: parsed.range,
           format,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.setRangeNumberFormat(parsed.range, format);
-          });
+            draft.setRangeNumberFormat(parsed.range, format)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.clearRangeNumberFormat": {
-      const parsed = clearRangeNumberFormatArgsSchema.parse(args);
+    case 'workbook.clearRangeNumberFormat': {
+      const parsed = clearRangeNumberFormatArgsSchema.parse(args)
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
         {
-          kind: "clearRangeNumberFormat",
+          kind: 'clearRangeNumberFormat',
           range: parsed.range,
         },
         runtimeManager,
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
-            draft.clearRangeNumberFormat(parsed.range);
-          });
+            draft.clearRangeNumberFormat(parsed.range)
+          })
         },
         parsed.clientMutationId,
         session,
-      );
-      return;
+      )
+      return
     }
 
-    case "workbook.updatePresence": {
-      const parsed = updatePresenceArgsSchema.parse(args);
-      await ensureWorkbookDocumentExists(
-        serverTx.dbTransaction.wrappedTransaction,
-        parsed.documentId,
-        session?.userID ?? "system",
-      );
+    case 'workbook.updatePresence': {
+      const parsed = updatePresenceArgsSchema.parse(args)
+      await ensureWorkbookDocumentExists(serverTx.dbTransaction.wrappedTransaction, parsed.documentId, session?.userID ?? 'system')
       await upsertWorkbookPresence(serverTx.dbTransaction.wrappedTransaction, {
         documentId: parsed.documentId,
         sessionId: parsed.sessionId,
-        userId: session?.userID ?? "system",
+        userId: session?.userID ?? 'system',
         presenceClientId: parsed.presenceClientId ?? null,
         sheetId: parsed.sheetId ?? null,
         sheetName: parsed.sheetName ?? null,
         address: parsed.address ?? null,
         selection: parsed.selection,
-      });
-      return;
+      })
+      return
     }
 
-    case "workbook.revertChange": {
-      const parsed = revertWorkbookChangeArgsSchema.parse(args);
-      const db = serverTx.dbTransaction.wrappedTransaction;
-      const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision);
+    case 'workbook.revertChange': {
+      const parsed = revertWorkbookChangeArgsSchema.parse(args)
+      const db = serverTx.dbTransaction.wrappedTransaction
+      const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision)
       if (!targetChange) {
-        throw new Error("Workbook change was not found");
+        throw new Error('Workbook change was not found')
       }
       if (!targetChange.undoBundle) {
-        throw new Error("Workbook change is not revertible");
+        throw new Error('Workbook change is not revertible')
       }
       if (targetChange.revertedByRevision !== null) {
-        throw new Error(
-          `Workbook change was already reverted in r${targetChange.revertedByRevision}`,
-        );
+        throw new Error(`Workbook change was already reverted in r${targetChange.revertedByRevision}`)
       }
-      if (targetChange.eventKind === "revertChange" || targetChange.revertsRevision !== null) {
-        throw new Error("Reverting a revert change is not supported");
+      if (targetChange.eventKind === 'revertChange' || targetChange.revertsRevision !== null) {
+        throw new Error('Reverting a revert change is not supported')
       }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
-        ...(parsed.clientMutationId !== undefined
-          ? { clientMutationId: parsed.clientMutationId }
-          : {}),
+        ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
         targetChange: {
           revision: targetChange.revision,
           summary: targetChange.summary,
@@ -912,31 +863,26 @@ export async function handleServerMutator(
           range: targetChange.range,
           undoBundle: targetChange.undoBundle,
         },
-        eventKind: "revertChange",
-      });
-      return;
+        eventKind: 'revertChange',
+      })
+      return
     }
 
-    case "workbook.undoLatestChange": {
-      const parsed = undoLatestWorkbookChangeArgsSchema.parse(args);
-      const targetChange = await loadLatestUndoableWorkbookChange(
-        serverTx.dbTransaction.wrappedTransaction,
-        {
-          documentId: parsed.documentId,
-          actorUserId: session?.userID ?? "system",
-        },
-      );
+    case 'workbook.undoLatestChange': {
+      const parsed = undoLatestWorkbookChangeArgsSchema.parse(args)
+      const targetChange = await loadLatestUndoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        actorUserId: session?.userID ?? 'system',
+      })
       if (!targetChange?.undoBundle) {
-        throw new Error("No undoable workbook change was found");
+        throw new Error('No undoable workbook change was found')
       }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
-        ...(parsed.clientMutationId !== undefined
-          ? { clientMutationId: parsed.clientMutationId }
-          : {}),
+        ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
         targetChange: {
           revision: targetChange.revision,
           summary: targetChange.summary,
@@ -945,31 +891,26 @@ export async function handleServerMutator(
           range: targetChange.range,
           undoBundle: targetChange.undoBundle,
         },
-        eventKind: "revertChange",
-      });
-      return;
+        eventKind: 'revertChange',
+      })
+      return
     }
 
-    case "workbook.redoLatestChange": {
-      const parsed = redoLatestWorkbookChangeArgsSchema.parse(args);
-      const targetChange = await loadLatestRedoableWorkbookChange(
-        serverTx.dbTransaction.wrappedTransaction,
-        {
-          documentId: parsed.documentId,
-          actorUserId: session?.userID ?? "system",
-        },
-      );
+    case 'workbook.redoLatestChange': {
+      const parsed = redoLatestWorkbookChangeArgsSchema.parse(args)
+      const targetChange = await loadLatestRedoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        actorUserId: session?.userID ?? 'system',
+      })
       if (!targetChange?.undoBundle) {
-        throw new Error("No redoable workbook change was found");
+        throw new Error('No redoable workbook change was found')
       }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
-        ...(parsed.clientMutationId !== undefined
-          ? { clientMutationId: parsed.clientMutationId }
-          : {}),
+        ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
         targetChange: {
           revision: targetChange.revision,
           summary: targetChange.summary,
@@ -978,12 +919,12 @@ export async function handleServerMutator(
           range: targetChange.range,
           undoBundle: targetChange.undoBundle,
         },
-        eventKind: "redoChange",
-      });
-      return;
+        eventKind: 'redoChange',
+      })
+      return
     }
 
     default:
-      throw new Error(`Unknown Zero mutator: ${name}`);
+      throw new Error(`Unknown Zero mutator: ${name}`)
   }
 }

@@ -1,7 +1,7 @@
-import type { SyncState } from "@bilig/protocol";
-import { assign, fromCallback, sendTo, setup } from "xstate";
-import type { WorkbookWorkerStateSnapshot } from "./worker-runtime.js";
-import type { ZeroConnectionState } from "./worker-workbook-app-model.js";
+import type { SyncState } from '@bilig/protocol'
+import { assign, fromCallback, sendTo, setup } from 'xstate'
+import type { WorkbookWorkerStateSnapshot } from './worker-runtime.js'
+import type { ZeroConnectionState } from './worker-workbook-app-model.js'
 import {
   createWorkerRuntimeSessionController,
   type CreateWorkerRuntimeSessionInput,
@@ -9,103 +9,98 @@ import {
   type WorkerRuntimeSelection,
   type WorkerRuntimeSessionController,
   type WorkerRuntimeSessionPhase,
-} from "./runtime-session.js";
+} from './runtime-session.js'
 
-type ConnectionStateName = ZeroConnectionState["name"];
+type ConnectionStateName = ZeroConnectionState['name']
 
 interface WorkerRuntimeMachineContext {
-  readonly sessionInput: WorkerRuntimeMachineInput;
-  readonly persistState: boolean;
-  readonly controller: WorkerRuntimeSessionController | null;
-  readonly handle: WorkerHandle | null;
-  readonly runtimeState: WorkbookWorkerStateSnapshot | null;
-  readonly selection: WorkerRuntimeSelection;
-  readonly connectionStateName: ConnectionStateName;
-  readonly error: string | null;
+  readonly sessionInput: WorkerRuntimeMachineInput
+  readonly persistState: boolean
+  readonly controller: WorkerRuntimeSessionController | null
+  readonly handle: WorkerHandle | null
+  readonly runtimeState: WorkbookWorkerStateSnapshot | null
+  readonly selection: WorkerRuntimeSelection
+  readonly connectionStateName: ConnectionStateName
+  readonly error: string | null
 }
 
 type WorkerRuntimeMachineEvent =
-  | { type: "retry"; persistState?: boolean }
-  | { type: "error.clear" }
-  | { type: "selection.changed"; selection: WorkerRuntimeSelection }
-  | { type: "connection.changed"; connectionStateName: ConnectionStateName }
-  | { type: "session.ready"; controller: WorkerRuntimeSessionController }
-  | { type: "session.runtime"; runtimeState: WorkbookWorkerStateSnapshot }
-  | { type: "session.selection"; selection: WorkerRuntimeSelection }
-  | { type: "session.phase"; phase: WorkerRuntimeSessionPhase }
-  | { type: "session.error"; message: string }
-  | { type: "session.failed"; message: string };
+  | { type: 'retry'; persistState?: boolean }
+  | { type: 'error.clear' }
+  | { type: 'selection.changed'; selection: WorkerRuntimeSelection }
+  | { type: 'connection.changed'; connectionStateName: ConnectionStateName }
+  | { type: 'session.ready'; controller: WorkerRuntimeSessionController }
+  | { type: 'session.runtime'; runtimeState: WorkbookWorkerStateSnapshot }
+  | { type: 'session.selection'; selection: WorkerRuntimeSelection }
+  | { type: 'session.phase'; phase: WorkerRuntimeSessionPhase }
+  | { type: 'session.error'; message: string }
+  | { type: 'session.failed'; message: string }
 
 export interface WorkerRuntimeMachineInput extends CreateWorkerRuntimeSessionInput {
-  readonly connectionStateName?: ConnectionStateName;
+  readonly connectionStateName?: ConnectionStateName
   readonly createSession?: (
     input: CreateWorkerRuntimeSessionInput,
     callbacks: Parameters<typeof createWorkerRuntimeSessionController>[1],
-  ) => Promise<WorkerRuntimeSessionController>;
+  ) => Promise<WorkerRuntimeSessionController>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function isWorkbookWorkerStateSnapshotValue(value: unknown): value is WorkbookWorkerStateSnapshot {
   return (
     isRecord(value) &&
-    typeof value["workbookName"] === "string" &&
-    Array.isArray(value["sheetNames"]) &&
-    isRecord(value["metrics"]) &&
-    typeof value["syncState"] === "string"
-  );
+    typeof value['workbookName'] === 'string' &&
+    Array.isArray(value['sheetNames']) &&
+    isRecord(value['metrics']) &&
+    typeof value['syncState'] === 'string'
+  )
 }
 
 function initialConnectionStateName(input: WorkerRuntimeMachineInput): ConnectionStateName {
-  return input.connectionStateName ?? (input.zero ? "connecting" : "closed");
+  return input.connectionStateName ?? (input.zero ? 'connecting' : 'closed')
 }
 
-function mapConnectionStateToRuntimeSyncState(
-  connectionStateName: ConnectionStateName,
-  hasZero: boolean,
-): SyncState | null {
+function mapConnectionStateToRuntimeSyncState(connectionStateName: ConnectionStateName, hasZero: boolean): SyncState | null {
   if (!hasZero) {
-    return "local-only";
+    return 'local-only'
   }
   switch (connectionStateName) {
-    case "connected":
-      return "live";
-    case "connecting":
-      return "syncing";
-    case "disconnected":
-      return "reconnecting";
-    case "needs-auth":
-    case "error":
-    case "closed":
-      return "local-only";
+    case 'connected':
+      return 'live'
+    case 'connecting':
+      return 'syncing'
+    case 'disconnected':
+      return 'reconnecting'
+    case 'needs-auth':
+    case 'error':
+    case 'closed':
+      return 'local-only'
   }
 }
 
 function resolveSteadySubstate(input: {
-  hasZero: boolean;
-  connectionStateName: ConnectionStateName;
-}): "localReady" | "live" | "syncing" | "offline" {
+  hasZero: boolean
+  connectionStateName: ConnectionStateName
+}): 'localReady' | 'live' | 'syncing' | 'offline' {
   if (!input.hasZero) {
-    return "localReady";
+    return 'localReady'
   }
   switch (input.connectionStateName) {
-    case "connected":
-      return "live";
-    case "connecting":
-      return "syncing";
-    case "disconnected":
-    case "needs-auth":
-    case "error":
-    case "closed":
-      return "offline";
+    case 'connected':
+      return 'live'
+    case 'connecting':
+      return 'syncing'
+    case 'disconnected':
+    case 'needs-auth':
+    case 'error':
+    case 'closed':
+      return 'offline'
   }
 }
 
-function buildSessionCreateInput(
-  input: WorkerRuntimeMachineInput,
-): CreateWorkerRuntimeSessionInput {
+function buildSessionCreateInput(input: WorkerRuntimeMachineInput): CreateWorkerRuntimeSessionInput {
   return {
     documentId: input.documentId,
     replicaId: input.replicaId,
@@ -115,7 +110,7 @@ function buildSessionCreateInput(
     ...(input.zero ? { zero: input.zero } : {}),
     ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
     ...(input.createWorker ? { createWorker: input.createWorker } : {}),
-  };
+  }
 }
 
 export function createWorkerRuntimeMachine() {
@@ -125,60 +120,60 @@ export function createWorkerRuntimeMachine() {
       receive,
       input,
     }: {
-      sendBack: (event: WorkerRuntimeMachineEvent) => void;
-      receive: (listener: (event: WorkerRuntimeMachineEvent) => void) => void;
-      input: WorkerRuntimeMachineInput;
+      sendBack: (event: WorkerRuntimeMachineEvent) => void
+      receive: (listener: (event: WorkerRuntimeMachineEvent) => void) => void
+      input: WorkerRuntimeMachineInput
     }) => {
-      const createSession = input.createSession ?? createWorkerRuntimeSessionController;
-      let controller: WorkerRuntimeSessionController | null = null;
-      let disposed = false;
-      let pendingSelection = input.initialSelection;
-      let pendingConnectionStateName = initialConnectionStateName(input);
+      const createSession = input.createSession ?? createWorkerRuntimeSessionController
+      let controller: WorkerRuntimeSessionController | null = null
+      let disposed = false
+      let pendingSelection = input.initialSelection
+      let pendingConnectionStateName = initialConnectionStateName(input)
 
       const applyExternalSyncState = async (): Promise<void> => {
         if (!controller) {
-          return;
+          return
         }
         const value = await controller.invoke(
-          "setExternalSyncState",
+          'setExternalSyncState',
           mapConnectionStateToRuntimeSyncState(pendingConnectionStateName, Boolean(input.zero)),
-        );
+        )
         if (!disposed && isWorkbookWorkerStateSnapshotValue(value)) {
-          sendBack({ type: "session.runtime", runtimeState: value });
+          sendBack({ type: 'session.runtime', runtimeState: value })
         }
-      };
+      }
 
       receive((event) => {
-        if (event.type === "selection.changed") {
-          pendingSelection = event.selection;
+        if (event.type === 'selection.changed') {
+          pendingSelection = event.selection
           if (!controller) {
-            return;
+            return
           }
           void controller.setSelection(event.selection).catch((error: unknown) => {
             if (!disposed) {
               sendBack({
-                type: "session.error",
+                type: 'session.error',
                 message: error instanceof Error ? error.message : String(error),
-              });
+              })
             }
-          });
-          return;
+          })
+          return
         }
-        if (event.type === "connection.changed") {
-          pendingConnectionStateName = event.connectionStateName;
+        if (event.type === 'connection.changed') {
+          pendingConnectionStateName = event.connectionStateName
           if (!controller) {
-            return;
+            return
           }
           void applyExternalSyncState().catch((error: unknown) => {
             if (!disposed) {
               sendBack({
-                type: "session.error",
+                type: 'session.error',
                 message: error instanceof Error ? error.message : String(error),
-              });
+              })
             }
-          });
+          })
         }
-      });
+      })
 
       void createSession(
         buildSessionCreateInput({
@@ -187,35 +182,35 @@ export function createWorkerRuntimeMachine() {
         }),
         {
           onRuntimeState(runtimeState) {
-            sendBack({ type: "session.runtime", runtimeState });
+            sendBack({ type: 'session.runtime', runtimeState })
           },
           onSelection(selection) {
-            pendingSelection = selection;
-            sendBack({ type: "session.selection", selection });
+            pendingSelection = selection
+            sendBack({ type: 'session.selection', selection })
           },
           onPhase(phase) {
-            sendBack({ type: "session.phase", phase });
+            sendBack({ type: 'session.phase', phase })
           },
           onError(message) {
-            sendBack({ type: "session.error", message });
+            sendBack({ type: 'session.error', message })
           },
         },
       )
         .then((createdController) => {
           if (disposed) {
-            createdController.dispose();
-            return undefined;
+            createdController.dispose()
+            return undefined
           }
-          controller = createdController;
-          sendBack({ type: "session.ready", controller: createdController });
+          controller = createdController
+          sendBack({ type: 'session.ready', controller: createdController })
           void applyExternalSyncState().catch((error: unknown) => {
             if (!disposed) {
               sendBack({
-                type: "session.error",
+                type: 'session.error',
                 message: error instanceof Error ? error.message : String(error),
-              });
+              })
             }
-          });
+          })
           if (
             pendingSelection.sheetName !== createdController.selection.sheetName ||
             pendingSelection.address !== createdController.selection.address
@@ -223,36 +218,36 @@ export function createWorkerRuntimeMachine() {
             void createdController.setSelection(pendingSelection).catch((error: unknown) => {
               if (!disposed) {
                 sendBack({
-                  type: "session.error",
+                  type: 'session.error',
                   message: error instanceof Error ? error.message : String(error),
-                });
+                })
               }
-            });
+            })
           }
-          return undefined;
+          return undefined
         })
         .catch((error: unknown) => {
           if (!disposed) {
             sendBack({
-              type: "session.failed",
+              type: 'session.failed',
               message: error instanceof Error ? error.message : String(error),
-            });
+            })
           }
-          return undefined;
-        });
+          return undefined
+        })
 
       return () => {
-        disposed = true;
-        controller?.dispose();
-      };
+        disposed = true
+        controller?.dispose()
+      }
     },
-  );
+  )
 
   return setup<
     WorkerRuntimeMachineContext,
     WorkerRuntimeMachineEvent,
     {
-      readonly runtimeSession: typeof runtimeSessionActor;
+      readonly runtimeSession: typeof runtimeSessionActor
     },
     {},
     {},
@@ -265,8 +260,8 @@ export function createWorkerRuntimeMachine() {
       runtimeSession: runtimeSessionActor,
     },
   }).createMachine({
-    id: "workerRuntime",
-    initial: "active",
+    id: 'workerRuntime',
+    initial: 'active',
     context: ({ input }) => ({
       sessionInput: input,
       persistState: input.persistState,
@@ -280,8 +275,8 @@ export function createWorkerRuntimeMachine() {
     states: {
       active: {
         invoke: {
-          id: "runtimeSession",
-          src: "runtimeSession",
+          id: 'runtimeSession',
+          src: 'runtimeSession',
           input: ({ context }) => ({
             ...context.sessionInput,
             persistState: context.persistState,
@@ -291,74 +286,74 @@ export function createWorkerRuntimeMachine() {
         },
         on: {
           retry: {
-            target: "#workerRuntime.active",
+            target: '#workerRuntime.active',
             reenter: true,
             actions: assign({
-              persistState: ({ context, event }) => event["persistState"] ?? context.persistState,
+              persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
               handle: () => null,
               controller: () => null,
               runtimeState: () => null,
               error: () => null,
             }),
           },
-          "error.clear": {
+          'error.clear': {
             actions: assign({
               error: () => null,
             }),
           },
-          "selection.changed": {
+          'selection.changed': {
             actions: [
               assign({
-                selection: ({ event }) => event["selection"],
+                selection: ({ event }) => event['selection'],
               }),
-              sendTo("runtimeSession", ({ event }) => event),
+              sendTo('runtimeSession', ({ event }) => event),
             ],
           },
-          "connection.changed": {
+          'connection.changed': {
             actions: [
               assign({
-                connectionStateName: ({ event }) => event["connectionStateName"],
+                connectionStateName: ({ event }) => event['connectionStateName'],
               }),
-              sendTo("runtimeSession", ({ event }) => event),
+              sendTo('runtimeSession', ({ event }) => event),
             ],
           },
-          "session.runtime": {
+          'session.runtime': {
             actions: assign({
-              runtimeState: ({ event }) => event["runtimeState"],
+              runtimeState: ({ event }) => event['runtimeState'],
             }),
           },
-          "session.selection": {
+          'session.selection': {
             actions: assign({
-              selection: ({ event }) => event["selection"],
+              selection: ({ event }) => event['selection'],
             }),
           },
-          "session.error": {
+          'session.error': {
             actions: assign({
-              error: ({ event }) => event["message"],
+              error: ({ event }) => event['message'],
             }),
           },
-          "session.failed": {
-            target: "failed",
+          'session.failed': {
+            target: 'failed',
             actions: assign({
-              error: ({ event }) => event["message"],
+              error: ({ event }) => event['message'],
               controller: () => null,
               handle: () => null,
               runtimeState: () => null,
             }),
           },
-          "session.ready": [
+          'session.ready': [
             {
               guard: ({ context }) =>
                 resolveSteadySubstate({
                   hasZero: Boolean(context.sessionInput.zero),
                   connectionStateName: context.connectionStateName,
-                }) === "live",
-              target: ".live",
+                }) === 'live',
+              target: '.live',
               actions: assign({
-                handle: ({ event }) => event["controller"].handle,
-                controller: ({ event }) => event["controller"],
-                runtimeState: ({ event }) => event["controller"].runtimeState,
-                selection: ({ event }) => event["controller"].selection,
+                handle: ({ event }) => event['controller'].handle,
+                controller: ({ event }) => event['controller'],
+                runtimeState: ({ event }) => event['controller'].runtimeState,
+                selection: ({ event }) => event['controller'].selection,
                 error: () => null,
               }),
             },
@@ -367,13 +362,13 @@ export function createWorkerRuntimeMachine() {
                 resolveSteadySubstate({
                   hasZero: Boolean(context.sessionInput.zero),
                   connectionStateName: context.connectionStateName,
-                }) === "syncing",
-              target: ".syncing",
+                }) === 'syncing',
+              target: '.syncing',
               actions: assign({
-                handle: ({ event }) => event["controller"].handle,
-                controller: ({ event }) => event["controller"],
-                runtimeState: ({ event }) => event["controller"].runtimeState,
-                selection: ({ event }) => event["controller"].selection,
+                handle: ({ event }) => event['controller'].handle,
+                controller: ({ event }) => event['controller'],
+                runtimeState: ({ event }) => event['controller'].runtimeState,
+                selection: ({ event }) => event['controller'].selection,
                 error: () => null,
               }),
             },
@@ -382,97 +377,97 @@ export function createWorkerRuntimeMachine() {
                 resolveSteadySubstate({
                   hasZero: Boolean(context.sessionInput.zero),
                   connectionStateName: context.connectionStateName,
-                }) === "offline",
-              target: ".offline",
+                }) === 'offline',
+              target: '.offline',
               actions: assign({
-                handle: ({ event }) => event["controller"].handle,
-                controller: ({ event }) => event["controller"],
-                runtimeState: ({ event }) => event["controller"].runtimeState,
-                selection: ({ event }) => event["controller"].selection,
+                handle: ({ event }) => event['controller'].handle,
+                controller: ({ event }) => event['controller'],
+                runtimeState: ({ event }) => event['controller'].runtimeState,
+                selection: ({ event }) => event['controller'].selection,
                 error: () => null,
               }),
             },
             {
-              target: ".localReady",
+              target: '.localReady',
               actions: assign({
-                handle: ({ event }) => event["controller"].handle,
-                controller: ({ event }) => event["controller"],
-                runtimeState: ({ event }) => event["controller"].runtimeState,
-                selection: ({ event }) => event["controller"].selection,
+                handle: ({ event }) => event['controller'].handle,
+                controller: ({ event }) => event['controller'],
+                runtimeState: ({ event }) => event['controller'].runtimeState,
+                selection: ({ event }) => event['controller'].selection,
                 error: () => null,
               }),
             },
           ],
-          "session.phase": [
+          'session.phase': [
             {
-              guard: ({ event }) => event["phase"] === "hydratingLocal",
-              target: ".hydratingLocal",
+              guard: ({ event }) => event['phase'] === 'hydratingLocal',
+              target: '.hydratingLocal',
             },
             {
-              guard: ({ event }) => event["phase"] === "syncing",
-              target: ".syncing",
+              guard: ({ event }) => event['phase'] === 'syncing',
+              target: '.syncing',
             },
             {
-              guard: ({ event }) => event["phase"] === "reconciling",
-              target: ".reconciling",
+              guard: ({ event }) => event['phase'] === 'reconciling',
+              target: '.reconciling',
             },
             {
-              guard: ({ event }) => event["phase"] === "recovering",
-              target: ".recovering",
-            },
-            {
-              guard: ({ context, event }) =>
-                event["phase"] === "steady" &&
-                resolveSteadySubstate({
-                  hasZero: Boolean(context.sessionInput.zero),
-                  connectionStateName: context.connectionStateName,
-                }) === "live",
-              target: ".live",
+              guard: ({ event }) => event['phase'] === 'recovering',
+              target: '.recovering',
             },
             {
               guard: ({ context, event }) =>
-                event["phase"] === "steady" &&
+                event['phase'] === 'steady' &&
                 resolveSteadySubstate({
                   hasZero: Boolean(context.sessionInput.zero),
                   connectionStateName: context.connectionStateName,
-                }) === "syncing",
-              target: ".syncing",
+                }) === 'live',
+              target: '.live',
             },
             {
               guard: ({ context, event }) =>
-                event["phase"] === "steady" &&
+                event['phase'] === 'steady' &&
                 resolveSteadySubstate({
                   hasZero: Boolean(context.sessionInput.zero),
                   connectionStateName: context.connectionStateName,
-                }) === "offline",
-              target: ".offline",
+                }) === 'syncing',
+              target: '.syncing',
             },
             {
-              guard: ({ event }) => event["phase"] === "steady",
-              target: ".localReady",
+              guard: ({ context, event }) =>
+                event['phase'] === 'steady' &&
+                resolveSteadySubstate({
+                  hasZero: Boolean(context.sessionInput.zero),
+                  connectionStateName: context.connectionStateName,
+                }) === 'offline',
+              target: '.offline',
+            },
+            {
+              guard: ({ event }) => event['phase'] === 'steady',
+              target: '.localReady',
             },
           ],
         },
-        initial: "booting",
+        initial: 'booting',
         states: {
           booting: {},
           hydratingLocal: {},
           syncing: {
             on: {
-              "connection.changed": [
+              'connection.changed': [
                 {
                   guard: ({ context, event }) =>
                     context.controller !== null &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
-                      connectionStateName: event["connectionStateName"],
-                    }) === "live",
-                  target: "#workerRuntime.active.live",
+                      connectionStateName: event['connectionStateName'],
+                    }) === 'live',
+                  target: '#workerRuntime.active.live',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
@@ -480,14 +475,14 @@ export function createWorkerRuntimeMachine() {
                     context.controller !== null &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
-                      connectionStateName: event["connectionStateName"],
-                    }) === "offline",
-                  target: "#workerRuntime.active.offline",
+                      connectionStateName: event['connectionStateName'],
+                    }) === 'offline',
+                  target: '#workerRuntime.active.offline',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
@@ -495,22 +490,22 @@ export function createWorkerRuntimeMachine() {
                     context.controller !== null &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
-                      connectionStateName: event["connectionStateName"],
-                    }) === "localReady",
-                  target: "#workerRuntime.active.localReady",
+                      connectionStateName: event['connectionStateName'],
+                    }) === 'localReady',
+                  target: '#workerRuntime.active.localReady',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
               ],
@@ -518,23 +513,23 @@ export function createWorkerRuntimeMachine() {
           },
           localReady: {
             on: {
-              "connection.changed": [
+              'connection.changed': [
                 {
-                  guard: ({ event }) => event["connectionStateName"] === "connected",
-                  target: "#workerRuntime.active.live",
+                  guard: ({ event }) => event['connectionStateName'] === 'connected',
+                  target: '#workerRuntime.active.live',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
               ],
@@ -542,33 +537,33 @@ export function createWorkerRuntimeMachine() {
           },
           live: {
             on: {
-              "connection.changed": [
+              'connection.changed': [
                 {
-                  guard: ({ event }) => event["connectionStateName"] === "connected",
+                  guard: ({ event }) => event['connectionStateName'] === 'connected',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
-                  guard: ({ event }) => event["connectionStateName"] === "connecting",
-                  target: "#workerRuntime.active.syncing",
+                  guard: ({ event }) => event['connectionStateName'] === 'connecting',
+                  target: '#workerRuntime.active.syncing',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
-                  target: "#workerRuntime.active.offline",
+                  target: '#workerRuntime.active.offline',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
               ],
@@ -576,33 +571,33 @@ export function createWorkerRuntimeMachine() {
           },
           offline: {
             on: {
-              "connection.changed": [
+              'connection.changed': [
                 {
-                  guard: ({ event }) => event["connectionStateName"] === "connected",
-                  target: "#workerRuntime.active.live",
+                  guard: ({ event }) => event['connectionStateName'] === 'connected',
+                  target: '#workerRuntime.active.live',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
-                  guard: ({ event }) => event["connectionStateName"] === "connecting",
-                  target: "#workerRuntime.active.syncing",
+                  guard: ({ event }) => event['connectionStateName'] === 'connecting',
+                  target: '#workerRuntime.active.syncing',
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
                 {
                   actions: [
                     assign({
-                      connectionStateName: ({ event }) => event["connectionStateName"],
+                      connectionStateName: ({ event }) => event['connectionStateName'],
                     }),
-                    sendTo("runtimeSession", ({ event }) => event),
+                    sendTo('runtimeSession', ({ event }) => event),
                   ],
                 },
               ],
@@ -614,15 +609,15 @@ export function createWorkerRuntimeMachine() {
       },
       failed: {
         on: {
-          "error.clear": {
+          'error.clear': {
             actions: assign({
               error: () => null,
             }),
           },
           retry: {
-            target: "active",
+            target: 'active',
             actions: assign({
-              persistState: ({ context, event }) => event["persistState"] ?? context.persistState,
+              persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
               handle: () => null,
               controller: () => null,
               runtimeState: () => null,
@@ -632,5 +627,5 @@ export function createWorkerRuntimeMachine() {
         },
       },
     },
-  });
+  })
 }

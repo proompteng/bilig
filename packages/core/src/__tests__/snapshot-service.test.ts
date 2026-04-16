@@ -1,100 +1,96 @@
-import { Effect, Exit } from "effect";
-import { describe, expect, it } from "vitest";
-import { FormulaTable } from "../formula-table.js";
-import { createReplicaState } from "../replica-state.js";
-import { createEngineSnapshotService } from "../engine/services/snapshot-service.js";
-import { StringPool } from "../string-pool.js";
-import { WorkbookStore } from "../workbook-store.js";
-import { SpreadsheetEngine } from "../engine.js";
+import { Effect, Exit } from 'effect'
+import { describe, expect, it } from 'vitest'
+import { FormulaTable } from '../formula-table.js'
+import { createReplicaState } from '../replica-state.js'
+import { createEngineSnapshotService } from '../engine/services/snapshot-service.js'
+import { StringPool } from '../string-pool.js'
+import { WorkbookStore } from '../workbook-store.js'
+import { SpreadsheetEngine } from '../engine.js'
 
-describe("EngineSnapshotService", () => {
-  it("normalizes thrown import failures into tagged snapshot errors", () => {
-    const workbook = new WorkbookStore("book");
+describe('EngineSnapshotService', () => {
+  it('normalizes thrown import failures into tagged snapshot errors', () => {
+    const workbook = new WorkbookStore('book')
     const service = createEngineSnapshotService({
       state: {
         workbook,
         strings: new StringPool(),
         formulas: new FormulaTable(workbook.cellStore),
-        replicaState: createReplicaState("replica"),
+        replicaState: createReplicaState('replica'),
         entityVersions: new Map(),
         sheetDeleteVersions: new Map(),
       },
       getCellByIndex: () => {
-        throw new Error("unused");
+        throw new Error('unused')
       },
       resetWorkbook: () => {
-        throw new Error("broken");
+        throw new Error('broken')
       },
       executeRestoreTransaction: () => {},
-    });
+    })
 
     const exit = Effect.runSyncExit(
       service.importWorkbook({
         version: 1,
-        workbook: { name: "book" },
+        workbook: { name: 'book' },
         sheets: [],
       }),
-    );
+    )
 
-    expect(Exit.isFailure(exit)).toBe(true);
-  });
+    expect(Exit.isFailure(exit)).toBe(true)
+  })
 
-  it("roundtrips replica tracking maps through the service boundary", () => {
-    const workbook = new WorkbookStore("book");
+  it('roundtrips replica tracking maps through the service boundary', () => {
+    const workbook = new WorkbookStore('book')
     const state = {
       workbook,
       strings: new StringPool(),
       formulas: new FormulaTable(workbook.cellStore),
-      replicaState: createReplicaState("replica"),
-      entityVersions: new Map([
-        ["cell:1", { counter: 2, replicaId: "replica", batchId: "replica:2", opIndex: 0 }],
-      ]),
-      sheetDeleteVersions: new Map([
-        ["Sheet1", { counter: 3, replicaId: "replica", batchId: "replica:3", opIndex: 0 }],
-      ]),
-    };
+      replicaState: createReplicaState('replica'),
+      entityVersions: new Map([['cell:1', { counter: 2, replicaId: 'replica', batchId: 'replica:2', opIndex: 0 }]]),
+      sheetDeleteVersions: new Map([['Sheet1', { counter: 3, replicaId: 'replica', batchId: 'replica:3', opIndex: 0 }]]),
+    }
     const service = createEngineSnapshotService({
       state,
       getCellByIndex: () => {
-        throw new Error("unused");
+        throw new Error('unused')
       },
       resetWorkbook: () => {},
       executeRestoreTransaction: () => {},
-    });
+    })
 
-    const exported = Effect.runSync(service.exportReplica());
-    state.entityVersions.clear();
-    state.sheetDeleteVersions.clear();
+    const exported = Effect.runSync(service.exportReplica())
+    state.entityVersions.clear()
+    state.sheetDeleteVersions.clear()
 
-    Effect.runSync(service.importReplica(exported));
+    Effect.runSync(service.importReplica(exported))
 
-    expect(state.entityVersions.get("cell:1")).toEqual(exported.entityVersions[0]?.order);
-    expect(state.sheetDeleteVersions.get("Sheet1")).toEqual(exported.sheetDeleteVersions[0]?.order);
-  });
+    expect(state.entityVersions.get('cell:1')).toEqual(exported.entityVersions[0]?.order)
+    expect(state.sheetDeleteVersions.get('Sheet1')).toEqual(exported.sheetDeleteVersions[0]?.order)
+  })
 
-  it("preserves explicit authored blank cells through snapshot import", async () => {
+  it('preserves explicit authored blank cells through snapshot import', async () => {
     const snapshot = {
       version: 1 as const,
-      workbook: { name: "snapshot-authored-blank" },
+      workbook: { name: 'snapshot-authored-blank' },
       sheets: [
         {
           id: 1,
-          name: "Sheet1",
+          name: 'Sheet1',
           order: 0,
           cells: [
-            { address: "D3", value: null },
-            { address: "E3", formula: "D3+C3" },
+            { address: 'D3', value: null },
+            { address: 'E3', formula: 'D3+C3' },
           ],
         },
       ],
-    };
+    }
     const restored = new SpreadsheetEngine({
       workbookName: snapshot.workbook.name,
-      replicaId: "snapshot-authored-blank-restore",
-    });
-    await restored.ready();
-    restored.importSnapshot(snapshot);
+      replicaId: 'snapshot-authored-blank-restore',
+    })
+    await restored.ready()
+    restored.importSnapshot(snapshot)
 
-    expect(restored.exportSnapshot()).toEqual(snapshot);
-  });
-});
+    expect(restored.exportSnapshot()).toEqual(snapshot)
+  })
+})

@@ -1,1 +1,1 @@
-export type { WorkbookSnapshot } from "@bilig/protocol";
+export type { WorkbookSnapshot } from '@bilig/protocol'

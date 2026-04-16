@@ -1,18 +1,18 @@
-import React from "react";
-import { describe, expect, it, vi } from "vitest";
-import { SpreadsheetEngine } from "@bilig/core";
-import { Cell, Sheet, Workbook } from "../components.js";
-import { createWorkbookRendererRoot } from "../renderer-root.js";
+import React from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { SpreadsheetEngine } from '@bilig/core'
+import { Cell, Sheet, Workbook } from '../components.js'
+import { createWorkbookRendererRoot } from '../renderer-root.js'
 
 function PassthroughWrapper({ children }: { children?: React.ReactNode }) {
-  return <>{children}</>;
+  return <>{children}</>
 }
 
-describe("createWorkbookRendererRoot", () => {
-  it("commits workbook DSL trees into the engine and clears on unmount", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-test" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+describe('createWorkbookRendererRoot', () => {
+  it('commits workbook DSL trees into the engine and clears on unmount', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-test' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
     await root.render(
       <Workbook name="test">
@@ -21,24 +21,24 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
       </Workbook>,
-    );
+    )
 
-    expect(engine.getCell("Sheet1", "A1").format).toBe("currency-usd");
-    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: 1, value: 20 });
+    expect(engine.getCell('Sheet1', 'A1').format).toBe('currency-usd')
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: 1, value: 20 })
 
-    await root.unmount();
+    await root.unmount()
 
-    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 0 });
-  });
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: 0 })
+  })
 
-  it("keeps rerenders idempotent and stable under StrictMode", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-strict" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
-    const batches: number[] = [];
+  it('keeps rerenders idempotent and stable under StrictMode', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-strict' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
+    const batches: number[] = []
     const unsubscribe = engine.subscribe((event) => {
-      batches.push(event.metrics.batchId);
-    });
+      batches.push(event.metrics.batchId)
+    })
 
     const tree = (
       <React.StrictMode>
@@ -49,23 +49,23 @@ describe("createWorkbookRendererRoot", () => {
           </Sheet>
         </Workbook>
       </React.StrictMode>
-    );
+    )
 
-    await root.render(tree);
-    await root.render(tree);
+    await root.render(tree)
+    await root.render(tree)
 
-    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: 1, value: 20 });
-    expect(batches).toHaveLength(1);
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: 1, value: 20 })
+    expect(batches).toHaveLength(1)
 
-    unsubscribe();
-    await root.unmount();
-  });
+    unsubscribe()
+    await root.unmount()
+  })
 
-  it("rejects invalid workbook DSL trees without mutating the engine", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-invalid" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  it('rejects invalid workbook DSL trees without mutating the engine', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-invalid' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     try {
       await expect(
@@ -74,22 +74,22 @@ describe("createWorkbookRendererRoot", () => {
             <Cell addr="A1" value={10} />
           </Workbook>,
         ),
-      ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
+      ).rejects.toThrow('Only <Sheet> nodes can exist under <Workbook>.')
 
       expect(engine.exportSnapshot()).toEqual({
         version: 1,
-        workbook: { name: "renderer-root-invalid" },
+        workbook: { name: 'renderer-root-invalid' },
         sheets: [],
-      });
+      })
     } finally {
-      consoleError.mockRestore();
+      consoleError.mockRestore()
     }
-  });
+  })
 
-  it("supports wrapper nodes and applies renames without leaking stale sheets or cells", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-updates" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+  it('supports wrapper nodes and applies renames without leaking stale sheets or cells', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-updates' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
     await root.render(
       <>
@@ -101,7 +101,7 @@ describe("createWorkbookRendererRoot", () => {
           </React.Fragment>
         </Workbook>
       </>,
-    );
+    )
 
     await root.render(
       <Workbook name="book-renamed">
@@ -109,27 +109,27 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="B2" value={21} />
         </Sheet>
       </Workbook>,
-    );
+    )
 
     expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
-      workbook: { name: "book-renamed" },
+      workbook: { name: 'book-renamed' },
       sheets: [
         {
           id: expect.any(Number),
-          name: "Renamed",
+          name: 'Renamed',
           order: 0,
-          cells: [{ address: "B2", value: 21 }],
+          cells: [{ address: 'B2', value: 21 }],
         },
       ],
-    });
-    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 0 });
-  });
+    })
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: 0 })
+  })
 
-  it("rejects text nodes inside sheets without mutating committed state", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-text" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+  it('rejects text nodes inside sheets without mutating committed state', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-text' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
     await root.render(
       <Workbook name="valid">
@@ -137,34 +137,34 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="A1" value={10} />
         </Sheet>
       </Workbook>,
-    );
+    )
 
     await expect(
       root.render(
         <Workbook name="invalid">
-          <Sheet name="Sheet1">{"bad"}</Sheet>
+          <Sheet name="Sheet1">{'bad'}</Sheet>
         </Workbook>,
       ),
-    ).rejects.toThrow("Workbook DSL does not support text nodes.");
+    ).rejects.toThrow('Workbook DSL does not support text nodes.')
 
     expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
-      workbook: { name: "valid" },
+      workbook: { name: 'valid' },
       sheets: [
         {
           id: expect.any(Number),
-          name: "Sheet1",
+          name: 'Sheet1',
           order: 0,
-          cells: [{ address: "A1", value: 10 }],
+          cells: [{ address: 'A1', value: 10 }],
         },
       ],
-    });
-  });
+    })
+  })
 
-  it("rejects invalid root, sheet, and cell contracts before commit", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-contracts" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+  it('rejects invalid root, sheet, and cell contracts before commit', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-contracts' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
     await expect(
       root.render(
@@ -172,27 +172,27 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="A1" value={1} />
         </Sheet>,
       ),
-    ).rejects.toThrow("Root descriptor must be a Workbook.");
+    ).rejects.toThrow('Root descriptor must be a Workbook.')
 
     await expect(
       root.render(
         <Workbook name="missing-sheet-name">
-          <Sheet name={""}>
+          <Sheet name={''}>
             <Cell addr="A1" value={1} />
           </Sheet>
         </Workbook>,
       ),
-    ).rejects.toThrow("<Sheet> requires a name prop.");
+    ).rejects.toThrow('<Sheet> requires a name prop.')
 
     await expect(
       root.render(
         <Workbook name="missing-addr">
           <Sheet name="Sheet1">
-            <Cell addr={""} value={1} />
+            <Cell addr={''} value={1} />
           </Sheet>
         </Workbook>,
       ),
-    ).rejects.toThrow("<Cell> requires an addr prop.");
+    ).rejects.toThrow('<Cell> requires an addr prop.')
 
     await expect(
       root.render(
@@ -202,19 +202,19 @@ describe("createWorkbookRendererRoot", () => {
           </Sheet>
         </Workbook>,
       ),
-    ).rejects.toThrow("<Cell> cannot specify both value and formula.");
+    ).rejects.toThrow('<Cell> cannot specify both value and formula.')
 
     expect(engine.exportSnapshot()).toEqual({
       version: 1,
-      workbook: { name: "renderer-root-contracts" },
+      workbook: { name: 'renderer-root-contracts' },
       sheets: [],
-    });
-  });
+    })
+  })
 
-  it("allows clearing the rendered workbook by rendering null", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-clear" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+  it('allows clearing the rendered workbook by rendering null', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-clear' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
     await root.render(
       <Workbook name="clearable">
@@ -222,65 +222,57 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="A1" value={10} />
         </Sheet>
       </Workbook>,
-    );
+    )
 
-    await root.render(null);
+    await root.render(null)
 
     expect(engine.exportSnapshot()).toEqual({
       version: 1,
-      workbook: { name: "clearable" },
+      workbook: { name: 'clearable' },
       sheets: [],
-    });
-  });
+    })
+  })
 
-  it("accepts string host tags and non-DSL wrapper components", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-string-tags" });
-    await engine.ready();
-    const root = createWorkbookRendererRoot(engine);
+  it('accepts string host tags and non-DSL wrapper components', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-string-tags' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
 
-    const MemoWrapper = React.memo(function MemoWrapper({
-      children,
-    }: {
-      children?: React.ReactNode;
-    }) {
-      return <>{children}</>;
-    });
+    const MemoWrapper = React.memo(function MemoWrapper({ children }: { children?: React.ReactNode }) {
+      return <>{children}</>
+    })
 
     await root.render(
       React.createElement(
         PassthroughWrapper,
         null,
         React.createElement(
-          "Workbook",
-          { name: "string-book" },
+          'Workbook',
+          { name: 'string-book' },
           React.createElement(
             MemoWrapper,
             null,
             React.createElement(
-              "Sheet",
-              { name: "Sheet1" },
-              React.createElement(
-                PassthroughWrapper,
-                null,
-                React.createElement("Cell", { addr: "A1", value: 9 }),
-              ),
+              'Sheet',
+              { name: 'Sheet1' },
+              React.createElement(PassthroughWrapper, null, React.createElement('Cell', { addr: 'A1', value: 9 })),
             ),
           ),
         ),
       ),
-    );
+    )
 
     expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
-      workbook: { name: "string-book" },
+      workbook: { name: 'string-book' },
       sheets: [
         {
           id: expect.any(Number),
-          name: "Sheet1",
+          name: 'Sheet1',
           order: 0,
-          cells: [{ address: "A1", value: 9 }],
+          cells: [{ address: 'A1', value: 9 }],
         },
       ],
-    });
-  });
-});
+    })
+  })
+})

@@ -1,71 +1,71 @@
-import { describe, expect, test } from "vitest";
-import { hasSelectionTargetChanged } from "../WorkbookGridSurface.js";
-import { getGridMetrics } from "../gridMetrics.js";
-import { resolveViewportScrollPosition } from "../workbookGridViewport.js";
+import { describe, expect, test } from 'vitest'
+import { hasSelectionTargetChanged } from '../WorkbookGridSurface.js'
+import { getGridMetrics } from '../gridMetrics.js'
+import { resolveViewportScrollPosition } from '../workbookGridViewport.js'
 
-describe("WorkbookGridSurface selection autoscroll", () => {
-  test("autoscrolls on first selection target", () => {
+describe('WorkbookGridSurface selection autoscroll', () => {
+  test('autoscrolls on first selection target', () => {
     expect(
       hasSelectionTargetChanged(null, {
-        sheetName: "Sheet1",
+        sheetName: 'Sheet1',
         col: 2,
         row: 4,
       }),
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  test("does not autoscroll again when the selection target is unchanged", () => {
+  test('does not autoscroll again when the selection target is unchanged', () => {
     expect(
       hasSelectionTargetChanged(
         {
-          sheetName: "Sheet1",
+          sheetName: 'Sheet1',
           col: 2,
           row: 4,
         },
         {
-          sheetName: "Sheet1",
+          sheetName: 'Sheet1',
           col: 2,
           row: 4,
         },
       ),
-    ).toBe(false);
-  });
+    ).toBe(false)
+  })
 
-  test("autoscrolls when the selected cell changes", () => {
+  test('autoscrolls when the selected cell changes', () => {
     expect(
       hasSelectionTargetChanged(
         {
-          sheetName: "Sheet1",
+          sheetName: 'Sheet1',
           col: 2,
           row: 4,
         },
         {
-          sheetName: "Sheet1",
+          sheetName: 'Sheet1',
           col: 3,
           row: 4,
         },
       ),
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  test("autoscrolls when the active sheet changes", () => {
+  test('autoscrolls when the active sheet changes', () => {
     expect(
       hasSelectionTargetChanged(
         {
-          sheetName: "Sheet1",
+          sheetName: 'Sheet1',
           col: 2,
           row: 4,
         },
         {
-          sheetName: "Sheet2",
+          sheetName: 'Sheet2',
           col: 2,
           row: 4,
         },
       ),
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  test("restores a saved viewport to the recorded top-left cell", () => {
+  test('restores a saved viewport to the recorded top-left cell', () => {
     expect(
       resolveViewportScrollPosition({
         viewport: {
@@ -79,6 +79,6 @@ describe("WorkbookGridSurface selection autoscroll", () => {
     ).toEqual({
       scrollLeft: getGridMetrics().columnWidth * 3,
       scrollTop: getGridMetrics().rowHeight * 14,
-    });
-  });
-});
+    })
+  })
+})

@@ -1,18 +1,15 @@
-import type { Queryable } from "./store.js";
-import {
-  resolveWorkbookSheetRef,
-  type WorkbookSheetRef as WorkbookPresenceSheetRef,
-} from "./workbook-sheet-ref.js";
+import type { Queryable } from './store.js'
+import { resolveWorkbookSheetRef, type WorkbookSheetRef as WorkbookPresenceSheetRef } from './workbook-sheet-ref.js'
 
 export interface UpsertWorkbookPresenceInput {
-  readonly documentId: string;
-  readonly sessionId: string;
-  readonly userId: string;
-  readonly presenceClientId?: string | null;
-  readonly sheetId?: number | null;
-  readonly sheetName?: string | null;
-  readonly address?: string | null;
-  readonly selection?: unknown;
+  readonly documentId: string
+  readonly sessionId: string
+  readonly userId: string
+  readonly presenceClientId?: string | null
+  readonly sheetId?: number | null
+  readonly sheetName?: string | null
+  readonly address?: string | null
+  readonly selection?: unknown
 }
 
 export async function ensureWorkbookPresenceSchema(db: Queryable): Promise<void> {
@@ -29,28 +26,21 @@ export async function ensureWorkbookPresenceSchema(db: Queryable): Promise<void>
       updated_at BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, session_id)
     );
-  `);
-  await db.query(
-    `CREATE INDEX IF NOT EXISTS presence_coarse_workbook_updated_idx ON presence_coarse(workbook_id, updated_at DESC);`,
-  );
-  await db.query(
-    `CREATE INDEX IF NOT EXISTS presence_coarse_updated_idx ON presence_coarse(updated_at);`,
-  );
-  await db.query(`ALTER TABLE presence_coarse ADD COLUMN IF NOT EXISTS presence_client_id TEXT;`);
+  `)
+  await db.query(`CREATE INDEX IF NOT EXISTS presence_coarse_workbook_updated_idx ON presence_coarse(workbook_id, updated_at DESC);`)
+  await db.query(`CREATE INDEX IF NOT EXISTS presence_coarse_updated_idx ON presence_coarse(updated_at);`)
+  await db.query(`ALTER TABLE presence_coarse ADD COLUMN IF NOT EXISTS presence_client_id TEXT;`)
 }
 
 export async function resolveWorkbookPresenceSheetRef(
   db: Queryable,
-  input: Pick<UpsertWorkbookPresenceInput, "documentId" | "sheetId" | "sheetName">,
+  input: Pick<UpsertWorkbookPresenceInput, 'documentId' | 'sheetId' | 'sheetName'>,
 ): Promise<WorkbookPresenceSheetRef> {
-  return await resolveWorkbookSheetRef(db, input);
+  return await resolveWorkbookSheetRef(db, input)
 }
 
-export async function upsertWorkbookPresence(
-  db: Queryable,
-  input: UpsertWorkbookPresenceInput,
-): Promise<void> {
-  const sheetRef = await resolveWorkbookPresenceSheetRef(db, input);
+export async function upsertWorkbookPresence(db: Queryable, input: UpsertWorkbookPresenceInput): Promise<void> {
+  const sheetRef = await resolveWorkbookPresenceSheetRef(db, input)
   await db.query(
     `
       INSERT INTO presence_coarse (
@@ -86,5 +76,5 @@ export async function upsertWorkbookPresence(
       JSON.stringify(input.selection ?? null),
       Date.now(),
     ],
-  );
+  )
 }

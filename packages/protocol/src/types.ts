@@ -1,182 +1,182 @@
-import { ErrorCode, type FormulaMode, type ValueTag } from "./enums.js";
+import { ErrorCode, type FormulaMode, type ValueTag } from './enums.js'
 
-export type CellIndex = number;
-export type FormulaId = number;
-export type RangeIndex = number;
-export type EntityId = number;
-export type LiteralInput = number | string | boolean | null;
-export type CompatibilityMode = "excel-modern" | "odf-1.4";
+export type CellIndex = number
+export type FormulaId = number
+export type RangeIndex = number
+export type EntityId = number
+export type LiteralInput = number | string | boolean | null
+export type CompatibilityMode = 'excel-modern' | 'odf-1.4'
 
-export type EmptyValue = { tag: ValueTag.Empty };
-export type NumberValue = { tag: ValueTag.Number; value: number };
-export type BooleanValue = { tag: ValueTag.Boolean; value: boolean };
-export type StringValue = { tag: ValueTag.String; value: string; stringId: number };
-export type ErrorValue = { tag: ValueTag.Error; code: ErrorCode };
+export type EmptyValue = { tag: ValueTag.Empty }
+export type NumberValue = { tag: ValueTag.Number; value: number }
+export type BooleanValue = { tag: ValueTag.Boolean; value: boolean }
+export type StringValue = { tag: ValueTag.String; value: string; stringId: number }
+export type ErrorValue = { tag: ValueTag.Error; code: ErrorCode }
 
-export type CellValue = EmptyValue | NumberValue | BooleanValue | StringValue | ErrorValue;
+export type CellValue = EmptyValue | NumberValue | BooleanValue | StringValue | ErrorValue
 
 export function formatErrorCode(code: ErrorCode): string {
   switch (code) {
     case ErrorCode.None:
-      return "#ERROR!";
+      return '#ERROR!'
     case ErrorCode.Div0:
-      return "#DIV/0!";
+      return '#DIV/0!'
     case ErrorCode.Ref:
-      return "#REF!";
+      return '#REF!'
     case ErrorCode.Value:
-      return "#VALUE!";
+      return '#VALUE!'
     case ErrorCode.Name:
-      return "#NAME?";
+      return '#NAME?'
     case ErrorCode.NA:
-      return "#N/A";
+      return '#N/A'
     case ErrorCode.Cycle:
-      return "#CYCLE!";
+      return '#CYCLE!'
     case ErrorCode.Spill:
-      return "#SPILL!";
+      return '#SPILL!'
     case ErrorCode.Blocked:
-      return "#BLOCKED!";
+      return '#BLOCKED!'
     default:
-      return "#ERROR!";
+      return '#ERROR!'
   }
 }
 
 export interface CellSnapshot {
-  sheetName: string;
-  address: string;
-  formula?: string;
-  format?: string;
-  numberFormatId?: string;
-  styleId?: string;
-  input?: LiteralInput;
-  value: CellValue;
-  flags: number;
-  version: number;
+  sheetName: string
+  address: string
+  formula?: string
+  format?: string
+  numberFormatId?: string
+  styleId?: string
+  input?: LiteralInput
+  value: CellValue
+  flags: number
+  version: number
 }
 
 export interface DependencySnapshot {
-  directPrecedents: string[];
-  directDependents: string[];
+  directPrecedents: string[]
+  directDependents: string[]
 }
 
 export interface ExplainCellSnapshot {
-  sheetName: string;
-  address: string;
-  formula?: string;
-  format?: string;
-  numberFormatId?: string;
-  styleId?: string;
-  mode?: FormulaMode;
-  value: CellValue;
-  flags: number;
-  version: number;
-  topoRank?: number;
-  inCycle: boolean;
-  directPrecedents: string[];
-  directDependents: string[];
+  sheetName: string
+  address: string
+  formula?: string
+  format?: string
+  numberFormatId?: string
+  styleId?: string
+  mode?: FormulaMode
+  value: CellValue
+  flags: number
+  version: number
+  topoRank?: number
+  inCycle: boolean
+  directPrecedents: string[]
+  directDependents: string[]
 }
 
 export interface RecalcMetrics {
-  batchId: number;
-  changedInputCount: number;
-  dirtyFormulaCount: number;
-  wasmFormulaCount: number;
-  jsFormulaCount: number;
-  rangeNodeVisits: number;
-  recalcMs: number;
-  compileMs: number;
+  batchId: number
+  changedInputCount: number
+  dirtyFormulaCount: number
+  wasmFormulaCount: number
+  jsFormulaCount: number
+  rangeNodeVisits: number
+  recalcMs: number
+  compileMs: number
 }
 
 export interface AxisInvalidation {
-  sheetName: string;
-  startIndex: number;
-  endIndex: number;
+  sheetName: string
+  startIndex: number
+  endIndex: number
 }
 
 export interface EngineChangedCell {
-  kind: "cell";
-  cellIndex: number;
+  kind: 'cell'
+  cellIndex: number
   address: {
-    sheet: number;
-    row: number;
-    col: number;
-  };
-  sheetName: string;
-  a1: string;
-  newValue: CellValue;
+    sheet: number
+    row: number
+    col: number
+  }
+  sheetName: string
+  a1: string
+  newValue: CellValue
 }
 
 export interface EngineEvent {
-  kind: "batch";
-  invalidation: "cells" | "full";
-  changedCellIndices: Uint32Array | number[];
-  changedCells: readonly EngineChangedCell[];
-  invalidatedRanges: CellRangeRef[];
-  invalidatedRows: AxisInvalidation[];
-  invalidatedColumns: AxisInvalidation[];
-  metrics: RecalcMetrics;
+  kind: 'batch'
+  invalidation: 'cells' | 'full'
+  changedCellIndices: Uint32Array | number[]
+  changedCells: readonly EngineChangedCell[]
+  invalidatedRanges: CellRangeRef[]
+  invalidatedRows: AxisInvalidation[]
+  invalidatedColumns: AxisInvalidation[]
+  metrics: RecalcMetrics
 }
 
 export interface CellRangeRef {
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
+  sheetName: string
+  startAddress: string
+  endAddress: string
 }
 
 export interface SelectionRange {
-  startAddress: string;
-  endAddress: string;
+  startAddress: string
+  endAddress: string
 }
 
-export type SelectionEditMode = "idle" | "cell" | "formula";
-export type SyncState = "local-only" | "syncing" | "live" | "behind" | "reconnecting";
+export type SelectionEditMode = 'idle' | 'cell' | 'formula'
+export type SyncState = 'local-only' | 'syncing' | 'live' | 'behind' | 'reconnecting'
 
 export interface SelectionState {
-  sheetName: string;
-  address: string | null;
-  anchorAddress: string | null;
-  range: SelectionRange | null;
-  editMode: SelectionEditMode;
+  sheetName: string
+  address: string | null
+  anchorAddress: string | null
+  range: SelectionRange | null
+  editMode: SelectionEditMode
 }
 
 export interface Viewport {
-  rowStart: number;
-  rowEnd: number;
-  colStart: number;
-  colEnd: number;
+  rowStart: number
+  rowEnd: number
+  colStart: number
+  colEnd: number
 }
 
 export interface WorkbookDefinedNameSnapshot {
-  name: string;
-  value: WorkbookDefinedNameValueSnapshot;
+  name: string
+  value: WorkbookDefinedNameValueSnapshot
 }
 
 export interface WorkbookDefinedNameScalarValueSnapshot {
-  kind: "scalar";
-  value: LiteralInput;
+  kind: 'scalar'
+  value: LiteralInput
 }
 
 export interface WorkbookDefinedNameCellRefValueSnapshot {
-  kind: "cell-ref";
-  sheetName: string;
-  address: string;
+  kind: 'cell-ref'
+  sheetName: string
+  address: string
 }
 
 export interface WorkbookDefinedNameRangeRefValueSnapshot {
-  kind: "range-ref";
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
+  kind: 'range-ref'
+  sheetName: string
+  startAddress: string
+  endAddress: string
 }
 
 export interface WorkbookDefinedNameStructuredRefValueSnapshot {
-  kind: "structured-ref";
-  tableName: string;
-  columnName: string;
+  kind: 'structured-ref'
+  tableName: string
+  columnName: string
 }
 
 export interface WorkbookDefinedNameFormulaValueSnapshot {
-  kind: "formula";
-  formula: string;
+  kind: 'formula'
+  formula: string
 }
 
 export type WorkbookDefinedNameValueSnapshot =
@@ -185,384 +185,369 @@ export type WorkbookDefinedNameValueSnapshot =
   | WorkbookDefinedNameCellRefValueSnapshot
   | WorkbookDefinedNameRangeRefValueSnapshot
   | WorkbookDefinedNameStructuredRefValueSnapshot
-  | WorkbookDefinedNameFormulaValueSnapshot;
+  | WorkbookDefinedNameFormulaValueSnapshot
 
 export interface WorkbookPropertySnapshot {
-  key: string;
-  value: LiteralInput;
+  key: string
+  value: LiteralInput
 }
 
 export interface WorkbookSpillSnapshot {
-  sheetName: string;
-  address: string;
-  rows: number;
-  cols: number;
+  sheetName: string
+  address: string
+  rows: number
+  cols: number
 }
 
-export type PivotAggregation = "sum" | "count";
+export type PivotAggregation = 'sum' | 'count'
 
 export interface WorkbookPivotValueSnapshot {
-  sourceColumn: string;
-  summarizeBy: PivotAggregation;
-  outputLabel?: string;
+  sourceColumn: string
+  summarizeBy: PivotAggregation
+  outputLabel?: string
 }
 
 export interface WorkbookPivotSnapshot {
-  name: string;
-  sheetName: string;
-  address: string;
-  source: CellRangeRef;
-  groupBy: string[];
-  values: WorkbookPivotValueSnapshot[];
-  rows: number;
-  cols: number;
+  name: string
+  sheetName: string
+  address: string
+  source: CellRangeRef
+  groupBy: string[]
+  values: WorkbookPivotValueSnapshot[]
+  rows: number
+  cols: number
 }
 
-export type WorkbookChartType = "column" | "bar" | "line" | "area" | "pie" | "scatter";
-export type WorkbookChartSeriesOrientation = "rows" | "columns";
-export type WorkbookChartLegendPosition = "top" | "right" | "bottom" | "left" | "hidden";
+export type WorkbookChartType = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'scatter'
+export type WorkbookChartSeriesOrientation = 'rows' | 'columns'
+export type WorkbookChartLegendPosition = 'top' | 'right' | 'bottom' | 'left' | 'hidden'
 
 export interface WorkbookChartSnapshot {
-  id: string;
-  sheetName: string;
-  address: string;
-  source: CellRangeRef;
-  chartType: WorkbookChartType;
-  seriesOrientation?: WorkbookChartSeriesOrientation;
-  firstRowAsHeaders?: boolean;
-  firstColumnAsLabels?: boolean;
-  title?: string;
-  legendPosition?: WorkbookChartLegendPosition;
-  rows: number;
-  cols: number;
+  id: string
+  sheetName: string
+  address: string
+  source: CellRangeRef
+  chartType: WorkbookChartType
+  seriesOrientation?: WorkbookChartSeriesOrientation
+  firstRowAsHeaders?: boolean
+  firstColumnAsLabels?: boolean
+  title?: string
+  legendPosition?: WorkbookChartLegendPosition
+  rows: number
+  cols: number
 }
 
 export interface WorkbookImageSnapshot {
-  id: string;
-  sheetName: string;
-  address: string;
-  sourceUrl: string;
-  rows: number;
-  cols: number;
-  altText?: string;
+  id: string
+  sheetName: string
+  address: string
+  sourceUrl: string
+  rows: number
+  cols: number
+  altText?: string
 }
 
-export type WorkbookShapeType =
-  | "rectangle"
-  | "roundedRectangle"
-  | "ellipse"
-  | "line"
-  | "arrow"
-  | "textBox";
+export type WorkbookShapeType = 'rectangle' | 'roundedRectangle' | 'ellipse' | 'line' | 'arrow' | 'textBox'
 
 export interface WorkbookShapeSnapshot {
-  id: string;
-  sheetName: string;
-  address: string;
-  shapeType: WorkbookShapeType;
-  rows: number;
-  cols: number;
-  text?: string;
-  fillColor?: string;
-  strokeColor?: string;
+  id: string
+  sheetName: string
+  address: string
+  shapeType: WorkbookShapeType
+  rows: number
+  cols: number
+  text?: string
+  fillColor?: string
+  strokeColor?: string
 }
 
 export interface WorkbookTableSnapshot {
-  name: string;
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
-  columnNames: string[];
-  headerRow: boolean;
-  totalsRow: boolean;
+  name: string
+  sheetName: string
+  startAddress: string
+  endAddress: string
+  columnNames: string[]
+  headerRow: boolean
+  totalsRow: boolean
 }
 
 export interface WorkbookAxisMetadataSnapshot {
-  start: number;
-  count: number;
-  size?: number | null;
-  hidden?: boolean | null;
+  start: number
+  count: number
+  size?: number | null
+  hidden?: boolean | null
 }
 
 export interface WorkbookAxisEntrySnapshot {
-  id: string;
-  index: number;
-  size?: number | null;
-  hidden?: boolean | null;
+  id: string
+  index: number
+  size?: number | null
+  hidden?: boolean | null
 }
 
-export type WorkbookCalculationMode = "automatic" | "manual";
+export type WorkbookCalculationMode = 'automatic' | 'manual'
 
 export interface WorkbookCalculationSettingsSnapshot {
-  mode: WorkbookCalculationMode;
-  compatibilityMode?: CompatibilityMode;
+  mode: WorkbookCalculationMode
+  compatibilityMode?: CompatibilityMode
 }
 
 export interface WorkbookVolatileContextSnapshot {
-  recalcEpoch: number;
+  recalcEpoch: number
 }
 
 export interface WorkbookFreezePaneSnapshot {
-  rows: number;
-  cols: number;
+  rows: number
+  cols: number
 }
 
 export interface CellStyleFillSnapshot {
-  backgroundColor: string;
+  backgroundColor: string
 }
 
 export interface CellStyleFontSnapshot {
-  family?: string;
-  size?: number;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  color?: string;
+  family?: string
+  size?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  color?: string
 }
 
-export type CellHorizontalAlignment = "general" | "left" | "center" | "right";
-export type CellVerticalAlignment = "top" | "middle" | "bottom";
-export type CellBorderStyle = "solid" | "dashed" | "dotted" | "double";
-export type CellBorderWeight = "thin" | "medium" | "thick";
+export type CellHorizontalAlignment = 'general' | 'left' | 'center' | 'right'
+export type CellVerticalAlignment = 'top' | 'middle' | 'bottom'
+export type CellBorderStyle = 'solid' | 'dashed' | 'dotted' | 'double'
+export type CellBorderWeight = 'thin' | 'medium' | 'thick'
 
 export interface CellStyleAlignmentSnapshot {
-  horizontal?: CellHorizontalAlignment;
-  vertical?: CellVerticalAlignment;
-  wrap?: boolean;
-  indent?: number;
+  horizontal?: CellHorizontalAlignment
+  vertical?: CellVerticalAlignment
+  wrap?: boolean
+  indent?: number
 }
 
 export interface CellBorderSideSnapshot {
-  style: CellBorderStyle;
-  weight: CellBorderWeight;
-  color: string;
+  style: CellBorderStyle
+  weight: CellBorderWeight
+  color: string
 }
 
 export interface CellStyleBordersSnapshot {
-  top?: CellBorderSideSnapshot;
-  right?: CellBorderSideSnapshot;
-  bottom?: CellBorderSideSnapshot;
-  left?: CellBorderSideSnapshot;
+  top?: CellBorderSideSnapshot
+  right?: CellBorderSideSnapshot
+  bottom?: CellBorderSideSnapshot
+  left?: CellBorderSideSnapshot
 }
 
 export interface CellStyleRecord {
-  id: string;
-  fill?: CellStyleFillSnapshot;
-  font?: CellStyleFontSnapshot;
-  alignment?: CellStyleAlignmentSnapshot;
-  borders?: CellStyleBordersSnapshot;
+  id: string
+  fill?: CellStyleFillSnapshot
+  font?: CellStyleFontSnapshot
+  alignment?: CellStyleAlignmentSnapshot
+  borders?: CellStyleBordersSnapshot
 }
 
 export interface CellStyleFillPatch {
-  backgroundColor?: string | null;
+  backgroundColor?: string | null
 }
 
 export interface CellStyleFontPatch {
-  family?: string | null;
-  size?: number | null;
-  bold?: boolean | null;
-  italic?: boolean | null;
-  underline?: boolean | null;
-  color?: string | null;
+  family?: string | null
+  size?: number | null
+  bold?: boolean | null
+  italic?: boolean | null
+  underline?: boolean | null
+  color?: string | null
 }
 
 export interface CellStyleAlignmentPatch {
-  horizontal?: CellHorizontalAlignment | null;
-  vertical?: CellVerticalAlignment | null;
-  wrap?: boolean | null;
-  indent?: number | null;
+  horizontal?: CellHorizontalAlignment | null
+  vertical?: CellVerticalAlignment | null
+  wrap?: boolean | null
+  indent?: number | null
 }
 
 export interface CellBorderSidePatch {
-  style?: CellBorderStyle | null;
-  weight?: CellBorderWeight | null;
-  color?: string | null;
+  style?: CellBorderStyle | null
+  weight?: CellBorderWeight | null
+  color?: string | null
 }
 
 export interface CellStyleBordersPatch {
-  top?: CellBorderSidePatch | null;
-  right?: CellBorderSidePatch | null;
-  bottom?: CellBorderSidePatch | null;
-  left?: CellBorderSidePatch | null;
+  top?: CellBorderSidePatch | null
+  right?: CellBorderSidePatch | null
+  bottom?: CellBorderSidePatch | null
+  left?: CellBorderSidePatch | null
 }
 
 export interface CellStylePatch {
-  fill?: CellStyleFillPatch | null;
-  font?: CellStyleFontPatch | null;
-  alignment?: CellStyleAlignmentPatch | null;
-  borders?: CellStyleBordersPatch | null;
+  fill?: CellStyleFillPatch | null
+  font?: CellStyleFontPatch | null
+  alignment?: CellStyleAlignmentPatch | null
+  borders?: CellStyleBordersPatch | null
 }
 
 export type CellStyleField =
-  | "backgroundColor"
-  | "fontFamily"
-  | "fontSize"
-  | "fontBold"
-  | "fontItalic"
-  | "fontUnderline"
-  | "fontColor"
-  | "alignmentHorizontal"
-  | "alignmentVertical"
-  | "alignmentWrap"
-  | "alignmentIndent"
-  | "borderTop"
-  | "borderRight"
-  | "borderBottom"
-  | "borderLeft";
+  | 'backgroundColor'
+  | 'fontFamily'
+  | 'fontSize'
+  | 'fontBold'
+  | 'fontItalic'
+  | 'fontUnderline'
+  | 'fontColor'
+  | 'alignmentHorizontal'
+  | 'alignmentVertical'
+  | 'alignmentWrap'
+  | 'alignmentIndent'
+  | 'borderTop'
+  | 'borderRight'
+  | 'borderBottom'
+  | 'borderLeft'
 
-export type CellNumberFormatKind =
-  | "general"
-  | "number"
-  | "currency"
-  | "accounting"
-  | "percent"
-  | "date"
-  | "time"
-  | "datetime"
-  | "text";
+export type CellNumberFormatKind = 'general' | 'number' | 'currency' | 'accounting' | 'percent' | 'date' | 'time' | 'datetime' | 'text'
 
-export type CellNumberNegativeStyle = "minus" | "parentheses";
-export type CellNumberZeroStyle = "zero" | "dash";
-export type CellDateStyle = "short" | "iso";
+export type CellNumberNegativeStyle = 'minus' | 'parentheses'
+export type CellNumberZeroStyle = 'zero' | 'dash'
+export type CellDateStyle = 'short' | 'iso'
 
 export interface CellNumberFormatPreset {
-  kind: CellNumberFormatKind;
-  currency?: string;
-  decimals?: number;
-  useGrouping?: boolean;
-  negativeStyle?: CellNumberNegativeStyle;
-  zeroStyle?: CellNumberZeroStyle;
-  dateStyle?: CellDateStyle;
+  kind: CellNumberFormatKind
+  currency?: string
+  decimals?: number
+  useGrouping?: boolean
+  negativeStyle?: CellNumberNegativeStyle
+  zeroStyle?: CellNumberZeroStyle
+  dateStyle?: CellDateStyle
 }
 
-export type CellNumberFormatInput = string | CellNumberFormatPreset;
+export type CellNumberFormatInput = string | CellNumberFormatPreset
 
 export interface CellNumberFormatRecord {
-  id: string;
-  code: string;
-  kind: CellNumberFormatKind;
+  id: string
+  code: string
+  kind: CellNumberFormatKind
 }
 
 export interface SheetStyleRangeSnapshot {
-  range: CellRangeRef;
-  styleId: string;
+  range: CellRangeRef
+  styleId: string
 }
 
 export interface SheetFormatRangeSnapshot {
-  range: CellRangeRef;
-  formatId: string;
+  range: CellRangeRef
+  formatId: string
 }
 
 export interface WorkbookSortKeySnapshot {
-  keyAddress: string;
-  direction: "asc" | "desc";
+  keyAddress: string
+  direction: 'asc' | 'desc'
 }
 
 export interface WorkbookSortSnapshot {
-  range: CellRangeRef;
-  keys: WorkbookSortKeySnapshot[];
+  range: CellRangeRef
+  keys: WorkbookSortKeySnapshot[]
 }
 
 export type WorkbookValidationComparisonOperator =
-  | "between"
-  | "notBetween"
-  | "equal"
-  | "notEqual"
-  | "greaterThan"
-  | "greaterThanOrEqual"
-  | "lessThan"
-  | "lessThanOrEqual";
+  | 'between'
+  | 'notBetween'
+  | 'equal'
+  | 'notEqual'
+  | 'greaterThan'
+  | 'greaterThanOrEqual'
+  | 'lessThan'
+  | 'lessThanOrEqual'
 
-export type WorkbookValidationErrorStyle = "stop" | "warning" | "information";
+export type WorkbookValidationErrorStyle = 'stop' | 'warning' | 'information'
 
 export interface WorkbookValidationNamedRangeSourceSnapshot {
-  kind: "named-range";
-  name: string;
+  kind: 'named-range'
+  name: string
 }
 
 export interface WorkbookValidationCellRefSourceSnapshot {
-  kind: "cell-ref";
-  sheetName: string;
-  address: string;
+  kind: 'cell-ref'
+  sheetName: string
+  address: string
 }
 
 export interface WorkbookValidationRangeRefSourceSnapshot {
-  kind: "range-ref";
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
+  kind: 'range-ref'
+  sheetName: string
+  startAddress: string
+  endAddress: string
 }
 
 export interface WorkbookValidationStructuredRefSourceSnapshot {
-  kind: "structured-ref";
-  tableName: string;
-  columnName: string;
+  kind: 'structured-ref'
+  tableName: string
+  columnName: string
 }
 
 export type WorkbookValidationListSourceSnapshot =
   | WorkbookValidationNamedRangeSourceSnapshot
   | WorkbookValidationCellRefSourceSnapshot
   | WorkbookValidationRangeRefSourceSnapshot
-  | WorkbookValidationStructuredRefSourceSnapshot;
+  | WorkbookValidationStructuredRefSourceSnapshot
 
 export interface WorkbookListValidationRuleSnapshot {
-  kind: "list";
-  values?: LiteralInput[];
-  source?: WorkbookValidationListSourceSnapshot;
+  kind: 'list'
+  values?: LiteralInput[]
+  source?: WorkbookValidationListSourceSnapshot
 }
 
 export interface WorkbookCheckboxValidationRuleSnapshot {
-  kind: "checkbox";
-  checkedValue?: LiteralInput;
-  uncheckedValue?: LiteralInput;
+  kind: 'checkbox'
+  checkedValue?: LiteralInput
+  uncheckedValue?: LiteralInput
 }
 
 export interface WorkbookScalarValidationRuleSnapshot {
-  kind: "whole" | "decimal" | "date" | "time" | "textLength";
-  operator: WorkbookValidationComparisonOperator;
-  values: LiteralInput[];
+  kind: 'whole' | 'decimal' | 'date' | 'time' | 'textLength'
+  operator: WorkbookValidationComparisonOperator
+  values: LiteralInput[]
 }
 
 export type WorkbookDataValidationRuleSnapshot =
   | WorkbookListValidationRuleSnapshot
   | WorkbookCheckboxValidationRuleSnapshot
-  | WorkbookScalarValidationRuleSnapshot;
+  | WorkbookScalarValidationRuleSnapshot
 
 export interface WorkbookDataValidationSnapshot {
-  range: CellRangeRef;
-  rule: WorkbookDataValidationRuleSnapshot;
-  allowBlank?: boolean;
-  showDropdown?: boolean;
-  promptTitle?: string;
-  promptMessage?: string;
-  errorStyle?: WorkbookValidationErrorStyle;
-  errorTitle?: string;
-  errorMessage?: string;
+  range: CellRangeRef
+  rule: WorkbookDataValidationRuleSnapshot
+  allowBlank?: boolean
+  showDropdown?: boolean
+  promptTitle?: string
+  promptMessage?: string
+  errorStyle?: WorkbookValidationErrorStyle
+  errorTitle?: string
+  errorMessage?: string
 }
 
 export interface WorkbookConditionalFormatCellIsRuleSnapshot {
-  kind: "cellIs";
-  operator: WorkbookValidationComparisonOperator;
-  values: LiteralInput[];
+  kind: 'cellIs'
+  operator: WorkbookValidationComparisonOperator
+  values: LiteralInput[]
 }
 
 export interface WorkbookConditionalFormatTextContainsRuleSnapshot {
-  kind: "textContains";
-  text: string;
-  caseSensitive?: boolean;
+  kind: 'textContains'
+  text: string
+  caseSensitive?: boolean
 }
 
 export interface WorkbookConditionalFormatFormulaRuleSnapshot {
-  kind: "formula";
-  formula: string;
+  kind: 'formula'
+  formula: string
 }
 
 export interface WorkbookConditionalFormatBlanksRuleSnapshot {
-  kind: "blanks";
+  kind: 'blanks'
 }
 
 export interface WorkbookConditionalFormatNotBlanksRuleSnapshot {
-  kind: "notBlanks";
+  kind: 'notBlanks'
 }
 
 export type WorkbookConditionalFormatRuleSnapshot =
@@ -570,116 +555,116 @@ export type WorkbookConditionalFormatRuleSnapshot =
   | WorkbookConditionalFormatTextContainsRuleSnapshot
   | WorkbookConditionalFormatFormulaRuleSnapshot
   | WorkbookConditionalFormatBlanksRuleSnapshot
-  | WorkbookConditionalFormatNotBlanksRuleSnapshot;
+  | WorkbookConditionalFormatNotBlanksRuleSnapshot
 
 export interface WorkbookConditionalFormatSnapshot {
-  id: string;
-  range: CellRangeRef;
-  rule: WorkbookConditionalFormatRuleSnapshot;
-  style: CellStylePatch;
-  stopIfTrue?: boolean;
-  priority?: number;
+  id: string
+  range: CellRangeRef
+  rule: WorkbookConditionalFormatRuleSnapshot
+  style: CellStylePatch
+  stopIfTrue?: boolean
+  priority?: number
 }
 
 export interface WorkbookSheetProtectionSnapshot {
-  sheetName: string;
-  hideFormulas?: boolean;
+  sheetName: string
+  hideFormulas?: boolean
 }
 
 export interface WorkbookRangeProtectionSnapshot {
-  id: string;
-  range: CellRangeRef;
-  hideFormulas?: boolean;
+  id: string
+  range: CellRangeRef
+  hideFormulas?: boolean
 }
 
 export interface WorkbookCommentEntrySnapshot {
-  id: string;
-  body: string;
-  authorUserId?: string;
-  authorDisplayName?: string;
-  createdAtUnixMs?: number;
+  id: string
+  body: string
+  authorUserId?: string
+  authorDisplayName?: string
+  createdAtUnixMs?: number
 }
 
 export interface WorkbookCommentThreadSnapshot {
-  threadId: string;
-  sheetName: string;
-  address: string;
-  comments: WorkbookCommentEntrySnapshot[];
-  resolved?: boolean;
-  resolvedByUserId?: string;
-  resolvedAtUnixMs?: number;
+  threadId: string
+  sheetName: string
+  address: string
+  comments: WorkbookCommentEntrySnapshot[]
+  resolved?: boolean
+  resolvedByUserId?: string
+  resolvedAtUnixMs?: number
 }
 
 export interface WorkbookNoteSnapshot {
-  sheetName: string;
-  address: string;
-  text: string;
+  sheetName: string
+  address: string
+  text: string
 }
 
 export interface WorkbookMetadataSnapshot {
-  properties?: WorkbookPropertySnapshot[];
-  definedNames?: WorkbookDefinedNameSnapshot[];
-  tables?: WorkbookTableSnapshot[];
-  spills?: WorkbookSpillSnapshot[];
-  pivots?: WorkbookPivotSnapshot[];
-  charts?: WorkbookChartSnapshot[];
-  images?: WorkbookImageSnapshot[];
-  shapes?: WorkbookShapeSnapshot[];
-  styles?: CellStyleRecord[];
-  formats?: CellNumberFormatRecord[];
-  calculationSettings?: WorkbookCalculationSettingsSnapshot;
-  volatileContext?: WorkbookVolatileContextSnapshot;
+  properties?: WorkbookPropertySnapshot[]
+  definedNames?: WorkbookDefinedNameSnapshot[]
+  tables?: WorkbookTableSnapshot[]
+  spills?: WorkbookSpillSnapshot[]
+  pivots?: WorkbookPivotSnapshot[]
+  charts?: WorkbookChartSnapshot[]
+  images?: WorkbookImageSnapshot[]
+  shapes?: WorkbookShapeSnapshot[]
+  styles?: CellStyleRecord[]
+  formats?: CellNumberFormatRecord[]
+  calculationSettings?: WorkbookCalculationSettingsSnapshot
+  volatileContext?: WorkbookVolatileContextSnapshot
 }
 
 export interface SheetMetadataSnapshot {
-  rows?: WorkbookAxisEntrySnapshot[];
-  columns?: WorkbookAxisEntrySnapshot[];
-  rowMetadata?: WorkbookAxisMetadataSnapshot[];
-  columnMetadata?: WorkbookAxisMetadataSnapshot[];
-  styleRanges?: SheetStyleRangeSnapshot[];
-  formatRanges?: SheetFormatRangeSnapshot[];
-  freezePane?: WorkbookFreezePaneSnapshot;
-  sheetProtection?: WorkbookSheetProtectionSnapshot;
-  filters?: CellRangeRef[];
-  sorts?: WorkbookSortSnapshot[];
-  validations?: WorkbookDataValidationSnapshot[];
-  conditionalFormats?: WorkbookConditionalFormatSnapshot[];
-  protectedRanges?: WorkbookRangeProtectionSnapshot[];
-  commentThreads?: WorkbookCommentThreadSnapshot[];
-  notes?: WorkbookNoteSnapshot[];
+  rows?: WorkbookAxisEntrySnapshot[]
+  columns?: WorkbookAxisEntrySnapshot[]
+  rowMetadata?: WorkbookAxisMetadataSnapshot[]
+  columnMetadata?: WorkbookAxisMetadataSnapshot[]
+  styleRanges?: SheetStyleRangeSnapshot[]
+  formatRanges?: SheetFormatRangeSnapshot[]
+  freezePane?: WorkbookFreezePaneSnapshot
+  sheetProtection?: WorkbookSheetProtectionSnapshot
+  filters?: CellRangeRef[]
+  sorts?: WorkbookSortSnapshot[]
+  validations?: WorkbookDataValidationSnapshot[]
+  conditionalFormats?: WorkbookConditionalFormatSnapshot[]
+  protectedRanges?: WorkbookRangeProtectionSnapshot[]
+  commentThreads?: WorkbookCommentThreadSnapshot[]
+  notes?: WorkbookNoteSnapshot[]
 }
 
 export interface WorkbookSnapshot {
-  version: 1;
+  version: 1
   workbook: {
-    name: string;
-    metadata?: WorkbookMetadataSnapshot;
-  };
+    name: string
+    metadata?: WorkbookMetadataSnapshot
+  }
   sheets: Array<{
-    id?: number;
-    name: string;
-    order: number;
-    metadata?: SheetMetadataSnapshot;
+    id?: number
+    name: string
+    order: number
+    metadata?: SheetMetadataSnapshot
     cells: Array<{
-      address: string;
-      value?: LiteralInput;
-      formula?: string;
-      format?: string;
-    }>;
-  }>;
+      address: string
+      value?: LiteralInput
+      formula?: string
+      format?: string
+    }>
+  }>
 }
 
 export interface FormulaRecord {
-  id: FormulaId;
-  source: string;
-  mode: FormulaMode;
-  depsPtr: number;
-  depsLen: number;
-  programOffset: number;
-  programLength: number;
-  constNumberOffset: number;
-  constNumberLength: number;
-  rangeListOffset: number;
-  rangeListLength: number;
-  maxStackDepth: number;
+  id: FormulaId
+  source: string
+  mode: FormulaMode
+  depsPtr: number
+  depsLen: number
+  programOffset: number
+  programLength: number
+  constNumberOffset: number
+  constNumberLength: number
+  rangeListOffset: number
+  rangeListLength: number
+  maxStackDepth: number
 }

@@ -1,7 +1,7 @@
-import type { WorkbookLocalStore } from "@bilig/storage-browser";
-import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from "./workbook-sync.js";
-import { isPendingWorkbookMutationInput } from "./workbook-sync.js";
-import { clonePendingWorkbookMutation } from "./workbook-mutation-journal.js";
+import type { WorkbookLocalStore } from '@bilig/storage-browser'
+import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
+import { isPendingWorkbookMutationInput } from './workbook-sync.js'
+import { clonePendingWorkbookMutation } from './workbook-mutation-journal.js'
 import {
   ackAbsorbedMutations,
   ackMutationInJournal,
@@ -10,80 +10,75 @@ import {
   markMutationSubmittedInJournal,
   recordMutationAttemptInJournal,
   retryMutationInJournal,
-} from "./worker-runtime-mutation-actions.js";
-import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
+} from './worker-runtime-mutation-actions.js'
+import { applyPendingWorkbookMutationToEngine } from './worker-runtime-mutation-replay.js'
 import {
   buildPendingMutationSummary,
   markJournalMutationsRebased,
   syncPendingMutationsFromJournal,
   type WorkerRuntimePendingMutationSummarySnapshot,
-} from "./worker-runtime-pending-mutations.js";
-import type { WorkerEngine } from "./worker-runtime-support.js";
+} from './worker-runtime-pending-mutations.js'
+import type { WorkerEngine } from './worker-runtime-support.js'
 
-type PersistableMutationJournalStore = Pick<
-  WorkbookLocalStore,
-  "appendPendingMutation" | "updatePendingMutation"
->;
+type PersistableMutationJournalStore = Pick<WorkbookLocalStore, 'appendPendingMutation' | 'updatePendingMutation'>
 
 export interface WorkerRuntimeMutationJournalBootstrapState {
-  readonly mutationJournalEntries: readonly PendingWorkbookMutation[];
-  readonly nextPendingMutationSeq: number;
+  readonly mutationJournalEntries: readonly PendingWorkbookMutation[]
+  readonly nextPendingMutationSeq: number
 }
 
 export class WorkerRuntimeMutationJournal {
-  private mutationJournalEntries: PendingWorkbookMutation[] = [];
-  private pendingMutations: PendingWorkbookMutation[] = [];
-  private nextPendingMutationSeq = 1;
+  private mutationJournalEntries: PendingWorkbookMutation[] = []
+  private pendingMutations: PendingWorkbookMutation[] = []
+  private nextPendingMutationSeq = 1
 
   constructor(
     private readonly deps: {
-      readonly getDocumentId: () => string;
-      readonly getAuthoritativeRevision: () => number;
-      readonly getLocalStore: () => PersistableMutationJournalStore | null;
-      readonly getProjectionEngine: () => Promise<WorkerEngine>;
-      readonly markProjectionDivergedFromLocalStore: () => void;
-      readonly queuePersist: () => Promise<void>;
-      readonly now?: () => number;
+      readonly getDocumentId: () => string
+      readonly getAuthoritativeRevision: () => number
+      readonly getLocalStore: () => PersistableMutationJournalStore | null
+      readonly getProjectionEngine: () => Promise<WorkerEngine>
+      readonly markProjectionDivergedFromLocalStore: () => void
+      readonly queuePersist: () => Promise<void>
+      readonly now?: () => number
     },
   ) {}
 
   reset(): void {
-    this.mutationJournalEntries = [];
-    this.pendingMutations = [];
-    this.nextPendingMutationSeq = 1;
+    this.mutationJournalEntries = []
+    this.pendingMutations = []
+    this.nextPendingMutationSeq = 1
   }
 
   restoreFromBootstrap(state: WorkerRuntimeMutationJournalBootstrapState): void {
-    this.mutationJournalEntries = state.mutationJournalEntries.map(clonePendingWorkbookMutation);
-    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries);
-    this.nextPendingMutationSeq = state.nextPendingMutationSeq;
+    this.mutationJournalEntries = state.mutationJournalEntries.map(clonePendingWorkbookMutation)
+    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries)
+    this.nextPendingMutationSeq = state.nextPendingMutationSeq
   }
 
   listPendingMutations(): PendingWorkbookMutation[] {
-    return this.pendingMutations.map(clonePendingWorkbookMutation);
+    return this.pendingMutations.map(clonePendingWorkbookMutation)
   }
 
   listMutationJournalEntries(): PendingWorkbookMutation[] {
-    return this.mutationJournalEntries.map(clonePendingWorkbookMutation);
+    return this.mutationJournalEntries.map(clonePendingWorkbookMutation)
   }
 
   getPendingMutationCount(): number {
-    return this.pendingMutations.length;
+    return this.pendingMutations.length
   }
 
   getAppliedPendingLocalSeq(): number {
-    return this.pendingMutations.at(-1)?.localSeq ?? 0;
+    return this.pendingMutations.at(-1)?.localSeq ?? 0
   }
 
   buildPendingMutationSummary(): WorkerRuntimePendingMutationSummarySnapshot {
-    return buildPendingMutationSummary(this.mutationJournalEntries, this.pendingMutations);
+    return buildPendingMutationSummary(this.mutationJournalEntries, this.pendingMutations)
   }
 
-  async enqueuePendingMutation(
-    input: PendingWorkbookMutationInput,
-  ): Promise<PendingWorkbookMutation> {
+  async enqueuePendingMutation(input: PendingWorkbookMutationInput): Promise<PendingWorkbookMutation> {
     if (!isPendingWorkbookMutationInput(input)) {
-      throw new Error("Invalid pending workbook mutation");
+      throw new Error('Invalid pending workbook mutation')
     }
     const nextMutation = createRuntimePendingMutation({
       documentId: this.deps.getDocumentId(),
@@ -91,17 +86,17 @@ export class WorkerRuntimeMutationJournal {
       authoritativeRevision: this.deps.getAuthoritativeRevision(),
       input,
       enqueuedAtUnixMs: this.now(),
-    });
-    this.mutationJournalEntries.push(nextMutation);
-    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries);
-    this.deps.markProjectionDivergedFromLocalStore();
-    const localStore = this.deps.getLocalStore();
+    })
+    this.mutationJournalEntries.push(nextMutation)
+    this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries)
+    this.deps.markProjectionDivergedFromLocalStore()
+    const localStore = this.deps.getLocalStore()
     if (localStore) {
-      await localStore.appendPendingMutation(clonePendingWorkbookMutation(nextMutation));
+      await localStore.appendPendingMutation(clonePendingWorkbookMutation(nextMutation))
     }
-    applyPendingWorkbookMutationToEngine(await this.deps.getProjectionEngine(), nextMutation);
-    await this.deps.queuePersist();
-    return clonePendingWorkbookMutation(nextMutation);
+    applyPendingWorkbookMutationToEngine(await this.deps.getProjectionEngine(), nextMutation)
+    await this.deps.queuePersist()
+    return clonePendingWorkbookMutation(nextMutation)
   }
 
   async markPendingMutationSubmitted(id: string): Promise<void> {
@@ -109,12 +104,12 @@ export class WorkerRuntimeMutationJournal {
       mutationJournalEntries: this.mutationJournalEntries,
       id,
       submittedAtUnixMs: this.now(),
-    });
+    })
     if (!result) {
-      return;
+      return
     }
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
-    await this.persistUpdatedMutation(result.updatedMutation);
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
+    await this.persistUpdatedMutation(result.updatedMutation)
   }
 
   async ackPendingMutation(id: string): Promise<void> {
@@ -122,15 +117,15 @@ export class WorkerRuntimeMutationJournal {
       mutationJournalEntries: this.mutationJournalEntries,
       id,
       ackedAtUnixMs: this.now(),
-    });
+    })
     if (!result) {
-      return;
+      return
     }
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
-    this.deps.markProjectionDivergedFromLocalStore();
-    await this.persistUpdatedMutation(result.updatedMutation);
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
+    this.deps.markProjectionDivergedFromLocalStore()
+    await this.persistUpdatedMutation(result.updatedMutation)
     if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist();
+      await this.deps.queuePersist()
     }
   }
 
@@ -139,12 +134,12 @@ export class WorkerRuntimeMutationJournal {
       mutationJournalEntries: this.mutationJournalEntries,
       id,
       attemptedAtUnixMs: this.now(),
-    });
+    })
     if (!result) {
-      return;
+      return
     }
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
-    await this.persistUpdatedMutation(result.updatedMutation);
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
+    await this.persistUpdatedMutation(result.updatedMutation)
   }
 
   async markPendingMutationFailed(id: string, failureMessage: string): Promise<void> {
@@ -153,15 +148,15 @@ export class WorkerRuntimeMutationJournal {
       id,
       failureMessage,
       failedAtUnixMs: this.now(),
-    });
+    })
     if (!result) {
-      return;
+      return
     }
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
-    this.deps.markProjectionDivergedFromLocalStore();
-    await this.persistUpdatedMutation(result.updatedMutation);
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
+    this.deps.markProjectionDivergedFromLocalStore()
+    await this.persistUpdatedMutation(result.updatedMutation)
     if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist();
+      await this.deps.queuePersist()
     }
   }
 
@@ -169,61 +164,59 @@ export class WorkerRuntimeMutationJournal {
     const result = retryMutationInJournal({
       mutationJournalEntries: this.mutationJournalEntries,
       id,
-    });
+    })
     if (!result) {
-      return;
+      return
     }
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
-    this.deps.markProjectionDivergedFromLocalStore();
-    await this.persistUpdatedMutation(result.updatedMutation);
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
+    this.deps.markProjectionDivergedFromLocalStore()
+    await this.persistUpdatedMutation(result.updatedMutation)
     if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist();
+      await this.deps.queuePersist()
     }
   }
 
   ackAbsorbedMutations(absorbedMutationIds: ReadonlySet<string>): void {
     if (absorbedMutationIds.size === 0) {
-      return;
+      return
     }
     const result = ackAbsorbedMutations({
       mutationJournalEntries: this.mutationJournalEntries,
       absorbedMutationIds,
       ackedAtUnixMs: this.now(),
-    });
-    this.updateState(result.mutationJournalEntries, result.pendingMutations);
+    })
+    this.updateState(result.mutationJournalEntries, result.pendingMutations)
   }
 
   async markRemainingJournalMutationsRebased(rebasedAtUnixMs = this.now()): Promise<void> {
-    const nextState = markJournalMutationsRebased(this.mutationJournalEntries, rebasedAtUnixMs);
-    this.updateState(nextState.mutationJournalEntries, nextState.pendingMutations);
-    const localStore = this.deps.getLocalStore();
+    const nextState = markJournalMutationsRebased(this.mutationJournalEntries, rebasedAtUnixMs)
+    this.updateState(nextState.mutationJournalEntries, nextState.pendingMutations)
+    const localStore = this.deps.getLocalStore()
     if (!localStore) {
-      return;
+      return
     }
     await Promise.all(
-      nextState.updatedMutations.map((mutation) =>
-        localStore.updatePendingMutation(clonePendingWorkbookMutation(mutation)),
-      ),
-    );
+      nextState.updatedMutations.map((mutation) => localStore.updatePendingMutation(clonePendingWorkbookMutation(mutation))),
+    )
   }
 
   private now(): number {
-    return this.deps.now?.() ?? Date.now();
+    return this.deps.now?.() ?? Date.now()
   }
 
   private updateState(
     mutationJournalEntries: readonly PendingWorkbookMutation[],
     pendingMutations: readonly PendingWorkbookMutation[],
   ): void {
-    this.mutationJournalEntries = mutationJournalEntries.map(clonePendingWorkbookMutation);
-    this.pendingMutations = pendingMutations.map(clonePendingWorkbookMutation);
+    this.mutationJournalEntries = mutationJournalEntries.map(clonePendingWorkbookMutation)
+    this.pendingMutations = pendingMutations.map(clonePendingWorkbookMutation)
   }
 
   private async persistUpdatedMutation(updatedMutation: PendingWorkbookMutation): Promise<void> {
-    const localStore = this.deps.getLocalStore();
+    const localStore = this.deps.getLocalStore()
     if (!localStore) {
-      return;
+      return
     }
-    await localStore.updatePendingMutation(clonePendingWorkbookMutation(updatedMutation));
+    await localStore.updatePendingMutation(clonePendingWorkbookMutation(updatedMutation))
   }
 }

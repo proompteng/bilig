@@ -1,241 +1,241 @@
-import { describe, expect, it } from "vitest";
-import { isEngineOp, isEngineOpBatch } from "../index.js";
+import { describe, expect, it } from 'vitest'
+import { isEngineOp, isEngineOpBatch } from '../index.js'
 
-describe("workbook domain guards", () => {
-  it("accepts engine op batches with valid workbook ops", () => {
+describe('workbook domain guards', () => {
+  it('accepts engine op batches with valid workbook ops', () => {
     expect(
       isEngineOpBatch({
-        id: "batch-1",
-        replicaId: "replica-1",
+        id: 'batch-1',
+        replicaId: 'replica-1',
         clock: { counter: 4 },
         ops: [
-          { kind: "upsertWorkbook", name: "Book" },
+          { kind: 'upsertWorkbook', name: 'Book' },
           {
-            kind: "setDataValidation",
+            kind: 'setDataValidation',
             validation: {
               range: {
-                sheetName: "Sheet1",
-                startAddress: "D2",
-                endAddress: "D10",
+                sheetName: 'Sheet1',
+                startAddress: 'D2',
+                endAddress: 'D10',
               },
               rule: {
-                kind: "list",
-                values: ["Draft", "Final"],
+                kind: 'list',
+                values: ['Draft', 'Final'],
               },
               allowBlank: false,
             },
           },
           {
-            kind: "upsertCommentThread",
+            kind: 'upsertCommentThread',
             thread: {
-              threadId: "thread-1",
-              sheetName: "Sheet1",
-              address: "E2",
-              comments: [{ id: "comment-1", body: "Check this total." }],
+              threadId: 'thread-1',
+              sheetName: 'Sheet1',
+              address: 'E2',
+              comments: [{ id: 'comment-1', body: 'Check this total.' }],
             },
           },
           {
-            kind: "upsertNote",
+            kind: 'upsertNote',
             note: {
-              sheetName: "Sheet1",
-              address: "F3",
-              text: "Manual override",
+              sheetName: 'Sheet1',
+              address: 'F3',
+              text: 'Manual override',
             },
           },
           {
-            kind: "upsertConditionalFormat",
+            kind: 'upsertConditionalFormat',
             format: {
-              id: "cf-1",
+              id: 'cf-1',
               range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "A5",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'A5',
               },
               rule: {
-                kind: "cellIs",
-                operator: "greaterThan",
+                kind: 'cellIs',
+                operator: 'greaterThan',
                 values: [10],
               },
               style: {
-                fill: { backgroundColor: "#ff0000" },
+                fill: { backgroundColor: '#ff0000' },
               },
             },
           },
           {
-            kind: "setSheetProtection",
+            kind: 'setSheetProtection',
             protection: {
-              sheetName: "Sheet1",
+              sheetName: 'Sheet1',
               hideFormulas: true,
             },
           },
           {
-            kind: "upsertRangeProtection",
+            kind: 'upsertRangeProtection',
             protection: {
-              id: "protect-a1",
+              id: 'protect-a1',
               range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "B2",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'B2',
               },
               hideFormulas: true,
             },
           },
           {
-            kind: "upsertPivotTable",
-            name: "Pivot1",
-            sheetName: "Sheet1",
-            address: "F1",
+            kind: 'upsertPivotTable',
+            name: 'Pivot1',
+            sheetName: 'Sheet1',
+            address: 'F1',
             source: {
-              sheetName: "Sheet1",
-              startAddress: "A1",
-              endAddress: "C10",
+              sheetName: 'Sheet1',
+              startAddress: 'A1',
+              endAddress: 'C10',
             },
-            groupBy: ["Region"],
-            values: [{ sourceColumn: "Sales", summarizeBy: "sum", outputLabel: "Total Sales" }],
+            groupBy: ['Region'],
+            values: [{ sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Total Sales' }],
             rows: 10,
             cols: 3,
           },
           {
-            kind: "upsertChart",
+            kind: 'upsertChart',
             chart: {
-              id: "chart-1",
-              sheetName: "Sheet1",
-              address: "J2",
+              id: 'chart-1',
+              sheetName: 'Sheet1',
+              address: 'J2',
               source: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "C10",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'C10',
               },
-              chartType: "line",
+              chartType: 'line',
               rows: 12,
               cols: 8,
-              title: "Sales trend",
+              title: 'Sales trend',
             },
           },
           {
-            kind: "upsertImage",
+            kind: 'upsertImage',
             image: {
-              id: "image-1",
-              sheetName: "Sheet1",
-              address: "L2",
-              sourceUrl: "https://example.com/chart.png",
+              id: 'image-1',
+              sheetName: 'Sheet1',
+              address: 'L2',
+              sourceUrl: 'https://example.com/chart.png',
               rows: 8,
               cols: 5,
-              altText: "Revenue image",
+              altText: 'Revenue image',
             },
           },
           {
-            kind: "upsertShape",
+            kind: 'upsertShape',
             shape: {
-              id: "shape-1",
-              sheetName: "Sheet1",
-              address: "M3",
-              shapeType: "textBox",
+              id: 'shape-1',
+              sheetName: 'Sheet1',
+              address: 'M3',
+              shapeType: 'textBox',
               rows: 4,
               cols: 6,
-              text: "Review",
-              fillColor: "#ffeeaa",
+              text: 'Review',
+              fillColor: '#ffeeaa',
             },
           },
         ],
       }),
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  it("rejects engine ops with malformed nested payloads", () => {
+  it('rejects engine ops with malformed nested payloads', () => {
     expect(
       isEngineOp({
-        kind: "upsertCellStyle",
+        kind: 'upsertCellStyle',
         style: {
-          id: "style-1",
+          id: 'style-1',
           fill: {
             backgroundColor: 42,
           },
         },
       }),
-    ).toBe(false);
+    ).toBe(false)
 
     expect(
       isEngineOpBatch({
-        id: "batch-1",
-        replicaId: "replica-1",
+        id: 'batch-1',
+        replicaId: 'replica-1',
         clock: { counter: 4 },
         ops: [
-          { kind: "setSort", sheetName: "Sheet1", range: { sheetName: "Sheet1" }, keys: [] },
+          { kind: 'setSort', sheetName: 'Sheet1', range: { sheetName: 'Sheet1' }, keys: [] },
           {
-            kind: "setDataValidation",
+            kind: 'setDataValidation',
             validation: {
               range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "A5",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'A5',
               },
               rule: {
-                kind: "list",
+                kind: 'list',
                 values: [undefined],
               },
             },
           },
           {
-            kind: "upsertCommentThread",
+            kind: 'upsertCommentThread',
             thread: {
-              threadId: "thread-1",
-              sheetName: "Sheet1",
-              address: "E2",
-              comments: [{ id: "comment-1" }],
+              threadId: 'thread-1',
+              sheetName: 'Sheet1',
+              address: 'E2',
+              comments: [{ id: 'comment-1' }],
             },
           },
           {
-            kind: "upsertConditionalFormat",
+            kind: 'upsertConditionalFormat',
             format: {
-              id: "cf-1",
+              id: 'cf-1',
               range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "A5",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'A5',
               },
               rule: {
-                kind: "cellIs",
-                operator: "greaterThan",
+                kind: 'cellIs',
+                operator: 'greaterThan',
                 values: [],
               },
-              style: "bad",
+              style: 'bad',
             },
           },
           {
-            kind: "upsertRangeProtection",
+            kind: 'upsertRangeProtection',
             protection: {
-              id: "protect-a1",
+              id: 'protect-a1',
               range: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "B2",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'B2',
               },
-              hideFormulas: "yes",
+              hideFormulas: 'yes',
             },
           },
           {
-            kind: "upsertChart",
+            kind: 'upsertChart',
             chart: {
-              id: "chart-1",
-              sheetName: "Sheet1",
-              address: "J2",
+              id: 'chart-1',
+              sheetName: 'Sheet1',
+              address: 'J2',
               source: {
-                sheetName: "Sheet1",
-                startAddress: "A1",
-                endAddress: "C10",
+                sheetName: 'Sheet1',
+                startAddress: 'A1',
+                endAddress: 'C10',
               },
-              chartType: "donut",
+              chartType: 'donut',
               rows: 12,
               cols: 8,
             },
           },
           {
-            kind: "upsertImage",
+            kind: 'upsertImage',
             image: {
-              id: "image-1",
-              sheetName: "Sheet1",
-              address: "L2",
+              id: 'image-1',
+              sheetName: 'Sheet1',
+              address: 'L2',
               sourceUrl: 7,
               rows: 8,
               cols: 5,
@@ -243,6 +243,6 @@ describe("workbook domain guards", () => {
           },
         ],
       }),
-    ).toBe(false);
-  });
-});
+    ).toBe(false)
+  })
+})

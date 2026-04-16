@@ -1,49 +1,44 @@
-import { assign, fromPromise, setup } from "xstate";
+import { assign, fromPromise, setup } from 'xstate'
 
 interface BootstrapContext<Config, Session> {
-  readonly config: Config | null;
-  readonly session: Session | null;
-  readonly error: string | null;
-  readonly shouldLoadSession: boolean;
-  readonly loadConfig: () => Promise<Config>;
-  readonly loadSession: (config: Config) => Promise<Session>;
-  readonly evaluateShouldLoadSession: (config: Config) => boolean;
+  readonly config: Config | null
+  readonly session: Session | null
+  readonly error: string | null
+  readonly shouldLoadSession: boolean
+  readonly loadConfig: () => Promise<Config>
+  readonly loadSession: (config: Config) => Promise<Session>
+  readonly evaluateShouldLoadSession: (config: Config) => boolean
 }
 
 export interface BootstrapMachineInput<Config, Session> {
-  readonly loadConfig: () => Promise<Config>;
-  readonly loadSession: (config: Config) => Promise<Session>;
-  readonly shouldLoadSession?: (config: Config) => boolean;
+  readonly loadConfig: () => Promise<Config>
+  readonly loadSession: (config: Config) => Promise<Session>
+  readonly shouldLoadSession?: (config: Config) => boolean
 }
 
 interface LoadConfigActorInput<Config> {
-  readonly loader: () => Promise<Config>;
-  readonly shouldLoadSession: (config: Config) => boolean;
+  readonly loader: () => Promise<Config>
+  readonly shouldLoadSession: (config: Config) => boolean
 }
 
 interface LoadSessionActorInput<Config, Session> {
-  readonly config: Config;
-  readonly loader: (config: Config) => Promise<Session>;
+  readonly config: Config
+  readonly loader: (config: Config) => Promise<Session>
 }
 
 export function createBootstrapMachine<Config, Session>() {
-  const loadConfigActor = fromPromise(
-    async ({ input }: { input: LoadConfigActorInput<Config> }) => ({
-      config: await input.loader(),
-      shouldLoadSession: input.shouldLoadSession,
-    }),
-  );
-  const loadSessionActor = fromPromise(
-    async ({ input }: { input: LoadSessionActorInput<Config, Session> }) =>
-      input.loader(input.config),
-  );
+  const loadConfigActor = fromPromise(async ({ input }: { input: LoadConfigActorInput<Config> }) => ({
+    config: await input.loader(),
+    shouldLoadSession: input.shouldLoadSession,
+  }))
+  const loadSessionActor = fromPromise(async ({ input }: { input: LoadSessionActorInput<Config, Session> }) => input.loader(input.config))
 
   return setup<
     BootstrapContext<Config, Session>,
-    { type: "retry" },
+    { type: 'retry' },
     {
-      readonly loadConfig: typeof loadConfigActor;
-      readonly loadSession: typeof loadSessionActor;
+      readonly loadConfig: typeof loadConfigActor
+      readonly loadSession: typeof loadSessionActor
     },
     {},
     {},
@@ -57,8 +52,8 @@ export function createBootstrapMachine<Config, Session>() {
       loadSession: loadSessionActor,
     },
   }).createMachine({
-    id: "bootstrap",
-    initial: "loadingConfig",
+    id: 'bootstrap',
+    initial: 'loadingConfig',
     context: ({ input }) => ({
       config: null,
       session: null,
@@ -71,13 +66,13 @@ export function createBootstrapMachine<Config, Session>() {
     states: {
       loadingConfig: {
         invoke: {
-          src: "loadConfig",
+          src: 'loadConfig',
           input: ({ context }) => ({
             loader: context.loadConfig,
             shouldLoadSession: context.evaluateShouldLoadSession,
           }),
           onDone: {
-            target: "decideSession",
+            target: 'decideSession',
             actions: assign({
               config: ({ event }) => event.output.config,
               shouldLoadSession: ({ event }) => event.output.shouldLoadSession(event.output.config),
@@ -85,10 +80,9 @@ export function createBootstrapMachine<Config, Session>() {
             }),
           },
           onError: {
-            target: "failed",
+            target: 'failed',
             actions: assign({
-              error: ({ event }) =>
-                event.error instanceof Error ? event.error.message : String(event.error),
+              error: ({ event }) => (event.error instanceof Error ? event.error.message : String(event.error)),
             }),
           },
         },
@@ -97,46 +91,45 @@ export function createBootstrapMachine<Config, Session>() {
         always: [
           {
             guard: ({ context }) => context.shouldLoadSession,
-            target: "loadingSession",
+            target: 'loadingSession',
           },
-          { target: "ready" },
+          { target: 'ready' },
         ],
       },
       loadingSession: {
         invoke: {
-          src: "loadSession",
+          src: 'loadSession',
           input: ({ context }) => {
             if (context.config === null) {
-              throw new Error("Cannot load session before config");
+              throw new Error('Cannot load session before config')
             }
             return {
               config: context.config,
               loader: context.loadSession,
-            };
+            }
           },
           onDone: {
-            target: "ready",
+            target: 'ready',
             actions: assign({
               session: ({ event }) => event.output,
               error: () => null,
             }),
           },
           onError: {
-            target: "failed",
+            target: 'failed',
             actions: assign({
-              error: ({ event }) =>
-                event.error instanceof Error ? event.error.message : String(event.error),
+              error: ({ event }) => (event.error instanceof Error ? event.error.message : String(event.error)),
             }),
           },
         },
       },
       ready: {
-        type: "final",
+        type: 'final',
       },
       failed: {
         on: {
           retry: {
-            target: "loadingConfig",
+            target: 'loadingConfig',
             actions: assign({
               config: () => null,
               session: () => null,
@@ -147,31 +140,31 @@ export function createBootstrapMachine<Config, Session>() {
         },
       },
     },
-  });
+  })
 }
 
 interface DocumentSupervisorContext {
-  readonly documentId: string;
-  readonly browserSubscriberCount: number;
-  readonly lastKnownCursor: number | null;
-  readonly lastSnapshotCursor: number | null;
-  readonly lastOperation: string | null;
-  readonly lastError: string | null;
+  readonly documentId: string
+  readonly browserSubscriberCount: number
+  readonly lastKnownCursor: number | null
+  readonly lastSnapshotCursor: number | null
+  readonly lastOperation: string | null
+  readonly lastError: string | null
 }
 
 type DocumentSupervisorEvent =
-  | { type: "browser.attached" }
-  | { type: "browser.detached" }
-  | { type: "cursor.updated"; cursor: number }
-  | { type: "snapshot.updated"; cursor: number }
-  | { type: "operation.recorded"; operation: string }
-  | { type: "error.raised"; message: string }
-  | { type: "reset" };
+  | { type: 'browser.attached' }
+  | { type: 'browser.detached' }
+  | { type: 'cursor.updated'; cursor: number }
+  | { type: 'snapshot.updated'; cursor: number }
+  | { type: 'operation.recorded'; operation: string }
+  | { type: 'error.raised'; message: string }
+  | { type: 'reset' }
 
 export function createDocumentSupervisorMachine(documentId: string) {
   return setup<DocumentSupervisorContext, DocumentSupervisorEvent>({}).createMachine({
     id: `document-supervisor:${documentId}`,
-    initial: "idle",
+    initial: 'idle',
     context: {
       documentId,
       browserSubscriberCount: 0,
@@ -183,36 +176,36 @@ export function createDocumentSupervisorMachine(documentId: string) {
     states: {
       idle: {
         on: {
-          "browser.attached": {
-            target: "active",
+          'browser.attached': {
+            target: 'active',
             actions: assign({
               browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
               lastError: () => null,
             }),
           },
-          "cursor.updated": {
-            target: "active",
+          'cursor.updated': {
+            target: 'active',
             actions: assign({
               lastKnownCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "snapshot.updated": {
-            target: "active",
+          'snapshot.updated': {
+            target: 'active',
             actions: assign({
               lastSnapshotCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "operation.recorded": {
-            target: "active",
+          'operation.recorded': {
+            target: 'active',
             actions: assign({
               lastOperation: ({ event }) => event.operation,
               lastError: () => null,
             }),
           },
-          "error.raised": {
-            target: "degraded",
+          'error.raised': {
+            target: 'degraded',
             actions: assign({
               lastError: ({ event }) => event.message,
             }),
@@ -221,38 +214,37 @@ export function createDocumentSupervisorMachine(documentId: string) {
       },
       active: {
         on: {
-          "browser.attached": {
+          'browser.attached': {
             actions: assign({
               browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
               lastError: () => null,
             }),
           },
-          "browser.detached": {
+          'browser.detached': {
             actions: assign({
-              browserSubscriberCount: ({ context }) =>
-                Math.max(0, context.browserSubscriberCount - 1),
+              browserSubscriberCount: ({ context }) => Math.max(0, context.browserSubscriberCount - 1),
             }),
           },
-          "cursor.updated": {
+          'cursor.updated': {
             actions: assign({
               lastKnownCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "snapshot.updated": {
+          'snapshot.updated': {
             actions: assign({
               lastSnapshotCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "operation.recorded": {
+          'operation.recorded': {
             actions: assign({
               lastOperation: ({ event }) => event.operation,
               lastError: () => null,
             }),
           },
-          "error.raised": {
-            target: "degraded",
+          'error.raised': {
+            target: 'degraded',
             actions: assign({
               lastError: ({ event }) => event.message,
             }),
@@ -262,34 +254,34 @@ export function createDocumentSupervisorMachine(documentId: string) {
       degraded: {
         on: {
           reset: {
-            target: "active",
+            target: 'active',
             actions: assign({
               lastError: () => null,
             }),
           },
-          "browser.attached": {
-            target: "active",
+          'browser.attached': {
+            target: 'active',
             actions: assign({
               browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
               lastError: () => null,
             }),
           },
-          "cursor.updated": {
-            target: "active",
+          'cursor.updated': {
+            target: 'active',
             actions: assign({
               lastKnownCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "snapshot.updated": {
-            target: "active",
+          'snapshot.updated': {
+            target: 'active',
             actions: assign({
               lastSnapshotCursor: ({ event }) => event.cursor,
               lastError: () => null,
             }),
           },
-          "operation.recorded": {
-            target: "active",
+          'operation.recorded': {
+            target: 'active',
             actions: assign({
               lastOperation: ({ event }) => event.operation,
               lastError: () => null,
@@ -298,5 +290,5 @@ export function createDocumentSupervisorMachine(documentId: string) {
         },
       },
     },
-  });
+  })
 }

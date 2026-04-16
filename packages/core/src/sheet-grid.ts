@@ -1,60 +1,49 @@
-const BLOCK_ROWS = 128;
-const BLOCK_COLS = 32;
+const BLOCK_ROWS = 128
+const BLOCK_COLS = 32
 
 function blockKey(row: number, col: number): number {
-  return Math.floor(row / BLOCK_ROWS) * 1_000_000 + Math.floor(col / BLOCK_COLS);
+  return Math.floor(row / BLOCK_ROWS) * 1_000_000 + Math.floor(col / BLOCK_COLS)
 }
 
 export class SheetGrid {
-  readonly blocks = new Map<number, Uint32Array>();
+  readonly blocks = new Map<number, Uint32Array>()
 
-  private setInBlocks(
-    blocks: Map<number, Uint32Array>,
-    row: number,
-    col: number,
-    cellIndex: number,
-  ): void {
-    const key = blockKey(row, col);
-    let block = blocks.get(key);
+  private setInBlocks(blocks: Map<number, Uint32Array>, row: number, col: number, cellIndex: number): void {
+    const key = blockKey(row, col)
+    let block = blocks.get(key)
     if (!block) {
-      block = new Uint32Array(BLOCK_ROWS * BLOCK_COLS);
-      blocks.set(key, block);
+      block = new Uint32Array(BLOCK_ROWS * BLOCK_COLS)
+      blocks.set(key, block)
     }
-    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS);
-    block[offset] = cellIndex + 1;
+    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
+    block[offset] = cellIndex + 1
   }
 
   get(row: number, col: number): number {
-    const block = this.blocks.get(blockKey(row, col));
-    if (!block) return -1;
-    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS);
-    const value = block[offset]!;
-    return value === 0 ? -1 : value - 1;
+    const block = this.blocks.get(blockKey(row, col))
+    if (!block) return -1
+    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
+    const value = block[offset]!
+    return value === 0 ? -1 : value - 1
   }
 
   set(row: number, col: number, cellIndex: number): void {
-    this.setInBlocks(this.blocks, row, col, cellIndex);
+    this.setInBlocks(this.blocks, row, col, cellIndex)
   }
 
   clear(row: number, col: number): void {
-    const block = this.blocks.get(blockKey(row, col));
-    if (!block) return;
-    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS);
-    block[offset] = 0;
+    const block = this.blocks.get(blockKey(row, col))
+    if (!block) return
+    const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
+    block[offset] = 0
   }
 
-  forEachInRange(
-    rowStart: number,
-    colStart: number,
-    rowEnd: number,
-    colEnd: number,
-    fn: (cellIndex: number) => void,
-  ): void {
+  forEachInRange(rowStart: number, colStart: number, rowEnd: number, colEnd: number, fn: (cellIndex: number) => void): void {
     for (let row = rowStart; row <= rowEnd; row += 1) {
       for (let col = colStart; col <= colEnd; col += 1) {
-        const value = this.get(row, col);
+        const value = this.get(row, col)
         if (value !== -1) {
-          fn(value);
+          fn(value)
         }
       }
     }
@@ -62,60 +51,60 @@ export class SheetGrid {
 
   forEachCell(fn: (cellIndex: number) => void): void {
     this.forEachCellEntry((cellIndex) => {
-      fn(cellIndex);
-    });
+      fn(cellIndex)
+    })
   }
 
   forEachCellEntry(fn: (cellIndex: number, row: number, col: number) => void): void {
     this.blocks.forEach((block, key) => {
-      const blockRow = Math.floor(key / 1_000_000);
-      const blockCol = key % 1_000_000;
+      const blockRow = Math.floor(key / 1_000_000)
+      const blockCol = key % 1_000_000
       for (let offset = 0; offset < block.length; offset += 1) {
-        const value = block[offset]!;
-        if (value === 0) continue;
-        const localRow = Math.floor(offset / BLOCK_COLS);
-        const localCol = offset % BLOCK_COLS;
-        const row = blockRow * BLOCK_ROWS + localRow;
-        const col = blockCol * BLOCK_COLS + localCol;
+        const value = block[offset]!
+        if (value === 0) continue
+        const localRow = Math.floor(offset / BLOCK_COLS)
+        const localCol = offset % BLOCK_COLS
+        const row = blockRow * BLOCK_ROWS + localRow
+        const col = blockCol * BLOCK_COLS + localCol
         if (row >= 0 && col >= 0) {
-          fn(value - 1, row, col);
+          fn(value - 1, row, col)
         }
       }
-    });
+    })
   }
 
   remapAxis(
-    axis: "row" | "column",
+    axis: 'row' | 'column',
     remapIndex: (index: number) => number | undefined,
   ): Array<{
-    cellIndex: number;
-    row: number;
-    col: number;
-    nextRow: number | undefined;
-    nextCol: number | undefined;
+    cellIndex: number
+    row: number
+    col: number
+    nextRow: number | undefined
+    nextCol: number | undefined
   }> {
     const changedEntries: Array<{
-      cellIndex: number;
-      row: number;
-      col: number;
-      nextRow: number | undefined;
-      nextCol: number | undefined;
-    }> = [];
-    const nextBlocks = new Map<number, Uint32Array>();
+      cellIndex: number
+      row: number
+      col: number
+      nextRow: number | undefined
+      nextCol: number | undefined
+    }> = []
+    const nextBlocks = new Map<number, Uint32Array>()
     this.blocks.forEach((block, key) => {
-      const blockRow = Math.floor(key / 1_000_000);
-      const blockCol = key % 1_000_000;
+      const blockRow = Math.floor(key / 1_000_000)
+      const blockCol = key % 1_000_000
       for (let offset = 0; offset < block.length; offset += 1) {
-        const value = block[offset]!;
+        const value = block[offset]!
         if (value === 0) {
-          continue;
+          continue
         }
-        const localRow = Math.floor(offset / BLOCK_COLS);
-        const localCol = offset % BLOCK_COLS;
-        const row = blockRow * BLOCK_ROWS + localRow;
-        const col = blockCol * BLOCK_COLS + localCol;
-        const nextRow = axis === "row" ? remapIndex(row) : row;
-        const nextCol = axis === "column" ? remapIndex(col) : col;
+        const localRow = Math.floor(offset / BLOCK_COLS)
+        const localCol = offset % BLOCK_COLS
+        const row = blockRow * BLOCK_ROWS + localRow
+        const col = blockCol * BLOCK_COLS + localCol
+        const nextRow = axis === 'row' ? remapIndex(row) : row
+        const nextCol = axis === 'column' ? remapIndex(col) : col
         if (nextRow !== row || nextCol !== col) {
           changedEntries.push({
             cellIndex: value - 1,
@@ -123,18 +112,18 @@ export class SheetGrid {
             col,
             nextRow,
             nextCol,
-          });
+          })
         }
         if (nextRow === undefined || nextCol === undefined) {
-          continue;
+          continue
         }
-        this.setInBlocks(nextBlocks, nextRow, nextCol, value - 1);
+        this.setInBlocks(nextBlocks, nextRow, nextCol, value - 1)
       }
-    });
-    this.blocks.clear();
+    })
+    this.blocks.clear()
     nextBlocks.forEach((block, key) => {
-      this.blocks.set(key, block);
-    });
-    return changedEntries;
+      this.blocks.set(key, block)
+    })
+    return changedEntries
   }
 }

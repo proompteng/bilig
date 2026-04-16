@@ -1,218 +1,218 @@
-export type JsonPrimitive = boolean | number | string | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonPrimitive = boolean | number | string | null
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
 
-export type CodexRequestId = number;
+export type CodexRequestId = number
 
 export interface CodexClientInfo {
-  name: string;
-  title: string;
-  version: string;
+  name: string
+  title: string
+  version: string
 }
 
 export interface CodexInitializeCapabilities {
-  experimentalApi: boolean;
-  optOutNotificationMethods?: string[] | null;
+  experimentalApi: boolean
+  optOutNotificationMethods?: string[] | null
 }
 
 export interface CodexInitializeResponse {
-  userAgent: string;
-  codexHome?: string;
-  platformFamily?: string;
-  platformOs?: string;
+  userAgent: string
+  codexHome?: string
+  platformFamily?: string
+  platformOs?: string
 }
 
 export interface CodexThread {
-  id: string;
-  preview: string;
-  turns: CodexTurn[];
+  id: string
+  preview: string
+  turns: CodexTurn[]
 }
 
 export interface CodexTurn {
-  id: string;
-  status: "completed" | "interrupted" | "failed" | "inProgress";
-  items: CodexThreadItem[];
+  id: string
+  status: 'completed' | 'interrupted' | 'failed' | 'inProgress'
+  items: CodexThreadItem[]
   error: {
-    message?: string;
-  } | null;
+    message?: string
+  } | null
 }
 
 export interface CodexThreadStartResponse {
-  thread: CodexThread;
+  thread: CodexThread
 }
 
 export interface CodexTurnStartResponse {
-  turn: CodexTurn;
+  turn: CodexTurn
 }
 
 export type CodexUserInput = {
-  type: "text";
-  text: string;
-};
+  type: 'text'
+  text: string
+}
 
 export interface CodexDynamicToolSpec {
-  name: string;
-  description: string;
-  inputSchema: JsonValue;
-  deferLoading?: boolean;
+  name: string
+  description: string
+  inputSchema: JsonValue
+  deferLoading?: boolean
 }
 
 export type CodexDynamicToolCallResult = {
   contentItems: Array<
     | {
-        type: "inputText";
-        text: string;
+        type: 'inputText'
+        text: string
       }
     | {
-        type: "inputImage";
-        imageUrl: string;
+        type: 'inputImage'
+        imageUrl: string
       }
-  >;
-  success: boolean;
-};
+  >
+  success: boolean
+}
 
 export interface CodexDynamicToolCallRequest {
-  threadId: string;
-  turnId: string;
-  callId: string;
-  tool: string;
-  arguments: JsonValue;
+  threadId: string
+  turnId: string
+  callId: string
+  tool: string
+  arguments: JsonValue
 }
 
 export type CodexThreadItem =
   | {
-      type: "userMessage";
-      id: string;
-      content: CodexUserInput[];
+      type: 'userMessage'
+      id: string
+      content: CodexUserInput[]
     }
   | {
-      type: "agentMessage";
-      id: string;
-      text: string;
-      phase: string | null;
-      memoryCitation: unknown;
+      type: 'agentMessage'
+      id: string
+      text: string
+      phase: string | null
+      memoryCitation: unknown
     }
   | {
-      type: "plan";
-      id: string;
-      text: string;
+      type: 'plan'
+      id: string
+      text: string
     }
   | {
-      type: "dynamicToolCall";
-      id: string;
-      tool: string;
-      arguments: JsonValue;
-      status: "inProgress" | "completed" | "failed";
+      type: 'dynamicToolCall'
+      id: string
+      tool: string
+      arguments: JsonValue
+      status: 'inProgress' | 'completed' | 'failed'
       contentItems: Array<
         | {
-            type: "inputText";
-            text: string;
+            type: 'inputText'
+            text: string
           }
         | {
-            type: "inputImage";
-            imageUrl: string;
+            type: 'inputImage'
+            imageUrl: string
           }
-      > | null;
-      success: boolean | null;
-      durationMs: number | null;
+      > | null
+      success: boolean | null
+      durationMs: number | null
     }
   | {
-      type: string;
-      id: string;
-      [key: string]: JsonValue | undefined;
-    };
+      type: string
+      id: string
+      [key: string]: JsonValue | undefined
+    }
 
 export type CodexServerNotification =
   | {
-      method: "thread/started";
+      method: 'thread/started'
       params: {
-        thread: CodexThread;
-      };
+        thread: CodexThread
+      }
     }
   | {
-      method: "turn/started";
+      method: 'turn/started'
       params: {
-        threadId: string;
-        turn: CodexTurn;
-      };
+        threadId: string
+        turn: CodexTurn
+      }
     }
   | {
-      method: "turn/completed";
+      method: 'turn/completed'
       params: {
-        threadId: string;
-        turn: CodexTurn;
-      };
+        threadId: string
+        turn: CodexTurn
+      }
     }
   | {
-      method: "item/started";
+      method: 'item/started'
       params: {
-        threadId: string;
-        turnId: string;
-        item: CodexThreadItem;
-      };
+        threadId: string
+        turnId: string
+        item: CodexThreadItem
+      }
     }
   | {
-      method: "item/completed";
+      method: 'item/completed'
       params: {
-        threadId: string;
-        turnId: string;
-        item: CodexThreadItem;
-      };
+        threadId: string
+        turnId: string
+        item: CodexThreadItem
+      }
     }
   | {
-      method: "item/agentMessage/delta";
+      method: 'item/agentMessage/delta'
       params: {
-        threadId: string;
-        turnId: string;
-        itemId: string;
-        delta: string;
-      };
+        threadId: string
+        turnId: string
+        itemId: string
+        delta: string
+      }
     }
   | {
-      method: "item/plan/delta";
+      method: 'item/plan/delta'
       params: {
-        threadId: string;
-        turnId: string;
-        itemId: string;
-        delta: string;
-      };
+        threadId: string
+        turnId: string
+        itemId: string
+        delta: string
+      }
     }
   | {
-      method: "item/reasoning/delta";
+      method: 'item/reasoning/delta'
       params: {
-        threadId: string;
-        turnId: string;
-        itemId: string;
-        delta: string;
-      };
+        threadId: string
+        turnId: string
+        itemId: string
+        delta: string
+      }
     }
   | {
-      method: "error";
+      method: 'error'
       params: {
-        message?: string;
-        [key: string]: JsonValue | undefined;
-      };
-    };
+        message?: string
+        [key: string]: JsonValue | undefined
+      }
+    }
 
 export type CodexServerRequest =
   | {
-      method: "item/tool/call";
-      id: CodexRequestId;
-      params: CodexDynamicToolCallRequest;
+      method: 'item/tool/call'
+      id: CodexRequestId
+      params: CodexDynamicToolCallRequest
     }
   | {
-      method: string;
-      id: CodexRequestId;
-      params?: JsonValue;
-    };
+      method: string
+      id: CodexRequestId
+      params?: JsonValue
+    }
 
 export interface CodexJsonRpcError {
-  code: number;
-  message: string;
-  data?: JsonValue;
+  code: number
+  message: string
+  data?: JsonValue
 }
 
 export interface CodexJsonRpcResponse<TResult = JsonValue> {
-  id: CodexRequestId;
-  result?: TResult;
-  error?: CodexJsonRpcError;
+  id: CodexRequestId
+  result?: TResult
+  error?: CodexJsonRpcError
 }

@@ -1,43 +1,31 @@
-import type { HeaderSelection, PointerGeometry, VisibleRegionState } from "./gridPointer.js";
-import {
-  resolveColumnResizeTarget,
-  resolveHeaderSelection,
-  resolvePointerCell,
-  resolveRowResizeTarget,
-} from "./gridPointer.js";
-import type { GridMetrics } from "./gridMetrics.js";
-import type { Item, Rectangle } from "./gridTypes.js";
+import type { HeaderSelection, PointerGeometry, VisibleRegionState } from './gridPointer.js'
+import { resolveColumnResizeTarget, resolveHeaderSelection, resolvePointerCell, resolveRowResizeTarget } from './gridPointer.js'
+import type { GridMetrics } from './gridMetrics.js'
+import type { Item, Rectangle } from './gridTypes.js'
 
-export type GridHoverCursor =
-  | "default"
-  | "cell"
-  | "pointer"
-  | "col-resize"
-  | "row-resize"
-  | "grab"
-  | "grabbing";
+export type GridHoverCursor = 'default' | 'cell' | 'pointer' | 'col-resize' | 'row-resize' | 'grab' | 'grabbing'
 
 export interface GridHoverState {
-  readonly cell: Item | null;
-  readonly header: HeaderSelection | null;
-  readonly cursor: GridHoverCursor;
+  readonly cell: Item | null
+  readonly header: HeaderSelection | null
+  readonly cursor: GridHoverCursor
 }
 
 interface ResolveGridHoverStateOptions {
-  readonly clientX: number;
-  readonly clientY: number;
-  readonly region: VisibleRegionState;
-  readonly geometry: PointerGeometry;
-  readonly columnWidths: Readonly<Record<number, number>>;
-  readonly rowHeights: Readonly<Record<number, number>>;
-  readonly defaultColumnWidth: number;
-  readonly defaultRowHeight: number;
-  readonly gridMetrics: GridMetrics;
-  readonly selectedCell: Item;
-  readonly selectedCellBounds?: Rectangle | null;
-  readonly selectionRange?: Rectangle | null;
-  readonly hasColumnSelection: boolean;
-  readonly hasRowSelection: boolean;
+  readonly clientX: number
+  readonly clientY: number
+  readonly region: VisibleRegionState
+  readonly geometry: PointerGeometry
+  readonly columnWidths: Readonly<Record<number, number>>
+  readonly rowHeights: Readonly<Record<number, number>>
+  readonly defaultColumnWidth: number
+  readonly defaultRowHeight: number
+  readonly gridMetrics: GridMetrics
+  readonly selectedCell: Item
+  readonly selectedCellBounds?: Rectangle | null
+  readonly selectionRange?: Rectangle | null
+  readonly hasColumnSelection: boolean
+  readonly hasRowSelection: boolean
 }
 
 export function resolveGridHoverState(options: ResolveGridHoverStateOptions): GridHoverState {
@@ -56,55 +44,33 @@ export function resolveGridHoverState(options: ResolveGridHoverStateOptions): Gr
     selectionRange,
     hasColumnSelection,
     hasRowSelection,
-  } = options;
+  } = options
 
-  const resizeTarget = resolveColumnResizeTarget(
-    clientX,
-    clientY,
-    region,
-    geometry,
-    columnWidths,
-    defaultColumnWidth,
-  );
+  const resizeTarget = resolveColumnResizeTarget(clientX, clientY, region, geometry, columnWidths, defaultColumnWidth)
   if (resizeTarget !== null) {
     return {
       cell: null,
-      header: { kind: "column", index: resizeTarget },
-      cursor: "col-resize",
-    };
+      header: { kind: 'column', index: resizeTarget },
+      cursor: 'col-resize',
+    }
   }
 
-  const rowResizeTarget = resolveRowResizeTarget(
-    clientX,
-    clientY,
-    region,
-    geometry,
-    rowHeights,
-    defaultRowHeight,
-  );
+  const rowResizeTarget = resolveRowResizeTarget(clientX, clientY, region, geometry, rowHeights, defaultRowHeight)
   if (rowResizeTarget !== null) {
     return {
       cell: null,
-      header: { kind: "row", index: rowResizeTarget },
-      cursor: "row-resize",
-    };
+      header: { kind: 'row', index: rowResizeTarget },
+      cursor: 'row-resize',
+    }
   }
 
-  const header = resolveHeaderSelection(
-    clientX,
-    clientY,
-    region,
-    geometry,
-    columnWidths,
-    rowHeights,
-    gridMetrics,
-  );
+  const header = resolveHeaderSelection(clientX, clientY, region, geometry, columnWidths, rowHeights, gridMetrics)
   if (header) {
     return {
       cell: null,
       header,
-      cursor: "pointer",
-    };
+      cursor: 'pointer',
+    }
   }
 
   const cell = resolvePointerCell({
@@ -120,40 +86,30 @@ export function resolveGridHoverState(options: ResolveGridHoverStateOptions): Gr
     selectionRange: selectionRange ?? null,
     hasColumnSelection,
     hasRowSelection,
-  });
+  })
   if (cell) {
     return {
       cell,
       header: null,
-      cursor: "cell",
-    };
+      cursor: 'cell',
+    }
   }
 
   return {
     cell: null,
     header: null,
-    cursor: "default",
-  };
+    cursor: 'default',
+  }
 }
 
 export function sameGridHoverState(left: GridHoverState, right: GridHoverState): boolean {
-  return (
-    sameItem(left.cell, right.cell) &&
-    sameHeaderSelection(left.header, right.header) &&
-    left.cursor === right.cursor
-  );
+  return sameItem(left.cell, right.cell) && sameHeaderSelection(left.header, right.header) && left.cursor === right.cursor
 }
 
 function sameItem(left: Item | null, right: Item | null): boolean {
-  return (
-    left === right ||
-    (left !== null && right !== null && left[0] === right[0] && left[1] === right[1])
-  );
+  return left === right || (left !== null && right !== null && left[0] === right[0] && left[1] === right[1])
 }
 
 function sameHeaderSelection(left: HeaderSelection | null, right: HeaderSelection | null): boolean {
-  return (
-    left === right ||
-    (left !== null && right !== null && left.kind === right.kind && left.index === right.index)
-  );
+  return left === right || (left !== null && right !== null && left.kind === right.kind && left.index === right.index)
 }

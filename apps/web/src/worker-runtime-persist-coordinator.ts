@@ -1,71 +1,63 @@
-import { Effect } from "effect";
-import type { ProjectionOverlayScope } from "./worker-local-overlay.js";
-import { createEmptyProjectionOverlayScope } from "./worker-local-overlay.js";
+import { Effect } from 'effect'
+import type { ProjectionOverlayScope } from './worker-local-overlay.js'
+import { createEmptyProjectionOverlayScope } from './worker-local-overlay.js'
 
 export function resolveProjectionOverlayScopeForPersist(args: {
-  projectionOverlayScope: ProjectionOverlayScope | null;
-  pendingMutationCount: number;
+  projectionOverlayScope: ProjectionOverlayScope | null
+  pendingMutationCount: number
 }): ProjectionOverlayScope | null {
   if (args.projectionOverlayScope) {
-    return args.projectionOverlayScope;
+    return args.projectionOverlayScope
   }
-  return args.pendingMutationCount === 0 ? createEmptyProjectionOverlayScope() : null;
+  return args.pendingMutationCount === 0 ? createEmptyProjectionOverlayScope() : null
 }
 
-export class WorkerRuntimePersistCoordinator<
-  TLocalStore,
-  TAuthoritativeEngine,
-  TProjectionEngine,
-  TPersistedState,
-> {
-  private flushInFlight: Promise<void> | null = null;
-  private requestedPersistVersion = 0;
-  private flushedPersistVersion = 0;
+export class WorkerRuntimePersistCoordinator<TLocalStore, TAuthoritativeEngine, TProjectionEngine, TPersistedState> {
+  private flushInFlight: Promise<void> | null = null
+  private requestedPersistVersion = 0
+  private flushedPersistVersion = 0
 
   constructor(
     private readonly options: {
-      canPersistState: () => boolean;
-      getLocalStore: () => TLocalStore | null;
-      getAuthoritativeEngine: () => Promise<TAuthoritativeEngine>;
-      getProjectionEngine: () => Promise<TProjectionEngine>;
-      buildPersistedState: (input: {
-        authoritativeEngine: TAuthoritativeEngine;
-        projectionEngine: TProjectionEngine;
-      }) => TPersistedState;
-      getProjectionOverlayScope: () => ProjectionOverlayScope | null;
+      canPersistState: () => boolean
+      getLocalStore: () => TLocalStore | null
+      getAuthoritativeEngine: () => Promise<TAuthoritativeEngine>
+      getProjectionEngine: () => Promise<TProjectionEngine>
+      buildPersistedState: (input: { authoritativeEngine: TAuthoritativeEngine; projectionEngine: TProjectionEngine }) => TPersistedState
+      getProjectionOverlayScope: () => ProjectionOverlayScope | null
       saveState: (input: {
-        localStore: TLocalStore;
-        state: TPersistedState;
-        authoritativeEngine: TAuthoritativeEngine;
-        projectionEngine: TProjectionEngine;
-        projectionOverlayScope: ProjectionOverlayScope | null;
-      }) => Promise<void>;
-      markProjectionMatchesLocalStore: () => void;
+        localStore: TLocalStore
+        state: TPersistedState
+        authoritativeEngine: TAuthoritativeEngine
+        projectionEngine: TProjectionEngine
+        projectionOverlayScope: ProjectionOverlayScope | null
+      }) => Promise<void>
+      markProjectionMatchesLocalStore: () => void
     },
   ) {}
 
   reset(): void {
-    this.flushInFlight = null;
-    this.requestedPersistVersion = 0;
-    this.flushedPersistVersion = 0;
+    this.flushInFlight = null
+    this.requestedPersistVersion = 0
+    this.flushedPersistVersion = 0
   }
 
   async queuePersist(): Promise<void> {
     if (!this.options.canPersistState()) {
-      return;
+      return
     }
-    this.requestedPersistVersion += 1;
+    this.requestedPersistVersion += 1
     if (this.flushInFlight) {
-      await this.flushInFlight;
-      return;
+      await this.flushInFlight
+      return
     }
-    const flushPromise = this.flush();
-    this.flushInFlight = flushPromise;
+    const flushPromise = this.flush()
+    this.flushInFlight = flushPromise
     try {
-      await flushPromise;
+      await flushPromise
     } finally {
       if (this.flushInFlight === flushPromise) {
-        this.flushInFlight = null;
+        this.flushInFlight = null
       }
     }
   }
@@ -73,23 +65,18 @@ export class WorkerRuntimePersistCoordinator<
   private async flush(): Promise<void> {
     await Effect.runPromise(
       Effect.gen(this, function* () {
-        while (
-          this.flushedPersistVersion < this.requestedPersistVersion &&
-          this.options.canPersistState()
-        ) {
-          const targetVersion = this.requestedPersistVersion;
-          const authoritativeEngine = yield* Effect.promise(() =>
-            this.options.getAuthoritativeEngine(),
-          );
-          const projectionEngine = yield* Effect.promise(() => this.options.getProjectionEngine());
+        while (this.flushedPersistVersion < this.requestedPersistVersion && this.options.canPersistState()) {
+          const targetVersion = this.requestedPersistVersion
+          const authoritativeEngine = yield* Effect.promise(() => this.options.getAuthoritativeEngine())
+          const projectionEngine = yield* Effect.promise(() => this.options.getProjectionEngine())
           const state = this.options.buildPersistedState({
             authoritativeEngine,
             projectionEngine,
-          });
+          })
 
-          const localStore = this.options.getLocalStore();
+          const localStore = this.options.getLocalStore()
           if (!localStore) {
-            return;
+            return
           }
 
           yield* Effect.promise(() =>
@@ -100,11 +87,11 @@ export class WorkerRuntimePersistCoordinator<
               projectionEngine,
               projectionOverlayScope: this.options.getProjectionOverlayScope(),
             }),
-          );
-          this.options.markProjectionMatchesLocalStore();
-          this.flushedPersistVersion = targetVersion;
+          )
+          this.options.markProjectionMatchesLocalStore()
+          this.flushedPersistVersion = targetVersion
         }
       }),
-    );
+    )
   }
 }

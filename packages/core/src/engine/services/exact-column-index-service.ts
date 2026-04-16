@@ -1,377 +1,326 @@
-import { ValueTag, type CellValue } from "@bilig/protocol";
-import { parseRangeAddress } from "@bilig/formula";
-import type { EngineRuntimeState, PreparedExactVectorLookup } from "../runtime-state.js";
-import type {
-  EngineRuntimeColumnStoreService,
-  RuntimeColumnSlice,
-} from "./runtime-column-store-service.js";
+import { ValueTag, type CellValue } from '@bilig/protocol'
+import { parseRangeAddress } from '@bilig/formula'
+import type { EngineRuntimeState, PreparedExactVectorLookup } from '../runtime-state.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
 
 export interface ExactVectorMatchRequest {
-  lookupValue: CellValue;
-  sheetName: string;
-  start: string;
-  end: string;
-  startRow?: number;
-  endRow?: number;
-  startCol?: number;
-  endCol?: number;
-  searchMode: 1 | -1;
+  lookupValue: CellValue
+  sheetName: string
+  start: string
+  end: string
+  startRow?: number
+  endRow?: number
+  startCol?: number
+  endCol?: number
+  searchMode: 1 | -1
 }
 
-export type ExactVectorMatchResult =
-  | { handled: false }
-  | { handled: true; position: number | undefined };
+export type ExactVectorMatchResult = { handled: false } | { handled: true; position: number | undefined }
 
 export interface ExactColumnIndexService {
-  readonly primeColumnIndex: (request: {
-    sheetName: string;
-    rowStart: number;
-    rowEnd: number;
-    col: number;
-  }) => void;
-  readonly prepareVectorLookup: (request: {
-    sheetName: string;
-    rowStart: number;
-    rowEnd: number;
-    col: number;
-  }) => PreparedExactVectorLookup;
+  readonly primeColumnIndex: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => void
+  readonly prepareVectorLookup: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => PreparedExactVectorLookup
   readonly findPreparedVectorMatch: (request: {
-    lookupValue: CellValue;
-    prepared: PreparedExactVectorLookup;
-    searchMode: 1 | -1;
-  }) => ExactVectorMatchResult;
-  readonly findVectorMatch: (request: ExactVectorMatchRequest) => ExactVectorMatchResult;
-  readonly invalidateColumn: (request: { sheetName: string; col: number }) => void;
+    lookupValue: CellValue
+    prepared: PreparedExactVectorLookup
+    searchMode: 1 | -1
+  }) => ExactVectorMatchResult
+  readonly findVectorMatch: (request: ExactVectorMatchRequest) => ExactVectorMatchResult
+  readonly invalidateColumn: (request: { sheetName: string; col: number }) => void
   readonly recordLiteralWrite: (request: {
-    sheetName: string;
-    row: number;
-    col: number;
-    oldValue: CellValue;
-    newValue: CellValue;
-    oldStringId?: number;
-    newStringId?: number;
-  }) => void;
+    sheetName: string
+    row: number
+    col: number
+    oldValue: CellValue
+    newValue: CellValue
+    oldStringId?: number
+    newStringId?: number
+  }) => void
 }
 
 interface ExactColumnIndexEntry {
-  sheetName: string;
-  rowStart: number;
-  rowEnd: number;
-  col: number;
-  columnVersion: number;
-  structureVersion: number;
-  comparableKind: "numeric" | "text" | "mixed";
-  uniformStart: number | undefined;
-  uniformStep: number | undefined;
-  rowLists: Map<string, number[]>;
-  firstPositions: Map<string, number>;
-  lastPositions: Map<string, number>;
-  firstNumericPositions: Map<number, number> | undefined;
-  lastNumericPositions: Map<number, number> | undefined;
-  firstTextPositions: Map<string, number> | undefined;
-  lastTextPositions: Map<string, number> | undefined;
+  sheetName: string
+  rowStart: number
+  rowEnd: number
+  col: number
+  columnVersion: number
+  structureVersion: number
+  comparableKind: 'numeric' | 'text' | 'mixed'
+  uniformStart: number | undefined
+  uniformStep: number | undefined
+  rowLists: Map<string, number[]>
+  firstPositions: Map<string, number>
+  lastPositions: Map<string, number>
+  firstNumericPositions: Map<number, number> | undefined
+  lastNumericPositions: Map<number, number> | undefined
+  firstTextPositions: Map<string, number> | undefined
+  lastTextPositions: Map<string, number> | undefined
 }
 
 interface ExactColumnBounds {
-  rowStart: number;
-  rowEnd: number;
-  col: number;
+  rowStart: number
+  rowEnd: number
+  col: number
 }
 
 interface VectorLookupBoundsRequest {
-  sheetName: string;
-  start: string;
-  end: string;
-  startRow?: number;
-  endRow?: number;
-  startCol?: number;
-  endCol?: number;
+  sheetName: string
+  start: string
+  end: string
+  startRow?: number
+  endRow?: number
+  startCol?: number
+  endCol?: number
 }
 
-function getExactColumnCacheKey(
-  sheetName: string,
-  col: number,
-  rowStart: number,
-  rowEnd: number,
-): string {
-  return `${sheetName}\t${col}\t${rowStart}\t${rowEnd}`;
+function getExactColumnCacheKey(sheetName: string, col: number, rowStart: number, rowEnd: number): string {
+  return `${sheetName}\t${col}\t${rowStart}\t${rowEnd}`
 }
 
 function columnRegistryKey(sheetName: string, col: number): string {
-  return `${sheetName}\t${col}`;
+  return `${sheetName}\t${col}`
 }
 
-function normalizeExactLookupKey(
-  value: CellValue,
-  lookupString: (id: number) => string,
-  stringId = 0,
-): string | undefined {
+function normalizeExactLookupKey(value: CellValue, lookupString: (id: number) => string, stringId = 0): string | undefined {
   switch (value.tag) {
     case ValueTag.Empty:
-      return "e:";
+      return 'e:'
     case ValueTag.Number:
-      return `n:${Object.is(value.value, -0) ? 0 : value.value}`;
+      return `n:${Object.is(value.value, -0) ? 0 : value.value}`
     case ValueTag.Boolean:
-      return value.value ? "b:1" : "b:0";
+      return value.value ? 'b:1' : 'b:0'
     case ValueTag.String:
-      return `s:${(stringId !== 0 ? lookupString(stringId) : value.value).toUpperCase()}`;
+      return `s:${(stringId !== 0 ? lookupString(stringId) : value.value).toUpperCase()}`
     case ValueTag.Error:
-      return undefined;
+      return undefined
   }
 }
 
-function detectUniformNumericStep(
-  values: Float64Array,
-): { start: number; step: number } | undefined {
+function detectUniformNumericStep(values: Float64Array): { start: number; step: number } | undefined {
   if (values.length < 2) {
-    return undefined;
+    return undefined
   }
-  const start = values[0]!;
-  const step = values[1]! - start;
+  const start = values[0]!
+  const step = values[1]! - start
   if (!Number.isFinite(step) || step === 0) {
-    return undefined;
+    return undefined
   }
   for (let index = 2; index < values.length; index += 1) {
     if (values[index]! - values[index - 1]! !== step) {
-      return undefined;
+      return undefined
     }
   }
-  return { start, step };
+  return { start, step }
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
   if (rawTag === undefined) {
-    return ValueTag.Empty;
+    return ValueTag.Empty
   }
   switch (rawTag) {
     case 1:
-      return ValueTag.Number;
+      return ValueTag.Number
     case 2:
-      return ValueTag.Boolean;
+      return ValueTag.Boolean
     case 3:
-      return ValueTag.String;
+      return ValueTag.String
     case 4:
-      return ValueTag.Error;
+      return ValueTag.Error
     case 0:
     default:
-      return ValueTag.Empty;
+      return ValueTag.Empty
   }
 }
 
-function resolveExactColumnBounds(
-  request: VectorLookupBoundsRequest,
-): ExactColumnBounds | undefined {
-  if (
-    request.startRow !== undefined &&
-    request.endRow !== undefined &&
-    request.startCol !== undefined &&
-    request.endCol !== undefined
-  ) {
+function resolveExactColumnBounds(request: VectorLookupBoundsRequest): ExactColumnBounds | undefined {
+  if (request.startRow !== undefined && request.endRow !== undefined && request.startCol !== undefined && request.endCol !== undefined) {
     if (request.startCol !== request.endCol) {
-      return undefined;
+      return undefined
     }
     return {
       rowStart: request.startRow,
       rowEnd: request.endRow,
       col: request.startCol,
-    };
+    }
   }
 
-  const parsedRange = parseRangeAddress(`${request.start}:${request.end}`, request.sheetName);
-  if (parsedRange.kind !== "cells" || parsedRange.start.col !== parsedRange.end.col) {
-    return undefined;
+  const parsedRange = parseRangeAddress(`${request.start}:${request.end}`, request.sheetName)
+  if (parsedRange.kind !== 'cells' || parsedRange.start.col !== parsedRange.end.col) {
+    return undefined
   }
   return {
     rowStart: parsedRange.start.row,
     rowEnd: parsedRange.end.row,
     col: parsedRange.start.col,
-  };
+  }
 }
 
 function setPositionsForKey(entry: ExactColumnIndexEntry, key: string): void {
-  const rows = entry.rowLists.get(key);
+  const rows = entry.rowLists.get(key)
   if (!rows || rows.length === 0) {
-    entry.rowLists.delete(key);
-    entry.firstPositions.delete(key);
-    entry.lastPositions.delete(key);
-    if (key.startsWith("n:")) {
-      const numericValue = Number(key.slice(2));
-      entry.firstNumericPositions?.delete(numericValue);
-      entry.lastNumericPositions?.delete(numericValue);
-    } else if (key.startsWith("s:")) {
-      const textValue = key.slice(2);
-      entry.firstTextPositions?.delete(textValue);
-      entry.lastTextPositions?.delete(textValue);
+    entry.rowLists.delete(key)
+    entry.firstPositions.delete(key)
+    entry.lastPositions.delete(key)
+    if (key.startsWith('n:')) {
+      const numericValue = Number(key.slice(2))
+      entry.firstNumericPositions?.delete(numericValue)
+      entry.lastNumericPositions?.delete(numericValue)
+    } else if (key.startsWith('s:')) {
+      const textValue = key.slice(2)
+      entry.firstTextPositions?.delete(textValue)
+      entry.lastTextPositions?.delete(textValue)
     }
-    return;
+    return
   }
-  entry.firstPositions.set(key, rows[0]!);
-  entry.lastPositions.set(key, rows[rows.length - 1]!);
-  if (key.startsWith("n:")) {
-    const numericValue = Number(key.slice(2));
-    entry.firstNumericPositions?.set(numericValue, rows[0]!);
-    entry.lastNumericPositions?.set(numericValue, rows[rows.length - 1]!);
-  } else if (key.startsWith("s:")) {
-    const textValue = key.slice(2);
-    entry.firstTextPositions?.set(textValue, rows[0]!);
-    entry.lastTextPositions?.set(textValue, rows[rows.length - 1]!);
+  entry.firstPositions.set(key, rows[0]!)
+  entry.lastPositions.set(key, rows[rows.length - 1]!)
+  if (key.startsWith('n:')) {
+    const numericValue = Number(key.slice(2))
+    entry.firstNumericPositions?.set(numericValue, rows[0]!)
+    entry.lastNumericPositions?.set(numericValue, rows[rows.length - 1]!)
+  } else if (key.startsWith('s:')) {
+    const textValue = key.slice(2)
+    entry.firstTextPositions?.set(textValue, rows[0]!)
+    entry.lastTextPositions?.set(textValue, rows[rows.length - 1]!)
   }
 }
 
 export function createExactColumnIndexService(args: {
-  readonly state: Pick<EngineRuntimeState, "workbook" | "strings">;
-  readonly runtimeColumnStore: EngineRuntimeColumnStoreService;
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly runtimeColumnStore: EngineRuntimeColumnStoreService
 }): ExactColumnIndexService {
-  const emptyColumnVersions = new Uint32Array(0);
-  const exactColumnIndices = new Map<string, ExactColumnIndexEntry>();
-  const cacheKeysByColumn = new Map<string, Set<string>>();
+  const emptyColumnVersions = new Uint32Array(0)
+  const exactColumnIndices = new Map<string, ExactColumnIndexEntry>()
+  const cacheKeysByColumn = new Map<string, Set<string>>()
 
   const getCurrentColumnVersions = (
     sheetName: string,
     col: number,
   ): {
-    columnVersion: number;
-    structureVersion: number;
-    sheetColumnVersions: Uint32Array;
+    columnVersion: number
+    structureVersion: number
+    sheetColumnVersions: Uint32Array
   } => {
-    const sheet = args.state.workbook.getSheet(sheetName);
-    const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions;
+    const sheet = args.state.workbook.getSheet(sheetName)
+    const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions
     return {
       columnVersion: sheetColumnVersions[col] ?? 0,
       structureVersion: sheet?.structureVersion ?? 0,
       sheetColumnVersions,
-    };
-  };
+    }
+  }
 
   const trackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
-    const registryKey = columnRegistryKey(sheetName, col);
-    const existing = cacheKeysByColumn.get(registryKey);
+    const registryKey = columnRegistryKey(sheetName, col)
+    const existing = cacheKeysByColumn.get(registryKey)
     if (existing) {
-      existing.add(cacheKey);
-      return;
+      existing.add(cacheKey)
+      return
     }
-    cacheKeysByColumn.set(registryKey, new Set([cacheKey]));
-  };
+    cacheKeysByColumn.set(registryKey, new Set([cacheKey]))
+  }
 
   const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
-    const registryKey = columnRegistryKey(sheetName, col);
-    const existing = cacheKeysByColumn.get(registryKey);
+    const registryKey = columnRegistryKey(sheetName, col)
+    const existing = cacheKeysByColumn.get(registryKey)
     if (!existing) {
-      return;
+      return
     }
-    existing.delete(cacheKey);
+    existing.delete(cacheKey)
     if (existing.size === 0) {
-      cacheKeysByColumn.delete(registryKey);
+      cacheKeysByColumn.delete(registryKey)
     }
-  };
+  }
 
-  const replaceExactColumnIndex = (
-    cacheKey: string,
-    entry: ExactColumnIndexEntry | undefined,
-  ): void => {
-    const existing = exactColumnIndices.get(cacheKey);
+  const replaceExactColumnIndex = (cacheKey: string, entry: ExactColumnIndexEntry | undefined): void => {
+    const existing = exactColumnIndices.get(cacheKey)
     if (existing) {
-      untrackCacheKey(existing.sheetName, existing.col, cacheKey);
-      exactColumnIndices.delete(cacheKey);
+      untrackCacheKey(existing.sheetName, existing.col, cacheKey)
+      exactColumnIndices.delete(cacheKey)
     }
     if (!entry) {
-      return;
+      return
     }
-    exactColumnIndices.set(cacheKey, entry);
-    trackCacheKey(entry.sheetName, entry.col, cacheKey);
-  };
+    exactColumnIndices.set(cacheKey, entry)
+    trackCacheKey(entry.sheetName, entry.col, cacheKey)
+  }
 
   const keyAtOffset = (slice: RuntimeColumnSlice, offset: number): string | undefined => {
-    const tag = decodeValueTag(slice.tags[offset]);
+    const tag = decodeValueTag(slice.tags[offset])
     switch (tag) {
       case ValueTag.Empty:
-        return "e:";
+        return 'e:'
       case ValueTag.Number:
-        return `n:${slice.numbers[offset] ?? 0}`;
+        return `n:${slice.numbers[offset] ?? 0}`
       case ValueTag.Boolean:
-        return (slice.numbers[offset] ?? 0) !== 0 ? "b:1" : "b:0";
+        return (slice.numbers[offset] ?? 0) !== 0 ? 'b:1' : 'b:0'
       case ValueTag.String: {
-        const stringId = slice.stringIds[offset] ?? 0;
-        return `s:${args.runtimeColumnStore.normalizeStringId(stringId)}`;
+        const stringId = slice.stringIds[offset] ?? 0
+        return `s:${args.runtimeColumnStore.normalizeStringId(stringId)}`
       }
       case ValueTag.Error:
       default:
-        return undefined;
+        return undefined
     }
-  };
+  }
 
-  const buildExactColumnIndex = (
-    sheetName: string,
-    col: number,
-    rowStart: number,
-    rowEnd: number,
-  ): ExactColumnIndexEntry => {
+  const buildExactColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ExactColumnIndexEntry => {
     const slice = args.runtimeColumnStore.getColumnSlice({
       sheetName,
       rowStart,
       rowEnd,
       col,
-    });
-    const firstPositions = new Map<string, number>();
-    const lastPositions = new Map<string, number>();
-    const firstNumericPositions = new Map<number, number>();
-    const lastNumericPositions = new Map<number, number>();
-    const firstTextPositions = new Map<string, number>();
-    const lastTextPositions = new Map<string, number>();
-    const rowLists = new Map<string, number[]>();
-    const numericSequence: number[] = [];
-    let sawNumeric = false;
-    let sawText = false;
-    let sawOther = false;
+    })
+    const firstPositions = new Map<string, number>()
+    const lastPositions = new Map<string, number>()
+    const firstNumericPositions = new Map<number, number>()
+    const lastNumericPositions = new Map<number, number>()
+    const firstTextPositions = new Map<string, number>()
+    const lastTextPositions = new Map<string, number>()
+    const rowLists = new Map<string, number[]>()
+    const numericSequence: number[] = []
+    let sawNumeric = false
+    let sawText = false
+    let sawOther = false
     for (let offset = 0; offset < slice.length; offset += 1) {
-      const row = rowStart + offset;
-      const key = keyAtOffset(slice, offset);
+      const row = rowStart + offset
+      const key = keyAtOffset(slice, offset)
       if (key === undefined) {
-        continue;
+        continue
       }
       if (!firstPositions.has(key)) {
-        firstPositions.set(key, row);
+        firstPositions.set(key, row)
       }
-      lastPositions.set(key, row);
-      const existingRows = rowLists.get(key);
+      lastPositions.set(key, row)
+      const existingRows = rowLists.get(key)
       if (existingRows) {
-        existingRows.push(row);
+        existingRows.push(row)
       } else {
-        rowLists.set(key, [row]);
+        rowLists.set(key, [row])
       }
-      if (key.startsWith("n:")) {
-        const numericValue = Number(key.slice(2));
+      if (key.startsWith('n:')) {
+        const numericValue = Number(key.slice(2))
         if (!firstNumericPositions.has(numericValue)) {
-          firstNumericPositions.set(numericValue, row);
+          firstNumericPositions.set(numericValue, row)
         }
-        lastNumericPositions.set(numericValue, row);
-        numericSequence.push(numericValue);
-        sawNumeric = true;
-        continue;
+        lastNumericPositions.set(numericValue, row)
+        numericSequence.push(numericValue)
+        sawNumeric = true
+        continue
       }
-      if (key.startsWith("s:")) {
-        const textValue = key.slice(2);
+      if (key.startsWith('s:')) {
+        const textValue = key.slice(2)
         if (!firstTextPositions.has(textValue)) {
-          firstTextPositions.set(textValue, row);
+          firstTextPositions.set(textValue, row)
         }
-        lastTextPositions.set(textValue, row);
-        sawText = true;
-        continue;
+        lastTextPositions.set(textValue, row)
+        sawText = true
+        continue
       }
-      sawOther = true;
+      sawOther = true
     }
-    const comparableKind =
-      sawOther || (sawNumeric && sawText)
-        ? "mixed"
-        : sawNumeric
-          ? "numeric"
-          : sawText
-            ? "text"
-            : "mixed";
-    const uniformNumericStep =
-      comparableKind === "numeric"
-        ? detectUniformNumericStep(Float64Array.from(numericSequence))
-        : undefined;
+    const comparableKind = sawOther || (sawNumeric && sawText) ? 'mixed' : sawNumeric ? 'numeric' : sawText ? 'text' : 'mixed'
+    const uniformNumericStep = comparableKind === 'numeric' ? detectUniformNumericStep(Float64Array.from(numericSequence)) : undefined
     return {
       sheetName,
       rowStart,
@@ -385,32 +334,23 @@ export function createExactColumnIndexService(args: {
       rowLists,
       firstPositions,
       lastPositions,
-      firstNumericPositions: comparableKind === "numeric" ? firstNumericPositions : undefined,
-      lastNumericPositions: comparableKind === "numeric" ? lastNumericPositions : undefined,
-      firstTextPositions: comparableKind === "text" ? firstTextPositions : undefined,
-      lastTextPositions: comparableKind === "text" ? lastTextPositions : undefined,
-    };
-  };
-
-  const ensureExactColumnIndex = (
-    sheetName: string,
-    col: number,
-    rowStart: number,
-    rowEnd: number,
-  ): ExactColumnIndexEntry => {
-    const cacheKey = getExactColumnCacheKey(sheetName, col, rowStart, rowEnd);
-    const currentVersions = getCurrentColumnVersions(sheetName, col);
-    let entry = exactColumnIndices.get(cacheKey);
-    if (
-      !entry ||
-      entry.columnVersion !== currentVersions.columnVersion ||
-      entry.structureVersion !== currentVersions.structureVersion
-    ) {
-      entry = buildExactColumnIndex(sheetName, col, rowStart, rowEnd);
-      replaceExactColumnIndex(cacheKey, entry);
+      firstNumericPositions: comparableKind === 'numeric' ? firstNumericPositions : undefined,
+      lastNumericPositions: comparableKind === 'numeric' ? lastNumericPositions : undefined,
+      firstTextPositions: comparableKind === 'text' ? firstTextPositions : undefined,
+      lastTextPositions: comparableKind === 'text' ? lastTextPositions : undefined,
     }
-    return entry;
-  };
+  }
+
+  const ensureExactColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ExactColumnIndexEntry => {
+    const cacheKey = getExactColumnCacheKey(sheetName, col, rowStart, rowEnd)
+    const currentVersions = getCurrentColumnVersions(sheetName, col)
+    let entry = exactColumnIndices.get(cacheKey)
+    if (!entry || entry.columnVersion !== currentVersions.columnVersion || entry.structureVersion !== currentVersions.structureVersion) {
+      entry = buildExactColumnIndex(sheetName, col, rowStart, rowEnd)
+      replaceExactColumnIndex(cacheKey, entry)
+    }
+    return entry
+  }
 
   const updateEntryLiteralWrite = (
     entry: ExactColumnIndexEntry,
@@ -420,69 +360,64 @@ export function createExactColumnIndexService(args: {
     currentColumnVersion: number,
     currentStructureVersion: number,
   ): boolean => {
-    entry.columnVersion = currentColumnVersion;
-    entry.structureVersion = currentStructureVersion;
+    entry.columnVersion = currentColumnVersion
+    entry.structureVersion = currentStructureVersion
     if (row < entry.rowStart || row > entry.rowEnd) {
-      return true;
+      return true
     }
     if (oldKey === newKey) {
-      return true;
+      return true
     }
-    if (entry.comparableKind === "numeric") {
-      const oldNumeric = oldKey?.startsWith("n:") ?? false;
-      const newNumeric = newKey?.startsWith("n:") ?? false;
+    if (entry.comparableKind === 'numeric') {
+      const oldNumeric = oldKey?.startsWith('n:') ?? false
+      const newNumeric = newKey?.startsWith('n:') ?? false
       if ((oldKey !== undefined && !oldNumeric) || (newKey !== undefined && !newNumeric)) {
-        return false;
+        return false
       }
-      entry.uniformStart = undefined;
-      entry.uniformStep = undefined;
-    } else if (entry.comparableKind === "text") {
-      const oldText = oldKey?.startsWith("s:") ?? false;
-      const newText = newKey?.startsWith("s:") ?? false;
+      entry.uniformStart = undefined
+      entry.uniformStep = undefined
+    } else if (entry.comparableKind === 'text') {
+      const oldText = oldKey?.startsWith('s:') ?? false
+      const newText = newKey?.startsWith('s:') ?? false
       if ((oldKey !== undefined && !oldText) || (newKey !== undefined && !newText)) {
-        return false;
+        return false
       }
     }
     if (oldKey !== undefined) {
-      const rows = entry.rowLists.get(oldKey);
+      const rows = entry.rowLists.get(oldKey)
       if (!rows) {
-        return false;
+        return false
       }
-      const rowIndex = rows.indexOf(row);
+      const rowIndex = rows.indexOf(row)
       if (rowIndex === -1) {
-        return false;
+        return false
       }
-      rows.splice(rowIndex, 1);
-      setPositionsForKey(entry, oldKey);
+      rows.splice(rowIndex, 1)
+      setPositionsForKey(entry, oldKey)
     }
     if (newKey !== undefined) {
-      const rows = entry.rowLists.get(newKey);
+      const rows = entry.rowLists.get(newKey)
       if (rows) {
-        let insertIndex = rows.length;
+        let insertIndex = rows.length
         while (insertIndex > 0 && rows[insertIndex - 1]! > row) {
-          insertIndex -= 1;
+          insertIndex -= 1
         }
-        rows.splice(insertIndex, 0, row);
+        rows.splice(insertIndex, 0, row)
       } else {
-        entry.rowLists.set(newKey, [row]);
+        entry.rowLists.set(newKey, [row])
       }
-      setPositionsForKey(entry, newKey);
+      setPositionsForKey(entry, newKey)
     }
-    return true;
-  };
+    return true
+  }
 
   const prepareVectorLookup = (request: {
-    sheetName: string;
-    rowStart: number;
-    rowEnd: number;
-    col: number;
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    col: number
   }): PreparedExactVectorLookup => {
-    const entry = ensureExactColumnIndex(
-      request.sheetName,
-      request.col,
-      request.rowStart,
-      request.rowEnd,
-    );
+    const entry = ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
     return {
       sheetName: request.sheetName,
       rowStart: request.rowStart,
@@ -491,8 +426,7 @@ export function createExactColumnIndexService(args: {
       length: request.rowEnd - request.rowStart + 1,
       columnVersion: entry.columnVersion,
       structureVersion: entry.structureVersion,
-      sheetColumnVersions: getCurrentColumnVersions(request.sheetName, request.col)
-        .sheetColumnVersions,
+      sheetColumnVersions: getCurrentColumnVersions(request.sheetName, request.col).sheetColumnVersions,
       comparableKind: entry.comparableKind,
       uniformStart: entry.uniformStart,
       uniformStep: entry.uniformStep,
@@ -502,243 +436,191 @@ export function createExactColumnIndexService(args: {
       lastNumericPositions: entry.lastNumericPositions,
       firstTextPositions: entry.firstTextPositions,
       lastTextPositions: entry.lastTextPositions,
-    };
-  };
-
-  const refreshPreparedVectorLookup = (
-    prepared: PreparedExactVectorLookup,
-  ): PreparedExactVectorLookup => {
-    const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col);
-    if (
-      currentVersions.columnVersion === prepared.columnVersion &&
-      currentVersions.structureVersion === prepared.structureVersion
-    ) {
-      return prepared;
     }
-    const refreshed = prepareVectorLookup(prepared);
-    prepared.length = refreshed.length;
-    prepared.columnVersion = refreshed.columnVersion;
-    prepared.structureVersion = refreshed.structureVersion;
-    prepared.sheetColumnVersions = refreshed.sheetColumnVersions;
-    prepared.comparableKind = refreshed.comparableKind;
-    prepared.uniformStart = refreshed.uniformStart;
-    prepared.uniformStep = refreshed.uniformStep;
-    prepared.firstPositions = refreshed.firstPositions;
-    prepared.lastPositions = refreshed.lastPositions;
-    prepared.firstNumericPositions = refreshed.firstNumericPositions;
-    prepared.lastNumericPositions = refreshed.lastNumericPositions;
-    prepared.firstTextPositions = refreshed.firstTextPositions;
-    prepared.lastTextPositions = refreshed.lastTextPositions;
-    return prepared;
-  };
+  }
+
+  const refreshPreparedVectorLookup = (prepared: PreparedExactVectorLookup): PreparedExactVectorLookup => {
+    const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col)
+    if (currentVersions.columnVersion === prepared.columnVersion && currentVersions.structureVersion === prepared.structureVersion) {
+      return prepared
+    }
+    const refreshed = prepareVectorLookup(prepared)
+    prepared.length = refreshed.length
+    prepared.columnVersion = refreshed.columnVersion
+    prepared.structureVersion = refreshed.structureVersion
+    prepared.sheetColumnVersions = refreshed.sheetColumnVersions
+    prepared.comparableKind = refreshed.comparableKind
+    prepared.uniformStart = refreshed.uniformStart
+    prepared.uniformStep = refreshed.uniformStep
+    prepared.firstPositions = refreshed.firstPositions
+    prepared.lastPositions = refreshed.lastPositions
+    prepared.firstNumericPositions = refreshed.firstNumericPositions
+    prepared.lastNumericPositions = refreshed.lastNumericPositions
+    prepared.firstTextPositions = refreshed.firstTextPositions
+    prepared.lastTextPositions = refreshed.lastTextPositions
+    return prepared
+  }
 
   const findPreparedVectorMatch = (request: {
-    lookupValue: CellValue;
-    prepared: PreparedExactVectorLookup;
-    searchMode: 1 | -1;
+    lookupValue: CellValue
+    prepared: PreparedExactVectorLookup
+    searchMode: 1 | -1
   }): ExactVectorMatchResult => {
-    const prepared = refreshPreparedVectorLookup(request.prepared);
-    if (prepared.comparableKind === "numeric") {
+    const prepared = refreshPreparedVectorLookup(request.prepared)
+    if (prepared.comparableKind === 'numeric') {
       if (request.lookupValue.tag === ValueTag.Error) {
-        return { handled: false };
+        return { handled: false }
       }
       if (request.lookupValue.tag !== ValueTag.Number) {
-        return { handled: true, position: undefined };
+        return { handled: true, position: undefined }
       }
-      const numericValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value;
+      const numericValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
       if (prepared.uniformStart !== undefined && prepared.uniformStep !== undefined) {
-        const relative = (numericValue - prepared.uniformStart) / prepared.uniformStep;
-        const position = Number.isInteger(relative) ? relative + 1 : undefined;
+        const relative = (numericValue - prepared.uniformStart) / prepared.uniformStep
+        const position = Number.isInteger(relative) ? relative + 1 : undefined
         return {
           handled: true,
-          position:
-            position !== undefined && position >= 1 && position <= prepared.length
-              ? position
-              : undefined,
-        };
+          position: position !== undefined && position >= 1 && position <= prepared.length ? position : undefined,
+        }
       }
-      const numericMap =
-        request.searchMode === -1 ? prepared.lastNumericPositions : prepared.firstNumericPositions;
-      const row = numericMap?.get(numericValue);
+      const numericMap = request.searchMode === -1 ? prepared.lastNumericPositions : prepared.firstNumericPositions
+      const row = numericMap?.get(numericValue)
       return {
         handled: true,
         position: row === undefined ? undefined : row - prepared.rowStart + 1,
-      };
+      }
     }
-    if (prepared.comparableKind === "text") {
+    if (prepared.comparableKind === 'text') {
       if (request.lookupValue.tag === ValueTag.Error) {
-        return { handled: false };
+        return { handled: false }
       }
       if (request.lookupValue.tag !== ValueTag.String) {
-        return { handled: true, position: undefined };
+        return { handled: true, position: undefined }
       }
-      const textValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue);
-      const textMap =
-        request.searchMode === -1 ? prepared.lastTextPositions : prepared.firstTextPositions;
-      const row = textMap?.get(textValue);
+      const textValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue)
+      const textMap = request.searchMode === -1 ? prepared.lastTextPositions : prepared.firstTextPositions
+      const row = textMap?.get(textValue)
       return {
         handled: true,
         position: row === undefined ? undefined : row - prepared.rowStart + 1,
-      };
+      }
     }
-    const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) =>
-      args.state.strings.get(id),
-    );
+    const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) => args.state.strings.get(id))
     if (normalizedLookupKey === undefined) {
-      return { handled: false };
+      return { handled: false }
     }
     const row =
-      request.searchMode === -1
-        ? prepared.lastPositions.get(normalizedLookupKey)
-        : prepared.firstPositions.get(normalizedLookupKey);
+      request.searchMode === -1 ? prepared.lastPositions.get(normalizedLookupKey) : prepared.firstPositions.get(normalizedLookupKey)
     return {
       handled: true,
       position: row === undefined ? undefined : row - prepared.rowStart + 1,
-    };
-  };
+    }
+  }
 
   return {
     primeColumnIndex(request) {
-      ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd);
+      ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
     },
     prepareVectorLookup(request) {
-      return prepareVectorLookup(request);
+      return prepareVectorLookup(request)
     },
     findPreparedVectorMatch(request) {
-      return findPreparedVectorMatch(request);
+      return findPreparedVectorMatch(request)
     },
     findVectorMatch(request) {
-      const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) =>
-        args.state.strings.get(id),
-      );
+      const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) => args.state.strings.get(id))
       if (normalizedLookupKey === undefined) {
-        return { handled: false };
+        return { handled: false }
       }
 
-      const bounds = resolveExactColumnBounds(request);
+      const bounds = resolveExactColumnBounds(request)
       if (!bounds) {
-        return { handled: false };
+        return { handled: false }
       }
 
-      const entry = ensureExactColumnIndex(
-        request.sheetName,
-        bounds.col,
-        bounds.rowStart,
-        bounds.rowEnd,
-      );
-      if (entry.comparableKind === "numeric") {
+      const entry = ensureExactColumnIndex(request.sheetName, bounds.col, bounds.rowStart, bounds.rowEnd)
+      if (entry.comparableKind === 'numeric') {
         if (request.lookupValue.tag === ValueTag.Error) {
-          return { handled: false };
+          return { handled: false }
         }
         if (request.lookupValue.tag !== ValueTag.Number) {
-          return { handled: true, position: undefined };
+          return { handled: true, position: undefined }
         }
-        const numericValue = Object.is(request.lookupValue.value, -0)
-          ? 0
-          : request.lookupValue.value;
+        const numericValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
         if (entry.uniformStart !== undefined && entry.uniformStep !== undefined) {
-          const relative = (numericValue - entry.uniformStart) / entry.uniformStep;
-          const position = Number.isInteger(relative) ? relative + 1 : undefined;
+          const relative = (numericValue - entry.uniformStart) / entry.uniformStep
+          const position = Number.isInteger(relative) ? relative + 1 : undefined
           return {
             handled: true,
-            position:
-              position !== undefined &&
-              position >= 1 &&
-              position <= bounds.rowEnd - bounds.rowStart + 1
-                ? position
-                : undefined,
-          };
+            position: position !== undefined && position >= 1 && position <= bounds.rowEnd - bounds.rowStart + 1 ? position : undefined,
+          }
         }
-        const numericMap =
-          request.searchMode === -1 ? entry.lastNumericPositions : entry.firstNumericPositions;
-        const row = numericMap?.get(numericValue);
+        const numericMap = request.searchMode === -1 ? entry.lastNumericPositions : entry.firstNumericPositions
+        const row = numericMap?.get(numericValue)
         return {
           handled: true,
           position: row === undefined ? undefined : row - bounds.rowStart + 1,
-        };
+        }
       }
-      if (entry.comparableKind === "text") {
+      if (entry.comparableKind === 'text') {
         if (request.lookupValue.tag === ValueTag.Error) {
-          return { handled: false };
+          return { handled: false }
         }
         if (request.lookupValue.tag !== ValueTag.String) {
-          return { handled: true, position: undefined };
+          return { handled: true, position: undefined }
         }
-        const textValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue);
-        const textMap =
-          request.searchMode === -1 ? entry.lastTextPositions : entry.firstTextPositions;
-        const row = textMap?.get(textValue);
+        const textValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue)
+        const textMap = request.searchMode === -1 ? entry.lastTextPositions : entry.firstTextPositions
+        const row = textMap?.get(textValue)
         return {
           handled: true,
           position: row === undefined ? undefined : row - bounds.rowStart + 1,
-        };
+        }
       }
 
-      const row =
-        request.searchMode === -1
-          ? entry.lastPositions.get(normalizedLookupKey)
-          : entry.firstPositions.get(normalizedLookupKey);
+      const row = request.searchMode === -1 ? entry.lastPositions.get(normalizedLookupKey) : entry.firstPositions.get(normalizedLookupKey)
       return {
         handled: true,
         position: row === undefined ? undefined : row - bounds.rowStart + 1,
-      };
+      }
     },
     invalidateColumn(request) {
-      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col));
+      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
       if (!cacheKeys) {
-        return;
+        return
       }
       for (const cacheKey of cacheKeys) {
-        replaceExactColumnIndex(cacheKey, undefined);
+        replaceExactColumnIndex(cacheKey, undefined)
       }
     },
     recordLiteralWrite(request) {
-      const registryKey = columnRegistryKey(request.sheetName, request.col);
-      const cacheKeys = cacheKeysByColumn.get(registryKey);
+      const registryKey = columnRegistryKey(request.sheetName, request.col)
+      const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
-        return;
+        return
       }
-      const sheet = args.state.workbook.getSheet(request.sheetName);
+      const sheet = args.state.workbook.getSheet(request.sheetName)
       if (!sheet) {
-        return;
+        return
       }
-      const currentColumnVersion = sheet.columnVersions[request.col] ?? 0;
-      const currentStructureVersion = args.state.workbook.getSheetStructureVersion(
-        request.sheetName,
-      );
-      const oldKey = normalizeExactLookupKey(
-        request.oldValue,
-        (id) => args.state.strings.get(id),
-        request.oldStringId,
-      );
-      const newKey = normalizeExactLookupKey(
-        request.newValue,
-        (id) => args.state.strings.get(id),
-        request.newStringId,
-      );
+      const currentColumnVersion = sheet.columnVersions[request.col] ?? 0
+      const currentStructureVersion = args.state.workbook.getSheetStructureVersion(request.sheetName)
+      const oldKey = normalizeExactLookupKey(request.oldValue, (id) => args.state.strings.get(id), request.oldStringId)
+      const newKey = normalizeExactLookupKey(request.newValue, (id) => args.state.strings.get(id), request.newStringId)
       for (const cacheKey of cacheKeys) {
-        const entry = exactColumnIndices.get(cacheKey);
+        const entry = exactColumnIndices.get(cacheKey)
         if (!entry) {
-          untrackCacheKey(request.sheetName, request.col, cacheKey);
-          continue;
+          untrackCacheKey(request.sheetName, request.col, cacheKey)
+          continue
         }
         if (entry.structureVersion !== currentStructureVersion) {
-          replaceExactColumnIndex(cacheKey, undefined);
-          continue;
+          replaceExactColumnIndex(cacheKey, undefined)
+          continue
         }
-        if (
-          !updateEntryLiteralWrite(
-            entry,
-            request.row,
-            oldKey,
-            newKey,
-            currentColumnVersion,
-            currentStructureVersion,
-          )
-        ) {
-          replaceExactColumnIndex(cacheKey, undefined);
+        if (!updateEntryLiteralWrite(entry, request.row, oldKey, newKey, currentColumnVersion, currentStructureVersion)) {
+          replaceExactColumnIndex(cacheKey, undefined)
         }
       }
     },
-  };
+  }
 }

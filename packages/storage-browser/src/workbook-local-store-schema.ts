@@ -1,34 +1,25 @@
-import type { Database, SqlValue } from "@sqlite.org/sqlite-wasm";
+import type { Database, SqlValue } from '@sqlite.org/sqlite-wasm'
 
-function readSingleObjectRow(
-  db: Database,
-  sql: string,
-  bind?: readonly SqlValue[],
-): Record<string, SqlValue> | null {
-  const statement = db.prepare(sql);
+function readSingleObjectRow(db: Database, sql: string, bind?: readonly SqlValue[]): Record<string, SqlValue> | null {
+  const statement = db.prepare(sql)
   try {
     if (bind) {
-      statement.bind([...bind]);
+      statement.bind([...bind])
     }
     if (!statement.step()) {
-      return null;
+      return null
     }
-    return statement.get({});
+    return statement.get({})
   } finally {
-    statement.finalize();
+    statement.finalize()
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
-function ensureColumn(
-  db: Database,
-  tableName: string,
-  columnName: string,
-  definition: string,
-): void {
+function ensureColumn(db: Database, tableName: string, columnName: string, definition: string): void {
   const column = readSingleObjectRow(
     db,
     `
@@ -37,9 +28,9 @@ function ensureColumn(
        WHERE name = ?
     `,
     [tableName, columnName],
-  );
+  )
   if (!column) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`)
   }
 }
 
@@ -54,7 +45,7 @@ function tableHasColumn(db: Database, tableName: string, columnName: string): bo
       `,
       [tableName, columnName],
     ),
-  );
+  )
 }
 
 function tableExists(db: Database, tableName: string): boolean {
@@ -69,7 +60,7 @@ function tableExists(db: Database, tableName: string): boolean {
       `,
       [tableName],
     ),
-  );
+  )
 }
 
 function createPendingOpTable(db: Database): void {
@@ -90,20 +81,20 @@ function createPendingOpTable(db: Database): void {
       failure_message TEXT,
       status TEXT NOT NULL CHECK (status IN ('local', 'submitted', 'acked', 'rebased', 'failed'))
     )
-  `);
+  `)
 }
 
 function migratePendingOpTable(db: Database): void {
-  if (!tableExists(db, "pending_op")) {
-    createPendingOpTable(db);
-    return;
+  if (!tableExists(db, 'pending_op')) {
+    createPendingOpTable(db)
+    return
   }
-  if (tableHasColumn(db, "pending_op", "attempt_count")) {
-    return;
+  if (tableHasColumn(db, 'pending_op', 'attempt_count')) {
+    return
   }
 
-  const hasSubmittedAtMs = tableHasColumn(db, "pending_op", "submitted_at_ms");
-  const submittedAtExpr = hasSubmittedAtMs ? "submitted_at_ms" : "NULL";
+  const hasSubmittedAtMs = tableHasColumn(db, 'pending_op', 'submitted_at_ms')
+  const submittedAtExpr = hasSubmittedAtMs ? 'submitted_at_ms' : 'NULL'
   const attemptCountExpr = hasSubmittedAtMs
     ? `
       CASE
@@ -111,10 +102,10 @@ function migratePendingOpTable(db: Database): void {
         ELSE 1
       END
     `
-    : "0";
+    : '0'
 
-  db.exec("ALTER TABLE pending_op RENAME TO pending_op_legacy");
-  createPendingOpTable(db);
+  db.exec('ALTER TABLE pending_op RENAME TO pending_op_legacy')
+  createPendingOpTable(db)
   db.exec(`
     INSERT INTO pending_op (
       op_id,
@@ -152,51 +143,47 @@ function migratePendingOpTable(db: Database): void {
         ELSE 'local'
       END
     FROM pending_op_legacy
-  `);
-  db.exec("DROP TABLE pending_op_legacy");
+  `)
+  db.exec('DROP TABLE pending_op_legacy')
 }
 
 function parseSheetIdsFromSnapshotJson(snapshotJson: string | null): Map<string, number> {
-  if (typeof snapshotJson !== "string") {
-    return new Map();
+  if (typeof snapshotJson !== 'string') {
+    return new Map()
   }
   try {
-    const parsed = JSON.parse(snapshotJson) as unknown;
-    if (!isRecord(parsed) || !Array.isArray(parsed["sheets"])) {
-      return new Map();
+    const parsed = JSON.parse(snapshotJson) as unknown
+    if (!isRecord(parsed) || !Array.isArray(parsed['sheets'])) {
+      return new Map()
     }
-    const sheetIds = new Map<string, number>();
-    parsed["sheets"].forEach((sheet, index) => {
-      if (!isRecord(sheet) || typeof sheet["name"] !== "string") {
-        return;
+    const sheetIds = new Map<string, number>()
+    parsed['sheets'].forEach((sheet, index) => {
+      if (!isRecord(sheet) || typeof sheet['name'] !== 'string') {
+        return
       }
-      const id = typeof sheet["id"] === "number" ? sheet["id"] : index + 1;
-      if (!sheetIds.has(sheet["name"])) {
-        sheetIds.set(sheet["name"], id);
+      const id = typeof sheet['id'] === 'number' ? sheet['id'] : index + 1
+      if (!sheetIds.has(sheet['name'])) {
+        sheetIds.set(sheet['name'], id)
       }
-    });
-    return sheetIds;
+    })
+    return sheetIds
   } catch {
-    return new Map();
+    return new Map()
   }
 }
 
 function parseWorkbookNameFromSnapshotJson(snapshotJson: string | null): string | null {
-  if (typeof snapshotJson !== "string") {
-    return null;
+  if (typeof snapshotJson !== 'string') {
+    return null
   }
   try {
-    const parsed = JSON.parse(snapshotJson) as unknown;
-    if (
-      !isRecord(parsed) ||
-      !isRecord(parsed["workbook"]) ||
-      typeof parsed["workbook"]["name"] !== "string"
-    ) {
-      return null;
+    const parsed = JSON.parse(snapshotJson) as unknown
+    if (!isRecord(parsed) || !isRecord(parsed['workbook']) || typeof parsed['workbook']['name'] !== 'string') {
+      return null
     }
-    return parsed["workbook"]["name"];
+    return parsed['workbook']['name']
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -208,12 +195,12 @@ function backfillSheetIds(db: Database): void {
         FROM runtime_state
        WHERE id = 1
     `,
-  );
+  )
   const legacySheetIds = parseSheetIdsFromSnapshotJson(
-    typeof snapshotRow?.["snapshotJson"] === "string" ? snapshotRow["snapshotJson"] : null,
-  );
+    typeof snapshotRow?.['snapshotJson'] === 'string' ? snapshotRow['snapshotJson'] : null,
+  )
 
-  const rows: Array<{ name: string; sheetId: number | null }> = [];
+  const rows: Array<{ name: string; sheetId: number | null }> = []
   const readSheets = db.prepare(
     `
       SELECT name,
@@ -222,46 +209,46 @@ function backfillSheetIds(db: Database): void {
         FROM authoritative_sheet
        ORDER BY sort_order ASC, name ASC
     `,
-  );
+  )
   try {
     while (readSheets.step()) {
-      const row = readSheets.get({});
-      if (typeof row["name"] !== "string") {
-        continue;
+      const row = readSheets.get({})
+      if (typeof row['name'] !== 'string') {
+        continue
       }
       rows.push({
-        name: row["name"],
-        sheetId: typeof row["sheetId"] === "number" ? row["sheetId"] : null,
-      });
+        name: row['name'],
+        sheetId: typeof row['sheetId'] === 'number' ? row['sheetId'] : null,
+      })
     }
   } finally {
-    readSheets.finalize();
+    readSheets.finalize()
   }
   if (rows.length === 0) {
-    return;
+    return
   }
 
-  const usedIds = new Set(rows.flatMap((row) => (row.sheetId === null ? [] : [row.sheetId])));
-  let nextAutoId = usedIds.size > 0 ? Math.max(...usedIds) + 1 : 1;
-  const assignments = new Map<string, number>();
+  const usedIds = new Set(rows.flatMap((row) => (row.sheetId === null ? [] : [row.sheetId])))
+  let nextAutoId = usedIds.size > 0 ? Math.max(...usedIds) + 1 : 1
+  const assignments = new Map<string, number>()
   rows.forEach((row) => {
     if (row.sheetId !== null) {
-      assignments.set(row.name, row.sheetId);
-      return;
+      assignments.set(row.name, row.sheetId)
+      return
     }
-    const legacyId = legacySheetIds.get(row.name);
+    const legacyId = legacySheetIds.get(row.name)
     if (legacyId !== undefined && !usedIds.has(legacyId)) {
-      assignments.set(row.name, legacyId);
-      usedIds.add(legacyId);
-      return;
+      assignments.set(row.name, legacyId)
+      usedIds.add(legacyId)
+      return
     }
     while (usedIds.has(nextAutoId)) {
-      nextAutoId += 1;
+      nextAutoId += 1
     }
-    assignments.set(row.name, nextAutoId);
-    usedIds.add(nextAutoId);
-    nextAutoId += 1;
-  });
+    assignments.set(row.name, nextAutoId)
+    usedIds.add(nextAutoId)
+    nextAutoId += 1
+  })
 
   const updateSheet = db.prepare(
     `
@@ -270,7 +257,7 @@ function backfillSheetIds(db: Database): void {
        WHERE name = ?
          AND sheet_id IS NULL
     `,
-  );
+  )
   const updateChildTable = (tableName: string) =>
     db.prepare(
       `
@@ -279,30 +266,30 @@ function backfillSheetIds(db: Database): void {
          WHERE sheet_name = ?
            AND sheet_id IS NULL
       `,
-    );
+    )
   const childTables = [
-    updateChildTable("authoritative_cell_input"),
-    updateChildTable("authoritative_cell_render"),
-    updateChildTable("authoritative_row_axis"),
-    updateChildTable("authoritative_column_axis"),
-    updateChildTable("projection_overlay_cell"),
-    updateChildTable("projection_overlay_row_axis"),
-    updateChildTable("projection_overlay_column_axis"),
-  ];
+    updateChildTable('authoritative_cell_input'),
+    updateChildTable('authoritative_cell_render'),
+    updateChildTable('authoritative_row_axis'),
+    updateChildTable('authoritative_column_axis'),
+    updateChildTable('projection_overlay_cell'),
+    updateChildTable('projection_overlay_row_axis'),
+    updateChildTable('projection_overlay_column_axis'),
+  ]
   try {
     assignments.forEach((sheetId, sheetName) => {
-      updateSheet.bind([sheetId, sheetName]);
-      updateSheet.step();
-      updateSheet.reset();
+      updateSheet.bind([sheetId, sheetName])
+      updateSheet.step()
+      updateSheet.reset()
       childTables.forEach((statement) => {
-        statement.bind([sheetId, sheetName]);
-        statement.step();
-        statement.reset();
-      });
-    });
+        statement.bind([sheetId, sheetName])
+        statement.step()
+        statement.reset()
+      })
+    })
   } finally {
-    updateSheet.finalize();
-    childTables.forEach((statement) => statement.finalize());
+    updateSheet.finalize()
+    childTables.forEach((statement) => statement.finalize())
   }
 }
 
@@ -315,18 +302,16 @@ function backfillWorkbookName(db: Database): void {
         FROM runtime_state
        WHERE id = 1
     `,
-  );
+  )
   if (!row) {
-    return;
+    return
   }
-  if (typeof row["workbookName"] === "string" && row["workbookName"].length > 0) {
-    return;
+  if (typeof row['workbookName'] === 'string' && row['workbookName'].length > 0) {
+    return
   }
-  const workbookName = parseWorkbookNameFromSnapshotJson(
-    typeof row["snapshotJson"] === "string" ? row["snapshotJson"] : null,
-  );
+  const workbookName = parseWorkbookNameFromSnapshotJson(typeof row['snapshotJson'] === 'string' ? row['snapshotJson'] : null)
   if (!workbookName) {
-    return;
+    return
   }
   db.exec(
     `
@@ -335,7 +320,7 @@ function backfillWorkbookName(db: Database): void {
        WHERE id = 1
     `,
     { bind: [workbookName] },
-  );
+  )
 }
 
 export function initializeWorkbookLocalStoreSchema(db: Database): void {
@@ -455,30 +440,30 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
       style_id TEXT PRIMARY KEY,
       record_json TEXT NOT NULL
     );
-  `);
+  `)
 
-  migratePendingOpTable(db);
+  migratePendingOpTable(db)
 
-  ensureColumn(db, "runtime_state", "applied_pending_local_seq", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "runtime_state", "workbook_name", "TEXT NOT NULL DEFAULT ''");
-  ensureColumn(db, "pending_op", "submitted_at_ms", "INTEGER");
-  ensureColumn(db, "pending_op", "last_attempted_at_ms", "INTEGER");
-  ensureColumn(db, "pending_op", "acked_at_ms", "INTEGER");
-  ensureColumn(db, "pending_op", "rebased_at_ms", "INTEGER");
-  ensureColumn(db, "pending_op", "failed_at_ms", "INTEGER");
-  ensureColumn(db, "pending_op", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "pending_op", "failure_message", "TEXT");
-  ensureColumn(db, "authoritative_sheet", "sheet_id", "INTEGER");
-  ensureColumn(db, "authoritative_cell_input", "sheet_id", "INTEGER");
-  ensureColumn(db, "authoritative_cell_render", "sheet_id", "INTEGER");
-  ensureColumn(db, "authoritative_row_axis", "sheet_id", "INTEGER");
-  ensureColumn(db, "authoritative_column_axis", "sheet_id", "INTEGER");
-  ensureColumn(db, "projection_overlay_cell", "sheet_id", "INTEGER");
-  ensureColumn(db, "projection_overlay_row_axis", "sheet_id", "INTEGER");
-  ensureColumn(db, "projection_overlay_column_axis", "sheet_id", "INTEGER");
+  ensureColumn(db, 'runtime_state', 'applied_pending_local_seq', 'INTEGER NOT NULL DEFAULT 0')
+  ensureColumn(db, 'runtime_state', 'workbook_name', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'pending_op', 'submitted_at_ms', 'INTEGER')
+  ensureColumn(db, 'pending_op', 'last_attempted_at_ms', 'INTEGER')
+  ensureColumn(db, 'pending_op', 'acked_at_ms', 'INTEGER')
+  ensureColumn(db, 'pending_op', 'rebased_at_ms', 'INTEGER')
+  ensureColumn(db, 'pending_op', 'failed_at_ms', 'INTEGER')
+  ensureColumn(db, 'pending_op', 'attempt_count', 'INTEGER NOT NULL DEFAULT 0')
+  ensureColumn(db, 'pending_op', 'failure_message', 'TEXT')
+  ensureColumn(db, 'authoritative_sheet', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'authoritative_cell_input', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'authoritative_cell_render', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'authoritative_row_axis', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'authoritative_column_axis', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'projection_overlay_cell', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'projection_overlay_row_axis', 'sheet_id', 'INTEGER')
+  ensureColumn(db, 'projection_overlay_column_axis', 'sheet_id', 'INTEGER')
 
-  backfillSheetIds(db);
-  backfillWorkbookName(db);
+  backfillSheetIds(db)
+  backfillWorkbookName(db)
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS pending_op_local_seq_idx
@@ -518,5 +503,5 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
       ON projection_overlay_column_axis(sheet_name, axis_index);
     CREATE INDEX IF NOT EXISTS projection_overlay_column_axis_sheet_id_viewport_idx
       ON projection_overlay_column_axis(sheet_id, axis_index);
-  `);
+  `)
 }

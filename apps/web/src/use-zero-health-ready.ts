@@ -1,60 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
 
-const ZERO_HEALTH_POLL_DELAY_MS = 250;
+const ZERO_HEALTH_POLL_DELAY_MS = 250
 
 function canProbeZeroHealth(connectionStateName: string): boolean {
   return !(
-    connectionStateName === "disconnected" ||
-    connectionStateName === "needs-auth" ||
-    connectionStateName === "error" ||
-    connectionStateName === "closed"
-  );
+    connectionStateName === 'disconnected' ||
+    connectionStateName === 'needs-auth' ||
+    connectionStateName === 'error' ||
+    connectionStateName === 'closed'
+  )
 }
 
 export function useZeroHealthReady(input: { connectionStateName: string; runtimeReady: boolean }) {
-  const { connectionStateName, runtimeReady } = input;
-  const [zeroHealthReady, setZeroHealthReady] = useState(false);
+  const { connectionStateName, runtimeReady } = input
+  const [zeroHealthReady, setZeroHealthReady] = useState(false)
 
   useEffect(() => {
     if (!runtimeReady || !canProbeZeroHealth(connectionStateName)) {
-      setZeroHealthReady(false);
-      return;
+      setZeroHealthReady(false)
+      return
     }
 
-    let cancelled = false;
-    let retryTimer: number | null = null;
+    let cancelled = false
+    let retryTimer: number | null = null
 
     const scheduleRetry = () => {
       retryTimer = window.setTimeout(() => {
-        void probe();
-      }, ZERO_HEALTH_POLL_DELAY_MS);
-    };
+        void probe()
+      }, ZERO_HEALTH_POLL_DELAY_MS)
+    }
 
     const probe = async (): Promise<void> => {
       try {
-        const response = await fetch("/zero/keepalive", { cache: "no-store" });
+        const response = await fetch('/zero/keepalive', { cache: 'no-store' })
         if (response.ok) {
           if (!cancelled) {
-            setZeroHealthReady(true);
+            setZeroHealthReady(true)
           }
-          return;
+          return
         }
       } catch {}
 
       if (!cancelled) {
-        scheduleRetry();
+        scheduleRetry()
       }
-    };
+    }
 
-    setZeroHealthReady(false);
-    void probe();
+    setZeroHealthReady(false)
+    void probe()
     return () => {
-      cancelled = true;
+      cancelled = true
       if (retryTimer !== null) {
-        window.clearTimeout(retryTimer);
+        window.clearTimeout(retryTimer)
       }
-    };
-  }, [connectionStateName, runtimeReady]);
+    }
+  }, [connectionStateName, runtimeReady])
 
-  return zeroHealthReady;
+  return zeroHealthReady
 }

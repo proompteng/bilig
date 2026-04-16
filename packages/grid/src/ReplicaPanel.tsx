@@ -1,16 +1,16 @@
-import type { RecalcMetrics } from "@bilig/protocol";
+import type { RecalcMetrics } from '@bilig/protocol'
 
 interface ReplicaPanelProps {
-  localReplicaId: string;
-  remoteReplicaId: string;
-  selectedLabel: string;
-  remoteValue: string;
-  syncPaused: boolean;
-  pendingSyncCount: number;
-  queuedSyncCount: number;
-  latencyMs: number;
-  remoteMetrics: RecalcMetrics;
-  onToggleSync(this: void): void;
+  localReplicaId: string
+  remoteReplicaId: string
+  selectedLabel: string
+  remoteValue: string
+  syncPaused: boolean
+  pendingSyncCount: number
+  queuedSyncCount: number
+  latencyMs: number
+  remoteMetrics: RecalcMetrics
+  onToggleSync(this: void): void
 }
 
 export function ReplicaPanel({
@@ -34,14 +34,14 @@ export function ReplicaPanel({
             {localReplicaId} → {remoteReplicaId}
           </h3>
         </div>
-        <button className={syncPaused ? "ghost-button" : ""} onClick={onToggleSync} type="button">
-          {syncPaused ? "Resume sync" : "Pause sync"}
+        <button className={syncPaused ? 'ghost-button' : ''} onClick={onToggleSync} type="button">
+          {syncPaused ? 'Resume sync' : 'Pause sync'}
         </button>
       </div>
       <dl className="replica-stats">
         <div>
           <dt>Status</dt>
-          <dd data-testid="replica-status">{syncPaused ? "Paused" : "Live"}</dd>
+          <dd data-testid="replica-status">{syncPaused ? 'Paused' : 'Live'}</dd>
         </div>
         <div>
           <dt>Latency</dt>
@@ -62,8 +62,8 @@ export function ReplicaPanel({
       </dl>
       <div className="replica-selected">
         <strong>{selectedLabel}</strong>
-        <span data-testid="replica-value">{remoteValue || "∅"}</span>
+        <span data-testid="replica-value">{remoteValue || '∅'}</span>
       </div>
     </div>
-  );
+  )
 }

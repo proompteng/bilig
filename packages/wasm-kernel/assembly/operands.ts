@@ -1,68 +1,55 @@
-import { ValueTag } from "./protocol";
-import {
-  getTrackedArrayCols as getDynamicArrayCols,
-  getTrackedArrayRows as getDynamicArrayRows,
-} from "./dynamic-arrays";
-import { readSpillArrayTag, readSpillArrayLength, readSpillArrayNumber } from "./vm";
+import { ValueTag } from './protocol'
+import { getTrackedArrayCols as getDynamicArrayCols, getTrackedArrayRows as getDynamicArrayRows } from './dynamic-arrays'
+import { readSpillArrayTag, readSpillArrayLength, readSpillArrayNumber } from './vm'
 
-const STACK_KIND_SCALAR: u8 = 0;
-const STACK_KIND_RANGE: u8 = 1;
-const STACK_KIND_ARRAY: u8 = 2;
-const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff;
+const STACK_KIND_SCALAR: u8 = 0
+const STACK_KIND_RANGE: u8 = 1
+const STACK_KIND_ARRAY: u8 = 2
+const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff
 
 export function toNumberOrNaN(tag: u8, value: f64): f64 {
-  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
-  if (tag == ValueTag.Empty) return 0;
-  return NaN;
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value
+  if (tag == ValueTag.Empty) return 0
+  return NaN
 }
 
 export function toNumberOrZero(tag: u8, value: f64): f64 {
-  const numeric = toNumberOrNaN(tag, value);
-  return isNaN(numeric) ? 0 : numeric;
+  const numeric = toNumberOrNaN(tag, value)
+  return isNaN(numeric) ? 0 : numeric
 }
 
 export function toNumberExact(tag: u8, value: f64): f64 {
-  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
-  if (tag == ValueTag.Empty) return 0;
-  return NaN;
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value
+  if (tag == ValueTag.Empty) return 0
+  return NaN
 }
 
-export function inputRowsFromSlot(
-  slot: i32,
-  kindStack: Uint8Array,
-  rangeIndexStack: Uint32Array,
-  rangeRowCounts: Uint32Array,
-): i32 {
-  const kind = kindStack[slot];
+export function inputRowsFromSlot(slot: i32, kindStack: Uint8Array, rangeIndexStack: Uint32Array, rangeRowCounts: Uint32Array): i32 {
+  const kind = kindStack[slot]
   if (kind == STACK_KIND_SCALAR) {
-    return 1;
+    return 1
   }
   if (kind == STACK_KIND_RANGE) {
-    return <i32>rangeRowCounts[rangeIndexStack[slot]];
+    return <i32>rangeRowCounts[rangeIndexStack[slot]]
   }
   if (kind == STACK_KIND_ARRAY) {
-    return getDynamicArrayRows(rangeIndexStack[slot]);
+    return getDynamicArrayRows(rangeIndexStack[slot])
   }
-  return i32.MIN_VALUE;
+  return i32.MIN_VALUE
 }
 
-export function inputColsFromSlot(
-  slot: i32,
-  kindStack: Uint8Array,
-  rangeIndexStack: Uint32Array,
-  rangeColCounts: Uint32Array,
-): i32 {
-  const kind = kindStack[slot];
+export function inputColsFromSlot(slot: i32, kindStack: Uint8Array, rangeIndexStack: Uint32Array, rangeColCounts: Uint32Array): i32 {
+  const kind = kindStack[slot]
   if (kind == STACK_KIND_SCALAR) {
-    return 1;
+    return 1
   }
   if (kind == STACK_KIND_RANGE) {
-    return <i32>rangeColCounts[rangeIndexStack[slot]];
+    return <i32>rangeColCounts[rangeIndexStack[slot]]
   }
   if (kind == STACK_KIND_ARRAY) {
-    return getDynamicArrayCols(rangeIndexStack[slot]);
+    return getDynamicArrayCols(rangeIndexStack[slot])
   }
-  return i32.MIN_VALUE;
+  return i32.MIN_VALUE
 }
 
 export function memberScalarValue(
@@ -72,14 +59,14 @@ export function memberScalarValue(
   cellStringIds: Uint32Array,
   cellErrors: Uint16Array,
 ): f64 {
-  const tag = cellTags[memberIndex];
+  const tag = cellTags[memberIndex]
   if (tag == ValueTag.String) {
-    return <f64>cellStringIds[memberIndex];
+    return <f64>cellStringIds[memberIndex]
   }
   if (tag == ValueTag.Error) {
-    return <f64>cellErrors[memberIndex];
+    return <f64>cellErrors[memberIndex]
   }
-  return cellNumbers[memberIndex];
+  return cellNumbers[memberIndex]
 }
 
 export function rangeMemberAt(
@@ -93,23 +80,15 @@ export function rangeMemberAt(
   rangeMembers: Uint32Array,
 ): u32 {
   if (rangeIndex == UNRESOLVED_WASM_OPERAND) {
-    return 0xffffffff;
+    return 0xffffffff
   }
-  const rowCount = <i32>rangeRowCounts[rangeIndex];
-  const colCount = <i32>rangeColCounts[rangeIndex];
-  const length = <i32>rangeLengths[rangeIndex];
-  if (
-    rowCount <= 0 ||
-    colCount <= 0 ||
-    row < 0 ||
-    col < 0 ||
-    row >= rowCount ||
-    col >= colCount ||
-    row * colCount + col >= length
-  ) {
-    return 0xffffffff;
+  const rowCount = <i32>rangeRowCounts[rangeIndex]
+  const colCount = <i32>rangeColCounts[rangeIndex]
+  const length = <i32>rangeLengths[rangeIndex]
+  if (rowCount <= 0 || colCount <= 0 || row < 0 || col < 0 || row >= rowCount || col >= colCount || row * colCount + col >= length) {
+    return 0xffffffff
   }
-  return rangeMembers[rangeOffsets[rangeIndex] + row * colCount + col];
+  return rangeMembers[rangeOffsets[rangeIndex] + row * colCount + col]
 }
 
 export function inputCellTag(
@@ -128,47 +107,38 @@ export function inputCellTag(
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
 ): u8 {
-  const kind = kindStack[slot];
+  const kind = kindStack[slot]
   if (row < 0 || col < 0) {
-    return <u8>ValueTag.Error;
+    return <u8>ValueTag.Error
   }
   if (kind == STACK_KIND_SCALAR) {
     if (row != 0 || col != 0) {
-      return <u8>ValueTag.Error;
+      return <u8>ValueTag.Error
     }
-    return tagStack[slot];
+    return tagStack[slot]
   }
   if (kind == STACK_KIND_RANGE) {
-    const rangeIndex = rangeIndexStack[slot];
-    const memberIndex = rangeMemberAt(
-      rangeIndex,
-      row,
-      col,
-      rangeOffsets,
-      rangeLengths,
-      rangeRowCounts,
-      rangeColCounts,
-      rangeMembers,
-    );
+    const rangeIndex = rangeIndexStack[slot]
+    const memberIndex = rangeMemberAt(rangeIndex, row, col, rangeOffsets, rangeLengths, rangeRowCounts, rangeColCounts, rangeMembers)
     if (memberIndex == 0xffffffff) {
-      return <u8>ValueTag.Error;
+      return <u8>ValueTag.Error
     }
-    return cellTags[memberIndex];
+    return cellTags[memberIndex]
   }
   if (kind == STACK_KIND_ARRAY) {
-    const arrayIndex = rangeIndexStack[slot];
-    const arrayRows = getDynamicArrayRows(arrayIndex);
-    const arrayCols = getDynamicArrayCols(arrayIndex);
+    const arrayIndex = rangeIndexStack[slot]
+    const arrayRows = getDynamicArrayRows(arrayIndex)
+    const arrayCols = getDynamicArrayCols(arrayIndex)
     if (arrayRows < 1 || arrayCols < 1 || row >= arrayRows || col >= arrayCols) {
-      return <u8>ValueTag.Error;
+      return <u8>ValueTag.Error
     }
-    const arrayOffset = row * arrayCols + col;
+    const arrayOffset = row * arrayCols + col
     if (arrayOffset >= readSpillArrayLength(arrayIndex)) {
-      return <u8>ValueTag.Error;
+      return <u8>ValueTag.Error
     }
-    return readSpillArrayTag(arrayIndex, arrayOffset);
+    return readSpillArrayTag(arrayIndex, arrayOffset)
   }
-  return <u8>ValueTag.Error;
+  return <u8>ValueTag.Error
 }
 
 export function inputCellScalarValue(
@@ -189,44 +159,35 @@ export function inputCellScalarValue(
   cellStringIds: Uint32Array,
   cellErrors: Uint16Array,
 ): f64 {
-  const kind = kindStack[slot];
+  const kind = kindStack[slot]
   if (row < 0 || col < 0) {
-    return NaN;
+    return NaN
   }
   if (kind == STACK_KIND_SCALAR) {
-    return row == 0 && col == 0 ? valueStack[slot] : NaN;
+    return row == 0 && col == 0 ? valueStack[slot] : NaN
   }
   if (kind == STACK_KIND_RANGE) {
-    const rangeIndex = rangeIndexStack[slot];
-    const memberIndex = rangeMemberAt(
-      rangeIndex,
-      row,
-      col,
-      rangeOffsets,
-      rangeLengths,
-      rangeRowCounts,
-      rangeColCounts,
-      rangeMembers,
-    );
+    const rangeIndex = rangeIndexStack[slot]
+    const memberIndex = rangeMemberAt(rangeIndex, row, col, rangeOffsets, rangeLengths, rangeRowCounts, rangeColCounts, rangeMembers)
     if (memberIndex == 0xffffffff) {
-      return NaN;
+      return NaN
     }
-    return memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors);
+    return memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors)
   }
   if (kind == STACK_KIND_ARRAY) {
-    const arrayIndex = rangeIndexStack[slot];
-    const arrayRows = getDynamicArrayRows(arrayIndex);
-    const arrayCols = getDynamicArrayCols(arrayIndex);
+    const arrayIndex = rangeIndexStack[slot]
+    const arrayRows = getDynamicArrayRows(arrayIndex)
+    const arrayCols = getDynamicArrayCols(arrayIndex)
     if (arrayRows < 1 || arrayCols < 1 || row >= arrayRows || col >= arrayCols) {
-      return NaN;
+      return NaN
     }
-    const arrayOffset = row * arrayCols + col;
+    const arrayOffset = row * arrayCols + col
     if (arrayOffset >= readSpillArrayLength(arrayIndex)) {
-      return NaN;
+      return NaN
     }
-    return readSpillArrayNumber(arrayIndex, arrayOffset);
+    return readSpillArrayNumber(arrayIndex, arrayOffset)
   }
-  return NaN;
+  return NaN
 }
 
 export function inputCellNumeric(
@@ -245,45 +206,33 @@ export function inputCellNumeric(
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
 ): f64 {
-  const kind = kindStack[slot];
+  const kind = kindStack[slot]
   if (row < 0 || col < 0) {
-    return NaN;
+    return NaN
   }
   if (kind == STACK_KIND_SCALAR) {
-    return row == 0 && col == 0 ? toNumberOrNaN(tagStack[slot], valueStack[slot]) : NaN;
+    return row == 0 && col == 0 ? toNumberOrNaN(tagStack[slot], valueStack[slot]) : NaN
   }
   if (kind == STACK_KIND_RANGE) {
-    const rangeIndex = rangeIndexStack[slot];
-    const memberIndex = rangeMemberAt(
-      rangeIndex,
-      row,
-      col,
-      rangeOffsets,
-      rangeLengths,
-      rangeRowCounts,
-      rangeColCounts,
-      rangeMembers,
-    );
+    const rangeIndex = rangeIndexStack[slot]
+    const memberIndex = rangeMemberAt(rangeIndex, row, col, rangeOffsets, rangeLengths, rangeRowCounts, rangeColCounts, rangeMembers)
     if (memberIndex == 0xffffffff) {
-      return NaN;
+      return NaN
     }
-    return toNumberOrNaN(cellTags[memberIndex], cellNumbers[memberIndex]);
+    return toNumberOrNaN(cellTags[memberIndex], cellNumbers[memberIndex])
   }
   if (kind == STACK_KIND_ARRAY) {
-    const arrayIndex = rangeIndexStack[slot];
-    const arrayRows = getDynamicArrayRows(arrayIndex);
-    const arrayCols = getDynamicArrayCols(arrayIndex);
+    const arrayIndex = rangeIndexStack[slot]
+    const arrayRows = getDynamicArrayRows(arrayIndex)
+    const arrayCols = getDynamicArrayCols(arrayIndex)
     if (arrayRows < 1 || arrayCols < 1 || row >= arrayRows || col >= arrayCols) {
-      return NaN;
+      return NaN
     }
-    const arrayOffset = row * arrayCols + col;
+    const arrayOffset = row * arrayCols + col
     if (arrayOffset >= readSpillArrayLength(arrayIndex)) {
-      return NaN;
+      return NaN
     }
-    return toNumberOrNaN(
-      readSpillArrayTag(arrayIndex, arrayOffset),
-      readSpillArrayNumber(arrayIndex, arrayOffset),
-    );
+    return toNumberOrNaN(readSpillArrayTag(arrayIndex, arrayOffset), readSpillArrayNumber(arrayIndex, arrayOffset))
   }
-  return NaN;
+  return NaN
 }

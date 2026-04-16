@@ -1,101 +1,82 @@
-import { createActor, type ActorRefFrom } from "xstate";
-import { Effect } from "effect";
+import { createActor, type ActorRefFrom } from 'xstate'
+import { Effect } from 'effect'
 
-import { createDocumentSupervisorMachine } from "@bilig/actors";
-import type { AgentFrame } from "@bilig/agent-api";
-import type { HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
-import type { DocumentStateSummary } from "@bilig/contracts";
-import {
-  type AgentFrameContext,
-  type DocumentControlService,
-  type SnapshotPayload,
-  TransportError,
-} from "@bilig/runtime-kernel";
+import { createDocumentSupervisorMachine } from '@bilig/actors'
+import type { AgentFrame } from '@bilig/agent-api'
+import type { HelloFrame, ProtocolFrame } from '@bilig/binary-protocol'
+import type { DocumentStateSummary } from '@bilig/contracts'
+import { type AgentFrameContext, type DocumentControlService, type SnapshotPayload, TransportError } from '@bilig/runtime-kernel'
 
-import {
-  resolveAgentDocumentId,
-  updateActorFromFrames,
-  wrapTransportPromise,
-  wrapTransportSync,
-} from "./document-supervisor-shared.js";
-import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
+import { resolveAgentDocumentId, updateActorFromFrames, wrapTransportPromise, wrapTransportSync } from './document-supervisor-shared.js'
+import { LocalWorkbookSessionManager } from './local-workbook-session-manager.js'
 
-type DocumentSupervisorActor = ActorRefFrom<ReturnType<typeof createDocumentSupervisorMachine>>;
+type DocumentSupervisorActor = ActorRefFrom<ReturnType<typeof createDocumentSupervisorMachine>>
 
 export class LocalDocumentSupervisor implements DocumentControlService {
-  private readonly actors = new Map<string, DocumentSupervisorActor>();
+  private readonly actors = new Map<string, DocumentSupervisorActor>()
 
   constructor(private readonly manager: LocalWorkbookSessionManager) {}
 
-  attachBrowser(
-    documentId: string,
-    subscriberId: string,
-    send: (frame: ProtocolFrame) => void,
-  ): Effect.Effect<() => void, TransportError> {
-    return wrapTransportSync("Failed to attach browser subscriber", () => {
-      const actor = this.ensureActor(documentId);
-      actor.send({ type: "browser.attached" });
-      const detach = this.manager.attachBrowser(documentId, subscriberId, send);
+  attachBrowser(documentId: string, subscriberId: string, send: (frame: ProtocolFrame) => void): Effect.Effect<() => void, TransportError> {
+    return wrapTransportSync('Failed to attach browser subscriber', () => {
+      const actor = this.ensureActor(documentId)
+      actor.send({ type: 'browser.attached' })
+      const detach = this.manager.attachBrowser(documentId, subscriberId, send)
       return () => {
-        detach();
-        actor.send({ type: "browser.detached" });
-      };
-    });
+        detach()
+        actor.send({ type: 'browser.detached' })
+      }
+    })
   }
 
   openBrowserSession(frame: HelloFrame): Effect.Effect<ProtocolFrame[], TransportError> {
-    return wrapTransportPromise("Failed to open browser session", async () => {
-      const actor = this.ensureActor(frame.documentId);
-      const responses = await this.manager.openBrowserSession(frame);
-      actor.send({ type: "operation.recorded", operation: "openBrowserSession" });
-      actor.send({ type: "browser.attached" });
-      updateActorFromFrames(actor, responses);
-      return responses;
-    });
+    return wrapTransportPromise('Failed to open browser session', async () => {
+      const actor = this.ensureActor(frame.documentId)
+      const responses = await this.manager.openBrowserSession(frame)
+      actor.send({ type: 'operation.recorded', operation: 'openBrowserSession' })
+      actor.send({ type: 'browser.attached' })
+      updateActorFromFrames(actor, responses)
+      return responses
+    })
   }
 
-  handleSyncFrame(
-    frame: ProtocolFrame,
-  ): Effect.Effect<ProtocolFrame | ProtocolFrame[], TransportError> {
-    return wrapTransportPromise("Failed to handle sync frame", async () => {
-      const actor = this.ensureActor(frame.documentId);
-      const responses = await this.manager.handleSyncFrame(frame);
-      actor.send({ type: "operation.recorded", operation: `sync:${frame.kind}` });
-      updateActorFromFrames(actor, responses);
-      return responses;
-    });
+  handleSyncFrame(frame: ProtocolFrame): Effect.Effect<ProtocolFrame | ProtocolFrame[], TransportError> {
+    return wrapTransportPromise('Failed to handle sync frame', async () => {
+      const actor = this.ensureActor(frame.documentId)
+      const responses = await this.manager.handleSyncFrame(frame)
+      actor.send({ type: 'operation.recorded', operation: `sync:${frame.kind}` })
+      updateActorFromFrames(actor, responses)
+      return responses
+    })
   }
 
-  handleAgentFrame(
-    frame: AgentFrame,
-    context: AgentFrameContext = {},
-  ): Effect.Effect<AgentFrame, TransportError> {
-    return wrapTransportPromise("Failed to handle agent frame", async () => {
-      const documentId = resolveAgentDocumentId(frame);
-      const actor = documentId ? this.ensureActor(documentId) : null;
-      const response = await this.manager.handleAgentFrame(frame, context);
+  handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Effect.Effect<AgentFrame, TransportError> {
+    return wrapTransportPromise('Failed to handle agent frame', async () => {
+      const documentId = resolveAgentDocumentId(frame)
+      const actor = documentId ? this.ensureActor(documentId) : null
+      const response = await this.manager.handleAgentFrame(frame, context)
       actor?.send({
-        type: "operation.recorded",
-        operation: frame.kind === "request" ? `agent:${frame.request.kind}` : `agent:${frame.kind}`,
-      });
-      if (response.kind === "response" && response.response.kind === "workbookLoaded") {
+        type: 'operation.recorded',
+        operation: frame.kind === 'request' ? `agent:${frame.request.kind}` : `agent:${frame.kind}`,
+      })
+      if (response.kind === 'response' && response.response.kind === 'workbookLoaded') {
         this.ensureActor(response.response.documentId).send({
-          type: "snapshot.updated",
+          type: 'snapshot.updated',
           cursor: 1,
-        });
+        })
       }
-      return response;
-    });
+      return response
+    })
   }
 
   getDocumentState(documentId: string): Effect.Effect<DocumentStateSummary, TransportError> {
-    return wrapTransportSync("Failed to get document state", () => {
-      const actor = this.ensureActor(documentId);
-      const summary = this.manager.getDocumentState(documentId);
-      actor.send({ type: "cursor.updated", cursor: summary.cursor });
-      const latestSnapshotCursor = this.manager.getLatestSnapshot(documentId)?.cursor ?? null;
+    return wrapTransportSync('Failed to get document state', () => {
+      const actor = this.ensureActor(documentId)
+      const summary = this.manager.getDocumentState(documentId)
+      actor.send({ type: 'cursor.updated', cursor: summary.cursor })
+      const latestSnapshotCursor = this.manager.getLatestSnapshot(documentId)?.cursor ?? null
       if (latestSnapshotCursor !== null) {
-        actor.send({ type: "snapshot.updated", cursor: latestSnapshotCursor });
+        actor.send({ type: 'snapshot.updated', cursor: latestSnapshotCursor })
       }
       return {
         documentId: summary.documentId,
@@ -103,32 +84,32 @@ export class LocalDocumentSupervisor implements DocumentControlService {
         owner: null,
         sessions: [...summary.browserSessions, ...summary.agentSessions],
         latestSnapshotCursor,
-      } satisfies DocumentStateSummary;
-    });
+      } satisfies DocumentStateSummary
+    })
   }
 
   getLatestSnapshot(documentId: string): Effect.Effect<SnapshotPayload | null, TransportError> {
-    return wrapTransportSync("Failed to load latest snapshot", () => {
-      const snapshot = this.manager.getLatestSnapshot(documentId);
+    return wrapTransportSync('Failed to load latest snapshot', () => {
+      const snapshot = this.manager.getLatestSnapshot(documentId)
       if (!snapshot) {
-        return null;
+        return null
       }
       this.ensureActor(documentId).send({
-        type: "snapshot.updated",
+        type: 'snapshot.updated',
         cursor: snapshot.cursor,
-      });
-      return snapshot satisfies SnapshotPayload;
-    });
+      })
+      return snapshot satisfies SnapshotPayload
+    })
   }
 
   private ensureActor(documentId: string): DocumentSupervisorActor {
-    const existing = this.actors.get(documentId);
+    const existing = this.actors.get(documentId)
     if (existing) {
-      return existing;
+      return existing
     }
-    const actor = createActor(createDocumentSupervisorMachine(documentId));
-    actor.start();
-    this.actors.set(documentId, actor);
-    return actor;
+    const actor = createActor(createDocumentSupervisorMachine(documentId))
+    actor.start()
+    this.actors.set(documentId, actor)
+    return actor
   }
 }

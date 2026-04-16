@@ -30,39 +30,23 @@ import type {
   WorkbookSortSnapshot,
   WorkbookShapeSnapshot,
   WorkbookSnapshot,
-} from "@bilig/protocol";
-import { ValueTag } from "@bilig/protocol";
-import {
-  Float64Arena,
-  Uint32Arena,
-  formatAddress,
-  parseCellAddress,
-  rewriteFormulaForStructuralTransform,
-} from "@bilig/formula";
-import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import type { EngineCellMutationRef } from "./cell-mutations-at.js";
-import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
-import { CycleDetector } from "./cycle-detection.js";
-import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
-import { definedNameValuesEqual } from "./engine-metadata-utils.js";
-import {
-  buildFormatClearOps,
-  buildFormatPatchOps,
-  buildStyleClearOps,
-  buildStylePatchOps,
-} from "./engine-range-format-ops.js";
-import { EngineEventBus } from "./events.js";
-import { FormulaTable } from "./formula-table.js";
-import { RangeRegistry } from "./range-registry.js";
-import { RecalcScheduler } from "./scheduler.js";
-import {
-  selectCellSnapshot,
-  selectMetrics,
-  selectSelectionState,
-  selectViewportCells,
-} from "./selectors.js";
-import { StringPool } from "./string-pool.js";
-import { WasmKernelFacade } from "./wasm-facade.js";
+} from '@bilig/protocol'
+import { ValueTag } from '@bilig/protocol'
+import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress, rewriteFormulaForStructuralTransform } from '@bilig/formula'
+import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
+import type { EngineCellMutationRef } from './cell-mutations-at.js'
+import { createReplicaState, type OpOrder, type ReplicaState } from './replica-state.js'
+import { CycleDetector } from './cycle-detection.js'
+import { EdgeArena, type EdgeSlice } from './edge-arena.js'
+import { definedNameValuesEqual } from './engine-metadata-utils.js'
+import { buildFormatClearOps, buildFormatPatchOps, buildStyleClearOps, buildStylePatchOps } from './engine-range-format-ops.js'
+import { EngineEventBus } from './events.js'
+import { FormulaTable } from './formula-table.js'
+import { RangeRegistry } from './range-registry.js'
+import { RecalcScheduler } from './scheduler.js'
+import { selectCellSnapshot, selectMetrics, selectSelectionState, selectViewportCells } from './selectors.js'
+import { StringPool } from './string-pool.js'
+import { WasmKernelFacade } from './wasm-facade.js'
 import {
   WorkbookStore,
   normalizeDefinedName,
@@ -81,9 +65,9 @@ import {
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
   type WorkbookNoteRecord,
-} from "./workbook-store.js";
-import { cellToCsvValue, serializeCsv } from "./csv.js";
-import { canonicalWorkbookRangeRef } from "./workbook-range-records.js";
+} from './workbook-store.js'
+import { cellToCsvValue, serializeCsv } from './csv.js'
+import { canonicalWorkbookRangeRef } from './workbook-range-records.js'
 import {
   createEngineRuntimeState,
   createInitialRecalcMetrics,
@@ -98,13 +82,8 @@ import {
   type SpreadsheetEngineOptions,
   type TransactionLogEntry,
   type U32,
-} from "./engine/runtime-state.js";
-import {
-  createEngineServiceRuntime,
-  runEngineEffect,
-  runEngineEffectPromise,
-  type EngineServiceRuntime,
-} from "./engine/live.js";
+} from './engine/runtime-state.js'
+import { createEngineServiceRuntime, runEngineEffect, runEngineEffectPromise, type EngineServiceRuntime } from './engine/live.js'
 
 export type {
   CommitOp,
@@ -112,73 +91,73 @@ export type {
   EngineSyncClient,
   EngineSyncClientConnection,
   SpreadsheetEngineOptions,
-} from "./engine/runtime-state.js";
+} from './engine/runtime-state.js'
 
 export class SpreadsheetEngine {
-  readonly workbook: WorkbookStore;
-  readonly strings = new StringPool();
-  readonly events = new EngineEventBus();
-  private readonly replicaState: ReplicaState;
-  readonly ranges = new RangeRegistry();
-  readonly scheduler = new RecalcScheduler();
-  readonly wasm = new WasmKernelFacade();
+  readonly workbook: WorkbookStore
+  readonly strings = new StringPool()
+  readonly events = new EngineEventBus()
+  private readonly replicaState: ReplicaState
+  readonly ranges = new RangeRegistry()
+  readonly scheduler = new RecalcScheduler()
+  readonly wasm = new WasmKernelFacade()
 
-  private readonly formulas: FormulaTable<RuntimeFormula>;
-  private readonly cycleDetector = new CycleDetector();
-  private readonly edgeArena = new EdgeArena();
-  private readonly programArena = new Uint32Arena();
-  private readonly constantArena = new Float64Arena();
-  private readonly rangeListArena = new Uint32Arena();
-  private reverseCellEdges: Array<EdgeSlice | undefined> = [];
-  private reverseRangeEdges: Array<EdgeSlice | undefined> = [];
-  private readonly reverseDefinedNameEdges = new Map<string, Set<number>>();
-  private readonly reverseTableEdges = new Map<string, Set<number>>();
-  private readonly reverseSpillEdges = new Map<string, Set<number>>();
-  private readonly reverseAggregateColumnEdges = new Map<number, Set<number>>();
-  private readonly reverseExactLookupColumnEdges = new Map<number, EdgeSlice>();
-  private readonly reverseSortedLookupColumnEdges = new Map<number, EdgeSlice>();
-  private readonly pivotOutputOwners = new Map<number, string>();
-  private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
-  private readonly selectionListeners = new Set<() => void>();
-  private readonly entityVersions = new Map<string, OpOrder>();
-  private readonly sheetDeleteVersions = new Map<string, OpOrder>();
-  private selection: SelectionState = createInitialSelectionState();
-  private syncState: SyncState = "local-only";
-  private syncClientConnection: EngineSyncClientConnection | null = null;
-  private readonly undoStack: TransactionLogEntry[] = [];
-  private readonly redoStack: TransactionLogEntry[] = [];
-  private transactionReplayDepth = 0;
-  private useColumnIndexEnabled: boolean;
-  private dependencyBuildEpoch = 1;
-  private dependencyBuildSeen: U32 = new Uint32Array(128);
-  private dependencyBuildCells: U32 = new Uint32Array(128);
-  private dependencyBuildEntities: U32 = new Uint32Array(128);
-  private dependencyBuildRanges: U32 = new Uint32Array(128);
-  private dependencyBuildNewRanges: U32 = new Uint32Array(128);
-  private symbolicRefBindings: U32 = new Uint32Array(128);
-  private symbolicRangeBindings: U32 = new Uint32Array(128);
-  private wasmProgramTargets: U32 = new Uint32Array(128);
-  private wasmProgramOffsets: U32 = new Uint32Array(128);
-  private wasmProgramLengths: U32 = new Uint32Array(128);
-  private wasmConstantOffsets: U32 = new Uint32Array(128);
-  private wasmConstantLengths: U32 = new Uint32Array(128);
-  private wasmRangeOffsets: U32 = new Uint32Array(128);
-  private wasmRangeLengths: U32 = new Uint32Array(128);
-  private wasmRangeRowCounts: U32 = new Uint32Array(128);
-  private wasmRangeColCounts: U32 = new Uint32Array(128);
-  private topoIndegree: U32 = new Uint32Array(128);
-  private topoQueue: U32 = new Uint32Array(128);
-  private batchMutationDepth = 0;
-  private wasmProgramSyncPending = false;
-  private lastMetrics: RecalcMetrics = createInitialRecalcMetrics();
-  private readonly state: EngineRuntimeState;
-  private readonly runtime: EngineServiceRuntime;
+  private readonly formulas: FormulaTable<RuntimeFormula>
+  private readonly cycleDetector = new CycleDetector()
+  private readonly edgeArena = new EdgeArena()
+  private readonly programArena = new Uint32Arena()
+  private readonly constantArena = new Float64Arena()
+  private readonly rangeListArena = new Uint32Arena()
+  private reverseCellEdges: Array<EdgeSlice | undefined> = []
+  private reverseRangeEdges: Array<EdgeSlice | undefined> = []
+  private readonly reverseDefinedNameEdges = new Map<string, Set<number>>()
+  private readonly reverseTableEdges = new Map<string, Set<number>>()
+  private readonly reverseSpillEdges = new Map<string, Set<number>>()
+  private readonly reverseAggregateColumnEdges = new Map<number, Set<number>>()
+  private readonly reverseExactLookupColumnEdges = new Map<number, EdgeSlice>()
+  private readonly reverseSortedLookupColumnEdges = new Map<number, EdgeSlice>()
+  private readonly pivotOutputOwners = new Map<number, string>()
+  private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>()
+  private readonly selectionListeners = new Set<() => void>()
+  private readonly entityVersions = new Map<string, OpOrder>()
+  private readonly sheetDeleteVersions = new Map<string, OpOrder>()
+  private selection: SelectionState = createInitialSelectionState()
+  private syncState: SyncState = 'local-only'
+  private syncClientConnection: EngineSyncClientConnection | null = null
+  private readonly undoStack: TransactionLogEntry[] = []
+  private readonly redoStack: TransactionLogEntry[] = []
+  private transactionReplayDepth = 0
+  private useColumnIndexEnabled: boolean
+  private dependencyBuildEpoch = 1
+  private dependencyBuildSeen: U32 = new Uint32Array(128)
+  private dependencyBuildCells: U32 = new Uint32Array(128)
+  private dependencyBuildEntities: U32 = new Uint32Array(128)
+  private dependencyBuildRanges: U32 = new Uint32Array(128)
+  private dependencyBuildNewRanges: U32 = new Uint32Array(128)
+  private symbolicRefBindings: U32 = new Uint32Array(128)
+  private symbolicRangeBindings: U32 = new Uint32Array(128)
+  private wasmProgramTargets: U32 = new Uint32Array(128)
+  private wasmProgramOffsets: U32 = new Uint32Array(128)
+  private wasmProgramLengths: U32 = new Uint32Array(128)
+  private wasmConstantOffsets: U32 = new Uint32Array(128)
+  private wasmConstantLengths: U32 = new Uint32Array(128)
+  private wasmRangeOffsets: U32 = new Uint32Array(128)
+  private wasmRangeLengths: U32 = new Uint32Array(128)
+  private wasmRangeRowCounts: U32 = new Uint32Array(128)
+  private wasmRangeColCounts: U32 = new Uint32Array(128)
+  private topoIndegree: U32 = new Uint32Array(128)
+  private topoQueue: U32 = new Uint32Array(128)
+  private batchMutationDepth = 0
+  private wasmProgramSyncPending = false
+  private lastMetrics: RecalcMetrics = createInitialRecalcMetrics()
+  private readonly state: EngineRuntimeState
+  private readonly runtime: EngineServiceRuntime
 
   constructor(options: SpreadsheetEngineOptions = {}) {
-    this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
-    this.formulas = new FormulaTable(this.workbook.cellStore);
-    this.replicaState = createReplicaState(options.replicaId ?? "local");
-    this.useColumnIndexEnabled = options.useColumnIndex ?? false;
+    this.workbook = new WorkbookStore(options.workbookName ?? 'Workbook')
+    this.formulas = new FormulaTable(this.workbook.cellStore)
+    this.replicaState = createReplicaState(options.replicaId ?? 'local')
+    this.useColumnIndexEnabled = options.useColumnIndex ?? false
     this.state = createEngineRuntimeState({
       workbook: this.workbook,
       strings: this.strings,
@@ -197,29 +176,29 @@ export class SpreadsheetEngine {
       trackReplicaVersions: options.trackReplicaVersions ?? true,
       getUseColumnIndex: () => this.useColumnIndexEnabled,
       setUseColumnIndex: (enabled) => {
-        this.useColumnIndexEnabled = enabled;
+        this.useColumnIndexEnabled = enabled
       },
       getSelection: () => this.selection,
       setSelection: (selection) => {
-        this.selection = selection;
+        this.selection = selection
       },
       getSyncState: () => this.syncState,
       setSyncState: (state) => {
-        this.syncState = state;
+        this.syncState = state
       },
       getSyncClientConnection: () => this.syncClientConnection,
       setSyncClientConnection: (connection) => {
-        this.syncClientConnection = connection;
+        this.syncClientConnection = connection
       },
       getTransactionReplayDepth: () => this.transactionReplayDepth,
       setTransactionReplayDepth: (depth) => {
-        this.transactionReplayDepth = depth;
+        this.transactionReplayDepth = depth
       },
       getLastMetrics: () => this.lastMetrics,
       setLastMetrics: (metrics) => {
-        this.lastMetrics = metrics;
+        this.lastMetrics = metrics
       },
-    });
+    })
     this.runtime = createEngineServiceRuntime({
       state: this.state,
       getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
@@ -240,10 +219,10 @@ export class SpreadsheetEngine {
         },
         pivotOutputOwners: this.pivotOutputOwners,
         setWasmProgramSyncPending: (next) => {
-          this.wasmProgramSyncPending = next;
+          this.wasmProgramSyncPending = next
         },
         resetWasmState: () => {
-          this.wasm.resetStoreState();
+          this.wasm.resetStoreState()
         },
       },
       mutationSupport: {
@@ -274,35 +253,35 @@ export class SpreadsheetEngine {
         },
         getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
         setDependencyBuildEpoch: (next) => {
-          this.dependencyBuildEpoch = next;
+          this.dependencyBuildEpoch = next
         },
         getDependencyBuildSeen: () => this.dependencyBuildSeen,
         setDependencyBuildSeen: (next) => {
-          this.dependencyBuildSeen = next;
+          this.dependencyBuildSeen = next
         },
         getDependencyBuildCells: () => this.dependencyBuildCells,
         setDependencyBuildCells: (next) => {
-          this.dependencyBuildCells = next;
+          this.dependencyBuildCells = next
         },
         getDependencyBuildEntities: () => this.dependencyBuildEntities,
         setDependencyBuildEntities: (next) => {
-          this.dependencyBuildEntities = next;
+          this.dependencyBuildEntities = next
         },
         getDependencyBuildRanges: () => this.dependencyBuildRanges,
         setDependencyBuildRanges: (next) => {
-          this.dependencyBuildRanges = next;
+          this.dependencyBuildRanges = next
         },
         getDependencyBuildNewRanges: () => this.dependencyBuildNewRanges,
         setDependencyBuildNewRanges: (next) => {
-          this.dependencyBuildNewRanges = next;
+          this.dependencyBuildNewRanges = next
         },
         getSymbolicRefBindings: () => this.symbolicRefBindings,
         setSymbolicRefBindings: (next) => {
-          this.symbolicRefBindings = next;
+          this.symbolicRefBindings = next
         },
         getSymbolicRangeBindings: () => this.symbolicRangeBindings,
         setSymbolicRangeBindings: (next) => {
-          this.symbolicRangeBindings = next;
+          this.symbolicRangeBindings = next
         },
       },
       formulaGraph: {
@@ -313,52 +292,52 @@ export class SpreadsheetEngine {
         rangeListArena: this.rangeListArena,
         getTopoIndegree: () => this.topoIndegree,
         setTopoIndegree: (next) => {
-          this.topoIndegree = next;
+          this.topoIndegree = next
         },
         getTopoQueue: () => this.topoQueue,
         setTopoQueue: (next) => {
-          this.topoQueue = next;
+          this.topoQueue = next
         },
         getWasmProgramTargets: () => this.wasmProgramTargets,
         setWasmProgramTargets: (next) => {
-          this.wasmProgramTargets = next;
+          this.wasmProgramTargets = next
         },
         getWasmProgramOffsets: () => this.wasmProgramOffsets,
         setWasmProgramOffsets: (next) => {
-          this.wasmProgramOffsets = next;
+          this.wasmProgramOffsets = next
         },
         getWasmProgramLengths: () => this.wasmProgramLengths,
         setWasmProgramLengths: (next) => {
-          this.wasmProgramLengths = next;
+          this.wasmProgramLengths = next
         },
         getWasmConstantOffsets: () => this.wasmConstantOffsets,
         setWasmConstantOffsets: (next) => {
-          this.wasmConstantOffsets = next;
+          this.wasmConstantOffsets = next
         },
         getWasmConstantLengths: () => this.wasmConstantLengths,
         setWasmConstantLengths: (next) => {
-          this.wasmConstantLengths = next;
+          this.wasmConstantLengths = next
         },
         getWasmRangeOffsets: () => this.wasmRangeOffsets,
         setWasmRangeOffsets: (next) => {
-          this.wasmRangeOffsets = next;
+          this.wasmRangeOffsets = next
         },
         getWasmRangeLengths: () => this.wasmRangeLengths,
         setWasmRangeLengths: (next) => {
-          this.wasmRangeLengths = next;
+          this.wasmRangeLengths = next
         },
         getWasmRangeRowCounts: () => this.wasmRangeRowCounts,
         setWasmRangeRowCounts: (next) => {
-          this.wasmRangeRowCounts = next;
+          this.wasmRangeRowCounts = next
         },
         getWasmRangeColCounts: () => this.wasmRangeColCounts,
         setWasmRangeColCounts: (next) => {
-          this.wasmRangeColCounts = next;
+          this.wasmRangeColCounts = next
         },
         getBatchMutationDepth: () => this.batchMutationDepth,
         getWasmProgramSyncPending: () => this.wasmProgramSyncPending,
         setWasmProgramSyncPending: (next) => {
-          this.wasmProgramSyncPending = next;
+          this.wasmProgramSyncPending = next
         },
       },
       traversal: {
@@ -396,7 +375,7 @@ export class SpreadsheetEngine {
         },
       },
       applyRemoteSnapshot: (snapshot) => {
-        this.importSnapshot(snapshot);
+        this.importSnapshot(snapshot)
       },
       operation: {
         state: this.state,
@@ -408,515 +387,418 @@ export class SpreadsheetEngine {
         },
         getBatchMutationDepth: () => this.batchMutationDepth,
         setBatchMutationDepth: (next) => {
-          this.batchMutationDepth = next;
+          this.batchMutationDepth = next
         },
         materializePivot: (pivotRecord) => this.runtime.pivot.materializePivotNow(pivotRecord),
         refreshRangeDependencies: () => {
-          return;
+          return
         },
         getEntityDependents: () => new Uint32Array(),
         collectFormulaDependents: () => new Uint32Array(),
         noteExactLookupLiteralWrite: () => {
-          return;
+          return
         },
         noteSortedLookupLiteralWrite: () => {
-          return;
+          return
         },
         invalidateExactLookupColumn: () => {
-          return;
+          return
         },
         invalidateSortedLookupColumn: () => {
-          return;
+          return
         },
       },
-    });
+    })
     if (!this.wasm.initSyncIfPossible()) {
-      void this.wasm.init();
+      void this.wasm.init()
     }
   }
 
   async ready(): Promise<void> {
-    await this.wasm.init();
+    await this.wasm.init()
   }
 
   subscribe(listener: (event: EngineEvent) => void): () => void {
-    return runEngineEffect(this.runtime.events.subscribe(listener));
+    return runEngineEffect(this.runtime.events.subscribe(listener))
   }
 
   subscribeCell(sheetName: string, address: string, listener: () => void): () => void {
-    return runEngineEffect(this.runtime.events.subscribeCell(sheetName, address, listener));
+    return runEngineEffect(this.runtime.events.subscribeCell(sheetName, address, listener))
   }
 
-  subscribeCells(
-    sheetName: string,
-    addresses: readonly string[],
-    listener: () => void,
-  ): () => void {
-    return runEngineEffect(this.runtime.events.subscribeCells(sheetName, addresses, listener));
+  subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
+    return runEngineEffect(this.runtime.events.subscribeCells(sheetName, addresses, listener))
   }
 
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void {
-    return runEngineEffect(this.runtime.events.subscribeBatches(listener));
+    return runEngineEffect(this.runtime.events.subscribeBatches(listener))
   }
 
   subscribeSelection(listener: () => void): () => void {
-    return runEngineEffect(this.runtime.selection.subscribe(listener));
+    return runEngineEffect(this.runtime.selection.subscribe(listener))
   }
 
   getSelectionState(): SelectionState {
-    return runEngineEffect(this.runtime.selection.getSelectionState());
+    return runEngineEffect(this.runtime.selection.getSelectionState())
   }
 
   setSelection(
     sheetName: string,
     address: string | null,
     options: {
-      anchorAddress?: string | null;
-      range?: { startAddress: string; endAddress: string } | null;
-      editMode?: SelectionState["editMode"];
+      anchorAddress?: string | null
+      range?: { startAddress: string; endAddress: string } | null
+      editMode?: SelectionState['editMode']
     } = {},
   ): void {
-    runEngineEffect(this.runtime.selection.setSelection(sheetName, address, options));
+    runEngineEffect(this.runtime.selection.setSelection(sheetName, address, options))
   }
 
   getLastMetrics(): RecalcMetrics {
-    return this.lastMetrics;
+    return this.lastMetrics
   }
 
   setUseColumnIndexEnabled(enabled: boolean): void {
-    this.state.setUseColumnIndex(enabled);
+    this.state.setUseColumnIndex(enabled)
   }
 
   getSyncState(): SyncState {
-    return this.syncState;
+    return this.syncState
   }
 
   async connectSyncClient(client: EngineSyncClient): Promise<void> {
     if (!this.state.trackReplicaVersions) {
-      throw new Error(
-        "Sync is unavailable when trackReplicaVersions is disabled; construct the engine with trackReplicaVersions enabled.",
-      );
+      throw new Error('Sync is unavailable when trackReplicaVersions is disabled; construct the engine with trackReplicaVersions enabled.')
     }
-    await runEngineEffectPromise(this.runtime.sync.connectClient(client));
+    await runEngineEffectPromise(this.runtime.sync.connectClient(client))
   }
 
   async disconnectSyncClient(): Promise<void> {
-    await runEngineEffectPromise(this.runtime.sync.disconnectClient());
+    await runEngineEffectPromise(this.runtime.sync.disconnectClient())
   }
 
   createSheet(name: string): void {
-    this.executeLocalTransaction([
-      { kind: "upsertSheet", name, order: this.workbook.sheetsByName.size },
-    ]);
+    this.executeLocalTransaction([{ kind: 'upsertSheet', name, order: this.workbook.sheetsByName.size }])
   }
 
   renameSheet(oldName: string, newName: string): void {
-    const trimmedName = newName.trim();
+    const trimmedName = newName.trim()
     if (trimmedName.length === 0 || oldName === trimmedName) {
-      return;
+      return
     }
     if (this.workbook.getSheet(trimmedName)) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "renameSheet", oldName, newName: trimmedName }]);
+    this.executeLocalTransaction([{ kind: 'renameSheet', oldName, newName: trimmedName }])
   }
 
   deleteSheet(name: string): void {
-    this.executeLocalTransaction([{ kind: "deleteSheet", name }]);
+    this.executeLocalTransaction([{ kind: 'deleteSheet', name }])
   }
 
   setCellValue(sheetName: string, address: string, value: LiteralInput): CellValue {
-    this.executeLocalTransaction([{ kind: "setCellValue", sheetName, address, value }]);
-    return this.getCellValue(sheetName, address);
+    this.executeLocalTransaction([{ kind: 'setCellValue', sheetName, address, value }])
+    return this.getCellValue(sheetName, address)
   }
 
   setCellValueAt(sheetId: number, row: number, col: number, value: LiteralInput): CellValue {
-    const sheetName = this.workbook.getSheetById(sheetId)?.name;
+    const sheetName = this.workbook.getSheetById(sheetId)?.name
     if (!sheetName) {
-      throw new Error(`Unknown sheet id: ${sheetId}`);
+      throw new Error(`Unknown sheet id: ${sheetId}`)
     }
-    const address = formatAddress(row, col);
-    this.runtime.mutation.executeLocalCellMutationsAtNow(
-      [{ sheetId, mutation: { kind: "setCellValue", row, col, value } }],
-      1,
-      { returnUndoOps: false },
-    );
-    return this.getCellValue(sheetName, address);
+    const address = formatAddress(row, col)
+    this.runtime.mutation.executeLocalCellMutationsAtNow([{ sheetId, mutation: { kind: 'setCellValue', row, col, value } }], 1, {
+      returnUndoOps: false,
+    })
+    return this.getCellValue(sheetName, address)
   }
 
   setCellFormula(sheetName: string, address: string, formula: string): CellValue {
-    this.executeLocalTransaction([{ kind: "setCellFormula", sheetName, address, formula }]);
-    return this.getCellValue(sheetName, address);
+    this.executeLocalTransaction([{ kind: 'setCellFormula', sheetName, address, formula }])
+    return this.getCellValue(sheetName, address)
   }
 
   setCellFormulaAt(sheetId: number, row: number, col: number, formula: string): CellValue {
-    const sheetName = this.workbook.getSheetById(sheetId)?.name;
+    const sheetName = this.workbook.getSheetById(sheetId)?.name
     if (!sheetName) {
-      throw new Error(`Unknown sheet id: ${sheetId}`);
+      throw new Error(`Unknown sheet id: ${sheetId}`)
     }
-    const address = formatAddress(row, col);
-    this.runtime.mutation.executeLocalCellMutationsAtNow(
-      [{ sheetId, mutation: { kind: "setCellFormula", row, col, formula } }],
-      1,
-      { returnUndoOps: false },
-    );
-    return this.getCellValue(sheetName, address);
+    const address = formatAddress(row, col)
+    this.runtime.mutation.executeLocalCellMutationsAtNow([{ sheetId, mutation: { kind: 'setCellFormula', row, col, formula } }], 1, {
+      returnUndoOps: false,
+    })
+    return this.getCellValue(sheetName, address)
   }
 
   setCellFormat(sheetName: string, address: string, format: string | null): void {
-    this.executeLocalTransaction([{ kind: "setCellFormat", sheetName, address, format }]);
+    this.executeLocalTransaction([{ kind: 'setCellFormat', sheetName, address, format }])
   }
 
   clearCellAt(sheetId: number, row: number, col: number): void {
-    this.runtime.mutation.executeLocalCellMutationsAtNow(
-      [{ sheetId, mutation: { kind: "clearCell", row, col } }],
-      0,
-      { returnUndoOps: false },
-    );
+    this.runtime.mutation.executeLocalCellMutationsAtNow([{ sheetId, mutation: { kind: 'clearCell', row, col } }], 0, {
+      returnUndoOps: false,
+    })
   }
 
-  applyCellMutationsAt(
-    refs: readonly EngineCellMutationRef[],
-    potentialNewCells?: number,
-  ): readonly EngineOp[] | null {
-    return this.runtime.mutation.executeLocalCellMutationsAtNow(refs, potentialNewCells);
+  applyCellMutationsAt(refs: readonly EngineCellMutationRef[], potentialNewCells?: number): readonly EngineOp[] | null {
+    return this.runtime.mutation.executeLocalCellMutationsAtNow(refs, potentialNewCells)
   }
 
   applyCellMutationsAtWithOptions(
     refs: readonly EngineCellMutationRef[],
     options: {
-      captureUndo?: boolean;
-      potentialNewCells?: number;
-      source?: "local" | "restore";
-      returnUndoOps?: boolean;
-      reuseRefs?: boolean;
+      captureUndo?: boolean
+      potentialNewCells?: number
+      source?: 'local' | 'restore'
+      returnUndoOps?: boolean
+      reuseRefs?: boolean
     } = {},
   ): readonly EngineOp[] | null {
-    return this.runtime.mutation.applyCellMutationsAtNow(refs, options);
+    return this.runtime.mutation.applyCellMutationsAtNow(refs, options)
   }
 
-  initializeCellFormulasAt(
-    refs: readonly EngineCellMutationRef[],
-    potentialNewCells?: number,
-  ): void {
-    runEngineEffect(
-      this.runtime.formulaInitialization.initializeCellFormulasAt(refs, potentialNewCells),
-    );
+  initializeCellFormulasAt(refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void {
+    runEngineEffect(this.runtime.formulaInitialization.initializeCellFormulasAt(refs, potentialNewCells))
   }
 
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
-    const ops = buildFormatPatchOps(this.workbook, range, format);
-    this.executeLocalTransaction(ops);
+    const ops = buildFormatPatchOps(this.workbook, range, format)
+    this.executeLocalTransaction(ops)
   }
 
   clearRangeNumberFormat(range: CellRangeRef): void {
-    const ops = buildFormatClearOps(this.workbook, range);
-    this.executeLocalTransaction(ops);
+    const ops = buildFormatClearOps(this.workbook, range)
+    this.executeLocalTransaction(ops)
   }
 
   setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
-    const ops = buildStylePatchOps(this.workbook, range, patch);
-    this.executeLocalTransaction(ops);
+    const ops = buildStylePatchOps(this.workbook, range, patch)
+    this.executeLocalTransaction(ops)
   }
 
   clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
-    const ops = buildStyleClearOps(this.workbook, range, fields);
-    this.executeLocalTransaction(ops);
+    const ops = buildStyleClearOps(this.workbook, range, fields)
+    this.executeLocalTransaction(ops)
   }
 
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
-    return this.workbook.getCellStyle(styleId);
+    return this.workbook.getCellStyle(styleId)
   }
 
   getCellNumberFormat(id: string | undefined): CellNumberFormatRecord | undefined {
-    return this.workbook.getCellNumberFormat(id);
+    return this.workbook.getCellNumberFormat(id)
   }
 
   setDefinedName(name: string, value: WorkbookDefinedNameValueSnapshot): void {
-    const normalizedName = normalizeDefinedName(name);
-    const previous = this.workbook.getDefinedName(normalizedName);
-    const trimmedName = name.trim();
+    const normalizedName = normalizeDefinedName(name)
+    const previous = this.workbook.getDefinedName(normalizedName)
+    const trimmedName = name.trim()
     if (previous?.name === trimmedName && definedNameValuesEqual(previous.value, value)) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "upsertDefinedName", name: trimmedName, value }]);
+    this.executeLocalTransaction([{ kind: 'upsertDefinedName', name: trimmedName, value }])
   }
 
   deleteDefinedName(name: string): boolean {
     if (!this.workbook.getDefinedName(name)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteDefinedName", name }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteDefinedName', name }])
+    return true
   }
 
   getDefinedName(name: string): WorkbookDefinedNameRecord | undefined {
-    return this.workbook.getDefinedName(name);
+    return this.workbook.getDefinedName(name)
   }
 
   getDefinedNames(): WorkbookDefinedNameRecord[] {
-    return this.workbook.listDefinedNames();
+    return this.workbook.listDefinedNames()
   }
 
   setWorkbookMetadata(key: string, value: LiteralInput): void {
-    const existing = this.workbook.getWorkbookProperty(key);
+    const existing = this.workbook.getWorkbookProperty(key)
     if (existing?.value === value || (existing === undefined && value === null)) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "setWorkbookMetadata", key, value }]);
+    this.executeLocalTransaction([{ kind: 'setWorkbookMetadata', key, value }])
   }
 
   getWorkbookMetadata(key: string): WorkbookPropertyRecord | undefined {
-    return this.workbook.getWorkbookProperty(key);
+    return this.workbook.getWorkbookProperty(key)
   }
 
   getWorkbookMetadataEntries(): WorkbookPropertyRecord[] {
-    return this.workbook.listWorkbookProperties();
+    return this.workbook.listWorkbookProperties()
   }
 
   setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): void {
-    const current = this.workbook.getCalculationSettings();
-    const nextSettings = { compatibilityMode: "excel-modern" as const, ...settings };
-    if (
-      current.mode === nextSettings.mode &&
-      current.compatibilityMode === nextSettings.compatibilityMode
-    ) {
-      return;
+    const current = this.workbook.getCalculationSettings()
+    const nextSettings = { compatibilityMode: 'excel-modern' as const, ...settings }
+    if (current.mode === nextSettings.mode && current.compatibilityMode === nextSettings.compatibilityMode) {
+      return
     }
-    this.executeLocalTransaction([{ kind: "setCalculationSettings", settings: nextSettings }]);
+    this.executeLocalTransaction([{ kind: 'setCalculationSettings', settings: nextSettings }])
   }
 
   getCalculationSettings(): WorkbookCalculationSettingsRecord {
-    return this.workbook.getCalculationSettings();
+    return this.workbook.getCalculationSettings()
   }
 
   getVolatileContext(): WorkbookVolatileContextRecord {
-    return this.workbook.getVolatileContext();
+    return this.workbook.getVolatileContext()
   }
 
-  private formulaWouldRewriteForDelete(
-    formula: string,
-    sheetName: string,
-    axis: "row" | "column",
-    start: number,
-    count: number,
-  ): boolean {
+  private formulaWouldRewriteForDelete(formula: string, sheetName: string, axis: 'row' | 'column', start: number, count: number): boolean {
     return (
       rewriteFormulaForStructuralTransform(formula, sheetName, sheetName, {
-        kind: "delete",
+        kind: 'delete',
         axis,
         start,
         count,
       }) !== formula
-    );
+    )
   }
 
   private cellHasSemanticDeleteImpact(cellIndex: number): boolean {
-    const snapshot = this.getCellByIndex(cellIndex);
+    const snapshot = this.getCellByIndex(cellIndex)
     if (snapshot.formula !== undefined) {
-      return true;
+      return true
     }
     if (this.workbook.getCellFormat(cellIndex) !== undefined) {
-      return true;
+      return true
     }
-    return (
-      snapshot.value.tag === ValueTag.Number ||
-      snapshot.value.tag === ValueTag.Boolean ||
-      snapshot.value.tag === ValueTag.String
-    );
+    return snapshot.value.tag === ValueTag.Number || snapshot.value.tag === ValueTag.Boolean || snapshot.value.tag === ValueTag.String
   }
 
-  private hasFormulaReferenceAtOrAfter(
-    sheetName: string,
-    axis: "row" | "column",
-    start: number,
-    count: number,
-  ): boolean {
-    let found = false;
+  private hasFormulaReferenceAtOrAfter(sheetName: string, axis: 'row' | 'column', start: number, count: number): boolean {
+    let found = false
     for (const sheet of this.workbook.sheetsByName.values()) {
       if (found) {
-        break;
+        break
       }
       sheet.grid.forEachCell((cellIndex) => {
         if (found) {
-          return;
+          return
         }
-        const formulaId = this.workbook.cellStore.formulaIds[cellIndex] ?? 0;
+        const formulaId = this.workbook.cellStore.formulaIds[cellIndex] ?? 0
         if (formulaId === 0) {
-          return;
+          return
         }
-        const snapshot = this.getCellByIndex(cellIndex);
-        if (
-          snapshot.formula &&
-          this.formulaWouldRewriteForDelete(snapshot.formula, sheetName, axis, start, count)
-        ) {
-          found = true;
+        const snapshot = this.getCellByIndex(cellIndex)
+        if (snapshot.formula && this.formulaWouldRewriteForDelete(snapshot.formula, sheetName, axis, start, count)) {
+          found = true
         }
-      });
+      })
     }
-    return found;
+    return found
   }
 
   private definedNameTouchesAxisDelete(
     value: WorkbookDefinedNameValueSnapshot,
     sheetName: string,
-    axis: "row" | "column",
+    axis: 'row' | 'column',
     start: number,
     count: number,
   ): boolean {
-    if (typeof value === "string") {
-      return this.formulaWouldRewriteForDelete(value, sheetName, axis, start, count);
+    if (typeof value === 'string') {
+      return this.formulaWouldRewriteForDelete(value, sheetName, axis, start, count)
     }
-    if (value === null || typeof value !== "object") {
-      return false;
+    if (value === null || typeof value !== 'object') {
+      return false
     }
     switch (value.kind) {
-      case "scalar":
-      case "structured-ref":
-        return false;
-      case "formula":
-        return this.formulaWouldRewriteForDelete(value.formula, sheetName, axis, start, count);
-      case "cell-ref": {
+      case 'scalar':
+      case 'structured-ref':
+        return false
+      case 'formula':
+        return this.formulaWouldRewriteForDelete(value.formula, sheetName, axis, start, count)
+      case 'cell-ref': {
         if (value.sheetName !== sheetName) {
-          return false;
+          return false
         }
-        const parsed = parseCellAddress(value.address, value.sheetName);
-        return axis === "row" ? parsed.row >= start : parsed.col >= start;
+        const parsed = parseCellAddress(value.address, value.sheetName)
+        return axis === 'row' ? parsed.row >= start : parsed.col >= start
       }
-      case "range-ref": {
+      case 'range-ref': {
         if (value.sheetName !== sheetName) {
-          return false;
+          return false
         }
-        const end = parseCellAddress(value.endAddress, value.sheetName);
-        return axis === "row" ? end.row >= start : end.col >= start;
+        const end = parseCellAddress(value.endAddress, value.sheetName)
+        return axis === 'row' ? end.row >= start : end.col >= start
       }
     }
   }
 
-  private rangeTouchesAxisDelete(
-    range: CellRangeRef,
-    axis: "row" | "column",
-    start: number,
-  ): boolean {
-    const end = parseCellAddress(range.endAddress, range.sheetName);
-    return axis === "row" ? end.row >= start : end.col >= start;
+  private rangeTouchesAxisDelete(range: CellRangeRef, axis: 'row' | 'column', start: number): boolean {
+    const end = parseCellAddress(range.endAddress, range.sheetName)
+    return axis === 'row' ? end.row >= start : end.col >= start
   }
 
-  private addressTouchesAxisDelete(
-    sheetName: string,
-    address: string,
-    axis: "row" | "column",
-    start: number,
-  ): boolean {
-    const parsed = parseCellAddress(address, sheetName);
-    return axis === "row" ? parsed.row >= start : parsed.col >= start;
+  private addressTouchesAxisDelete(sheetName: string, address: string, axis: 'row' | 'column', start: number): boolean {
+    const parsed = parseCellAddress(address, sheetName)
+    return axis === 'row' ? parsed.row >= start : parsed.col >= start
   }
 
-  private hasStructuralDeleteImpact(
-    sheetName: string,
-    axis: "row" | "column",
-    start: number,
-    count: number,
-  ): boolean {
-    const sheet = this.workbook.getSheet(sheetName);
+  private hasStructuralDeleteImpact(sheetName: string, axis: 'row' | 'column', start: number, count: number): boolean {
+    const sheet = this.workbook.getSheet(sheetName)
     if (!sheet) {
-      return false;
+      return false
     }
-    let cellImpact = false;
+    let cellImpact = false
     sheet.grid.forEachCell((cellIndex) => {
       if (cellImpact) {
-        return;
+        return
       }
       if (!this.cellHasSemanticDeleteImpact(cellIndex)) {
-        return;
+        return
       }
-      const row = this.workbook.cellStore.rows[cellIndex] ?? -1;
-      const col = this.workbook.cellStore.cols[cellIndex] ?? -1;
-      cellImpact = axis === "row" ? row >= start : col >= start;
-    });
+      const row = this.workbook.cellStore.rows[cellIndex] ?? -1
+      const col = this.workbook.cellStore.cols[cellIndex] ?? -1
+      cellImpact = axis === 'row' ? row >= start : col >= start
+    })
     if (cellImpact) {
-      return true;
+      return true
     }
-    const axisEntries =
-      axis === "row"
-        ? this.workbook.listRowAxisEntries(sheetName)
-        : this.workbook.listColumnAxisEntries(sheetName);
+    const axisEntries = axis === 'row' ? this.workbook.listRowAxisEntries(sheetName) : this.workbook.listColumnAxisEntries(sheetName)
     if (axisEntries.some((entry) => entry.index >= start)) {
-      return true;
+      return true
     }
-    const axisMetadata =
-      axis === "row"
-        ? this.workbook.listRowMetadata(sheetName)
-        : this.workbook.listColumnMetadata(sheetName);
+    const axisMetadata = axis === 'row' ? this.workbook.listRowMetadata(sheetName) : this.workbook.listColumnMetadata(sheetName)
     if (axisMetadata.some((record) => record.start + record.count - 1 >= start)) {
-      return true;
+      return true
+    }
+    if (this.workbook.listStyleRanges(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    if (this.workbook.listFormatRanges(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    const freezePane = this.workbook.getFreezePane(sheetName)
+    if (freezePane && (axis === 'row' ? freezePane.rows > start : freezePane.cols > start)) {
+      return true
+    }
+    if (this.workbook.listFilters(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    if (this.workbook.listSorts(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    if (this.workbook.listDataValidations(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    if (this.workbook.listConditionalFormats(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
+    }
+    if (this.workbook.listRangeProtections(sheetName).some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))) {
+      return true
     }
     if (
-      this.workbook
-        .listStyleRanges(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
+      this.workbook.listCommentThreads(sheetName).some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))
     ) {
-      return true;
+      return true
     }
-    if (
-      this.workbook
-        .listFormatRanges(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    const freezePane = this.workbook.getFreezePane(sheetName);
-    if (freezePane && (axis === "row" ? freezePane.rows > start : freezePane.cols > start)) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listFilters(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listSorts(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listDataValidations(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listConditionalFormats(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listRangeProtections(sheetName)
-        .some((record) => this.rangeTouchesAxisDelete(record.range, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listCommentThreads(sheetName)
-        .some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))
-    ) {
-      return true;
-    }
-    if (
-      this.workbook
-        .listNotes(sheetName)
-        .some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))
-    ) {
-      return true;
+    if (this.workbook.listNotes(sheetName).some((record) => this.addressTouchesAxisDelete(sheetName, record.address, axis, start))) {
+      return true
     }
     if (
       this.workbook
@@ -924,326 +806,281 @@ export class SpreadsheetEngine {
         .some(
           (table) =>
             table.sheetName === sheetName &&
-            this.rangeTouchesAxisDelete(
-              { sheetName, startAddress: table.startAddress, endAddress: table.endAddress },
-              axis,
-              start,
-            ),
+            this.rangeTouchesAxisDelete({ sheetName, startAddress: table.startAddress, endAddress: table.endAddress }, axis, start),
         )
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listSpills()
-        .some(
-          (spill) =>
-            spill.sheetName === sheetName &&
-            this.addressTouchesAxisDelete(sheetName, spill.address, axis, start),
-        )
+        .some((spill) => spill.sheetName === sheetName && this.addressTouchesAxisDelete(sheetName, spill.address, axis, start))
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listPivots()
         .some(
           (pivot) =>
-            (pivot.sheetName === sheetName &&
-              this.addressTouchesAxisDelete(sheetName, pivot.address, axis, start)) ||
-            (pivot.source.sheetName === sheetName &&
-              this.rangeTouchesAxisDelete(pivot.source, axis, start)),
+            (pivot.sheetName === sheetName && this.addressTouchesAxisDelete(sheetName, pivot.address, axis, start)) ||
+            (pivot.source.sheetName === sheetName && this.rangeTouchesAxisDelete(pivot.source, axis, start)),
         )
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listCharts()
         .some(
           (chart) =>
-            (chart.sheetName === sheetName &&
-              this.addressTouchesAxisDelete(sheetName, chart.address, axis, start)) ||
-            (chart.source.sheetName === sheetName &&
-              this.rangeTouchesAxisDelete(chart.source, axis, start)),
+            (chart.sheetName === sheetName && this.addressTouchesAxisDelete(sheetName, chart.address, axis, start)) ||
+            (chart.source.sheetName === sheetName && this.rangeTouchesAxisDelete(chart.source, axis, start)),
         )
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listImages()
-        .some(
-          (image) =>
-            image.sheetName === sheetName &&
-            this.addressTouchesAxisDelete(sheetName, image.address, axis, start),
-        )
+        .some((image) => image.sheetName === sheetName && this.addressTouchesAxisDelete(sheetName, image.address, axis, start))
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listShapes()
-        .some(
-          (shape) =>
-            shape.sheetName === sheetName &&
-            this.addressTouchesAxisDelete(sheetName, shape.address, axis, start),
-        )
+        .some((shape) => shape.sheetName === sheetName && this.addressTouchesAxisDelete(sheetName, shape.address, axis, start))
     ) {
-      return true;
+      return true
     }
     if (
       this.workbook
         .listDefinedNames()
-        .some((definedName) =>
-          this.definedNameTouchesAxisDelete(definedName.value, sheetName, axis, start, count),
-        )
+        .some((definedName) => this.definedNameTouchesAxisDelete(definedName.value, sheetName, axis, start, count))
     ) {
-      return true;
+      return true
     }
-    return this.hasFormulaReferenceAtOrAfter(sheetName, axis, start, count);
+    return this.hasFormulaReferenceAtOrAfter(sheetName, axis, start, count)
   }
 
   recalculateNow(): number[] {
-    return runEngineEffect(this.runtime.recalc.recalculateNow());
+    return runEngineEffect(this.runtime.recalc.recalculateNow())
   }
 
   recalculateDifferential(): { js: CellSnapshot[]; wasm: CellSnapshot[]; drift: string[] } {
-    return runEngineEffect(this.runtime.recalc.recalculateDifferential());
+    return runEngineEffect(this.runtime.recalc.recalculateDifferential())
   }
 
   recalculateDirty(
     dirtyRegions: Array<{
-      sheetName: string;
-      rowStart: number;
-      rowEnd: number;
-      colStart: number;
-      colEnd: number;
+      sheetName: string
+      rowStart: number
+      rowEnd: number
+      colStart: number
+      colEnd: number
     }>,
   ): number[] {
-    return runEngineEffect(this.runtime.recalc.recalculateDirty(dirtyRegions));
+    return runEngineEffect(this.runtime.recalc.recalculateDirty(dirtyRegions))
   }
 
-  updateRowMetadata(
-    sheetName: string,
-    start: number,
-    count: number,
-    size: number | null,
-    hidden: boolean | null,
-  ): void {
-    const existing = this.workbook.getRowMetadata(sheetName, start, count);
+  updateRowMetadata(sheetName: string, start: number, count: number, size: number | null, hidden: boolean | null): void {
+    const existing = this.workbook.getRowMetadata(sheetName, start, count)
     if (existing?.size === size && existing.hidden === hidden) {
-      return;
+      return
     }
     if (existing === undefined && size === null && hidden === null) {
-      return;
+      return
     }
-    this.executeLocalTransaction([
-      { kind: "updateRowMetadata", sheetName, start, count, size, hidden },
-    ]);
+    this.executeLocalTransaction([{ kind: 'updateRowMetadata', sheetName, start, count, size, hidden }])
   }
 
   getRowMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.workbook.listRowMetadata(sheetName);
+    return this.workbook.listRowMetadata(sheetName)
   }
 
   getRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
-    return this.workbook.listRowAxisEntries(sheetName);
+    return this.workbook.listRowAxisEntries(sheetName)
   }
 
   insertRows(sheetName: string, start: number, count: number): void {
     if (count <= 0) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "insertRows", sheetName, start, count }]);
+    this.executeLocalTransaction([{ kind: 'insertRows', sheetName, start, count }])
   }
 
   deleteRows(sheetName: string, start: number, count: number): void {
-    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, "row", start, count)) {
-      return;
+    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, 'row', start, count)) {
+      return
     }
-    this.executeLocalTransaction([{ kind: "deleteRows", sheetName, start, count }]);
+    this.executeLocalTransaction([{ kind: 'deleteRows', sheetName, start, count }])
   }
 
   moveRows(sheetName: string, start: number, count: number, target: number): void {
     if (count <= 0 || start === target) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "moveRows", sheetName, start, count, target }]);
+    this.executeLocalTransaction([{ kind: 'moveRows', sheetName, start, count, target }])
   }
 
-  updateColumnMetadata(
-    sheetName: string,
-    start: number,
-    count: number,
-    size: number | null,
-    hidden: boolean | null,
-  ): void {
-    const existing = this.workbook.getColumnMetadata(sheetName, start, count);
+  updateColumnMetadata(sheetName: string, start: number, count: number, size: number | null, hidden: boolean | null): void {
+    const existing = this.workbook.getColumnMetadata(sheetName, start, count)
     if (existing?.size === size && existing.hidden === hidden) {
-      return;
+      return
     }
     if (existing === undefined && size === null && hidden === null) {
-      return;
+      return
     }
-    this.executeLocalTransaction([
-      { kind: "updateColumnMetadata", sheetName, start, count, size, hidden },
-    ]);
+    this.executeLocalTransaction([{ kind: 'updateColumnMetadata', sheetName, start, count, size, hidden }])
   }
 
   getColumnMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.workbook.listColumnMetadata(sheetName);
+    return this.workbook.listColumnMetadata(sheetName)
   }
 
   getColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
-    return this.workbook.listColumnAxisEntries(sheetName);
+    return this.workbook.listColumnAxisEntries(sheetName)
   }
 
   insertColumns(sheetName: string, start: number, count: number): void {
     if (count <= 0) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "insertColumns", sheetName, start, count }]);
+    this.executeLocalTransaction([{ kind: 'insertColumns', sheetName, start, count }])
   }
 
   deleteColumns(sheetName: string, start: number, count: number): void {
-    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, "column", start, count)) {
-      return;
+    if (count <= 0 || !this.hasStructuralDeleteImpact(sheetName, 'column', start, count)) {
+      return
     }
-    this.executeLocalTransaction([{ kind: "deleteColumns", sheetName, start, count }]);
+    this.executeLocalTransaction([{ kind: 'deleteColumns', sheetName, start, count }])
   }
 
   moveColumns(sheetName: string, start: number, count: number, target: number): void {
     if (count <= 0 || start === target) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "moveColumns", sheetName, start, count, target }]);
+    this.executeLocalTransaction([{ kind: 'moveColumns', sheetName, start, count, target }])
   }
 
   setFreezePane(sheetName: string, rows: number, cols: number): void {
-    const existing = this.workbook.getFreezePane(sheetName);
+    const existing = this.workbook.getFreezePane(sheetName)
     if (existing?.rows === rows && existing.cols === cols) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "setFreezePane", sheetName, rows, cols }]);
+    this.executeLocalTransaction([{ kind: 'setFreezePane', sheetName, rows, cols }])
   }
 
   clearFreezePane(sheetName: string): boolean {
     if (!this.workbook.getFreezePane(sheetName)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "clearFreezePane", sheetName }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'clearFreezePane', sheetName }])
+    return true
   }
 
   getFreezePane(sheetName: string): WorkbookFreezePaneSnapshot | undefined {
-    return this.workbook.getFreezePane(sheetName);
+    return this.workbook.getFreezePane(sheetName)
   }
 
   setSheetProtection(protection: WorkbookSheetProtectionSnapshot): void {
-    const existing = this.workbook.getSheetProtection(protection.sheetName);
+    const existing = this.workbook.getSheetProtection(protection.sheetName)
     const normalized: WorkbookSheetProtectionSnapshot = {
       sheetName: protection.sheetName,
       ...(protection.hideFormulas !== undefined ? { hideFormulas: protection.hideFormulas } : {}),
-    };
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
     }
-    this.executeLocalTransaction([{ kind: "setSheetProtection", protection: normalized }]);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'setSheetProtection', protection: normalized }])
   }
 
   clearSheetProtection(sheetName: string): boolean {
     if (!this.workbook.getSheetProtection(sheetName)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "clearSheetProtection", sheetName }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'clearSheetProtection', sheetName }])
+    return true
   }
 
   getSheetProtection(sheetName: string): WorkbookSheetProtectionRecord | undefined {
-    return this.workbook.getSheetProtection(sheetName);
+    return this.workbook.getSheetProtection(sheetName)
   }
 
   setFilter(sheetName: string, range: CellRangeRef): void {
-    const existing = this.workbook.getFilter(sheetName, range);
+    const existing = this.workbook.getFilter(sheetName, range)
     if (existing) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "setFilter", sheetName, range: { ...range } }]);
+    this.executeLocalTransaction([{ kind: 'setFilter', sheetName, range: { ...range } }])
   }
 
   clearFilter(sheetName: string, range: CellRangeRef): boolean {
     if (!this.workbook.getFilter(sheetName, range)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "clearFilter", sheetName, range: { ...range } }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'clearFilter', sheetName, range: { ...range } }])
+    return true
   }
 
   getFilters(sheetName: string): WorkbookFilterRecord[] {
-    return this.workbook.listFilters(sheetName);
+    return this.workbook.listFilters(sheetName)
   }
 
-  setSort(sheetName: string, range: CellRangeRef, keys: WorkbookSortSnapshot["keys"]): void {
-    const existing = this.workbook.getSort(sheetName, range);
-    const normalizedKeys = keys.map((key) => Object.assign({}, key));
+  setSort(sheetName: string, range: CellRangeRef, keys: WorkbookSortSnapshot['keys']): void {
+    const existing = this.workbook.getSort(sheetName, range)
+    const normalizedKeys = keys.map((key) => Object.assign({}, key))
     if (
       existing &&
       existing.keys.length === normalizedKeys.length &&
       existing.keys.every(
-        (key, index) =>
-          key.keyAddress === normalizedKeys[index]?.keyAddress &&
-          key.direction === normalizedKeys[index]?.direction,
+        (key, index) => key.keyAddress === normalizedKeys[index]?.keyAddress && key.direction === normalizedKeys[index]?.direction,
       )
     ) {
-      return;
+      return
     }
-    this.executeLocalTransaction([
-      { kind: "setSort", sheetName, range: { ...range }, keys: normalizedKeys },
-    ]);
+    this.executeLocalTransaction([{ kind: 'setSort', sheetName, range: { ...range }, keys: normalizedKeys }])
   }
 
   clearSort(sheetName: string, range: CellRangeRef): boolean {
     if (!this.workbook.getSort(sheetName, range)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "clearSort", sheetName, range: { ...range } }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'clearSort', sheetName, range: { ...range } }])
+    return true
   }
 
   getSorts(sheetName: string): WorkbookSortRecord[] {
-    return this.workbook.listSorts(sheetName);
+    return this.workbook.listSorts(sheetName)
   }
 
   setDataValidation(validation: WorkbookDataValidationSnapshot): void {
-    const existing = this.workbook.getDataValidation(validation.range.sheetName, validation.range);
+    const existing = this.workbook.getDataValidation(validation.range.sheetName, validation.range)
     const normalized: WorkbookDataValidationSnapshot = {
       ...structuredClone(validation),
       range: canonicalWorkbookRangeRef(validation.range),
-    };
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
     }
-    this.executeLocalTransaction([{ kind: "setDataValidation", validation: normalized }]);
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'setDataValidation', validation: normalized }])
   }
 
   clearDataValidation(sheetName: string, range: CellRangeRef): boolean {
     if (!this.workbook.getDataValidation(sheetName, range)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "clearDataValidation", sheetName, range: { ...range } }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'clearDataValidation', sheetName, range: { ...range } }])
+    return true
   }
 
-  getDataValidation(
-    sheetName: string,
-    range: CellRangeRef,
-  ): WorkbookDataValidationRecord | undefined {
-    return this.workbook.getDataValidation(sheetName, range);
+  getDataValidation(sheetName: string, range: CellRangeRef): WorkbookDataValidationRecord | undefined {
+    return this.workbook.getDataValidation(sheetName, range)
   }
 
   getDataValidations(sheetName: string): WorkbookDataValidationRecord[] {
-    return this.workbook.listDataValidations(sheetName);
+    return this.workbook.listDataValidations(sheetName)
   }
 
   setConditionalFormat(format: WorkbookConditionalFormatSnapshot): void {
@@ -1251,35 +1088,35 @@ export class SpreadsheetEngine {
       ...structuredClone(format),
       id: format.id.trim(),
       range: canonicalWorkbookRangeRef(format.range),
-    };
-    const existing = this.workbook.getConditionalFormat(normalized.id);
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
     }
-    this.executeLocalTransaction([{ kind: "upsertConditionalFormat", format: normalized }]);
+    const existing = this.workbook.getConditionalFormat(normalized.id)
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'upsertConditionalFormat', format: normalized }])
   }
 
   deleteConditionalFormat(id: string): boolean {
-    const existing = this.workbook.getConditionalFormat(id);
+    const existing = this.workbook.getConditionalFormat(id)
     if (!existing) {
-      return false;
+      return false
     }
     this.executeLocalTransaction([
       {
-        kind: "deleteConditionalFormat",
+        kind: 'deleteConditionalFormat',
         id: existing.id,
         sheetName: existing.range.sheetName,
       },
-    ]);
-    return true;
+    ])
+    return true
   }
 
   getConditionalFormat(id: string): WorkbookConditionalFormatRecord | undefined {
-    return this.workbook.getConditionalFormat(id);
+    return this.workbook.getConditionalFormat(id)
   }
 
   getConditionalFormats(sheetName: string): WorkbookConditionalFormatRecord[] {
-    return this.workbook.listConditionalFormats(sheetName);
+    return this.workbook.listConditionalFormats(sheetName)
   }
 
   setRangeProtection(protection: WorkbookRangeProtectionSnapshot): void {
@@ -1287,35 +1124,33 @@ export class SpreadsheetEngine {
       id: protection.id.trim(),
       range: canonicalWorkbookRangeRef(protection.range),
       ...(protection.hideFormulas !== undefined ? { hideFormulas: protection.hideFormulas } : {}),
-    };
-    const existing = this.workbook.getRangeProtection(normalized.id);
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
     }
-    this.executeLocalTransaction([{ kind: "upsertRangeProtection", protection: normalized }]);
+    const existing = this.workbook.getRangeProtection(normalized.id)
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'upsertRangeProtection', protection: normalized }])
   }
 
   deleteRangeProtection(id: string): boolean {
-    const existing = this.workbook.getRangeProtection(id);
+    const existing = this.workbook.getRangeProtection(id)
     if (!existing) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([
-      { kind: "deleteRangeProtection", id: existing.id, sheetName: existing.range.sheetName },
-    ]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteRangeProtection', id: existing.id, sheetName: existing.range.sheetName }])
+    return true
   }
 
   getRangeProtection(id: string): WorkbookRangeProtectionRecord | undefined {
-    return this.workbook.getRangeProtection(id);
+    return this.workbook.getRangeProtection(id)
   }
 
   getRangeProtections(sheetName: string): WorkbookRangeProtectionRecord[] {
-    return this.workbook.listRangeProtections(sheetName);
+    return this.workbook.listRangeProtections(sheetName)
   }
 
   setCommentThread(thread: WorkbookCommentThreadSnapshot): void {
-    const parsed = parseCellAddress(thread.address, thread.sheetName);
+    const parsed = parseCellAddress(thread.address, thread.sheetName)
     const normalized: WorkbookCommentThreadSnapshot = {
       threadId: thread.threadId.trim(),
       sheetName: thread.sheetName,
@@ -1324,76 +1159,68 @@ export class SpreadsheetEngine {
         id: comment.id.trim(),
         body: comment.body.trim(),
         ...(comment.authorUserId !== undefined ? { authorUserId: comment.authorUserId } : {}),
-        ...(comment.authorDisplayName !== undefined
-          ? { authorDisplayName: comment.authorDisplayName }
-          : {}),
-        ...(comment.createdAtUnixMs !== undefined
-          ? { createdAtUnixMs: comment.createdAtUnixMs }
-          : {}),
+        ...(comment.authorDisplayName !== undefined ? { authorDisplayName: comment.authorDisplayName } : {}),
+        ...(comment.createdAtUnixMs !== undefined ? { createdAtUnixMs: comment.createdAtUnixMs } : {}),
       })),
       ...(thread.resolved !== undefined ? { resolved: thread.resolved } : {}),
-      ...(thread.resolvedByUserId !== undefined
-        ? { resolvedByUserId: thread.resolvedByUserId }
-        : {}),
-      ...(thread.resolvedAtUnixMs !== undefined
-        ? { resolvedAtUnixMs: thread.resolvedAtUnixMs }
-        : {}),
-    };
-    const existing = this.workbook.getCommentThread(thread.sheetName, thread.address);
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
+      ...(thread.resolvedByUserId !== undefined ? { resolvedByUserId: thread.resolvedByUserId } : {}),
+      ...(thread.resolvedAtUnixMs !== undefined ? { resolvedAtUnixMs: thread.resolvedAtUnixMs } : {}),
     }
-    this.executeLocalTransaction([{ kind: "upsertCommentThread", thread: normalized }]);
+    const existing = this.workbook.getCommentThread(thread.sheetName, thread.address)
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'upsertCommentThread', thread: normalized }])
   }
 
   deleteCommentThread(sheetName: string, address: string): boolean {
     if (!this.workbook.getCommentThread(sheetName, address)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteCommentThread", sheetName, address }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteCommentThread', sheetName, address }])
+    return true
   }
 
   getCommentThread(sheetName: string, address: string): WorkbookCommentThreadRecord | undefined {
-    return this.workbook.getCommentThread(sheetName, address);
+    return this.workbook.getCommentThread(sheetName, address)
   }
 
   getCommentThreads(sheetName: string): WorkbookCommentThreadRecord[] {
-    return this.workbook.listCommentThreads(sheetName);
+    return this.workbook.listCommentThreads(sheetName)
   }
 
   setNote(note: WorkbookNoteSnapshot): void {
-    const parsed = parseCellAddress(note.address, note.sheetName);
+    const parsed = parseCellAddress(note.address, note.sheetName)
     const normalized: WorkbookNoteSnapshot = {
       sheetName: note.sheetName,
       address: formatAddress(parsed.row, parsed.col),
       text: note.text.trim(),
-    };
-    const existing = this.workbook.getNote(note.sheetName, note.address);
-    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
-      return;
     }
-    this.executeLocalTransaction([{ kind: "upsertNote", note: normalized }]);
+    const existing = this.workbook.getNote(note.sheetName, note.address)
+    if (existing && JSON.stringify(existing) === JSON.stringify(normalized)) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'upsertNote', note: normalized }])
   }
 
   deleteNote(sheetName: string, address: string): boolean {
     if (!this.workbook.getNote(sheetName, address)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteNote", sheetName, address }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteNote', sheetName, address }])
+    return true
   }
 
   getNote(sheetName: string, address: string): WorkbookNoteRecord | undefined {
-    return this.workbook.getNote(sheetName, address);
+    return this.workbook.getNote(sheetName, address)
   }
 
   getNotes(sheetName: string): WorkbookNoteRecord[] {
-    return this.workbook.listNotes(sheetName);
+    return this.workbook.listNotes(sheetName)
   }
 
   setTable(table: WorkbookTableRecord): void {
-    const existing = this.workbook.getTable(table.name);
+    const existing = this.workbook.getTable(table.name)
     if (
       existing &&
       existing.sheetName === table.sheetName &&
@@ -1404,56 +1231,56 @@ export class SpreadsheetEngine {
       existing.columnNames.length === table.columnNames.length &&
       existing.columnNames.every((name, index) => name === table.columnNames[index])
     ) {
-      return;
+      return
     }
     this.executeLocalTransaction([
       {
-        kind: "upsertTable",
+        kind: 'upsertTable',
         table: Object.assign({}, table, { columnNames: [...table.columnNames] }),
       },
-    ]);
+    ])
   }
 
   deleteTable(name: string): boolean {
     if (!this.workbook.getTable(name)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteTable", name }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteTable', name }])
+    return true
   }
 
   getTable(name: string): WorkbookTableRecord | undefined {
-    return this.workbook.getTable(name);
+    return this.workbook.getTable(name)
   }
 
   getTables(): WorkbookTableRecord[] {
-    return this.workbook.listTables();
+    return this.workbook.listTables()
   }
 
   setSpillRange(sheetName: string, address: string, rows: number, cols: number): void {
-    const existing = this.workbook.getSpill(sheetName, address);
+    const existing = this.workbook.getSpill(sheetName, address)
     if (existing?.rows === rows && existing.cols === cols) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "upsertSpillRange", sheetName, address, rows, cols }]);
+    this.executeLocalTransaction([{ kind: 'upsertSpillRange', sheetName, address, rows, cols }])
   }
 
   deleteSpillRange(sheetName: string, address: string): boolean {
     if (!this.workbook.getSpill(sheetName, address)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteSpillRange", sheetName, address }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteSpillRange', sheetName, address }])
+    return true
   }
 
   getSpillRanges(): WorkbookSpillRecord[] {
-    return this.workbook.listSpills();
+    return this.workbook.listSpills()
   }
 
   setPivotTable(sheetName: string, address: string, definition: PivotTableInput): void {
     this.executeLocalTransaction([
       {
-        kind: "upsertPivotTable",
+        kind: 'upsertPivotTable',
         name: definition.name.trim(),
         sheetName,
         address,
@@ -1463,27 +1290,27 @@ export class SpreadsheetEngine {
         rows: 1,
         cols: Math.max(definition.groupBy.length + definition.values.length, 1),
       },
-    ]);
+    ])
   }
 
   deletePivotTable(sheetName: string, address: string): boolean {
     if (!this.workbook.getPivot(sheetName, address)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deletePivotTable", sheetName, address }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deletePivotTable', sheetName, address }])
+    return true
   }
 
   getPivotTable(sheetName: string, address: string): WorkbookPivotSnapshot | undefined {
-    return this.workbook.getPivot(sheetName, address);
+    return this.workbook.getPivot(sheetName, address)
   }
 
   getPivotTables(): WorkbookPivotSnapshot[] {
-    return this.workbook.listPivots();
+    return this.workbook.listPivots()
   }
 
   setChart(chart: WorkbookChartSnapshot): void {
-    const existing = this.workbook.getChart(chart.id);
+    const existing = this.workbook.getChart(chart.id)
     if (
       existing &&
       existing.sheetName === chart.sheetName &&
@@ -1500,29 +1327,29 @@ export class SpreadsheetEngine {
       existing.title === chart.title &&
       existing.legendPosition === chart.legendPosition
     ) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "upsertChart", chart: structuredClone(chart) }]);
+    this.executeLocalTransaction([{ kind: 'upsertChart', chart: structuredClone(chart) }])
   }
 
   deleteChart(id: string): boolean {
     if (!this.workbook.getChart(id)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteChart", id }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteChart', id }])
+    return true
   }
 
   getChart(id: string): WorkbookChartSnapshot | undefined {
-    return this.workbook.getChart(id);
+    return this.workbook.getChart(id)
   }
 
   getCharts(): WorkbookChartSnapshot[] {
-    return this.workbook.listCharts();
+    return this.workbook.listCharts()
   }
 
   setImage(image: WorkbookImageSnapshot): void {
-    const existing = this.workbook.getImage(image.id);
+    const existing = this.workbook.getImage(image.id)
     if (
       existing &&
       existing.sheetName === image.sheetName &&
@@ -1532,29 +1359,29 @@ export class SpreadsheetEngine {
       existing.cols === image.cols &&
       existing.altText === image.altText
     ) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "upsertImage", image: structuredClone(image) }]);
+    this.executeLocalTransaction([{ kind: 'upsertImage', image: structuredClone(image) }])
   }
 
   deleteImage(id: string): boolean {
     if (!this.workbook.getImage(id)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteImage", id }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteImage', id }])
+    return true
   }
 
   getImage(id: string): WorkbookImageSnapshot | undefined {
-    return this.workbook.getImage(id);
+    return this.workbook.getImage(id)
   }
 
   getImages(): WorkbookImageSnapshot[] {
-    return this.workbook.listImages();
+    return this.workbook.listImages()
   }
 
   setShape(shape: WorkbookShapeSnapshot): void {
-    const existing = this.workbook.getShape(shape.id);
+    const existing = this.workbook.getShape(shape.id)
     if (
       existing &&
       existing.sheetName === shape.sheetName &&
@@ -1566,160 +1393,157 @@ export class SpreadsheetEngine {
       existing.fillColor === shape.fillColor &&
       existing.strokeColor === shape.strokeColor
     ) {
-      return;
+      return
     }
-    this.executeLocalTransaction([{ kind: "upsertShape", shape: structuredClone(shape) }]);
+    this.executeLocalTransaction([{ kind: 'upsertShape', shape: structuredClone(shape) }])
   }
 
   deleteShape(id: string): boolean {
     if (!this.workbook.getShape(id)) {
-      return false;
+      return false
     }
-    this.executeLocalTransaction([{ kind: "deleteShape", id }]);
-    return true;
+    this.executeLocalTransaction([{ kind: 'deleteShape', id }])
+    return true
   }
 
   getShape(id: string): WorkbookShapeSnapshot | undefined {
-    return this.workbook.getShape(id);
+    return this.workbook.getShape(id)
   }
 
   getShapes(): WorkbookShapeSnapshot[] {
-    return this.workbook.listShapes();
+    return this.workbook.listShapes()
   }
 
   clearCell(sheetName: string, address: string): void {
-    this.executeLocalTransaction([{ kind: "clearCell", sheetName, address }]);
+    this.executeLocalTransaction([{ kind: 'clearCell', sheetName, address }])
   }
 
   setRangeValues(range: CellRangeRef, values: readonly (readonly LiteralInput[])[]): void {
-    runEngineEffect(this.runtime.mutation.setRangeValues(range, values));
+    runEngineEffect(this.runtime.mutation.setRangeValues(range, values))
   }
 
   setRangeFormulas(range: CellRangeRef, formulas: readonly (readonly string[])[]): void {
-    runEngineEffect(this.runtime.mutation.setRangeFormulas(range, formulas));
+    runEngineEffect(this.runtime.mutation.setRangeFormulas(range, formulas))
   }
 
   clearRange(range: CellRangeRef): void {
-    runEngineEffect(this.runtime.mutation.clearRange(range));
+    runEngineEffect(this.runtime.mutation.clearRange(range))
   }
 
   fillRange(source: CellRangeRef, target: CellRangeRef): void {
-    runEngineEffect(this.runtime.mutation.fillRange(source, target));
+    runEngineEffect(this.runtime.mutation.fillRange(source, target))
   }
 
   copyRange(source: CellRangeRef, target: CellRangeRef): void {
-    runEngineEffect(this.runtime.mutation.copyRange(source, target));
+    runEngineEffect(this.runtime.mutation.copyRange(source, target))
   }
 
   moveRange(source: CellRangeRef, target: CellRangeRef): void {
-    runEngineEffect(this.runtime.mutation.moveRange(source, target));
+    runEngineEffect(this.runtime.mutation.moveRange(source, target))
   }
 
   pasteRange(source: CellRangeRef, target: CellRangeRef): void {
-    runEngineEffect(this.runtime.mutation.copyRange(source, target));
+    runEngineEffect(this.runtime.mutation.copyRange(source, target))
   }
 
   undo(): boolean {
-    return runEngineEffect(this.runtime.history.undo());
+    return runEngineEffect(this.runtime.history.undo())
   }
 
   redo(): boolean {
-    return runEngineEffect(this.runtime.history.redo());
+    return runEngineEffect(this.runtime.history.redo())
   }
 
   exportSheetCsv(sheetName: string): string {
-    return runEngineEffect(this.runtime.read.exportSheetCsv(sheetName));
+    return runEngineEffect(this.runtime.read.exportSheetCsv(sheetName))
   }
 
   importSheetCsv(sheetName: string, csv: string): void {
-    runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv));
-    if (csv.includes("=")) {
+    runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv))
+    if (csv.includes('=')) {
       // CSV import applies one bulk mutation batch. A second full recalc settles
       // formulas whose imported ranges include other formulas introduced later in the same batch.
-      this.recalculateNow();
-      this.recalculateNow();
+      this.recalculateNow()
+      this.recalculateNow()
     }
   }
 
   getCellValue(sheetName: string, address: string): CellValue {
-    return runEngineEffect(this.runtime.read.getCellValue(sheetName, address));
+    return runEngineEffect(this.runtime.read.getCellValue(sheetName, address))
   }
 
   getRangeValues(range: CellRangeRef): CellValue[][] {
-    return runEngineEffect(this.runtime.read.getRangeValues(range));
+    return runEngineEffect(this.runtime.read.getRangeValues(range))
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    return runEngineEffect(this.runtime.read.getCell(sheetName, address));
+    return runEngineEffect(this.runtime.read.getCell(sheetName, address))
   }
 
   getCellByIndex(cellIndex: number): CellSnapshot {
-    return runEngineEffect(this.runtime.read.getCellByIndex(cellIndex));
+    return runEngineEffect(this.runtime.read.getCellByIndex(cellIndex))
   }
 
   getDependencies(sheetName: string, address: string): DependencySnapshot {
-    return runEngineEffect(this.runtime.read.getDependencies(sheetName, address));
+    return runEngineEffect(this.runtime.read.getDependencies(sheetName, address))
   }
 
   getDependents(sheetName: string, address: string): DependencySnapshot {
-    return runEngineEffect(this.runtime.read.getDependents(sheetName, address));
+    return runEngineEffect(this.runtime.read.getDependents(sheetName, address))
   }
 
   explainCell(sheetName: string, address: string): ExplainCellSnapshot {
-    return runEngineEffect(this.runtime.read.explainCell(sheetName, address));
+    return runEngineEffect(this.runtime.read.explainCell(sheetName, address))
   }
 
   exportSnapshot(): WorkbookSnapshot {
-    return runEngineEffect(this.runtime.snapshot.exportWorkbook());
+    return runEngineEffect(this.runtime.snapshot.exportWorkbook())
   }
 
   importSnapshot(snapshot: WorkbookSnapshot): void {
-    runEngineEffect(this.runtime.snapshot.importWorkbook(snapshot));
+    runEngineEffect(this.runtime.snapshot.importWorkbook(snapshot))
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
-    return runEngineEffect(this.runtime.snapshot.exportReplica());
+    return runEngineEffect(this.runtime.snapshot.exportReplica())
   }
 
   importReplicaSnapshot(snapshot: EngineReplicaSnapshot): void {
-    runEngineEffect(this.runtime.snapshot.importReplica(snapshot));
+    runEngineEffect(this.runtime.snapshot.importReplica(snapshot))
   }
 
   renderCommit(ops: CommitOp[]): void {
-    runEngineEffect(this.runtime.mutation.renderCommit(ops));
+    runEngineEffect(this.runtime.mutation.renderCommit(ops))
   }
 
   applyRemoteBatch(batch: EngineOpBatch): boolean {
-    return runEngineEffect(this.runtime.sync.applyRemoteBatch(batch));
+    return runEngineEffect(this.runtime.sync.applyRemoteBatch(batch))
   }
 
   captureUndoOps<T>(mutate: () => T): {
-    result: T;
-    undoOps: readonly EngineOp[] | null;
+    result: T
+    undoOps: readonly EngineOp[] | null
   } {
-    return runEngineEffect(this.runtime.mutation.captureUndoOps(mutate));
+    return runEngineEffect(this.runtime.mutation.captureUndoOps(mutate))
   }
 
   applyOps(
     ops: readonly EngineOp[],
     options: {
-      captureUndo?: boolean;
-      potentialNewCells?: number;
-      source?: "local" | "restore";
-      trusted?: boolean;
+      captureUndo?: boolean
+      potentialNewCells?: number
+      source?: 'local' | 'restore'
+      trusted?: boolean
     } = {},
   ): readonly EngineOp[] | null {
-    return this.runtime.mutation.applyOpsNow(ops, options);
+    return this.runtime.mutation.applyOpsNow(ops, options)
   }
 
-  private executeLocalTransaction(
-    ops: EngineOp[],
-    potentialNewCells?: number,
-  ): readonly EngineOp[] | null {
+  private executeLocalTransaction(ops: EngineOp[], potentialNewCells?: number): readonly EngineOp[] | null {
     if (ops.length === 0) {
-      return null;
+      return null
     }
-    return this.runtime.mutation.executeLocalNow(ops, potentialNewCells);
+    return this.runtime.mutation.executeLocalNow(ops, potentialNewCells)
   }
 }
 
@@ -1728,4 +1552,4 @@ export const selectors = {
   selectMetrics,
   selectSelectionState,
   selectViewportCells,
-};
+}

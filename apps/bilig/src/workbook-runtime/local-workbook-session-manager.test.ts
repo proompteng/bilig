@@ -1,299 +1,290 @@
-import { describe, expect, it } from "vitest";
-import {
-  WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-  createSnapshotChunkFrames,
-  type ProtocolFrame,
-} from "@bilig/binary-protocol";
-import type { AgentFrame } from "@bilig/agent-api";
-import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
+import { describe, expect, it } from 'vitest'
+import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames, type ProtocolFrame } from '@bilig/binary-protocol'
+import type { AgentFrame } from '@bilig/agent-api'
+import { LocalWorkbookSessionManager } from './local-workbook-session-manager.js'
 
-async function openSession(
-  manager: LocalWorkbookSessionManager,
-  documentId: string,
-): Promise<string> {
+async function openSession(manager: LocalWorkbookSessionManager, documentId: string): Promise<string> {
   const response = await manager.handleAgentFrame({
-    kind: "request",
+    kind: 'request',
     request: {
-      kind: "openWorkbookSession",
-      id: "open-1",
+      kind: 'openWorkbookSession',
+      id: 'open-1',
       documentId,
-      replicaId: "replica-1",
+      replicaId: 'replica-1',
     },
-  } satisfies AgentFrame);
+  } satisfies AgentFrame)
 
-  if (response.kind !== "response" || response.response.kind !== "ok") {
-    throw new Error("Expected workbook session to open");
+  if (response.kind !== 'response' || response.response.kind !== 'ok') {
+    throw new Error('Expected workbook session to open')
   }
   if (!response.response.sessionId) {
-    throw new Error("Expected workbook session id");
+    throw new Error('Expected workbook session id')
   }
 
-  return response.response.sessionId;
+  return response.response.sessionId
 }
 
-describe("LocalWorkbookSessionManager", () => {
-  it("tracks browser subscribers independently from workbook sessions", async () => {
-    const manager = new LocalWorkbookSessionManager();
-    const detach = manager.attachBrowser("doc-browser", "browser-1", () => {});
+describe('LocalWorkbookSessionManager', () => {
+  it('tracks browser subscribers independently from workbook sessions', async () => {
+    const manager = new LocalWorkbookSessionManager()
+    const detach = manager.attachBrowser('doc-browser', 'browser-1', () => {})
 
-    expect(manager.getDocumentState("doc-browser").browserSessions).toEqual(["browser-1"]);
+    expect(manager.getDocumentState('doc-browser').browserSessions).toEqual(['browser-1'])
 
-    detach();
+    detach()
 
-    expect(manager.getDocumentState("doc-browser").browserSessions).toEqual([]);
-  });
+    expect(manager.getDocumentState('doc-browser').browserSessions).toEqual([])
+  })
 
-  it("compacts long batch backlogs into a snapshot", async () => {
-    const manager = new LocalWorkbookSessionManager();
-    const sessionId = await openSession(manager, "doc-perf");
+  it('compacts long batch backlogs into a snapshot', async () => {
+    const manager = new LocalWorkbookSessionManager()
+    const sessionId = await openSession(manager, 'doc-perf')
 
     await Promise.all(
       Array.from({ length: 270 }, (_entry, index) =>
         manager.handleAgentFrame({
-          kind: "request",
+          kind: 'request',
           request: {
-            kind: "writeRange",
+            kind: 'writeRange',
             id: `write-${index}`,
             sessionId,
             range: {
-              sheetName: "Sheet1",
-              startAddress: "A1",
-              endAddress: "A1",
+              sheetName: 'Sheet1',
+              startAddress: 'A1',
+              endAddress: 'A1',
             },
             values: [[index]],
           },
         } satisfies AgentFrame),
       ),
-    );
+    )
 
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve))
 
-    const snapshot = manager.getLatestSnapshot("doc-perf");
-    expect(snapshot).not.toBeNull();
+    const snapshot = manager.getLatestSnapshot('doc-perf')
+    expect(snapshot).not.toBeNull()
 
     const helloFrames = await manager.handleSyncFrame({
-      kind: "hello",
-      documentId: "doc-perf",
-      replicaId: "browser-1",
-      sessionId: "browser-1",
+      kind: 'hello',
+      documentId: 'doc-perf',
+      replicaId: 'browser-1',
+      sessionId: 'browser-1',
       protocolVersion: 1,
       lastServerCursor: 0,
       capabilities: [],
-    } satisfies ProtocolFrame);
+    } satisfies ProtocolFrame)
 
-    expect(helloFrames.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
-    const appendFrames = helloFrames.filter((frame) => frame.kind === "appendBatch");
-    expect(appendFrames.length).toBeLessThanOrEqual(256);
-  });
+    expect(helloFrames.some((frame) => frame.kind === 'snapshotChunk')).toBe(true)
+    const appendFrames = helloFrames.filter((frame) => frame.kind === 'appendBatch')
+    expect(appendFrames.length).toBeLessThanOrEqual(256)
+  })
 
-  it("emits large range subscription events for style-only invalidations", async () => {
-    const manager = new LocalWorkbookSessionManager();
-    const sessionId = await openSession(manager, "doc-range");
-    const events: AgentFrame[] = [];
+  it('emits large range subscription events for style-only invalidations', async () => {
+    const manager = new LocalWorkbookSessionManager()
+    const sessionId = await openSession(manager, 'doc-range')
+    const events: AgentFrame[] = []
     const unsubscribeEvents = manager.subscribeAgentEvents((event) => {
-      events.push({ kind: "event", event });
-    });
+      events.push({ kind: 'event', event })
+    })
 
     await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "subscribeRange",
-        id: "subscribe-1",
+        kind: 'subscribeRange',
+        id: 'subscribe-1',
         sessionId,
-        subscriptionId: "sub-1",
+        subscriptionId: 'sub-1',
         range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "Z20",
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'Z20',
         },
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
     await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "setRangeStyle",
-        id: "style-1",
+        kind: 'setRangeStyle',
+        id: 'style-1',
         sessionId,
         range: {
-          sheetName: "Sheet1",
-          startAddress: "B2",
-          endAddress: "B2",
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          endAddress: 'B2',
         },
         patch: {
-          fill: { backgroundColor: "#ff0000" },
+          fill: { backgroundColor: '#ff0000' },
         },
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve))
 
     expect(events).toContainEqual({
-      kind: "event",
+      kind: 'event',
       event: {
-        kind: "rangeChanged",
-        subscriptionId: "sub-1",
+        kind: 'rangeChanged',
+        subscriptionId: 'sub-1',
         range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "Z20",
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'Z20',
         },
-        changedAddresses: ["B2"],
+        changedAddresses: ['B2'],
       },
-    });
+    })
 
-    unsubscribeEvents();
-  });
+    unsubscribeEvents()
+  })
 
-  it("reuses cached snapshots for repeated export requests until a write occurs", async () => {
-    const manager = new LocalWorkbookSessionManager();
-    const sessionId = await openSession(manager, "doc-snapshot-cache");
+  it('reuses cached snapshots for repeated export requests until a write occurs', async () => {
+    const manager = new LocalWorkbookSessionManager()
+    const sessionId = await openSession(manager, 'doc-snapshot-cache')
 
     const firstResponse = await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "exportSnapshot",
-        id: "export-1",
+        kind: 'exportSnapshot',
+        id: 'export-1',
         sessionId,
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
     const secondResponse = await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "exportSnapshot",
-        id: "export-2",
+        kind: 'exportSnapshot',
+        id: 'export-2',
         sessionId,
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
     if (
-      firstResponse.kind !== "response" ||
-      firstResponse.response.kind !== "snapshot" ||
-      secondResponse.kind !== "response" ||
-      secondResponse.response.kind !== "snapshot"
+      firstResponse.kind !== 'response' ||
+      firstResponse.response.kind !== 'snapshot' ||
+      secondResponse.kind !== 'response' ||
+      secondResponse.response.kind !== 'snapshot'
     ) {
-      throw new Error("Expected snapshot responses");
+      throw new Error('Expected snapshot responses')
     }
 
-    expect(secondResponse.response.snapshot).toBe(firstResponse.response.snapshot);
+    expect(secondResponse.response.snapshot).toBe(firstResponse.response.snapshot)
 
     await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "writeRange",
-        id: "write-1",
+        kind: 'writeRange',
+        id: 'write-1',
         sessionId,
         range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1",
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
         values: [[123]],
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
     const thirdResponse = await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "exportSnapshot",
-        id: "export-3",
+        kind: 'exportSnapshot',
+        id: 'export-3',
         sessionId,
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
-    if (thirdResponse.kind !== "response" || thirdResponse.response.kind !== "snapshot") {
-      throw new Error("Expected snapshot response after write");
+    if (thirdResponse.kind !== 'response' || thirdResponse.response.kind !== 'snapshot') {
+      throw new Error('Expected snapshot response after write')
     }
 
-    expect(thirdResponse.response.snapshot).not.toBe(firstResponse.response.snapshot);
-    expect(thirdResponse.response.snapshot.sheets[0]?.cells).toContainEqual(
-      expect.objectContaining({ address: "A1", value: 123 }),
-    );
-  });
+    expect(thirdResponse.response.snapshot).not.toBe(firstResponse.response.snapshot)
+    expect(thirdResponse.response.snapshot.sheets[0]?.cells).toContainEqual(expect.objectContaining({ address: 'A1', value: 123 }))
+  })
 
-  it("imports snapshot chunks through the local sync host", async () => {
-    const manager = new LocalWorkbookSessionManager();
-    const sourceSessionId = await openSession(manager, "doc-source");
-    const browserFrames: ProtocolFrame[] = [];
-    manager.attachBrowser("doc-imported", "browser-1", (frame) => {
-      browserFrames.push(frame);
-    });
+  it('imports snapshot chunks through the local sync host', async () => {
+    const manager = new LocalWorkbookSessionManager()
+    const sourceSessionId = await openSession(manager, 'doc-source')
+    const browserFrames: ProtocolFrame[] = []
+    manager.attachBrowser('doc-imported', 'browser-1', (frame) => {
+      browserFrames.push(frame)
+    })
 
     await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "writeRange",
-        id: "write-source",
+        kind: 'writeRange',
+        id: 'write-source',
         sessionId: sourceSessionId,
         range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1",
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
         values: [[987]],
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
     const exported = await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "exportSnapshot",
-        id: "export-source",
+        kind: 'exportSnapshot',
+        id: 'export-source',
         sessionId: sourceSessionId,
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
-    if (exported.kind !== "response" || exported.response.kind !== "snapshot") {
-      throw new Error("Expected snapshot export");
+    if (exported.kind !== 'response' || exported.response.kind !== 'snapshot') {
+      throw new Error('Expected snapshot export')
     }
 
-    const bytes = new TextEncoder().encode(JSON.stringify(exported.response.snapshot));
+    const bytes = new TextEncoder().encode(JSON.stringify(exported.response.snapshot))
     const chunkFrames = createSnapshotChunkFrames({
-      documentId: "doc-imported",
-      snapshotId: "doc-imported:snapshot:1",
+      documentId: 'doc-imported',
+      snapshotId: 'doc-imported:snapshot:1',
       cursor: 4,
       contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
       bytes,
-    });
+    })
 
-    const responses = await Promise.all(chunkFrames.map((frame) => manager.handleSyncFrame(frame)));
+    const responses = await Promise.all(chunkFrames.map((frame) => manager.handleSyncFrame(frame)))
     responses.forEach((responseFrames) => {
       expect(responseFrames).toContainEqual(
         expect.objectContaining({
-          kind: "ack",
-          documentId: "doc-imported",
-          batchId: "doc-imported:snapshot:1",
+          kind: 'ack',
+          documentId: 'doc-imported',
+          batchId: 'doc-imported:snapshot:1',
           cursor: 4,
         }),
-      );
-    });
+      )
+    })
 
-    const importedSessionId = await openSession(manager, "doc-imported");
+    const importedSessionId = await openSession(manager, 'doc-imported')
     const imported = await manager.handleAgentFrame({
-      kind: "request",
+      kind: 'request',
       request: {
-        kind: "readRange",
-        id: "read-imported",
+        kind: 'readRange',
+        id: 'read-imported',
         sessionId: importedSessionId,
         range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1",
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
       },
-    } satisfies AgentFrame);
+    } satisfies AgentFrame)
 
-    if (imported.kind !== "response" || imported.response.kind !== "rangeValues") {
-      throw new Error("Expected imported range values");
+    if (imported.kind !== 'response' || imported.response.kind !== 'rangeValues') {
+      throw new Error('Expected imported range values')
     }
 
-    expect(imported.response.values[0]?.[0]).toEqual(expect.objectContaining({ value: 987 }));
-    expect(browserFrames.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
+    expect(imported.response.values[0]?.[0]).toEqual(expect.objectContaining({ value: 987 }))
+    expect(browserFrames.some((frame) => frame.kind === 'snapshotChunk')).toBe(true)
     expect(browserFrames).toContainEqual({
-      kind: "cursorWatermark",
-      documentId: "doc-imported",
+      kind: 'cursorWatermark',
+      documentId: 'doc-imported',
       cursor: 4,
       compactedCursor: 4,
-    });
-  });
-});
+    })
+  })
+})

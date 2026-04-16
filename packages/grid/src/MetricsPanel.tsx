@@ -1,4 +1,4 @@
-import type { RecalcMetrics } from "@bilig/protocol";
+import type { RecalcMetrics } from '@bilig/protocol'
 
 export function MetricsPanel({ metrics }: { metrics: RecalcMetrics }) {
   return (
@@ -35,5 +35,5 @@ export function MetricsPanel({ metrics }: { metrics: RecalcMetrics }) {
         </div>
       </dl>
     </div>
-  );
+  )
 }

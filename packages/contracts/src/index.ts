@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect'
 
-export const AuthSourceSchema = Schema.Literal("header", "cookie", "guest");
-export type AuthSource = Schema.Schema.Type<typeof AuthSourceSchema>;
+export const AuthSourceSchema = Schema.Literal('header', 'cookie', 'guest')
+export type AuthSource = Schema.Schema.Type<typeof AuthSourceSchema>
 
 export const RuntimeSessionSchema = Schema.Struct({
   authToken: Schema.String,
@@ -9,15 +9,15 @@ export const RuntimeSessionSchema = Schema.Struct({
   roles: Schema.Array(Schema.String),
   isAuthenticated: Schema.Boolean,
   authSource: AuthSourceSchema,
-});
-export type RuntimeSession = Schema.Schema.Type<typeof RuntimeSessionSchema>;
+})
+export type RuntimeSession = Schema.Schema.Type<typeof RuntimeSessionSchema>
 
 export const ErrorEnvelopeSchema = Schema.Struct({
   error: Schema.String,
   message: Schema.String,
   retryable: Schema.Boolean,
-});
-export type ErrorEnvelope = Schema.Schema.Type<typeof ErrorEnvelopeSchema>;
+})
+export type ErrorEnvelope = Schema.Schema.Type<typeof ErrorEnvelopeSchema>
 
 export const DocumentStateSummarySchema = Schema.Struct({
   documentId: Schema.String,
@@ -25,14 +25,14 @@ export const DocumentStateSummarySchema = Schema.Struct({
   owner: Schema.Union(Schema.String, Schema.Null),
   sessions: Schema.Array(Schema.String),
   latestSnapshotCursor: Schema.Union(Schema.Number, Schema.Null),
-});
-export type DocumentStateSummary = Schema.Schema.Type<typeof DocumentStateSummarySchema>;
+})
+export type DocumentStateSummary = Schema.Schema.Type<typeof DocumentStateSummarySchema>
 
 export const SnapshotMetadataSchema = Schema.Struct({
   cursor: Schema.Number,
   contentType: Schema.String,
-});
-export type SnapshotMetadata = Schema.Schema.Type<typeof SnapshotMetadataSchema>;
+})
+export type SnapshotMetadata = Schema.Schema.Type<typeof SnapshotMetadataSchema>
 
 export const WorkbookAgentUiSelectionSchema = Schema.Struct({
   sheetName: Schema.String,
@@ -44,84 +44,55 @@ export const WorkbookAgentUiSelectionSchema = Schema.Struct({
     }),
     {},
   ),
-});
-export type WorkbookAgentUiSelection = Schema.Schema.Type<typeof WorkbookAgentUiSelectionSchema>;
+})
+export type WorkbookAgentUiSelection = Schema.Schema.Type<typeof WorkbookAgentUiSelectionSchema>
 
 export const WorkbookViewportSchema = Schema.Struct({
   rowStart: Schema.Number,
   rowEnd: Schema.Number,
   colStart: Schema.Number,
   colEnd: Schema.Number,
-});
-export type WorkbookViewport = Schema.Schema.Type<typeof WorkbookViewportSchema>;
+})
+export type WorkbookViewport = Schema.Schema.Type<typeof WorkbookViewportSchema>
 
 export const WorkbookAgentUiContextSchema = Schema.Struct({
   selection: WorkbookAgentUiSelectionSchema,
   viewport: WorkbookViewportSchema,
-});
-export type WorkbookAgentUiContext = Schema.Schema.Type<typeof WorkbookAgentUiContextSchema>;
+})
+export type WorkbookAgentUiContext = Schema.Schema.Type<typeof WorkbookAgentUiContextSchema>
 
-export const WorkbookAgentEntryKindSchema = Schema.Literal(
-  "user",
-  "assistant",
-  "plan",
-  "reasoning",
-  "tool",
-  "system",
-);
-export type WorkbookAgentEntryKind = Schema.Schema.Type<typeof WorkbookAgentEntryKindSchema>;
+export const WorkbookAgentEntryKindSchema = Schema.Literal('user', 'assistant', 'plan', 'reasoning', 'tool', 'system')
+export type WorkbookAgentEntryKind = Schema.Schema.Type<typeof WorkbookAgentEntryKindSchema>
 
-export const WorkbookAgentTextEntryKindSchema = Schema.Literal("assistant", "plan", "reasoning");
-export type WorkbookAgentTextEntryKind = Schema.Schema.Type<
-  typeof WorkbookAgentTextEntryKindSchema
->;
+export const WorkbookAgentTextEntryKindSchema = Schema.Literal('assistant', 'plan', 'reasoning')
+export type WorkbookAgentTextEntryKind = Schema.Schema.Type<typeof WorkbookAgentTextEntryKindSchema>
 
-export const WorkbookAgentExecutionPolicySchema = Schema.Literal(
-  "autoApplySafe",
-  "autoApplyAll",
-  "ownerReview",
-);
-export type WorkbookAgentExecutionPolicy = Schema.Schema.Type<
-  typeof WorkbookAgentExecutionPolicySchema
->;
+export const WorkbookAgentExecutionPolicySchema = Schema.Literal('autoApplySafe', 'autoApplyAll', 'ownerReview')
+export type WorkbookAgentExecutionPolicy = Schema.Schema.Type<typeof WorkbookAgentExecutionPolicySchema>
 
-export const WorkbookAgentToolStatusSchema = Schema.Union(
-  Schema.Literal("inProgress", "completed", "failed"),
-  Schema.Null,
-);
-export type WorkbookAgentToolStatus = Schema.Schema.Type<typeof WorkbookAgentToolStatusSchema>;
+export const WorkbookAgentToolStatusSchema = Schema.Union(Schema.Literal('inProgress', 'completed', 'failed'), Schema.Null)
+export type WorkbookAgentToolStatus = Schema.Schema.Type<typeof WorkbookAgentToolStatusSchema>
 
-export const WorkbookAgentRangeCitationRoleSchema = Schema.Literal("target", "source");
-export type WorkbookAgentRangeCitationRole = Schema.Schema.Type<
-  typeof WorkbookAgentRangeCitationRoleSchema
->;
+export const WorkbookAgentRangeCitationRoleSchema = Schema.Literal('target', 'source')
+export type WorkbookAgentRangeCitationRole = Schema.Schema.Type<typeof WorkbookAgentRangeCitationRoleSchema>
 
 export const WorkbookAgentRangeCitationSchema = Schema.Struct({
-  kind: Schema.Literal("range"),
+  kind: Schema.Literal('range'),
   sheetName: Schema.String,
   startAddress: Schema.String,
   endAddress: Schema.String,
   role: WorkbookAgentRangeCitationRoleSchema,
-});
-export type WorkbookAgentRangeCitation = Schema.Schema.Type<
-  typeof WorkbookAgentRangeCitationSchema
->;
+})
+export type WorkbookAgentRangeCitation = Schema.Schema.Type<typeof WorkbookAgentRangeCitationSchema>
 
 export const WorkbookAgentRevisionCitationSchema = Schema.Struct({
-  kind: Schema.Literal("revision"),
+  kind: Schema.Literal('revision'),
   revision: Schema.Number,
-});
-export type WorkbookAgentRevisionCitation = Schema.Schema.Type<
-  typeof WorkbookAgentRevisionCitationSchema
->;
+})
+export type WorkbookAgentRevisionCitation = Schema.Schema.Type<typeof WorkbookAgentRevisionCitationSchema>
 
-export const WorkbookAgentTimelineCitationSchema = Schema.Union(
-  WorkbookAgentRangeCitationSchema,
-  WorkbookAgentRevisionCitationSchema,
-);
-export type WorkbookAgentTimelineCitation = Schema.Schema.Type<
-  typeof WorkbookAgentTimelineCitationSchema
->;
+export const WorkbookAgentTimelineCitationSchema = Schema.Union(WorkbookAgentRangeCitationSchema, WorkbookAgentRevisionCitationSchema)
+export type WorkbookAgentTimelineCitation = Schema.Schema.Type<typeof WorkbookAgentTimelineCitationSchema>
 
 export const WorkbookAgentTimelineEntrySchema = Schema.Struct({
   id: Schema.String,
@@ -135,18 +106,14 @@ export const WorkbookAgentTimelineEntrySchema = Schema.Struct({
   outputText: Schema.Union(Schema.String, Schema.Null),
   success: Schema.Union(Schema.Boolean, Schema.Null),
   citations: Schema.Array(WorkbookAgentTimelineCitationSchema),
-});
-export type WorkbookAgentTimelineEntry = Schema.Schema.Type<
-  typeof WorkbookAgentTimelineEntrySchema
->;
+})
+export type WorkbookAgentTimelineEntry = Schema.Schema.Type<typeof WorkbookAgentTimelineEntrySchema>
 
-export const WorkbookAgentSessionStatusSchema = Schema.Literal("idle", "inProgress", "failed");
-export type WorkbookAgentSessionStatus = Schema.Schema.Type<
-  typeof WorkbookAgentSessionStatusSchema
->;
+export const WorkbookAgentSessionStatusSchema = Schema.Literal('idle', 'inProgress', 'failed')
+export type WorkbookAgentSessionStatus = Schema.Schema.Type<typeof WorkbookAgentSessionStatusSchema>
 
-export const WorkbookAgentThreadScopeSchema = Schema.Literal("private", "shared");
-export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentThreadScopeSchema>;
+export const WorkbookAgentThreadScopeSchema = Schema.Literal('private', 'shared')
+export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentThreadScopeSchema>
 
 export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   threadId: Schema.String,
@@ -156,60 +123,41 @@ export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   entryCount: Schema.Number,
   reviewQueueItemCount: Schema.Number,
   latestEntryText: Schema.Union(Schema.String, Schema.Null),
-});
-export type WorkbookAgentThreadSummary = Schema.Schema.Type<
-  typeof WorkbookAgentThreadSummarySchema
->;
+})
+export type WorkbookAgentThreadSummary = Schema.Schema.Type<typeof WorkbookAgentThreadSummarySchema>
 
 export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
-  "summarizeWorkbook",
-  "summarizeCurrentSheet",
-  "describeRecentChanges",
-  "findFormulaIssues",
-  "highlightFormulaIssues",
-  "repairFormulaIssues",
-  "highlightCurrentSheetOutliers",
-  "styleCurrentSheetHeaders",
-  "normalizeCurrentSheetHeaders",
-  "normalizeCurrentSheetNumberFormats",
-  "normalizeCurrentSheetWhitespace",
-  "fillCurrentSheetFormulasDown",
-  "traceSelectionDependencies",
-  "explainSelectionCell",
-  "searchWorkbookQuery",
-  "createCurrentSheetRollup",
-  "createCurrentSheetReviewTab",
-  "createSheet",
-  "renameCurrentSheet",
-  "hideCurrentRow",
-  "hideCurrentColumn",
-  "unhideCurrentRow",
-  "unhideCurrentColumn",
-);
-export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
-  typeof WorkbookAgentWorkflowTemplateSchema
->;
+  'summarizeWorkbook',
+  'summarizeCurrentSheet',
+  'describeRecentChanges',
+  'findFormulaIssues',
+  'highlightFormulaIssues',
+  'repairFormulaIssues',
+  'highlightCurrentSheetOutliers',
+  'styleCurrentSheetHeaders',
+  'normalizeCurrentSheetHeaders',
+  'normalizeCurrentSheetNumberFormats',
+  'normalizeCurrentSheetWhitespace',
+  'fillCurrentSheetFormulasDown',
+  'traceSelectionDependencies',
+  'explainSelectionCell',
+  'searchWorkbookQuery',
+  'createCurrentSheetRollup',
+  'createCurrentSheetReviewTab',
+  'createSheet',
+  'renameCurrentSheet',
+  'hideCurrentRow',
+  'hideCurrentColumn',
+  'unhideCurrentRow',
+  'unhideCurrentColumn',
+)
+export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<typeof WorkbookAgentWorkflowTemplateSchema>
 
-export const WorkbookAgentWorkflowStatusSchema = Schema.Literal(
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-);
-export type WorkbookAgentWorkflowStatus = Schema.Schema.Type<
-  typeof WorkbookAgentWorkflowStatusSchema
->;
+export const WorkbookAgentWorkflowStatusSchema = Schema.Literal('running', 'completed', 'failed', 'cancelled')
+export type WorkbookAgentWorkflowStatus = Schema.Schema.Type<typeof WorkbookAgentWorkflowStatusSchema>
 
-export const WorkbookAgentWorkflowStepStatusSchema = Schema.Literal(
-  "pending",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-);
-export type WorkbookAgentWorkflowStepStatus = Schema.Schema.Type<
-  typeof WorkbookAgentWorkflowStepStatusSchema
->;
+export const WorkbookAgentWorkflowStepStatusSchema = Schema.Literal('pending', 'running', 'completed', 'failed', 'cancelled')
+export type WorkbookAgentWorkflowStepStatus = Schema.Schema.Type<typeof WorkbookAgentWorkflowStepStatusSchema>
 
 export const WorkbookAgentWorkflowStepSchema = Schema.Struct({
   stepId: Schema.String,
@@ -217,17 +165,15 @@ export const WorkbookAgentWorkflowStepSchema = Schema.Struct({
   status: WorkbookAgentWorkflowStepStatusSchema,
   summary: Schema.String,
   updatedAtUnixMs: Schema.Number,
-});
-export type WorkbookAgentWorkflowStep = Schema.Schema.Type<typeof WorkbookAgentWorkflowStepSchema>;
+})
+export type WorkbookAgentWorkflowStep = Schema.Schema.Type<typeof WorkbookAgentWorkflowStepSchema>
 
 export const WorkbookAgentWorkflowArtifactSchema = Schema.Struct({
-  kind: Schema.Literal("markdown"),
+  kind: Schema.Literal('markdown'),
   title: Schema.String,
   text: Schema.String,
-});
-export type WorkbookAgentWorkflowArtifact = Schema.Schema.Type<
-  typeof WorkbookAgentWorkflowArtifactSchema
->;
+})
+export type WorkbookAgentWorkflowArtifact = Schema.Schema.Type<typeof WorkbookAgentWorkflowArtifactSchema>
 
 export const WorkbookAgentWorkflowRunSchema = Schema.Struct({
   runId: Schema.String,
@@ -243,8 +189,8 @@ export const WorkbookAgentWorkflowRunSchema = Schema.Struct({
   errorMessage: Schema.Union(Schema.String, Schema.Null),
   steps: Schema.Array(WorkbookAgentWorkflowStepSchema),
   artifact: Schema.Union(WorkbookAgentWorkflowArtifactSchema, Schema.Null),
-});
-export type WorkbookAgentWorkflowRun = Schema.Schema.Type<typeof WorkbookAgentWorkflowRunSchema>;
+})
+export type WorkbookAgentWorkflowRun = Schema.Schema.Type<typeof WorkbookAgentWorkflowRunSchema>
 
 export const WorkbookAgentThreadSnapshotSchema = Schema.Struct({
   documentId: Schema.String,
@@ -259,29 +205,24 @@ export const WorkbookAgentThreadSnapshotSchema = Schema.Struct({
   reviewQueueItems: Schema.Array(Schema.Unknown),
   executionRecords: Schema.Array(Schema.Unknown),
   workflowRuns: Schema.Array(WorkbookAgentWorkflowRunSchema),
-});
-export type WorkbookAgentThreadSnapshot = Schema.Schema.Type<
-  typeof WorkbookAgentThreadSnapshotSchema
->;
+})
+export type WorkbookAgentThreadSnapshot = Schema.Schema.Type<typeof WorkbookAgentThreadSnapshotSchema>
 
 export const WorkbookAgentStreamEventSchema = Schema.Union(
   Schema.Struct({
-    type: Schema.Literal("snapshot"),
+    type: Schema.Literal('snapshot'),
     snapshot: WorkbookAgentThreadSnapshotSchema,
   }),
   Schema.Struct({
-    type: Schema.Literal("entryTextDelta"),
+    type: Schema.Literal('entryTextDelta'),
     entryKind: WorkbookAgentTextEntryKindSchema,
     itemId: Schema.String,
     turnId: Schema.String,
     delta: Schema.String,
   }),
-);
-export type WorkbookAgentStreamEvent = Schema.Schema.Type<typeof WorkbookAgentStreamEventSchema>;
+)
+export type WorkbookAgentStreamEvent = Schema.Schema.Type<typeof WorkbookAgentStreamEventSchema>
 
-export function decodeUnknownSync<Decoded, Encoded>(
-  schema: Schema.Schema<Decoded, Encoded>,
-  input: unknown,
-): Decoded {
-  return Schema.decodeUnknownSync(schema)(input);
+export function decodeUnknownSync<Decoded, Encoded>(schema: Schema.Schema<Decoded, Encoded>, input: unknown): Decoded {
+  return Schema.decodeUnknownSync(schema)(input)
 }

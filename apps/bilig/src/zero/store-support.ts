@@ -1,5 +1,5 @@
-import { isEngineReplicaSnapshot, type EngineReplicaSnapshot } from "@bilig/core";
-import { parseCellAddress } from "@bilig/formula";
+import { isEngineReplicaSnapshot, type EngineReplicaSnapshot } from '@bilig/core'
+import { parseCellAddress } from '@bilig/formula'
 import {
   isWorkbookSnapshot,
   ValueTag,
@@ -11,8 +11,8 @@ import {
   type CellValue,
   type CellVerticalAlignment,
   type WorkbookSnapshot,
-} from "@bilig/protocol";
-import type { DirtyRegion, WorkbookEventPayload } from "@bilig/zero-sync";
+} from '@bilig/protocol'
+import type { DirtyRegion, WorkbookEventPayload } from '@bilig/zero-sync'
 import type {
   AxisMetadataSourceRow,
   CellEvalRow,
@@ -22,29 +22,17 @@ import type {
   SheetSourceRow,
   StyleSourceRow,
   WorkbookMetadataSourceRow,
-} from "./projection.js";
+} from './projection.js'
 
-export type FocusedCellEventPayload = Extract<
-  WorkbookEventPayload,
-  { kind: "setCellValue" | "setCellFormula" | "clearCell" }
->;
+export type FocusedCellEventPayload = Extract<WorkbookEventPayload, { kind: 'setCellValue' | 'setCellFormula' | 'clearCell' }>
 
-export type StyleRangeEventPayload = Extract<
-  WorkbookEventPayload,
-  { kind: "setRangeStyle" | "clearRangeStyle" }
->;
+export type StyleRangeEventPayload = Extract<WorkbookEventPayload, { kind: 'setRangeStyle' | 'clearRangeStyle' }>
 
-export type NumberFormatRangeEventPayload = Extract<
-  WorkbookEventPayload,
-  { kind: "setRangeNumberFormat" | "clearRangeNumberFormat" }
->;
+export type NumberFormatRangeEventPayload = Extract<WorkbookEventPayload, { kind: 'setRangeNumberFormat' | 'clearRangeNumberFormat' }>
 
-export type ColumnMetadataEventPayload = Extract<
-  WorkbookEventPayload,
-  { kind: "updateColumnWidth" | "updateColumnMetadata" }
->;
+export type ColumnMetadataEventPayload = Extract<WorkbookEventPayload, { kind: 'updateColumnWidth' | 'updateColumnMetadata' }>
 
-export type RowMetadataEventPayload = Extract<WorkbookEventPayload, { kind: "updateRowMetadata" }>;
+export type RowMetadataEventPayload = Extract<WorkbookEventPayload, { kind: 'updateRowMetadata' }>
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {
   return {
@@ -55,123 +43,109 @@ export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapsho
     sheets: [
       {
         id: 1,
-        name: "Sheet1",
+        name: 'Sheet1',
         order: 0,
         cells: [],
       },
     ],
-  };
+  }
 }
 
 export function nowIso(): string {
-  return new Date().toISOString();
+  return new Date().toISOString()
 }
 
 export function parseInteger(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
   }
-  if (typeof value === "string" && value.length > 0) {
-    const parsed = Number.parseInt(value, 10);
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Number.parseInt(value, 10)
     if (Number.isFinite(parsed)) {
-      return parsed;
+      return parsed
     }
   }
-  return 0;
+  return 0
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 export function isDirtyRegion(value: unknown): value is DirtyRegion {
   return (
     isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["rowStart"] === "number" &&
-    typeof value["rowEnd"] === "number" &&
-    typeof value["colStart"] === "number" &&
-    typeof value["colEnd"] === "number"
-  );
+    typeof value['sheetName'] === 'string' &&
+    typeof value['rowStart'] === 'number' &&
+    typeof value['rowEnd'] === 'number' &&
+    typeof value['colStart'] === 'number' &&
+    typeof value['colEnd'] === 'number'
+  )
 }
 
 function isCellHorizontalAlignment(value: unknown): value is CellHorizontalAlignment {
-  return value === "general" || value === "left" || value === "center" || value === "right";
+  return value === 'general' || value === 'left' || value === 'center' || value === 'right'
 }
 
 function isCellVerticalAlignment(value: unknown): value is CellVerticalAlignment {
-  return value === "top" || value === "middle" || value === "bottom";
+  return value === 'top' || value === 'middle' || value === 'bottom'
 }
 
 function isCellBorderStyle(value: unknown): value is CellBorderStyle {
-  return value === "solid" || value === "dashed" || value === "dotted" || value === "double";
+  return value === 'solid' || value === 'dashed' || value === 'dotted' || value === 'double'
 }
 
 function isCellBorderWeight(value: unknown): value is CellBorderWeight {
-  return value === "thin" || value === "medium" || value === "thick";
+  return value === 'thin' || value === 'medium' || value === 'thick'
 }
 
 export function parseCheckpointPayload(value: unknown, documentId: string): WorkbookSnapshot {
-  return isWorkbookSnapshot(value) ? value : createEmptyWorkbookSnapshot(documentId);
+  return isWorkbookSnapshot(value) ? value : createEmptyWorkbookSnapshot(documentId)
 }
 
 export function parseCheckpointReplicaState(value: unknown): EngineReplicaSnapshot | null {
-  return isEngineReplicaSnapshot(value) ? value : null;
+  return isEngineReplicaSnapshot(value) ? value : null
 }
 
-export function isFocusedCellEventPayload(
-  payload: WorkbookEventPayload,
-): payload is FocusedCellEventPayload {
-  return (
-    payload.kind === "setCellValue" ||
-    payload.kind === "setCellFormula" ||
-    payload.kind === "clearCell"
-  );
+export function isFocusedCellEventPayload(payload: WorkbookEventPayload): payload is FocusedCellEventPayload {
+  return payload.kind === 'setCellValue' || payload.kind === 'setCellFormula' || payload.kind === 'clearCell'
 }
 
-export function isStyleRangeEventPayload(
-  payload: WorkbookEventPayload,
-): payload is StyleRangeEventPayload {
-  return payload.kind === "setRangeStyle" || payload.kind === "clearRangeStyle";
+export function isStyleRangeEventPayload(payload: WorkbookEventPayload): payload is StyleRangeEventPayload {
+  return payload.kind === 'setRangeStyle' || payload.kind === 'clearRangeStyle'
 }
 
-export function isNumberFormatRangeEventPayload(
-  payload: WorkbookEventPayload,
-): payload is NumberFormatRangeEventPayload {
-  return payload.kind === "setRangeNumberFormat" || payload.kind === "clearRangeNumberFormat";
+export function isNumberFormatRangeEventPayload(payload: WorkbookEventPayload): payload is NumberFormatRangeEventPayload {
+  return payload.kind === 'setRangeNumberFormat' || payload.kind === 'clearRangeNumberFormat'
 }
 
-export function isColumnMetadataEventPayload(
-  payload: WorkbookEventPayload,
-): payload is ColumnMetadataEventPayload {
-  return payload.kind === "updateColumnWidth" || payload.kind === "updateColumnMetadata";
+export function isColumnMetadataEventPayload(payload: WorkbookEventPayload): payload is ColumnMetadataEventPayload {
+  return payload.kind === 'updateColumnWidth' || payload.kind === 'updateColumnMetadata'
 }
 
-export function isRowMetadataEventPayload(
-  payload: WorkbookEventPayload,
-): payload is RowMetadataEventPayload {
-  return payload.kind === "updateRowMetadata";
+export function isRowMetadataEventPayload(payload: WorkbookEventPayload): payload is RowMetadataEventPayload {
+  return payload.kind === 'updateRowMetadata'
 }
 
 export function eventRequiresRecalc(payload: WorkbookEventPayload): boolean {
   return !(
-    payload.kind === "setRangeStyle" ||
-    payload.kind === "clearRangeStyle" ||
-    payload.kind === "setRangeNumberFormat" ||
-    payload.kind === "clearRangeNumberFormat" ||
-    payload.kind === "updateRowMetadata" ||
-    payload.kind === "updateColumnMetadata" ||
-    payload.kind === "updateColumnWidth" ||
-    payload.kind === "setFreezePane"
-  );
+    payload.kind === 'setRangeStyle' ||
+    payload.kind === 'clearRangeStyle' ||
+    payload.kind === 'setRangeNumberFormat' ||
+    payload.kind === 'clearRangeNumberFormat' ||
+    payload.kind === 'updateRowMetadata' ||
+    payload.kind === 'updateColumnMetadata' ||
+    payload.kind === 'updateColumnWidth' ||
+    payload.kind === 'setFreezePane'
+  )
 }
 
 function semanticSignature(value: unknown): string {
-  return JSON.stringify(value);
+  return JSON.stringify(value)
 }
 
 export function sheetSignature(row: SheetSourceRow): string {
-  return semanticSignature([row.name, row.sortOrder, row.freezeRows, row.freezeCols]);
+  return semanticSignature([row.name, row.sortOrder, row.freezeRows, row.freezeCols])
 }
 
 export function cellSignature(row: CellSourceRow): string {
@@ -185,33 +159,27 @@ export function cellSignature(row: CellSourceRow): string {
     row.format ?? null,
     row.styleId ?? null,
     row.explicitFormatId ?? null,
-  ]);
+  ])
 }
 
 export function axisSignature(row: AxisMetadataSourceRow): string {
-  return semanticSignature([
-    row.sheetName,
-    row.startIndex,
-    row.count,
-    row.size ?? null,
-    row.hidden ?? null,
-  ]);
+  return semanticSignature([row.sheetName, row.startIndex, row.count, row.size ?? null, row.hidden ?? null])
 }
 
 export function definedNameSignature(row: DefinedNameSourceRow): string {
-  return semanticSignature([row.name, row.value]);
+  return semanticSignature([row.name, row.value])
 }
 
 export function workbookMetadataSignature(row: WorkbookMetadataSourceRow): string {
-  return semanticSignature([row.key, row.value]);
+  return semanticSignature([row.key, row.value])
 }
 
 export function styleSignature(row: StyleSourceRow): string {
-  return semanticSignature([row.id, row.recordJSON, row.hash]);
+  return semanticSignature([row.id, row.recordJSON, row.hash])
 }
 
 export function numberFormatSignature(row: NumberFormatSourceRow): string {
-  return semanticSignature([row.id, row.code, row.kind]);
+  return semanticSignature([row.id, row.code, row.kind])
 }
 
 export function cellEvalSignature(row: CellEvalRow): string {
@@ -227,154 +195,140 @@ export function cellEvalSignature(row: CellEvalRow): string {
     row.styleJson,
     row.formatId,
     row.formatCode,
-  ]);
+  ])
 }
 
 export function parseJsonKey(key: string): unknown[] {
-  const parsed = JSON.parse(key) as unknown;
+  const parsed = JSON.parse(key) as unknown
   if (!Array.isArray(parsed)) {
-    throw new Error(`Invalid projection key: ${key}`);
+    throw new Error(`Invalid projection key: ${key}`)
   }
-  return parsed;
+  return parsed
 }
 
 function isCellValue(value: unknown): value is CellValue {
-  if (!isRecord(value) || typeof value["tag"] !== "number") {
-    return false;
+  if (!isRecord(value) || typeof value['tag'] !== 'number') {
+    return false
   }
-  const tag = value["tag"];
+  const tag = value['tag']
   if (tag === 0) {
-    return true;
+    return true
   }
   if (tag === 1) {
-    return typeof value["value"] === "number";
+    return typeof value['value'] === 'number'
   }
   if (tag === 2) {
-    return typeof value["value"] === "boolean";
+    return typeof value['value'] === 'boolean'
   }
   if (tag === 3) {
-    return typeof value["value"] === "string";
+    return typeof value['value'] === 'string'
   }
   if (tag === 4) {
-    return typeof value["code"] === "number";
+    return typeof value['code'] === 'number'
   }
-  return false;
+  return false
 }
 
 export function parseCellEvalValue(value: unknown): CellValue {
-  return isCellValue(value) ? value : { tag: ValueTag.Empty };
+  return isCellValue(value) ? value : { tag: ValueTag.Empty }
 }
 
 export function parseCellStyleRecord(value: unknown): CellStyleRecord | null {
-  if (!isRecord(value) || typeof value["id"] !== "string") {
-    return null;
+  if (!isRecord(value) || typeof value['id'] !== 'string') {
+    return null
   }
-  const record: CellStyleRecord = { id: value["id"] };
-  if (isRecord(value["fill"])) {
-    const fill = value["fill"];
-    if (typeof fill["backgroundColor"] === "string") {
-      record.fill = { backgroundColor: fill["backgroundColor"] };
+  const record: CellStyleRecord = { id: value['id'] }
+  if (isRecord(value['fill'])) {
+    const fill = value['fill']
+    if (typeof fill['backgroundColor'] === 'string') {
+      record.fill = { backgroundColor: fill['backgroundColor'] }
     }
   }
-  if (isRecord(value["font"])) {
-    const font = value["font"];
+  if (isRecord(value['font'])) {
+    const font = value['font']
     record.font = {
-      ...(typeof font["family"] === "string" ? { family: font["family"] } : {}),
-      ...(typeof font["size"] === "number" ? { size: font["size"] } : {}),
-      ...(typeof font["bold"] === "boolean" ? { bold: font["bold"] } : {}),
-      ...(typeof font["italic"] === "boolean" ? { italic: font["italic"] } : {}),
-      ...(typeof font["underline"] === "boolean" ? { underline: font["underline"] } : {}),
-      ...(typeof font["color"] === "string" ? { color: font["color"] } : {}),
-    };
+      ...(typeof font['family'] === 'string' ? { family: font['family'] } : {}),
+      ...(typeof font['size'] === 'number' ? { size: font['size'] } : {}),
+      ...(typeof font['bold'] === 'boolean' ? { bold: font['bold'] } : {}),
+      ...(typeof font['italic'] === 'boolean' ? { italic: font['italic'] } : {}),
+      ...(typeof font['underline'] === 'boolean' ? { underline: font['underline'] } : {}),
+      ...(typeof font['color'] === 'string' ? { color: font['color'] } : {}),
+    }
     if (Object.keys(record.font).length === 0) {
-      delete record.font;
+      delete record.font
     }
   }
-  if (isRecord(value["alignment"])) {
-    const alignment = value["alignment"];
+  if (isRecord(value['alignment'])) {
+    const alignment = value['alignment']
     const nextAlignment = {
-      ...(isCellHorizontalAlignment(alignment["horizontal"])
-        ? { horizontal: alignment["horizontal"] }
-        : {}),
-      ...(isCellVerticalAlignment(alignment["vertical"])
-        ? { vertical: alignment["vertical"] }
-        : {}),
-      ...(typeof alignment["wrap"] === "boolean" ? { wrap: alignment["wrap"] } : {}),
-      ...(typeof alignment["indent"] === "number" ? { indent: alignment["indent"] } : {}),
-    };
+      ...(isCellHorizontalAlignment(alignment['horizontal']) ? { horizontal: alignment['horizontal'] } : {}),
+      ...(isCellVerticalAlignment(alignment['vertical']) ? { vertical: alignment['vertical'] } : {}),
+      ...(typeof alignment['wrap'] === 'boolean' ? { wrap: alignment['wrap'] } : {}),
+      ...(typeof alignment['indent'] === 'number' ? { indent: alignment['indent'] } : {}),
+    }
     if (Object.keys(nextAlignment).length > 0) {
-      record.alignment = nextAlignment;
+      record.alignment = nextAlignment
     }
   }
-  if (isRecord(value["borders"])) {
-    const borders = value["borders"];
-    const nextBorders: NonNullable<CellStyleRecord["borders"]> = {};
-    for (const side of ["top", "right", "bottom", "left"] as const) {
-      const border = borders[side];
+  if (isRecord(value['borders'])) {
+    const borders = value['borders']
+    const nextBorders: NonNullable<CellStyleRecord['borders']> = {}
+    for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+      const border = borders[side]
       if (!isRecord(border)) {
-        continue;
+        continue
       }
-      if (
-        isCellBorderStyle(border["style"]) &&
-        isCellBorderWeight(border["weight"]) &&
-        typeof border["color"] === "string"
-      ) {
+      if (isCellBorderStyle(border['style']) && isCellBorderWeight(border['weight']) && typeof border['color'] === 'string') {
         nextBorders[side] = {
-          style: border["style"],
-          weight: border["weight"],
-          color: border["color"],
-        };
+          style: border['style'],
+          weight: border['weight'],
+          color: border['color'],
+        }
       }
     }
     if (Object.keys(nextBorders).length > 0) {
-      record.borders = nextBorders;
+      record.borders = nextBorders
     }
   }
-  return record;
+  return record
 }
 
 export function normalizeRangeBounds(range: CellRangeRef): {
-  sheetName: string;
-  rowStart: number;
-  rowEnd: number;
-  colStart: number;
-  colEnd: number;
+  sheetName: string
+  rowStart: number
+  rowEnd: number
+  colStart: number
+  colEnd: number
 } {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
   return {
     sheetName: range.sheetName,
     rowStart: Math.min(start.row, end.row),
     rowEnd: Math.max(start.row, end.row),
     colStart: Math.min(start.col, end.col),
     colEnd: Math.max(start.col, end.col),
-  };
+  }
 }
 
-export function cellEvalRowInRange(
-  row: Pick<CellEvalRow, "sheetName" | "rowNum" | "colNum">,
-  range: CellRangeRef,
-): boolean {
-  const bounds = normalizeRangeBounds(range);
+export function cellEvalRowInRange(row: Pick<CellEvalRow, 'sheetName' | 'rowNum' | 'colNum'>, range: CellRangeRef): boolean {
+  const bounds = normalizeRangeBounds(range)
   return (
     row.sheetName === bounds.sheetName &&
     row.rowNum >= bounds.rowStart &&
     row.rowNum <= bounds.rowEnd &&
     row.colNum >= bounds.colStart &&
     row.colNum <= bounds.colEnd
-  );
+  )
 }
 
-export function cellSourceRowInRange(
-  row: Pick<CellSourceRow, "sheetName" | "rowNum" | "colNum">,
-  range: CellRangeRef,
-): boolean {
-  const bounds = normalizeRangeBounds(range);
+export function cellSourceRowInRange(row: Pick<CellSourceRow, 'sheetName' | 'rowNum' | 'colNum'>, range: CellRangeRef): boolean {
+  const bounds = normalizeRangeBounds(range)
   return (
     row.sheetName === bounds.sheetName &&
     row.rowNum >= bounds.rowStart &&
     row.rowNum <= bounds.rowEnd &&
     row.colNum >= bounds.colStart &&
     row.colNum <= bounds.colEnd
-  );
+  )
 }

@@ -1,4 +1,4 @@
-import { formatAddress } from "@bilig/formula";
+import { formatAddress } from '@bilig/formula'
 import type {
   CellNumberFormatRecord,
   CellStyleRecord,
@@ -12,46 +12,46 @@ import type {
   WorkbookFreezePaneSnapshot,
   WorkbookPropertySnapshot,
   WorkbookSnapshot,
-} from "@bilig/protocol";
-import { isWorkbookSnapshot } from "@bilig/protocol";
-import { isLiteralInput } from "./mutators.js";
+} from '@bilig/protocol'
+import { isWorkbookSnapshot } from '@bilig/protocol'
+import { isLiteralInput } from './mutators.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
+  return typeof value === 'string' ? value : undefined
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function asBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
+  return typeof value === 'boolean' ? value : undefined
 }
 
 function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+  return Array.isArray(value) ? value : []
 }
 
-function isCellNumberFormatKind(value: unknown): value is CellNumberFormatRecord["kind"] {
+function isCellNumberFormatKind(value: unknown): value is CellNumberFormatRecord['kind'] {
   return (
-    value === "general" ||
-    value === "number" ||
-    value === "currency" ||
-    value === "accounting" ||
-    value === "percent" ||
-    value === "date" ||
-    value === "time" ||
-    value === "datetime" ||
-    value === "text"
-  );
+    value === 'general' ||
+    value === 'number' ||
+    value === 'currency' ||
+    value === 'accounting' ||
+    value === 'percent' ||
+    value === 'date' ||
+    value === 'time' ||
+    value === 'datetime' ||
+    value === 'text'
+  )
 }
 
 function isCompatibilityMode(value: unknown): value is CompatibilityMode {
-  return value === "excel-modern" || value === "odf-1.4";
+  return value === 'excel-modern' || value === 'odf-1.4'
 }
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {
@@ -63,124 +63,116 @@ export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapsho
     sheets: [
       {
         id: 1,
-        name: "Sheet1",
+        name: 'Sheet1',
         order: 0,
         cells: [],
       },
     ],
-  };
+  }
 }
 
 function parseAxisMetadata(entries: unknown[]): WorkbookAxisMetadataSnapshot[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const start = asNumber(entry["startIndex"]);
-      const count = asNumber(entry["count"]);
+      const start = asNumber(entry['startIndex'])
+      const count = asNumber(entry['count'])
       if (start === undefined || count === undefined) {
-        return null;
+        return null
       }
       const next: WorkbookAxisMetadataSnapshot = {
         start,
         count,
-      };
-      const size = asNumber(entry["size"]);
-      const hiddenFlag = asBoolean(entry["hidden"]);
+      }
+      const size = asNumber(entry['size'])
+      const hiddenFlag = asBoolean(entry['hidden'])
       if (size !== undefined) {
-        next.size = size;
+        next.size = size
       }
       if (hiddenFlag !== undefined) {
-        next.hidden = hiddenFlag;
+        next.hidden = hiddenFlag
       }
-      return next;
+      return next
     })
-    .filter((entry): entry is WorkbookAxisMetadataSnapshot => entry !== null);
+    .filter((entry): entry is WorkbookAxisMetadataSnapshot => entry !== null)
 }
 
 function parseWorkbookProperties(entries: unknown[]): WorkbookPropertySnapshot[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const key = asString(entry["key"]);
-      const value = entry["value"];
+      const key = asString(entry['key'])
+      const value = entry['value']
       if (!key || !isLiteralInput(value)) {
-        return null;
+        return null
       }
-      return { key, value };
+      return { key, value }
     })
-    .filter((entry): entry is WorkbookPropertySnapshot => entry !== null);
+    .filter((entry): entry is WorkbookPropertySnapshot => entry !== null)
 }
 
-function isWorkbookDefinedNameValueSnapshot(
-  value: unknown,
-): value is WorkbookDefinedNameValueSnapshot {
-  return (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    isRecord(value)
-  );
+function isWorkbookDefinedNameValueSnapshot(value: unknown): value is WorkbookDefinedNameValueSnapshot {
+  return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean' || isRecord(value)
 }
 
 function parseDefinedNames(entries: unknown[]): WorkbookDefinedNameSnapshot[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const name = asString(entry["name"]);
-      const value = entry["value"];
+      const name = asString(entry['name'])
+      const value = entry['value']
       if (!name || !isWorkbookDefinedNameValueSnapshot(value)) {
-        return null;
+        return null
       }
-      return { name, value };
+      return { name, value }
     })
-    .filter((entry): entry is WorkbookDefinedNameSnapshot => entry !== null);
+    .filter((entry): entry is WorkbookDefinedNameSnapshot => entry !== null)
 }
 
 function parseStyleRecords(entries: unknown[]): CellStyleRecord[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const id = asString(entry["id"]);
-      const recordJSON = entry["recordJSON"];
+      const id = asString(entry['id'])
+      const recordJSON = entry['recordJSON']
       if (!id || !isRecord(recordJSON)) {
-        return null;
+        return null
       }
       return {
-        ...(recordJSON as Omit<CellStyleRecord, "id">),
+        ...(recordJSON as Omit<CellStyleRecord, 'id'>),
         id,
-      };
+      }
     })
-    .filter((entry): entry is CellStyleRecord => entry !== null);
+    .filter((entry): entry is CellStyleRecord => entry !== null)
 }
 
 function parseNumberFormats(entries: unknown[]): CellNumberFormatRecord[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const id = asString(entry["id"]);
-      const code = asString(entry["code"]);
-      const kind = asString(entry["kind"]);
+      const id = asString(entry['id'])
+      const code = asString(entry['code'])
+      const kind = asString(entry['kind'])
       if (!id || !code || !isCellNumberFormatKind(kind)) {
-        return null;
+        return null
       }
       return {
         id,
         code,
         kind,
-      };
+      }
     })
-    .filter((entry): entry is CellNumberFormatRecord => entry !== null);
+    .filter((entry): entry is CellNumberFormatRecord => entry !== null)
 }
 
 function parseFreezePane(
@@ -188,79 +180,67 @@ function parseFreezePane(
   freezeCols: unknown,
   fallback?: WorkbookFreezePaneSnapshot,
 ): WorkbookFreezePaneSnapshot | undefined {
-  const rows = asNumber(freezeRows);
-  const cols = asNumber(freezeCols);
+  const rows = asNumber(freezeRows)
+  const cols = asNumber(freezeCols)
   if ((rows ?? 0) > 0 || (cols ?? 0) > 0) {
     return {
       rows: rows ?? 0,
       cols: cols ?? 0,
-    };
+    }
   }
-  return fallback;
+  return fallback
 }
 
 function parseStyleRanges(entries: unknown[]): SheetStyleRangeSnapshot[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const startRow = asNumber(entry["startRow"]);
-      const endRow = asNumber(entry["endRow"]);
-      const startCol = asNumber(entry["startCol"]);
-      const endCol = asNumber(entry["endCol"]);
-      const styleId = asString(entry["styleId"]);
-      if (
-        startRow === undefined ||
-        endRow === undefined ||
-        startCol === undefined ||
-        endCol === undefined ||
-        !styleId
-      ) {
-        return null;
+      const startRow = asNumber(entry['startRow'])
+      const endRow = asNumber(entry['endRow'])
+      const startCol = asNumber(entry['startCol'])
+      const endCol = asNumber(entry['endCol'])
+      const styleId = asString(entry['styleId'])
+      if (startRow === undefined || endRow === undefined || startCol === undefined || endCol === undefined || !styleId) {
+        return null
       }
       return {
         range: {
-          sheetName: "",
+          sheetName: '',
           startAddress: formatAddress(startRow, startCol),
           endAddress: formatAddress(endRow, endCol),
         },
         styleId,
-      };
+      }
     })
-    .filter((entry): entry is SheetStyleRangeSnapshot => entry !== null);
+    .filter((entry): entry is SheetStyleRangeSnapshot => entry !== null)
 }
 
 function parseFormatRanges(entries: unknown[]): SheetFormatRangeSnapshot[] {
   return entries
     .map((entry) => {
       if (!isRecord(entry)) {
-        return null;
+        return null
       }
-      const startRow = asNumber(entry["startRow"]);
-      const endRow = asNumber(entry["endRow"]);
-      const startCol = asNumber(entry["startCol"]);
-      const endCol = asNumber(entry["endCol"]);
-      const formatId = asString(entry["formatId"]);
-      if (
-        startRow === undefined ||
-        endRow === undefined ||
-        startCol === undefined ||
-        endCol === undefined ||
-        !formatId
-      ) {
-        return null;
+      const startRow = asNumber(entry['startRow'])
+      const endRow = asNumber(entry['endRow'])
+      const startCol = asNumber(entry['startCol'])
+      const endCol = asNumber(entry['endCol'])
+      const formatId = asString(entry['formatId'])
+      if (startRow === undefined || endRow === undefined || startCol === undefined || endCol === undefined || !formatId) {
+        return null
       }
       return {
         range: {
-          sheetName: "",
+          sheetName: '',
           startAddress: formatAddress(startRow, startCol),
           endAddress: formatAddress(endRow, endCol),
         },
         formatId,
-      };
+      }
     })
-    .filter((entry): entry is SheetFormatRangeSnapshot => entry !== null);
+    .filter((entry): entry is SheetFormatRangeSnapshot => entry !== null)
 }
 
 function withSheetMetadataFallback(
@@ -272,28 +252,28 @@ function withSheetMetadataFallback(
   freezePane: WorkbookFreezePaneSnapshot | undefined,
   fallback?: SheetMetadataSnapshot,
 ) {
-  const next: SheetMetadataSnapshot = {};
+  const next: SheetMetadataSnapshot = {}
   if (fallback?.rows) {
-    next.rows = fallback.rows;
+    next.rows = fallback.rows
   }
   if (fallback?.columns) {
-    next.columns = fallback.columns;
+    next.columns = fallback.columns
   }
   if (fallback?.filters) {
-    next.filters = fallback.filters;
+    next.filters = fallback.filters
   }
   if (fallback?.sorts) {
-    next.sorts = fallback.sorts;
+    next.sorts = fallback.sorts
   }
   if (rowEntries.length > 0) {
-    next.rowMetadata = rowEntries;
+    next.rowMetadata = rowEntries
   } else if (fallback?.rowMetadata) {
-    next.rowMetadata = fallback.rowMetadata;
+    next.rowMetadata = fallback.rowMetadata
   }
   if (columnEntries.length > 0) {
-    next.columnMetadata = columnEntries;
+    next.columnMetadata = columnEntries
   } else if (fallback?.columnMetadata) {
-    next.columnMetadata = fallback.columnMetadata;
+    next.columnMetadata = fallback.columnMetadata
   }
   if (styleRanges.length > 0) {
     next.styleRanges = styleRanges.map((entry) => ({
@@ -302,9 +282,9 @@ function withSheetMetadataFallback(
         ...entry.range,
         sheetName,
       },
-    }));
+    }))
   } else if (fallback?.styleRanges) {
-    next.styleRanges = fallback.styleRanges;
+    next.styleRanges = fallback.styleRanges
   }
   if (formatRanges.length > 0) {
     next.formatRanges = formatRanges.map((entry) => ({
@@ -313,165 +293,142 @@ function withSheetMetadataFallback(
         ...entry.range,
         sheetName,
       },
-    }));
+    }))
   } else if (fallback?.formatRanges) {
-    next.formatRanges = fallback.formatRanges;
+    next.formatRanges = fallback.formatRanges
   }
   if (freezePane) {
-    next.freezePane = freezePane;
+    next.freezePane = freezePane
   } else if (fallback?.freezePane) {
-    next.freezePane = fallback.freezePane;
+    next.freezePane = fallback.freezePane
   }
-  return Object.keys(next).length > 0 ? next : undefined;
+  return Object.keys(next).length > 0 ? next : undefined
 }
 
 export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
   if (!isRecord(value)) {
-    return null;
+    return null
   }
 
-  const baseSnapshot = isWorkbookSnapshot(value["snapshot"])
-    ? value["snapshot"]
-    : createEmptyWorkbookSnapshot(documentId);
-  const workbookName = asString(value["name"]) ?? baseSnapshot.workbook.name ?? documentId;
+  const baseSnapshot = isWorkbookSnapshot(value['snapshot']) ? value['snapshot'] : createEmptyWorkbookSnapshot(documentId)
+  const workbookName = asString(value['name']) ?? baseSnapshot.workbook.name ?? documentId
 
-  const workbookMetadata = parseWorkbookProperties(asArray(value["workbookMetadataEntries"]));
-  const definedNames = parseDefinedNames(asArray(value["definedNames"]));
-  const styles = parseStyleRecords(asArray(value["styles"]));
-  const numberFormats = parseNumberFormats(asArray(value["numberFormats"]));
-  const numberFormatCodeById = new Map(numberFormats.map((entry) => [entry.id, entry.code]));
+  const workbookMetadata = parseWorkbookProperties(asArray(value['workbookMetadataEntries']))
+  const definedNames = parseDefinedNames(asArray(value['definedNames']))
+  const styles = parseStyleRecords(asArray(value['styles']))
+  const numberFormats = parseNumberFormats(asArray(value['numberFormats']))
+  const numberFormatCodeById = new Map(numberFormats.map((entry) => [entry.id, entry.code]))
 
-  const calculationSettingsRecord = isRecord(value["calculationSettings"])
-    ? value["calculationSettings"]
-    : null;
-  const calculationMode = calculationSettingsRecord
-    ? asString(calculationSettingsRecord["mode"])
-    : undefined;
-  const compatibilityMode = asString(value["compatibilityMode"]);
+  const calculationSettingsRecord = isRecord(value['calculationSettings']) ? value['calculationSettings'] : null
+  const calculationMode = calculationSettingsRecord ? asString(calculationSettingsRecord['mode']) : undefined
+  const compatibilityMode = asString(value['compatibilityMode'])
   const recalcEpoch =
-    calculationSettingsRecord?.["recalcEpoch"] !== undefined
-      ? asNumber(calculationSettingsRecord["recalcEpoch"])
-      : asNumber(value["recalcEpoch"]);
+    calculationSettingsRecord?.['recalcEpoch'] !== undefined
+      ? asNumber(calculationSettingsRecord['recalcEpoch'])
+      : asNumber(value['recalcEpoch'])
 
-  const fallbackSheets = new Map(baseSnapshot.sheets.map((sheet) => [sheet.name, sheet]));
-  const projectedSheets = asArray(value["sheets"])
+  const fallbackSheets = new Map(baseSnapshot.sheets.map((sheet) => [sheet.name, sheet]))
+  const projectedSheets = asArray(value['sheets'])
     .map((sheetEntry) => {
       if (!isRecord(sheetEntry)) {
-        return null;
+        return null
       }
-      const sheetName = asString(sheetEntry["name"]);
-      const sortOrder = asNumber(sheetEntry["sortOrder"]);
+      const sheetName = asString(sheetEntry['name'])
+      const sortOrder = asNumber(sheetEntry['sortOrder'])
       if (!sheetName || sortOrder === undefined) {
-        return null;
+        return null
       }
 
-      const cells = asArray(sheetEntry["cells"])
+      const cells = asArray(sheetEntry['cells'])
         .map((cellEntry) => {
           if (!isRecord(cellEntry)) {
-            return null;
+            return null
           }
-          const explicitFormatId = asString(cellEntry["explicitFormatId"]);
+          const explicitFormatId = asString(cellEntry['explicitFormatId'])
           const address =
-            asString(cellEntry["address"]) ??
-            (asNumber(cellEntry["rowNum"]) !== undefined &&
-            asNumber(cellEntry["colNum"]) !== undefined
-              ? formatAddress(
-                  asNumber(cellEntry["rowNum"]) ?? 0,
-                  asNumber(cellEntry["colNum"]) ?? 0,
-                )
-              : undefined);
+            asString(cellEntry['address']) ??
+            (asNumber(cellEntry['rowNum']) !== undefined && asNumber(cellEntry['colNum']) !== undefined
+              ? formatAddress(asNumber(cellEntry['rowNum']) ?? 0, asNumber(cellEntry['colNum']) ?? 0)
+              : undefined)
           if (!address) {
-            return null;
+            return null
           }
-          const inputValue = cellEntry["inputValue"];
-          const formula = asString(cellEntry["formula"]);
-          const format =
-            asString(cellEntry["format"]) ??
-            (explicitFormatId ? numberFormatCodeById.get(explicitFormatId) : undefined);
-          const nextCell: WorkbookSnapshot["sheets"][number]["cells"][number] = { address };
+          const inputValue = cellEntry['inputValue']
+          const formula = asString(cellEntry['formula'])
+          const format = asString(cellEntry['format']) ?? (explicitFormatId ? numberFormatCodeById.get(explicitFormatId) : undefined)
+          const nextCell: WorkbookSnapshot['sheets'][number]['cells'][number] = { address }
           if (formula) {
-            nextCell.formula = formula;
+            nextCell.formula = formula
           } else if (isLiteralInput(inputValue)) {
-            nextCell.value = inputValue;
+            nextCell.value = inputValue
           }
           if (format) {
-            nextCell.format = format;
+            nextCell.format = format
           }
-          return nextCell;
+          return nextCell
         })
-        .filter(
-          (entry): entry is WorkbookSnapshot["sheets"][number]["cells"][number] => entry !== null,
-        );
+        .filter((entry): entry is WorkbookSnapshot['sheets'][number]['cells'][number] => entry !== null)
 
-      const fallbackSheet = fallbackSheets.get(sheetName);
+      const fallbackSheet = fallbackSheets.get(sheetName)
       const metadata = withSheetMetadataFallback(
         sheetName,
-        parseAxisMetadata(asArray(sheetEntry["rowMetadata"])),
-        parseAxisMetadata(asArray(sheetEntry["columnMetadata"])),
-        parseStyleRanges(asArray(sheetEntry["styleRanges"])),
-        parseFormatRanges(asArray(sheetEntry["formatRanges"])),
-        parseFreezePane(
-          sheetEntry["freezeRows"],
-          sheetEntry["freezeCols"],
-          fallbackSheet?.metadata?.freezePane,
-        ),
+        parseAxisMetadata(asArray(sheetEntry['rowMetadata'])),
+        parseAxisMetadata(asArray(sheetEntry['columnMetadata'])),
+        parseStyleRanges(asArray(sheetEntry['styleRanges'])),
+        parseFormatRanges(asArray(sheetEntry['formatRanges'])),
+        parseFreezePane(sheetEntry['freezeRows'], sheetEntry['freezeCols'], fallbackSheet?.metadata?.freezePane),
         fallbackSheet?.metadata,
-      );
+      )
 
-      const id = asNumber(sheetEntry["id"]) ?? fallbackSheet?.id;
-      const nextSheet: WorkbookSnapshot["sheets"][number] = metadata
+      const id = asNumber(sheetEntry['id']) ?? fallbackSheet?.id
+      const nextSheet: WorkbookSnapshot['sheets'][number] = metadata
         ? { name: sheetName, order: sortOrder, metadata, cells }
-        : { name: sheetName, order: sortOrder, cells };
+        : { name: sheetName, order: sortOrder, cells }
       if (id !== undefined) {
-        nextSheet.id = id;
+        nextSheet.id = id
       }
-      return nextSheet;
+      return nextSheet
     })
-    .filter((entry): entry is WorkbookSnapshot["sheets"][number] => entry !== null);
+    .filter((entry): entry is WorkbookSnapshot['sheets'][number] => entry !== null)
 
   const workbookMetadataSnapshot = {
     ...baseSnapshot.workbook.metadata,
-  };
+  }
 
   if (workbookMetadata.length > 0) {
-    workbookMetadataSnapshot.properties = workbookMetadata;
+    workbookMetadataSnapshot.properties = workbookMetadata
   }
   if (definedNames.length > 0) {
-    workbookMetadataSnapshot.definedNames = definedNames;
+    workbookMetadataSnapshot.definedNames = definedNames
   }
   if (styles.length > 0) {
-    workbookMetadataSnapshot.styles = styles;
+    workbookMetadataSnapshot.styles = styles
   }
   if (numberFormats.length > 0) {
-    workbookMetadataSnapshot.formats = numberFormats;
+    workbookMetadataSnapshot.formats = numberFormats
   }
-  if (
-    (calculationMode === "automatic" || calculationMode === "manual") &&
-    isCompatibilityMode(compatibilityMode)
-  ) {
+  if ((calculationMode === 'automatic' || calculationMode === 'manual') && isCompatibilityMode(compatibilityMode)) {
     workbookMetadataSnapshot.calculationSettings = {
       mode: calculationMode,
       compatibilityMode,
-    };
-  } else if (calculationMode === "automatic" || calculationMode === "manual") {
+    }
+  } else if (calculationMode === 'automatic' || calculationMode === 'manual') {
     workbookMetadataSnapshot.calculationSettings = {
       mode: calculationMode,
-    };
+    }
   }
   if (recalcEpoch !== undefined) {
     workbookMetadataSnapshot.volatileContext = {
       recalcEpoch,
-    };
+    }
   }
 
   const workbook =
-    Object.keys(workbookMetadataSnapshot).length > 0
-      ? { name: workbookName, metadata: workbookMetadataSnapshot }
-      : { name: workbookName };
+    Object.keys(workbookMetadataSnapshot).length > 0 ? { name: workbookName, metadata: workbookMetadataSnapshot } : { name: workbookName }
 
   return {
     version: 1,
     workbook,
     sheets: projectedSheets.length > 0 ? projectedSheets : baseSnapshot.sheets,
-  };
+  }
 }

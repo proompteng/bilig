@@ -1,98 +1,98 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest'
 import {
   describeWorkbookAgentExecutionPolicy,
   isWorkbookAgentBundleAutoApplyEligible,
   requiresWorkbookAgentOwnerReview,
   resolveWorkbookAgentReviewDisposition,
-} from "../workbook-agent-execution-policy.js";
+} from '../workbook-agent-execution-policy.js'
 
-describe("workbook agent execution policy", () => {
-  it("routes private auto-apply-all sessions straight to execution", () => {
+describe('workbook agent execution policy', () => {
+  it('routes private auto-apply-all sessions straight to execution', () => {
     expect(
       isWorkbookAgentBundleAutoApplyEligible({
-        scope: "private",
-        executionPolicy: "autoApplyAll",
-        riskClass: "high",
+        scope: 'private',
+        executionPolicy: 'autoApplyAll',
+        riskClass: 'high',
       }),
-    ).toBe(true);
+    ).toBe(true)
     expect(
       resolveWorkbookAgentReviewDisposition({
-        scope: "private",
-        executionPolicy: "autoApplyAll",
-        riskClass: "high",
+        scope: 'private',
+        executionPolicy: 'autoApplyAll',
+        riskClass: 'high',
       }),
-    ).toBe("applyAutomatically");
-  });
+    ).toBe('applyAutomatically')
+  })
 
-  it("routes private safe sessions by risk class", () => {
+  it('routes private safe sessions by risk class', () => {
     expect(
       isWorkbookAgentBundleAutoApplyEligible({
-        scope: "private",
-        executionPolicy: "autoApplySafe",
-        riskClass: "low",
+        scope: 'private',
+        executionPolicy: 'autoApplySafe',
+        riskClass: 'low',
       }),
-    ).toBe(true);
+    ).toBe(true)
     expect(
       isWorkbookAgentBundleAutoApplyEligible({
-        scope: "private",
-        executionPolicy: "autoApplySafe",
-        riskClass: "medium",
+        scope: 'private',
+        executionPolicy: 'autoApplySafe',
+        riskClass: 'medium',
       }),
-    ).toBe(false);
-  });
+    ).toBe(false)
+  })
 
-  it("routes shared medium and high risk work through owner review", () => {
+  it('routes shared medium and high risk work through owner review', () => {
     expect(
       requiresWorkbookAgentOwnerReview({
-        scope: "shared",
-        riskClass: "medium",
+        scope: 'shared',
+        riskClass: 'medium',
       }),
-    ).toBe(true);
+    ).toBe(true)
     expect(
       requiresWorkbookAgentOwnerReview({
-        scope: "shared",
-        riskClass: "low",
+        scope: 'shared',
+        riskClass: 'low',
       }),
-    ).toBe(false);
-  });
+    ).toBe(false)
+  })
 
-  it("allows shared low-risk work to execute directly when session policy allows it", () => {
+  it('allows shared low-risk work to execute directly when session policy allows it', () => {
     expect(
       resolveWorkbookAgentReviewDisposition({
-        scope: "shared",
-        executionPolicy: "autoApplyAll",
-        riskClass: "low",
+        scope: 'shared',
+        executionPolicy: 'autoApplyAll',
+        riskClass: 'low',
       }),
-    ).toBe("applyAutomatically");
+    ).toBe('applyAutomatically')
     expect(
       resolveWorkbookAgentReviewDisposition({
-        scope: "shared",
-        executionPolicy: "autoApplySafe",
-        riskClass: "low",
+        scope: 'shared',
+        executionPolicy: 'autoApplySafe',
+        riskClass: 'low',
       }),
-    ).toBe("applyAutomatically");
-  });
+    ).toBe('applyAutomatically')
+  })
 
-  it("keeps shared medium and high risk work behind review even under auto-apply policies", () => {
+  it('keeps shared medium and high risk work behind review even under auto-apply policies', () => {
     expect(
       resolveWorkbookAgentReviewDisposition({
-        scope: "shared",
-        executionPolicy: "autoApplyAll",
-        riskClass: "medium",
+        scope: 'shared',
+        executionPolicy: 'autoApplyAll',
+        riskClass: 'medium',
       }),
-    ).toBe("reviewQueue");
+    ).toBe('reviewQueue')
     expect(
       resolveWorkbookAgentReviewDisposition({
-        scope: "shared",
-        executionPolicy: "autoApplySafe",
-        riskClass: "high",
+        scope: 'shared',
+        executionPolicy: 'autoApplySafe',
+        riskClass: 'high',
       }),
-    ).toBe("reviewQueue");
-  });
+    ).toBe('reviewQueue')
+  })
 
-  it("describes execution policies for user-facing summaries", () => {
-    expect(describeWorkbookAgentExecutionPolicy("autoApplySafe")).toBe("auto-apply safe changes");
-    expect(describeWorkbookAgentExecutionPolicy("autoApplyAll")).toBe("auto-apply all changes");
-    expect(describeWorkbookAgentExecutionPolicy("ownerReview")).toBe("owner review");
-  });
-});
+  it('describes execution policies for user-facing summaries', () => {
+    expect(describeWorkbookAgentExecutionPolicy('autoApplySafe')).toBe('auto-apply safe changes')
+    expect(describeWorkbookAgentExecutionPolicy('autoApplyAll')).toBe('auto-apply all changes')
+    expect(describeWorkbookAgentExecutionPolicy('ownerReview')).toBe('owner review')
+  })
+})

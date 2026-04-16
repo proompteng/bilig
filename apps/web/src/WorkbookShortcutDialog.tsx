@@ -1,79 +1,69 @@
-import { cva } from "class-variance-authority";
-import { useMemo, useRef } from "react";
-import { Search, X } from "lucide-react";
-import { Dialog } from "@base-ui/react/dialog";
+import { cva } from 'class-variance-authority'
+import { useMemo, useRef } from 'react'
+import { Search, X } from 'lucide-react'
+import { Dialog } from '@base-ui/react/dialog'
 import {
   getWorkbookShortcutLabel,
   getWorkbookShortcutParts,
   groupWorkbookShortcutEntries,
   searchWorkbookShortcutEntries,
-} from "./shortcut-registry.js";
+} from './shortcut-registry.js'
 
-const shortcutChordClass = cva("flex items-center gap-1.5");
+const shortcutChordClass = cva('flex items-center gap-1.5')
 
 const shortcutKeyClass = cva(
-  "inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-[var(--color-mauve-300)] bg-white px-2 text-[11px] font-semibold leading-none text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+  'inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-[var(--color-mauve-300)] bg-white px-2 text-[11px] font-semibold leading-none text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
   {
     variants: {
       tokenType: {
-        symbol: "font-sans",
-        text: "font-sans",
+        symbol: 'font-sans',
+        text: 'font-sans',
       },
     },
     defaultVariants: {
-      tokenType: "text",
+      tokenType: 'text',
     },
   },
-);
+)
 
 function ShortcutKeyChord(props: { readonly shortcutId: string }) {
-  const parts = getWorkbookShortcutParts(props.shortcutId);
-  const label = getWorkbookShortcutLabel(props.shortcutId);
+  const parts = getWorkbookShortcutParts(props.shortcutId)
+  const label = getWorkbookShortcutLabel(props.shortcutId)
   if (parts.length === 0) {
-    return null;
+    return null
   }
-  const showPlusSeparators = label.includes("+");
+  const showPlusSeparators = label.includes('+')
   return (
-    <div
-      aria-label={label}
-      className={shortcutChordClass()}
-      data-testid="workbook-shortcut-chord"
-      title={label}
-    >
+    <div aria-label={label} className={shortcutChordClass()} data-testid="workbook-shortcut-chord" title={label}>
       {parts.map((part, index) => {
-        const isSymbol = part.length === 1 && /[⌘⇧⌥⌃]/.test(part);
-        const chordKey = `${props.shortcutId}:${parts.slice(0, index + 1).join("::")}`;
+        const isSymbol = part.length === 1 && /[⌘⇧⌥⌃]/.test(part)
+        const chordKey = `${props.shortcutId}:${parts.slice(0, index + 1).join('::')}`
         return (
           <div className="flex items-center gap-1.5" key={chordKey}>
-            {index > 0 && showPlusSeparators ? (
-              <span className="text-[10px] font-medium text-[var(--color-mauve-500)]">+</span>
-            ) : null}
+            {index > 0 && showPlusSeparators ? <span className="text-[10px] font-medium text-[var(--color-mauve-500)]">+</span> : null}
             <kbd
               className={shortcutKeyClass({
-                tokenType: isSymbol ? "symbol" : "text",
+                tokenType: isSymbol ? 'symbol' : 'text',
               })}
             >
               {part}
             </kbd>
           </div>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
 export function WorkbookShortcutDialog(props: {
-  open: boolean;
-  query: string;
-  onOpenChange(this: void, open: boolean): void;
-  onQueryChange(this: void, next: string): void;
+  open: boolean
+  query: string
+  onOpenChange(this: void, open: boolean): void
+  onQueryChange(this: void, next: string): void
 }) {
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const filteredEntries = useMemo(() => searchWorkbookShortcutEntries(props.query), [props.query]);
-  const groupedEntries = useMemo(
-    () => groupWorkbookShortcutEntries(filteredEntries),
-    [filteredEntries],
-  );
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const filteredEntries = useMemo(() => searchWorkbookShortcutEntries(props.query), [props.query])
+  const groupedEntries = useMemo(() => groupWorkbookShortcutEntries(filteredEntries), [filteredEntries])
 
   return (
     <Dialog.Root open={props.open} onOpenChange={props.onOpenChange}>
@@ -87,9 +77,7 @@ export function WorkbookShortcutDialog(props: {
         >
           <div className="flex items-start justify-between gap-4 border-b border-[var(--wb-border)] px-4 py-3">
             <div className="min-w-0">
-              <Dialog.Title className="text-[14px] font-semibold text-[var(--wb-text)]">
-                Keyboard shortcuts
-              </Dialog.Title>
+              <Dialog.Title className="text-[14px] font-semibold text-[var(--wb-text)]">Keyboard shortcuts</Dialog.Title>
               <Dialog.Description className="mt-1 text-[12px] text-[var(--wb-text-subtle)]">
                 Search shortcuts and commands already supported by the workbook shell.
               </Dialog.Description>
@@ -118,7 +106,7 @@ export function WorkbookShortcutDialog(props: {
                 type="text"
                 value={props.query}
                 onChange={(event) => {
-                  props.onQueryChange(event.target.value);
+                  props.onQueryChange(event.target.value)
                 }}
               />
             </div>
@@ -147,9 +135,7 @@ export function WorkbookShortcutDialog(props: {
                           key={entry.id}
                         >
                           <div className="min-w-0">
-                            <div className="text-[13px] font-medium text-[var(--wb-text)]">
-                              {entry.label}
-                            </div>
+                            <div className="text-[13px] font-medium text-[var(--wb-text)]">{entry.label}</div>
                           </div>
                           <ShortcutKeyChord shortcutId={entry.id} />
                         </div>
@@ -163,5 +149,5 @@ export function WorkbookShortcutDialog(props: {
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
-  );
+  )
 }

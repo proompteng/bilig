@@ -1,11 +1,11 @@
-import type { CellStylePatch } from "@bilig/protocol";
-import { setRangeStyleArgsSchema } from "@bilig/zero-sync";
-import { z } from "zod";
+import type { CellStylePatch } from '@bilig/protocol'
+import { setRangeStyleArgsSchema } from '@bilig/zero-sync'
+import { z } from 'zod'
 
-const alignmentHorizontalSchema = z.enum(["general", "left", "center", "right"]);
-const alignmentVerticalSchema = z.enum(["top", "middle", "bottom"]);
-const borderStyleSchema = z.enum(["solid", "dashed", "dotted", "double"]);
-const borderWeightSchema = z.enum(["thin", "medium", "thick"]);
+const alignmentHorizontalSchema = z.enum(['general', 'left', 'center', 'right'])
+const alignmentVerticalSchema = z.enum(['top', 'middle', 'bottom'])
+const borderStyleSchema = z.enum(['solid', 'dashed', 'dotted', 'double'])
+const borderWeightSchema = z.enum(['thin', 'medium', 'thick'])
 
 const styleBorderSidePatchSchema = z
   .object({
@@ -14,7 +14,7 @@ const styleBorderSidePatchSchema = z
     color: z.string().nullable().optional(),
   })
   .nullable()
-  .optional();
+  .optional()
 
 export const workbookAgentStylePatchSchema = setRangeStyleArgsSchema.shape.patch.extend({
   backgroundColor: z.string().nullable().optional(),
@@ -35,145 +35,139 @@ export const workbookAgentStylePatchSchema = setRangeStyleArgsSchema.shape.patch
   borderRight: styleBorderSidePatchSchema,
   borderBottom: styleBorderSidePatchSchema,
   borderLeft: styleBorderSidePatchSchema,
-});
+})
 
-export type WorkbookAgentStylePatchInput = z.infer<typeof workbookAgentStylePatchSchema>;
+export type WorkbookAgentStylePatchInput = z.infer<typeof workbookAgentStylePatchSchema>
 
 export const workbookAgentStylePatchJsonSchema = {
-  type: "object",
+  type: 'object',
   additionalProperties: false,
   properties: {
-    fill: { type: "object" },
-    font: { type: "object" },
-    alignment: { type: "object" },
-    borders: { type: "object" },
-    backgroundColor: { type: "string" },
-    fillColor: { type: "string" },
-    fontFamily: { type: "string" },
-    fontSize: { type: "number" },
-    fontWeight: { type: "string" },
-    fontStyle: { type: "string" },
-    fontUnderline: { type: "boolean" },
-    fontColor: { type: "string" },
-    textColor: { type: "string" },
-    horizontalAlignment: { type: "string", enum: ["general", "left", "center", "right"] },
-    verticalAlignment: { type: "string", enum: ["top", "middle", "bottom"] },
-    wrap: { type: "boolean" },
-    indent: { type: "number" },
-    border: { type: "object" },
-    borderTop: { type: "object" },
-    borderRight: { type: "object" },
-    borderBottom: { type: "object" },
-    borderLeft: { type: "object" },
+    fill: { type: 'object' },
+    font: { type: 'object' },
+    alignment: { type: 'object' },
+    borders: { type: 'object' },
+    backgroundColor: { type: 'string' },
+    fillColor: { type: 'string' },
+    fontFamily: { type: 'string' },
+    fontSize: { type: 'number' },
+    fontWeight: { type: 'string' },
+    fontStyle: { type: 'string' },
+    fontUnderline: { type: 'boolean' },
+    fontColor: { type: 'string' },
+    textColor: { type: 'string' },
+    horizontalAlignment: { type: 'string', enum: ['general', 'left', 'center', 'right'] },
+    verticalAlignment: { type: 'string', enum: ['top', 'middle', 'bottom'] },
+    wrap: { type: 'boolean' },
+    indent: { type: 'number' },
+    border: { type: 'object' },
+    borderTop: { type: 'object' },
+    borderRight: { type: 'object' },
+    borderBottom: { type: 'object' },
+    borderLeft: { type: 'object' },
   },
-};
+}
 
-export function normalizeWorkbookAgentStylePatch(
-  patch: WorkbookAgentStylePatchInput,
-): CellStylePatch {
-  const normalized: CellStylePatch = {};
+export function normalizeWorkbookAgentStylePatch(patch: WorkbookAgentStylePatchInput): CellStylePatch {
+  const normalized: CellStylePatch = {}
 
   if (patch.fill === null) {
-    normalized.fill = null;
+    normalized.fill = null
   } else {
-    const fill: NonNullable<CellStylePatch["fill"]> = {};
-    const backgroundColor = firstDefined(
-      patch.fill?.backgroundColor,
-      patch.fillColor,
-      patch.backgroundColor,
-    );
+    const fill: NonNullable<CellStylePatch['fill']> = {}
+    const backgroundColor = firstDefined(patch.fill?.backgroundColor, patch.fillColor, patch.backgroundColor)
     if (backgroundColor !== undefined) {
-      fill.backgroundColor = backgroundColor;
+      fill.backgroundColor = backgroundColor
     }
     if (Object.keys(fill).length > 0) {
-      normalized.fill = fill;
+      normalized.fill = fill
     }
   }
 
   if (patch.font === null) {
-    normalized.font = null;
+    normalized.font = null
   } else {
-    const font: NonNullable<CellStylePatch["font"]> = {};
-    const family = firstDefined(patch.font?.family, patch.fontFamily);
+    const font: NonNullable<CellStylePatch['font']> = {}
+    const family = firstDefined(patch.font?.family, patch.fontFamily)
     if (family !== undefined) {
-      font.family = family;
+      font.family = family
     }
-    const size = firstDefined(patch.font?.size, patch.fontSize);
+    const size = firstDefined(patch.font?.size, patch.fontSize)
     if (size !== undefined) {
-      font.size = size;
+      font.size = size
     }
-    const bold = firstDefined(patch.font?.bold, normalizeFontWeightAlias(patch.fontWeight));
+    const bold = firstDefined(patch.font?.bold, normalizeFontWeightAlias(patch.fontWeight))
     if (bold !== undefined) {
-      font.bold = bold;
+      font.bold = bold
     }
-    const italic = firstDefined(patch.font?.italic, normalizeFontStyleAlias(patch.fontStyle));
+    const italic = firstDefined(patch.font?.italic, normalizeFontStyleAlias(patch.fontStyle))
     if (italic !== undefined) {
-      font.italic = italic;
+      font.italic = italic
     }
-    const underline = firstDefined(patch.font?.underline, patch.fontUnderline);
+    const underline = firstDefined(patch.font?.underline, patch.fontUnderline)
     if (underline !== undefined) {
-      font.underline = underline;
+      font.underline = underline
     }
-    const color = firstDefined(patch.font?.color, patch.textColor, patch.fontColor);
+    const color = firstDefined(patch.font?.color, patch.textColor, patch.fontColor)
     if (color !== undefined) {
-      font.color = color;
+      font.color = color
     }
     if (Object.keys(font).length > 0) {
-      normalized.font = font;
+      normalized.font = font
     }
   }
 
   if (patch.alignment === null) {
-    normalized.alignment = null;
+    normalized.alignment = null
   } else {
-    const alignment: NonNullable<CellStylePatch["alignment"]> = {};
-    const horizontal = firstDefined(patch.alignment?.horizontal, patch.horizontalAlignment);
+    const alignment: NonNullable<CellStylePatch['alignment']> = {}
+    const horizontal = firstDefined(patch.alignment?.horizontal, patch.horizontalAlignment)
     if (horizontal !== undefined) {
-      alignment.horizontal = horizontal;
+      alignment.horizontal = horizontal
     }
-    const vertical = firstDefined(patch.alignment?.vertical, patch.verticalAlignment);
+    const vertical = firstDefined(patch.alignment?.vertical, patch.verticalAlignment)
     if (vertical !== undefined) {
-      alignment.vertical = vertical;
+      alignment.vertical = vertical
     }
-    const wrap = firstDefined(patch.alignment?.wrap, patch.wrap);
+    const wrap = firstDefined(patch.alignment?.wrap, patch.wrap)
     if (wrap !== undefined) {
-      alignment.wrap = wrap;
+      alignment.wrap = wrap
     }
-    const indent = firstDefined(patch.alignment?.indent, patch.indent);
+    const indent = firstDefined(patch.alignment?.indent, patch.indent)
     if (indent !== undefined) {
-      alignment.indent = indent;
+      alignment.indent = indent
     }
     if (Object.keys(alignment).length > 0) {
-      normalized.alignment = alignment;
+      normalized.alignment = alignment
     }
   }
 
   if (patch.borders === null) {
-    normalized.borders = null;
+    normalized.borders = null
   } else {
-    const borders: NonNullable<CellStylePatch["borders"]> = {};
+    const borders: NonNullable<CellStylePatch['borders']> = {}
     const borderAliases = {
       top: patch.borderTop,
       right: patch.borderRight,
       bottom: patch.borderBottom,
       left: patch.borderLeft,
-    } as const;
-    for (const sideName of ["top", "right", "bottom", "left"] as const) {
+    } as const
+    for (const sideName of ['top', 'right', 'bottom', 'left'] as const) {
       const side = firstDefined(
         normalizeBorderSideAlias(patch.borders?.[sideName]),
         normalizeBorderSideAlias(borderAliases[sideName]),
         normalizeBorderSideAlias(patch.border),
-      );
+      )
       if (side !== undefined) {
-        borders[sideName] = side;
+        borders[sideName] = side
       }
     }
     if (Object.values(borders).some((value) => value !== undefined)) {
-      normalized.borders = borders;
+      normalized.borders = borders
     }
   }
 
-  return normalized;
+  return normalized
 }
 
 export function workbookAgentStylePatchHasChanges(patch: CellStylePatch): boolean {
@@ -182,96 +176,85 @@ export function workbookAgentStylePatchHasChanges(patch: CellStylePatch): boolea
     styleSectionHasChanges(patch.font) ||
     styleSectionHasChanges(patch.alignment) ||
     styleBordersHaveChanges(patch.borders)
-  );
+  )
 }
 
-function normalizeFontWeightAlias(
-  value: WorkbookAgentStylePatchInput["fontWeight"],
-): boolean | null | undefined {
-  if (value === undefined || value === null || typeof value === "boolean") {
-    return value;
+function normalizeFontWeightAlias(value: WorkbookAgentStylePatchInput['fontWeight']): boolean | null | undefined {
+  if (value === undefined || value === null || typeof value === 'boolean') {
+    return value
   }
-  if (typeof value === "number") {
-    return value >= 600;
+  if (typeof value === 'number') {
+    return value >= 600
   }
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "bold" || normalized === "bolder") {
-    return true;
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'bold' || normalized === 'bolder') {
+    return true
   }
-  if (
-    normalized === "semibold" ||
-    normalized === "semi-bold" ||
-    normalized === "demibold" ||
-    normalized === "demi-bold"
-  ) {
-    return true;
+  if (normalized === 'semibold' || normalized === 'semi-bold' || normalized === 'demibold' || normalized === 'demi-bold') {
+    return true
   }
-  if (normalized === "normal" || normalized === "lighter") {
-    return false;
+  if (normalized === 'normal' || normalized === 'lighter') {
+    return false
   }
-  const numeric = Number(normalized);
+  const numeric = Number(normalized)
   if (!Number.isNaN(numeric)) {
-    return numeric >= 600;
+    return numeric >= 600
   }
-  return undefined;
+  return undefined
 }
 
-function normalizeFontStyleAlias(
-  value: WorkbookAgentStylePatchInput["fontStyle"],
-): boolean | null | undefined {
+function normalizeFontStyleAlias(value: WorkbookAgentStylePatchInput['fontStyle']): boolean | null | undefined {
   if (value === undefined || value === null) {
-    return value;
+    return value
   }
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "italic") {
-    return true;
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'italic') {
+    return true
   }
-  if (normalized === "normal" || normalized === "roman") {
-    return false;
+  if (normalized === 'normal' || normalized === 'roman') {
+    return false
   }
-  return undefined;
+  return undefined
 }
 
 function normalizeBorderSideAlias(
-  value: WorkbookAgentStylePatchInput["border"],
-): NonNullable<NonNullable<CellStylePatch["borders"]>["top"]> | null | undefined {
+  value: WorkbookAgentStylePatchInput['border'],
+): NonNullable<NonNullable<CellStylePatch['borders']>['top']> | null | undefined {
   if (value === undefined || value === null) {
-    return value;
+    return value
   }
-  const side: NonNullable<NonNullable<CellStylePatch["borders"]>["top"]> = {};
+  const side: NonNullable<NonNullable<CellStylePatch['borders']>['top']> = {}
   if (value.style !== undefined) {
-    side.style = value.style;
+    side.style = value.style
   }
   if (value.weight !== undefined) {
-    side.weight = value.weight;
+    side.weight = value.weight
   }
   if (value.color !== undefined) {
-    side.color = value.color;
+    side.color = value.color
   }
-  return Object.keys(side).length > 0 ? side : undefined;
+  return Object.keys(side).length > 0 ? side : undefined
 }
 
 function styleSectionHasChanges(value: object | null | undefined): boolean {
-  return value === null || (value !== undefined && Object.keys(value).length > 0);
+  return value === null || (value !== undefined && Object.keys(value).length > 0)
 }
 
-function styleBordersHaveChanges(value: CellStylePatch["borders"]): boolean {
+function styleBordersHaveChanges(value: CellStylePatch['borders']): boolean {
   if (value === null) {
-    return true;
+    return true
   }
   if (value === undefined) {
-    return false;
+    return false
   }
-  return (["top", "right", "bottom", "left"] as const).some((sideName) =>
-    styleSectionHasChanges(value[sideName]),
-  );
+  return (['top', 'right', 'bottom', 'left'] as const).some((sideName) => styleSectionHasChanges(value[sideName]))
 }
 
 function firstDefined<T>(...values: readonly (T | undefined)[]): T | undefined {
   for (const value of values) {
     if (value !== undefined) {
-      return value;
+      return value
     }
   }
-  return undefined;
+  return undefined
 }

@@ -1,289 +1,279 @@
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   isWorkbookChangeUndoBundle,
   isWorkbookEventPayload,
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
-} from "@bilig/zero-sync";
-import type { CellRangeRef } from "@bilig/protocol";
-import type { QueryResultRow, Queryable } from "./store.js";
-import { resolveWorkbookSheetRef } from "./workbook-sheet-ref.js";
+} from '@bilig/zero-sync'
+import type { CellRangeRef } from '@bilig/protocol'
+import type { QueryResultRow, Queryable } from './store.js'
+import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
 
 export interface WorkbookChangeRange {
-  readonly sheetName: string;
-  readonly startAddress: string;
-  readonly endAddress: string;
+  readonly sheetName: string
+  readonly startAddress: string
+  readonly endAddress: string
 }
 
 export interface WorkbookChangeDescriptor {
-  readonly eventKind: WorkbookEventPayload["kind"];
-  readonly summary: string;
-  readonly sheetName: string | null;
-  readonly anchorAddress: string | null;
-  readonly range: WorkbookChangeRange | null;
+  readonly eventKind: WorkbookEventPayload['kind']
+  readonly summary: string
+  readonly sheetName: string | null
+  readonly anchorAddress: string | null
+  readonly range: WorkbookChangeRange | null
 }
 
 export interface AppendWorkbookChangeInput {
-  readonly documentId: string;
-  readonly revision: number;
-  readonly actorUserId: string;
-  readonly clientMutationId: string | null;
-  readonly payload: WorkbookEventPayload;
-  readonly undoBundle: WorkbookChangeUndoBundle | null;
-  readonly createdAtUnixMs: number;
+  readonly documentId: string
+  readonly revision: number
+  readonly actorUserId: string
+  readonly clientMutationId: string | null
+  readonly payload: WorkbookEventPayload
+  readonly undoBundle: WorkbookChangeUndoBundle | null
+  readonly createdAtUnixMs: number
 }
 
 interface WorkbookChangeInsertRow {
-  readonly documentId: string;
-  readonly revision: number;
-  readonly actorUserId: string;
-  readonly clientMutationId: string | null;
-  readonly descriptor: WorkbookChangeDescriptor;
-  readonly undoBundle: WorkbookChangeUndoBundle | null;
-  readonly revertsRevision: number | null;
-  readonly createdAtUnixMs: number;
+  readonly documentId: string
+  readonly revision: number
+  readonly actorUserId: string
+  readonly clientMutationId: string | null
+  readonly descriptor: WorkbookChangeDescriptor
+  readonly undoBundle: WorkbookChangeUndoBundle | null
+  readonly revertsRevision: number | null
+  readonly createdAtUnixMs: number
 }
 
 export interface WorkbookChangeRecord {
-  readonly revision: number;
-  readonly actorUserId: string;
-  readonly clientMutationId: string | null;
-  readonly eventKind: WorkbookEventPayload["kind"];
-  readonly summary: string;
-  readonly sheetId: number | null;
-  readonly sheetName: string | null;
-  readonly anchorAddress: string | null;
-  readonly range: WorkbookChangeRange | null;
-  readonly undoBundle: WorkbookChangeUndoBundle | null;
-  readonly revertedByRevision: number | null;
-  readonly revertsRevision: number | null;
-  readonly createdAtUnixMs: number;
+  readonly revision: number
+  readonly actorUserId: string
+  readonly clientMutationId: string | null
+  readonly eventKind: WorkbookEventPayload['kind']
+  readonly summary: string
+  readonly sheetId: number | null
+  readonly sheetName: string | null
+  readonly anchorAddress: string | null
+  readonly range: WorkbookChangeRange | null
+  readonly undoBundle: WorkbookChangeUndoBundle | null
+  readonly revertedByRevision: number | null
+  readonly revertsRevision: number | null
+  readonly createdAtUnixMs: number
 }
 
 interface WorkbookEventBackfillRow extends QueryResultRow {
-  readonly workbookId?: unknown;
-  readonly revision?: unknown;
-  readonly actorUserId?: unknown;
-  readonly clientMutationId?: unknown;
-  readonly payload?: unknown;
-  readonly createdAtUnixMs?: unknown;
+  readonly workbookId?: unknown
+  readonly revision?: unknown
+  readonly actorUserId?: unknown
+  readonly clientMutationId?: unknown
+  readonly payload?: unknown
+  readonly createdAtUnixMs?: unknown
 }
 
 interface WorkbookChangeSelectRow extends QueryResultRow {
-  readonly revision?: unknown;
-  readonly actorUserId?: unknown;
-  readonly clientMutationId?: unknown;
-  readonly eventKind?: unknown;
-  readonly summary?: unknown;
-  readonly sheetId?: unknown;
-  readonly sheetName?: unknown;
-  readonly anchorAddress?: unknown;
-  readonly rangeJson?: unknown;
-  readonly undoBundleJson?: unknown;
-  readonly revertedByRevision?: unknown;
-  readonly revertsRevision?: unknown;
-  readonly createdAtUnixMs?: unknown;
+  readonly revision?: unknown
+  readonly actorUserId?: unknown
+  readonly clientMutationId?: unknown
+  readonly eventKind?: unknown
+  readonly summary?: unknown
+  readonly sheetId?: unknown
+  readonly sheetName?: unknown
+  readonly anchorAddress?: unknown
+  readonly rangeJson?: unknown
+  readonly undoBundleJson?: unknown
+  readonly revertedByRevision?: unknown
+  readonly revertsRevision?: unknown
+  readonly createdAtUnixMs?: unknown
 }
 
 interface CommitCellOpDescriptor {
-  readonly sheetName: string;
-  readonly address: string;
-  readonly kind: "upsertCell" | "deleteCell";
-  readonly formula?: string;
+  readonly sheetName: string
+  readonly address: string
+  readonly kind: 'upsertCell' | 'deleteCell'
+  readonly formula?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
   }
-  if (typeof value === "string" && value.length > 0) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : null
   }
-  return null;
+  return null
 }
 
 function normalizeRange(range: CellRangeRef): WorkbookChangeRange {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
   return {
     sheetName: range.sheetName,
     startAddress: formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col)),
     endAddress: formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col)),
-  };
+  }
 }
 
 function normalizeWorkbookChangeRange(value: unknown): WorkbookChangeRange | null {
   if (!isRecord(value)) {
-    return null;
+    return null
   }
-  const sheetName = value["sheetName"];
-  const startAddress = value["startAddress"];
-  const endAddress = value["endAddress"];
-  if (
-    typeof sheetName !== "string" ||
-    typeof startAddress !== "string" ||
-    typeof endAddress !== "string"
-  ) {
-    return null;
+  const sheetName = value['sheetName']
+  const startAddress = value['startAddress']
+  const endAddress = value['endAddress']
+  if (typeof sheetName !== 'string' || typeof startAddress !== 'string' || typeof endAddress !== 'string') {
+    return null
   }
   return {
     sheetName,
     startAddress,
     endAddress,
-  };
+  }
 }
 
 function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookChangeRecord | null {
-  const revision = parseNumericValue(row.revision);
-  const sheetId = parseNumericValue(row.sheetId);
-  const revertedByRevision = parseNumericValue(row.revertedByRevision);
-  const revertsRevision = parseNumericValue(row.revertsRevision);
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
+  const revision = parseNumericValue(row.revision)
+  const sheetId = parseNumericValue(row.sheetId)
+  const revertedByRevision = parseNumericValue(row.revertedByRevision)
+  const revertsRevision = parseNumericValue(row.revertsRevision)
+  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
   if (
     revision === null ||
     createdAtUnixMs === null ||
-    typeof row.actorUserId !== "string" ||
-    typeof row.eventKind !== "string" ||
-    typeof row.summary !== "string"
+    typeof row.actorUserId !== 'string' ||
+    typeof row.eventKind !== 'string' ||
+    typeof row.summary !== 'string'
   ) {
-    return null;
+    return null
   }
-  const range = normalizeWorkbookChangeRange(row.rangeJson);
-  const eventKind = row.eventKind;
+  const range = normalizeWorkbookChangeRange(row.rangeJson)
+  const eventKind = row.eventKind
   if (
-    eventKind !== "applyBatch" &&
-    eventKind !== "applyAgentCommandBundle" &&
-    eventKind !== "setCellValue" &&
-    eventKind !== "setCellFormula" &&
-    eventKind !== "clearCell" &&
-    eventKind !== "clearRange" &&
-    eventKind !== "renderCommit" &&
-    eventKind !== "fillRange" &&
-    eventKind !== "copyRange" &&
-    eventKind !== "moveRange" &&
-    eventKind !== "updateRowMetadata" &&
-    eventKind !== "updateColumnMetadata" &&
-    eventKind !== "updateColumnWidth" &&
-    eventKind !== "setFreezePane" &&
-    eventKind !== "setRangeStyle" &&
-    eventKind !== "clearRangeStyle" &&
-    eventKind !== "setRangeNumberFormat" &&
-    eventKind !== "clearRangeNumberFormat" &&
-    eventKind !== "restoreVersion" &&
-    eventKind !== "revertChange" &&
-    eventKind !== "redoChange"
+    eventKind !== 'applyBatch' &&
+    eventKind !== 'applyAgentCommandBundle' &&
+    eventKind !== 'setCellValue' &&
+    eventKind !== 'setCellFormula' &&
+    eventKind !== 'clearCell' &&
+    eventKind !== 'clearRange' &&
+    eventKind !== 'renderCommit' &&
+    eventKind !== 'fillRange' &&
+    eventKind !== 'copyRange' &&
+    eventKind !== 'moveRange' &&
+    eventKind !== 'updateRowMetadata' &&
+    eventKind !== 'updateColumnMetadata' &&
+    eventKind !== 'updateColumnWidth' &&
+    eventKind !== 'setFreezePane' &&
+    eventKind !== 'setRangeStyle' &&
+    eventKind !== 'clearRangeStyle' &&
+    eventKind !== 'setRangeNumberFormat' &&
+    eventKind !== 'clearRangeNumberFormat' &&
+    eventKind !== 'restoreVersion' &&
+    eventKind !== 'revertChange' &&
+    eventKind !== 'redoChange'
   ) {
-    return null;
+    return null
   }
   return {
     revision,
     actorUserId: row.actorUserId,
-    clientMutationId: typeof row.clientMutationId === "string" ? row.clientMutationId : null,
+    clientMutationId: typeof row.clientMutationId === 'string' ? row.clientMutationId : null,
     eventKind,
     summary: row.summary,
     sheetId,
-    sheetName: typeof row.sheetName === "string" ? row.sheetName : null,
-    anchorAddress: typeof row.anchorAddress === "string" ? row.anchorAddress : null,
+    sheetName: typeof row.sheetName === 'string' ? row.sheetName : null,
+    anchorAddress: typeof row.anchorAddress === 'string' ? row.anchorAddress : null,
     range,
     undoBundle: isWorkbookChangeUndoBundle(row.undoBundleJson) ? row.undoBundleJson : null,
     revertedByRevision,
     revertsRevision,
     createdAtUnixMs,
-  };
+  }
 }
 
 function rangeLabel(range: WorkbookChangeRange): string {
   return range.startAddress === range.endAddress
     ? `${range.sheetName}!${range.startAddress}`
-    : `${range.sheetName}!${range.startAddress}:${range.endAddress}`;
+    : `${range.sheetName}!${range.startAddress}:${range.endAddress}`
 }
 
 function columnLabel(columnIndex: number): string {
-  return formatAddress(0, columnIndex).replace(/[0-9]+$/u, "");
+  return formatAddress(0, columnIndex).replace(/[0-9]+$/u, '')
 }
 
 function rowLabel(rowIndex: number): string {
-  return String(rowIndex + 1);
+  return String(rowIndex + 1)
 }
 
 function rowRangeLabel(startRow: number, count: number): string {
   if (count <= 1) {
-    return rowLabel(startRow);
+    return rowLabel(startRow)
   }
-  return `${rowLabel(startRow)}:${rowLabel(startRow + count - 1)}`;
+  return `${rowLabel(startRow)}:${rowLabel(startRow + count - 1)}`
 }
 
 function columnRangeLabel(startCol: number, count: number): string {
   if (count <= 1) {
-    return columnLabel(startCol);
+    return columnLabel(startCol)
   }
-  return `${columnLabel(startCol)}:${columnLabel(startCol + count - 1)}`;
+  return `${columnLabel(startCol)}:${columnLabel(startCol + count - 1)}`
 }
 
-function rangeFromAddresses(
-  sheetName: string,
-  addresses: readonly string[],
-): WorkbookChangeRange | null {
+function rangeFromAddresses(sheetName: string, addresses: readonly string[]): WorkbookChangeRange | null {
   if (addresses.length === 0) {
-    return null;
+    return null
   }
-  let rowStart = Number.POSITIVE_INFINITY;
-  let rowEnd = Number.NEGATIVE_INFINITY;
-  let colStart = Number.POSITIVE_INFINITY;
-  let colEnd = Number.NEGATIVE_INFINITY;
+  let rowStart = Number.POSITIVE_INFINITY
+  let rowEnd = Number.NEGATIVE_INFINITY
+  let colStart = Number.POSITIVE_INFINITY
+  let colEnd = Number.NEGATIVE_INFINITY
   for (const address of addresses) {
-    const parsed = parseCellAddress(address, sheetName);
-    rowStart = Math.min(rowStart, parsed.row);
-    rowEnd = Math.max(rowEnd, parsed.row);
-    colStart = Math.min(colStart, parsed.col);
-    colEnd = Math.max(colEnd, parsed.col);
+    const parsed = parseCellAddress(address, sheetName)
+    rowStart = Math.min(rowStart, parsed.row)
+    rowEnd = Math.max(rowEnd, parsed.row)
+    colStart = Math.min(colStart, parsed.col)
+    colEnd = Math.max(colEnd, parsed.col)
   }
   return {
     sheetName,
     startAddress: formatAddress(rowStart, colStart),
     endAddress: formatAddress(rowEnd, colEnd),
-  };
+  }
 }
 
 function summarizeCommitCellOps(ops: readonly CommitCellOpDescriptor[]): WorkbookChangeDescriptor {
   const range = rangeFromAddresses(
     ops[0]!.sheetName,
     ops.map((op) => op.address),
-  );
-  const allUpserts = ops.every((op) => op.kind === "upsertCell");
-  const allDeletes = ops.every((op) => op.kind === "deleteCell");
-  const allFormulas = ops.every((op) => op.kind === "upsertCell" && typeof op.formula === "string");
+  )
+  const allUpserts = ops.every((op) => op.kind === 'upsertCell')
+  const allDeletes = ops.every((op) => op.kind === 'deleteCell')
+  const allFormulas = ops.every((op) => op.kind === 'upsertCell' && typeof op.formula === 'string')
 
   if (ops.length === 1) {
-    const op = ops[0]!;
-    if (op.kind === "deleteCell") {
+    const op = ops[0]!
+    if (op.kind === 'deleteCell') {
       return {
-        eventKind: "renderCommit",
+        eventKind: 'renderCommit',
         summary: `Cleared ${op.sheetName}!${op.address}`,
         sheetName: op.sheetName,
         anchorAddress: op.address,
         range,
-      };
+      }
     }
     return {
-      eventKind: "renderCommit",
-      summary:
-        typeof op.formula === "string"
-          ? `Set formula in ${op.sheetName}!${op.address}`
-          : `Updated ${op.sheetName}!${op.address}`,
+      eventKind: 'renderCommit',
+      summary: typeof op.formula === 'string' ? `Set formula in ${op.sheetName}!${op.address}` : `Updated ${op.sheetName}!${op.address}`,
       sheetName: op.sheetName,
       anchorAddress: op.address,
       range,
-    };
+    }
   }
 
   return {
-    eventKind: "renderCommit",
+    eventKind: 'renderCommit',
     summary: allFormulas
       ? `Filled ${ops.length} formulas in ${rangeLabel(range!)}`
       : allUpserts
@@ -294,98 +284,90 @@ function summarizeCommitCellOps(ops: readonly CommitCellOpDescriptor[]): Workboo
     sheetName: range?.sheetName ?? ops[0]!.sheetName,
     anchorAddress: range?.startAddress ?? ops[0]!.address,
     range,
-  };
+  }
 }
 
-function summarizeRenderCommit(
-  payload: Extract<WorkbookEventPayload, { kind: "renderCommit" }>,
-): WorkbookChangeDescriptor {
+function summarizeRenderCommit(payload: Extract<WorkbookEventPayload, { kind: 'renderCommit' }>): WorkbookChangeDescriptor {
   const cellOps = payload.ops.flatMap((op): CommitCellOpDescriptor[] => {
-    if (!isRecord(op) || typeof op["kind"] !== "string") {
-      return [];
+    if (!isRecord(op) || typeof op['kind'] !== 'string') {
+      return []
     }
     if (
-      (op["kind"] === "upsertCell" || op["kind"] === "deleteCell") &&
-      typeof op["sheetName"] === "string" &&
-      typeof op["addr"] === "string"
+      (op['kind'] === 'upsertCell' || op['kind'] === 'deleteCell') &&
+      typeof op['sheetName'] === 'string' &&
+      typeof op['addr'] === 'string'
     ) {
       const base = {
-        sheetName: op["sheetName"],
-        address: op["addr"],
-        kind: op["kind"],
-      } satisfies Omit<CommitCellOpDescriptor, "formula">;
-      return [typeof op["formula"] === "string" ? { ...base, formula: op["formula"] } : base];
+        sheetName: op['sheetName'],
+        address: op['addr'],
+        kind: op['kind'],
+      } satisfies Omit<CommitCellOpDescriptor, 'formula'>
+      return [typeof op['formula'] === 'string' ? { ...base, formula: op['formula'] } : base]
     }
-    return [];
-  });
+    return []
+  })
 
   if (cellOps.length === payload.ops.length && cellOps.length > 0) {
-    return summarizeCommitCellOps(cellOps);
+    return summarizeCommitCellOps(cellOps)
   }
 
   if (payload.ops.length === 1) {
-    const op = payload.ops[0]!;
-    if (op.kind === "upsertSheet" && op.name) {
+    const op = payload.ops[0]!
+    if (op.kind === 'upsertSheet' && op.name) {
       return {
-        eventKind: "renderCommit",
+        eventKind: 'renderCommit',
         summary: `Created sheet ${op.name}`,
         sheetName: op.name,
-        anchorAddress: "A1",
+        anchorAddress: 'A1',
         range: {
           sheetName: op.name,
-          startAddress: "A1",
-          endAddress: "A1",
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
-      };
+      }
     }
-    if (op.kind === "renameSheet" && op.oldName && op.newName) {
+    if (op.kind === 'renameSheet' && op.oldName && op.newName) {
       return {
-        eventKind: "renderCommit",
+        eventKind: 'renderCommit',
         summary: `Renamed sheet ${op.oldName} to ${op.newName}`,
         sheetName: op.newName,
-        anchorAddress: "A1",
+        anchorAddress: 'A1',
         range: {
           sheetName: op.newName,
-          startAddress: "A1",
-          endAddress: "A1",
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
-      };
+      }
     }
-    if (op.kind === "deleteSheet" && op.name) {
+    if (op.kind === 'deleteSheet' && op.name) {
       return {
-        eventKind: "renderCommit",
+        eventKind: 'renderCommit',
         summary: `Deleted sheet ${op.name}`,
         sheetName: null,
         anchorAddress: null,
         range: null,
-      };
+      }
     }
   }
 
   return {
-    eventKind: "renderCommit",
+    eventKind: 'renderCommit',
     summary: `Applied ${payload.ops.length} workbook changes`,
     sheetName: null,
     anchorAddress: null,
     range: null,
-  };
+  }
 }
 
-export function buildWorkbookChangeDescriptor(
-  payload: WorkbookEventPayload,
-): WorkbookChangeDescriptor {
+export function buildWorkbookChangeDescriptor(payload: WorkbookEventPayload): WorkbookChangeDescriptor {
   switch (payload.kind) {
-    case "applyAgentCommandBundle": {
-      const firstTargetRange = payload.bundle.affectedRanges.find(
-        (range) => range.role === "target",
-      );
+    case 'applyAgentCommandBundle': {
+      const firstTargetRange = payload.bundle.affectedRanges.find((range) => range.role === 'target')
       return {
         eventKind: payload.kind,
         summary: payload.bundle.summary,
-        sheetName:
-          firstTargetRange?.sheetName ?? payload.bundle.context?.selection.sheetName ?? null,
-        anchorAddress:
-          firstTargetRange?.startAddress ?? payload.bundle.context?.selection.address ?? null,
+        sheetName: firstTargetRange?.sheetName ?? payload.bundle.context?.selection.sheetName ?? null,
+        anchorAddress: firstTargetRange?.startAddress ?? payload.bundle.context?.selection.address ?? null,
         range:
           firstTargetRange === undefined
             ? null
@@ -394,9 +376,9 @@ export function buildWorkbookChangeDescriptor(
                 startAddress: firstTargetRange.startAddress,
                 endAddress: firstTargetRange.endAddress,
               },
-      };
+      }
     }
-    case "setCellValue":
+    case 'setCellValue':
       return {
         eventKind: payload.kind,
         summary: `Updated ${payload.sheetName}!${payload.address}`,
@@ -407,8 +389,8 @@ export function buildWorkbookChangeDescriptor(
           startAddress: payload.address,
           endAddress: payload.address,
         },
-      };
-    case "setCellFormula":
+      }
+    case 'setCellFormula':
       return {
         eventKind: payload.kind,
         summary: `Set formula in ${payload.sheetName}!${payload.address}`,
@@ -419,8 +401,8 @@ export function buildWorkbookChangeDescriptor(
           startAddress: payload.address,
           endAddress: payload.address,
         },
-      };
-    case "clearCell":
+      }
+    case 'clearCell':
       return {
         eventKind: payload.kind,
         summary: `Cleared ${payload.sheetName}!${payload.address}`,
@@ -431,49 +413,49 @@ export function buildWorkbookChangeDescriptor(
           startAddress: payload.address,
           endAddress: payload.address,
         },
-      };
-    case "clearRange": {
-      const range = normalizeRange(payload.range);
+      }
+    case 'clearRange': {
+      const range = normalizeRange(payload.range)
       return {
         eventKind: payload.kind,
         summary: `Cleared ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "fillRange": {
-      const range = normalizeRange(payload.target);
+    case 'fillRange': {
+      const range = normalizeRange(payload.target)
       return {
         eventKind: payload.kind,
         summary: `Filled ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "copyRange": {
-      const range = normalizeRange(payload.target);
+    case 'copyRange': {
+      const range = normalizeRange(payload.target)
       return {
         eventKind: payload.kind,
         summary: `Copied into ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "moveRange": {
-      const range = normalizeRange(payload.target);
+    case 'moveRange': {
+      const range = normalizeRange(payload.target)
       return {
         eventKind: payload.kind,
         summary: `Moved cells to ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "insertRows": {
-      const anchorAddress = formatAddress(payload.start, 0);
+    case 'insertRows': {
+      const anchorAddress = formatAddress(payload.start, 0)
       return {
         eventKind: payload.kind,
         summary: `Inserted rows ${rowRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
@@ -484,10 +466,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(payload.start + payload.count - 1, 0),
         },
-      };
+      }
     }
-    case "deleteRows": {
-      const anchorAddress = formatAddress(payload.start, 0);
+    case 'deleteRows': {
+      const anchorAddress = formatAddress(payload.start, 0)
       return {
         eventKind: payload.kind,
         summary: `Deleted rows ${rowRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
@@ -498,10 +480,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(payload.start + payload.count - 1, 0),
         },
-      };
+      }
     }
-    case "insertColumns": {
-      const anchorAddress = formatAddress(0, payload.start);
+    case 'insertColumns': {
+      const anchorAddress = formatAddress(0, payload.start)
       return {
         eventKind: payload.kind,
         summary: `Inserted columns ${columnRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
@@ -512,10 +494,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(0, payload.start + payload.count - 1),
         },
-      };
+      }
     }
-    case "deleteColumns": {
-      const anchorAddress = formatAddress(0, payload.start);
+    case 'deleteColumns': {
+      const anchorAddress = formatAddress(0, payload.start)
       return {
         eventKind: payload.kind,
         summary: `Deleted columns ${columnRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
@@ -526,10 +508,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(0, payload.start + payload.count - 1),
         },
-      };
+      }
     }
-    case "updateRowMetadata": {
-      const anchorAddress = formatAddress(payload.startRow, 0);
+    case 'updateRowMetadata': {
+      const anchorAddress = formatAddress(payload.startRow, 0)
       return {
         eventKind: payload.kind,
         summary: `Updated rows ${rowRangeLabel(payload.startRow, payload.count)} on ${payload.sheetName}`,
@@ -540,10 +522,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(payload.startRow + payload.count - 1, 0),
         },
-      };
+      }
     }
-    case "updateColumnMetadata": {
-      const anchorAddress = formatAddress(0, payload.startCol);
+    case 'updateColumnMetadata': {
+      const anchorAddress = formatAddress(0, payload.startCol)
       return {
         eventKind: payload.kind,
         summary: `Updated columns ${columnRangeLabel(payload.startCol, payload.count)} on ${payload.sheetName}`,
@@ -554,10 +536,10 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: formatAddress(0, payload.startCol + payload.count - 1),
         },
-      };
+      }
     }
-    case "updateColumnWidth": {
-      const anchorAddress = formatAddress(0, payload.columnIndex);
+    case 'updateColumnWidth': {
+      const anchorAddress = formatAddress(0, payload.columnIndex)
       return {
         eventKind: payload.kind,
         summary: `Resized column ${columnLabel(payload.columnIndex)} on ${payload.sheetName}`,
@@ -568,9 +550,9 @@ export function buildWorkbookChangeDescriptor(
           startAddress: anchorAddress,
           endAddress: anchorAddress,
         },
-      };
+      }
     }
-    case "setFreezePane":
+    case 'setFreezePane':
       return {
         eventKind: payload.kind,
         summary:
@@ -578,56 +560,56 @@ export function buildWorkbookChangeDescriptor(
             ? `Cleared freeze panes on ${payload.sheetName}`
             : `Set freeze panes on ${payload.sheetName}`,
         sheetName: payload.sheetName,
-        anchorAddress: "A1",
+        anchorAddress: 'A1',
         range: {
           sheetName: payload.sheetName,
-          startAddress: "A1",
-          endAddress: "A1",
+          startAddress: 'A1',
+          endAddress: 'A1',
         },
-      };
-    case "setRangeStyle": {
-      const range = normalizeRange(payload.range);
+      }
+    case 'setRangeStyle': {
+      const range = normalizeRange(payload.range)
       return {
         eventKind: payload.kind,
         summary: `Formatted ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "clearRangeStyle": {
-      const range = normalizeRange(payload.range);
+    case 'clearRangeStyle': {
+      const range = normalizeRange(payload.range)
       return {
         eventKind: payload.kind,
         summary: `Cleared formatting in ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "setRangeNumberFormat": {
-      const range = normalizeRange(payload.range);
+    case 'setRangeNumberFormat': {
+      const range = normalizeRange(payload.range)
       return {
         eventKind: payload.kind,
         summary: `Changed number format in ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "clearRangeNumberFormat": {
-      const range = normalizeRange(payload.range);
+    case 'clearRangeNumberFormat': {
+      const range = normalizeRange(payload.range)
       return {
         eventKind: payload.kind,
         summary: `Cleared number format in ${rangeLabel(range)}`,
         sheetName: range.sheetName,
         anchorAddress: range.startAddress,
         range,
-      };
+      }
     }
-    case "renderCommit":
-      return summarizeRenderCommit(payload);
-    case "restoreVersion":
+    case 'renderCommit':
+      return summarizeRenderCommit(payload)
+    case 'restoreVersion':
       return {
         eventKind: payload.kind,
         summary: `Restored version ${payload.versionName}`,
@@ -641,34 +623,34 @@ export function buildWorkbookChangeDescriptor(
                 endAddress: payload.address,
               }
             : null,
-      };
-    case "revertChange":
+      }
+    case 'revertChange':
       return {
         eventKind: payload.kind,
         summary: `Reverted r${payload.targetRevision}: ${payload.targetSummary}`,
         sheetName: payload.sheetName ?? payload.range?.sheetName ?? null,
         anchorAddress: payload.address ?? payload.range?.startAddress ?? null,
         range: payload.range ? normalizeRange(payload.range) : null,
-      };
-    case "redoChange":
+      }
+    case 'redoChange':
       return {
         eventKind: payload.kind,
         summary: `Redid r${payload.targetRevision}: ${payload.targetSummary}`,
         sheetName: payload.sheetName ?? payload.range?.sheetName ?? null,
         anchorAddress: payload.address ?? payload.range?.startAddress ?? null,
         range: payload.range ? normalizeRange(payload.range) : null,
-      };
-    case "applyBatch":
+      }
+    case 'applyBatch':
       return {
         eventKind: payload.kind,
         summary: `Applied ${payload.batch.ops.length} synced operations`,
         sheetName: null,
         anchorAddress: null,
         range: null,
-      };
+      }
     default: {
-      const exhaustive: never = payload;
-      return exhaustive;
+      const exhaustive: never = payload
+      return exhaustive
     }
   }
 }
@@ -677,7 +659,7 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
   const sheetRef = await resolveWorkbookSheetRef(db, {
     documentId: row.documentId,
     sheetName: row.descriptor.sheetName,
-  });
+  })
   await db.query(
     `
       INSERT INTO workbook_change (
@@ -728,15 +710,15 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
       row.revertsRevision,
       row.createdAtUnixMs,
     ],
-  );
+  )
 }
 
 async function markWorkbookChangeReverted(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly revision: number;
-    readonly revertedByRevision: number;
+    readonly documentId: string
+    readonly revision: number
+    readonly revertedByRevision: number
   },
 ): Promise<void> {
   await db.query(
@@ -747,7 +729,7 @@ async function markWorkbookChangeReverted(
          AND revision = $2
     `,
     [input.documentId, input.revision, input.revertedByRevision],
-  );
+  )
 }
 
 export async function ensureWorkbookChangeSchema(db: Queryable): Promise<void> {
@@ -769,21 +751,16 @@ export async function ensureWorkbookChangeSchema(db: Queryable): Promise<void> {
       created_at BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, revision)
     );
-  `);
-  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS undo_bundle_json JSONB;`);
-  await db.query(
-    `ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverted_by_revision BIGINT;`,
-  );
-  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverts_revision BIGINT;`);
+  `)
+  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS undo_bundle_json JSONB;`)
+  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverted_by_revision BIGINT;`)
+  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverts_revision BIGINT;`)
   await db.query(
     `CREATE INDEX IF NOT EXISTS workbook_change_workbook_created_idx ON workbook_change(workbook_id, created_at DESC, revision DESC);`,
-  );
+  )
 }
 
-export async function appendWorkbookChange(
-  db: Queryable,
-  input: AppendWorkbookChangeInput,
-): Promise<void> {
+export async function appendWorkbookChange(db: Queryable, input: AppendWorkbookChangeInput): Promise<void> {
   await insertWorkbookChange(db, {
     documentId: input.documentId,
     revision: input.revision,
@@ -791,26 +768,19 @@ export async function appendWorkbookChange(
     clientMutationId: input.clientMutationId,
     descriptor: buildWorkbookChangeDescriptor(input.payload),
     undoBundle: input.undoBundle,
-    revertsRevision:
-      input.payload.kind === "revertChange" || input.payload.kind === "redoChange"
-        ? input.payload.targetRevision
-        : null,
+    revertsRevision: input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange' ? input.payload.targetRevision : null,
     createdAtUnixMs: input.createdAtUnixMs,
-  });
-  if (input.payload.kind === "revertChange" || input.payload.kind === "redoChange") {
+  })
+  if (input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange') {
     await markWorkbookChangeReverted(db, {
       documentId: input.documentId,
       revision: input.payload.targetRevision,
       revertedByRevision: input.revision,
-    });
+    })
   }
 }
 
-export async function loadWorkbookChange(
-  db: Queryable,
-  documentId: string,
-  revision: number,
-): Promise<WorkbookChangeRecord | null> {
+export async function loadWorkbookChange(db: Queryable, documentId: string, revision: number): Promise<WorkbookChangeRecord | null> {
   const result = await db.query<WorkbookChangeSelectRow>(
     `
       SELECT revision AS "revision",
@@ -832,17 +802,17 @@ export async function loadWorkbookChange(
        LIMIT 1
     `,
     [documentId, revision],
-  );
-  const row = result.rows[0];
-  return row ? normalizeWorkbookChangeRecord(row) : null;
+  )
+  const row = result.rows[0]
+  return row ? normalizeWorkbookChangeRecord(row) : null
 }
 
 async function loadWorkbookChangeFromWhere(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly whereClause: string;
-    readonly values: readonly unknown[];
+    readonly documentId: string
+    readonly whereClause: string
+    readonly values: readonly unknown[]
   },
 ): Promise<WorkbookChangeRecord | null> {
   const result = await db.query<WorkbookChangeSelectRow>(
@@ -867,16 +837,16 @@ async function loadWorkbookChangeFromWhere(
        LIMIT 1
     `,
     [input.documentId, ...input.values],
-  );
-  const row = result.rows[0];
-  return row ? normalizeWorkbookChangeRecord(row) : null;
+  )
+  const row = result.rows[0]
+  return row ? normalizeWorkbookChangeRecord(row) : null
 }
 
 export async function loadLatestUndoableWorkbookChange(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly actorUserId: string;
+    readonly documentId: string
+    readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
   return await loadWorkbookChangeFromWhere(db, {
@@ -888,14 +858,14 @@ export async function loadLatestUndoableWorkbookChange(
       AND event_kind <> 'revertChange'
     `,
     values: [input.actorUserId],
-  });
+  })
 }
 
 export async function loadLatestRedoableWorkbookChange(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly actorUserId: string;
+    readonly documentId: string
+    readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
   return await loadWorkbookChangeFromWhere(db, {
@@ -907,14 +877,14 @@ export async function loadLatestRedoableWorkbookChange(
       AND event_kind = 'revertChange'
     `,
     values: [input.actorUserId],
-  });
+  })
 }
 
 export async function listWorkbookChanges(
   db: Queryable,
   input: {
-    readonly documentId: string;
-    readonly limit?: number;
+    readonly documentId: string
+    readonly limit?: number
   },
 ): Promise<WorkbookChangeRecord[]> {
   const result = await db.query<WorkbookChangeSelectRow>(
@@ -938,11 +908,11 @@ export async function listWorkbookChanges(
        LIMIT $2
     `,
     [input.documentId, input.limit ?? 10],
-  );
+  )
   return result.rows.flatMap((row) => {
-    const record = normalizeWorkbookChangeRecord(row);
-    return record ? [record] : [];
-  });
+    const record = normalizeWorkbookChangeRecord(row)
+    return record ? [record] : []
+  })
 }
 
 export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
@@ -964,31 +934,31 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
        WHERE change.workbook_id IS NULL
        ORDER BY event.workbook_id ASC, event.revision ASC
     `,
-  );
+  )
 
   const inserts = result.rows.flatMap((row) => {
-    const revision = parseNumericValue(row.revision);
-    const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
+    const revision = parseNumericValue(row.revision)
+    const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
     if (
-      typeof row.workbookId !== "string" ||
-      typeof row.actorUserId !== "string" ||
+      typeof row.workbookId !== 'string' ||
+      typeof row.actorUserId !== 'string' ||
       revision === null ||
       createdAtUnixMs === null ||
       !isWorkbookEventPayload(row.payload)
     ) {
-      return [];
+      return []
     }
     return [
       appendWorkbookChange(db, {
         documentId: row.workbookId,
         revision,
         actorUserId: row.actorUserId,
-        clientMutationId: typeof row.clientMutationId === "string" ? row.clientMutationId : null,
+        clientMutationId: typeof row.clientMutationId === 'string' ? row.clientMutationId : null,
         payload: row.payload,
         undoBundle: null,
         createdAtUnixMs,
       }),
-    ];
-  });
-  await Promise.all(inserts);
+    ]
+  })
+  await Promise.all(inserts)
 }

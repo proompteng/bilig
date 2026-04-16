@@ -1,14 +1,10 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @source "./";
 @source "../../../packages/grid/src";
 
 @theme {
-  --font-sans:
-    "IBM Plex Sans", "Inter", "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial,
-    sans-serif;
-  --font-mono:
-    "SFMono-Regular", "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono",
-    monospace;
+  --font-sans: 'IBM Plex Sans', 'Inter', 'SF Pro Text', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SFMono-Regular', 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Consolas, 'Liberation Mono', monospace;
 }
 
 @layer base {

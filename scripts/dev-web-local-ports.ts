@@ -1,8 +1,5 @@
-export function resolvePreferredPort(
-  configuredPort: string | undefined,
-  fallbackPort: number,
-): number {
-  return Number.parseInt(configuredPort ?? String(fallbackPort), 10);
+export function resolvePreferredPort(configuredPort: string | undefined, fallbackPort: number): number {
+  return Number.parseInt(configuredPort ?? String(fallbackPort), 10)
 }
 
 export function resolvePreferredZeroPort(
@@ -11,47 +8,39 @@ export function resolvePreferredZeroPort(
   fallbackPort: number,
 ): number {
   return Number.parseInt(
-    configuredZeroPort ??
-      (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : undefined) ??
-      String(fallbackPort),
+    configuredZeroPort ?? (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : undefined) ?? String(fallbackPort),
     10,
-  );
+  )
 }
 
 export async function resolveRequestedOrAvailablePort(options: {
-  readonly preferredPort: number;
-  readonly explicitPort: string | undefined;
-  readonly label: string;
-  readonly canUseRequestedPort: (port: number) => Promise<boolean>;
-  readonly remainingOffsets?: number;
+  readonly preferredPort: number
+  readonly explicitPort: string | undefined
+  readonly label: string
+  readonly canUseRequestedPort: (port: number) => Promise<boolean>
+  readonly remainingOffsets?: number
 }): Promise<number> {
-  const {
-    preferredPort,
-    explicitPort,
-    label,
-    canUseRequestedPort,
-    remainingOffsets = 10,
-  } = options;
+  const { preferredPort, explicitPort, label, canUseRequestedPort, remainingOffsets = 10 } = options
   if (explicitPort) {
     if (!(await canUseRequestedPort(preferredPort))) {
-      throw new Error(`${label} ${preferredPort} is already in use.`);
+      throw new Error(`${label} ${preferredPort} is already in use.`)
     }
-    return preferredPort;
+    return preferredPort
   }
 
-  return findAvailablePort(preferredPort, remainingOffsets, label, canUseRequestedPort);
+  return findAvailablePort(preferredPort, remainingOffsets, label, canUseRequestedPort)
 }
 
 export async function canUsePort(options: {
-  readonly port: number;
-  readonly listListeningPids: (port: number) => string[];
-  readonly bindProbe: (port: number) => Promise<boolean>;
+  readonly port: number
+  readonly listListeningPids: (port: number) => string[]
+  readonly bindProbe: (port: number) => Promise<boolean>
 }): Promise<boolean> {
-  const { port, listListeningPids, bindProbe } = options;
+  const { port, listListeningPids, bindProbe } = options
   if (listListeningPids(port).length > 0) {
-    return false;
+    return false
   }
-  return bindProbe(port);
+  return bindProbe(port)
 }
 
 async function findAvailablePort(
@@ -62,11 +51,11 @@ async function findAvailablePort(
   offset = 0,
 ): Promise<number> {
   if (offset >= remainingOffsets) {
-    throw new Error(`Unable to find an available ${label}.`);
+    throw new Error(`Unable to find an available ${label}.`)
   }
-  const candidate = startPort + offset;
+  const candidate = startPort + offset
   if (await canUseRequestedPort(candidate)) {
-    return candidate;
+    return candidate
   }
-  return findAvailablePort(startPort, remainingOffsets, label, canUseRequestedPort, offset + 1);
+  return findAvailablePort(startPort, remainingOffsets, label, canUseRequestedPort, offset + 1)
 }

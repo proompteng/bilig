@@ -1,74 +1,71 @@
 // @vitest-environment jsdom
-import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkbookPresenceBar } from "../WorkbookPresenceBar.js";
-import { useWorkbookPresence } from "../use-workbook-presence.js";
-import {
-  WORKBOOK_PRESENCE_HEARTBEAT_MS,
-  WORKBOOK_PRESENCE_STALE_AFTER_MS,
-} from "../workbook-presence-model.js";
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { WorkbookPresenceBar } from '../WorkbookPresenceBar.js'
+import { useWorkbookPresence } from '../use-workbook-presence.js'
+import { WORKBOOK_PRESENCE_HEARTBEAT_MS, WORKBOOK_PRESENCE_STALE_AFTER_MS } from '../workbook-presence-model.js'
 
 interface MockZeroPresenceHarness {
-  readonly mutateCalls: unknown[];
+  readonly mutateCalls: unknown[]
   readonly zero: {
     materialize(): {
-      readonly data: unknown;
-      addListener(listener: (value: unknown) => void): () => void;
-      destroy(): void;
-    };
-    mutate(request: unknown): { client: Promise<{ type: "complete" }> };
-  };
-  emit(value: unknown): void;
+      readonly data: unknown
+      addListener(listener: (value: unknown) => void): () => void
+      destroy(): void
+    }
+    mutate(request: unknown): { client: Promise<{ type: 'complete' }> }
+  }
+  emit(value: unknown): void
 }
 
 function createMockZeroPresenceHarness(initialValue: unknown): MockZeroPresenceHarness {
-  let currentValue = initialValue;
-  const listeners = new Set<(value: unknown) => void>();
-  const mutateCalls: unknown[] = [];
+  let currentValue = initialValue
+  const listeners = new Set<(value: unknown) => void>()
+  const mutateCalls: unknown[] = []
   const view = {
     get data() {
-      return currentValue;
+      return currentValue
     },
     addListener(listener: (value: unknown) => void) {
-      listeners.add(listener);
+      listeners.add(listener)
       return () => {
-        listeners.delete(listener);
-      };
+        listeners.delete(listener)
+      }
     },
     destroy() {},
-  };
+  }
 
   return {
     mutateCalls,
     zero: {
       materialize() {
-        return view;
+        return view
       },
       mutate(request: unknown) {
-        mutateCalls.push(request);
+        mutateCalls.push(request)
         return {
-          client: Promise.resolve({ type: "complete" as const }),
-        };
+          client: Promise.resolve({ type: 'complete' as const }),
+        }
       },
     },
     emit(value: unknown) {
-      currentValue = value;
-      listeners.forEach((listener) => listener(value));
+      currentValue = value
+      listeners.forEach((listener) => listener(value))
     },
-  };
+  }
 }
 
 function PresenceHarness(props: {
-  documentId: string;
-  currentUserId: string;
-  presenceClientId: string;
-  sessionId: string;
-  selection: { sheetName: string; address: string };
-  sheetNames: readonly string[];
-  zero: MockZeroPresenceHarness["zero"];
-  enabled: boolean;
-  onJump: (sheetName: string, address: string) => void;
+  documentId: string
+  currentUserId: string
+  presenceClientId: string
+  sessionId: string
+  selection: { sheetName: string; address: string }
+  sheetNames: readonly string[]
+  zero: MockZeroPresenceHarness['zero']
+  enabled: boolean
+  onJump: (sheetName: string, address: string) => void
 }) {
   const collaborators = useWorkbookPresence({
     documentId: props.documentId,
@@ -79,44 +76,44 @@ function PresenceHarness(props: {
     sheetNames: props.sheetNames,
     zero: props.zero,
     enabled: props.enabled,
-  });
-  return <WorkbookPresenceBar collaborators={collaborators} onJump={props.onJump} />;
+  })
+  return <WorkbookPresenceBar collaborators={collaborators} onJump={props.onJump} />
 }
 
 afterEach(() => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  document.body.innerHTML = "";
-});
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
 
-describe("workbook presence", () => {
-  it("publishes local selection presence and renders collaborator jump chips", async () => {
+describe('workbook presence', () => {
+  it('publishes local selection presence and renders collaborator jump chips', async () => {
     const presence = createMockZeroPresenceHarness([
       {
-        sessionId: "doc-1:browser:other",
-        userId: "amy.smith@example.com",
-        presenceClientId: "presence:other",
+        sessionId: 'doc-1:browser:other',
+        userId: 'amy.smith@example.com',
+        presenceClientId: 'presence:other',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "B7",
-        selectionJson: { sheetName: "Sheet1", address: "B7" },
+        sheetName: 'Sheet1',
+        address: 'B7',
+        selectionJson: { sheetName: 'Sheet1', address: 'B7' },
         updatedAt: Date.now(),
       },
       {
-        sessionId: "doc-1:browser:self",
-        userId: "me@example.com",
-        presenceClientId: "presence:self",
+        sessionId: 'doc-1:browser:self',
+        userId: 'me@example.com',
+        presenceClientId: 'presence:self',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "A1",
-        selectionJson: { sheetName: "Sheet1", address: "A1" },
+        sheetName: 'Sheet1',
+        address: 'A1',
+        selectionJson: { sheetName: 'Sheet1', address: 'A1' },
         updatedAt: Date.now(),
       },
-    ]);
-    const onJump = vi.fn();
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    ])
+    const onJump = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
       root.render(
@@ -125,81 +122,81 @@ describe("workbook presence", () => {
           currentUserId="me@example.com"
           presenceClientId="presence:self"
           enabled
-          selection={{ sheetName: "Sheet1", address: "A1" }}
+          selection={{ sheetName: 'Sheet1', address: 'A1' }}
           sessionId="doc-1:browser:self"
-          sheetNames={["Sheet1"]}
+          sheetNames={['Sheet1']}
           zero={presence.zero}
           onJump={onJump}
         />,
-      );
-    });
+      )
+    })
 
-    expect(presence.mutateCalls).toHaveLength(1);
+    expect(presence.mutateCalls).toHaveLength(1)
     expect(presence.mutateCalls[0]).toMatchObject({
       args: {
-        documentId: "doc-1",
-        sessionId: "doc-1:browser:self",
-        presenceClientId: "presence:self",
-        sheetName: "Sheet1",
-        address: "A1",
+        documentId: 'doc-1',
+        sessionId: 'doc-1:browser:self',
+        presenceClientId: 'presence:self',
+        sheetName: 'Sheet1',
+        address: 'A1',
         selection: {
-          sheetName: "Sheet1",
-          address: "A1",
+          sheetName: 'Sheet1',
+          address: 'A1',
         },
       },
-    });
+    })
 
-    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
-    expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Amy Smith");
-
-    await act(async () => {
-      chips[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(onJump).toHaveBeenCalledWith("Sheet1", "B7");
+    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']")
+    expect(chips).toHaveLength(1)
+    expect(chips[0]?.textContent).toContain('Amy Smith')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      chips[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
-  it("does not render other sessions owned by the current user", async () => {
+    expect(onJump).toHaveBeenCalledWith('Sheet1', 'B7')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not render other sessions owned by the current user', async () => {
     const presence = createMockZeroPresenceHarness([
       {
-        sessionId: "doc-1:browser:stale-self",
-        userId: "guest:facefeed",
-        presenceClientId: "presence:self",
+        sessionId: 'doc-1:browser:stale-self',
+        userId: 'guest:facefeed',
+        presenceClientId: 'presence:self',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "E35",
-        selectionJson: { sheetName: "Sheet1", address: "E35" },
+        sheetName: 'Sheet1',
+        address: 'E35',
+        selectionJson: { sheetName: 'Sheet1', address: 'E35' },
         updatedAt: Date.now(),
       },
       {
-        sessionId: "doc-1:browser:self",
-        userId: "guest:facefeed",
-        presenceClientId: "presence:self",
+        sessionId: 'doc-1:browser:self',
+        userId: 'guest:facefeed',
+        presenceClientId: 'presence:self',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "A1",
-        selectionJson: { sheetName: "Sheet1", address: "A1" },
+        sheetName: 'Sheet1',
+        address: 'A1',
+        selectionJson: { sheetName: 'Sheet1', address: 'A1' },
         updatedAt: Date.now(),
       },
       {
-        sessionId: "doc-1:browser:other",
-        userId: "guest:deadbeef",
-        presenceClientId: "presence:other",
+        sessionId: 'doc-1:browser:other',
+        userId: 'guest:deadbeef',
+        presenceClientId: 'presence:other',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "B7",
-        selectionJson: { sheetName: "Sheet1", address: "B7" },
+        sheetName: 'Sheet1',
+        address: 'B7',
+        selectionJson: { sheetName: 'Sheet1', address: 'B7' },
         updatedAt: Date.now(),
       },
-    ]);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
       root.render(
@@ -208,60 +205,60 @@ describe("workbook presence", () => {
           currentUserId="guest:facefeed"
           presenceClientId="presence:self"
           enabled
-          selection={{ sheetName: "Sheet1", address: "A1" }}
+          selection={{ sheetName: 'Sheet1', address: 'A1' }}
           sessionId="doc-1:browser:self"
-          sheetNames={["Sheet1"]}
+          sheetNames={['Sheet1']}
           zero={presence.zero}
           onJump={() => {}}
         />,
-      );
-    });
+      )
+    })
 
-    expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull();
-    expect(host.textContent).not.toContain("Guest BEEF");
-    expect(host.textContent).not.toContain("Guest FEED");
+    expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull()
+    expect(host.textContent).not.toContain('Guest BEEF')
+    expect(host.textContent).not.toContain('Guest FEED')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("never renders guest collaborator rows", async () => {
+  it('never renders guest collaborator rows', async () => {
     const presence = createMockZeroPresenceHarness([
       {
-        sessionId: "doc-1:browser:stale-guest",
-        userId: "guest:ec9c",
-        presenceClientId: "presence:self",
+        sessionId: 'doc-1:browser:stale-guest',
+        userId: 'guest:ec9c',
+        presenceClientId: 'presence:self',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "B19",
-        selectionJson: { sheetName: "Sheet1", address: "B19" },
+        sheetName: 'Sheet1',
+        address: 'B19',
+        selectionJson: { sheetName: 'Sheet1', address: 'B19' },
         updatedAt: Date.now(),
       },
       {
-        sessionId: "doc-1:browser:other",
-        userId: "guest:cab7",
-        presenceClientId: "presence:other",
+        sessionId: 'doc-1:browser:other',
+        userId: 'guest:cab7',
+        presenceClientId: 'presence:other',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "E35",
-        selectionJson: { sheetName: "Sheet1", address: "E35" },
+        sheetName: 'Sheet1',
+        address: 'E35',
+        selectionJson: { sheetName: 'Sheet1', address: 'E35' },
         updatedAt: Date.now(),
       },
       {
-        sessionId: "doc-1:browser:real-user",
-        userId: "amy.smith@example.com",
-        presenceClientId: "presence:real-user",
+        sessionId: 'doc-1:browser:real-user',
+        userId: 'amy.smith@example.com',
+        presenceClientId: 'presence:real-user',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "F2",
-        selectionJson: { sheetName: "Sheet1", address: "F2" },
+        sheetName: 'Sheet1',
+        address: 'F2',
+        selectionJson: { sheetName: 'Sheet1', address: 'F2' },
         updatedAt: Date.now(),
       },
-    ]);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
       root.render(
@@ -270,45 +267,45 @@ describe("workbook presence", () => {
           currentUserId="guest:fresh"
           presenceClientId="presence:self"
           enabled
-          selection={{ sheetName: "Sheet1", address: "A1" }}
+          selection={{ sheetName: 'Sheet1', address: 'A1' }}
           sessionId="doc-1:browser:self"
-          sheetNames={["Sheet1"]}
+          sheetNames={['Sheet1']}
           zero={presence.zero}
           onJump={() => {}}
         />,
-      );
-    });
+      )
+    })
 
-    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
-    expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Amy Smith");
-    expect(host.textContent).not.toContain("Guest EC9C");
-    expect(host.textContent).not.toContain("Guest CAB7");
+    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']")
+    expect(chips).toHaveLength(1)
+    expect(chips[0]?.textContent).toContain('Amy Smith')
+    expect(host.textContent).not.toContain('Guest EC9C')
+    expect(host.textContent).not.toContain('Guest CAB7')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
+      root.unmount()
+    })
+  })
 
-  it("drops stale collaborators and keeps publishing heartbeat updates", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-06T12:00:00.000Z"));
+  it('drops stale collaborators and keeps publishing heartbeat updates', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-06T12:00:00.000Z'))
 
     const presence = createMockZeroPresenceHarness([
       {
-        sessionId: "doc-1:browser:other",
-        userId: "guest:deadbeef",
-        presenceClientId: "presence:other",
+        sessionId: 'doc-1:browser:other',
+        userId: 'guest:deadbeef',
+        presenceClientId: 'presence:other',
         sheetId: 1,
-        sheetName: "Sheet1",
-        address: "C9",
-        selectionJson: { sheetName: "Sheet1", address: "C9" },
+        sheetName: 'Sheet1',
+        address: 'C9',
+        selectionJson: { sheetName: 'Sheet1', address: 'C9' },
         updatedAt: Date.now() - WORKBOOK_PRESENCE_STALE_AFTER_MS - 1,
       },
-    ]);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
     await act(async () => {
       root.render(
@@ -317,67 +314,67 @@ describe("workbook presence", () => {
           currentUserId="guest:self"
           presenceClientId="presence:self"
           enabled
-          selection={{ sheetName: "Sheet1", address: "A1" }}
+          selection={{ sheetName: 'Sheet1', address: 'A1' }}
           sessionId="doc-1:browser:self"
-          sheetNames={["Sheet1"]}
+          sheetNames={['Sheet1']}
           zero={presence.zero}
           onJump={() => {}}
         />,
-      );
-    });
+      )
+    })
 
-    expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull();
-    expect(presence.mutateCalls).toHaveLength(1);
+    expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull()
+    expect(presence.mutateCalls).toHaveLength(1)
 
     await act(async () => {
-      vi.advanceTimersByTime(WORKBOOK_PRESENCE_HEARTBEAT_MS);
-      await Promise.resolve();
-    });
+      vi.advanceTimersByTime(WORKBOOK_PRESENCE_HEARTBEAT_MS)
+      await Promise.resolve()
+    })
 
-    expect(presence.mutateCalls).toHaveLength(2);
+    expect(presence.mutateCalls).toHaveLength(2)
 
     await act(async () => {
       presence.emit([
         {
-          sessionId: "doc-1:browser:other",
-          userId: "guest:deadbeef",
-          presenceClientId: "presence:other",
+          sessionId: 'doc-1:browser:other',
+          userId: 'guest:deadbeef',
+          presenceClientId: 'presence:other',
           sheetId: 1,
-          sheetName: "Missing",
-          address: "C9",
-          selectionJson: { sheetName: "Missing", address: "C9" },
+          sheetName: 'Missing',
+          address: 'C9',
+          selectionJson: { sheetName: 'Missing', address: 'C9' },
           updatedAt: Date.now(),
         },
         {
-          sessionId: "doc-1:browser:other-2",
-          userId: "guest:facefeed",
-          presenceClientId: "presence:other-2",
+          sessionId: 'doc-1:browser:other-2',
+          userId: 'guest:facefeed',
+          presenceClientId: 'presence:other-2',
           sheetId: 1,
-          sheetName: "Sheet1",
-          address: "D4",
-          selectionJson: { sheetName: "Sheet1", address: "D4" },
+          sheetName: 'Sheet1',
+          address: 'D4',
+          selectionJson: { sheetName: 'Sheet1', address: 'D4' },
           updatedAt: Date.now(),
         },
         {
-          sessionId: "doc-1:browser:other-3",
-          userId: "casey@example.com",
-          presenceClientId: "presence:other-3",
+          sessionId: 'doc-1:browser:other-3',
+          userId: 'casey@example.com',
+          presenceClientId: 'presence:other-3',
           sheetId: 1,
-          sheetName: "Sheet1",
-          address: "E6",
-          selectionJson: { sheetName: "Sheet1", address: "E6" },
+          sheetName: 'Sheet1',
+          address: 'E6',
+          selectionJson: { sheetName: 'Sheet1', address: 'E6' },
           updatedAt: Date.now(),
         },
-      ]);
-    });
+      ])
+    })
 
-    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']");
-    expect(chips).toHaveLength(1);
-    expect(chips[0]?.textContent).toContain("Casey");
-    expect(host.textContent).not.toContain("Guest FEED");
+    const chips = host.querySelectorAll("[data-testid='ax-presence-chip']")
+    expect(chips).toHaveLength(1)
+    expect(chips[0]?.textContent).toContain('Casey')
+    expect(host.textContent).not.toContain('Guest FEED')
 
     await act(async () => {
-      root.unmount();
-    });
-  });
-});
+      root.unmount()
+    })
+  })
+})

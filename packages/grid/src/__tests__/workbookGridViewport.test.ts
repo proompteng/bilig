@@ -1,13 +1,10 @@
-import { describe, expect, test } from "vitest";
-import { getGridMetrics } from "../gridMetrics.js";
-import {
-  resolveViewportScrollPosition,
-  resolveVisibleRegionFromScroll,
-} from "../workbookGridViewport.js";
+import { describe, expect, test } from 'vitest'
+import { getGridMetrics } from '../gridMetrics.js'
+import { resolveViewportScrollPosition, resolveVisibleRegionFromScroll } from '../workbookGridViewport.js'
 
-describe("workbookGridViewport", () => {
-  test("restores a saved viewport with row height overrides", () => {
-    const gridMetrics = getGridMetrics();
+describe('workbookGridViewport', () => {
+  test('restores a saved viewport with row height overrides', () => {
+    const gridMetrics = getGridMetrics()
 
     expect(
       resolveViewportScrollPosition({
@@ -22,11 +19,11 @@ describe("workbookGridViewport", () => {
     ).toEqual({
       scrollLeft: gridMetrics.columnWidth,
       scrollTop: gridMetrics.rowHeight + 34 + gridMetrics.rowHeight,
-    });
-  });
+    })
+  })
 
-  test("resolves the visible region using row height overrides", () => {
-    const gridMetrics = getGridMetrics();
+  test('resolves the visible region using row height overrides', () => {
+    const gridMetrics = getGridMetrics()
 
     expect(
       resolveVisibleRegionFromScroll({
@@ -49,11 +46,11 @@ describe("workbookGridViewport", () => {
       ty: 10,
       freezeRows: 0,
       freezeCols: 0,
-    });
-  });
+    })
+  })
 
-  test("skips collapsed hidden rows when resolving the scroll anchor", () => {
-    const gridMetrics = getGridMetrics();
+  test('skips collapsed hidden rows when resolving the scroll anchor', () => {
+    const gridMetrics = getGridMetrics()
 
     expect(
       resolveVisibleRegionFromScroll({
@@ -70,11 +67,11 @@ describe("workbookGridViewport", () => {
         y: 3,
       },
       ty: 0,
-    });
-  });
+    })
+  })
 
-  test("keeps frozen rows and columns pinned when restoring viewport scroll", () => {
-    const gridMetrics = getGridMetrics();
+  test('keeps frozen rows and columns pinned when restoring viewport scroll', () => {
+    const gridMetrics = getGridMetrics()
 
     expect(
       resolveViewportScrollPosition({
@@ -98,11 +95,11 @@ describe("workbookGridViewport", () => {
     ).toEqual({
       scrollLeft: 104 + 132 + 104,
       scrollTop: 22 + 26 + 22,
-    });
-  });
+    })
+  })
 
-  test("resolves the visible region after frozen rows and columns", () => {
-    const gridMetrics = getGridMetrics();
+  test('resolves the visible region after frozen rows and columns', () => {
+    const gridMetrics = getGridMetrics()
 
     expect(
       resolveVisibleRegionFromScroll({
@@ -125,6 +122,6 @@ describe("workbookGridViewport", () => {
       ty: 0,
       freezeRows: 1,
       freezeCols: 2,
-    });
-  });
-});
+    })
+  })
+})

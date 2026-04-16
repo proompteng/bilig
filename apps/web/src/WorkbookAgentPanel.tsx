@@ -1,35 +1,31 @@
-import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from "react";
-import { Button } from "@base-ui/react/button";
-import { ScrollArea } from "@base-ui/react/scroll-area";
-import { ArrowUp, Square } from "lucide-react";
-import {
-  WORKBOOK_AGENT_TOOL_NAMES,
-  describeWorkbookAgentCommand,
-  normalizeWorkbookAgentToolName,
-} from "@bilig/agent-api";
-import { cva } from "class-variance-authority";
+import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from 'react'
+import { Button } from '@base-ui/react/button'
+import { ScrollArea } from '@base-ui/react/scroll-area'
+import { ArrowUp, Square } from 'lucide-react'
+import { WORKBOOK_AGENT_TOOL_NAMES, describeWorkbookAgentCommand, normalizeWorkbookAgentToolName } from '@bilig/agent-api'
+import { cva } from 'class-variance-authority'
 import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentPreviewChangeKind,
   WorkbookAgentPreviewSummary,
   WorkbookAgentSharedReviewRecommendation,
-} from "@bilig/agent-api";
+} from '@bilig/agent-api'
 import type {
   WorkbookAgentThreadSnapshot,
   WorkbookAgentTimelineCitation,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentWorkflowRun,
-} from "@bilig/contracts";
-import { cn } from "./cn.js";
+} from '@bilig/contracts'
+import { cn } from './cn.js'
 import {
   workbookAlertClass,
   workbookButtonClass,
   workbookInsetClass,
   workbookPillClass,
   workbookSurfaceClass,
-} from "./workbook-shell-chrome.js";
-import { WorkbookAgentDisclosureRow } from "./workbook-agent-panel-disclosure-row.js";
+} from './workbook-shell-chrome.js'
+import { WorkbookAgentDisclosureRow } from './workbook-agent-panel-disclosure-row.js'
 import {
   agentPanelBodyMutedTextClass,
   agentPanelBodyTextClass,
@@ -51,80 +47,74 @@ import {
   agentPanelTimelineListClass,
   agentPanelThreadButtonClass,
   agentPanelThreadListClass,
-} from "./workbook-agent-panel-primitives.js";
-import { WorkbookAgentMarkdown } from "./workbook-agent-markdown.js";
-import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
-import {
-  AssistantProgressRow,
-  PreviewRangeList,
-  WorkflowRunRow,
-} from "./workbook-agent-panel-history.js";
+} from './workbook-agent-panel-primitives.js'
+import { WorkbookAgentMarkdown } from './workbook-agent-markdown.js'
+import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
+import { AssistantProgressRow, PreviewRangeList, WorkflowRunRow } from './workbook-agent-panel-history.js'
 
 const toolStatusPillClass = cva(
-  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] leading-none font-medium uppercase tracking-[0.05em]",
+  'inline-flex h-5 items-center rounded-full border px-2 text-[10px] leading-none font-medium uppercase tracking-[0.05em]',
   {
     variants: {
       status: {
-        completed: workbookPillClass({ tone: "neutral", weight: "strong" }),
-        failed: workbookPillClass({ tone: "danger", weight: "strong" }),
-        running: workbookPillClass({ tone: "accent", weight: "strong" }),
+        completed: workbookPillClass({ tone: 'neutral', weight: 'strong' }),
+        failed: workbookPillClass({ tone: 'danger', weight: 'strong' }),
+        running: workbookPillClass({ tone: 'accent', weight: 'strong' }),
       },
     },
   },
-);
+)
 
 const agentPanelThemeStyle: CSSProperties & Record<`--${string}`, string> = {
-  "--wb-app-bg": "var(--color-mauve-50)",
-  "--wb-surface": "white",
-  "--wb-surface-subtle": "var(--color-mauve-50)",
-  "--wb-surface-muted": "var(--color-mauve-100)",
-  "--wb-border": "var(--color-mauve-200)",
-  "--wb-border-strong": "var(--color-mauve-300)",
-  "--wb-grid-border": "var(--color-mauve-100)",
-  "--wb-text": "var(--color-mauve-900)",
-  "--wb-text-muted": "var(--color-mauve-700)",
-  "--wb-text-subtle": "var(--color-mauve-600)",
-  "--wb-accent": "var(--color-mauve-900)",
-  "--wb-accent-soft": "var(--color-mauve-100)",
-  "--wb-accent-ring": "var(--color-mauve-400)",
-  "--wb-hover": "var(--color-mauve-100)",
-  "--wb-shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.04)",
-};
+  '--wb-app-bg': 'var(--color-mauve-50)',
+  '--wb-surface': 'white',
+  '--wb-surface-subtle': 'var(--color-mauve-50)',
+  '--wb-surface-muted': 'var(--color-mauve-100)',
+  '--wb-border': 'var(--color-mauve-200)',
+  '--wb-border-strong': 'var(--color-mauve-300)',
+  '--wb-grid-border': 'var(--color-mauve-100)',
+  '--wb-text': 'var(--color-mauve-900)',
+  '--wb-text-muted': 'var(--color-mauve-700)',
+  '--wb-text-subtle': 'var(--color-mauve-600)',
+  '--wb-accent': 'var(--color-mauve-900)',
+  '--wb-accent-soft': 'var(--color-mauve-100)',
+  '--wb-accent-ring': 'var(--color-mauve-400)',
+  '--wb-hover': 'var(--color-mauve-100)',
+  '--wb-shadow-sm': '0 1px 2px rgba(15, 23, 42, 0.04)',
+}
 
-const AGENT_COMPOSER_MIN_HEIGHT = 112;
-const AGENT_COMPOSER_MAX_HEIGHT = 224;
+const AGENT_COMPOSER_MIN_HEIGHT = 112
+const AGENT_COMPOSER_MAX_HEIGHT = 224
 
 function formatThreadEntryCount(entryCount: number): string {
-  return `${entryCount} ${entryCount === 1 ? "item" : "items"}`;
+  return `${entryCount} ${entryCount === 1 ? 'item' : 'items'}`
 }
 
 function summarizeThreadActivity(text: string | null): string | null {
   if (!text) {
-    return null;
+    return null
   }
-  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  const normalized = text.trim().replaceAll(/\s+/g, ' ')
   if (normalized.length === 0) {
-    return null;
+    return null
   }
-  return normalized.length <= 64 ? normalized : `${normalized.slice(0, 61)}...`;
+  return normalized.length <= 64 ? normalized : `${normalized.slice(0, 61)}...`
 }
 
 function ThreadSummaryStrip(props: {
-  readonly activeThreadId: string | null;
-  readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
-  readonly onSelectThread: (threadId: string) => void;
+  readonly activeThreadId: string | null
+  readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
+  readonly onSelectThread: (threadId: string) => void
 }) {
-  const visibleThreadSummaries = props.threadSummaries.filter(
-    (threadSummary) => threadSummary.threadId !== props.activeThreadId,
-  );
+  const visibleThreadSummaries = props.threadSummaries.filter((threadSummary) => threadSummary.threadId !== props.activeThreadId)
   if (visibleThreadSummaries.length === 0) {
-    return null;
+    return null
   }
 
   return (
     <div className={agentPanelThreadListClass()}>
       {visibleThreadSummaries.map((threadSummary) => {
-        const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText);
+        const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText)
         return (
           <Button
             key={threadSummary.threadId}
@@ -134,243 +124,212 @@ function ThreadSummaryStrip(props: {
             data-testid={`workbook-agent-thread-${threadSummary.threadId}`}
             type="button"
             onClick={() => {
-              props.onSelectThread(threadSummary.threadId);
+              props.onSelectThread(threadSummary.threadId)
             }}
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-                  {threadSummary.scope === "shared" ? "Shared" : "Private"}
+                <span className={cn(agentPanelLabelTextClass(), 'font-semibold')}>
+                  {threadSummary.scope === 'shared' ? 'Shared' : 'Private'}
                 </span>
                 <span className={agentPanelMetaTextClass()}>
-                  {threadSummary.scope === "shared"
-                    ? formatWorkbookCollaboratorLabel(threadSummary.ownerUserId)
-                    : "Just you"}
+                  {threadSummary.scope === 'shared' ? formatWorkbookCollaboratorLabel(threadSummary.ownerUserId) : 'Just you'}
                 </span>
-                <span className={agentPanelMetaTextClass()}>
-                  {formatThreadEntryCount(threadSummary.entryCount)}
-                </span>
+                <span className={agentPanelMetaTextClass()}>{formatThreadEntryCount(threadSummary.entryCount)}</span>
               </div>
-              {latestActivity ? (
-                <div className={cn(agentPanelMetaTextClass(), "mt-0.5 truncate")}>
-                  {latestActivity}
-                </div>
-              ) : null}
+              {latestActivity ? <div className={cn(agentPanelMetaTextClass(), 'mt-0.5 truncate')}>{latestActivity}</div> : null}
             </div>
-            {threadSummary.scope === "shared" && threadSummary.reviewQueueItemCount > 0 ? (
-              <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
-                Review
-              </span>
+            {threadSummary.scope === 'shared' && threadSummary.reviewQueueItemCount > 0 ? (
+              <span className={workbookPillClass({ tone: 'accent', weight: 'strong' })}>Review</span>
             ) : null}
           </Button>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
-function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["toolStatus"] }) {
-  if (props.status === "completed") {
-    return null;
+function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry['toolStatus'] }) {
+  if (props.status === 'completed') {
+    return null
   }
-  const label = props.status === "failed" ? "Failed" : "Running";
+  const label = props.status === 'failed' ? 'Failed' : 'Running'
   return (
     <span
       className={toolStatusPillClass({
-        status: props.status === "failed" ? "failed" : "running",
+        status: props.status === 'failed' ? 'failed' : 'running',
       })}
     >
       {label}
     </span>
-  );
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
-function readString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
+function readString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
 }
 
 function readNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
 function safeParseToolOutput(outputText: string | null): unknown {
   if (!outputText) {
-    return null;
+    return null
   }
   try {
-    return JSON.parse(outputText) as unknown;
+    return JSON.parse(outputText) as unknown
   } catch {
-    return null;
+    return null
   }
 }
 
 function renderToolDisplayName(toolName: string | null): string {
-  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null;
+  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null
   if (!normalizedToolName) {
-    return "Tool call";
+    return 'Tool call'
   }
   return normalizedToolName
-    .split("_")
-    .map((segment) =>
-      segment.length === 0 ? segment : `${segment[0]!.toUpperCase()}${segment.slice(1)}`,
-    )
-    .join(" ");
+    .split('_')
+    .map((segment) => (segment.length === 0 ? segment : `${segment[0]!.toUpperCase()}${segment.slice(1)}`))
+    .join(' ')
 }
 
 function supportsStructuredToolOutput(toolName: string | null): boolean {
-  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null;
+  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null
   return (
     normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues ||
     normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook ||
     normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies
-  );
+  )
 }
 
 function renderReasonLabel(reason: string): string {
   switch (reason) {
-    case "sheet":
-      return "sheet";
-    case "address":
-      return "address";
-    case "formula":
-      return "formula";
-    case "input":
-      return "input";
-    case "value":
-      return "value";
+    case 'sheet':
+      return 'sheet'
+    case 'address':
+      return 'address'
+    case 'formula':
+      return 'formula'
+    case 'input':
+      return 'input'
+    case 'value':
+      return 'value'
     default:
-      return reason;
+      return reason
   }
 }
 
 function renderPreviewChangeKind(kind: WorkbookAgentPreviewChangeKind): string {
   switch (kind) {
-    case "input":
-      return "value";
-    case "formula":
-      return "formula";
-    case "style":
-      return "style";
-    case "numberFormat":
-      return "number format";
+    case 'input':
+      return 'value'
+    case 'formula':
+      return 'formula'
+    case 'style':
+      return 'style'
+    case 'numberFormat':
+      return 'number format'
   }
 }
 
 function renderMarkdownPlainText(markdown: string): string {
   return markdown
-    .replaceAll(/```[\s\S]*?```/g, " ")
-    .replaceAll(/`([^`]+)`/g, "$1")
-    .replaceAll(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-    .replaceAll(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
-    .replaceAll(/^#{1,6}\s+/gm, "")
-    .replaceAll(/^>\s?/gm, "")
-    .replaceAll(/[*_~]+/g, " ")
-    .replaceAll(/\s+/g, " ");
+    .replaceAll(/```[\s\S]*?```/g, ' ')
+    .replaceAll(/`([^`]+)`/g, '$1')
+    .replaceAll(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replaceAll(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
+    .replaceAll(/^#{1,6}\s+/gm, '')
+    .replaceAll(/^>\s?/gm, '')
+    .replaceAll(/[*_~]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
 }
 
 function summarizeDisclosureText(text: string | null): string | null {
   if (!text) {
-    return null;
+    return null
   }
-  const normalized = renderMarkdownPlainText(text).trim().replaceAll(/\s+/g, " ");
+  const normalized = renderMarkdownPlainText(text).trim().replaceAll(/\s+/g, ' ')
   if (normalized.length === 0) {
-    return null;
+    return null
   }
-  return normalized.length <= 88 ? normalized : `${normalized.slice(0, 85)}...`;
+  return normalized.length <= 88 ? normalized : `${normalized.slice(0, 85)}...`
 }
 
 function summarizePlainText(text: string | null, maxLength = 88): string | null {
   if (!text) {
-    return null;
+    return null
   }
-  const normalized = text.trim().replaceAll(/\s+/g, " ");
+  const normalized = text.trim().replaceAll(/\s+/g, ' ')
   if (normalized.length === 0) {
-    return null;
+    return null
   }
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`;
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`
 }
 
 function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
-  const parsed = safeParseToolOutput(entry.outputText);
+  const parsed = safeParseToolOutput(entry.outputText)
   if (isRecord(parsed)) {
-    if (typeof parsed["summary"] === "string") {
-      return summarizePlainText(parsed["summary"], 96);
+    if (typeof parsed['summary'] === 'string') {
+      return summarizePlainText(parsed['summary'], 96)
     }
-    const workflowRun = isRecord(parsed["workflowRun"]) ? parsed["workflowRun"] : null;
-    if (typeof workflowRun?.["summary"] === "string") {
-      return summarizePlainText(workflowRun["summary"], 96);
+    const workflowRun = isRecord(parsed['workflowRun']) ? parsed['workflowRun'] : null
+    if (typeof workflowRun?.['summary'] === 'string') {
+      return summarizePlainText(workflowRun['summary'], 96)
     }
-    const selection = isRecord(parsed["selection"]) ? parsed["selection"] : null;
-    if (typeof selection?.["sheetName"] === "string" && typeof selection["address"] === "string") {
-      const selectionRange = isRecord(selection["range"]) ? selection["range"] : null;
-      const startAddress =
-        typeof selectionRange?.["startAddress"] === "string"
-          ? selectionRange["startAddress"]
-          : selection["address"];
-      const endAddress =
-        typeof selectionRange?.["endAddress"] === "string"
-          ? selectionRange["endAddress"]
-          : selection["address"];
-      return `${selection["sheetName"]}!${startAddress}${startAddress === endAddress ? "" : `:${endAddress}`}`;
+    const selection = isRecord(parsed['selection']) ? parsed['selection'] : null
+    if (typeof selection?.['sheetName'] === 'string' && typeof selection['address'] === 'string') {
+      const selectionRange = isRecord(selection['range']) ? selection['range'] : null
+      const startAddress = typeof selectionRange?.['startAddress'] === 'string' ? selectionRange['startAddress'] : selection['address']
+      const endAddress = typeof selectionRange?.['endAddress'] === 'string' ? selectionRange['endAddress'] : selection['address']
+      return `${selection['sheetName']}!${startAddress}${startAddress === endAddress ? '' : `:${endAddress}`}`
     }
-    const range = isRecord(parsed["range"]) ? parsed["range"] : null;
-    if (
-      typeof range?.["sheetName"] === "string" &&
-      typeof range["startAddress"] === "string" &&
-      typeof range["endAddress"] === "string"
-    ) {
-      const startAddress = range["startAddress"];
-      const endAddress = range["endAddress"];
-      return `${range["sheetName"]}!${startAddress}${startAddress === endAddress ? "" : `:${endAddress}`}`;
+    const range = isRecord(parsed['range']) ? parsed['range'] : null
+    if (typeof range?.['sheetName'] === 'string' && typeof range['startAddress'] === 'string' && typeof range['endAddress'] === 'string') {
+      const startAddress = range['startAddress']
+      const endAddress = range['endAddress']
+      return `${range['sheetName']}!${startAddress}${startAddress === endAddress ? '' : `:${endAddress}`}`
     }
-    if (typeof parsed["sheetCount"] === "number") {
-      return `${String(parsed["sheetCount"])} ${parsed["sheetCount"] === 1 ? "sheet" : "sheets"}`;
+    if (typeof parsed['sheetCount'] === 'number') {
+      return `${String(parsed['sheetCount'])} ${parsed['sheetCount'] === 1 ? 'sheet' : 'sheets'}`
     }
-    if (typeof parsed["changeCount"] === "number") {
-      return `${String(parsed["changeCount"])} ${parsed["changeCount"] === 1 ? "change" : "changes"}`;
+    if (typeof parsed['changeCount'] === 'number') {
+      return `${String(parsed['changeCount'])} ${parsed['changeCount'] === 1 ? 'change' : 'changes'}`
     }
   }
-  const outputText = entry.outputText?.trim() ?? "";
-  if (outputText.length > 0 && !outputText.startsWith("{") && !outputText.startsWith("[")) {
-    return summarizePlainText(outputText, 96);
+  const outputText = entry.outputText?.trim() ?? ''
+  if (outputText.length > 0 && !outputText.startsWith('{') && !outputText.startsWith('[')) {
+    return summarizePlainText(outputText, 96)
   }
-  const argumentsText = entry.argumentsText?.trim() ?? "";
-  if (
-    argumentsText.length > 0 &&
-    !argumentsText.startsWith("{") &&
-    !argumentsText.startsWith("[")
-  ) {
-    return summarizePlainText(argumentsText, 96);
+  const argumentsText = entry.argumentsText?.trim() ?? ''
+  if (argumentsText.length > 0 && !argumentsText.startsWith('{') && !argumentsText.startsWith('[')) {
+    return summarizePlainText(argumentsText, 96)
   }
-  return null;
+  return null
 }
 
 function isAppliedExecutionSystemEntry(entry: WorkbookAgentTimelineEntry): boolean {
   return (
-    entry.kind === "system" &&
-    (entry.text?.startsWith("Applied workbook change set at revision r") === true ||
-      entry.text?.startsWith("Applied automatically workbook change set at revision r") === true ||
-      entry.text?.startsWith("Applied automatically selected workbook change set at revision r") ===
-        true ||
-      entry.text?.startsWith("Applied selected workbook change set at revision r") === true)
-  );
+    entry.kind === 'system' &&
+    (entry.text?.startsWith('Applied workbook change set at revision r') === true ||
+      entry.text?.startsWith('Applied automatically workbook change set at revision r') === true ||
+      entry.text?.startsWith('Applied automatically selected workbook change set at revision r') === true ||
+      entry.text?.startsWith('Applied selected workbook change set at revision r') === true)
+  )
 }
 
-function TextDisclosureEntryRow(props: {
-  readonly entry: WorkbookAgentTimelineEntry;
-  readonly label: "Thought" | "Plan";
-}) {
-  const bodyText =
-    props.entry.kind === "reasoning" || props.entry.kind === "plan" ? props.entry.text : null;
+function TextDisclosureEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry; readonly label: 'Thought' | 'Plan' }) {
+  const bodyText = props.entry.kind === 'reasoning' || props.entry.kind === 'plan' ? props.entry.text : null
   if (!bodyText?.trim().length) {
-    return null;
+    return null
   }
-  const summary = summarizeDisclosureText(bodyText);
-  const disclosureKey = props.entry.kind;
+  const summary = summarizeDisclosureText(bodyText)
+  const disclosureKey = props.entry.kind
 
   return (
     <WorkbookAgentDisclosureRow
@@ -389,63 +348,49 @@ function TextDisclosureEntryRow(props: {
       </div>
       <TimelineCitationList citations={props.entry.citations} />
     </WorkbookAgentDisclosureRow>
-  );
+  )
 }
 
-function StructuredToolOutput(props: {
-  readonly toolName: string | null;
-  readonly outputText: string | null;
-}) {
-  const parsed = safeParseToolOutput(props.outputText);
-  const normalizedToolName = props.toolName ? normalizeWorkbookAgentToolName(props.toolName) : null;
+function StructuredToolOutput(props: { readonly toolName: string | null; readonly outputText: string | null }) {
+  const parsed = safeParseToolOutput(props.outputText)
+  const normalizedToolName = props.toolName ? normalizeWorkbookAgentToolName(props.toolName) : null
   if (!normalizedToolName || !isRecord(parsed)) {
-    return null;
+    return null
   }
 
-  if (
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues &&
-    Array.isArray(parsed["issues"])
-  ) {
-    const summary = isRecord(parsed["summary"]) ? parsed["summary"] : null;
-    const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
+  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues && Array.isArray(parsed['issues'])) {
+    const summary = isRecord(parsed['summary']) ? parsed['summary'] : null
+    const issues = parsed['issues'].flatMap((issue) => (isRecord(issue) ? [issue] : []))
     return (
-      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
+      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
+        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
           <div>
-            {readNumber(summary?.["issueCount"], issues.length)} issues ·{" "}
-            {readNumber(summary?.["scannedFormulaCells"])} formulas
+            {readNumber(summary?.['issueCount'], issues.length)} issues · {readNumber(summary?.['scannedFormulaCells'])} formulas
           </div>
-          <div className={cn(agentPanelEyebrowTextClass(), "text-right")}>
-            {readNumber(summary?.["errorCount"])} errors · {readNumber(summary?.["cycleCount"])}{" "}
-            cycles · {readNumber(summary?.["unsupportedCount"])} JS-only
+          <div className={cn(agentPanelEyebrowTextClass(), 'text-right')}>
+            {readNumber(summary?.['errorCount'])} errors · {readNumber(summary?.['cycleCount'])} cycles ·{' '}
+            {readNumber(summary?.['unsupportedCount'])} JS-only
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-2">
           {issues.slice(0, 8).map((issue) => (
             <div
-              key={`${readString(issue["sheetName"])}:${readString(issue["address"])}`}
+              key={`${readString(issue['sheetName'])}:${readString(issue['address'])}`}
               className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-                    {readString(issue["sheetName"])}!{readString(issue["address"])}
+                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>
+                    {readString(issue['sheetName'])}!{readString(issue['address'])}
                   </div>
-                  <div className={cn(agentPanelMetaTextClass(), "mt-1 break-all")}>
-                    {readString(issue["formula"])}
-                  </div>
+                  <div className={cn(agentPanelMetaTextClass(), 'mt-1 break-all')}>{readString(issue['formula'])}</div>
                 </div>
-                <div className={cn(agentPanelEyebrowTextClass(), "text-right")}>
-                  {readString(issue["valueText"]) || "(empty)"}
-                </div>
+                <div className={cn(agentPanelEyebrowTextClass(), 'text-right')}>{readString(issue['valueText']) || '(empty)'}</div>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {Array.isArray(issue["issueKinds"])
-                  ? issue["issueKinds"].map((kind) => (
-                      <span
-                        key={readString(kind)}
-                        className={workbookPillClass({ tone: "danger", weight: "strong" })}
-                      >
+                {Array.isArray(issue['issueKinds'])
+                  ? issue['issueKinds'].map((kind) => (
+                      <span key={readString(kind)} className={workbookPillClass({ tone: 'danger', weight: 'strong' })}>
                         {readString(kind)}
                       </span>
                     ))
@@ -455,54 +400,40 @@ function StructuredToolOutput(props: {
           ))}
         </div>
       </div>
-    );
+    )
   }
 
-  if (
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook &&
-    Array.isArray(parsed["matches"])
-  ) {
-    const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
+  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook && Array.isArray(parsed['matches'])) {
+    const matches = parsed['matches'].flatMap((match) => (isRecord(match) ? [match] : []))
     return (
-      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
-          <div className="truncate">“{readString(parsed["query"])}”</div>
+      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
+        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
+          <div className="truncate">“{readString(parsed['query'])}”</div>
           <div className={agentPanelEyebrowTextClass()}>
-            {readNumber(
-              isRecord(parsed["summary"]) ? parsed["summary"]["matchCount"] : undefined,
-              matches.length,
-            )}{" "}
-            matches
+            {readNumber(isRecord(parsed['summary']) ? parsed['summary']['matchCount'] : undefined, matches.length)} matches
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-2">
           {matches.slice(0, 8).map((match) => (
             <div
-              key={`${readString(match["kind"])}:${readString(match["sheetName"])}:${readString(match["address"])}`}
+              key={`${readString(match['kind'])}:${readString(match['sheetName'])}:${readString(match['address'])}`}
               className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-                    {readString(match["kind"]) === "sheet"
-                      ? `Sheet ${readString(match["sheetName"])}`
-                      : `${readString(match["sheetName"])}!${readString(match["address"])}`}
+                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>
+                    {readString(match['kind']) === 'sheet'
+                      ? `Sheet ${readString(match['sheetName'])}`
+                      : `${readString(match['sheetName'])}!${readString(match['address'])}`}
                   </div>
-                  <div className={cn(agentPanelMetaTextClass(), "mt-1 break-all")}>
-                    {readString(match["snippet"])}
-                  </div>
+                  <div className={cn(agentPanelMetaTextClass(), 'mt-1 break-all')}>{readString(match['snippet'])}</div>
                 </div>
-                <div className={agentPanelEyebrowTextClass()}>
-                  score {readNumber(match["score"])}
-                </div>
+                <div className={agentPanelEyebrowTextClass()}>score {readNumber(match['score'])}</div>
               </div>
-              {Array.isArray(match["reasons"]) ? (
+              {Array.isArray(match['reasons']) ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {match["reasons"].map((reason) => (
-                    <span
-                      key={readString(reason)}
-                      className={workbookPillClass({ tone: "neutral" })}
-                    >
+                  {match['reasons'].map((reason) => (
+                    <span key={readString(reason)} className={workbookPillClass({ tone: 'neutral' })}>
                       {renderReasonLabel(readString(reason))}
                     </span>
                   ))}
@@ -512,47 +443,44 @@ function StructuredToolOutput(props: {
           ))}
         </div>
       </div>
-    );
+    )
   }
 
-  if (
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies &&
-    Array.isArray(parsed["layers"])
-  ) {
-    const root = isRecord(parsed["root"]) ? parsed["root"] : null;
-    const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
+  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies && Array.isArray(parsed['layers'])) {
+    const root = isRecord(parsed['root']) ? parsed['root'] : null
+    const layers = parsed['layers'].flatMap((layer) => (isRecord(layer) ? [layer] : []))
     return (
-      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className={cn(agentPanelMetaTextClass(), "flex items-start justify-between gap-3")}>
+      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
+        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
           <div>
-            {readString(root?.["sheetName"])}!{readString(root?.["address"])}
+            {readString(root?.['sheetName'])}!{readString(root?.['address'])}
           </div>
           <div className={agentPanelEyebrowTextClass()}>
-            {readString(parsed["direction"], "both")} · {readNumber(parsed["depth"])} hops
+            {readString(parsed['direction'], 'both')} · {readNumber(parsed['depth'])} hops
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-2">
           {layers.map((layer) => (
             <div
-              key={`trace-layer-${readNumber(layer["depth"])}`}
+              key={`trace-layer-${readNumber(layer['depth'])}`}
               className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
             >
-              <div className={agentPanelEyebrowTextClass()}>Hop {readNumber(layer["depth"])}</div>
+              <div className={agentPanelEyebrowTextClass()}>Hop {readNumber(layer['depth'])}</div>
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <div>
-                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>Precedents</div>
+                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>Precedents</div>
                   <div className="mt-1 flex flex-col gap-1">
-                    {Array.isArray(layer["precedents"]) && layer["precedents"].length > 0 ? (
-                      layer["precedents"]
+                    {Array.isArray(layer['precedents']) && layer['precedents'].length > 0 ? (
+                      layer['precedents']
                         .flatMap((node) => (isRecord(node) ? [node] : []))
                         .map((node) => (
                           <div
-                            key={`precedent:${readString(node["sheetName"])}:${readString(node["address"])}`}
+                            key={`precedent:${readString(node['sheetName'])}:${readString(node['address'])}`}
                             className={agentPanelMetaTextClass()}
                           >
-                            {readString(node["sheetName"])}!{readString(node["address"])}{" "}
+                            {readString(node['sheetName'])}!{readString(node['address'])}{' '}
                             <span className="text-[var(--wb-text-muted)]">
-                              {readString(node["formula"]) || readString(node["valueText"])}
+                              {readString(node['formula']) || readString(node['valueText'])}
                             </span>
                           </div>
                         ))
@@ -562,19 +490,19 @@ function StructuredToolOutput(props: {
                   </div>
                 </div>
                 <div>
-                  <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>Dependents</div>
+                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>Dependents</div>
                   <div className="mt-1 flex flex-col gap-1">
-                    {Array.isArray(layer["dependents"]) && layer["dependents"].length > 0 ? (
-                      layer["dependents"]
+                    {Array.isArray(layer['dependents']) && layer['dependents'].length > 0 ? (
+                      layer['dependents']
                         .flatMap((node) => (isRecord(node) ? [node] : []))
                         .map((node) => (
                           <div
-                            key={`dependent:${readString(node["sheetName"])}:${readString(node["address"])}`}
+                            key={`dependent:${readString(node['sheetName'])}:${readString(node['address'])}`}
                             className={agentPanelMetaTextClass()}
                           >
-                            {readString(node["sheetName"])}!{readString(node["address"])}{" "}
+                            {readString(node['sheetName'])}!{readString(node['address'])}{' '}
                             <span className="text-[var(--wb-text-muted)]">
-                              {readString(node["formula"]) || readString(node["valueText"])}
+                              {readString(node['formula']) || readString(node['valueText'])}
                             </span>
                           </div>
                         ))
@@ -588,82 +516,74 @@ function StructuredToolOutput(props: {
           ))}
         </div>
       </div>
-    );
+    )
   }
 
-  return null;
+  return null
 }
 
 function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
-  const { entry } = props;
-  if (entry.kind === "user") {
+  const { entry } = props
+  if (entry.kind === 'user') {
     return (
       <div className="flex justify-end px-3 py-3">
         <div
           className={cn(
             agentPanelBodyTextClass(),
-            "max-w-[82%] break-words rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+            'max-w-[82%] break-words rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
           )}
         >
-          <WorkbookAgentMarkdown markdown={entry.text ?? ""} />
+          <WorkbookAgentMarkdown markdown={entry.text ?? ''} />
           <TimelineCitationList citations={entry.citations} />
         </div>
       </div>
-    );
+    )
   }
 
-  if (entry.kind === "assistant") {
-    if (entry.phase === "progress") {
-      return null;
+  if (entry.kind === 'assistant') {
+    if (entry.phase === 'progress') {
+      return null
     }
     if (!entry.text?.trim().length) {
-      return null;
+      return null
     }
     return (
-      <div className={cn(agentPanelBodyTextClass(), "px-3 py-3")}>
+      <div className={cn(agentPanelBodyTextClass(), 'px-3 py-3')}>
         <WorkbookAgentMarkdown markdown={entry.text} />
         <TimelineCitationList citations={entry.citations} />
       </div>
-    );
+    )
   }
 
-  if (entry.kind === "reasoning") {
-    return <TextDisclosureEntryRow entry={entry} label="Thought" />;
+  if (entry.kind === 'reasoning') {
+    return <TextDisclosureEntryRow entry={entry} label="Thought" />
   }
 
-  if (entry.kind === "plan") {
-    return <TextDisclosureEntryRow entry={entry} label="Plan" />;
+  if (entry.kind === 'plan') {
+    return <TextDisclosureEntryRow entry={entry} label="Plan" />
   }
 
-  if (entry.kind === "tool") {
-    const displayName = renderToolDisplayName(entry.toolName);
-    const summary = summarizeToolEntry(entry);
-    const hasStructuredOutput = supportsStructuredToolOutput(entry.toolName);
-    const parsedOutput = safeParseToolOutput(entry.outputText);
-    const hasDetails =
-      (entry.argumentsText?.trim().length ?? 0) > 0 || (entry.outputText?.trim().length ?? 0) > 0;
+  if (entry.kind === 'tool') {
+    const displayName = renderToolDisplayName(entry.toolName)
+    const summary = summarizeToolEntry(entry)
+    const hasStructuredOutput = supportsStructuredToolOutput(entry.toolName)
+    const parsedOutput = safeParseToolOutput(entry.outputText)
+    const hasDetails = (entry.argumentsText?.trim().length ?? 0) > 0 || (entry.outputText?.trim().length ?? 0) > 0
     if (!hasDetails) {
       return (
         <div className="px-3 py-2.5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex flex-1 items-center gap-2.5">
-              <div className={cn(agentPanelLabelTextClass(), "min-w-0")}>{displayName}</div>
+              <div className={cn(agentPanelLabelTextClass(), 'min-w-0')}>{displayName}</div>
               {summary ? (
-                <div
-                  className={cn(
-                    agentPanelMetaTextClass(),
-                    "min-w-0 flex-1 whitespace-normal break-words",
-                  )}
-                >
-                  {summary}
-                </div>
+                <div className={cn(agentPanelMetaTextClass(), 'min-w-0 flex-1 whitespace-normal break-words')}>{summary}</div>
               ) : null}
             </div>
             <ToolStatusPill status={entry.toolStatus} />
           </div>
           <TimelineCitationList citations={entry.citations} />
         </div>
-      );
+      )
     }
     return (
       <WorkbookAgentDisclosureRow
@@ -684,7 +604,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
             <pre
               className={cn(
                 agentPanelMetaTextClass(),
-                "mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+                'mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2',
               )}
             >
               {entry.argumentsText}
@@ -692,7 +612,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
           </div>
         ) : null}
         {entry.outputText?.trim().length ? (
-          <div className={entry.argumentsText?.trim().length ? "mt-2" : undefined}>
+          <div className={entry.argumentsText?.trim().length ? 'mt-2' : undefined}>
             <div className={agentPanelEyebrowTextClass()}>Output</div>
             {hasStructuredOutput && parsedOutput !== null ? (
               <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
@@ -700,7 +620,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
               <pre
                 className={cn(
                   agentPanelMetaTextClass(),
-                  "mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2",
+                  'mt-1 box-border w-full min-w-0 max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2',
                 )}
               >
                 {entry.outputText}
@@ -710,11 +630,11 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         ) : null}
         <TimelineCitationList citations={entry.citations} />
       </WorkbookAgentDisclosureRow>
-    );
+    )
   }
 
   if (isAppliedExecutionSystemEntry(entry)) {
-    return null;
+    return null
   }
 
   return (
@@ -722,18 +642,16 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       <div className={agentPanelMetaTextClass()}>{entry.text}</div>
       <TimelineCitationList citations={entry.citations} />
     </div>
-  );
+  )
 }
 
-function TimelineCitationList(props: {
-  readonly citations: readonly WorkbookAgentTimelineCitation[];
-}) {
-  const segments = summarizeTimelineCitations(props.citations);
+function TimelineCitationList(props: { readonly citations: readonly WorkbookAgentTimelineCitation[] }) {
+  const segments = summarizeTimelineCitations(props.citations)
   if (segments.length === 0) {
-    return null;
+    return null
   }
   return (
-    <div className={cn(agentPanelMetaTextClass(), "mt-1 break-words")}>
+    <div className={cn(agentPanelMetaTextClass(), 'mt-1 break-words')}>
       {segments.map((segment, index) => (
         <Fragment key={segment}>
           {index > 0 ? <span aria-hidden="true"> · </span> : null}
@@ -741,101 +659,88 @@ function TimelineCitationList(props: {
         </Fragment>
       ))}
     </div>
-  );
+  )
 }
 
-function summarizeTimelineCitations(
-  citations: readonly WorkbookAgentTimelineCitation[],
-): readonly string[] {
-  const seen = new Set<string>();
-  const segments: string[] = [];
+function summarizeTimelineCitations(citations: readonly WorkbookAgentTimelineCitation[]): readonly string[] {
+  const seen = new Set<string>()
+  const segments: string[] = []
   for (const citation of citations) {
-    if (citation.kind === "revision") {
-      continue;
+    if (citation.kind === 'revision') {
+      continue
     }
     const address =
       citation.startAddress === citation.endAddress
         ? `${citation.sheetName}!${citation.startAddress}`
-        : `${citation.sheetName}!${citation.startAddress}:${citation.endAddress}`;
-    const segment = `${citation.role === "target" ? "Target" : "Source"} ${address}`;
+        : `${citation.sheetName}!${citation.startAddress}:${citation.endAddress}`
+    const segment = `${citation.role === 'target' ? 'Target' : 'Source'} ${address}`
     if (seen.has(segment)) {
-      continue;
+      continue
     }
-    seen.add(segment);
-    segments.push(segment);
+    seen.add(segment)
+    segments.push(segment)
   }
-  return segments;
+  return segments
 }
 
 function ReviewItemCard(props: {
-  readonly activeReviewBundle: WorkbookAgentCommandBundle;
-  readonly preview: WorkbookAgentPreviewSummary | null;
-  readonly sharedApprovalOwnerUserId: string | null;
-  readonly sharedReviewOwnerUserId: string | null;
-  readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
-  readonly sharedReviewDecidedByUserId: string | null;
-  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[];
-  readonly currentUserSharedRecommendation: "approved" | "rejected" | null;
-  readonly canFinalizeSharedBundle: boolean;
-  readonly canRecommendSharedBundle: boolean;
-  readonly selectedCommandIndexes: readonly number[];
-  readonly isApplyingReviewItem: boolean;
-  readonly onApply: () => void;
-  readonly onDismiss: () => void;
-  readonly onReview: (decision: "approved" | "rejected") => void;
-  readonly onSelectAll: () => void;
-  readonly onToggleCommand: (commandIndex: number) => void;
+  readonly activeReviewBundle: WorkbookAgentCommandBundle
+  readonly preview: WorkbookAgentPreviewSummary | null
+  readonly sharedApprovalOwnerUserId: string | null
+  readonly sharedReviewOwnerUserId: string | null
+  readonly sharedReviewStatus: 'pending' | 'approved' | 'rejected' | null
+  readonly sharedReviewDecidedByUserId: string | null
+  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[]
+  readonly currentUserSharedRecommendation: 'approved' | 'rejected' | null
+  readonly canFinalizeSharedBundle: boolean
+  readonly canRecommendSharedBundle: boolean
+  readonly selectedCommandIndexes: readonly number[]
+  readonly isApplyingReviewItem: boolean
+  readonly onApply: () => void
+  readonly onDismiss: () => void
+  readonly onReview: (decision: 'approved' | 'rejected') => void
+  readonly onSelectAll: () => void
+  readonly onToggleCommand: (commandIndex: number) => void
 }) {
-  const selectedCount = props.selectedCommandIndexes.length;
-  const hasFullSelection = selectedCount === props.activeReviewBundle.commands.length;
-  const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId
-    ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId)
-    : null;
-  const sharedReviewOwnerLabel = props.sharedReviewOwnerUserId
-    ? formatWorkbookCollaboratorLabel(props.sharedReviewOwnerUserId)
-    : null;
+  const selectedCount = props.selectedCommandIndexes.length
+  const hasFullSelection = selectedCount === props.activeReviewBundle.commands.length
+  const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId) : null
+  const sharedReviewOwnerLabel = props.sharedReviewOwnerUserId ? formatWorkbookCollaboratorLabel(props.sharedReviewOwnerUserId) : null
   const sharedReviewDecisionLabel = props.sharedReviewDecidedByUserId
     ? formatWorkbookCollaboratorLabel(props.sharedReviewDecidedByUserId)
-    : null;
+    : null
   const approvalRecommendationCount = props.sharedReviewRecommendations.filter(
-    (recommendation) => recommendation.decision === "approved",
-  ).length;
+    (recommendation) => recommendation.decision === 'approved',
+  ).length
   const rejectionRecommendationCount = props.sharedReviewRecommendations.filter(
-    (recommendation) => recommendation.decision === "rejected",
-  ).length;
+    (recommendation) => recommendation.decision === 'rejected',
+  ).length
   const recommendationSummary =
     props.sharedReviewRecommendations.length === 0
       ? null
-      : `${String(approvalRecommendationCount)} approval ${approvalRecommendationCount === 1 ? "recommendation" : "recommendations"} · ${String(rejectionRecommendationCount)} rejection ${rejectionRecommendationCount === 1 ? "recommendation" : "recommendations"}`;
+      : `${String(approvalRecommendationCount)} approval ${approvalRecommendationCount === 1 ? 'recommendation' : 'recommendations'} · ${String(rejectionRecommendationCount)} rejection ${rejectionRecommendationCount === 1 ? 'recommendation' : 'recommendations'}`
   const canApply =
     props.preview !== null &&
     !props.isApplyingReviewItem &&
     selectedCount > 0 &&
     sharedApprovalOwnerLabel === null &&
-    (props.sharedReviewStatus === null || props.sharedReviewStatus === "approved");
+    (props.sharedReviewStatus === null || props.sharedReviewStatus === 'approved')
   const applyLabel =
     selectedCount > 0 && !hasFullSelection
       ? props.isApplyingReviewItem
-        ? "Applying…"
-        : "Apply"
-      : props.sharedReviewStatus === "pending"
-        ? "Owner review"
-        : props.sharedReviewStatus === "rejected"
-          ? "Returned"
+        ? 'Applying…'
+        : 'Apply'
+      : props.sharedReviewStatus === 'pending'
+        ? 'Owner review'
+        : props.sharedReviewStatus === 'rejected'
+          ? 'Returned'
           : props.isApplyingReviewItem
-            ? "Applying…"
-            : "Apply";
+            ? 'Applying…'
+            : 'Apply'
   return (
-    <div
-      className={cn(
-        workbookSurfaceClass({ emphasis: "raised" }),
-        "border-[var(--wb-border-strong)] px-3 py-3",
-      )}
-    >
-      <div className={cn(agentPanelLabelTextClass(), "font-semibold")}>
-        {props.activeReviewBundle.summary}
-      </div>
-      <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
+    <div className={cn(workbookSurfaceClass({ emphasis: 'raised' }), 'border-[var(--wb-border-strong)] px-3 py-3')}>
+      <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>{props.activeReviewBundle.summary}</div>
+      <div className={cn(workbookInsetClass(), 'mt-3 px-2 py-2')}>
         <div className="flex items-center justify-between gap-3">
           <div className={agentPanelEyebrowTextClass()}>
             {String(selectedCount)}/{String(props.activeReviewBundle.commands.length)}
@@ -852,16 +757,14 @@ function ReviewItemCard(props: {
         </div>
         <div className="mt-2 flex flex-col gap-2">
           {props.activeReviewBundle.commands.map((command, index) => {
-            const checked = props.selectedCommandIndexes.includes(index);
-            const commandLabel = describeWorkbookAgentCommand(command);
+            const checked = props.selectedCommandIndexes.includes(index)
+            const commandLabel = describeWorkbookAgentCommand(command)
             return (
               <div
                 key={`${props.activeReviewBundle.id}:${JSON.stringify(command)}`}
                 className={cn(
-                  "flex items-start gap-3 rounded-[var(--wb-radius-control)] border px-3 py-2 transition-colors",
-                  checked
-                    ? "border-[var(--wb-accent-ring)] bg-[var(--wb-surface)]"
-                    : "border-[var(--wb-border)] bg-[var(--wb-surface)]",
+                  'flex items-start gap-3 rounded-[var(--wb-radius-control)] border px-3 py-2 transition-colors',
+                  checked ? 'border-[var(--wb-accent-ring)] bg-[var(--wb-surface)]' : 'border-[var(--wb-border)] bg-[var(--wb-surface)]',
                 )}
               >
                 <input
@@ -871,68 +774,49 @@ function ReviewItemCard(props: {
                   data-testid={`workbook-agent-review-command-toggle-${String(index)}`}
                   type="checkbox"
                   onChange={() => {
-                    props.onToggleCommand(index);
+                    props.onToggleCommand(index)
                   }}
                 />
                 <div className="min-w-0">
                   <div className={agentPanelLabelTextClass()}>{commandLabel}</div>
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       </div>
       <PreviewRangeList ranges={props.preview?.ranges ?? props.activeReviewBundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
-        <div
-          className={cn(
-            workbookInsetClass(),
-            agentPanelMetaTextClass(),
-            "mt-2 border-transparent px-2 py-2",
-          )}
-        >
-          {props.preview.structuralChanges.join(" · ")}
+        <div className={cn(workbookInsetClass(), agentPanelMetaTextClass(), 'mt-2 border-transparent px-2 py-2')}>
+          {props.preview.structuralChanges.join(' · ')}
         </div>
       ) : null}
       {sharedApprovalOwnerLabel ? (
-        <div
-          className={cn(
-            workbookAlertClass({ tone: "warning" }),
-            agentPanelMetaTextClass(),
-            "mt-2 border-[var(--wb-border-strong)]",
-          )}
-        >
-          Owner review routes medium/high-risk changes to {sharedApprovalOwnerLabel} on this shared
-          thread.
+        <div className={cn(workbookAlertClass({ tone: 'warning' }), agentPanelMetaTextClass(), 'mt-2 border-[var(--wb-border-strong)]')}>
+          Owner review routes medium/high-risk changes to {sharedApprovalOwnerLabel} on this shared thread.
         </div>
       ) : null}
       {recommendationSummary ? (
-        <div
-          className={cn(
-            workbookInsetClass(),
-            agentPanelMetaTextClass(),
-            "mt-2 border-transparent px-2 py-2",
-          )}
-        >
+        <div className={cn(workbookInsetClass(), agentPanelMetaTextClass(), 'mt-2 border-transparent px-2 py-2')}>
           {recommendationSummary}
           {props.currentUserSharedRecommendation
-            ? ` You recommended ${props.currentUserSharedRecommendation === "approved" ? "approval" : "rejection"}.`
-            : ""}
+            ? ` You recommended ${props.currentUserSharedRecommendation === 'approved' ? 'approval' : 'rejection'}.`
+            : ''}
         </div>
       ) : null}
       {sharedReviewOwnerLabel && props.sharedReviewStatus ? (
         <div
           className={cn(
             workbookAlertClass({
-              tone: props.sharedReviewStatus === "rejected" ? "danger" : "warning",
+              tone: props.sharedReviewStatus === 'rejected' ? 'danger' : 'warning',
             }),
             agentPanelMetaTextClass(),
-            "mt-2 border-[var(--wb-border-strong)]",
+            'mt-2 border-[var(--wb-border-strong)]',
           )}
         >
-          {props.sharedReviewStatus === "pending"
+          {props.sharedReviewStatus === 'pending'
             ? `Owner review is in progress with ${sharedReviewOwnerLabel}.`
-            : props.sharedReviewStatus === "approved"
+            : props.sharedReviewStatus === 'approved'
               ? `Approved by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`
               : `Returned by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`}
         </div>
@@ -940,45 +824,45 @@ function ReviewItemCard(props: {
       {props.canFinalizeSharedBundle && props.sharedReviewStatus !== null ? (
         <div className="mt-2 flex items-center justify-end gap-2">
           <Button
-            className={workbookButtonClass({ tone: "neutral" })}
+            className={workbookButtonClass({ tone: 'neutral' })}
             data-testid="workbook-agent-review-item-reject"
             type="button"
             onClick={() => {
-              props.onReview("rejected");
+              props.onReview('rejected')
             }}
           >
             Reject
           </Button>
           <Button
-            className={workbookButtonClass({ tone: "accent" })}
+            className={workbookButtonClass({ tone: 'accent' })}
             data-testid="workbook-agent-review-item-approve"
             type="button"
             onClick={() => {
-              props.onReview("approved");
+              props.onReview('approved')
             }}
           >
             Approve
           </Button>
         </div>
       ) : null}
-      {props.canRecommendSharedBundle && props.sharedReviewStatus === "pending" ? (
+      {props.canRecommendSharedBundle && props.sharedReviewStatus === 'pending' ? (
         <div className="mt-2 flex items-center justify-end gap-2">
           <Button
-            className={workbookButtonClass({ tone: "neutral" })}
+            className={workbookButtonClass({ tone: 'neutral' })}
             data-testid="workbook-agent-review-item-reject"
             type="button"
             onClick={() => {
-              props.onReview("rejected");
+              props.onReview('rejected')
             }}
           >
             Recommend reject
           </Button>
           <Button
-            className={workbookButtonClass({ tone: "accent" })}
+            className={workbookButtonClass({ tone: 'accent' })}
             data-testid="workbook-agent-review-item-approve"
             type="button"
             onClick={() => {
-              props.onReview("approved");
+              props.onReview('approved')
             }}
           >
             Recommend approve
@@ -993,37 +877,29 @@ function ReviewItemCard(props: {
                 key={`${diff.sheetName}:${diff.address}`}
                 className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-t border-[var(--wb-border)] px-2 py-2 first:border-t-0"
               >
-                <div className={cn(agentPanelLabelTextClass(), "col-span-2")}>
+                <div className={cn(agentPanelLabelTextClass(), 'col-span-2')}>
                   {diff.sheetName}!{diff.address}
                 </div>
                 <div className="col-span-2 mt-1 flex flex-wrap gap-1">
                   {diff.changeKinds.map((kind) => (
-                    <span key={kind} className={workbookPillClass({ tone: "neutral" })}>
+                    <span key={kind} className={workbookPillClass({ tone: 'neutral' })}>
                       {renderPreviewChangeKind(kind)}
                     </span>
                   ))}
                 </div>
-                <div className={agentPanelMetaTextClass()}>
-                  {(diff.beforeFormula ?? String(diff.beforeInput ?? "")) || "(empty)"}
-                </div>
-                <div className={agentPanelLabelTextClass()}>
-                  {(diff.afterFormula ?? String(diff.afterInput ?? "")) || "(empty)"}
-                </div>
+                <div className={agentPanelMetaTextClass()}>{(diff.beforeFormula ?? String(diff.beforeInput ?? '')) || '(empty)'}</div>
+                <div className={agentPanelLabelTextClass()}>{(diff.afterFormula ?? String(diff.afterInput ?? '')) || '(empty)'}</div>
               </div>
             ))}
           </div>
         </div>
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
-        <Button
-          className={workbookButtonClass({ tone: "neutral" })}
-          type="button"
-          onClick={props.onDismiss}
-        >
+        <Button className={workbookButtonClass({ tone: 'neutral' })} type="button" onClick={props.onDismiss}>
           Clear
         </Button>
         <Button
-          className={workbookButtonClass({ tone: "accent", weight: "strong" })}
+          className={workbookButtonClass({ tone: 'accent', weight: 'strong' })}
           data-testid="workbook-agent-apply-review-item"
           disabled={!canApply}
           type="button"
@@ -1033,80 +909,77 @@ function ReviewItemCard(props: {
         </Button>
       </div>
     </div>
-  );
+  )
 }
 
 export function WorkbookAgentPanel(props: {
-  readonly activeThreadId: string | null;
-  readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[];
-  readonly snapshot: WorkbookAgentThreadSnapshot | null;
-  readonly activeResponseTurnId: string | null;
-  readonly showAssistantProgress: boolean;
-  readonly activeReviewBundle: WorkbookAgentCommandBundle | null;
-  readonly preview: WorkbookAgentPreviewSummary | null;
-  readonly sharedApprovalOwnerUserId: string | null;
-  readonly sharedReviewOwnerUserId: string | null;
-  readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
-  readonly sharedReviewDecidedByUserId: string | null;
-  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[];
-  readonly currentUserSharedRecommendation: "approved" | "rejected" | null;
-  readonly canFinalizeSharedBundle: boolean;
-  readonly canRecommendSharedBundle: boolean;
-  readonly selectedCommandIndexes: readonly number[];
-  readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
-  readonly cancellingWorkflowRunId: string | null;
-  readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
-  readonly draft: string;
-  readonly isLoading: boolean;
-  readonly isApplyingReviewItem: boolean;
-  readonly onApplyReviewItem: () => void;
-  readonly onDraftChange: (value: string) => void;
-  readonly onDismissReviewItem: () => void;
-  readonly onReviewReviewItem: (decision: "approved" | "rejected") => void;
-  readonly onInterrupt: () => void;
-  readonly onSelectAllReviewCommands: () => void;
-  readonly onSelectThread: (threadId: string) => void;
-  readonly onToggleReviewCommand: (commandIndex: number) => void;
-  readonly onCancelWorkflowRun: (runId: string) => void;
-  readonly onSubmit: () => void;
+  readonly activeThreadId: string | null
+  readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[]
+  readonly snapshot: WorkbookAgentThreadSnapshot | null
+  readonly activeResponseTurnId: string | null
+  readonly showAssistantProgress: boolean
+  readonly activeReviewBundle: WorkbookAgentCommandBundle | null
+  readonly preview: WorkbookAgentPreviewSummary | null
+  readonly sharedApprovalOwnerUserId: string | null
+  readonly sharedReviewOwnerUserId: string | null
+  readonly sharedReviewStatus: 'pending' | 'approved' | 'rejected' | null
+  readonly sharedReviewDecidedByUserId: string | null
+  readonly sharedReviewRecommendations: readonly WorkbookAgentSharedReviewRecommendation[]
+  readonly currentUserSharedRecommendation: 'approved' | 'rejected' | null
+  readonly canFinalizeSharedBundle: boolean
+  readonly canRecommendSharedBundle: boolean
+  readonly selectedCommandIndexes: readonly number[]
+  readonly workflowRuns: readonly WorkbookAgentWorkflowRun[]
+  readonly cancellingWorkflowRunId: string | null
+  readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
+  readonly draft: string
+  readonly isLoading: boolean
+  readonly isApplyingReviewItem: boolean
+  readonly onApplyReviewItem: () => void
+  readonly onDraftChange: (value: string) => void
+  readonly onDismissReviewItem: () => void
+  readonly onReviewReviewItem: (decision: 'approved' | 'rejected') => void
+  readonly onInterrupt: () => void
+  readonly onSelectAllReviewCommands: () => void
+  readonly onSelectThread: (threadId: string) => void
+  readonly onToggleReviewCommand: (commandIndex: number) => void
+  readonly onCancelWorkflowRun: (runId: string) => void
+  readonly onSubmit: () => void
 }) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const composerViewportRef = useRef<HTMLDivElement | null>(null);
-  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const composerViewportRef = useRef<HTMLDivElement | null>(null)
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const optimisticEntries = props.optimisticEntries ?? [];
+  const optimisticEntries = props.optimisticEntries ?? []
 
   useEffect(() => {
-    const node = scrollRef.current;
+    const node = scrollRef.current
     if (!node) {
-      return;
+      return
     }
-    node.scrollTop = node.scrollHeight;
-  }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status]);
+    node.scrollTop = node.scrollHeight
+  }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status])
 
   useLayoutEffect(() => {
-    const viewport = composerViewportRef.current;
-    const textarea = composerTextareaRef.current;
+    const viewport = composerViewportRef.current
+    const textarea = composerTextareaRef.current
     if (!viewport || !textarea) {
-      return;
+      return
     }
 
-    textarea.style.height = "0px";
-    const measuredHeight = Math.max(textarea.scrollHeight, AGENT_COMPOSER_MIN_HEIGHT);
-    textarea.style.height = `${measuredHeight}px`;
-    viewport.style.height = `${Math.min(measuredHeight, AGENT_COMPOSER_MAX_HEIGHT)}px`;
-    viewport.scrollTop = viewport.scrollHeight;
-  }, [props.draft]);
+    textarea.style.height = '0px'
+    const measuredHeight = Math.max(textarea.scrollHeight, AGENT_COMPOSER_MIN_HEIGHT)
+    textarea.style.height = `${measuredHeight}px`
+    viewport.style.height = `${Math.min(measuredHeight, AGENT_COMPOSER_MAX_HEIGHT)}px`
+    viewport.scrollTop = viewport.scrollHeight
+  }, [props.draft])
 
-  const isRunning = props.snapshot?.status === "inProgress";
-  const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])];
+  const isRunning = props.snapshot?.status === 'inProgress'
+  const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])]
   const progressAnchorIndex =
     props.showAssistantProgress && props.activeResponseTurnId
-      ? visibleEntries.findLastIndex(
-          (entry) =>
-            entry.turnId === props.activeResponseTurnId && !isAppliedExecutionSystemEntry(entry),
-        )
-      : -1;
+      ? visibleEntries.findLastIndex((entry) => entry.turnId === props.activeResponseTurnId && !isAppliedExecutionSystemEntry(entry))
+      : -1
 
   return (
     <div
@@ -1136,18 +1009,14 @@ export function WorkbookAgentPanel(props: {
                         <div className="min-w-0 w-full max-w-full overflow-hidden">
                           <WorkbookAgentEntryRow entry={entry} />
                         </div>
-                        {props.showAssistantProgress && progressAnchorIndex === index ? (
-                          <AssistantProgressRow />
-                        ) : null}
+                        {props.showAssistantProgress && progressAnchorIndex === index ? <AssistantProgressRow /> : null}
                       </Fragment>
                     ))}
-                    {props.showAssistantProgress && progressAnchorIndex < 0 ? (
-                      <AssistantProgressRow />
-                    ) : null}
+                    {props.showAssistantProgress && progressAnchorIndex < 0 ? <AssistantProgressRow /> : null}
                   </div>
                   {props.workflowRuns.length > 0 ? (
                     <div className="pt-1">
-                      <div className={cn(agentPanelEyebrowTextClass(), "mb-2")}>Workflows</div>
+                      <div className={cn(agentPanelEyebrowTextClass(), 'mb-2')}>Workflows</div>
                       <div className="flex flex-col gap-2">
                         {props.workflowRuns.slice(0, 5).map((run) => (
                           <WorkflowRunRow
@@ -1155,7 +1024,7 @@ export function WorkbookAgentPanel(props: {
                             isCancelling={props.cancellingWorkflowRunId === run.runId}
                             run={run}
                             onCancel={() => {
-                              props.onCancelWorkflowRun(run.runId);
+                              props.onCancelWorkflowRun(run.runId)
                             }}
                           />
                         ))}
@@ -1167,11 +1036,7 @@ export function WorkbookAgentPanel(props: {
             </div>
           </ScrollArea.Content>
         </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar
-          className={agentPanelScrollAreaScrollbarClass()}
-          keepMounted
-          orientation="vertical"
-        >
+        <ScrollArea.Scrollbar className={agentPanelScrollAreaScrollbarClass()} keepMounted orientation="vertical">
           <ScrollArea.Thumb className={agentPanelScrollAreaThumbClass()} />
         </ScrollArea.Scrollbar>
       </ScrollArea.Root>
@@ -1201,8 +1066,8 @@ export function WorkbookAgentPanel(props: {
         ) : null}
         <form
           onSubmit={(event) => {
-            event.preventDefault();
-            props.onSubmit();
+            event.preventDefault()
+            props.onSubmit()
           }}
         >
           <label className="sr-only" htmlFor="workbook-agent-input">
@@ -1224,44 +1089,37 @@ export function WorkbookAgentPanel(props: {
                     placeholder="Ask the workbook assistant"
                     value={props.draft}
                     onChange={(event) => {
-                      props.onDraftChange(event.target.value);
+                      props.onDraftChange(event.target.value)
                     }}
                     onKeyDown={(event) => {
                       if (isRunning) {
-                        return;
+                        return
                       }
-                      if (
-                        event.key !== "Enter" ||
-                        event.shiftKey ||
-                        event.nativeEvent.isComposing
-                      ) {
-                        return;
+                      if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
+                        return
                       }
-                      event.preventDefault();
-                      props.onSubmit();
+                      event.preventDefault()
+                      props.onSubmit()
                     }}
                   />
                 </ScrollArea.Content>
               </ScrollArea.Viewport>
-              <ScrollArea.Scrollbar
-                className={agentPanelScrollAreaScrollbarClass()}
-                orientation="vertical"
-              >
+              <ScrollArea.Scrollbar className={agentPanelScrollAreaScrollbarClass()} orientation="vertical">
                 <ScrollArea.Thumb className={agentPanelScrollAreaThumbClass()} />
               </ScrollArea.Scrollbar>
             </ScrollArea.Root>
             <Button
-              aria-label={isRunning ? "Stop" : "Send message"}
+              aria-label={isRunning ? 'Stop' : 'Send message'}
               className={agentPanelComposerSendButtonClass()}
               data-testid="workbook-agent-send"
               disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
               type="button"
               onClick={() => {
                 if (isRunning) {
-                  props.onInterrupt();
-                  return;
+                  props.onInterrupt()
+                  return
                 }
-                props.onSubmit();
+                props.onSubmit()
               }}
             >
               {isRunning ? <StopIcon /> : <SendArrowIcon />}
@@ -1270,13 +1128,13 @@ export function WorkbookAgentPanel(props: {
         </form>
       </div>
     </div>
-  );
+  )
 }
 
 function SendArrowIcon() {
-  return <ArrowUp aria-hidden="true" className="size-5" strokeWidth={1.9} />;
+  return <ArrowUp aria-hidden="true" className="size-5" strokeWidth={1.9} />
 }
 
 function StopIcon() {
-  return <Square aria-hidden="true" className="size-4 fill-current" strokeWidth={0} />;
+  return <Square aria-hidden="true" className="size-4 fill-current" strokeWidth={0} />
 }

@@ -1,83 +1,80 @@
-import React from "react";
-import { describe, expect, it } from "vitest";
-import { Cell, Sheet, Workbook } from "../components.js";
+import React from 'react'
+import { describe, expect, it } from 'vitest'
+import { Cell, Sheet, Workbook } from '../components.js'
 
 function isPropsWithChildren(value: unknown): value is { children?: React.ReactNode } {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function expectElement(value: React.ReactNode): React.ReactElement {
   if (!React.isValidElement(value)) {
-    throw new Error("Expected a React element");
+    throw new Error('Expected a React element')
   }
-  return value;
+  return value
 }
 
-describe("renderer components", () => {
-  it("wraps workbook and sheet children with stable keys", () => {
+describe('renderer components', () => {
+  it('wraps workbook and sheet children with stable keys', () => {
     const workbookElement = Workbook({
-      name: "book",
+      name: 'book',
       children: [<Sheet name="Sheet1" key="ignored-1" />, <Sheet key="ignored-2" name="Sheet2" />],
-    });
-    expect(isPropsWithChildren(workbookElement.props)).toBe(true);
+    })
+    expect(isPropsWithChildren(workbookElement.props)).toBe(true)
     if (!isPropsWithChildren(workbookElement.props)) {
-      throw new Error("Workbook props should include children");
+      throw new Error('Workbook props should include children')
     }
 
-    const workbookChildren = React.Children.toArray(workbookElement.props.children);
-    expect(workbookElement.type).toBe("Workbook");
-    expect(String(expectElement(workbookChildren[0]).key)).toContain("Sheet1");
-    expect(String(expectElement(workbookChildren[1]).key)).toContain("Sheet2");
+    const workbookChildren = React.Children.toArray(workbookElement.props.children)
+    expect(workbookElement.type).toBe('Workbook')
+    expect(String(expectElement(workbookChildren[0]).key)).toContain('Sheet1')
+    expect(String(expectElement(workbookChildren[1]).key)).toContain('Sheet2')
 
     const sheetElement = Sheet({
-      name: "Sheet1",
-      children: [
-        <Cell addr="A1" value={10} key="ignored-a1" />,
-        <Cell addr="B1" formula="A1*2" key="ignored-b1" />,
-      ],
-    });
-    expect(isPropsWithChildren(sheetElement.props)).toBe(true);
+      name: 'Sheet1',
+      children: [<Cell addr="A1" value={10} key="ignored-a1" />, <Cell addr="B1" formula="A1*2" key="ignored-b1" />],
+    })
+    expect(isPropsWithChildren(sheetElement.props)).toBe(true)
     if (!isPropsWithChildren(sheetElement.props)) {
-      throw new Error("Sheet props should include children");
+      throw new Error('Sheet props should include children')
     }
 
-    const sheetChildren = React.Children.toArray(sheetElement.props.children);
-    expect(sheetElement.type).toBe("Sheet");
-    expect(String(expectElement(sheetChildren[0]).key)).toContain("A1");
-    expect(String(expectElement(sheetChildren[1]).key)).toContain("B1");
-  });
+    const sheetChildren = React.Children.toArray(sheetElement.props.children)
+    expect(sheetElement.type).toBe('Sheet')
+    expect(String(expectElement(sheetChildren[0]).key)).toContain('A1')
+    expect(String(expectElement(sheetChildren[1]).key)).toContain('B1')
+  })
 
-  it("passes cell props through unchanged", () => {
-    const element = Cell({ addr: "A1", value: 10, format: "currency-usd" });
-    expect(element.type).toBe("Cell");
+  it('passes cell props through unchanged', () => {
+    const element = Cell({ addr: 'A1', value: 10, format: 'currency-usd' })
+    expect(element.type).toBe('Cell')
     expect(element.props).toMatchObject({
-      addr: "A1",
+      addr: 'A1',
       value: 10,
-      format: "currency-usd",
-    });
-  });
+      format: 'currency-usd',
+    })
+  })
 
-  it("preserves non-element children when assigning stable keys", () => {
+  it('preserves non-element children when assigning stable keys', () => {
     const workbookElement = Workbook({
-      name: "book",
-      children: ["plain child", <Sheet name="Sheet1" key="ignored" />],
-    });
-    expect(isPropsWithChildren(workbookElement.props)).toBe(true);
+      name: 'book',
+      children: ['plain child', <Sheet name="Sheet1" key="ignored" />],
+    })
+    expect(isPropsWithChildren(workbookElement.props)).toBe(true)
     if (!isPropsWithChildren(workbookElement.props)) {
-      throw new Error("Workbook props should include children");
+      throw new Error('Workbook props should include children')
     }
-    const workbookChildren = React.Children.toArray(workbookElement.props.children);
-    expect(workbookChildren[0]).toBe("plain child");
+    const workbookChildren = React.Children.toArray(workbookElement.props.children)
+    expect(workbookChildren[0]).toBe('plain child')
 
     const sheetElement = Sheet({
-      name: "Sheet1",
-      children: ["note", <Cell addr="A1" value={1} key="ignored-a1" />],
-    });
-    expect(isPropsWithChildren(sheetElement.props)).toBe(true);
+      name: 'Sheet1',
+      children: ['note', <Cell addr="A1" value={1} key="ignored-a1" />],
+    })
+    expect(isPropsWithChildren(sheetElement.props)).toBe(true)
     if (!isPropsWithChildren(sheetElement.props)) {
-      throw new Error("Sheet props should include children");
+      throw new Error('Sheet props should include children')
     }
-    const sheetChildren = React.Children.toArray(sheetElement.props.children);
-    expect(sheetChildren[0]).toBe("note");
-  });
-});
+    const sheetChildren = React.Children.toArray(sheetElement.props.children)
+    expect(sheetChildren[0]).toBe('note')
+  })
+})

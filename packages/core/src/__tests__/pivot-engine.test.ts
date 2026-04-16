@@ -1,101 +1,97 @@
-import { describe, expect, it } from "vitest";
-import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import { materializePivotTable } from "../pivot-engine.js";
+import { describe, expect, it } from 'vitest'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { materializePivotTable } from '../pivot-engine.js'
 
 function stringValue(value: string): CellValue {
-  return { tag: ValueTag.String, value, stringId: 0 };
+  return { tag: ValueTag.String, value, stringId: 0 }
 }
 
 function numberValue(value: number): CellValue {
-  return { tag: ValueTag.Number, value };
+  return { tag: ValueTag.Number, value }
 }
 
-describe("materializePivotTable", () => {
-  it("groups rows by key columns and accumulates sum and count values", () => {
+describe('materializePivotTable', () => {
+  it('groups rows by key columns and accumulates sum and count values', () => {
     const result = materializePivotTable(
       {
-        groupBy: ["Region", "Product"],
+        groupBy: ['Region', 'Product'],
         values: [
-          { sourceColumn: "Sales", summarizeBy: "sum" },
-          { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" },
+          { sourceColumn: 'Sales', summarizeBy: 'sum' },
+          { sourceColumn: 'Sales', summarizeBy: 'count', outputLabel: 'Rows' },
         ],
       },
       [
-        [stringValue("Region"), stringValue("Product"), stringValue("Sales")],
-        [stringValue("East"), stringValue("Widget"), numberValue(10)],
-        [stringValue("East"), stringValue("Widget"), numberValue(5)],
-        [stringValue("West"), stringValue("Gizmo"), numberValue(7)],
+        [stringValue('Region'), stringValue('Product'), stringValue('Sales')],
+        [stringValue('East'), stringValue('Widget'), numberValue(10)],
+        [stringValue('East'), stringValue('Widget'), numberValue(5)],
+        [stringValue('West'), stringValue('Gizmo'), numberValue(7)],
       ],
-    );
+    )
 
     expect(result).toEqual({
-      kind: "ok",
+      kind: 'ok',
       rows: 3,
       cols: 4,
       values: [
-        stringValue("Region"),
-        stringValue("Product"),
-        stringValue("SUM of Sales"),
-        stringValue("Rows"),
-        stringValue("East"),
-        stringValue("Widget"),
+        stringValue('Region'),
+        stringValue('Product'),
+        stringValue('SUM of Sales'),
+        stringValue('Rows'),
+        stringValue('East'),
+        stringValue('Widget'),
         numberValue(15),
         numberValue(2),
-        stringValue("West"),
-        stringValue("Gizmo"),
+        stringValue('West'),
+        stringValue('Gizmo'),
         numberValue(7),
         numberValue(1),
       ],
-    });
-  });
+    })
+  })
 
-  it("returns a #VALUE pivot result when configured columns are missing", () => {
+  it('returns a #VALUE pivot result when configured columns are missing', () => {
     const result = materializePivotTable(
       {
-        groupBy: ["Region"],
-        values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+        groupBy: ['Region'],
+        values: [{ sourceColumn: 'Sales', summarizeBy: 'sum' }],
       },
-      [[stringValue("Category"), stringValue("Amount")]],
-    );
+      [[stringValue('Category'), stringValue('Amount')]],
+    )
 
     expect(result).toEqual({
-      kind: "error",
+      kind: 'error',
       code: ErrorCode.Value,
       rows: 1,
       cols: 1,
       values: [{ tag: ValueTag.Error, code: ErrorCode.Value }],
-    });
-  });
+    })
+  })
 
-  it("skips fully empty rows, preserves boolean and error keys, and honors custom output labels", () => {
+  it('skips fully empty rows, preserves boolean and error keys, and honors custom output labels', () => {
     const result = materializePivotTable(
       {
-        groupBy: ["Group"],
+        groupBy: ['Group'],
         values: [
-          { sourceColumn: "Sales", summarizeBy: "sum", outputLabel: "Revenue " },
-          { sourceColumn: "Tickets", summarizeBy: "count" },
+          { sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Revenue ' },
+          { sourceColumn: 'Tickets', summarizeBy: 'count' },
         ],
       },
       [
-        [stringValue("Group"), stringValue("Sales"), stringValue("Tickets")],
+        [stringValue('Group'), stringValue('Sales'), stringValue('Tickets')],
         [{ tag: ValueTag.Empty }, { tag: ValueTag.Empty }, { tag: ValueTag.Empty }],
-        [
-          { tag: ValueTag.Boolean, value: true },
-          { tag: ValueTag.Error, code: ErrorCode.Name },
-          { tag: ValueTag.Empty },
-        ],
-        [{ tag: ValueTag.Error, code: ErrorCode.Ref }, numberValue(5), stringValue("x")],
+        [{ tag: ValueTag.Boolean, value: true }, { tag: ValueTag.Error, code: ErrorCode.Name }, { tag: ValueTag.Empty }],
+        [{ tag: ValueTag.Error, code: ErrorCode.Ref }, numberValue(5), stringValue('x')],
       ],
-    );
+    )
 
     expect(result).toEqual({
-      kind: "ok",
+      kind: 'ok',
       rows: 3,
       cols: 3,
       values: [
-        stringValue("Group"),
-        stringValue("Revenue"),
-        stringValue("COUNT of Tickets"),
+        stringValue('Group'),
+        stringValue('Revenue'),
+        stringValue('COUNT of Tickets'),
         { tag: ValueTag.Boolean, value: true },
         numberValue(0),
         numberValue(0),
@@ -103,64 +99,59 @@ describe("materializePivotTable", () => {
         numberValue(5),
         numberValue(1),
       ],
-    });
-  });
+    })
+  })
 
-  it("rejects incomplete pivot configs and normalizes headers for count aggregations", () => {
+  it('rejects incomplete pivot configs and normalizes headers for count aggregations', () => {
     expect(
       materializePivotTable(
         {
-          groupBy: ["Region"],
+          groupBy: ['Region'],
           values: [],
         },
-        [[stringValue("Region"), stringValue("Sales")]],
+        [[stringValue('Region'), stringValue('Sales')]],
       ),
     ).toEqual({
-      kind: "error",
+      kind: 'error',
       code: ErrorCode.Value,
       rows: 1,
       cols: 1,
       values: [{ tag: ValueTag.Error, code: ErrorCode.Value }],
-    });
+    })
 
     expect(
       materializePivotTable(
         {
-          groupBy: ["Region"],
-          values: [{ sourceColumn: "Sales", summarizeBy: "count" }],
+          groupBy: ['Region'],
+          values: [{ sourceColumn: 'Sales', summarizeBy: 'count' }],
         },
         [],
       ),
     ).toEqual({
-      kind: "error",
+      kind: 'error',
       code: ErrorCode.Value,
       rows: 1,
       cols: 1,
       values: [{ tag: ValueTag.Error, code: ErrorCode.Value }],
-    });
+    })
 
     expect(
       materializePivotTable(
         {
-          groupBy: [" region "],
-          values: [{ sourceColumn: "sales", summarizeBy: "count" }],
+          groupBy: [' region '],
+          values: [{ sourceColumn: 'sales', summarizeBy: 'count' }],
         },
         [
-          [stringValue(" Region "), stringValue("Sales"), stringValue("sales")],
-          [stringValue("East"), stringValue("ignored"), stringValue("ticket-1")],
-          [{ tag: ValueTag.Empty }, { tag: ValueTag.Empty }, stringValue("ticket-2")],
+          [stringValue(' Region '), stringValue('Sales'), stringValue('sales')],
+          [stringValue('East'), stringValue('ignored'), stringValue('ticket-1')],
+          [{ tag: ValueTag.Empty }, { tag: ValueTag.Empty }, stringValue('ticket-2')],
         ],
       ),
     ).toEqual({
-      kind: "ok",
+      kind: 'ok',
       rows: 2,
       cols: 2,
-      values: [
-        stringValue("Region"),
-        stringValue("COUNT of Sales"),
-        stringValue("East"),
-        numberValue(1),
-      ],
-    });
-  });
-});
+      values: [stringValue('Region'), stringValue('COUNT of Sales'), stringValue('East'), numberValue(1)],
+    })
+  })
+})

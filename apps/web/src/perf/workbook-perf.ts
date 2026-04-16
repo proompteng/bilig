@@ -1,63 +1,48 @@
 export interface WorkbookPerfBootstrapResultLike {
-  readonly restoredFromPersistence: boolean;
-  readonly requiresAuthoritativeHydrate: boolean;
+  readonly restoredFromPersistence: boolean
+  readonly requiresAuthoritativeHydrate: boolean
 }
 
 interface WorkbookPerformanceApi {
-  mark(markName: string): void;
-  measure(
-    measureName: string,
-    startOrOptions?: string | { start?: string; end?: string },
-    endMark?: string,
-  ): void;
+  mark(markName: string): void
+  measure(measureName: string, startOrOptions?: string | { start?: string; end?: string }, endMark?: string): void
 }
 
 export interface WorkbookPerfSession {
-  readonly scope: string;
-  markShellMounted(): void;
-  noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void;
-  markFirstAuthoritativePatchVisible(): void;
-  markFirstAssistantDeltaVisible?(): void;
-  markFirstAgentApplyVisible?(): void;
-  markFirstLocalEditApplied?(): void;
-  markFirstPasteApplied?(): void;
-  markFirstPreviewVisible?(): void;
-  markFirstReconcileStarted(): void;
-  markFirstReconcileSettled(): void;
-  markFirstSelectionVisible(): void;
+  readonly scope: string
+  markShellMounted(): void
+  noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void
+  markFirstAuthoritativePatchVisible(): void
+  markFirstAssistantDeltaVisible?(): void
+  markFirstAgentApplyVisible?(): void
+  markFirstLocalEditApplied?(): void
+  markFirstPasteApplied?(): void
+  markFirstPreviewVisible?(): void
+  markFirstReconcileStarted(): void
+  markFirstReconcileSettled(): void
+  markFirstSelectionVisible(): void
 }
 
-let nextWorkbookPerfSessionId = 1;
+let nextWorkbookPerfSessionId = 1
 
-function resolvePerformanceApi(
-  performanceApi?: WorkbookPerformanceApi | null,
-): WorkbookPerformanceApi | null {
+function resolvePerformanceApi(performanceApi?: WorkbookPerformanceApi | null): WorkbookPerformanceApi | null {
   if (performanceApi) {
-    return performanceApi;
+    return performanceApi
   }
-  const globalPerformance = globalThis.performance;
-  if (
-    !globalPerformance ||
-    typeof globalPerformance.mark !== "function" ||
-    typeof globalPerformance.measure !== "function"
-  ) {
-    return null;
+  const globalPerformance = globalThis.performance
+  if (!globalPerformance || typeof globalPerformance.mark !== 'function' || typeof globalPerformance.measure !== 'function') {
+    return null
   }
-  return globalPerformance;
+  return globalPerformance
 }
 
-function recordMeasure(
-  performanceApi: WorkbookPerformanceApi,
-  measureName: string,
-  startMark: string,
-  endMark: string,
-): void {
+function recordMeasure(performanceApi: WorkbookPerformanceApi, measureName: string, startMark: string, endMark: string): void {
   try {
-    performanceApi.measure(measureName, { start: startMark, end: endMark });
-    return;
+    performanceApi.measure(measureName, { start: startMark, end: endMark })
+    return
   } catch {
     try {
-      performanceApi.measure(measureName, startMark, endMark);
+      performanceApi.measure(measureName, startMark, endMark)
     } catch {
       // Ignore measurement failures so the product path stays non-blocking.
     }
@@ -65,19 +50,18 @@ function recordMeasure(
 }
 
 export function createWorkbookPerfSession(input: {
-  readonly documentId: string;
-  readonly performance?: WorkbookPerformanceApi | null;
-  readonly scope?: string;
+  readonly documentId: string
+  readonly performance?: WorkbookPerformanceApi | null
+  readonly scope?: string
 }): WorkbookPerfSession {
-  const performanceApi = resolvePerformanceApi(input.performance);
-  const scope =
-    input.scope ?? `bilig:${input.documentId}:perf-session:${nextWorkbookPerfSessionId++}`;
-  const startMark = `${scope}:start`;
-  const markedEvents = new Set<string>();
+  const performanceApi = resolvePerformanceApi(input.performance)
+  const scope = input.scope ?? `bilig:${input.documentId}:perf-session:${nextWorkbookPerfSessionId++}`
+  const startMark = `${scope}:start`
+  const markedEvents = new Set<string>()
 
   if (performanceApi) {
     try {
-      performanceApi.mark(startMark);
+      performanceApi.mark(startMark)
     } catch {
       // Ignore performance API failures so the shell keeps booting.
     }
@@ -85,56 +69,54 @@ export function createWorkbookPerfSession(input: {
 
   const markEvent = (eventName: string): void => {
     if (!performanceApi || markedEvents.has(eventName)) {
-      return;
+      return
     }
-    const eventMark = `${scope}:${eventName}`;
+    const eventMark = `${scope}:${eventName}`
     try {
-      performanceApi.mark(eventMark);
-      recordMeasure(performanceApi, `${scope}:time-to-${eventName}`, startMark, eventMark);
-      markedEvents.add(eventName);
+      performanceApi.mark(eventMark)
+      recordMeasure(performanceApi, `${scope}:time-to-${eventName}`, startMark, eventMark)
+      markedEvents.add(eventName)
     } catch {
       // Ignore performance API failures so the shell keeps booting.
     }
-  };
+  }
 
   return {
     scope,
     markShellMounted() {
-      markEvent("shell-mounted");
+      markEvent('shell-mounted')
     },
     noteBootstrapResult(result) {
       markEvent(
-        result.restoredFromPersistence && !result.requiresAuthoritativeHydrate
-          ? "local-restore-ready"
-          : "authoritative-hydrate-required",
-      );
+        result.restoredFromPersistence && !result.requiresAuthoritativeHydrate ? 'local-restore-ready' : 'authoritative-hydrate-required',
+      )
     },
     markFirstAuthoritativePatchVisible() {
-      markEvent("first-authoritative-patch-visible");
+      markEvent('first-authoritative-patch-visible')
     },
     markFirstAssistantDeltaVisible() {
-      markEvent("first-assistant-delta-visible");
+      markEvent('first-assistant-delta-visible')
     },
     markFirstAgentApplyVisible() {
-      markEvent("first-agent-apply-visible");
+      markEvent('first-agent-apply-visible')
     },
     markFirstLocalEditApplied() {
-      markEvent("first-local-edit-applied");
+      markEvent('first-local-edit-applied')
     },
     markFirstPasteApplied() {
-      markEvent("first-paste-applied");
+      markEvent('first-paste-applied')
     },
     markFirstPreviewVisible() {
-      markEvent("first-preview-visible");
+      markEvent('first-preview-visible')
     },
     markFirstReconcileStarted() {
-      markEvent("first-reconcile-started");
+      markEvent('first-reconcile-started')
     },
     markFirstReconcileSettled() {
-      markEvent("first-reconcile-settled");
+      markEvent('first-reconcile-settled')
     },
     markFirstSelectionVisible() {
-      markEvent("first-selection-visible");
+      markEvent('first-selection-visible')
     },
-  };
+  }
 }

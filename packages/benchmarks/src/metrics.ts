@@ -1,52 +1,52 @@
 declare const Bun:
   | {
-      gc(force?: boolean): void;
+      gc(force?: boolean): void
     }
-  | undefined;
+  | undefined
 
 export interface MemorySnapshot {
-  rssBytes: number;
-  heapUsedBytes: number;
-  heapTotalBytes: number;
-  externalBytes: number;
-  arrayBuffersBytes: number;
+  rssBytes: number
+  heapUsedBytes: number
+  heapTotalBytes: number
+  externalBytes: number
+  arrayBuffersBytes: number
 }
 
 export interface MemoryDelta {
-  rssBytes: number;
-  heapUsedBytes: number;
-  heapTotalBytes: number;
-  externalBytes: number;
-  arrayBuffersBytes: number;
+  rssBytes: number
+  heapUsedBytes: number
+  heapTotalBytes: number
+  externalBytes: number
+  arrayBuffersBytes: number
 }
 
 export interface MemoryMeasurement {
-  before: MemorySnapshot;
-  after: MemorySnapshot;
-  delta: MemoryDelta;
+  before: MemorySnapshot
+  after: MemorySnapshot
+  delta: MemoryDelta
 }
 
 export function collectGarbage(): void {
-  if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
-    Bun.gc(true);
-    return;
+  if (typeof Bun !== 'undefined' && typeof Bun.gc === 'function') {
+    Bun.gc(true)
+    return
   }
-  const gc = Reflect.get(globalThis, "gc");
-  if (typeof gc === "function") {
-    gc();
+  const gc = Reflect.get(globalThis, 'gc')
+  if (typeof gc === 'function') {
+    gc()
   }
 }
 
 export function sampleMemory(): MemorySnapshot {
-  collectGarbage();
-  const memory = process.memoryUsage();
+  collectGarbage()
+  const memory = process.memoryUsage()
   return {
     rssBytes: memory.rss,
     heapUsedBytes: memory.heapUsed,
     heapTotalBytes: memory.heapTotal,
     externalBytes: memory.external,
     arrayBuffersBytes: memory.arrayBuffers,
-  };
+  }
 }
 
 export function measureMemory(before: MemorySnapshot, after: MemorySnapshot): MemoryMeasurement {
@@ -60,5 +60,5 @@ export function measureMemory(before: MemorySnapshot, after: MemorySnapshot): Me
       externalBytes: after.externalBytes - before.externalBytes,
       arrayBuffersBytes: after.arrayBuffersBytes - before.arrayBuffersBytes,
     },
-  };
+  }
 }

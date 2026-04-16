@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { createColumnSliceSelection, createRowSliceSelection } from "../gridSelection.js";
-import { resolveKeyboardHeaderContextMenuTarget } from "../workbookGridContextMenuTarget.js";
+import { describe, expect, it } from 'vitest'
+import { createColumnSliceSelection, createRowSliceSelection } from '../gridSelection.js'
+import { resolveKeyboardHeaderContextMenuTarget } from '../workbookGridContextMenuTarget.js'
 
-describe("resolveKeyboardHeaderContextMenuTarget", () => {
-  it("anchors row selections to the row header", () => {
+describe('resolveKeyboardHeaderContextMenuTarget', () => {
+  it('anchors row selections to the row header', () => {
     expect(
       resolveKeyboardHeaderContextMenuTarget({
         gridSelection: createRowSliceSelection(4, 7, 7),
@@ -14,13 +14,13 @@ describe("resolveKeyboardHeaderContextMenuTarget", () => {
         headerHeight: 32,
       }),
     ).toEqual({
-      target: { kind: "row", index: 7 },
+      target: { kind: 'row', index: 7 },
       x: 60,
       y: 254,
-    });
-  });
+    })
+  })
 
-  it("anchors column selections to the column header", () => {
+  it('anchors column selections to the column header', () => {
     expect(
       resolveKeyboardHeaderContextMenuTarget({
         gridSelection: createColumnSliceSelection(3, 3, 5),
@@ -31,13 +31,13 @@ describe("resolveKeyboardHeaderContextMenuTarget", () => {
         headerHeight: 32,
       }),
     ).toEqual({
-      target: { kind: "column", index: 3 },
+      target: { kind: 'column', index: 3 },
       x: 256,
       y: 64,
-    });
-  });
+    })
+  })
 
-  it("returns null when the selection is not row-only or column-only", () => {
+  it('returns null when the selection is not row-only or column-only', () => {
     expect(
       resolveKeyboardHeaderContextMenuTarget({
         gridSelection: {
@@ -51,6 +51,6 @@ describe("resolveKeyboardHeaderContextMenuTarget", () => {
         rowMarkerWidth: 56,
         headerHeight: 32,
       }),
-    ).toBeNull();
-  });
-});
+    ).toBeNull()
+  })
+})

@@ -1,55 +1,55 @@
-import { describe, expect, test } from "vitest";
-import { getEditorPresentation } from "../gridPresentation.js";
+import { describe, expect, test } from 'vitest'
+import { getEditorPresentation } from '../gridPresentation.js'
 
-describe("gridPresentation", () => {
-  test("uses the cell fill and text styling for the in-cell editor", () => {
+describe('gridPresentation', () => {
+  test('uses the cell fill and text styling for the in-cell editor', () => {
     expect(
       getEditorPresentation({
         renderCell: {
-          kind: "string",
-          displayText: "hello",
-          copyText: "hello",
-          align: "left",
+          kind: 'string',
+          displayText: 'hello',
+          copyText: 'hello',
+          align: 'left',
           wrap: false,
-          color: "#f9fafb",
+          color: '#f9fafb',
           font: 'italic 700 14px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
           fontSize: 14,
           underline: true,
-          stringValue: "hello",
+          stringValue: 'hello',
         },
-        fillColor: "#1f2937",
+        fillColor: '#1f2937',
       }),
     ).toEqual({
-      backgroundColor: "#1f2937",
-      color: "#f9fafb",
+      backgroundColor: '#1f2937',
+      color: '#f9fafb',
       font: 'italic 700 14px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
       fontSize: 14,
       underline: true,
-    });
-  });
+    })
+  })
 
-  test("falls back to a white editor surface when the cell has no fill", () => {
+  test('falls back to a white editor surface when the cell has no fill', () => {
     expect(
       getEditorPresentation({
         renderCell: {
-          kind: "string",
-          displayText: "hello",
-          copyText: "hello",
-          align: "left",
+          kind: 'string',
+          displayText: 'hello',
+          copyText: 'hello',
+          align: 'left',
           wrap: false,
-          color: "#202124",
+          color: '#202124',
           font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
           fontSize: 13,
           underline: false,
-          stringValue: "hello",
+          stringValue: 'hello',
         },
       }),
     ).toEqual({
-      backgroundColor: "#ffffff",
-      color: "#202124",
+      backgroundColor: '#ffffff',
+      color: '#202124',
       font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
       fontSize: 13,
       underline: false,
-    });
-  });
-});
+    })
+  })
+})

@@ -1,31 +1,27 @@
-import sqlite3InitModule, { type Database, type SqlValue } from "@sqlite.org/sqlite-wasm";
-import { describe, expect, it } from "vitest";
+import sqlite3InitModule, { type Database, type SqlValue } from '@sqlite.org/sqlite-wasm'
+import { describe, expect, it } from 'vitest'
 
-import { readWorkbookViewportProjection } from "../workbook-local-store-projection.js";
-import { initializeWorkbookLocalStoreSchema } from "../workbook-local-store-schema.js";
+import { readWorkbookViewportProjection } from '../workbook-local-store-projection.js'
+import { initializeWorkbookLocalStoreSchema } from '../workbook-local-store-schema.js'
 
-function readSingleObjectRow(
-  db: Database,
-  sql: string,
-  bind?: readonly SqlValue[],
-): Record<string, SqlValue> | null {
-  const statement = db.prepare(sql);
+function readSingleObjectRow(db: Database, sql: string, bind?: readonly SqlValue[]): Record<string, SqlValue> | null {
+  const statement = db.prepare(sql)
   try {
     if (bind) {
-      statement.bind([...bind]);
+      statement.bind([...bind])
     }
     if (!statement.step()) {
-      return null;
+      return null
     }
-    return statement.get({});
+    return statement.get({})
   } finally {
-    statement.finalize();
+    statement.finalize()
   }
 }
 
 async function createLegacyWorkbookDb(): Promise<Database> {
-  const sqlite3 = await sqlite3InitModule();
-  const db = new sqlite3.oo1.DB(":memory:", "c");
+  const sqlite3 = await sqlite3InitModule()
+  const db = new sqlite3.oo1.DB(':memory:', 'c')
   db.exec(`
     CREATE TABLE runtime_state (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -137,13 +133,13 @@ async function createLegacyWorkbookDb(): Promise<Database> {
       style_id TEXT PRIMARY KEY,
       record_json TEXT NOT NULL
     );
-  `);
-  return db;
+  `)
+  return db
 }
 
-describe("workbook-local-store schema migration", () => {
-  it("backfills sheet ids from the legacy snapshot into authoritative and overlay tables", async () => {
-    const db = await createLegacyWorkbookDb();
+describe('workbook-local-store schema migration', () => {
+  it('backfills sheet ids from the legacy snapshot into authoritative and overlay tables', async () => {
+    const db = await createLegacyWorkbookDb()
     try {
       db.exec(
         `
@@ -206,14 +202,14 @@ describe("workbook-local-store schema migration", () => {
           bind: [
             JSON.stringify({
               version: 1,
-              workbook: { name: "legacy-doc" },
-              sheets: [{ id: 7, name: "Revenue", order: 0, cells: [] }],
+              workbook: { name: 'legacy-doc' },
+              sheets: [{ id: 7, name: 'Revenue', order: 0, cells: [] }],
             }),
           ],
         },
-      );
+      )
 
-      initializeWorkbookLocalStoreSchema(db);
+      initializeWorkbookLocalStoreSchema(db)
 
       expect(
         readSingleObjectRow(
@@ -224,7 +220,7 @@ describe("workbook-local-store schema migration", () => {
              WHERE id = 1
           `,
         ),
-      ).toEqual({ appliedPendingLocalSeq: 0 });
+      ).toEqual({ appliedPendingLocalSeq: 0 })
       expect(
         readSingleObjectRow(
           db,
@@ -234,7 +230,7 @@ describe("workbook-local-store schema migration", () => {
              WHERE op_id = 'op-1'
           `,
         ),
-      ).toEqual({ submittedAtMs: null });
+      ).toEqual({ submittedAtMs: null })
       expect(
         readSingleObjectRow(
           db,
@@ -244,7 +240,7 @@ describe("workbook-local-store schema migration", () => {
              WHERE name = 'Revenue'
           `,
         ),
-      ).toEqual({ sheetId: 7 });
+      ).toEqual({ sheetId: 7 })
       expect(
         readSingleObjectRow(
           db,
@@ -254,7 +250,7 @@ describe("workbook-local-store schema migration", () => {
              WHERE sheet_name = 'Revenue' AND address = 'A1'
           `,
         ),
-      ).toEqual({ sheetId: 7 });
+      ).toEqual({ sheetId: 7 })
       expect(
         readSingleObjectRow(
           db,
@@ -264,9 +260,9 @@ describe("workbook-local-store schema migration", () => {
              WHERE sheet_name = 'Revenue' AND address = 'A1'
           `,
         ),
-      ).toEqual({ sheetId: 7 });
+      ).toEqual({ sheetId: 7 })
       expect(
-        readWorkbookViewportProjection(db, "Revenue", {
+        readWorkbookViewportProjection(db, 'Revenue', {
           rowStart: 0,
           rowEnd: 0,
           colStart: 0,
@@ -274,24 +270,24 @@ describe("workbook-local-store schema migration", () => {
         }),
       ).toMatchObject({
         sheetId: 7,
-        sheetName: "Revenue",
+        sheetName: 'Revenue',
         cells: [
           {
             snapshot: {
-              address: "A1",
+              address: 'A1',
               input: 43,
               value: { tag: 1, value: 43 },
             },
           },
         ],
-      });
+      })
     } finally {
-      db.close();
+      db.close()
     }
-  });
+  })
 
-  it("assigns deterministic fallback sheet ids from sheet order when the legacy snapshot omits them", async () => {
-    const db = await createLegacyWorkbookDb();
+  it('assigns deterministic fallback sheet ids from sheet order when the legacy snapshot omits them', async () => {
+    const db = await createLegacyWorkbookDb()
     try {
       db.exec(
         `
@@ -311,17 +307,17 @@ describe("workbook-local-store schema migration", () => {
           bind: [
             JSON.stringify({
               version: 1,
-              workbook: { name: "legacy-doc" },
+              workbook: { name: 'legacy-doc' },
               sheets: [
-                { name: "Alpha", order: 0, cells: [] },
-                { name: "Beta", order: 1, cells: [] },
+                { name: 'Alpha', order: 0, cells: [] },
+                { name: 'Beta', order: 1, cells: [] },
               ],
             }),
           ],
         },
-      );
+      )
 
-      initializeWorkbookLocalStoreSchema(db);
+      initializeWorkbookLocalStoreSchema(db)
 
       expect(
         readSingleObjectRow(
@@ -332,7 +328,7 @@ describe("workbook-local-store schema migration", () => {
              WHERE name = 'Alpha'
           `,
         ),
-      ).toEqual({ alphaSheetId: 1 });
+      ).toEqual({ alphaSheetId: 1 })
       expect(
         readSingleObjectRow(
           db,
@@ -342,9 +338,9 @@ describe("workbook-local-store schema migration", () => {
              WHERE name = 'Beta'
           `,
         ),
-      ).toEqual({ betaSheetId: 2 });
+      ).toEqual({ betaSheetId: 2 })
     } finally {
-      db.close();
+      db.close()
     }
-  });
-});
+  })
+})
