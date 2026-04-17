@@ -319,12 +319,31 @@ export function captureCounterexample<Ts extends unknown[]>(options: CaptureCoun
 }
 
 function extractReplayPath(counterexample: unknown): string | null {
-  if (!Array.isArray(counterexample) || counterexample.length === 0) {
+  if (typeof counterexample === 'string') {
+    const match = /replayPath="([^"]+)"/u.exec(counterexample)
+    return match?.[1] ?? null
+  }
+  if (Array.isArray(counterexample)) {
+    for (const entry of counterexample) {
+      const replayPath = extractReplayPath(entry)
+      if (replayPath) {
+        return replayPath
+      }
+    }
     return null
   }
-  const serialized = `${counterexample[0] ?? ''}`
-  const match = /replayPath="([^"]+)"/u.exec(serialized)
-  return match?.[1] ?? null
+  if (isRecord(counterexample)) {
+    if (typeof counterexample['replayPath'] === 'string') {
+      return counterexample['replayPath']
+    }
+    for (const entry of Object.values(counterexample)) {
+      const replayPath = extractReplayPath(entry)
+      if (replayPath) {
+        return replayPath
+      }
+    }
+  }
+  return null
 }
 
 async function runChecked<Ts extends unknown[]>(

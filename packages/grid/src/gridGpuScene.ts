@@ -27,6 +27,12 @@ export interface GridGpuScene {
   readonly borderRects: readonly GridGpuRect[]
 }
 
+function appendRects(target: GridGpuRect[], rects: readonly GridGpuRect[]): void {
+  for (const rect of rects) {
+    target.push(rect)
+  }
+}
+
 interface BuildGridGpuSceneOptions {
   readonly engine: GridEngineLike
   readonly sheetName: string
@@ -138,8 +144,8 @@ export function buildGridGpuScene({
     visibleItems,
     getCellBounds,
   })
-  fillRects.push(...headerScene.fillRects)
-  borderRects.push(...headerScene.borderRects)
+  appendRects(fillRects, headerScene.fillRects)
+  appendRects(borderRects, headerScene.borderRects)
   if (visibleItems.length === 0) {
     return {
       fillRects,
@@ -204,7 +210,7 @@ export function buildGridGpuScene({
       if (!border) {
         continue
       }
-      borderRects.push(...createBorderRects(rect, side, border))
+      appendRects(borderRects, createBorderRects(rect, side, border))
     }
   }
 
