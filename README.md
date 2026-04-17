@@ -183,7 +183,7 @@ A useful way to understand bilig is to think of it as five connected layers.
 
 #### Layer 3: replication and transport
 
-`@bilig/crdt` handles replica clocks, operation batches, merge rules, and compaction. `@bilig/binary-protocol` defines how sync frames move over the wire. `@bilig/worker-transport` gives the repo a path to move the engine off the main browser thread.
+`@bilig/core` owns replica bookkeeping, local replay semantics, and ordered workbook mutation streams. `@bilig/zero-sync` defines the shared Zero schema, projection helpers, and workbook event payloads. `@bilig/binary-protocol` defines how sync frames move over the wire, and `@bilig/worker-transport` gives the repo a path to move the engine off the main browser thread.
 
 #### Layer 4: UI and declarative authoring
 
@@ -213,7 +213,7 @@ This split is important because it allows the project to evolve into a spreadshe
 | `@bilig/protocol` | Shared enums, constants, and protocol types |
 | `@bilig/formula` | Formula grammar, binding, compilation, JS oracle evaluation |
 | `@bilig/core` | Workbook engine, recalc, snapshots, selection, sync hooks |
-| `@bilig/crdt` | Replica clocks, operation batches, merge, compaction |
+| `@bilig/zero-sync` | Zero schema, workbook projection, shared event payloads |
 | `@bilig/binary-protocol` | Wire format for sync frames |
 | `@bilig/agent-api` | Agent request/response/event model and framing |
 | `@bilig/worker-transport` | Engine host/client bridge for worker execution |
@@ -302,13 +302,13 @@ If this project had to be explained in one paragraph:
 - `apps/web`: Vite 8 React app shell that composes the packages
 - `packages/protocol`: shared enums, opcodes, constants, and types
 - `packages/formula`: A1 addressing, lexer, parser, binder, compiler, JS evaluator
-- `packages/core`: spreadsheet engine, storage, scheduler, snapshots, selectors, WASM facade
-- `packages/crdt`: replica clocks, op batches, merge rules, log compaction
+- `packages/core`: spreadsheet engine, storage, scheduler, snapshots, selectors, sync ownership, WASM facade
+- `packages/zero-sync`: shared Zero schema, workbook queries, projection, and event payload helpers
 - `packages/renderer`: custom workbook reconciler and workbook DSL
 - `packages/grid`: reusable React spreadsheet UI, hooks, selection, metrics, and inspectors
 - `packages/wasm-kernel`: AssemblyScript VM and numeric kernels
 - `packages/benchmarks`: benchmark harness
-- `docs`: architecture, API, reconciler layering, CRDT model, formula language
+- `docs`: architecture, API, reconciler layering, sync ownership, formula language
 
 ## Quickstart
 

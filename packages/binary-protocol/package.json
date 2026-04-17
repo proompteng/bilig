@@ -5,9 +5,9 @@
   "keywords": [
     "bilig",
     "binary",
-    "crdt",
     "protocol",
-    "spreadsheet"
+    "spreadsheet",
+    "sync"
   ],
   "homepage": "https://github.com/proompteng/bilig/tree/main/packages/binary-protocol#readme",
   "bugs": {
