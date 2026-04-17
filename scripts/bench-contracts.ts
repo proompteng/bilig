@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -172,13 +173,14 @@ async function sampleBenchmark<T>(
   }, Promise.resolve())
 
   const runs = []
-  await Array.from({ length: iterations }).reduce((previous) => {
-    return previous.then(() =>
-      run().then((result) => {
-        return runs.push(result)
-      }),
-    )
-  }, Promise.resolve())
+  const runSequentially = async (remaining: number): Promise<void> => {
+    if (remaining <= 0) {
+      return
+    }
+    runs.push(await run())
+    await runSequentially(remaining - 1)
+  }
+  await runSequentially(iterations)
   return runs
 }
 

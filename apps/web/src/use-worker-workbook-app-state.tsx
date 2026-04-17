@@ -5,10 +5,10 @@ import type { EditMovement, EditSelectionBehavior } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
 import { createWorkerRuntimeMachine } from './runtime-machine.js'
-import { resolveRuntimeConfig } from './runtime-config.js'
+import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
 import { loadPersistedSelection, persistSelection } from './selection-persistence.js'
-import { ProjectedViewportStore } from './projected-viewport-store.js'
+import type { ProjectedViewportStore } from './projected-viewport-store.js'
 import { buildWorkbookAgentContext, singleCellAgentSelectionRange, type WorkbookAgentSelectionRange } from './workbook-agent-context.js'
 import {
   type EditingMode,

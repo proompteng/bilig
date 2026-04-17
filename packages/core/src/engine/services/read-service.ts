@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import type { CellSnapshot, CellValue, DependencySnapshot, ExplainCellSnapshot } from '@bilig/protocol'
+import type { CellRangeRef, CellSnapshot, CellValue, DependencySnapshot, ExplainCellSnapshot } from '@bilig/protocol'
 import { parseCellAddress } from '@bilig/formula'
 import { CellFlags } from '../../cell-store.js'
 import { entityPayload, isExactLookupColumnEntity, isRangeEntity, isSortedLookupColumnEntity, makeCellEntity } from '../../entity-ids.js'
@@ -12,7 +12,7 @@ import type { EngineRuntimeColumnStoreService } from './runtime-column-store-ser
 export interface EngineReadService {
   readonly exportSheetCsv: (sheetName: string) => Effect.Effect<string>
   readonly getCellValue: (sheetName: string, address: string) => Effect.Effect<CellValue>
-  readonly getRangeValues: (range: import('@bilig/protocol').CellRangeRef) => Effect.Effect<CellValue[][]>
+  readonly getRangeValues: (range: CellRangeRef) => Effect.Effect<CellValue[][]>
   readonly getCell: (sheetName: string, address: string) => Effect.Effect<CellSnapshot>
   readonly getCellByIndex: (cellIndex: number) => Effect.Effect<CellSnapshot>
   readonly getDependencies: (sheetName: string, address: string) => Effect.Effect<DependencySnapshot>
@@ -101,7 +101,7 @@ export function createEngineReadService(args: {
     return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col)
   }
 
-  const readRangeValueMatrix = (range: import('@bilig/protocol').CellRangeRef): CellValue[][] => {
+  const readRangeValueMatrix = (range: CellRangeRef): CellValue[][] => {
     const bounds = normalizeRange(range)
     const width = bounds.endCol - bounds.startCol + 1
     const height = bounds.endRow - bounds.startRow + 1

@@ -9,7 +9,7 @@ import { validateDescriptorTree } from './validation.js'
 export interface WorkbookContainer {
   engine: SpreadsheetEngine
   root: WorkbookDescriptor | null
-  pendingOps: import('@bilig/core').CommitOp[]
+  pendingOps: CommitOp[]
   shouldSyncSheetOrders: boolean
   lastError: Error | null
 }
@@ -252,7 +252,8 @@ export const workbookHostConfig = {
   HostTransitionContext: React.createContext(null),
   resetFormInstance() {},
   bindToConsole() {
-    return console.log.bind(console)
+    const globalConsole = globalThis.console
+    return globalConsole.log.bind(globalConsole)
   },
   supportsTestSelectors: false,
   appendChild(parent: Descriptor, child: Descriptor) {

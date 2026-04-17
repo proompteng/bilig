@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
 import { shouldApplyBatch } from '../../replica-state.js'
 import type { EngineRuntimeState, EngineSyncClient } from '../runtime-state.js'
@@ -16,7 +17,7 @@ export function createEngineReplicaSyncService(args: {
     'replicaState' | 'getSyncState' | 'setSyncState' | 'getSyncClientConnection' | 'setSyncClientConnection'
   >
   readonly applyRemoteBatchNow: (batch: EngineOpBatch) => void
-  readonly applyRemoteSnapshot: (snapshot: import('@bilig/protocol').WorkbookSnapshot) => void
+  readonly applyRemoteSnapshot: (snapshot: WorkbookSnapshot) => void
 }): EngineReplicaSyncService {
   return {
     connectClient(client) {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 
+import type { WorkPaperCellAddress, WorkPaperConfig, WorkPaperFunctionPluginDefinition } from '../index.js'
 import {
   WorkPaperExpectedOneOfValuesError,
   WorkPaperExpectedValueOfTypeError,
@@ -14,9 +15,6 @@ import {
   WorkPaperNotAFormulaError,
   WorkPaperNothingToPasteError,
   WorkPaper,
-  WorkPaperCellAddress,
-  WorkPaperConfig,
-  WorkPaperFunctionPluginDefinition,
 } from '../index.js'
 
 const TEST_LANGUAGE_CODE = 'hf-parity'

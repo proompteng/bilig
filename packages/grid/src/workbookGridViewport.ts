@@ -1,5 +1,6 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import { getGridMetrics, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
+import type { getGridMetrics } from './gridMetrics.js'
+import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
 import type { Item } from './gridTypes.js'
 import type { VisibleRegionState } from './gridPointer.js'
 

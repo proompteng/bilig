@@ -1,4 +1,4 @@
-import { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
+import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
 import { materializeCellEvalProjection } from './projection.js'
 import { leaseNextRecalcJob, markRecalcJobCompleted, markRecalcJobFailed, markRecalcJobSuperseded } from './recalc-job-store.js'
 import { shouldPersistWorkbookCheckpointRevision, type Queryable } from './store.js'

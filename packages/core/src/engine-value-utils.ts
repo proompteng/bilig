@@ -1,7 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from '@bilig/protocol'
 import type { CellStore } from './cell-store.js'
 import { CellFlags } from './cell-store.js'
-import { StringPool } from './string-pool.js'
+import type { StringPool } from './string-pool.js'
 
 export function normalizePivotLookupText(value: string): string {
   return value.trim().toUpperCase()

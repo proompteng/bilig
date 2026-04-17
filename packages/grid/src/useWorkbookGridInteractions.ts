@@ -45,7 +45,7 @@ import type { Item } from './gridTypes.js'
 import type { EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
 import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler.js'
-import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
+import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
 

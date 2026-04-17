@@ -468,10 +468,10 @@ interface DirectApproximateLookupCandidate {
 }
 
 type ParsedCompiledFormula = ReturnType<typeof compileFormula> & {
-  parsedDeps?: import('@bilig/formula').ParsedDependencyReference[]
-  parsedSymbolicRefs?: import('@bilig/formula').ParsedCellReferenceInfo[]
-  parsedSymbolicRanges?: import('@bilig/formula').ParsedRangeReferenceInfo[]
-  directAggregateCandidate?: import('@bilig/formula').DirectAggregateCandidate
+  parsedDeps?: ParsedDependencyReference[]
+  parsedSymbolicRefs?: ParsedCellReferenceInfo[]
+  parsedSymbolicRanges?: ParsedRangeReferenceInfo[]
+  directAggregateCandidate?: DirectAggregateCandidate
 }
 
 function uint32ArrayEqual(left: Uint32Array | readonly number[], right: Uint32Array | readonly number[]): boolean {

@@ -2,7 +2,7 @@ import type { HelloFrame, ProtocolFrame } from '@bilig/binary-protocol'
 import type { AgentFrame, AgentRequest, AgentResponse, LoadWorkbookFileRequest } from '@bilig/agent-api'
 import type { AgentFrameContext, WorksheetAgentRequest } from './agent-routing.js'
 import { handleWorkbookAgentFrame } from './workbook-session-shared.js'
-import { WorkbookSyncSessionHost } from './workbook-sync-session-host.js'
+import type { WorkbookSyncSessionHost } from './workbook-sync-session-host.js'
 
 type SyncFrameOutput = ProtocolFrame | ProtocolFrame[]
 

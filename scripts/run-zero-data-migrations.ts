@@ -12,9 +12,9 @@ const pool = createZeroPool(connectionString)
 try {
   const result = await runPendingZeroDataMigrations(pool)
   if (result.appliedThisRun.length === 0) {
-    console.info('Zero data migrations are already up to date.')
+    console.log('Zero data migrations are already up to date.')
   } else {
-    console.info(`Applied Zero data migrations: ${result.appliedThisRun.join(', ')}`)
+    console.log(`Applied Zero data migrations: ${result.appliedThisRun.join(', ')}`)
   }
 } finally {
   await pool.end()

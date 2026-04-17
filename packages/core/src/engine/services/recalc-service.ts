@@ -1,9 +1,18 @@
 import { Effect } from 'effect'
-import { ErrorCode, FormulaMode, ValueTag, type CellSnapshot } from '@bilig/protocol'
+import {
+  ErrorCode,
+  FormulaMode,
+  ValueTag,
+  type CellSnapshot,
+  type CellValue,
+  type EngineChangedCell,
+  type EngineEvent,
+  type WorkbookSnapshot,
+} from '@bilig/protocol'
 import { makeCellKey } from '../../workbook-store.js'
 import { CellFlags } from '../../cell-store.js'
 import { errorValue } from '../../engine-value-utils.js'
-import type { EngineRuntimeState, RecalcVolatileState, RuntimeFormula, U32 } from '../runtime-state.js'
+import type { EngineRuntimeState, RecalcVolatileState, RuntimeFormula, SpillMaterialization, U32 } from '../runtime-state.js'
 import { EngineRecalcError } from '../errors.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
 import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
@@ -61,15 +70,15 @@ export function createEngineRecalcService(args: {
     'workbook' | 'strings' | 'wasm' | 'formulas' | 'ranges' | 'events' | 'getLastMetrics' | 'setLastMetrics'
   >
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
-  readonly exportSnapshot: () => import('@bilig/protocol').WorkbookSnapshot
-  readonly importSnapshot: (snapshot: import('@bilig/protocol').WorkbookSnapshot) => void
+  readonly exportSnapshot: () => WorkbookSnapshot
+  readonly importSnapshot: (snapshot: WorkbookSnapshot) => void
   readonly beginMutationCollection: () => void
   readonly markInputChanged: (cellIndex: number, count: number) => number
   readonly markFormulaChanged: (cellIndex: number, count: number) => number
   readonly markExplicitChanged: (cellIndex: number, count: number) => number
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
-  readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly import('@bilig/protocol').EngineChangedCell[]
+  readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
   readonly unionChangedSets: (...sets: Array<readonly number[] | U32>) => U32
   readonly composeChangedRootsAndOrdered: (changedRoots: readonly number[] | U32, ordered: U32, orderedCount: number) => U32
   readonly emptyChangedSet: () => U32
@@ -86,10 +95,7 @@ export function createEngineRecalcService(args: {
   readonly random: () => number
   readonly performanceNow: () => number
   readonly dirtyScheduler: EngineDirtyFrontierSchedulerService
-  readonly materializeSpill: (
-    cellIndex: number,
-    arrayValue: { values: import('@bilig/protocol').CellValue[]; rows: number; cols: number },
-  ) => import('../runtime-state.js').SpillMaterialization
+  readonly materializeSpill: (cellIndex: number, arrayValue: { values: CellValue[]; rows: number; cols: number }) => SpillMaterialization
   readonly clearOwnedSpill: (cellIndex: number) => number[]
   readonly evaluateDirectLookupFormula: (cellIndex: number) => number[] | undefined
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[]
@@ -485,7 +491,7 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1
           lastMetrics.changedInputCount = formulaChangedCount
           args.state.setLastMetrics(lastMetrics)
-          const event: import('@bilig/protocol').EngineEvent & {
+          const event: EngineEvent & {
             explicitChangedCount: number
           } = {
             kind: 'batch',
@@ -539,7 +545,7 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1
           lastMetrics.changedInputCount = changedInputCount
           args.state.setLastMetrics(lastMetrics)
-          const event: import('@bilig/protocol').EngineEvent & {
+          const event: EngineEvent & {
             explicitChangedCount: number
           } = {
             kind: 'batch',

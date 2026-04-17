@@ -1,6 +1,7 @@
 import { ErrorCode, ValueTag, type LiteralInput } from '@bilig/protocol'
 import type { StringPool } from './string-pool.js'
-import { WorkbookStore, makeCellKey } from './workbook-store.js'
+import type { WorkbookStore } from './workbook-store.js'
+import { makeCellKey } from './workbook-store.js'
 import { CellFlags } from './cell-store.js'
 
 export function loadLiteralSheetIntoEmptySheet(

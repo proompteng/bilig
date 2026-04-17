@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { runProperty } from '@bilig/test-fuzz'
 import {
@@ -13,10 +14,7 @@ import {
   normalizeSnapshotForSemanticComparison,
 } from './engine-fuzz-helpers.js'
 
-function expectSemanticSnapshot(
-  actual: import('@bilig/protocol').WorkbookSnapshot,
-  expected: import('@bilig/protocol').WorkbookSnapshot,
-): void {
+function expectSemanticSnapshot(actual: WorkbookSnapshot, expected: WorkbookSnapshot): void {
   expect(normalizeSnapshotForSemanticComparison(actual)).toEqual(normalizeSnapshotForSemanticComparison(expected))
 }
 

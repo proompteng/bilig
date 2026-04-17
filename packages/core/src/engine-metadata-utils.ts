@@ -1,6 +1,6 @@
 import { ErrorCode, type CellValue, type LiteralInput, type WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
 import { parseCellAddress, parseFormula, renameFormulaSheetReferences, type FormulaNode } from '@bilig/formula'
-import { StringPool } from './string-pool.js'
+import type { StringPool } from './string-pool.js'
 import { errorValue, literalToValue } from './engine-value-utils.js'
 import { normalizeDefinedName, normalizeWorkbookObjectName } from './workbook-store.js'
 

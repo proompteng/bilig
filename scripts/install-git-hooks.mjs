@@ -33,7 +33,7 @@ function isWorktreeCheckout() {
 try {
   runGit(['rev-parse', '--is-inside-work-tree'])
 } catch {
-  console.info('[INFO] No git repository found, skipping hook install.')
+  console.log('[INFO] No git repository found, skipping hook install.')
   process.exit(0)
 }
 

@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import type { EngineOp } from '@bilig/workbook-domain'
 import { ValueTag, type CellSnapshot, type WorkbookAxisEntrySnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
@@ -186,7 +187,7 @@ export function createEngineSnapshotService(args: {
       return Effect.try({
         try: () => {
           args.resetWorkbook()
-          const ops: import('@bilig/workbook-domain').EngineOp[] = [{ kind: 'upsertWorkbook', name: snapshot.workbook.name }]
+          const ops: EngineOp[] = [{ kind: 'upsertWorkbook', name: snapshot.workbook.name }]
           snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {
             ops.push({ kind: 'setWorkbookMetadata', key, value })
           })

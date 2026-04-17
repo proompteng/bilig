@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
 import { RuntimeSessionSchema, type RuntimeSession as BiligRuntimeSession } from '@bilig/contracts'
-import { decodeWithSchema, DecodeError, HttpError, runPromise, TransportError } from '@bilig/runtime-kernel'
+import type { DecodeError } from '@bilig/runtime-kernel'
+import { decodeWithSchema, HttpError, runPromise, TransportError } from '@bilig/runtime-kernel'
 
 export type { BiligRuntimeSession }
 

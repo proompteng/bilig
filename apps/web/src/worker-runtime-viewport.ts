@@ -1,6 +1,13 @@
 import { formatAddress } from '@bilig/formula'
 import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
-import { ValueTag, formatCellDisplayValue, type CellSnapshot, type CellStyleRecord, type RecalcMetrics } from '@bilig/protocol'
+import {
+  ValueTag,
+  formatCellDisplayValue,
+  type CellSnapshot,
+  type CellStyleRecord,
+  type EngineEvent,
+  type RecalcMetrics,
+} from '@bilig/protocol'
 import type { ViewportPatch, ViewportPatchedCell } from '@bilig/worker-transport'
 import {
   buildAxisPatches,
@@ -116,7 +123,7 @@ function appendPatchedCell(context: PatchedCellContext, row: number, col: number
 
 export function buildViewportPatchFromEngine(input: {
   readonly state: ViewportSubscriptionState
-  readonly event: import('@bilig/protocol').EngineEvent | null
+  readonly event: EngineEvent | null
   readonly metrics: RecalcMetrics
   readonly sheetImpact: SheetViewportImpact | null
   readonly engine: WorkerEngine

@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { isEngineOpBatch, type EngineOpBatch } from '@bilig/workbook-domain'
 import type { CellRangeRef } from '@bilig/protocol'
 import { isLiteralInput } from '@bilig/protocol'
-import { schema } from './schema.js'
+import type { schema } from './schema.js'
 
 const literalInputSchema = z.union([z.number(), z.string(), z.boolean(), z.null()])
 

@@ -45,7 +45,7 @@ describe('EngineMutationService', () => {
     const replicaState = createReplicaState('local')
     const workbook = new WorkbookStore('inverse')
     let replayDepth = 0
-    const batches: import('@bilig/workbook-domain').EngineOpBatch[] = []
+    const batches: EngineOpBatch[] = []
     const service = createEngineMutationService({
       state: {
         workbook,
@@ -120,7 +120,7 @@ describe('EngineMutationService', () => {
     const replicaState = createReplicaState('local')
     const workbook = new WorkbookStore('spec')
     let replayDepth = 0
-    const batches: import('@bilig/workbook-domain').EngineOpBatch[] = []
+    const batches: EngineOpBatch[] = []
     const service = createEngineMutationService({
       state: {
         workbook,

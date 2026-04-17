@@ -341,7 +341,7 @@ async function runChecked<Ts extends unknown[]>(
   const details = await fc.check(property, parameters)
   const elapsedMs = Date.now() - startedAt
 
-  console.info(
+  console.log(
     [
       `[fuzz] suite=${suite}`,
       `kind=${kind}`,
@@ -358,7 +358,7 @@ async function runChecked<Ts extends unknown[]>(
     let artifactPath: string | null = null
     if (process.env['BILIG_FUZZ_CAPTURE'] === '1') {
       artifactPath = captureCounterexample({ suite, kind, details })
-      console.info(`[fuzz] captured=${artifactPath}`)
+      console.log(`[fuzz] captured=${artifactPath}`)
     }
     if (details.errorInstance instanceof Error) {
       throw details.errorInstance

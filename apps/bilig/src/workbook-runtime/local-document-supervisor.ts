@@ -1,14 +1,14 @@
 import { createActor, type ActorRefFrom } from 'xstate'
-import { Effect } from 'effect'
+import type { Effect } from 'effect'
 
 import { createDocumentSupervisorMachine } from '@bilig/actors'
 import type { AgentFrame } from '@bilig/agent-api'
 import type { HelloFrame, ProtocolFrame } from '@bilig/binary-protocol'
 import type { DocumentStateSummary } from '@bilig/contracts'
-import { type AgentFrameContext, type DocumentControlService, type SnapshotPayload, TransportError } from '@bilig/runtime-kernel'
+import type { AgentFrameContext, DocumentControlService, SnapshotPayload, TransportError } from '@bilig/runtime-kernel'
 
 import { resolveAgentDocumentId, updateActorFromFrames, wrapTransportPromise, wrapTransportSync } from './document-supervisor-shared.js'
-import { LocalWorkbookSessionManager } from './local-workbook-session-manager.js'
+import type { LocalWorkbookSessionManager } from './local-workbook-session-manager.js'
 
 type DocumentSupervisorActor = ActorRefFrom<ReturnType<typeof createDocumentSupervisorMachine>>
 

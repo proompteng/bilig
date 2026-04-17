@@ -167,20 +167,21 @@ function setSqliteConfigLogger(sqlite3: Sqlite3Static, key: 'error' | 'warn', lo
 }
 
 async function withSuppressedOpfsLockDiagnostics<T>(sqlite3: Sqlite3Static, vfsName: string, task: () => Promise<T>): Promise<T> {
-  const originalError = console.error
-  const originalWarn = console.warn
+  const globalConsole = globalThis.console
+  const originalError = globalConsole.error
+  const originalWarn = globalConsole.warn
   const originalSqliteError = getSqliteConfigLogger(sqlite3, 'error')
   const originalSqliteWarn = getSqliteConfigLogger(sqlite3, 'warn')
-  console.error = ((...args: unknown[]) => {
+  globalConsole.error = ((...args: unknown[]) => {
     if (!isOpfsLockDiagnostic(args, vfsName)) {
       originalError(...args)
     }
-  }) as typeof console.error
-  console.warn = ((...args: unknown[]) => {
+  }) as typeof globalConsole.error
+  globalConsole.warn = ((...args: unknown[]) => {
     if (!isOpfsLockDiagnostic(args, vfsName)) {
       originalWarn(...args)
     }
-  }) as typeof console.warn
+  }) as typeof globalConsole.warn
   if (originalSqliteError) {
     setSqliteConfigLogger(sqlite3, 'error', (...args: unknown[]) => {
       if (!isOpfsLockDiagnostic(args, vfsName)) {
@@ -198,8 +199,8 @@ async function withSuppressedOpfsLockDiagnostics<T>(sqlite3: Sqlite3Static, vfsN
   try {
     return await task()
   } finally {
-    console.error = originalError
-    console.warn = originalWarn
+    globalConsole.error = originalError
+    globalConsole.warn = originalWarn
     setSqliteConfigLogger(sqlite3, 'error', originalSqliteError)
     setSqliteConfigLogger(sqlite3, 'warn', originalSqliteWarn)
   }

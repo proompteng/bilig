@@ -15,18 +15,23 @@ import {
 import { CellFlags } from '../../cell-store.js'
 import { definedNameValueToCellValue } from '../../engine-metadata-utils.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
-import type { EngineRuntimeState, PreparedApproximateVectorLookup, PreparedExactVectorLookup, RuntimeFormula } from '../runtime-state.js'
+import type {
+  EngineRuntimeState,
+  PreparedApproximateVectorLookup,
+  PreparedExactVectorLookup,
+  RuntimeFormula,
+  SpillMaterialization,
+} from '../runtime-state.js'
 import { EngineFormulaEvaluationError } from '../errors.js'
 import type { CriterionRangeCacheService } from './criterion-range-cache-service.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
 import type { RangeAggregateCacheService } from './range-aggregate-cache-service.js'
+import type { SortedColumnSearchService } from './sorted-column-search-service.js'
 
 function decodeErrorCode(rawCode: number | undefined): ErrorCode {
   return rawCode ?? ErrorCode.None
 }
-
-import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
-import type { SortedColumnSearchService } from './sorted-column-search-service.js'
 
 export interface EngineFormulaEvaluationService {
   readonly evaluateDirectLookupFormula: (cellIndex: number) => Effect.Effect<number[] | undefined, EngineFormulaEvaluationError>
@@ -107,10 +112,7 @@ export function createEngineFormulaEvaluationService(args: {
   readonly aggregateCache: RangeAggregateCacheService
   readonly exactLookup: Pick<ExactColumnIndexService, 'findVectorMatch' | 'prepareVectorLookup' | 'findPreparedVectorMatch'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'findVectorMatch' | 'prepareVectorLookup' | 'findPreparedVectorMatch'>
-  readonly materializeSpill: (
-    cellIndex: number,
-    arrayValue: { values: CellValue[]; rows: number; cols: number },
-  ) => import('../runtime-state.js').SpillMaterialization
+  readonly materializeSpill: (cellIndex: number, arrayValue: { values: CellValue[]; rows: number; cols: number }) => SpillMaterialization
   readonly clearOwnedSpill: (cellIndex: number) => number[]
   readonly resolvePivotData: (
     sheetName: string,

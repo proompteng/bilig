@@ -1,6 +1,6 @@
 import { defineQueriesWithType, defineQuery } from '@rocicorp/zero'
 import { z } from 'zod'
-import { schema } from './schema.js'
+import type { schema } from './schema.js'
 import { zql } from './zql.js'
 
 const defineQueries = defineQueriesWithType<typeof schema>()

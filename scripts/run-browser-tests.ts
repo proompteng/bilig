@@ -152,7 +152,7 @@ function requireComposeInvocation(required: boolean): ComposeInvocation | null {
 
   if (invocation && !composeInvocationLogged) {
     const version = invocation.version ? ` (${invocation.version})` : ''
-    console.info(`compose is available via "${invocation.label}"${version}.`)
+    console.log(`compose is available via "${invocation.label}"${version}.`)
     composeInvocationLogged = true
   }
 
@@ -164,7 +164,7 @@ const composeLabel = compose ? compose.label : 'unavailable'
 const browserStack = normalizedBrowserStack === 'compose' && compose ? 'compose' : 'local'
 
 if (normalizedBrowserStack === 'compose' && compose) {
-  console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`)
+  console.log(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`)
 }
 
 if (normalizedBrowserStack === 'compose' && !compose && isCi) {
@@ -541,12 +541,12 @@ async function runComposePlaywright(): Promise<void> {
   terminatePreviewServers()
   runDockerCompose(['up', '-d', '--build', 'postgres', 'bilig-app', 'zero-cache'])
   try {
-    console.info(
+    console.log(
       `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(',')}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
     )
     if (!process.env['BILIG_E2E_HOST'] && !configuredE2eBaseUrl && !configuredE2eSyncServerUrl && !configuredE2eZeroKeepaliveUrl) {
       e2eHost = await resolveReachableHttpHost(e2eHostCandidates, e2eWebPort, '/healthz', composeStartupTimeoutMs)
-      console.info(`compose browser stack resolved host=${e2eHost}`)
+      console.log(`compose browser stack resolved host=${e2eHost}`)
     }
     await waitForHttp(`${getE2eBaseUrl()}/healthz`, composeStartupTimeoutMs)
     await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs)

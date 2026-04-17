@@ -106,19 +106,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { elapsedMs: elapsed, metrics, downstreamCount } = await runPerfSmokeGate()
 
   if (elapsed > 250) {
-    console.error(`perf smoke exceeded threshold: ${elapsed.toFixed(2)}ms`)
+    console.warn(`perf smoke exceeded threshold: ${elapsed.toFixed(2)}ms`)
     process.exit(1)
   }
 
   if (metrics.dirtyFormulaCount < downstreamCount) {
-    console.error(
+    console.warn(
       `perf smoke failed to mark the expected downstream formulas dirty: expected at least ${downstreamCount}, got ${metrics.dirtyFormulaCount}`,
     )
     process.exit(1)
   }
 
   if (metrics.wasmFormulaCount === 0) {
-    console.error('perf smoke did not exercise the wasm fast path')
+    console.warn('perf smoke did not exercise the wasm fast path')
     process.exit(1)
   }
 

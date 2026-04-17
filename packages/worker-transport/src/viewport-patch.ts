@@ -1,6 +1,6 @@
 import { BinaryProtocolError, BinaryReader, BinaryWriter } from '@bilig/binary-protocol'
 import {
-  ErrorCode,
+  type ErrorCode,
   ValueTag,
   type CellBorderStyle,
   type CellBorderWeight,

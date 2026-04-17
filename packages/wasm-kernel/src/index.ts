@@ -1,3 +1,6 @@
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
+
 type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
 
 const ARRAY_BUFFER_CLASS_ID = 1
@@ -711,7 +714,7 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
   }
 
   if (isNodeLike()) {
-    const fsPromises = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises') | undefined
+    const fsPromises = process.getBuiltinModule('fs/promises') as typeof FsPromises | undefined
     if (!fsPromises) {
       throw new Error('Node fs/promises module is unavailable')
     }
@@ -740,7 +743,7 @@ function loadWasmModuleSync(): WebAssembly.WebAssemblyInstantiatedSource {
       },
     },
   }
-  const fs = process.getBuiltinModule('fs') as typeof import('node:fs') | undefined
+  const fs = process.getBuiltinModule('fs') as typeof Fs | undefined
   if (!fs) {
     throw new Error('Node fs module is unavailable')
   }

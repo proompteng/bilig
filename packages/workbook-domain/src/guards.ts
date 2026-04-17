@@ -1,4 +1,5 @@
 import { isCellRangeRef, isLiteralInput } from '@bilig/protocol'
+import type { EngineOp, EngineOpBatch, WorkbookOp } from './index.js'
 
 const HORIZONTAL_ALIGNMENT_VALUES = new Set(['general', 'left', 'center', 'right'])
 const VERTICAL_ALIGNMENT_VALUES = new Set(['top', 'middle', 'bottom'])
@@ -501,7 +502,7 @@ function isWorkbookShape(value: unknown): boolean {
   )
 }
 
-export function isWorkbookOp(value: unknown): value is import('./index.js').WorkbookOp {
+export function isWorkbookOp(value: unknown): value is WorkbookOp {
   if (!isRecord(value) || typeof value['kind'] !== 'string') {
     return false
   }
@@ -654,15 +655,15 @@ export function isWorkbookOp(value: unknown): value is import('./index.js').Work
   }
 }
 
-export function isEngineOp(value: unknown): value is import('./index.js').EngineOp {
+export function isEngineOp(value: unknown): value is EngineOp {
   return isWorkbookOp(value)
 }
 
-export function isEngineOps(value: unknown): value is import('./index.js').EngineOp[] {
+export function isEngineOps(value: unknown): value is EngineOp[] {
   return Array.isArray(value) && value.every((entry) => isEngineOp(entry))
 }
 
-export function isEngineOpBatch(value: unknown): value is import('./index.js').EngineOpBatch {
+export function isEngineOpBatch(value: unknown): value is EngineOpBatch {
   return (
     isRecord(value) &&
     hasString(value, 'id') &&

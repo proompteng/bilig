@@ -15,4 +15,4 @@ const promotedPath = promoteCapturedArtifact({
   fixturePath,
 })
 
-console.info(`Promoted fuzz artifact to ${promotedPath}`)
+console.log(`Promoted fuzz artifact to ${promotedPath}`)

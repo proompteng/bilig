@@ -1,7 +1,7 @@
 import type { Viewport } from '@bilig/protocol'
 import { decodeViewportPatch, type ViewportPatch, type WorkerEngineClient } from '@bilig/worker-transport'
-import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
-import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
+import type { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
+import type { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { applyProjectedViewportPatch } from './projected-viewport-patch-application.js'
 
 type CellItem = readonly [number, number]

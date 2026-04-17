@@ -3,7 +3,7 @@ import { ErrorCode, MAX_COLS, MAX_ROWS, ValueTag, type CellValue, type Selection
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
-import { EdgeArena, type EdgeSlice } from '../../edge-arena.js'
+import type { EdgeArena, EdgeSlice } from '../../edge-arena.js'
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
 import { appendPackedCellIndex, growUint32 } from '../../engine-buffer-utils.js'
 import { areCellValuesEqual, emptyValue, errorValue } from '../../engine-value-utils.js'

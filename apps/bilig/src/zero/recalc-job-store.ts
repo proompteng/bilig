@@ -1,5 +1,6 @@
 import type { EngineReplicaSnapshot } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
+import type { DirtyRegion } from '@bilig/zero-sync'
 import type { CellEvalRow } from './projection.js'
 import { isDirtyRegion, parseInteger } from './store-support.js'
 import { shouldPersistWorkbookCheckpointRevision, type Queryable } from './store.js'
@@ -13,7 +14,7 @@ export interface RecalcJobLease {
   workbookId: string
   fromRevision: number
   toRevision: number
-  dirtyRegions: import('@bilig/zero-sync').DirtyRegion[] | null
+  dirtyRegions: DirtyRegion[] | null
   attempts: number
 }
 

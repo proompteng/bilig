@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  PendingZeroDataMigrationsError,
   assertZeroDataMigrationsReady,
   runPendingZeroDataMigrations,
+  type PendingZeroDataMigrationsError,
   type ZeroDataMigrationConnection,
   type ZeroDataMigrationDefinition,
   type ZeroDataMigrationPool,

@@ -28,6 +28,7 @@
     "@typescript-eslint/no-unsafe-type-assertion": "error",
     "@typescript-eslint/switch-exhaustiveness-check": "error",
     "@typescript-eslint/unbound-method": "error",
+    "typescript/consistent-type-imports": "error",
     "eqeqeq": [
       "error",
       "always",
@@ -38,18 +39,55 @@
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "import/no-self-import": "error",
+    "import/no-named-as-default-member": "error",
+    "import/no-unassigned-import": "error",
     "no-constant-condition": [
       "error",
       {
         "checkLoops": true
       }
     ],
+    "no-console": "off",
     "promise/always-return": "error",
+    "promise/no-nesting": "error",
     "promise/no-multiple-resolved": "error",
+    "promise/no-return-in-finally": "error",
+    "promise/no-return-wrap": "error",
     "promise/no-promise-in-callback": "error",
+    "unicorn/prefer-node-protocol": "error",
     "promise/prefer-await-to-then": "error",
     "promise/prefer-catch": "error",
     "react/react-in-jsx-scope": "off",
     "oxc/no-async-endpoint-handlers": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["apps/web/src/**/*.{ts,tsx}", "apps/bilig/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-console": "error"
+      }
+    },
+    {
+      "files": [
+        "**/__tests__/**/*.{ts,tsx}",
+        "**/*.test.{ts,tsx}",
+        "**/*.pw.ts",
+        "**/*.fuzz.test.ts",
+        "scripts/**/*.{ts,tsx,mjs,js}",
+        "packages/benchmarks/**/*.{ts,tsx}",
+        "packages/test-fuzz/**/*.{ts,tsx}",
+        "apps/bilig/src/index.ts",
+        "apps/bilig/src/zero/db.ts",
+        "apps/bilig/src/workbook-runtime/local-workbook-session-manager.ts",
+        "apps/bilig/src/codex-app/workbook-agent-service.ts",
+        "apps/bilig/src/codex-app/workbook-agent-workflow-runtime.ts",
+        "packages/renderer/src/host-config.ts",
+        "packages/storage-browser/src/browser-metadata-store.ts",
+        "packages/storage-browser/src/workbook-local-store.ts"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
 }

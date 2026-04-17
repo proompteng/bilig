@@ -1,4 +1,4 @@
-import { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core'
 import { applyWorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { EngineOp } from '@bilig/workbook-domain'
 import type {
@@ -36,14 +36,15 @@ import {
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
 } from '@bilig/zero-sync'
-import { z } from 'zod'
+import type { z } from 'zod'
 import type { SessionIdentity } from '../http/session.js'
-import { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
+import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
 import type { Queryable } from './store.js'
 import { acquireWorkbookMutationLock } from './workbook-runtime-store.js'
 import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
 import { persistWorkbookMutation } from './workbook-mutation-store.js'
 import { upsertWorkbookPresence } from './presence-store.js'
+import type { WorkbookChangeRange } from './workbook-change-store.js'
 import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
 
 interface ServerTransactionLike {
@@ -307,7 +308,7 @@ async function commitWorkbookHistoryMutation(input: {
     summary: string
     sheetName: string | null
     anchorAddress: string | null
-    range: import('./workbook-change-store.js').WorkbookChangeRange | null
+    range: WorkbookChangeRange | null
     undoBundle: WorkbookChangeUndoBundle
   }
   eventKind: 'revertChange' | 'redoChange'

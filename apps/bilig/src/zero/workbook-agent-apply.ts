@@ -1,4 +1,4 @@
-import { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   applyWorkbookAgentAnnotationCommand,

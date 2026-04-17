@@ -2,6 +2,7 @@ import React from 'react'
 import { SpreadsheetEngine } from '@bilig/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Cell, Sheet, Workbook } from '../components.js'
+import type * as RendererRoot from '../renderer-root.js'
 
 type CompatContainer = {
   lastError: unknown
@@ -42,7 +43,7 @@ vi.mock('../compat.js', () => ({
 
 async function loadRendererRootWithCompatMock(updateImpl: UpdateImpl): Promise<
   CompatMocks & {
-    createWorkbookRendererRoot: typeof import('../renderer-root.js').createWorkbookRendererRoot
+    createWorkbookRendererRoot: typeof RendererRoot.createWorkbookRendererRoot
     getCapturedContainer: () => CompatContainer | undefined
   }
 > {

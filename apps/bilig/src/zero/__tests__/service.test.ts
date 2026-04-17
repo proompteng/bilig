@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as storeModule from '../store.js'
 
 const deps = vi.hoisted(() => {
   const pool = {
@@ -84,7 +85,7 @@ vi.mock('../server-mutators.js', () => ({
 }))
 
 vi.mock('../store.js', async () => {
-  const actual = await vi.importActual<typeof import('../store.js')>('../store.js')
+  const actual = await vi.importActual<typeof storeModule>('../store.js')
   return {
     ...actual,
     loadWorkbookEventRecordsAfter: vi.fn(async () => []),

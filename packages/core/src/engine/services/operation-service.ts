@@ -1,7 +1,16 @@
 import { Effect } from 'effect'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
-import { MAX_COLS, ValueTag, type CellRangeRef, type CellValue, type EngineEvent } from '@bilig/protocol'
+import {
+  MAX_COLS,
+  ValueTag,
+  type CellRangeRef,
+  type CellValue,
+  type EngineChangedCell,
+  type EngineEvent,
+  type SelectionState,
+} from '@bilig/protocol'
+import type { EdgeSlice } from '../../edge-arena.js'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import {
   entityPayload,
@@ -223,10 +232,10 @@ export function createEngineOperationService(args: {
   readonly reverseState: {
     readonly reverseSpillEdges: Map<string, Set<number>>
     readonly reverseAggregateColumnEdges: Map<number, Set<number>>
-    readonly reverseExactLookupColumnEdges: Map<number, import('../../edge-arena.js').EdgeSlice>
-    readonly reverseSortedLookupColumnEdges: Map<number, import('../../edge-arena.js').EdgeSlice>
+    readonly reverseExactLookupColumnEdges: Map<number, EdgeSlice>
+    readonly reverseSortedLookupColumnEdges: Map<number, EdgeSlice>
   }
-  readonly getSelectionState: () => import('@bilig/protocol').SelectionState
+  readonly getSelectionState: () => SelectionState
   readonly setSelection: (sheetName: string, address: string) => void
   readonly rewriteDefinedNamesForSheetRename: (oldSheetName: string, newSheetName: string) => void
   readonly rewriteCellFormulasForSheetRename: (oldSheetName: string, newSheetName: string, formulaChangedCount: number) => number
@@ -260,7 +269,7 @@ export function createEngineOperationService(args: {
   readonly markExplicitChanged: (cellIndex: number, count: number) => number
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
-  readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly import('@bilig/protocol').EngineChangedCell[]
+  readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
   readonly getChangedInputBuffer: () => U32
   readonly ensureRecalcScratchCapacity: (size: number) => void
   readonly ensureCellTracked: (sheetName: string, address: string) => number

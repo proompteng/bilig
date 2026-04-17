@@ -1,4 +1,12 @@
-import type { CellValue, RecalcMetrics, SelectionState, SyncState, WorkbookPivotSnapshot } from '@bilig/protocol'
+import type {
+  CellValue,
+  LiteralInput,
+  RecalcMetrics,
+  SelectionState,
+  SyncState,
+  WorkbookPivotSnapshot,
+  WorkbookSnapshot,
+} from '@bilig/protocol'
 import type { CompiledFormula } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import type { OpOrder, ReplicaSnapshot, ReplicaState, ReplicaVersionSnapshot } from '../replica-state.js'
@@ -19,7 +27,7 @@ export interface CommitOp {
   order?: number
   sheetName?: string
   addr?: string
-  value?: import('@bilig/protocol').LiteralInput
+  value?: LiteralInput
   formula?: string
   format?: string
 }
@@ -39,7 +47,7 @@ export interface EngineSyncClientConnection {
 export interface EngineSyncClient {
   connect(handlers: {
     applyRemoteBatch(batch: EngineOpBatch): boolean
-    applyRemoteSnapshot?(snapshot: import('@bilig/protocol').WorkbookSnapshot): void
+    applyRemoteSnapshot?(snapshot: WorkbookSnapshot): void
     setState(state: SyncState): void
   }): EngineSyncClientConnection | Promise<EngineSyncClientConnection>
 }

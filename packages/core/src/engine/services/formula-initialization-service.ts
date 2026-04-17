@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import type { CompiledFormula } from '@bilig/formula'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
@@ -23,13 +24,8 @@ export function createEngineFormulaInitializationService(args: {
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
   readonly resetMaterializedCellScratch: (expectedSize: number) => void
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void
-  readonly bindPreparedFormula: (
-    cellIndex: number,
-    ownerSheetName: string,
-    source: string,
-    compiled: import('@bilig/formula').CompiledFormula,
-  ) => void
-  readonly compileTemplateFormula: (source: string, row: number, col: number) => import('@bilig/formula').CompiledFormula
+  readonly bindPreparedFormula: (cellIndex: number, ownerSheetName: string, source: string, compiled: CompiledFormula) => void
+  readonly compileTemplateFormula: (source: string, row: number, col: number) => CompiledFormula
   readonly clearTemplateFormulaCache: () => void
   readonly removeFormula: (cellIndex: number) => boolean
   readonly setInvalidFormulaValue: (cellIndex: number) => void

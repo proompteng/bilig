@@ -1,5 +1,5 @@
 import * as fc from 'fast-check'
-import { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core'
 import type { CellNumberFormatInput, CellRangeRef, CellStylePatch, LiteralInput } from '@bilig/protocol'
 import {
   buildWorkbookSourceProjection,

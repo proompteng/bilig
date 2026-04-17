@@ -171,6 +171,7 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
     async saveJson(key: string, value: unknown): Promise<void> {
       const serialized = JSON.stringify(value)
       const storage = getLocalStorage()
+      const globalConsole = globalThis.console
       if (storage) {
         try {
           if (serialized.length <= WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES) {
@@ -191,7 +192,7 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
       try {
         storage?.setItem(key, serialized)
       } catch (error) {
-        console.warn(`Unable to persist ${key}`, error)
+        globalConsole.warn(`Unable to persist ${key}`, error)
       }
     },
     async remove(key: string): Promise<void> {

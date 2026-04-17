@@ -11,7 +11,7 @@ import {
   buildWorkbookStyleRowsFromEngine,
   materializeCellEvalProjection,
 } from './projection.js'
-import { deriveDirtyRegions, type DirtyRegion } from '@bilig/zero-sync'
+import { deriveDirtyRegions, type DirtyRegion, type WorkbookEventRecord } from '@bilig/zero-sync'
 import {
   eventRequiresRecalc,
   isColumnMetadataEventPayload,
@@ -36,11 +36,12 @@ import {
   type WorkbookProjectionCommit,
 } from './store.js'
 import { persistCellEvalRangeDiff } from './workbook-calculation-store.js'
+import type { AxisMetadataSourceRow, CellSourceRow } from './projection.js'
 
 function buildFocusedProjectionCellRows(
   projection: PersistWorkbookMutationOptions['previousState']['projection'],
   payload: Extract<PersistWorkbookMutationOptions['eventPayload'], { kind: 'setCellValue' | 'setCellFormula' | 'clearCell' }>,
-): readonly import('./projection.js').CellSourceRow[] {
+): readonly CellSourceRow[] {
   const row = projection.cells.find((entry) => entry.sheetName === payload.sheetName && entry.address === payload.address)
   return row ? [row] : []
 }
@@ -48,18 +49,18 @@ function buildFocusedProjectionCellRows(
 function buildSheetColumnMetadataRowsFromProjection(
   projection: PersistWorkbookMutationOptions['previousState']['projection'],
   sheetName: string,
-): readonly import('./projection.js').AxisMetadataSourceRow[] {
+): readonly AxisMetadataSourceRow[] {
   return projection.columnMetadata.filter((entry) => entry.sheetName === sheetName)
 }
 
 function buildSheetRowMetadataRowsFromProjection(
   projection: PersistWorkbookMutationOptions['previousState']['projection'],
   sheetName: string,
-): readonly import('./projection.js').AxisMetadataSourceRow[] {
+): readonly AxisMetadataSourceRow[] {
   return projection.rowMetadata.filter((entry) => entry.sheetName === sheetName)
 }
 
-async function appendWorkbookEvent(db: Queryable, event: import('@bilig/zero-sync').WorkbookEventRecord): Promise<void> {
+async function appendWorkbookEvent(db: Queryable, event: WorkbookEventRecord): Promise<void> {
   await db.query(
     `
       INSERT INTO workbook_event (

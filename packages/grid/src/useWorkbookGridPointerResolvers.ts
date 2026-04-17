@@ -11,7 +11,7 @@ import {
   type VisibleRegionState,
 } from './gridPointer.js'
 import type { Rectangle, GridSelection, Item } from './gridTypes.js'
-import { getGridMetrics } from './gridMetrics.js'
+import type { getGridMetrics } from './gridMetrics.js'
 
 export function useWorkbookGridPointerResolvers(input: {
   hostRef: MutableRefObject<HTMLDivElement | null>

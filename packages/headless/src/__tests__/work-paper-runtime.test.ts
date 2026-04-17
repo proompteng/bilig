@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 
-import { WorkPaperEvaluationSuspendedError, WorkPaper, WorkPaperCellAddress } from '../index.js'
+import type { WorkPaperCellAddress } from '../index.js'
+import { WorkPaperEvaluationSuspendedError, WorkPaper } from '../index.js'
 
 const TEST_LANGUAGE_CODE = 'xHF'
 

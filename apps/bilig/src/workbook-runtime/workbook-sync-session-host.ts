@@ -1,5 +1,5 @@
 import type { HelloFrame, ProtocolFrame } from '@bilig/binary-protocol'
-import { WorkbookBrowserSessionHost } from './browser-session-host.js'
+import type { WorkbookBrowserSessionHost } from './browser-session-host.js'
 import { routeWorkbookSyncFrame } from './sync-frame-router.js'
 
 type SyncFrameOutput = ProtocolFrame | ProtocolFrame[]

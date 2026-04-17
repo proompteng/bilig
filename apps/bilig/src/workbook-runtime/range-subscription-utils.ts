@@ -1,4 +1,4 @@
-import { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core'
 import type { CellRangeRef, EngineEvent } from '@bilig/protocol'
 
 export interface RangeBounds {

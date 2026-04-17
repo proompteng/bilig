@@ -1,4 +1,4 @@
-import { ErrorCode, type CellValue, type LiteralInput } from '@bilig/protocol'
+import type { CellValue, ErrorCode, LiteralInput } from '@bilig/protocol'
 import { excelDateTimeFixtureSuite } from './datetime-fixtures.js'
 import { canonicalLogicalFixtures } from './logical-fixtures.js'
 import { canonicalExpansionFixtures } from './canonical-expansion-fixtures.js'

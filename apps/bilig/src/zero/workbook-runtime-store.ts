@@ -1,12 +1,12 @@
 import { SpreadsheetEngine, type EngineReplicaSnapshot } from '@bilig/core'
-import { isWorkbookSnapshot } from '@bilig/protocol'
+import { isWorkbookSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import { applyWorkbookEvent } from '@bilig/zero-sync'
 import { parseCheckpointPayload, parseCheckpointReplicaState, parseInteger } from './store-support.js'
 import { loadWorkbookEventRecordsAfter, type Queryable, type WorkbookRuntimeMetadata, type WorkbookRuntimeState } from './store.js'
 
 interface WorkbookCheckpointRecord {
   revision: number
-  checkpointPayload: import('@bilig/protocol').WorkbookSnapshot
+  checkpointPayload: WorkbookSnapshot
   replicaState: EngineReplicaSnapshot | null
 }
 

@@ -1,5 +1,5 @@
 import { Effect, Exit, Cause } from 'effect'
-import type { CellSnapshot } from '@bilig/protocol'
+import type { CellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineRuntimeState } from './runtime-state.js'
 import { createEngineCellStateService, type EngineCellStateService } from './services/cell-state-service.js'
 import { createEngineEventService, type EngineEventService } from './services/event-service.js'
@@ -227,8 +227,8 @@ function requireService<Service>(service: Service | undefined, name: string): Se
 export function createEngineServiceRuntime(args: {
   readonly state: EngineRuntimeState
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
-  readonly exportSnapshot: () => import('@bilig/protocol').WorkbookSnapshot
-  readonly importSnapshot: (snapshot: import('@bilig/protocol').WorkbookSnapshot) => void
+  readonly exportSnapshot: () => WorkbookSnapshot
+  readonly importSnapshot: (snapshot: WorkbookSnapshot) => void
   readonly maintenance: EngineMaintenanceRuntimeConfig
   readonly mutationSupport: EngineMutationSupportRuntimeConfig
   readonly formulaBinding: EngineFormulaBindingRuntimeConfig
@@ -242,7 +242,7 @@ export function createEngineServiceRuntime(args: {
   readonly pivotState: {
     readonly pivotOutputOwners: Map<number, string>
   }
-  readonly applyRemoteSnapshot: (snapshot: import('@bilig/protocol').WorkbookSnapshot) => void
+  readonly applyRemoteSnapshot: (snapshot: WorkbookSnapshot) => void
 }): EngineServiceRuntime {
   const scratch = createEngineRuntimeScratchService()
   const traversal = createEngineTraversalService(args.traversal)
