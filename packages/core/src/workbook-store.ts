@@ -23,11 +23,14 @@ import {
   type WorkbookShapeSnapshot,
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
-} from '@bilig/protocol'
-import { formatAddress, parseCellAddress } from '@bilig/formula'
-import { SheetGrid } from './sheet-grid.js'
-import { CellFlags, CellStore } from './cell-store.js'
-import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
+} from "@bilig/protocol";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { SheetGrid, type SheetGridAxisRemapScope } from "./sheet-grid.js";
+import { CellFlags, CellStore } from "./cell-store.js";
+import {
+  createWorkbookMetadataService,
+  runWorkbookMetadataEffect,
+} from "./workbook-metadata-service.js";
 import {
   createWorkbookMetadataRecord,
   type WorkbookAxisEntryRecord,
@@ -882,12 +885,13 @@ export class WorkbookStore {
     sheetName: string,
     axis: 'row' | 'column',
     remapIndex: (index: number) => number | undefined,
+    scope?: SheetGridAxisRemapScope,
   ): { changedCellIndices: number[]; removedCellIndices: number[] } {
     const sheet = this.getSheet(sheetName)
     if (!sheet) {
       return { changedCellIndices: [], removedCellIndices: [] }
     }
-    const changedEntries = sheet.grid.remapAxis(axis, remapIndex)
+    const changedEntries = sheet.grid.remapAxis(axis, remapIndex, scope);
     changedEntries.forEach(({ row, col }) => {
       this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
     })

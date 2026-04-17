@@ -513,11 +513,73 @@ describe('SpreadsheetEngine', () => {
     expect(engine.exportSnapshot()).toEqual(before)
   })
 
-  it('applies cell mutations by sheet id and returns inverse ops', async () => {
-    const engine = new SpreadsheetEngine({ workbookName: 'cell-mutation-refs' })
-    await engine.ready()
-    engine.createSheet('Sheet1')
-    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+  it("undoes formula fills into blank targets without leaving explicit empty cells behind", async () => {
+    const seed = new SpreadsheetEngine({ workbookName: "fill-undo-blank-target-seed" });
+    await seed.ready();
+    seed.createSheet("Sheet1");
+    const initialSnapshot = seed.exportSnapshot();
+
+    const engine = new SpreadsheetEngine({ workbookName: "fill-undo-blank-target" });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.setCellFormula("Sheet1", "A1", "E5+A1");
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { sheetName: "Sheet1", startAddress: "E5", endAddress: "E5" },
+    );
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      "0.00",
+    );
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+    );
+    engine.insertColumns("Sheet1", 0, 1);
+
+    let undoCount = 0;
+    while (engine.undo()) {
+      undoCount += 1;
+      expect(undoCount).toBeLessThanOrEqual(16);
+    }
+    expect(undoCount).toBeGreaterThan(0);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+  });
+
+  it("undoes formula creation on tracked dependency placeholders without exporting authored blanks", async () => {
+    const seed = new SpreadsheetEngine({ workbookName: "formula-undo-placeholder-seed" });
+    await seed.ready();
+    seed.createSheet("Sheet1");
+    const initialSnapshot = seed.exportSnapshot();
+
+    const engine = new SpreadsheetEngine({ workbookName: "formula-undo-placeholder" });
+    await engine.ready();
+    engine.importSnapshot(initialSnapshot);
+
+    engine.setCellFormula("Sheet1", "A1", "C3+A1");
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+    );
+    engine.clearRange({ sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" });
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" }, [[null]]);
+    engine.setCellFormula("Sheet1", "C3", "A1+A1");
+
+    let undoCount = 0;
+    while (engine.undo()) {
+      undoCount += 1;
+      expect(undoCount).toBeLessThanOrEqual(16);
+    }
+    expect(undoCount).toBeGreaterThan(0);
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot);
+  });
+
+  it("applies cell mutations by sheet id and returns inverse ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "cell-mutation-refs" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    const sheetId = engine.workbook.getSheet("Sheet1")!.id;
 
     const undoOps = engine.applyCellMutationsAt([
       {
@@ -4567,21 +4629,52 @@ describe('SpreadsheetEngine', () => {
     ])
   })
 
-  it('rewrites metadata-backed ranges, names, freeze panes, and pivot sources across structural row edits', async () => {
-    const engine = new SpreadsheetEngine({ workbookName: 'spec' })
-    await engine.ready()
-    engine.createSheet('Data')
-    engine.createSheet('Pivot')
-    engine.setRangeValues({ sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' }, [
-      ['Region', 'Sales'],
-      ['East', 10],
-      ['West', 7],
-      ['East', 5],
-    ])
-    engine.setDefinedName('SalesRange', '=Data!A1:B4')
-    engine.setFreezePane('Data', 1, 0)
-    engine.setFilter('Data', { sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' })
-    engine.setSort('Data', { sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' }, [{ keyAddress: 'B1', direction: 'asc' }])
+  it("keeps repeated direct aggregate families correct across structural row transforms", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "structural-aggregate-rows" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue("Sheet1", `A${row}`, row);
+      engine.setCellFormula("Sheet1", `B${row}`, `SUM(A1:A${row})`);
+    }
+
+    engine.insertRows("Sheet1", 1, 1);
+
+    expect(engine.getCell("Sheet1", "B1").formula).toBe("SUM(A1:A1)");
+    expect(engine.getCell("Sheet1", "B3").formula).toBe("SUM(A1:A3)");
+    expect(engine.getCell("Sheet1", "B5").formula).toBe("SUM(A1:A5)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "B5")).toEqual({ tag: ValueTag.Number, value: 10 });
+
+    engine.deleteRows("Sheet1", 1, 1);
+
+    for (let row = 1; row <= 4; row += 1) {
+      expect(engine.getCell("Sheet1", `B${row}`).formula).toBe(`SUM(A1:A${row})`);
+      expect(engine.getCellValue("Sheet1", `B${row}`)).toEqual({
+        tag: ValueTag.Number,
+        value: (row * (row + 1)) / 2,
+      });
+    }
+  });
+
+  it("rewrites metadata-backed ranges, names, freeze panes, and pivot sources across structural row edits", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
+      ["Region", "Sales"],
+      ["East", 10],
+      ["West", 7],
+      ["East", 5],
+    ]);
+    engine.setDefinedName("SalesRange", "=Data!A1:B4");
+    engine.setFreezePane("Data", 1, 0);
+    engine.setFilter("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B4" });
+    engine.setSort("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
+      { keyAddress: "B1", direction: "asc" },
+    ]);
     engine.setTable({
       name: 'Sales',
       sheetName: 'Data',

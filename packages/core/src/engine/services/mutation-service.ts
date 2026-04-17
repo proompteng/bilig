@@ -97,12 +97,18 @@ function translateFormulaForTarget(
 }
 
 export interface EngineMutationService {
-  readonly executeTransactionNow: (record: TransactionRecord, source: 'local' | 'restore' | 'history') => void
+  readonly executeTransactionNow: (
+    record: TransactionRecord,
+    source: "local" | "restore" | "undo" | "redo",
+  ) => void;
   readonly executeTransaction: (
     record: TransactionRecord,
-    source: 'local' | 'restore' | 'history',
-  ) => Effect.Effect<void, EngineMutationError>
-  readonly executeLocalNow: (ops: EngineOp[], potentialNewCells?: number) => readonly EngineOp[] | null
+    source: "local" | "restore" | "undo" | "redo",
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly executeLocalNow: (
+    ops: EngineOp[],
+    potentialNewCells?: number,
+  ) => readonly EngineOp[] | null;
   readonly executeLocalCellMutationsAtNow: (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
@@ -197,14 +203,14 @@ export function createEngineMutationService(args: {
   ) => EngineOp[]
   readonly applyBatchNow: (
     batch: EngineOpBatch,
-    source: 'local' | 'restore' | 'history',
+    source: "local" | "restore" | "undo" | "redo",
     potentialNewCells?: number,
     preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[],
   ) => void
   readonly applyCellMutationsAtBatchNow: (
     refs: readonly EngineCellMutationRef[],
     batch: EngineOpBatch | null,
-    source: 'local' | 'restore' | 'history',
+    source: "local" | "restore" | "undo" | "redo",
     potentialNewCells?: number,
   ) => void
 }): EngineMutationService {
@@ -1175,9 +1181,19 @@ export function createEngineMutationService(args: {
       return structuredClone(op)
     })
 
-  const executeTransactionNow = (record: TransactionRecord, source: 'local' | 'restore' | 'history'): void => {
+  const executeTransactionNow = (
+    record: TransactionRecord,
+    source: "local" | "restore" | "undo" | "redo",
+  ): void => {
+    if (record.kind === "ops" && record.ops.length === 0) {
+      return;
+  const executeTransactionNow = (
+    record: TransactionRecord,
+    source: 'local' | 'restore' | 'undo' | 'redo',
+  ): void => {
     if (record.kind === 'ops' && record.ops.length === 0) {
       return
+    }
     }
     const batch = createBatch(args.state.replicaState, record.kind === 'single-op' ? [record.op] : record.ops)
     args.applyBatchNow(batch, source, record.potentialNewCells)

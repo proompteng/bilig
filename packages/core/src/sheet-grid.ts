@@ -5,6 +5,47 @@ function blockKey(row: number, col: number): number {
   return Math.floor(row / BLOCK_ROWS) * 1_000_000 + Math.floor(col / BLOCK_COLS)
 }
 
+export interface SheetGridAxisRemapScope {
+  readonly start: number;
+  readonly end?: number;
+}
+
+function blockIntersectsScope(
+  axis: "row" | "column",
+  key: number,
+  scope: SheetGridAxisRemapScope | undefined,
+): boolean {
+  if (!scope) {
+    return true;
+  }
+  const blockStart =
+    axis === "row" ? Math.floor(key / 1_000_000) * BLOCK_ROWS : (key % 1_000_000) * BLOCK_COLS;
+  const blockEnd = blockStart + (axis === "row" ? BLOCK_ROWS : BLOCK_COLS);
+  if (scope.end === undefined) {
+    return blockEnd > scope.start;
+  }
+  return blockEnd > scope.start && blockStart < scope.end;
+}
+
+function axisIndexInScope(index: number, scope: SheetGridAxisRemapScope | undefined): boolean {
+  if (!scope) {
+    return true;
+  }
+  if (index < scope.start) {
+    return false;
+  }
+  return scope.end === undefined || index < scope.end;
+}
+
+function blockIsEmpty(block: Uint32Array): boolean {
+  for (let index = 0; index < block.length; index += 1) {
+    if (block[index] !== 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export class SheetGrid {
   readonly blocks = new Map<number, Uint32Array>()
 
@@ -76,6 +117,7 @@ export class SheetGrid {
   remapAxis(
     axis: 'row' | 'column',
     remapIndex: (index: number) => number | undefined,
+    scope?: SheetGridAxisRemapScope,
   ): Array<{
     cellIndex: number
     row: number
@@ -84,45 +126,67 @@ export class SheetGrid {
     nextCol: number | undefined
   }> {
     const changedEntries: Array<{
-      cellIndex: number
-      row: number
-      col: number
-      nextRow: number | undefined
-      nextCol: number | undefined
-    }> = []
-    const nextBlocks = new Map<number, Uint32Array>()
-    this.blocks.forEach((block, key) => {
-      const blockRow = Math.floor(key / 1_000_000)
-      const blockCol = key % 1_000_000
-      for (let offset = 0; offset < block.length; offset += 1) {
-        const value = block[offset]!
-        if (value === 0) {
-          continue
+      cellIndex: number;
+      row: number;
+      col: number;
+      nextRow: number | undefined;
+      nextCol: number | undefined;
+    }> = [];
+    const touchedBlockKeys = new Set<number>();
+    [...this.blocks.keys()]
+      .filter((key) => blockIntersectsScope(axis, key, scope))
+      .forEach((key) => {
+        const block = this.blocks.get(key);
+        if (!block) {
+          return;
         }
-        const localRow = Math.floor(offset / BLOCK_COLS)
-        const localCol = offset % BLOCK_COLS
-        const row = blockRow * BLOCK_ROWS + localRow
-        const col = blockCol * BLOCK_COLS + localCol
-        const nextRow = axis === 'row' ? remapIndex(row) : row
-        const nextCol = axis === 'column' ? remapIndex(col) : col
-        if (nextRow !== row || nextCol !== col) {
+        const blockRow = Math.floor(key / 1_000_000);
+        const blockCol = key % 1_000_000;
+        for (let offset = 0; offset < block.length; offset += 1) {
+          const value = block[offset]!;
+          if (value === 0) {
+            continue;
+          }
+          const localRow = Math.floor(offset / BLOCK_COLS);
+          const localCol = offset % BLOCK_COLS;
+          const row = blockRow * BLOCK_ROWS + localRow;
+          const col = blockCol * BLOCK_COLS + localCol;
+          const axisIndex = axis === "row" ? row : col;
+          if (!axisIndexInScope(axisIndex, scope)) {
+            continue;
+          }
+          const nextRow = axis === "row" ? remapIndex(row) : row;
+          const nextCol = axis === "column" ? remapIndex(col) : col;
+          if (nextRow === row && nextCol === col) {
+            continue;
+          }
           changedEntries.push({
             cellIndex: value - 1,
             row,
             col,
             nextRow,
             nextCol,
-          })
+          });
+          touchedBlockKeys.add(key);
+          if (nextRow !== undefined && nextCol !== undefined) {
+            touchedBlockKeys.add(blockKey(nextRow, nextCol));
+          }
         }
-        if (nextRow === undefined || nextCol === undefined) {
-          continue
-        }
-        this.setInBlocks(nextBlocks, nextRow, nextCol, value - 1)
-      }
+      })
+    changedEntries.forEach(({ row, col }) => {
+      this.clear(row, col)
     })
-    this.blocks.clear()
-    nextBlocks.forEach((block, key) => {
-      this.blocks.set(key, block)
+    changedEntries.forEach(({ cellIndex, nextRow, nextCol }) => {
+      if (nextRow === undefined || nextCol === undefined) {
+        return
+      }
+      this.set(nextRow, nextCol, cellIndex)
+    })
+    touchedBlockKeys.forEach((key) => {
+      const block = this.blocks.get(key)
+      if (block && blockIsEmpty(block)) {
+        this.blocks.delete(key)
+      }
     })
     return changedEntries
   }

@@ -134,6 +134,26 @@ function structuralRewritePreservesValue(
   )
 }
 
+function structuralRemapScope(transform: StructuralAxisTransform): { start: number; end?: number } {
+  switch (transform.kind) {
+    case "insert":
+    case "delete":
+      return { start: transform.start };
+    case "move":
+      if (transform.target < transform.start) {
+        return { start: transform.target, end: transform.start + transform.count };
+      }
+      if (transform.target > transform.start) {
+        return { start: transform.start, end: transform.target + transform.count };
+      }
+      return { start: transform.start, end: transform.start };
+    default: {
+      const exhaustive: never = transform;
+      return exhaustive;
+    }
+  }
+}
+
 export interface EngineStructureService {
   readonly captureSheetCellState: (sheetName: string) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => Effect.Effect<EngineOp[], EngineStructureError>
@@ -855,7 +875,12 @@ export function createEngineStructureService(args: {
             formulaCellIndices: impactedFormulas.formulaCellIndices,
           })
 
-          const remapped = args.state.workbook.remapSheetCells(sheetName, axis, (index) => mapStructuralAxisIndex(index, transform))
+          const remapped = args.state.workbook.remapSheetCells(
+            sheetName,
+            axis,
+            (index) => mapStructuralAxisIndex(index, transform),
+            structuralRemapScope(transform),
+          );
           remapped.removedCellIndices.forEach((cellIndex) => {
             clearDerivedCellArtifacts(cellIndex)
             args.removeFormula(cellIndex)

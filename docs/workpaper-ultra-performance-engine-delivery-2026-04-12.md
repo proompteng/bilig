@@ -2,7 +2,7 @@
 
 Date: `2026-04-12`
 
-Status: `execution-grade, revised against stable sample-count 5 benchmark reality`
+Status: `execution-grade, revised against current broader benchmark reality on main`
 
 Related documents:
 
@@ -24,63 +24,63 @@ The standard is unchanged:
 - no “clean it up later”
 - no hot path that still routes through displaced legacy code
 
-Current reality is better than when this plan started: WorkPaper is already leader by stable
-workload count on the expanded suite. The job now is to turn that lead into a clean all-green
-finish without regressing the wins already earned.
+Current reality is harsher than the earlier plan state: on the current broader suite, WorkPaper is
+behind HyperFormula by a wide workload count margin. The job now is to recover leadership on the
+broader suite without regressing the remaining green lanes.
 
 ## Current Benchmark Scoreboard
 
-Current stable artifact:
+Current decision-driving artifact:
 
-- `/tmp/workpaper-vs-hf-expanded-sample5-restored-again.json`
+- `/tmp/workpaper-vs-hf-current-sample2.json`
 
 Current position:
 
-- `WorkPaper` wins `17/31` directly comparable workloads
-- `HyperFormula` wins `14/31`
+- `WorkPaper` wins `12/35` directly comparable workloads
+- `HyperFormula` wins `23/35`
 - `WorkPaper` retains `1` leadership-only workload that HyperFormula does not support
-- overall comparable geometric-mean ratio is `0.798x` `WorkPaper / HyperFormula`
+
+The older `sample-count 5` artifact is now historical only. It should not be used to justify
+current execution order.
 
 ### Current green workloads
 
-These are the comparable lanes WorkPaper currently wins on the stable artifact:
+These are the comparable lanes WorkPaper currently wins on the current broader artifact:
 
 - `build-dense-literals`
-- `build-parser-cache-mixed-templates`
 - `build-many-sheets`
 - `rebuild-and-recalculate`
 - `rebuild-config-toggle`
-- `single-edit-chain`
 - `single-edit-fanout`
-- `partial-recompute-mixed-frontier`
-- `single-formula-edit-recalc`
 - `range-read-dense`
 - `aggregate-overlapping-ranges`
 - `conditional-aggregation-reused-ranges`
 - `conditional-aggregation-criteria-cell-edit`
 - `lookup-no-column-index`
 - `lookup-with-column-index`
-- `lookup-approximate-sorted`
 - `lookup-text-exact`
 
 ### Current red workloads and immediate owners
 
 | Workload | WorkPaper mean | HyperFormula mean | Primary owner |
 | --- | ---: | ---: | --- |
-| `build-mixed-content` | `14.109216 ms` | `11.206050 ms` | `FormulaTemplateNormalizationService` |
-| `build-parser-cache-row-templates` | `57.279358 ms` | `32.440667 ms` | `FormulaTemplateNormalizationService` |
-| `rebuild-runtime-from-snapshot` | `33.728442 ms` | `28.077592 ms` | `RebuildExecutionPolicy` |
-| `batch-edit-single-column` | `1.363717 ms` | `0.901900 ms` | `SuspendedBulkMutationLane` |
-| `batch-edit-multi-column` | `0.767492 ms` | `0.583783 ms` | `SuspendedBulkMutationLane` |
-| `batch-suspended-single-column` | `0.700500 ms` | `0.525725 ms` | `SuspendedBulkMutationLane` |
-| `batch-suspended-multi-column` | `0.642900 ms` | `0.544259 ms` | `SuspendedBulkMutationLane` |
-| `structural-insert-rows` | `9.016467 ms` | `2.980358 ms` | `StructuralTransformService` |
-| `structural-delete-rows` | `13.364550 ms` | `3.753475 ms` | `StructuralTransformService` |
-| `structural-move-rows` | `21.650233 ms` | `5.483008 ms` | `StructuralTransformService` |
-| `aggregate-overlapping-sliding-window` | `0.161200 ms` | `0.040817 ms` | `RangeAggregateCacheService` |
-| `lookup-with-column-index-after-column-write` | `0.073909 ms` | `0.036342 ms` | `ExactColumnIndexService` |
-| `lookup-with-column-index-after-batch-write` | `0.647859 ms` | `0.567850 ms` | `ExactColumnIndexService` |
-| `lookup-approximate-sorted-after-column-write` | `0.340433 ms` | `0.024542 ms` | `SortedColumnSearchService` |
+| `structural-insert-columns` | `28.460542 ms` | `0.472729 ms` | `StructuralTransformService` |
+| `structural-insert-rows` | `87.243625 ms` | `4.599000 ms` | `StructuralTransformService` |
+| `structural-delete-rows` | `90.903167 ms` | `5.498417 ms` | `StructuralTransformService` |
+| `structural-move-rows` | `97.645687 ms` | `9.541813 ms` | `StructuralTransformService` |
+| `lookup-approximate-sorted-after-column-write` | `0.532750 ms` | `0.052083 ms` | `SortedColumnSearchService` |
+| `structural-delete-columns` | `44.231937 ms` | `8.920687 ms` | `StructuralTransformService` |
+| `build-parser-cache-row-templates` | `156.698667 ms` | `34.312834 ms` | `FormulaTemplateNormalizationService` |
+| `partial-recompute-mixed-frontier` | `13.216562 ms` | `3.930520 ms` | `DirtyFrontier` and `RangeAggregateCacheService` |
+| `batch-edit-single-column-with-undo` | `3.913437 ms` | `1.428584 ms` | `SuspendedBulkMutationLane` |
+| `aggregate-overlapping-sliding-window` | `0.248979 ms` | `0.091479 ms` | `RangeAggregateCacheService` |
+| `structural-move-columns` | `18.526750 ms` | `7.899146 ms` | `StructuralTransformService` |
+| `lookup-with-column-index-after-column-write` | `0.150729 ms` | `0.072020 ms` | `ExactColumnIndexService` |
+| `build-parser-cache-mixed-templates` | `142.403709 ms` | `73.411562 ms` | `FormulaTemplateNormalizationService` |
+| `rebuild-runtime-from-snapshot` | `70.406521 ms` | `39.959250 ms` | `RebuildExecutionPolicy` |
+| `build-mixed-content` | `21.588395 ms` | `12.914250 ms` | `FormulaTemplateNormalizationService` |
+| `lookup-with-column-index-after-batch-write` | `1.086792 ms` | `0.661750 ms` | `ExactColumnIndexService` |
+| `batch-suspended-single-column` | `0.982688 ms` | `0.622895 ms` | `SuspendedBulkMutationLane` |
 
 ## Delivery Rules
 
@@ -101,15 +101,15 @@ This is the honest current repo status, not the aspirational one.
 
 | Phase | Status | Reality |
 | --- | --- | --- |
-| `Phase 0: Measurement and invariants` | `done` | expanded benchmark exists and the stable `sample-count 5` scoreboard is usable |
+| `Phase 0: Measurement and invariants` | `done` | expanded benchmark exists, but the broader suite now says we are behind and must drive priority |
 | `Phase 1: Direct change payload substrate` | `mostly delivered` | direct changed-cell payloads exist and headless no longer depends on ordinary snapshot diffs |
 | `Phase 2: Compiled plan arena and formula slots` | `partial` | shared plans and descriptors exist, but formula-local ownership is not fully gone |
 | `Phase 3: Rebuild execution policy` | `partial` | `rebuild-config-toggle` is green, but `rebuild-runtime-from-snapshot` is still red |
-| `Phase 4: Formula template normalization` | `partial` | mixed-template build is green, but row-template build and mixed-content build are still red |
+| `Phase 4: Formula template normalization` | `partial` | the current broader suite says both parser-template lanes are red again, so family reuse is incomplete |
 | `Phase 5: Suspended bulk mutation lane` | `partial` | suspended literal fast queue exists, but all batch lanes are still red |
 | `Phase 6: Range and criterion caches` | `partial` | criteria reuse is green and overlapping prefix ranges are green, but sliding-window aggregate reuse is still red |
-| `Phase 7: Structural transform service` | `partial` | structural impact and dependency ownership are much better, but row transforms are still red |
-| `Phase 8: Post-write lookup maintenance cutover` | `partial` | steady-state exact and approximate lookup are green, but after-write lanes are still red |
+| `Phase 7: Structural transform service` | `partial` | structural impact and dependency ownership are much better, but rows and columns are still the worst family |
+| `Phase 8: Post-write lookup maintenance cutover` | `partial` | steady-state exact lookup is green, but after-write exact and sorted lanes are still red |
 | `Phase 9: RuntimeColumnStore authority` | `partial` | runtime-owned column and range state grew meaningfully, but it is not authoritative for every remaining hot path |
 | `Phase 10: WASM criteria and search kernels` | `not delivered` | existing wins came from ownership cuts, not the final WASM layer yet |
 | `Phase 11: Delete displaced paths and lock gates` | `not delivered` | legacy ownership still exists in the remaining red families |
@@ -124,11 +124,13 @@ These changes are in the tree and have already survived reruns:
 - `RangeAggregateCacheService`
   - made `aggregate-overlapping-ranges` green
 - `FormulaTemplateNormalizationService`
-  - made `build-parser-cache-mixed-templates` green
+  - proved the right architectural direction, but the current broader suite says both parser-cache
+    template lanes are still red on `main`
 - live runtime `useColumnIndex` policy
   - made `rebuild-config-toggle` decisively green
 - mutation-owned exact and approximate lookup dirtying
-  - made steady-state indexed and approximate lookup green
+  - made steady-state exact lookup green, but approximate sorted is still red on the current
+    broader suite
 - suspended literal fast queue
   - narrowed the batch gap without finishing it
 - descriptor-owned structural impact tracking
@@ -164,19 +166,32 @@ The remaining execution order is now:
 3. `RebuildExecutionPolicy`
 4. `SortedColumnSearchService`
 5. `ExactColumnIndexService`
-6. `SuspendedBulkMutationLane`
-7. `RangeAggregateCacheService`
+6. `RangeAggregateCacheService`
+7. `SuspendedBulkMutationLane`
 8. `RuntimeColumnStore` authority expansion
 9. WASM kernel cutover on the cleaned ownership boundaries
 10. deletion of displaced paths
 
 This order is fixed by the current stable reds:
 
-- structural row transforms are still the largest engine-owned misses
-- row-template and mixed-content build still over-materialize equivalent formula state
+- structural rows and columns are now the largest engine-owned misses by far
+- row-template and mixed-template builds still over-materialize equivalent formula state
 - snapshot rebuild cannot become truly cheap until build normalization is cheaper
 - approximate-after-write is still a larger miss than exact-after-batch
 - sliding-window reuse matters, but only after range and structural ownership are stable enough
+
+## Performance Correctness Invariants
+
+These are required to ship performance work safely:
+
+1. Formula-result writes must update the same column and range invalidation machinery as literal
+   writes.
+2. Direct formulas must never read workbook state that is still sitting in a queued WASM batch.
+3. Versioned explicit empty cells must survive snapshot, replica, and undo or redo roundtrips.
+4. Literal-to-formula and formula-to-literal transitions must refresh dependent range topology
+   narrowly and correctly.
+5. Any performance phase that breaks snapshot parity, replica parity, or undo or redo correctness
+   is incomplete by definition.
 
 ## Remaining Phase Details
 
@@ -184,7 +199,8 @@ This order is fixed by the current stable reds:
 
 Goal:
 
-- make row transforms true engine transforms instead of partial transform plus broad rebuild
+- make row and column transforms true engine transforms instead of partial transform plus broad
+  rebuild
 
 Still required:
 
@@ -197,12 +213,16 @@ Proof gate:
 - `structural-insert-rows`
 - `structural-delete-rows`
 - `structural-move-rows`
+- `structural-insert-columns`
+- `structural-delete-columns`
+- `structural-move-columns`
 
 ### `FormulaTemplateNormalizationService`
 
 Goal:
 
-- stop rematerializing equivalent prepared binding state for repeated row-shifted formulas
+- stop rematerializing equivalent prepared binding state for repeated row-shifted and mixed
+  repeated formulas
 
 Still required:
 
@@ -213,8 +233,8 @@ Still required:
 Proof gate:
 
 - `build-parser-cache-row-templates`
+- `build-parser-cache-mixed-templates`
 - `build-mixed-content`
-- keep `build-parser-cache-mixed-templates` green
 
 ### `RebuildExecutionPolicy`
 
@@ -294,7 +314,7 @@ Fast engineering loop:
 
 - `pnpm exec tsx packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts --sample-count 2 --warmup-count 0`
 
-Leadership gate:
+Stability gate after a candidate tranche:
 
 - `pnpm exec tsx packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts --sample-count 5 --warmup-count 0`
 
@@ -342,14 +362,16 @@ This delivery program is complete only when all of the following are true:
 3. `aggregate-overlapping-ranges` and `aggregate-overlapping-sliding-window` are both green
 4. `structural-insert-rows`, `structural-delete-rows`, and `structural-move-rows` are
    transformer-owned and green
-5. `lookup-with-column-index-after-column-write` and
+5. `structural-insert-columns`, `structural-delete-columns`, and `structural-move-columns` are
+   transformer-owned and green
+6. `lookup-with-column-index-after-column-write` and
    `lookup-with-column-index-after-batch-write` are exact-index-owned and green
-6. `lookup-approximate-sorted-after-column-write` is sorted-service-owned and green
-7. `build-parser-cache-row-templates`, `build-parser-cache-mixed-templates`, and
+7. `lookup-approximate-sorted-after-column-write` is sorted-service-owned and green
+8. `build-parser-cache-row-templates`, `build-parser-cache-mixed-templates`, and
    `build-mixed-content` are template-normalization-owned and green
-8. `rebuild-config-toggle` and `rebuild-runtime-from-snapshot` are rebuild-policy-owned and green
-9. structural undo and redo share the same transform model as forward structural edits
-10. displaced legacy paths are deleted
+9. `rebuild-config-toggle` and `rebuild-runtime-from-snapshot` are rebuild-policy-owned and green
+10. structural undo and redo share the same transform model as forward structural edits
+11. displaced legacy paths are deleted
 
-Current state is leadership by workload count. Final state is `31/31` comparable wins with one
+Current state is behind on the broader suite. Final state is `35/35` comparable wins with one
 architecture and no fallback-first leftovers.

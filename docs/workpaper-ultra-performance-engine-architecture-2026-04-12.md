@@ -2,7 +2,7 @@
 
 Date: `2026-04-12`
 
-Status: `executing architecture, revised against stable sample-count 5 benchmark reality`
+Status: `executing architecture, revised against current expanded-suite reality on main`
 
 Related documents:
 
@@ -18,12 +18,12 @@ This document defines the engine architecture that can beat HyperFormula across 
 competitive suite in this repo without fallback-first sludge, temporary hacks, or benchmark-only
 special cases.
 
-The architecture is no longer only a target. Several major ownership cuts are already in the tree.
-This document now serves two jobs:
+Several major ownership cuts are already in the tree, but the current broader suite says
+WorkPaper is not leader right now. This document now serves two jobs:
 
-1. record the architecture that actually survived implementation and benchmark reruns
-2. define the remaining ownership cuts required to turn the current leadership-by-count position
-   into a full clean sweep
+1. record the architecture cuts that actually survived implementation
+2. define the remaining ownership work required to recover performance leadership on the current
+   broader suite
 
 The standard remains strict:
 
@@ -36,36 +36,40 @@ The standard remains strict:
 
 ## Current Benchmark Reality
 
-Current stable artifact:
+Current decision-driving artifact on `main`:
 
-- `/tmp/workpaper-vs-hf-expanded-sample5-restored-again.json`
+- `/tmp/workpaper-vs-hf-current-sample2.json`
 
-Current position on that artifact:
+Current position on that broader artifact:
 
-- `WorkPaper` wins `17/31` directly comparable workloads
-- `HyperFormula` wins `14/31`
+- `WorkPaper` wins `12/35` directly comparable workloads
+- `HyperFormula` wins `23/35`
 - `WorkPaper` retains `1` leadership-only workload that HyperFormula does not support
-- overall comparable geometric-mean ratio is `0.798x` `WorkPaper / HyperFormula`, so WorkPaper is
-  ahead on that aggregate as well
 
-This is real leadership, but it is not checkmate. The remaining red lanes are still substantial:
+The older `sample-count 5` leadership artifact is now historical only. It no longer describes the
+broader suite or the current tree well enough to drive architecture decisions.
+
+The remaining red lanes are not “cleanup.” They are the current engine story:
 
 | Workload | WorkPaper mean | HyperFormula mean | Primary owner that still must change | Real issue |
 | --- | ---: | ---: | --- | --- |
-| `build-mixed-content` | `14.109216 ms` | `11.206050 ms` | `FormulaTemplateNormalizationService` | mixed build still does too much per-formula dependency materialization |
-| `build-parser-cache-row-templates` | `57.279358 ms` | `32.440667 ms` | `FormulaTemplateNormalizationService` | repeated row-template families still bind too much unique per-cell structure |
-| `rebuild-runtime-from-snapshot` | `33.728442 ms` | `28.077592 ms` | `RebuildExecutionPolicy` | snapshot rebuild still rebuilds too much runtime and plan state |
-| `batch-edit-single-column` | `1.363717 ms` | `0.901900 ms` | `SuspendedBulkMutationLane` | ordinary batch lane still pays broader transaction scaffolding |
-| `batch-edit-multi-column` | `0.767492 ms` | `0.583783 ms` | `SuspendedBulkMutationLane` | multi-column batch still does extra queue and wake work |
-| `batch-suspended-single-column` | `0.700500 ms` | `0.525725 ms` | `SuspendedBulkMutationLane` | suspended single-column path is closer, but not minimal yet |
-| `batch-suspended-multi-column` | `0.642900 ms` | `0.544259 ms` | `SuspendedBulkMutationLane` | suspended multi-column batches still pay extra orchestration |
-| `structural-insert-rows` | `9.016467 ms` | `2.980358 ms` | `StructuralTransformService` | row insert still rebuilds too much range and dependency state |
-| `structural-delete-rows` | `13.364550 ms` | `3.753475 ms` | `StructuralTransformService` | structural delete still pays broad transform bookkeeping |
-| `structural-move-rows` | `21.650233 ms` | `5.483008 ms` | `StructuralTransformService` | row move is still far from a narrow transform-owned operation |
-| `aggregate-overlapping-sliding-window` | `0.161200 ms` | `0.040817 ms` | `RangeAggregateCacheService` | aggregate reuse exists, but sliding-window extension semantics are still weaker |
-| `lookup-with-column-index-after-column-write` | `0.073909 ms` | `0.036342 ms` | `ExactColumnIndexService` | exact after-write invalidation is much better, but still broader than the raw bucket update |
-| `lookup-with-column-index-after-batch-write` | `0.647859 ms` | `0.567850 ms` | `ExactColumnIndexService` | exact batched writes still rebuild or wake more than necessary |
-| `lookup-approximate-sorted-after-column-write` | `0.340433 ms` | `0.024542 ms` | `SortedColumnSearchService` | approximate post-write path still wakes far too much surrounding work |
+| `structural-insert-columns` | `28.460542 ms` | `0.472729 ms` | `StructuralTransformService` | column insert is still routed through far too much generic transform and rebind work |
+| `structural-insert-rows` | `87.243625 ms` | `4.599000 ms` | `StructuralTransformService` | row insert still rebuilds too much range and dependency state |
+| `structural-delete-rows` | `90.903167 ms` | `5.498417 ms` | `StructuralTransformService` | structural delete still pays broad transform bookkeeping |
+| `structural-move-rows` | `97.645687 ms` | `9.541813 ms` | `StructuralTransformService` | row move is still far from a narrow transform-owned operation |
+| `lookup-approximate-sorted-after-column-write` | `0.532750 ms` | `0.052083 ms` | `SortedColumnSearchService` | approximate post-write path still wakes far too much surrounding work |
+| `structural-delete-columns` | `44.231937 ms` | `8.920687 ms` | `StructuralTransformService` | column delete still broadens transform work instead of updating ownership in place |
+| `build-parser-cache-row-templates` | `156.698667 ms` | `34.312834 ms` | `FormulaTemplateNormalizationService` | repeated row-template families still bind too much unique per-cell structure |
+| `partial-recompute-mixed-frontier` | `13.216562 ms` | `3.930520 ms` | `DirtyFrontier` and `RangeAggregateCacheService` | recalculation still over-wakes through mixed range and formula paths |
+| `batch-edit-single-column-with-undo` | `3.913437 ms` | `1.428584 ms` | `SuspendedBulkMutationLane` | batch plus history still pays too much transaction scaffolding |
+| `aggregate-overlapping-sliding-window` | `0.248979 ms` | `0.091479 ms` | `RangeAggregateCacheService` | aggregate reuse exists, but sliding-window extension semantics are still weaker |
+| `structural-move-columns` | `18.526750 ms` | `7.899146 ms` | `StructuralTransformService` | column move still behaves like a broad mutation instead of a narrow transform |
+| `lookup-with-column-index-after-column-write` | `0.150729 ms` | `0.072020 ms` | `ExactColumnIndexService` | exact after-write invalidation is still broader than the raw bucket update |
+| `build-parser-cache-mixed-templates` | `142.403709 ms` | `73.411562 ms` | `FormulaTemplateNormalizationService` | mixed template families still over-materialize bindings after compile reuse |
+| `rebuild-runtime-from-snapshot` | `70.406521 ms` | `39.959250 ms` | `RebuildExecutionPolicy` | snapshot rebuild still rebuilds too much runtime and plan state |
+| `build-mixed-content` | `21.588395 ms` | `12.914250 ms` | `FormulaTemplateNormalizationService` | mixed build still does too much per-formula dependency materialization |
+| `lookup-with-column-index-after-batch-write` | `1.086792 ms` | `0.661750 ms` | `ExactColumnIndexService` | exact batched writes still rebuild or wake more than necessary |
+| `batch-suspended-single-column` | `0.982688 ms` | `0.622895 ms` | `SuspendedBulkMutationLane` | suspended single-column path is still paying extra wrapper overhead |
 
 The architecture only matters insofar as it flips those lanes without turning current greens red.
 
@@ -91,7 +95,7 @@ Engine-owned aggregate reuse now exists for direct aggregate families.
 
 Delivered effect:
 
-- `aggregate-overlapping-ranges` is green
+- `aggregate-overlapping-ranges` is still green
 
 Not yet complete:
 
@@ -104,12 +108,14 @@ Template-family detection and astless translated-family reuse are in the tree.
 
 Delivered effect:
 
-- `build-parser-cache-mixed-templates` is green
+- the design direction is still correct, but the current broader suite says both parser-template
+  build lanes are red again on `main`
 
 Not yet complete:
 
 - `build-parser-cache-row-templates` is still red
 - `build-mixed-content` is still red
+- `build-parser-cache-mixed-templates` is red again on the current broader suite
 
 That means template normalization is real, but prepared binding family reuse is not complete.
 
@@ -131,12 +137,12 @@ through broad literal-cell reverse edges.
 Delivered effect:
 
 - `lookup-with-column-index` is green
-- `lookup-approximate-sorted` is green
-- `lookup-with-column-index-after-column-write` improved from a major loss to a much smaller red
+- `lookup-no-column-index` is green
 
 Not yet complete:
 
-- exact after-write lanes are still slightly red
+- exact after-write lanes are still red
+- approximate sorted steady-state is slightly red again on the current broader suite
 - approximate sorted after-write is still badly red
 
 ### Descriptor-Owned Structural Impact Tracking
@@ -146,12 +152,12 @@ dependencies. Structural edits no longer blindly force the same formula teardown
 
 Delivered effect:
 
-- structural lanes improved massively from the earlier `50-80 ms` range into the current
-  `9-22 ms` range
+- structural ownership got materially cleaner than the original full-rebind design
 
 Not yet complete:
 
-- structural row transforms are still the largest remaining engine-owned red family
+- structural rows are catastrophic again on the broader suite
+- structural columns are now one of the worst losses in the entire benchmark
 
 ### Suspended-Eval Literal Fast Queue
 
@@ -174,12 +180,13 @@ order.
 ### Structural transforms are first-class engine operations
 
 HyperFormula treats row and column add, remove, and move as dedicated graph, address, range, and
-search transforms, not as large generic mutation loops.
+search transforms, not as large generic mutation loops. Its address-mapping layer is also a
+first-class strategy subsystem.
 
 Implication for WorkPaper:
 
-- `StructuralTransformService` must own in-place range retargeting, transform-scoped dependency
-  maintenance, and structural undo or redo on the same model
+- `StructuralTransformService` must own in-place range retargeting, address-mapping updates,
+  transform-scoped dependency maintenance, and structural undo or redo on the same model
 
 ### Exact and approximate lookup are different systems
 
@@ -233,6 +240,21 @@ These should stay dead unless new evidence proves a different design.
 8. No benchmark win counts if the old path is still the common hot path.
 9. No phase is complete if it introduces semantic drift, flaky invalidation, or cleanup debt.
 
+## Performance Correctness Invariants
+
+These are now hard architecture rules, not “test cleanup” details:
+
+1. Formula-result writes must invalidate column versions, lookup freshness, and range caches the
+   same way literal writes do.
+2. Direct formulas must never evaluate against workbook state that is still sitting in a pending
+   WASM batch.
+3. Versioned explicit empty cells are real workbook state and must not be pruned as if they were
+   dependency-only placeholders.
+4. When a cell flips between literal and formula, dependent range topology must refresh narrowly
+   and correctly.
+5. Snapshot import, replica replay, undo or redo, and live local mutation must converge to the same
+   visible workbook state.
+
 ## Runtime Layers
 
 The runtime is still the same seven-layer design, but the ownership boundaries matter more than the
@@ -241,9 +263,9 @@ names:
 1. `WorkbookPersistenceModel`
    - serializable workbook representation
 2. `RuntimeColumnStore`
-   - typed hot-path value storage
+   - typed hot-path value storage and formula-result invalidation authority
 3. `RangeEntityStore`
-   - canonical range handles, prefix links, cache roots
+   - canonical range handles, prefix links, cache roots, and range-member topology
 4. `CompiledFormulaPlanArena`
    - shared compiled plans and template families
 5. `EngineServices`
@@ -368,14 +390,16 @@ This architecture is not done until all of the following are true:
    `RangeAggregateCacheService`
 4. `structural-insert-rows`, `structural-delete-rows`, and `structural-move-rows` are all served
    by `StructuralTransformService` and are green
-5. `lookup-with-column-index-after-column-write` and
+5. `structural-insert-columns`, `structural-delete-columns`, and
+   `structural-move-columns` are all served by `StructuralTransformService` and are green
+6. `lookup-with-column-index-after-column-write` and
    `lookup-with-column-index-after-batch-write` are exact-index-owned and green
-6. `lookup-approximate-sorted-after-column-write` is sorted-service-owned and green
-7. `build-parser-cache-row-templates`, `build-parser-cache-mixed-templates`, and
+7. `lookup-approximate-sorted-after-column-write` is sorted-service-owned and green
+8. `build-parser-cache-row-templates`, `build-parser-cache-mixed-templates`, and
    `build-mixed-content` are template-normalization-owned and green
-8. `rebuild-config-toggle` and `rebuild-runtime-from-snapshot` are rebuild-policy-owned and green
-9. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
-10. benchmark wins survive reruns on a clean committed tree
+9. `rebuild-config-toggle` and `rebuild-runtime-from-snapshot` are rebuild-policy-owned and green
+10. headless applies engine-emitted `WorkPaperChange[]` without workbook diff reconstruction
+11. benchmark wins survive reruns on a clean committed tree
 
-That is the bar: `31/31` comparable wins, one architecture, no benchmark-only cheats, and no
+That is the bar: `35/35` comparable wins, one architecture, no benchmark-only cheats, and no
 fallback-first leftovers.

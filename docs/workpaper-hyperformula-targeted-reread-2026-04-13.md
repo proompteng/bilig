@@ -2,7 +2,7 @@
 
 Date: `2026-04-13`
 
-Status: `captured prior-art notes for the remaining red lanes`
+Status: `captured prior-art notes for the remaining red lanes, updated after broader suite exposed structural columns`
 
 ## Purpose
 
@@ -14,6 +14,9 @@ Files reread in the local HyperFormula checkout:
 
 - `/Users/gregkonush/github.com/hyperformula/src/Operations.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/DependencyGraph/DependencyGraph.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/DependencyGraph/AddressMapping/AddressMapping.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/DependencyGraph/AddressMapping/DenseStrategy.ts`
+- `/Users/gregkonush/github.com/hyperformula/src/DependencyGraph/AddressMapping/SparseStrategy.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/UndoRedo.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnIndex.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/Lookup/ColumnBinarySearch.ts`
@@ -31,13 +34,15 @@ What HyperFormula does:
 - row and column add, remove, and move are first-class engine transforms
 - address mapping, dependency graph state, range state, and lookup state are updated as part of the
   same transform
+- address mapping is a distinct ownership layer with storage strategies, not an incidental detail
 - structural undo and redo reuse the same transform model
 
 What that means for WorkPaper:
 
 - the remaining structural misses are not evaluator math problems
-- `StructuralTransformService` has to own in-place range retargeting and transform-owned dependency
-  maintenance
+- structural columns are not a side case; they are one of the largest current misses
+- `StructuralTransformService` has to own in-place range retargeting, address-mapping updates, and
+  transform-owned dependency maintenance
 - structural undo and redo cannot be an afterthought
 
 ## Exact Lookup Vs Approximate Lookup
@@ -84,6 +89,7 @@ What that means for WorkPaper:
 - `CriterionRangeCacheService` was the correct cut and should remain range-owned
 - `RangeAggregateCacheService` still needs smaller-range extension semantics for
   `aggregate-overlapping-sliding-window`
+- range caches must also observe formula-result writes, not only literal writes
 
 ## Practical Takeaways
 
@@ -94,8 +100,8 @@ The reread confirmed the correct remaining order:
 3. `RebuildExecutionPolicy`
 4. `SortedColumnSearchService`
 5. `ExactColumnIndexService`
-6. `SuspendedBulkMutationLane`
-7. `RangeAggregateCacheService`
+6. `RangeAggregateCacheService`
+7. `SuspendedBulkMutationLane`
 
 The reread also confirmed what not to do:
 
@@ -103,3 +109,4 @@ The reread also confirmed what not to do:
 - do not try to solve structural misses with evaluator micro-optimizations
 - do not treat parser-template build as only a compile-cache problem
 - do not add generic caches that are not owned by range or lookup entities
+- do not let direct formulas read workbook state that is still buffered in a deferred WASM batch

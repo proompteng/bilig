@@ -73,6 +73,11 @@ export function createEngineCellStateService(args: {
   ): EngineOp[] => {
     const ops: EngineOp[] = []
     const shouldEmitFormat = formatOverride !== null && formatOverride !== undefined && formatOverride !== ''
+    const isAuthoredBlank = (snapshot.flags & CellFlags.AuthoredBlank) !== 0
+    const explicitBlankOp = isAuthoredBlank
+      ? { kind: 'setCellValue' as const, sheetName, address, value: null, authoredBlank: true }
+      : { kind: 'setCellValue' as const, sheetName, address, value: null }
+    const shouldRestoreExplicitBlank = (snapshot.version ?? 0) !== 0 || isAuthoredBlank
     if (snapshot.formula !== undefined) {
       const translatedFormula =
         sourceSheetName && sourceAddress
@@ -83,19 +88,23 @@ export function createEngineCellStateService(args: {
       switch (snapshot.value.tag) {
         case ValueTag.Empty:
           ops.push(
-            (snapshot.flags & CellFlags.AuthoredBlank) !== 0
-              ? { kind: 'setCellValue', sheetName, address, value: null, authoredBlank: true }
-              : { kind: 'clearCell', sheetName, address },
-          )
-          break
+            shouldRestoreExplicitBlank
+              ? explicitBlankOp
+              : { kind: "clearCell", sheetName, address },
+          );
+          break;
         case ValueTag.Number:
         case ValueTag.Boolean:
         case ValueTag.String:
           ops.push({ kind: 'setCellValue', sheetName, address, value: snapshot.value.value })
           break
         case ValueTag.Error:
-          ops.push({ kind: 'clearCell', sheetName, address })
-          break
+          ops.push(
+            shouldRestoreExplicitBlank
+              ? explicitBlankOp
+              : { kind: "clearCell", sheetName, address },
+          );
+          break;
       }
     }
     if (shouldEmitFormat) {
@@ -131,15 +140,21 @@ export function createEngineCellStateService(args: {
       return [{ kind: 'clearCell', sheetName, address }]
     }
     const snapshot = args.getCellByIndex(cellIndex)
+    const explicitFormat = args.state.workbook.getCellFormat(cellIndex) ?? null
     if (snapshot.formula !== undefined) {
       return [{ kind: 'setCellFormula', sheetName, address, formula: snapshot.formula }]
     }
     switch (snapshot.value.tag) {
       case ValueTag.Empty:
       case ValueTag.Error:
-        return (snapshot.flags & CellFlags.AuthoredBlank) !== 0
-          ? [{ kind: 'setCellValue', sheetName, address, value: null, authoredBlank: true }]
-          : [{ kind: 'clearCell', sheetName, address }]
+        return toCellStateOpsNow(
+          sheetName,
+          address,
+          snapshot,
+          undefined,
+          undefined,
+          explicitFormat,
+        );
       case ValueTag.Number:
       case ValueTag.Boolean:
       case ValueTag.String:

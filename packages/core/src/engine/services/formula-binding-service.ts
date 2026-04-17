@@ -384,6 +384,27 @@ function canRewriteCompiledPreservingBindings(existing: RuntimeFormula, compiled
   )
 }
 
+function canRewriteCompiledPreservingDirectAggregate(
+  existing: RuntimeFormula,
+  compiled: CompiledFormula,
+): boolean {
+  return (
+    existing.rangeDependencies.length === 0 &&
+    existing.compiled.symbolicNames.length === 0 &&
+    existing.compiled.symbolicTables.length === 0 &&
+    existing.compiled.symbolicSpills.length === 0 &&
+    compiled.symbolicNames.length === 0 &&
+    compiled.symbolicTables.length === 0 &&
+    compiled.symbolicSpills.length === 0 &&
+    existing.directLookup === undefined &&
+    existing.directAggregate !== undefined &&
+    existing.directCriteria === undefined &&
+    existing.programLength === compiled.program.length &&
+    existing.constNumberLength === compiled.constants.length &&
+    existing.compiled.mode === compiled.mode
+  );
+}
+
 function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedExactLookupCandidate[] {
   switch (node.kind) {
     case 'CallExpr': {
@@ -1117,19 +1138,128 @@ export function createEngineFormulaBindingService(args: {
     primeLookupCandidatesNow(ownerSheetName, undefined, prepared.indexedExactLookupCandidates, prepared.directApproximateLookupCandidates)
   }
 
-  const rewriteFormulaCompiledPreservingBindingNow = (cellIndex: number, source: string, compiled: CompiledFormula): boolean => {
+  const rewriteFormulaCompiledPreservingBindingNow = (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+  ): boolean => {
+    const existing = args.state.formulas.get(cellIndex);
+    if (!existing) {
+      return false;
+    }
+    const ownerSheetName = args.state.workbook.getSheetNameById(
+      args.state.workbook.cellStore.sheetIds[cellIndex]!,
+    );
+    if (!ownerSheetName) {
+      return false;
+    }
+    let nextDirectAggregate: RuntimeDirectAggregateDescriptor | undefined;
+    if (canRewriteCompiledPreservingBindings(existing, compiled)) {
+      nextDirectAggregate = undefined;
+    } else if (canRewriteCompiledPreservingDirectAggregate(existing, compiled)) {
+      nextDirectAggregate = buildDirectAggregateDescriptor({
+        compiled: compiled as ParsedCompiledFormula,
+        ownerSheetName,
+      });
+      if (!nextDirectAggregate) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    args.compiledPlans.release(existing.planId);
+    const plan = args.compiledPlans.intern(source, compiled);
+    const previousDirectAggregate = existing.directAggregate;
+    existing.source = source;
+    existing.planId = plan.id;
+    existing.compiled = plan.compiled;
+    existing.plan = plan;
+    existing.programLength = compiled.program.length;
+    existing.constNumberLength = compiled.constants.length;
+    existing.directAggregate = nextDirectAggregate;
+    if (previousDirectAggregate || nextDirectAggregate) {
+      const previousSheet = previousDirectAggregate
+        ? args.state.workbook.getSheet(previousDirectAggregate.sheetName)
+        : undefined;
+      if (previousDirectAggregate && previousSheet) {
+        removeTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(previousSheet.id, previousDirectAggregate.col),
+          cellIndex,
+        );
+      }
+      const nextSheet = nextDirectAggregate
+        ? args.state.workbook.getSheet(nextDirectAggregate.sheetName)
+        : undefined;
+      if (nextDirectAggregate && nextSheet) {
+        appendTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(nextSheet.id, nextDirectAggregate.col),
+          cellIndex,
+        );
+      }
+    }
+  const rewriteFormulaCompiledPreservingBindingNow = (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+  ): boolean => {
     const existing = args.state.formulas.get(cellIndex)
-    if (!existing || !canRewriteCompiledPreservingBindings(existing, compiled)) {
+    if (!existing) {
+      return false
+    }
+    const ownerSheetName = args.state.workbook.getSheetNameById(
+      args.state.workbook.cellStore.sheetIds[cellIndex]!,
+    )
+    if (!ownerSheetName) {
+      return false
+    }
+    let nextDirectAggregate: RuntimeDirectAggregateDescriptor | undefined
+    if (canRewriteCompiledPreservingBindings(existing, compiled)) {
+      nextDirectAggregate = undefined
+    } else if (canRewriteCompiledPreservingDirectAggregate(existing, compiled)) {
+      nextDirectAggregate = buildDirectAggregateDescriptor({
+        compiled: compiled as ParsedCompiledFormula,
+        ownerSheetName,
+      })
+      if (!nextDirectAggregate) {
+        return false
+      }
+    } else {
       return false
     }
     args.compiledPlans.release(existing.planId)
     const plan = args.compiledPlans.intern(source, compiled)
+    const previousDirectAggregate = existing.directAggregate
     existing.source = source
     existing.planId = plan.id
     existing.compiled = plan.compiled
     existing.plan = plan
     existing.programLength = compiled.program.length
     existing.constNumberLength = compiled.constants.length
+    existing.directAggregate = nextDirectAggregate
+    if (previousDirectAggregate || nextDirectAggregate) {
+      const previousSheet = previousDirectAggregate
+        ? args.state.workbook.getSheet(previousDirectAggregate.sheetName)
+        : undefined
+      if (previousDirectAggregate && previousSheet) {
+        removeTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(previousSheet.id, previousDirectAggregate.col),
+          cellIndex,
+        )
+      }
+      const nextSheet = nextDirectAggregate
+        ? args.state.workbook.getSheet(nextDirectAggregate.sheetName)
+        : undefined
+      if (nextDirectAggregate && nextSheet) {
+        appendTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(nextSheet.id, nextDirectAggregate.col),
+          cellIndex,
+        )
+      }
+    }
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
     if (compiled.mode === FormulaMode.JsOnly) {

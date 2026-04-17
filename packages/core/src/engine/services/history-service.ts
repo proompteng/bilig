@@ -8,8 +8,16 @@ export interface EngineHistoryService {
 }
 
 export function createEngineHistoryService(args: {
-  readonly state: Pick<EngineRuntimeState, 'undoStack' | 'redoStack' | 'getTransactionReplayDepth' | 'setTransactionReplayDepth'>
-  readonly executeTransaction: (transaction: TransactionRecord, source: 'history') => void
+  readonly state: Pick<
+    EngineRuntimeState,
+    "undoStack" | "redoStack" | "getTransactionReplayDepth" | "setTransactionReplayDepth"
+  >;
+  readonly executeTransaction: (transaction: TransactionRecord, source: "undo" | "redo") => void;
+  readonly state: Pick<
+    EngineRuntimeState,
+    'undoStack' | 'redoStack' | 'getTransactionReplayDepth' | 'setTransactionReplayDepth'
+  >
+  readonly executeTransaction: (transaction: TransactionRecord, source: 'undo' | 'redo') => void
 }): EngineHistoryService {
   return {
     undo() {
@@ -21,7 +29,7 @@ export function createEngineHistoryService(args: {
           }
           args.state.setTransactionReplayDepth(args.state.getTransactionReplayDepth() + 1)
           try {
-            args.executeTransaction(entry.inverse, 'history')
+            args.executeTransaction(entry.inverse, 'undo')
           } finally {
             args.state.setTransactionReplayDepth(args.state.getTransactionReplayDepth() - 1)
           }
@@ -44,7 +52,7 @@ export function createEngineHistoryService(args: {
           }
           args.state.setTransactionReplayDepth(args.state.getTransactionReplayDepth() + 1)
           try {
-            args.executeTransaction(entry.forward, 'history')
+            args.executeTransaction(entry.forward, 'redo')
           } finally {
             args.state.setTransactionReplayDepth(args.state.getTransactionReplayDepth() - 1)
           }
