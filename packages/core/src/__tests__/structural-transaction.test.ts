@@ -33,4 +33,16 @@ describe('StructuralTransaction', () => {
     expect(transaction.removedCellIndices).toEqual([11])
     expect(transaction.remappedCells).toHaveLength(2)
   })
+
+  it('keeps a bounded move scope when the move target equals the source start', () => {
+    expect(
+      structuralScopeForTransform({
+        axis: 'column',
+        kind: 'move',
+        start: 3,
+        count: 2,
+        target: 3,
+      }),
+    ).toEqual({ start: 3, end: 5 })
+  })
 })

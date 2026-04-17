@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createCellNumberFormatRecord } from '@bilig/protocol'
-import { buildFormatPatchOps, buildStyleClearOps, buildStylePatchOps } from '../engine-range-format-ops.js'
+import {
+  buildFormatPatchOps,
+  buildStyleClearOps,
+  buildStylePatchOps,
+  restoreFormatRangeOps,
+  restoreStyleRangeOps,
+} from '../engine-range-format-ops.js'
 import { WorkbookStore } from '../workbook-store.js'
 
 describe('engine range format ops', () => {
@@ -87,6 +93,47 @@ describe('engine range format ops', () => {
       {
         kind: 'setFormatRange',
         range: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B2' },
+      },
+    ])
+  })
+
+  it('coalesces adjacent replayed style tiles without coalescing format tiles', () => {
+    const workbook = new WorkbookStore('restore-range-ops')
+    workbook.createSheet('Sheet1')
+    workbook.upsertCellStyle({ id: 'style-fill', fill: { backgroundColor: '#dbeafe' } })
+    workbook.upsertCellNumberFormat(createCellNumberFormatRecord('format-decimal', '0.00'))
+
+    workbook.setStyleRange({ sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A3' }, 'style-fill')
+    workbook.setStyleRange({ sheetName: 'Sheet1', startAddress: 'A4', endAddress: 'A4' }, 'style-fill')
+    workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'B3', endAddress: 'B3' }, 'format-decimal')
+    workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'B4', endAddress: 'B4' }, 'format-decimal')
+
+    expect(restoreStyleRangeOps(workbook, { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A4' })).toMatchObject([
+      {
+        kind: 'upsertCellStyle',
+        style: { id: 'style-fill', fill: { backgroundColor: '#dbeafe' } },
+      },
+      {
+        kind: 'setStyleRange',
+        range: { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A4' },
+        styleId: 'style-fill',
+      },
+    ])
+
+    expect(restoreFormatRangeOps(workbook, { sheetName: 'Sheet1', startAddress: 'B3', endAddress: 'B4' })).toMatchObject([
+      {
+        kind: 'upsertCellNumberFormat',
+        format: { id: 'format-decimal', code: '0.00' },
+      },
+      {
+        kind: 'setFormatRange',
+        range: { sheetName: 'Sheet1', startAddress: 'B3', endAddress: 'B3' },
+        formatId: 'format-decimal',
+      },
+      {
+        kind: 'setFormatRange',
+        range: { sheetName: 'Sheet1', startAddress: 'B4', endAddress: 'B4' },
+        formatId: 'format-decimal',
       },
     ])
   })
