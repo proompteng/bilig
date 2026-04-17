@@ -27,8 +27,31 @@ function runCommand(command: string[], extraEnv: Record<string, string>): void {
   }
 }
 
+const DEFAULT_FUZZ_PATTERNS = [
+  /^packages\/formula\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
+  /^packages\/core\/src\/__tests__\/(engine-history|engine-structure|engine-replica|engine-snapshot|engine-import-export|snapshot-wire-parity|literal-loader-parity|formula-runtime-differential)\.fuzz\.test\.ts$/,
+  /^apps\/bilig\/src\/zero\/__tests__\/(projection|reconnect-replay|sync-relay|sync-relay-scheduled)\.fuzz\.test\.ts$/,
+  /^apps\/web\/src\/__tests__\/(projected-viewport|runtime-sync|runtime-sync-scheduled|selection-command-parity|worker-workbook-app-model)\.fuzz\.test\.ts$/,
+  /^packages\/worker-transport\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
+  /^packages\/storage-browser\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
+]
+
 function listVitestFuzzFiles(): string[] {
   return ['packages', 'apps'].flatMap((root) => walkFuzzFiles(root)).toSorted((left, right) => left.localeCompare(right))
+}
+
+function selectVitestFuzzFiles(mode: FuzzMode, files: readonly string[]): string[] {
+  if (mode !== 'default') {
+    return [...files]
+  }
+  return files.filter((filePath) => DEFAULT_FUZZ_PATTERNS.some((pattern) => pattern.test(filePath)))
+}
+
+function shouldRunBrowserFuzz(mode: FuzzMode, replayKind: string | null, hasReplayFixture: boolean): boolean {
+  if (hasReplayFixture) {
+    return replayKind === 'browser'
+  }
+  return mode === 'main' || mode === 'nightly'
 }
 
 function parseReplayKind(filePath: string): string | null {
@@ -56,10 +79,10 @@ const env = {
   ...(resolvedReplayFixture ? { BILIG_FUZZ_REPLAY: resolvedReplayFixture } : {}),
 }
 
-const vitestFuzzFiles = listVitestFuzzFiles()
+const vitestFuzzFiles = selectVitestFuzzFiles(mode, listVitestFuzzFiles())
 runCommand(['pnpm', 'exec', 'vitest', 'run', ...vitestFuzzFiles], env)
 
-if (!resolvedReplayFixture || replayKind === 'browser') {
+if (shouldRunBrowserFuzz(mode, replayKind, resolvedReplayFixture !== null)) {
   runCommand(['bun', 'scripts/run-browser-tests.ts', '--grep', '@fuzz-browser'], {
     ...env,
     BILIG_FUZZ_BROWSER: '1',

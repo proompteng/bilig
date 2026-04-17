@@ -29,6 +29,7 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
   const sessionId = `${options.documentId}:${replicaId}`
   let lastServerCursor = 0
   let connectPromise: Promise<void> | null = null
+  let operationChain: Promise<void> = Promise.resolve()
 
   const sendFrame = async (frame: ProtocolFrame): Promise<ProtocolFrame> => {
     const response = await fetchImpl(`${baseUrl}/v2/documents/${encodeURIComponent(options.documentId)}/frames`, {
@@ -72,18 +73,31 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
     }
   }
 
+  const serializeOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    const next = operationChain.then(operation, operation)
+    operationChain = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
+
   return {
     async send(batch) {
-      await ensureConnected()
-      await sendFrame({
-        kind: 'appendBatch',
-        documentId: options.documentId,
-        cursor: lastServerCursor,
-        batch,
+      await serializeOperation(async () => {
+        await ensureConnected()
+        await sendFrame({
+          kind: 'appendBatch',
+          documentId: options.documentId,
+          cursor: lastServerCursor,
+          batch,
+        })
       })
     },
     async disconnect() {
-      connectPromise = null
+      await serializeOperation(async () => {
+        connectPromise = null
+      })
     },
   }
 }

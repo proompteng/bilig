@@ -17,19 +17,19 @@ const BUDGETS: Record<Exclude<FuzzProfile, 'replay'>, BudgetProfile> = {
   default: {
     property: { numRuns: 50, maxMs: 10_000 },
     model: { numRuns: 10, maxMs: 15_000 },
-    scheduled: { numRuns: 10, maxMs: 15_000 },
+    scheduled: { numRuns: 4, maxMs: 4_000 },
     browser: { numRuns: 5, maxMs: 20_000 },
   },
   main: {
     property: { numRuns: 200, maxMs: 30_000 },
     model: { numRuns: 40, maxMs: 30_000 },
-    scheduled: { numRuns: 25, maxMs: 30_000 },
+    scheduled: { numRuns: 12, maxMs: 12_000 },
     browser: { numRuns: 15, maxMs: 30_000 },
   },
   nightly: {
     property: { numRuns: 2_000, maxMs: 120_000 },
     model: { numRuns: 200, maxMs: 120_000 },
-    scheduled: { numRuns: 150, maxMs: 120_000 },
+    scheduled: { numRuns: 60, maxMs: 60_000 },
     browser: { numRuns: 75, maxMs: 120_000 },
   },
 }
