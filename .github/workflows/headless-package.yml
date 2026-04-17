@@ -262,18 +262,13 @@ jobs:
           echo "planner_args=$planner_args" >> "$GITHUB_OUTPUT"
 
       - name: Configure canonical release remotes
-        env:
-          FORGEJO_PUSH_URL: ${{ secrets.FORGEJO_PUSH_URL }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
-            echo "FORGEJO_PUSH_URL secret is required for runtime release planning" >&2
-            exit 1
-          fi
+          forgejo_fetch_url="https://code.proompteng.ai/kalmyk/bilig.git"
 
           git remote rename origin github
-          git remote add origin "${FORGEJO_PUSH_URL}"
+          git remote add origin "${forgejo_fetch_url}"
 
           while read -r tag; do
             [[ -n "$tag" ]] || continue
@@ -374,8 +369,11 @@ jobs:
             exit 1
           fi
 
+          forgejo_fetch_url="https://code.proompteng.ai/kalmyk/bilig.git"
+
           git remote rename origin github
-          git remote add origin "${FORGEJO_PUSH_URL}"
+          git remote add origin "${forgejo_fetch_url}"
+          git remote set-url --push origin "${FORGEJO_PUSH_URL}"
 
           while read -r tag; do
             [[ -n "$tag" ]] || continue
