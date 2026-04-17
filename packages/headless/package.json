@@ -1,6 +1,6 @@
 {
   "name": "@bilig/headless",
-  "version": "0.1.2",
+  "version": "0.1.95",
   "description": "WorkPaper spreadsheet workbook facade for bilig with HyperFormula-style workflows.",
   "keywords": [
     "bilig",

@@ -2,6 +2,14 @@
 
 All notable changes to `@bilig/headless` will be documented in this file.
 
+## 0.1.95
+
+# Libraries v0.1.95
+
+- Release type: patch
+- Previous libraries tag: none
+- Manual override: yes
+
 This package is released as part of the aligned bilig library package set.
 
 ## 0.1.1
