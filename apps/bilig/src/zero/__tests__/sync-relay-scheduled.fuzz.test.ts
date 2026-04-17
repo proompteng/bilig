@@ -63,8 +63,7 @@ describe('sync relay scheduled fuzz', () => {
           ),
         )
 
-        await scheduler.waitAll()
-        await Promise.all(actionPromises)
+        await scheduler.waitFor(Promise.all(actionPromises))
 
         const { expectedBatchIds, expectedHelloCursors } = replayRelayActions(executedActions)
         const helloFrames = seenFrames.filter((frame) => frame.kind === 'hello')

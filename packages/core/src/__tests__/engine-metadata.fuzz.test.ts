@@ -98,10 +98,11 @@ describe('engine metadata fuzz', () => {
       const seedSnapshot = await createEngineSeedSnapshot(seedName, `fuzz-core-metadata-${seedName}`)
       const ran = await runModelProperty({
         suite: `core/metadata/${seedName}`,
-        commands: fc.commands(
-          [applySemanticCommandArbitrary(metadataSemanticActionArbitrary), undoCommandArbitrary, redoCommandArbitrary],
-          { maxCommands: 18 },
-        ),
+        commands: (replayPath) =>
+          fc.commands([applySemanticCommandArbitrary(metadataSemanticActionArbitrary), undoCommandArbitrary, redoCommandArbitrary], {
+            maxCommands: 18,
+            ...(replayPath ? { replayPath } : {}),
+          }),
         createModel: () => ({
           initialSnapshot: structuredClone(seedSnapshot),
           applied: [],

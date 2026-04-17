@@ -127,7 +127,11 @@ describe('engine history fuzz', () => {
       const seedSnapshot = await createEngineSeedSnapshot(seedName, `fuzz-core-history-${seedName}`)
       const ran = await runModelProperty({
         suite: `core/history/${seedName}`,
-        commands: fc.commands(engineHistoryCommandArbitraries, { maxCommands: 18 }),
+        commands: (replayPath) =>
+          fc.commands(engineHistoryCommandArbitraries, {
+            maxCommands: 18,
+            ...(replayPath ? { replayPath } : {}),
+          }),
         createModel: () => ({
           initialSnapshot: structuredClone(seedSnapshot),
           applied: [],

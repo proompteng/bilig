@@ -57,8 +57,7 @@ describe('runtime sync scheduled fuzz', () => {
 
         try {
           const actionPromises = actions.map((action) => runAction(action))
-          await scheduler.waitAll()
-          await Promise.all(actionPromises)
+          await scheduler.waitFor(Promise.all(actionPromises))
         } finally {
           runtime.dispose()
         }

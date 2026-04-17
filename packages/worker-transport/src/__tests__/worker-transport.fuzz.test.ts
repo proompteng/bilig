@@ -38,13 +38,11 @@ describe('worker transport fuzz', () => {
 
         try {
           const readyPromise = client.ready()
-          await scheduler.waitAll()
-          await expect(readyPromise).resolves.toBeUndefined()
+          await expect(scheduler.waitFor(readyPromise)).resolves.toBeUndefined()
           const invokePromises = actions.map((action) => client.invoke(action.method, action.left, action.right))
-          await scheduler.waitAll()
-          const actualResults = await Promise.all(invokePromises)
+          const actualResults = await scheduler.waitFor(Promise.all(invokePromises))
           expect(actualResults).toEqual(actions.map((action) => evaluateWorkerTransportAction(action)))
-          await scheduler.waitAll()
+          await scheduler.waitIdle()
           await Promise.all(deliveryPromises)
         } finally {
           client.dispose()

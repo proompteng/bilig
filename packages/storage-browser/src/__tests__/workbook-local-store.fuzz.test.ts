@@ -29,8 +29,7 @@ describe('memory workbook local store fuzz', () => {
         })
 
         const actionPromises = actions.map((action) => applyAction(action))
-        await scheduler.waitAll()
-        await Promise.all(actionPromises)
+        await scheduler.waitFor(Promise.all(actionPromises))
 
         const reopened = await factory.open('fuzz-storage')
         const expected = replayStoreActions(executed)

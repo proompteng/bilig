@@ -41,6 +41,7 @@ export interface ReplayFixture {
   kind?: string
   seed: number
   path?: string
+  replayPath?: string
   numRuns?: number
   counterexample?: unknown
   failures?: unknown
@@ -76,7 +77,9 @@ export interface PropertySuiteOptions<T> {
 
 export interface ModelSuiteOptions<Model extends object, Real> {
   suite: string
-  commands: fc.Arbitrary<readonly AsyncCommand<Model, Real, boolean>[]>
+  commands:
+    | fc.Arbitrary<readonly AsyncCommand<Model, Real, boolean>[]>
+    | ((replayPath: string | null) => fc.Arbitrary<readonly AsyncCommand<Model, Real, boolean>[]>)
   createModel: () => Model
   createReal: () => Real | Promise<Real>
   teardown?: (real: Real) => void | Promise<void>
@@ -167,6 +170,9 @@ export function loadReplayFixture(filePath: string): ReplayFixture {
   }
   if (typeof raw['path'] === 'string') {
     fixture.path = raw['path']
+  }
+  if (typeof raw['replayPath'] === 'string') {
+    fixture.replayPath = raw['replayPath']
   }
   if (typeof raw['numRuns'] === 'number') {
     fixture.numRuns = raw['numRuns']
@@ -296,6 +302,7 @@ export function captureCounterexample<Ts extends unknown[]>(options: CaptureCoun
     profile: resolveFuzzProfile(),
     seed: options.details.seed,
     path: options.details.counterexamplePath ?? null,
+    replayPath: extractReplayPath(options.details.counterexample ?? null),
     numRuns: options.details.numRuns,
     numSkips: options.details.numSkips,
     numShrinks: options.details.numShrinks,
@@ -308,6 +315,15 @@ export function captureCounterexample<Ts extends unknown[]>(options: CaptureCoun
   mkdirSync(dirname(artifactPath), { recursive: true })
   writeFileSync(artifactPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
   return artifactPath
+}
+
+function extractReplayPath(counterexample: unknown): string | null {
+  if (!Array.isArray(counterexample) || counterexample.length === 0) {
+    return null
+  }
+  const serialized = `${counterexample[0] ?? ''}`
+  const match = /replayPath="([^"]+)"/u.exec(serialized)
+  return match?.[1] ?? null
 }
 
 async function runChecked<Ts extends unknown[]>(
@@ -362,7 +378,9 @@ export async function runProperty<T>(options: PropertySuiteOptions<T>): Promise<
 }
 
 export async function runModelProperty<Model extends object, Real>(options: ModelSuiteOptions<Model, Real>): Promise<boolean> {
-  const property = fc.asyncProperty(options.commands, async (commands) => {
+  const replayFixture = resolveReplayFixtureForSuite(options.suite)
+  const commandsArbitrary = typeof options.commands === 'function' ? options.commands(replayFixture?.replayPath ?? null) : options.commands
+  const property = fc.asyncProperty(commandsArbitrary, async (commands) => {
     const model = options.createModel()
     const real = await options.createReal()
     try {
@@ -377,7 +395,7 @@ export async function runModelProperty<Model extends object, Real>(options: Mode
 export async function runScheduledProperty<T>(options: ScheduledSuiteOptions<T>): Promise<boolean> {
   const property = fc.asyncProperty(fc.scheduler(), options.arbitrary, async (scheduler, value) => {
     await options.predicate({ scheduler, value })
-    await scheduler.waitAll()
+    await scheduler.waitIdle()
   })
   return runChecked(options.suite, options.kind ?? 'scheduled', property, options.parameters)
 }
