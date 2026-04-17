@@ -18,7 +18,7 @@ import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord }
 import type { EngineRuntimeState, PreparedCellAddress, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 
-type MutationSource = "local" | "remote" | "restore" | "undo" | "redo";
+type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -39,7 +39,7 @@ export interface EngineOperationService {
   readonly applyCellMutationsAt: (
     refs: readonly EngineCellMutationRef[],
     batch: EngineOpBatch | null,
-    source: "local" | "restore" | "undo" | "redo",
+    source: 'local' | 'restore' | 'undo' | 'redo',
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>
   readonly applyDerivedOp: (op: DerivedOp) => Effect.Effect<number[], EngineMutationError>
@@ -530,17 +530,14 @@ export function createEngineOperationService(args: {
     args.state.workbook.pruneCellIfEmpty(cellIndex)
   }
 
-  const normalizeHistoryDependencyPlaceholder = (
-    cellIndex: number,
-    source: MutationSource,
-  ): void => {
-    if (source !== "undo" && source !== "restore") {
-      return;
+  const normalizeHistoryDependencyPlaceholder = (cellIndex: number, source: MutationSource): void => {
+    if (source !== 'undo' && source !== 'restore') {
+      return
     }
     if (args.state.workbook.getCellFormat(cellIndex) !== undefined) {
-      return;
+      return
     }
-    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0;
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0
     if (
       (flags &
         (CellFlags.HasFormula |
@@ -551,19 +548,17 @@ export function createEngineOperationService(args: {
           CellFlags.PendingDelete)) !==
       0
     ) {
-      return;
+      return
     }
-    const value = args.state.workbook.cellStore.getValue(cellIndex, (id) =>
-      args.state.strings.get(id),
-    );
+    const value = args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id))
     if (value.tag !== ValueTag.Empty) {
-      return;
+      return
     }
     if (args.collectFormulaDependents(makeCellEntity(cellIndex)).length === 0) {
-      return;
+      return
     }
-    args.state.workbook.cellStore.versions[cellIndex] = 0;
-  };
+    args.state.workbook.cellStore.versions[cellIndex] = 0
+  }
 
   const markCycleMemberInputsChanged = (changedInputCount: number): number => {
     args.state.formulas.forEach((_formula, cellIndex) => {
@@ -1082,7 +1077,7 @@ export function createEngineOperationService(args: {
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
-      if (!isRestore && source !== "undo" && source !== "redo") {
+      if (!isRestore && source !== 'undo' && source !== 'redo') {
         batch.ops.forEach((op) => {
           assertProtectionAllowsOp(op)
         })
@@ -1344,7 +1339,7 @@ export function createEngineOperationService(args: {
               topologyChanged = removedFormula || topologyChanged
             }
             writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, op.value, args.state.strings)
-            if (op.authoredBlank === true && op.value === null) {
+            if (op.value === null) {
               args.state.workbook.cellStore.flags[cellIndex] =
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
             }
@@ -1550,19 +1545,13 @@ export function createEngineOperationService(args: {
             }
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput
-              );
-            normalizeHistoryDependencyPlaceholder(cellIndex, source);
-            pruneCellIfOrphaned(cellIndex);
-            changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
-            setEntityVersionForOp(op, order);
-            break;
+              ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
+            normalizeHistoryDependencyPlaceholder(cellIndex, source)
+            pruneCellIfOrphaned(cellIndex)
+            changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
+            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
+            setEntityVersionForOp(op, order)
+            break
           }
           case 'upsertDefinedName': {
             const normalizedName = normalizeDefinedName(op.name)
@@ -1717,7 +1706,7 @@ export function createEngineOperationService(args: {
   const applyCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
     batch: EngineOpBatch | null,
-    source: "local" | "restore" | "undo" | "redo",
+    source: 'local' | 'restore' | 'undo' | 'redo',
     potentialNewCells?: number,
   ): void => {
     const isRestore = source === 'restore'
@@ -2053,8 +2042,8 @@ export function createEngineOperationService(args: {
                   CellFlags.InCycle |
                   CellFlags.SpillChild |
                   CellFlags.PivotOutput
-                );
-              normalizeHistoryDependencyPlaceholder(existingIndex, source);
+                )
+              normalizeHistoryDependencyPlaceholder(existingIndex, source)
               if (!isRestore) {
                 pruneCellIfOrphaned(existingIndex)
               }

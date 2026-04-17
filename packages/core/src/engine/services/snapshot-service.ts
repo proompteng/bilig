@@ -354,7 +354,6 @@ export function createEngineSnapshotService(args: {
                   sheetName: sheet.name,
                   address: cell.address,
                   value: cell.value ?? null,
-                  authoredBlank: cell.value === null,
                 })
               }
               if (cell.format !== undefined) {

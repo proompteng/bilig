@@ -74,9 +74,7 @@ export function createEngineCellStateService(args: {
     const ops: EngineOp[] = []
     const shouldEmitFormat = formatOverride !== null && formatOverride !== undefined && formatOverride !== ''
     const isAuthoredBlank = (snapshot.flags & CellFlags.AuthoredBlank) !== 0
-    const explicitBlankOp = isAuthoredBlank
-      ? { kind: 'setCellValue' as const, sheetName, address, value: null, authoredBlank: true }
-      : { kind: 'setCellValue' as const, sheetName, address, value: null }
+    const explicitBlankOp = { kind: 'setCellValue' as const, sheetName, address, value: null }
     const shouldRestoreExplicitBlank = (snapshot.version ?? 0) !== 0 || isAuthoredBlank
     if (snapshot.formula !== undefined) {
       const translatedFormula =
@@ -87,24 +85,16 @@ export function createEngineCellStateService(args: {
     } else {
       switch (snapshot.value.tag) {
         case ValueTag.Empty:
-          ops.push(
-            shouldRestoreExplicitBlank
-              ? explicitBlankOp
-              : { kind: "clearCell", sheetName, address },
-          );
-          break;
+          ops.push(shouldRestoreExplicitBlank ? explicitBlankOp : { kind: 'clearCell', sheetName, address })
+          break
         case ValueTag.Number:
         case ValueTag.Boolean:
         case ValueTag.String:
           ops.push({ kind: 'setCellValue', sheetName, address, value: snapshot.value.value })
           break
         case ValueTag.Error:
-          ops.push(
-            shouldRestoreExplicitBlank
-              ? explicitBlankOp
-              : { kind: "clearCell", sheetName, address },
-          );
-          break;
+          ops.push(shouldRestoreExplicitBlank ? explicitBlankOp : { kind: 'clearCell', sheetName, address })
+          break
       }
     }
     if (shouldEmitFormat) {
@@ -147,14 +137,7 @@ export function createEngineCellStateService(args: {
     switch (snapshot.value.tag) {
       case ValueTag.Empty:
       case ValueTag.Error:
-        return toCellStateOpsNow(
-          sheetName,
-          address,
-          snapshot,
-          undefined,
-          undefined,
-          explicitFormat,
-        );
+        return toCellStateOpsNow(sheetName, address, snapshot, undefined, undefined, explicitFormat)
       case ValueTag.Number:
       case ValueTag.Boolean:
       case ValueTag.String:

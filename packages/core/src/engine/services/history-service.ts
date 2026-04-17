@@ -8,15 +8,7 @@ export interface EngineHistoryService {
 }
 
 export function createEngineHistoryService(args: {
-  readonly state: Pick<
-    EngineRuntimeState,
-    "undoStack" | "redoStack" | "getTransactionReplayDepth" | "setTransactionReplayDepth"
-  >;
-  readonly executeTransaction: (transaction: TransactionRecord, source: "undo" | "redo") => void;
-  readonly state: Pick<
-    EngineRuntimeState,
-    'undoStack' | 'redoStack' | 'getTransactionReplayDepth' | 'setTransactionReplayDepth'
-  >
+  readonly state: Pick<EngineRuntimeState, 'undoStack' | 'redoStack' | 'getTransactionReplayDepth' | 'setTransactionReplayDepth'>
   readonly executeTransaction: (transaction: TransactionRecord, source: 'undo' | 'redo') => void
 }): EngineHistoryService {
   return {

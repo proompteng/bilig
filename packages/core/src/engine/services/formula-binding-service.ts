@@ -384,10 +384,7 @@ function canRewriteCompiledPreservingBindings(existing: RuntimeFormula, compiled
   )
 }
 
-function canRewriteCompiledPreservingDirectAggregate(
-  existing: RuntimeFormula,
-  compiled: CompiledFormula,
-): boolean {
+function canRewriteCompiledPreservingDirectAggregate(existing: RuntimeFormula, compiled: CompiledFormula): boolean {
   return (
     existing.rangeDependencies.length === 0 &&
     existing.compiled.symbolicNames.length === 0 &&
@@ -402,7 +399,7 @@ function canRewriteCompiledPreservingDirectAggregate(
     existing.programLength === compiled.program.length &&
     existing.constNumberLength === compiled.constants.length &&
     existing.compiled.mode === compiled.mode
-  );
+  )
 }
 
 function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedExactLookupCandidate[] {
@@ -1138,79 +1135,12 @@ export function createEngineFormulaBindingService(args: {
     primeLookupCandidatesNow(ownerSheetName, undefined, prepared.indexedExactLookupCandidates, prepared.directApproximateLookupCandidates)
   }
 
-  const rewriteFormulaCompiledPreservingBindingNow = (
-    cellIndex: number,
-    source: string,
-    compiled: CompiledFormula,
-  ): boolean => {
-    const existing = args.state.formulas.get(cellIndex);
-    if (!existing) {
-      return false;
-    }
-    const ownerSheetName = args.state.workbook.getSheetNameById(
-      args.state.workbook.cellStore.sheetIds[cellIndex]!,
-    );
-    if (!ownerSheetName) {
-      return false;
-    }
-    let nextDirectAggregate: RuntimeDirectAggregateDescriptor | undefined;
-    if (canRewriteCompiledPreservingBindings(existing, compiled)) {
-      nextDirectAggregate = undefined;
-    } else if (canRewriteCompiledPreservingDirectAggregate(existing, compiled)) {
-      nextDirectAggregate = buildDirectAggregateDescriptor({
-        compiled: compiled as ParsedCompiledFormula,
-        ownerSheetName,
-      });
-      if (!nextDirectAggregate) {
-        return false;
-      }
-    } else {
-      return false;
-    }
-    args.compiledPlans.release(existing.planId);
-    const plan = args.compiledPlans.intern(source, compiled);
-    const previousDirectAggregate = existing.directAggregate;
-    existing.source = source;
-    existing.planId = plan.id;
-    existing.compiled = plan.compiled;
-    existing.plan = plan;
-    existing.programLength = compiled.program.length;
-    existing.constNumberLength = compiled.constants.length;
-    existing.directAggregate = nextDirectAggregate;
-    if (previousDirectAggregate || nextDirectAggregate) {
-      const previousSheet = previousDirectAggregate
-        ? args.state.workbook.getSheet(previousDirectAggregate.sheetName)
-        : undefined;
-      if (previousDirectAggregate && previousSheet) {
-        removeTrackedReverseEdge(
-          args.reverseState.reverseAggregateColumnEdges,
-          aggregateColumnDependencyKey(previousSheet.id, previousDirectAggregate.col),
-          cellIndex,
-        );
-      }
-      const nextSheet = nextDirectAggregate
-        ? args.state.workbook.getSheet(nextDirectAggregate.sheetName)
-        : undefined;
-      if (nextDirectAggregate && nextSheet) {
-        appendTrackedReverseEdge(
-          args.reverseState.reverseAggregateColumnEdges,
-          aggregateColumnDependencyKey(nextSheet.id, nextDirectAggregate.col),
-          cellIndex,
-        );
-      }
-    }
-  const rewriteFormulaCompiledPreservingBindingNow = (
-    cellIndex: number,
-    source: string,
-    compiled: CompiledFormula,
-  ): boolean => {
+  const rewriteFormulaCompiledPreservingBindingNow = (cellIndex: number, source: string, compiled: CompiledFormula): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (!existing) {
       return false
     }
-    const ownerSheetName = args.state.workbook.getSheetNameById(
-      args.state.workbook.cellStore.sheetIds[cellIndex]!,
-    )
+    const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
     if (!ownerSheetName) {
       return false
     }
@@ -1239,9 +1169,7 @@ export function createEngineFormulaBindingService(args: {
     existing.constNumberLength = compiled.constants.length
     existing.directAggregate = nextDirectAggregate
     if (previousDirectAggregate || nextDirectAggregate) {
-      const previousSheet = previousDirectAggregate
-        ? args.state.workbook.getSheet(previousDirectAggregate.sheetName)
-        : undefined
+      const previousSheet = previousDirectAggregate ? args.state.workbook.getSheet(previousDirectAggregate.sheetName) : undefined
       if (previousDirectAggregate && previousSheet) {
         removeTrackedReverseEdge(
           args.reverseState.reverseAggregateColumnEdges,
@@ -1249,9 +1177,7 @@ export function createEngineFormulaBindingService(args: {
           cellIndex,
         )
       }
-      const nextSheet = nextDirectAggregate
-        ? args.state.workbook.getSheet(nextDirectAggregate.sheetName)
-        : undefined
+      const nextSheet = nextDirectAggregate ? args.state.workbook.getSheet(nextDirectAggregate.sheetName) : undefined
       if (nextDirectAggregate && nextSheet) {
         appendTrackedReverseEdge(
           args.reverseState.reverseAggregateColumnEdges,

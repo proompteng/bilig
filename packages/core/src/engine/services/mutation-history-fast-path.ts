@@ -134,7 +134,7 @@ function restoreCellOpFromSnapshot(
     case ValueTag.Empty:
     case ValueTag.Error:
       return (snapshot.flags & CellFlags.AuthoredBlank) !== 0
-        ? { kind: 'setCellValue', sheetName, address, value: null, authoredBlank: true }
+        ? { kind: 'setCellValue', sheetName, address, value: null }
         : { kind: 'clearCell', sheetName, address }
     case ValueTag.Number:
     case ValueTag.Boolean:
