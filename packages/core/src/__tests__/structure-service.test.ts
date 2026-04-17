@@ -249,6 +249,26 @@ describe('EngineStructureService', () => {
     expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A1:A3)')
   })
 
+  it('keeps graph refresh enabled when deleting formulas from an active cycle', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-cycle' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellFormula('Sheet1', 'A1', 'B1')
+    engine.setCellFormula('Sheet1', 'B1', 'A1')
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'deleteRows',
+        sheetName: 'Sheet1',
+        start: 0,
+        count: 1,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(true)
+    expect(result.graphRefreshRequired).toBe(true)
+  })
+
   it('keeps repeated simple column families off the topology and dirty-formula path for inserts', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-column-families' })
     await engine.ready()

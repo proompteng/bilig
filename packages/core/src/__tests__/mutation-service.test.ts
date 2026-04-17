@@ -568,6 +568,75 @@ describe('EngineMutationService', () => {
     })
   })
 
+  it('does not snapshot unaffected cross-sheet formulas left of a deleted column span', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-columns-formula-narrow' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.createSheet('Other')
+    engine.setCellValue('Other', 'A1', 7)
+    engine.setCellFormula('Sheet1', 'A1', 'Other!A1')
+    engine.setCellValue('Sheet1', 'A2', 1)
+    engine.setCellValue('Sheet1', 'B2', 2)
+    engine.setCellValue('Sheet1', 'C2', 3)
+    engine.setCellFormula('Sheet1', 'D2', 'SUM(A2:C2)')
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteColumns', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    const formulaOps = inverseOps?.filter(
+      (op): op is Extract<(typeof inverseOps)[number], { kind: 'setCellFormula' }> => op.kind === 'setCellFormula',
+    )
+    expect(formulaOps).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sheetName: 'Sheet1', address: 'D2', formula: 'SUM(A2:C2)' })]),
+    )
+    expect(formulaOps).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ sheetName: 'Sheet1', address: 'A1', formula: 'Other!A1' })]),
+    )
+  })
+
+  it('captures formulas that depend on whole-row ranges across deleted row spans', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-rows-whole-range' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellFormula('Sheet1', 'B5', 'SUM(1:3)')
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteRows', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    expect(inverseOps).toContainEqual({
+      kind: 'setCellFormula',
+      sheetName: 'Sheet1',
+      address: 'B5',
+      formula: 'SUM(1:3)',
+    })
+  })
+
+  it('captures formulas that depend on whole-column ranges across deleted column spans', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-columns-whole-range' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'B1', 1)
+    engine.setCellValue('Sheet1', 'C1', 2)
+    engine.setCellValue('Sheet1', 'D1', 3)
+    engine.setCellFormula('Sheet1', 'F2', 'SUM(B:D)')
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteColumns', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    expect(inverseOps).toContainEqual({
+      kind: 'setCellFormula',
+      sheetName: 'Sheet1',
+      address: 'F2',
+      formula: 'SUM(B:D)',
+    })
+  })
+
   it('copies ranges through the service and rewrites relative formulas', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'copy-range-service' })
     await engine.ready()
