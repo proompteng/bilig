@@ -568,8 +568,30 @@ export async function waitForWorkbookReady(page: Page) {
   await expect(page.getByTestId('status-sync')).toHaveText(remoteSyncEnabled ? 'Ready' : /^(Ready|Local|Follower)$/, { timeout: 15_000 })
 }
 
+export async function gotoWorkbookShell(page: Page, path = '/', timeoutMs = 15_000) {
+  async function attempt(deadline: number, lastError: unknown): Promise<void> {
+    if (Date.now() >= deadline) {
+      throw lastError instanceof Error ? lastError : new Error(`Timed out navigating to ${path}`)
+    }
+
+    try {
+      await page.goto(path)
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!message.includes('ERR_CONNECTION_REFUSED')) {
+        throw error
+      }
+      await delay(250)
+      await attempt(deadline, error)
+    }
+  }
+
+  await attempt(Date.now() + timeoutMs, null)
+}
+
 export async function openZeroWorkbookPage(page: Page, documentId: string) {
-  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
   await selectToolbarActionRange(page)
 }

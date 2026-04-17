@@ -12,6 +12,7 @@ import {
   dragProductColumnResize,
   getProductColumnLeft,
   getProductColumnWidth,
+  gotoWorkbookShell,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 const fuzzBrowserEnabled = process.env['BILIG_FUZZ_BROWSER'] === '1'
@@ -908,7 +909,7 @@ test('@fuzz-browser web app preserves valid selection geometry and focus under g
       interruptAfterTimeLimit: 40_000,
     },
     predicate: async (actions) => {
-      await page.goto('/')
+      await gotoWorkbookShell(page)
       await waitForWorkbookReady(page)
       const grid = page.getByTestId('sheet-grid')
       const nameBox = page.getByTestId('name-box')
