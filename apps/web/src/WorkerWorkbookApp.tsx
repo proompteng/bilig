@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { WorkbookView } from '@bilig/grid'
 import type { BiligRuntimeConfig } from '@bilig/zero-sync'
 import { resolveRuntimeConfig } from './runtime-config.js'
@@ -65,6 +65,18 @@ function WorkerWorkbookAppInner({
     runtimeError,
   } = app
   const showFollowerPersistenceBanner = app.localPersistenceMode === 'follower' && (app.transferRequested || !app.remoteSyncAvailable)
+  const reportAsyncError = useCallback(
+    (task: Promise<unknown>): void => {
+      void (async () => {
+        try {
+          await task
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
+    },
+    [reportRuntimeError],
+  )
   const toasts = useMemo(
     () =>
       [
@@ -84,7 +96,7 @@ function WorkerWorkbookAppInner({
               action: {
                 label: 'Retry',
                 onAction: () => {
-                  void Promise.resolve(retryFailedPendingMutation()).catch(reportRuntimeError)
+                  reportAsyncError(Promise.resolve(retryFailedPendingMutation()))
                 },
               },
             }
@@ -113,7 +125,7 @@ function WorkerWorkbookAppInner({
       failedPendingMutation,
       clearImportError,
       importError,
-      reportRuntimeError,
+      reportAsyncError,
       retryFailedPendingMutation,
       runtimeError,
     ],
@@ -199,43 +211,46 @@ function WorkerWorkbookAppInner({
                 }
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
-                return app
-                  .invokeColumnWidthMutation(app.selection.sheetName, columnIndex, fallbackWidth, {
-                    flush: true,
-                  })
-                  .then(() => undefined)
-                  .catch(app.reportRuntimeError)
+                return (async () => {
+                  try {
+                    await app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, fallbackWidth, {
+                      flush: true,
+                    })
+                  } catch (error) {
+                    app.reportRuntimeError(error)
+                  }
+                })()
               }}
               onBeginEdit={app.beginEditing}
               onBeginFormulaEdit={(seed?: string) => app.beginEditing(seed, 'select-all', 'formula')}
               onCancelEdit={app.cancelEditor}
               onClearCell={app.clearSelectedCell}
               onColumnWidthChange={(columnIndex: number, newSize: number) => {
-                void app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize))
               }}
               onRowHeightChange={(rowIndex: number, newSize: number) => {
-                void app.invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize))
               }}
               onSetColumnHidden={(columnIndex: number, hidden: boolean) => {
-                void app.invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden))
               }}
               onInsertColumns={(startCol: number, count: number) => {
-                void app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count))
               }}
               onDeleteColumns={(startCol: number, count: number) => {
-                void app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count))
               }}
               onSetRowHidden={(rowIndex: number, hidden: boolean) => {
-                void app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden))
               }}
               onInsertRows={(startRow: number, count: number) => {
-                void app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count))
               }}
               onDeleteRows={(startRow: number, count: number) => {
-                void app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count))
               }}
               onSetFreezePane={(rows: number, cols: number) => {
-                void app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols).catch(app.reportRuntimeError)
+                reportAsyncError(app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols))
               }}
               onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}

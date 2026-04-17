@@ -36,6 +36,8 @@
       }
     ],
     "import/no-cycle": "error",
+    "import/no-duplicates": "error",
+    "import/no-self-import": "error",
     "no-constant-condition": [
       "error",
       {
@@ -45,6 +47,8 @@
     "promise/always-return": "error",
     "promise/no-multiple-resolved": "error",
     "promise/no-promise-in-callback": "error",
+    "promise/prefer-await-to-then": "error",
+    "promise/prefer-catch": "error",
     "react/react-in-jsx-scope": "off",
     "oxc/no-async-endpoint-handlers": "off"
   }

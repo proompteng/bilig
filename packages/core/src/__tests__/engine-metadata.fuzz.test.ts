@@ -4,7 +4,7 @@ import type { AsyncCommand } from 'fast-check'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { runModelProperty } from '@bilig/test-fuzz'
-import { normalizeSnapshotForSemanticComparison } from './engine-fuzz-helpers.js'
+import { createEngineSeedSnapshot, normalizeSnapshotForSemanticComparison } from './engine-fuzz-helpers.js'
 import {
   applyEngineSemanticActionAndCaptureResult,
   exportEngineSemanticReplaySnapshot,
@@ -13,7 +13,6 @@ import {
   projectMetadataSnapshot,
   type EngineSemanticAction,
 } from './engine-fuzz-metadata-helpers.js'
-import { createEngineSeedSnapshot } from './engine-fuzz-helpers.js'
 
 interface EngineMetadataModel {
   initialSnapshot: WorkbookSnapshot

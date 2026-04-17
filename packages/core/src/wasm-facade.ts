@@ -65,21 +65,20 @@ export class WasmKernelFacade {
       return
     }
     if (this.initPromise) return this.initPromise
-    this.initPromise = createKernel()
-      .then((kernel) => {
+    this.initPromise = (async () => {
+      try {
+        const kernel = await createKernel()
         if (this.kernel === null) {
           this.kernel = kernel
           kernel.init(64, 64, 64, 64, 64)
           this.storeSynced = false
         }
-        return undefined
-      })
-      .catch(() => {
+      } catch {
         if (this.kernel === null) {
           this.kernel = null
         }
-        return undefined
-      })
+      }
+    })()
     return this.initPromise
   }
 

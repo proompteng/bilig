@@ -143,17 +143,26 @@ export class WorkbookAgentWorkflowRuntime {
 
   private queueWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): void {
     const existingTask = this.workflowRunTasks.get(input.sessionState.threadId) ?? Promise.resolve()
-    const nextTask = existingTask.catch(() => undefined).then(() => this.executeQueuedWorkflowRun(input))
+    const nextTask = (async () => {
+      try {
+        await existingTask
+      } catch {
+        // Continue draining the queue after a prior workflow failure.
+      }
+      await this.executeQueuedWorkflowRun(input)
+    })()
     this.workflowRunTasks.set(input.sessionState.threadId, nextTask)
-    void nextTask
-      .catch((error: unknown) => {
+    void (async () => {
+      try {
+        await nextTask
+      } catch (error) {
         console.error(error)
-      })
-      .finally(() => {
+      } finally {
         if (this.workflowRunTasks.get(input.sessionState.threadId) === nextTask) {
           this.workflowRunTasks.delete(input.sessionState.threadId)
         }
-      })
+      }
+    })()
   }
 
   private async executeQueuedWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): Promise<void> {

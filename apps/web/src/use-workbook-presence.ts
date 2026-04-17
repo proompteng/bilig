@@ -40,7 +40,11 @@ function observeZeroMutationResult(result: unknown): void {
   if (!(observer instanceof Promise)) {
     return
   }
-  void observer.catch(() => undefined)
+  void (async () => {
+    try {
+      await observer
+    } catch {}
+  })()
 }
 
 export function useWorkbookPresence(input: {

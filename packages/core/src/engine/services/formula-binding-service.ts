@@ -4,10 +4,12 @@ import {
   compileFormulaAst,
   type CompiledFormula,
   type FormulaNode,
+  type Float64Arena,
   parseCellAddress,
   parseRangeAddress,
   renameFormulaSheetReferences,
   serializeFormula,
+  type Uint32Arena,
 } from '@bilig/formula'
 import { FormulaMode, ErrorCode, MAX_COLS, Opcode, ValueTag, type CellValue } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
@@ -38,7 +40,6 @@ import {
   type U32,
 } from '../runtime-state.js'
 import { EngineFormulaBindingError } from '../errors.js'
-import type { Uint32Arena, Float64Arena } from '@bilig/formula'
 import type { EngineCompiledPlanService } from './compiled-plan-service.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'

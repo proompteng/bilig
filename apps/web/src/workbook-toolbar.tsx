@@ -1,11 +1,12 @@
 import { memo, type ReactNode } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
 import {
+  Check,
   AlignCenter,
   AlignLeft,
   AlignRight,
   Baseline,
   Bold,
+  ChevronDown,
   Italic,
   PaintBucket,
   Redo2,

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
-import { useState } from 'react'
+import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkbookDefinedNameSnapshot } from '@bilig/protocol'

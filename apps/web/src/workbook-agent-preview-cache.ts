@@ -46,12 +46,14 @@ export function loadWorkbookAgentPreview(input: {
   if (inFlight) {
     return inFlight
   }
-  const nextPromise = input
-    .load()
-    .then((preview) => rememberWorkbookAgentPreview(input.requestKey, preview))
-    .finally(() => {
+  const nextPromise = (async () => {
+    try {
+      const preview = await input.load()
+      return rememberWorkbookAgentPreview(input.requestKey, preview)
+    } finally {
       inFlightPreviewCache.delete(input.requestKey)
-    })
+    }
+  })()
   inFlightPreviewCache.set(input.requestKey, nextPromise)
   return nextPromise
 }

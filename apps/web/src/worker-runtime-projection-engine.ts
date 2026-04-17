@@ -59,6 +59,10 @@ export function scheduleProjectionEngineMaterialization(args: {
     if (scheduledVersion !== args.getProjectionBuildVersion() || args.hasInstalledEngine()) {
       return
     }
-    void args.getProjectionEngine().catch(() => undefined)
+    void (async () => {
+      try {
+        await args.getProjectionEngine()
+      } catch {}
+    })()
   })
 }

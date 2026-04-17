@@ -1408,23 +1408,27 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       })
       await this.codexClient.ensureReady()
       this.unsubscribeCodex = this.codexClient.subscribe((notification) => {
-        void routeWorkbookAgentCodexNotification({
-          notification,
-          listSessions: () => [...this.sessions.values()],
-          tryGetSessionByThreadId: (threadId) => this.tryGetSessionByThreadId(threadId),
-          finalizeCompletedTurn: async (sessionState, turnId, turnStatus) =>
-            await this.finalizePrivateTurnBundle({
-              sessionState,
-              turnId,
-              turnStatus,
-            }),
-          persistSessionState: (sessionState) => this.persistSessionState(sessionState),
-          emitSnapshot: (threadId) => this.emitSnapshot(threadId),
-          emit: (threadId, event) => this.emit(threadId, event),
-          now: this.now,
-        }).catch((error: unknown) => {
-          console.error(error)
-        })
+        void (async () => {
+          try {
+            await routeWorkbookAgentCodexNotification({
+              notification,
+              listSessions: () => [...this.sessions.values()],
+              tryGetSessionByThreadId: (threadId) => this.tryGetSessionByThreadId(threadId),
+              finalizeCompletedTurn: async (sessionState, turnId, turnStatus) =>
+                await this.finalizePrivateTurnBundle({
+                  sessionState,
+                  turnId,
+                  turnStatus,
+                }),
+              persistSessionState: (sessionState) => this.persistSessionState(sessionState),
+              emitSnapshot: (threadId) => this.emitSnapshot(threadId),
+              emit: (threadId, event) => this.emit(threadId, event),
+              now: this.now,
+            })
+          } catch (error) {
+            console.error(error)
+          }
+        })()
       })
     }
     return this.codexClient

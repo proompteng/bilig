@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { EditSelectionBehavior } from '@bilig/grid'

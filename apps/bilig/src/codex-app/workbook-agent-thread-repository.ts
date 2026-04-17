@@ -58,23 +58,27 @@ export class WorkbookAgentThreadRepository {
   async saveThreadState(input: WorkbookAgentPersistedThreadInput): Promise<void> {
     const key = persistenceKey(input)
     const entries = dedupeTimelineEntries(input.entries)
-    const previous = this.pendingSaves.get(key) ?? Promise.resolve()
-    const next = previous
-      .catch(() => undefined)
-      .then(async () => {
-        await this.source.saveWorkbookAgentThreadState({
-          documentId: input.documentId,
-          threadId: input.threadId,
-          actorUserId: input.actorUserId,
-          scope: input.scope,
-          executionPolicy: input.executionPolicy,
-          context: input.context,
-          entries,
-          reviewQueueItems: input.reviewQueueItems,
-          updatedAtUnixMs: input.updatedAtUnixMs,
-        })
-        return undefined
+    const previous = this.pendingSaves.get(key)
+    const next = (async () => {
+      if (previous) {
+        try {
+          await previous
+        } catch {
+          // Preserve queue progress after a prior save failure.
+        }
+      }
+      await this.source.saveWorkbookAgentThreadState({
+        documentId: input.documentId,
+        threadId: input.threadId,
+        actorUserId: input.actorUserId,
+        scope: input.scope,
+        executionPolicy: input.executionPolicy,
+        context: input.context,
+        entries,
+        reviewQueueItems: input.reviewQueueItems,
+        updatedAtUnixMs: input.updatedAtUnixMs,
       })
+    })()
     this.pendingSaves.set(key, next)
     try {
       await next

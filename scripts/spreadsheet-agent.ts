@@ -826,18 +826,24 @@ async function main(): Promise<void> {
     const response = await runCommand(command, { ...options, server }, sessionId)
     console.log(JSON.stringify(response, null, 2))
   } finally {
-    await sendFrame(server, {
-      kind: 'request',
-      request: {
-        kind: 'closeWorkbookSession',
-        id: `close:${Date.now()}`,
-        sessionId,
-      },
-    }).catch(() => undefined)
+    try {
+      await sendFrame(server, {
+        kind: 'request',
+        request: {
+          kind: 'closeWorkbookSession',
+          id: `close:${Date.now()}`,
+          sessionId,
+        },
+      })
+    } catch {}
   }
 }
 
-void main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+void (async () => {
+  try {
+    await main()
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  }
+})()

@@ -56,15 +56,17 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
     if (connectPromise) {
       return connectPromise
     }
-    connectPromise = sendFrame({
-      kind: 'hello',
-      documentId: options.documentId,
-      replicaId,
-      sessionId,
-      protocolVersion: 1,
-      lastServerCursor,
-      capabilities: ['local-relay'],
-    }).then(() => undefined)
+    connectPromise = (async () => {
+      await sendFrame({
+        kind: 'hello',
+        documentId: options.documentId,
+        replicaId,
+        sessionId,
+        protocolVersion: 1,
+        lastServerCursor,
+        capabilities: ['local-relay'],
+      })
+    })()
     try {
       await connectPromise
     } catch (error) {
@@ -74,11 +76,22 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
   }
 
   const serializeOperation = <T>(operation: () => Promise<T>): Promise<T> => {
-    const next = operationChain.then(operation, operation)
-    operationChain = next.then(
-      () => undefined,
-      () => undefined,
-    )
+    const previous = operationChain
+    const next = (async () => {
+      try {
+        await previous
+      } catch {
+        // Continue processing subsequent operations after a failure.
+      }
+      return await operation()
+    })()
+    operationChain = (async () => {
+      try {
+        await next
+      } catch {
+        // Swallow to keep the operation chain reusable.
+      }
+    })()
     return next
   }
 

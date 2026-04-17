@@ -149,14 +149,18 @@ export function createWorkerRuntimeMachine() {
           if (!controller) {
             return
           }
-          void controller.setSelection(event.selection).catch((error: unknown) => {
-            if (!disposed) {
-              sendBack({
-                type: 'session.error',
-                message: error instanceof Error ? error.message : String(error),
-              })
+          void (async () => {
+            try {
+              await controller.setSelection(event.selection)
+            } catch (error) {
+              if (!disposed) {
+                sendBack({
+                  type: 'session.error',
+                  message: error instanceof Error ? error.message : String(error),
+                })
+              }
             }
-          })
+          })()
           return
         }
         if (event.type === 'connection.changed') {
@@ -164,77 +168,84 @@ export function createWorkerRuntimeMachine() {
           if (!controller) {
             return
           }
-          void applyExternalSyncState().catch((error: unknown) => {
-            if (!disposed) {
-              sendBack({
-                type: 'session.error',
-                message: error instanceof Error ? error.message : String(error),
-              })
-            }
-          })
-        }
-      })
-
-      void createSession(
-        buildSessionCreateInput({
-          ...input,
-          initialSelection: pendingSelection,
-        }),
-        {
-          onRuntimeState(runtimeState) {
-            sendBack({ type: 'session.runtime', runtimeState })
-          },
-          onSelection(selection) {
-            pendingSelection = selection
-            sendBack({ type: 'session.selection', selection })
-          },
-          onPhase(phase) {
-            sendBack({ type: 'session.phase', phase })
-          },
-          onError(message) {
-            sendBack({ type: 'session.error', message })
-          },
-        },
-      )
-        .then((createdController) => {
-          if (disposed) {
-            createdController.dispose()
-            return undefined
-          }
-          controller = createdController
-          sendBack({ type: 'session.ready', controller: createdController })
-          void applyExternalSyncState().catch((error: unknown) => {
-            if (!disposed) {
-              sendBack({
-                type: 'session.error',
-                message: error instanceof Error ? error.message : String(error),
-              })
-            }
-          })
-          if (
-            pendingSelection.sheetName !== createdController.selection.sheetName ||
-            pendingSelection.address !== createdController.selection.address
-          ) {
-            void createdController.setSelection(pendingSelection).catch((error: unknown) => {
+          void (async () => {
+            try {
+              await applyExternalSyncState()
+            } catch (error) {
               if (!disposed) {
                 sendBack({
                   type: 'session.error',
                   message: error instanceof Error ? error.message : String(error),
                 })
               }
-            })
+            }
+          })()
+        }
+      })
+
+      void (async () => {
+        try {
+          const createdController = await createSession(
+            buildSessionCreateInput({
+              ...input,
+              initialSelection: pendingSelection,
+            }),
+            {
+              onRuntimeState(runtimeState) {
+                sendBack({ type: 'session.runtime', runtimeState })
+              },
+              onSelection(selection) {
+                pendingSelection = selection
+                sendBack({ type: 'session.selection', selection })
+              },
+              onPhase(phase) {
+                sendBack({ type: 'session.phase', phase })
+              },
+              onError(message) {
+                sendBack({ type: 'session.error', message })
+              },
+            },
+          )
+          if (disposed) {
+            createdController.dispose()
+            return
           }
-          return undefined
-        })
-        .catch((error: unknown) => {
+          controller = createdController
+          sendBack({ type: 'session.ready', controller: createdController })
+          try {
+            await applyExternalSyncState()
+          } catch (error) {
+            if (!disposed) {
+              sendBack({
+                type: 'session.error',
+                message: error instanceof Error ? error.message : String(error),
+              })
+            }
+          }
+          if (
+            pendingSelection.sheetName !== createdController.selection.sheetName ||
+            pendingSelection.address !== createdController.selection.address
+          ) {
+            try {
+              await createdController.setSelection(pendingSelection)
+            } catch (error) {
+              if (!disposed) {
+                sendBack({
+                  type: 'session.error',
+                  message: error instanceof Error ? error.message : String(error),
+                })
+              }
+            }
+          }
+        } catch (error) {
           if (!disposed) {
             sendBack({
               type: 'session.failed',
               message: error instanceof Error ? error.message : String(error),
             })
           }
-          return undefined
-        })
+        }
+      })()
 
       return () => {
         disposed = true

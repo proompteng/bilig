@@ -1,8 +1,8 @@
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server'
-import { schema } from '@bilig/zero-sync'
 import {
   type AuthoritativeWorkbookEventBatch,
   queries,
+  schema,
   workbookCellArgsSchema,
   workbookColumnTileArgsSchema,
   workbookQueryArgsSchema,

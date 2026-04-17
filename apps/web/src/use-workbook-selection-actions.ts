@@ -120,13 +120,15 @@ export function useWorkbookSelectionActions(input: {
         targetStartAddr,
         targetEndAddr,
       )
-      void invokeMutation(method, source, target)
-        .then(() => {
+      void (async () => {
+        try {
+          await invokeMutation(method, source, target)
           resetEditingState()
           resetEditorConflictTracking()
-          return undefined
-        })
-        .catch(reportRuntimeError)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRef, writesAllowed],
   )
@@ -137,7 +139,13 @@ export function useWorkbookSelectionActions(input: {
     }
     resetEditingState('')
     resetEditorConflictTracking()
-    void invokeMutation('clearRange', selectionRangeRef.current).catch(reportRuntimeError)
+    void (async () => {
+      try {
+        await invokeMutation('clearRange', selectionRangeRef.current)
+      } catch (error) {
+        reportRuntimeError(error)
+      }
+    })()
   }, [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, writesAllowed])
 
   const clearSelectedCell = useCallback(() => {
@@ -149,7 +157,13 @@ export function useWorkbookSelectionActions(input: {
       if (!writesAllowed) {
         return
       }
-      void applyParsedInput(sheetName, address, { kind: 'value', value: nextValue }).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await applyParsedInput(sheetName, address, { kind: 'value', value: nextValue })
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     [applyParsedInput, reportRuntimeError, writesAllowed],
   )
@@ -163,12 +177,14 @@ export function useWorkbookSelectionActions(input: {
       if (ops.length === 0) {
         return
       }
-      void invokeMutation('renderCommit', ops)
-        .then(() => {
+      void (async () => {
+        try {
+          await invokeMutation('renderCommit', ops)
           onPasteApplied?.()
-          return undefined
-        })
-        .catch(reportRuntimeError)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
       resetEditingState()
       resetEditorConflictTracking()
     },

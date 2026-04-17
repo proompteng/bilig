@@ -243,7 +243,11 @@ export function handleGridKey({
     case 'clipboard-copy': {
       const clipboard = captureInternalClipboardSelection()
       if (clipboard && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(clipboard.plainText).catch(() => {})
+        void (async () => {
+          try {
+            await navigator.clipboard.writeText(clipboard.plainText)
+          } catch {}
+        })()
       }
       return
     }
@@ -254,24 +258,22 @@ export function handleGridKey({
       pendingKeyboardPasteSequenceRef.current += 1
       const sequence = pendingKeyboardPasteSequenceRef.current
       if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
-        void navigator.clipboard
-          .readText()
-          .then((rawText) => {
+        void (async () => {
+          try {
+            const rawText = await navigator.clipboard.readText()
             if (pendingKeyboardPasteSequenceRef.current !== sequence) {
-              return undefined
+              return
             }
             pendingKeyboardPasteSequenceRef.current = 0
             const values = parseClipboardPlainText(rawText)
             applyClipboardValues(action.target, values)
             suppressNextNativePasteRef.current = true
-            return undefined
-          })
-          .catch(() => {
+          } catch {
             if (pendingKeyboardPasteSequenceRef.current === sequence) {
               pendingKeyboardPasteSequenceRef.current = 0
             }
-            return undefined
-          })
+          }
+        })()
       }
       return
     }

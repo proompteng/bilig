@@ -192,7 +192,9 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
 
   private async createSlot(): Promise<CodexAppServerPoolSlot> {
     let createdSlot: CodexAppServerPoolSlot | null = null
-    this.slotCreationTask = this.slotCreationTask.then(async (): Promise<void> => {
+    const previousTask = this.slotCreationTask
+    this.slotCreationTask = (async (): Promise<void> => {
+      await previousTask
       if (this.slots.size >= this.maxClients) {
         return undefined
       }
@@ -217,7 +219,7 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
       }
       this.slots.set(slotId, createdSlot)
       return undefined
-    })
+    })()
     await this.slotCreationTask
     if (createdSlot) {
       return createdSlot

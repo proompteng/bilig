@@ -7,7 +7,7 @@ import httpProxy from '@fastify/http-proxy'
 
 import { decodeAgentFrame, encodeAgentFrame } from '@bilig/agent-api'
 import { decodeFrame, encodeFrame } from '@bilig/binary-protocol'
-import type { RuntimeSession } from '@bilig/contracts'
+import type { RuntimeSession, WorkbookAgentStreamEvent } from '@bilig/contracts'
 import {
   createErrorEnvelope,
   createRuntimeSession,
@@ -24,7 +24,6 @@ import { resolveRequestSession, resolveSessionIdentity } from './session.js'
 import type { WorksheetExecutor } from '../workbook-runtime/worksheet-executor.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import type { WorkbookAgentService } from '../codex-app/workbook-agent-service.js'
-import type { WorkbookAgentStreamEvent } from '@bilig/contracts'
 import { isWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 
 const SPA_FALLBACK_PREFIXES = ['/api/', '/v1/', '/v2/', '/zero', '/healthz', '/runtime-config.json'] as const

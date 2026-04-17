@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
-import type { SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from '@bilig/protocol'
+import { ValueTag, type SheetFormatRangeSnapshot, type SheetStyleRangeSnapshot } from '@bilig/protocol'
 import {
+  type CompiledFormula,
   formatAddress,
   parseCellAddress,
   rewriteAddressForStructuralTransform,
@@ -9,11 +10,9 @@ import {
   rewriteRangeForStructuralTransform,
   type StructuralAxisTransform,
 } from '@bilig/formula'
-import type { CompiledFormula } from '@bilig/formula'
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue } from '../../engine-value-utils.js'
-import { ValueTag } from '@bilig/protocol'
 import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
 import type { FormulaTable } from '../../formula-table.js'
 import type { RuntimeFormula } from '../runtime-state.js'

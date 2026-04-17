@@ -2,8 +2,7 @@ import { Context, Data, Effect, Layer, Schema } from 'effect'
 
 import type { AgentFrame } from '@bilig/agent-api'
 import type { HelloFrame, ProtocolFrame } from '@bilig/binary-protocol'
-import type { ErrorEnvelope, RuntimeSession } from '@bilig/contracts'
-import type { DocumentStateSummary } from '@bilig/contracts'
+import type { DocumentStateSummary, ErrorEnvelope, RuntimeSession } from '@bilig/contracts'
 
 export class TransportError extends Data.TaggedError('TransportError')<{
   readonly message: string

@@ -6,8 +6,7 @@ import { parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
 import { createWorkerRuntimeMachine } from './runtime-machine.js'
 import { resolveRuntimeConfig } from './runtime-config.js'
-import type { ZeroClient } from './runtime-session.js'
-import type { WorkerRuntimeSelection } from './runtime-session.js'
+import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
 import { loadPersistedSelection, persistSelection } from './selection-persistence.js'
 import { ProjectedViewportStore } from './projected-viewport-store.js'
 import { buildWorkbookAgentContext, singleCellAgentSelectionRange, type WorkbookAgentSelectionRange } from './workbook-agent-context.js'
@@ -415,7 +414,13 @@ export function useWorkerWorkbookAppState(input: {
       editingModeRef.current = 'idle'
       setEditingMode('idle')
       resetEditorConflictTracking(nextSelection)
-      void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     [
       applyParsedInput,
@@ -650,18 +655,42 @@ export function useWorkerWorkbookAppState(input: {
     canUnhideCurrentRow: hiddenRows[selectedPosition.row] === true,
     invokeMutation,
     onHideCurrentColumn: () => {
-      void invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, true).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, true)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     onHideCurrentRow: () => {
-      void invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, true).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, true)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     onRedo: redoLatestChange,
     onUndo: undoLatestChange,
     onUnhideCurrentColumn: () => {
-      void invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, false).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, false)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     onUnhideCurrentRow: () => {
-      void invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, false).catch(reportRuntimeError)
+      void (async () => {
+        try {
+          await invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, false)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     selectionRangeRef,
     selectedCell,

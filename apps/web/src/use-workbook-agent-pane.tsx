@@ -752,15 +752,22 @@ export function useWorkbookAgentPane(input: {
       if (!activeSession) {
         return
       }
-      void fetch(`/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/context`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          context: currentContext,
-        }),
-      }).catch(() => undefined)
+      void (async () => {
+        try {
+          await fetch(
+            `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(activeSession.threadId)}/context`,
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({
+                context: currentContext,
+              }),
+            },
+          )
+        } catch {}
+      })()
     }, 150)
     return () => {
       window.clearTimeout(timeout)

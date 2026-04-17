@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
-import { createElement, type MutableRefObject } from 'react'
+import { act, createElement, type MutableRefObject } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import * as fc from 'fast-check'

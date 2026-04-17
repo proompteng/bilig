@@ -51,11 +51,21 @@ async function main() {
     await syncApp.listen({ host, port: appPort })
     syncApp.log.info({ host, appPort, zeroSync: zeroSyncService.enabled }, 'bilig app listening')
   } catch (error) {
-    await workbookAgentService.close().catch(() => undefined)
-    await zeroSyncService.close().catch(() => undefined)
+    try {
+      await workbookAgentService.close()
+    } catch {}
+    try {
+      await zeroSyncService.close()
+    } catch {}
     console.error(error)
     process.exit(1)
   }
 }
 
-main().catch(console.error)
+void (async () => {
+  try {
+    await main()
+  } catch (error) {
+    console.error(error)
+  }
+})()

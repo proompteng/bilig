@@ -55,9 +55,13 @@ export function useWorkbookChangesPane(input: {
           }),
         ),
       )
-      void (observer ?? Promise.resolve()).finally(() => {
-        setPendingRevisions((current) => current.filter((revision) => revision !== change.revision))
-      })
+      void (async () => {
+        try {
+          await (observer ?? Promise.resolve())
+        } finally {
+          setPendingRevisions((current) => current.filter((revision) => revision !== change.revision))
+        }
+      })()
     },
     [documentId, enabled, pendingRevisions, zero],
   )
@@ -79,9 +83,13 @@ export function useWorkbookChangesPane(input: {
         }),
       ),
     )
-    void (observer ?? Promise.resolve()).finally(() => {
-      setIsUndoPending(false)
-    })
+    void (async () => {
+      try {
+        await (observer ?? Promise.resolve())
+      } finally {
+        setIsUndoPending(false)
+      }
+    })()
   }, [documentId, enabled, historyState.undoRevision, isUndoPending, zero])
 
   const redoLatestChange = useCallback(() => {
@@ -96,9 +104,13 @@ export function useWorkbookChangesPane(input: {
         }),
       ),
     )
-    void (observer ?? Promise.resolve()).finally(() => {
-      setIsRedoPending(false)
-    })
+    void (async () => {
+      try {
+        await (observer ?? Promise.resolve())
+      } finally {
+        setIsRedoPending(false)
+      }
+    })()
   }, [documentId, enabled, historyState.redoRevision, isRedoPending, zero])
 
   return {

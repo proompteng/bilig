@@ -14,15 +14,20 @@ export function useWorkbookSheetActions(input: {
 
   const createSheet = useCallback(() => {
     const nextSheetName = createNextSheetName(sheetNames)
-    void invokeMutation('renderCommit', [
-      {
-        kind: 'upsertSheet',
-        name: nextSheetName,
-        order: sheetNames.length,
-      } satisfies CommitOp,
-    ])
-      .then(() => selectAddress(nextSheetName, 'A1'))
-      .catch(reportRuntimeError)
+    void (async () => {
+      try {
+        await invokeMutation('renderCommit', [
+          {
+            kind: 'upsertSheet',
+            name: nextSheetName,
+            order: sheetNames.length,
+          } satisfies CommitOp,
+        ])
+        selectAddress(nextSheetName, 'A1')
+      } catch (error) {
+        reportRuntimeError(error)
+      }
+    })()
   }, [invokeMutation, reportRuntimeError, selectAddress, sheetNames])
 
   const renameSheet = useCallback(
@@ -37,20 +42,22 @@ export function useWorkbookSheetActions(input: {
         return
       }
 
-      void invokeMutation('renderCommit', [
-        {
-          kind: 'renameSheet',
-          oldName: currentName,
-          newName: trimmedName,
-        } satisfies CommitOp,
-      ])
-        .then(() => {
+      void (async () => {
+        try {
+          await invokeMutation('renderCommit', [
+            {
+              kind: 'renameSheet',
+              oldName: currentName,
+              newName: trimmedName,
+            } satisfies CommitOp,
+          ])
           if (selectionRef.current.sheetName === currentName) {
             selectAddress(trimmedName, selectionRef.current.address)
           }
-          return undefined
-        })
-        .catch(reportRuntimeError)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     [invokeMutation, reportRuntimeError, selectAddress, selectionRef, sheetNames],
   )
@@ -64,14 +71,16 @@ export function useWorkbookSheetActions(input: {
       const fallbackSheetName =
         selectionRef.current.sheetName === targetName ? (sheetNames.find((name) => name !== targetName) ?? null) : null
 
-      void invokeMutation('renderCommit', [{ kind: 'deleteSheet', name: targetName } satisfies CommitOp])
-        .then(() => {
+      void (async () => {
+        try {
+          await invokeMutation('renderCommit', [{ kind: 'deleteSheet', name: targetName } satisfies CommitOp])
           if (fallbackSheetName) {
             selectAddress(fallbackSheetName, 'A1')
           }
-          return undefined
-        })
-        .catch(reportRuntimeError)
+        } catch (error) {
+          reportRuntimeError(error)
+        }
+      })()
     },
     [invokeMutation, reportRuntimeError, selectAddress, selectionRef, sheetNames],
   )

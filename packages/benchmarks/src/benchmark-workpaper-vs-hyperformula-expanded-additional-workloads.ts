@@ -1,6 +1,6 @@
 import { WorkPaper } from '@bilig/headless'
-import { address } from './workpaper-benchmark-fixtures.js'
 import {
+  address,
   buildSlidingAggregateSheet,
   buildConditionalAggregationSheet,
   buildLookupSheet,

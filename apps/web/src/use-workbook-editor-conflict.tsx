@@ -126,7 +126,13 @@ export function useWorkbookEditorConflict(input: {
     editingModeRef.current = 'idle'
     setEditingMode('idle')
     resetEditorConflictTracking(nextSelection)
-    void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(reportRuntimeError)
+    void (async () => {
+      try {
+        await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
+      } catch (error) {
+        reportRuntimeError(error)
+      }
+    })()
   }, [
     applyParsedInput,
     completeEditNavigation,
