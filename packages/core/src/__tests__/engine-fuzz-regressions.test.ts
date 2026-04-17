@@ -120,4 +120,31 @@ describe('engine fuzz regressions', () => {
       code: ErrorCode.Cycle,
     })
   })
+
+  it('preserves cycle errors for self-referential range formulas after CSV roundtrip import', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'csv-cycle-roundtrip-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, [[false]])
+    engine.setCellFormula('Sheet1', 'A2', 'A1+A4')
+    engine.setCellFormula('Sheet1', 'A3', 'SUM(A1:A4)')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A4', endAddress: 'A4' }, [['text:lB<`x']])
+    engine.setCellFormula('Sheet1', 'A5', 'A1+A1')
+
+    expect(engine.getCell('Sheet1', 'A3').value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    })
+
+    const restored = new SpreadsheetEngine({ workbookName: 'csv-cycle-roundtrip-regression-restored' })
+    await restored.ready()
+    restored.createSheet('Sheet1')
+    restored.importSheetCsv('Sheet1', engine.exportSheetCsv('Sheet1'))
+
+    expect(restored.getCell('Sheet1', 'A3').value).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    })
+  })
 })

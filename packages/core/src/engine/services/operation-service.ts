@@ -1689,6 +1689,9 @@ export function createEngineOperationService(args: {
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+          if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+            return
+          }
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
           if (changedCellIndices) {
@@ -2128,6 +2131,9 @@ export function createEngineOperationService(args: {
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+          if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+            return
+          }
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
           if (changedCellIndices) {
