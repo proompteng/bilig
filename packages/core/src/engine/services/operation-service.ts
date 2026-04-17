@@ -1441,6 +1441,8 @@ export function createEngineOperationService(args: {
             }
             const cellIndex = ensurePreparedCellTracked(op.sheetName, op.address, preparedCellAddress)
             const priorHadFormula = args.state.formulas.get(cellIndex) !== undefined
+            args.state.workbook.cellStore.flags[cellIndex] =
+              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.AuthoredBlank
             if (!isRestore) {
               changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
             }

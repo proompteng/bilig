@@ -724,6 +724,28 @@ describe('engine correctness', () => {
     expect(engine.undo()).toBe(false)
   })
 
+  it('does not leave authored blank residue when undoing a formula after structural and null-write replay', async () => {
+    const initialSnapshot = await createBaselineSnapshot('correctness-formula-authored-blank-undo')
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-formula-authored-blank-undo',
+      replicaId: 'correctness-formula-authored-blank-undo',
+    })
+    await engine.ready()
+    engine.importSnapshot(initialSnapshot)
+
+    engine.setCellFormula(sheetName, 'B4', 'A1+A1')
+    engine.setRangeStyle({ sheetName, startAddress: 'A1', endAddress: 'A1' }, { fill: { backgroundColor: '#dbeafe' } })
+    engine.fillRange({ sheetName, startAddress: 'A1', endAddress: 'A1' }, { sheetName, startAddress: 'A1', endAddress: 'A1' })
+    engine.insertColumns(sheetName, 0, 1)
+    engine.setRangeValues({ sheetName, startAddress: 'B3', endAddress: 'C4' }, [
+      [false, 'north'],
+      ['north', null],
+    ])
+
+    expect(undoAll(engine, 16)).toBeGreaterThan(0)
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot)
+  })
+
   it('reverses random local edit streams through undo and redo', async () => {
     await runProperty({
       suite: 'core/undo-redo-reversibility',
