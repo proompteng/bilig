@@ -683,7 +683,7 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...[...args.state.workbook.sheetsByName.values()].flatMap((sheet) => args.captureSheetCellState(sheet.name)),
+          ...args.captureRowRangeCellState(op.sheetName, op.start, op.count),
           ...captureStructuralWorkbookMetadataOps(),
         ]
       }
@@ -712,7 +712,7 @@ export function createEngineMutationService(args: {
             entries,
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-          ...[...args.state.workbook.sheetsByName.values()].flatMap((sheet) => args.captureSheetCellState(sheet.name)),
+          ...args.captureColumnRangeCellState(op.sheetName, op.start, op.count),
           ...captureStructuralWorkbookMetadataOps(),
         ]
       }

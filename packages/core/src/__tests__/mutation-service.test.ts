@@ -317,6 +317,26 @@ describe('EngineMutationService', () => {
     })
   })
 
+  it('does not snapshot unrelated sheet cells in delete-row undo ops', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-rows-narrow' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.createSheet('Other')
+    engine.setCellValue('Sheet1', 'A2', 10)
+    engine.setCellValue('Other', 'C3', 99)
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteRows', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    expect(inverseOps).not.toContainEqual({
+      kind: 'setCellValue',
+      sheetName: 'Other',
+      address: 'C3',
+      value: 99,
+    })
+  })
+
   it('fast-paths simple cell mutation history without restore callbacks', () => {
     const replicaState = createReplicaState('local')
     const workbook = new WorkbookStore('fast-history')
@@ -497,6 +517,26 @@ describe('EngineMutationService', () => {
       start: 0,
       count: 1,
       entries: [],
+    })
+  })
+
+  it('does not snapshot unrelated sheet cells in delete-column undo ops', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-columns-narrow' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.createSheet('Other')
+    engine.setCellValue('Sheet1', 'B1', 10)
+    engine.setCellValue('Other', 'C3', 99)
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteColumns', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    expect(inverseOps).not.toContainEqual({
+      kind: 'setCellValue',
+      sheetName: 'Other',
+      address: 'C3',
+      value: 99,
     })
   })
 

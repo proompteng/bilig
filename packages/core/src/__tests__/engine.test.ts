@@ -4793,6 +4793,27 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getCellValue('Summary', 'A3')).toEqual({ tag: ValueTag.Number, value: 100 })
   })
 
+  it('undoes structural row deletes without losing cross-sheet formula correctness', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structural-delete-undo-cross-sheet' })
+    await engine.ready()
+    engine.createSheet('Data')
+    engine.createSheet('Summary')
+    engine.setRangeValues({ sheetName: 'Data', startAddress: 'A1', endAddress: 'A4' }, [[10], [20], [30], [40]])
+    engine.setCellFormula('Summary', 'A1', 'SUM(Data!A1:A4)')
+    engine.setCellFormula('Summary', 'A2', 'INDEX(Data!A1:A4,2)')
+
+    engine.deleteRows('Data', 1, 1)
+
+    expect(engine.getCellValue('Summary', 'A1')).toEqual({ tag: ValueTag.Number, value: 80 })
+    expect(engine.getCellValue('Summary', 'A2')).toEqual({ tag: ValueTag.Number, value: 30 })
+
+    expect(engine.undo()).toBe(true)
+
+    expect(engine.getCellValue('Summary', 'A1')).toEqual({ tag: ValueTag.Number, value: 100 })
+    expect(engine.getCellValue('Summary', 'A2')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getCellValue('Data', 'A2')).toEqual({ tag: ValueTag.Number, value: 20 })
+  })
+
   it('rewrites formulas for structural column inserts and roundtrips calc settings metadata', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()
@@ -4891,6 +4912,14 @@ describe('SpreadsheetEngine', () => {
       engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
     }
 
+    const planIdsBeforeInsert = new Map<string, number>()
+    for (let row = 1; row <= 4; row += 1) {
+      const cIndex = engine.workbook.getCellIndex('Sheet1', `C${row}`)
+      const dIndex = engine.workbook.getCellIndex('Sheet1', `D${row}`)
+      planIdsBeforeInsert.set(`C${row}`, readRuntimeFormula(engine, cIndex!)!.planId)
+      planIdsBeforeInsert.set(`D${row}`, readRuntimeFormula(engine, dIndex!)!.planId)
+    }
+
     engine.insertColumns('Sheet1', 1, 1)
 
     for (let row = 1; row <= 4; row += 1) {
@@ -4904,6 +4933,10 @@ describe('SpreadsheetEngine', () => {
         tag: ValueTag.Number,
         value: row * 6,
       })
+      const dIndex = engine.workbook.getCellIndex('Sheet1', `D${row}`)
+      const eIndex = engine.workbook.getCellIndex('Sheet1', `E${row}`)
+      expect(readRuntimeFormula(engine, dIndex!)?.planId).toBe(planIdsBeforeInsert.get(`C${row}`))
+      expect(readRuntimeFormula(engine, eIndex!)?.planId).toBe(planIdsBeforeInsert.get(`D${row}`))
     }
 
     engine.deleteColumns('Sheet1', 1, 1)

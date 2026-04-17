@@ -1109,11 +1109,12 @@ export function createEngineFormulaBindingService(args: {
       appendReverseEdge(dependencyEntity, formulaEntity)
     })
 
-    args.compiledPlans.release(existing.planId)
+    const plan = args.compiledPlans.replace(existing.planId, source, prepared.plan.compiled)
+    args.compiledPlans.release(prepared.plan.id)
     existing.source = source
-    existing.planId = prepared.plan.id
-    existing.compiled = prepared.plan.compiled
-    existing.plan = prepared.plan
+    existing.planId = plan.id
+    existing.compiled = plan.compiled
+    existing.plan = plan
     existing.dependencyIndices = prepared.dependencies.dependencyIndices
     existing.dependencyEntities = args.edgeArena.replace(existing.dependencyEntities, nextDependencies)
     existing.runtimeProgram = prepared.runtimeProgram
@@ -1158,8 +1159,7 @@ export function createEngineFormulaBindingService(args: {
     } else {
       return false
     }
-    args.compiledPlans.release(existing.planId)
-    const plan = args.compiledPlans.intern(source, compiled)
+    const plan = args.compiledPlans.replace(existing.planId, source, compiled)
     const previousDirectAggregate = existing.directAggregate
     existing.source = source
     existing.planId = plan.id
