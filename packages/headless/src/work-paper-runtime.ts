@@ -3615,7 +3615,9 @@ export class WorkPaper {
 
   private applyRuntimeOnlyConfigUpdate(nextConfig: WorkPaperConfig): void {
     if (this.config.useColumnIndex !== nextConfig.useColumnIndex) {
-      this.engine.setUseColumnIndexEnabled(nextConfig.useColumnIndex ?? false)
+      ;(this.engine as SpreadsheetEngine & { setUseColumnIndexEnabled(enabled: boolean): void }).setUseColumnIndexEnabled(
+        nextConfig.useColumnIndex ?? false,
+      )
     }
     this.config = cloneConfig(nextConfig)
   }
