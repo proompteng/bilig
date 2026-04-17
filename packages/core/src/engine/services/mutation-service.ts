@@ -185,6 +185,7 @@ export function createEngineMutationService(args: {
   readonly captureSheetCellState: (sheetName: string) => EngineOp[]
   readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => EngineOp[]
   readonly captureColumnRangeCellState: (sheetName: string, start: number, count: number) => EngineOp[]
+  readonly captureStoredCellOps: (cellIndex: number, sheetName: string, address: string) => EngineOp[]
   readonly restoreCellOps: (sheetName: string, address: string) => EngineOp[]
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
   readonly readRangeCells: (range: CellRangeRef) => CellSnapshot[][]
@@ -1173,7 +1174,7 @@ export function createEngineMutationService(args: {
       if (ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start && axisIndex < start + count) {
         return
       }
-      captured.push(...args.toCellStateOps(ownerSheetName, args.state.workbook.getAddress(cellIndex), args.getCellByIndex(cellIndex)))
+      captured.push(...args.captureStoredCellOps(cellIndex, ownerSheetName, args.state.workbook.getAddress(cellIndex)))
     })
     return captured
   }

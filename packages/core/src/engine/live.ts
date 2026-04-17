@@ -560,6 +560,7 @@ export function createEngineServiceRuntime(args: {
     captureRowRangeCellState: (sheetName, start, count) => runEngineEffect(maintenance.captureRowRangeCellState(sheetName, start, count)),
     captureColumnRangeCellState: (sheetName, start, count) =>
       runEngineEffect(maintenance.captureColumnRangeCellState(sheetName, start, count)),
+    captureStoredCellOps: (cellIndex, sheetName, address) => cellState.captureStoredCellOpsNow(cellIndex, sheetName, address),
     restoreCellOps: (sheetName, address) => cellState.restoreCellOpsNow(sheetName, address),
     getCellByIndex: args.getCellByIndex,
     readRangeCells: (range) => cellState.readRangeCellsNow(range),
