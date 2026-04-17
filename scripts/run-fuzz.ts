@@ -30,6 +30,11 @@ function runCommand(command: string[], extraEnv: Record<string, string>): void {
 const DEFAULT_FUZZ_PATTERNS = [
   /^packages\/formula\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
   /^packages\/core\/src\/__tests__\/(engine-history|engine-structure|engine-replica|engine-snapshot|engine-import-export|snapshot-wire-parity|literal-loader-parity|formula-runtime-differential)\.fuzz\.test\.ts$/,
+  /^packages\/(storage-server|excel-import|headless|binary-protocol|runtime-kernel|workbook-domain)\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
+  /^packages\/grid\/src\/__tests__\/gridSelection\.fuzz\.test\.ts$/,
+  /^packages\/renderer\/src\/__tests__\/commit-log\.fuzz\.test\.ts$/,
+  /^packages\/wasm-kernel\/src\/__tests__\/kernel-bridge\.fuzz\.test\.ts$/,
+  /^packages\/zero-sync\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
   /^apps\/bilig\/src\/zero\/__tests__\/(projection|reconnect-replay|sync-relay|sync-relay-scheduled)\.fuzz\.test\.ts$/,
   /^apps\/web\/src\/__tests__\/(projected-viewport|runtime-sync|runtime-sync-scheduled|selection-command-parity|worker-workbook-app-model)\.fuzz\.test\.ts$/,
   /^packages\/worker-transport\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
