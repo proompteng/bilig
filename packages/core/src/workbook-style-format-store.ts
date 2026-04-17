@@ -226,7 +226,6 @@ export function setFormatRange(
     }),
     (record) => record.formatId === defaultFormatId,
   )
-  sheet.formatRanges = coalesceFormatRangeRecords(sheet.formatRanges)
   return stored
 }
 
@@ -257,7 +256,7 @@ export function setFormatRanges(
       }
     },
   )
-  sheet.formatRanges = coalesceFormatRangeRecords(nextRanges)
+  sheet.formatRanges = nextRanges
   return listFormatRanges(sheet)
 }
 
@@ -275,17 +274,6 @@ function coalesceStyleRangeRecords(records: readonly WorkbookStyleRangeRecord[])
     (range, record) => ({
       range,
       styleId: record.styleId,
-    }),
-  )
-}
-
-function coalesceFormatRangeRecords(records: readonly WorkbookFormatRangeRecord[]): WorkbookFormatRangeRecord[] {
-  return coalesceWorkbookRangeRecords(
-    records,
-    (left, right) => left.formatId === right.formatId,
-    (range, record) => ({
-      range,
-      formatId: record.formatId,
     }),
   )
 }
