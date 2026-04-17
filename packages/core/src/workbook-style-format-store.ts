@@ -161,7 +161,6 @@ export function setStyleRange(
     }),
     (record) => record.styleId === defaultStyleId,
   )
-  sheet.styleRanges = coalesceStyleRangeRecords(sheet.styleRanges)
   return stored
 }
 
@@ -267,15 +266,16 @@ export function getRangeFormatId(sheet: WorkbookStyleFormatSheet | undefined, ro
   return findWorkbookRangeRecord(sheet.formatRanges, row, col)?.formatId ?? defaultFormatId
 }
 
-function coalesceStyleRangeRecords(records: readonly WorkbookStyleRangeRecord[]): WorkbookStyleRangeRecord[] {
-  return coalesceWorkbookRangeRecords(
-    records,
+export function coalesceStyleRanges(sheet: WorkbookStyleFormatSheet): WorkbookStyleRangeRecord[] {
+  sheet.styleRanges = coalesceWorkbookRangeRecords(
+    sheet.styleRanges,
     (left, right) => left.styleId === right.styleId,
     (range, record) => ({
       range,
       styleId: record.styleId,
     }),
   )
+  return listStyleRanges(sheet)
 }
 
 function coalesceWorkbookRangeRecords<RecordType extends { range: CellRangeRef }>(

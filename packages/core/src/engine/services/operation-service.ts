@@ -1498,6 +1498,9 @@ export function createEngineOperationService(args: {
             break
           case 'setStyleRange':
             args.state.workbook.setStyleRange(op.range, op.styleId)
+            if (source !== 'restore') {
+              args.state.workbook.coalesceStyleRanges(op.range.sheetName)
+            }
             invalidatedRanges.push(op.range)
             setEntityVersionForOp(op, order)
             break

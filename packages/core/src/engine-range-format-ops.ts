@@ -7,7 +7,7 @@ import {
   type CellStylePatch,
   type CellStyleRecord,
 } from '@bilig/protocol'
-import { formatAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp } from '@bilig/workbook-domain'
 import { intersectRangeBounds, normalizeRange } from './engine-range-utils.js'
 import { applyStylePatch, clearStyleFields, cloneCellStyleRecord, normalizeCellStylePatch } from './engine-style-utils.js'
@@ -36,7 +36,7 @@ export function buildStyleClearOps(workbook: WorkbookStore, range: CellRangeRef,
 }
 
 export function restoreStyleRangeOps(workbook: WorkbookStore, range: CellRangeRef): EngineOp[] {
-  const tiles = resolveStyleTiles(workbook, range)
+  const tiles = coalesceStyleTiles(resolveStyleTiles(workbook, range))
   const seenStyleIds = new Set<string>()
   const ops: EngineOp[] = []
   tiles.forEach((tile) => {
@@ -191,6 +191,78 @@ function resolveStyleTiles(workbook: WorkbookStore, range: CellRangeRef): StyleT
   }
 
   return tiles
+}
+
+function coalesceStyleTiles(tiles: readonly StyleTile[]): StyleTile[] {
+  const sorted = [...tiles].toSorted((left, right) => {
+    const leftStart = parseCellAddress(left.range.startAddress, left.range.sheetName)
+    const leftEnd = parseCellAddress(left.range.endAddress, left.range.sheetName)
+    const rightStart = parseCellAddress(right.range.startAddress, right.range.sheetName)
+    const rightEnd = parseCellAddress(right.range.endAddress, right.range.sheetName)
+    const sheetCompare = left.range.sheetName.localeCompare(right.range.sheetName)
+    if (sheetCompare !== 0) {
+      return sheetCompare
+    }
+    if (leftStart.row !== rightStart.row) {
+      return leftStart.row - rightStart.row
+    }
+    if (leftStart.col !== rightStart.col) {
+      return leftStart.col - rightStart.col
+    }
+    if (leftEnd.row !== rightEnd.row) {
+      return leftEnd.row - rightEnd.row
+    }
+    return leftEnd.col - rightEnd.col
+  })
+
+  const merged: Array<{
+    sheetName: string
+    styleId: string
+    startRow: number
+    endRow: number
+    startCol: number
+    endCol: number
+  }> = []
+
+  sorted.forEach((tile) => {
+    const start = parseCellAddress(tile.range.startAddress, tile.range.sheetName)
+    const end = parseCellAddress(tile.range.endAddress, tile.range.sheetName)
+    const startRow = Math.min(start.row, end.row)
+    const endRow = Math.max(start.row, end.row)
+    const startCol = Math.min(start.col, end.col)
+    const endCol = Math.max(start.col, end.col)
+    const previous = merged[merged.length - 1]
+    if (
+      previous &&
+      previous.sheetName === tile.range.sheetName &&
+      previous.styleId === tile.styleId &&
+      ((previous.startCol === startCol && previous.endCol === endCol && startRow <= previous.endRow + 1) ||
+        (previous.startRow === startRow && previous.endRow === endRow && startCol <= previous.endCol + 1))
+    ) {
+      previous.startRow = Math.min(previous.startRow, startRow)
+      previous.endRow = Math.max(previous.endRow, endRow)
+      previous.startCol = Math.min(previous.startCol, startCol)
+      previous.endCol = Math.max(previous.endCol, endCol)
+      return
+    }
+    merged.push({
+      sheetName: tile.range.sheetName,
+      styleId: tile.styleId,
+      startRow,
+      endRow,
+      startCol,
+      endCol,
+    })
+  })
+
+  return merged.map((tile) => ({
+    range: {
+      sheetName: tile.sheetName,
+      startAddress: formatAddress(tile.startRow, tile.startCol),
+      endAddress: formatAddress(tile.endRow, tile.endCol),
+    },
+    styleId: tile.styleId,
+  }))
 }
 
 function resolveFormatTiles(workbook: WorkbookStore, range: CellRangeRef): FormatTile[] {

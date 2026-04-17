@@ -72,6 +72,7 @@ import {
 } from './workbook-axis-records.js'
 import { cellStyleKey, axisMetadataKey } from './workbook-store-records.js'
 import {
+  coalesceStyleRanges as coalesceWorkbookStyleRanges,
   getCellStyle as readCellStyle,
   getCellNumberFormat as readCellNumberFormat,
   getRangeFormatId as readRangeFormatId,
@@ -461,6 +462,14 @@ export class WorkbookStore {
 
   setStyleRange(range: CellRangeRef, styleId: string): WorkbookStyleRangeRecord {
     return storeStyleRange(this, this.getOrCreateSheet(range.sheetName), range, styleId, WorkbookStore.defaultStyleId)
+  }
+
+  coalesceStyleRanges(sheetName: string): WorkbookStyleRangeRecord[] {
+    const sheet = this.getSheet(sheetName)
+    if (!sheet) {
+      return []
+    }
+    return coalesceWorkbookStyleRanges(sheet)
   }
 
   listStyleRanges(sheetName: string): WorkbookStyleRangeRecord[] {
