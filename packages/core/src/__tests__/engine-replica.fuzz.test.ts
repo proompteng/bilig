@@ -50,9 +50,12 @@ describe('engine replica fuzz', () => {
           workbookName: seedSnapshot.workbook.name,
           replicaId: `semantic-replay-${seedName}`,
         })
+        const restored = new SpreadsheetEngine({
+          workbookName: seedSnapshot.workbook.name,
+          replicaId: `restore-${seedName}`,
+        })
         let appliedBatches = 0
-        const restoreChecks: Array<Promise<void>> = []
-        await replay.ready()
+        await Promise.all([replay.ready(), restored.ready()])
         expect(replica.exportSnapshot()).toEqual(primary.exportSnapshot())
         replay.importSnapshot(structuredClone(seedSnapshot))
 
@@ -74,21 +77,9 @@ describe('engine replica fuzz', () => {
           assertSnapshotInvariants(primarySnapshot)
           expect(replica.exportSnapshot()).toEqual(primarySnapshot)
           expectSemanticSnapshot(primarySnapshot, replay.exportSnapshot())
-
-          restoreChecks.push(
-            (async () => {
-              const restored = new SpreadsheetEngine({
-                workbookName: primarySnapshot.workbook.name,
-                replicaId: `restore-${seedName}`,
-              })
-              await restored.ready()
-              restored.importSnapshot(primarySnapshot)
-              expect(restored.exportSnapshot()).toEqual(primarySnapshot)
-            })(),
-          )
+          restored.importSnapshot(primarySnapshot)
+          expect(restored.exportSnapshot()).toEqual(primarySnapshot)
         }
-
-        await Promise.all(restoreChecks)
       },
     })
   })
