@@ -15,7 +15,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['packages/*/src/**/*.test.ts', 'packages/*/src/**/*.test.tsx', 'apps/*/src/**/*.test.ts', 'apps/*/src/**/*.test.tsx'],
+    include: [
+      'packages/*/src/**/*.test.ts',
+      'packages/*/src/**/*.test.tsx',
+      'apps/*/src/**/*.test.ts',
+      'apps/*/src/**/*.test.tsx',
+      'scripts/**/*.test.ts',
+    ],
     exclude: ['**/dist/**', '**/build/**'],
     coverage: {
       provider: 'v8',

@@ -13,28 +13,27 @@ on:
       - "packages/workbook-domain/**"
       - "packages/wasm-kernel/**"
       - "packages/benchmarks/**"
-      - "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json"
-      - "docs/workpaper-platform-design.md"
-      - "docs/workpaper-engine-leadership-program.md"
+      - "packages/headless/CHANGELOG.md"
       - "docs/public-api.md"
-      - "docs/formula-language.md"
-      - "docs/formula-canonical-matrix.md"
-      - "docs/formula-canonical-program.md"
-      - "docs/production-acceptance-matrix.md"
+      - "docs/runtime-semantic-release-program-2026-04-16.md"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "scripts/check-package-publish.ts"
-      - "scripts/gen-workpaper-hyperformula-audit.ts"
+      - "scripts/check-runtime-commit-policy.ts"
       - "scripts/gen-formula-dominance-snapshot.ts"
-      - "scripts/workpaper-surface-contract.ts"
-      - "scripts/next-runtime-release-version.ts"
-      - "scripts/runtime-package-set.ts"
-      - "scripts/publish-runtime-package-set.ts"
       - "scripts/gen-workpaper-benchmark-baseline.ts"
+      - "scripts/gen-workpaper-hyperformula-audit.ts"
       - "scripts/gen-workpaper-vs-hyperformula-benchmark.ts"
       - "scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts"
+      - "scripts/next-runtime-release-version.ts"
+      - "scripts/plan-runtime-release.ts"
+      - "scripts/publish-runtime-package-set.ts"
+      - "scripts/runtime-package-set.ts"
+      - "scripts/runtime-release.ts"
+      - "scripts/sync-runtime-release-metadata.ts"
       - "scripts/workpaper-external-smoke.ts"
+      - "scripts/workpaper-surface-contract.ts"
       - "tsconfig.base.json"
       - "tsconfig.json"
       - "tsconfig.workspace-paths.json"
@@ -59,7 +58,7 @@ on:
         default: ""
 
 concurrency:
-  group: headless-package-${{ github.ref }}
+  group: runtime-packages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -180,11 +179,153 @@ jobs:
           path: build/npm-packages-runtime/*.tgz
           if-no-files-found: error
 
-  publish-release:
-    name: publish-runtime-packages
+  plan_release:
+    name: plan-runtime-release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: verify
     if: github.ref == 'refs/heads/main'
+    outputs:
+      release_needed: ${{ steps.planner.outputs.release_needed }}
+      bootstrap_required: ${{ steps.planner.outputs.bootstrap_required }}
+      manual_override: ${{ steps.planner.outputs.manual_override }}
+      release_type: ${{ steps.planner.outputs.release_type }}
+      reason: ${{ steps.planner.outputs.reason }}
+      manifest_version: ${{ steps.planner.outputs.manifest_version }}
+      published_version: ${{ steps.planner.outputs.published_version }}
+      last_tag: ${{ steps.planner.outputs.last_tag }}
+      target_version: ${{ steps.planner.outputs.target_version }}
+      tag_name: ${{ steps.planner.outputs.tag_name }}
+      npm_tag: ${{ steps.release_meta.outputs.npm_tag }}
+      dry_run: ${{ steps.release_meta.outputs.dry_run }}
+      planner_args: ${{ steps.release_meta.outputs.planner_args }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.11.1"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Enable Corepack
+        run: |
+          set -euo pipefail
+          corepack enable
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+
+      - name: Derive release invocation settings
+        id: release_meta
+        env:
+          INPUT_NPM_TAG: ${{ github.event.inputs.npm_tag }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          INPUT_TARGET_VERSION: ${{ github.event.inputs.target_version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            npm_tag_input="latest"
+            dry_run_input="false"
+          else
+            npm_tag_input="${INPUT_NPM_TAG:-latest}"
+            dry_run_input="${INPUT_DRY_RUN:-false}"
+          fi
+
+          case "$dry_run_input" in
+            true|True|TRUE) dry_run_value=true ;;
+            false|False|FALSE|"") dry_run_value=false ;;
+            *)
+              echo 'dry_run input must be true or false' >&2
+              exit 1
+              ;;
+          esac
+
+          planner_args=""
+          if [[ -n "${INPUT_TARGET_VERSION:-}" ]]; then
+            planner_args="--release-as ${INPUT_TARGET_VERSION} --allow-untagged-baseline"
+          fi
+
+          echo "npm_tag=$npm_tag_input" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run_value" >> "$GITHUB_OUTPUT"
+          echo "planner_args=$planner_args" >> "$GITHUB_OUTPUT"
+
+      - name: Configure canonical release remotes
+        env:
+          FORGEJO_PUSH_URL: ${{ secrets.FORGEJO_PUSH_URL }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
+            echo "FORGEJO_PUSH_URL secret is required for runtime release planning" >&2
+            exit 1
+          fi
+
+          git remote rename origin github
+          git remote add origin "${FORGEJO_PUSH_URL}"
+
+          while read -r tag; do
+            [[ -n "$tag" ]] || continue
+            git tag -d "$tag"
+          done < <(git tag --list 'runtime-packages-v*')
+
+          git fetch --force origin main
+          git fetch --force origin 'refs/tags/runtime-packages-v*:refs/tags/runtime-packages-v*'
+          git fetch --force github main
+
+      - name: Validate Forgejo and GitHub branch alignment
+        run: |
+          set -euo pipefail
+
+          origin_sha="$(git rev-parse origin/main)"
+          github_sha="$(git rev-parse github/main)"
+
+          echo "Forgejo main: ${origin_sha}"
+          echo "GitHub main: ${github_sha}"
+          echo "Workflow SHA: ${GITHUB_SHA}"
+
+          test "${origin_sha}" = "${github_sha}"
+          test "${origin_sha}" = "${GITHUB_SHA}"
+
+      - name: Plan runtime release
+        id: planner
+        run: |
+          set -euo pipefail
+
+          mkdir -p build
+          if [[ -n "${PLANNER_ARGS}" ]]; then
+            # shellcheck disable=SC2206
+            planner_args=(${PLANNER_ARGS})
+          else
+            planner_args=()
+          fi
+
+          bun scripts/plan-runtime-release.ts \
+            "${planner_args[@]}" \
+            --notes-file build/runtime-release-notes.md \
+            --github-output "$GITHUB_OUTPUT"
+        env:
+          PLANNER_ARGS: ${{ steps.release_meta.outputs.planner_args }}
+
+  publish_release:
+    name: publish-runtime-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - verify
+      - plan_release
+    if: github.ref == 'refs/heads/main' && needs.plan_release.outputs.release_needed == 'true'
     permissions:
       contents: write
       id-token: write
@@ -222,44 +363,62 @@ jobs:
           set -euo pipefail
           pnpm install --frozen-lockfile
 
-      - name: Derive release metadata
-        id: release_meta
+      - name: Configure canonical release remotes
         env:
-          INPUT_NPM_TAG: ${{ github.event.inputs.npm_tag }}
-          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
-          INPUT_TARGET_VERSION: ${{ github.event.inputs.target_version }}
+          FORGEJO_PUSH_URL: ${{ secrets.FORGEJO_PUSH_URL }}
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            npm_tag_input="latest"
-            dry_run_input="false"
-          else
-            npm_tag_input="${INPUT_NPM_TAG:-latest}"
-            dry_run_input="${INPUT_DRY_RUN:-false}"
+          if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
+            echo "FORGEJO_PUSH_URL secret is required for runtime publishing" >&2
+            exit 1
           fi
 
-          case "$dry_run_input" in
-            true|True|TRUE) dry_run_value=true ;;
-            false|False|FALSE|"") dry_run_value=false ;;
-            *)
-              echo 'dry_run input must be true or false' >&2
-              exit 1
-              ;;
-          esac
+          git remote rename origin github
+          git remote add origin "${FORGEJO_PUSH_URL}"
 
-          if [[ -n "${INPUT_TARGET_VERSION:-}" ]]; then
-            version_value="${INPUT_TARGET_VERSION}"
+          while read -r tag; do
+            [[ -n "$tag" ]] || continue
+            git tag -d "$tag"
+          done < <(git tag --list 'runtime-packages-v*')
+
+          git fetch --force origin main
+          git fetch --force origin 'refs/tags/runtime-packages-v*:refs/tags/runtime-packages-v*'
+          git fetch --force github main
+
+      - name: Validate Forgejo and GitHub branch alignment
+        run: |
+          set -euo pipefail
+
+          origin_sha="$(git rev-parse origin/main)"
+          github_sha="$(git rev-parse github/main)"
+
+          echo "Forgejo main: ${origin_sha}"
+          echo "GitHub main: ${github_sha}"
+          echo "Workflow SHA: ${GITHUB_SHA}"
+
+          test "${origin_sha}" = "${github_sha}"
+          test "${origin_sha}" = "${GITHUB_SHA}"
+
+      - name: Regenerate release notes
+        run: |
+          set -euo pipefail
+
+          mkdir -p build
+          if [[ -n "${PLANNER_ARGS}" ]]; then
+            # shellcheck disable=SC2206
+            planner_args=(${PLANNER_ARGS})
           else
-            version_value=$(bun scripts/next-runtime-release-version.ts | node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(data.targetVersion);')
+            planner_args=()
           fi
 
-          echo "version=$version_value" >> "$GITHUB_OUTPUT"
-          echo "npm_tag=$npm_tag_input" >> "$GITHUB_OUTPUT"
-          echo "dry_run=$dry_run_value" >> "$GITHUB_OUTPUT"
-          echo "create_release=$([[ "$dry_run_value" == "true" ]] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          bun scripts/plan-runtime-release.ts \
+            "${planner_args[@]}" \
+            --notes-file build/runtime-release-notes.md >/tmp/runtime-release-plan.json
+        env:
+          PLANNER_ARGS: ${{ needs.plan_release.outputs.planner_args }}
 
-      - name: Confirm package version
+      - name: Confirm package version baseline
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
@@ -300,38 +459,70 @@ jobs:
           set -euo pipefail
           pnpm publish:runtime:check
 
-      - name: Create git tag and GitHub release
-        if: steps.release_meta.outputs.create_release == 'true'
+      - name: Inspect runtime tag state
+        id: tag_state
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          TAG_NAME: ${{ needs.plan_release.outputs.tag_name }}
         run: |
           set -euo pipefail
-          tag_name="runtime-packages-v${RELEASE_VERSION}"
 
-          if git ls-remote --exit-code --tags origin "refs/tags/${tag_name}" >/dev/null 2>&1; then
-            echo "Tag ${tag_name} already exists; skipping release creation"
+          origin_tag="$(git ls-remote --tags origin "refs/tags/${TAG_NAME}" | awk '{print $1}')"
+          github_tag="$(git ls-remote --tags github "refs/tags/${TAG_NAME}" | awk '{print $1}')"
+
+          if [[ -n "${origin_tag}" || -n "${github_tag}" ]]; then
+            if [[ -z "${origin_tag}" || -z "${github_tag}" ]]; then
+              echo "Runtime tag ${TAG_NAME} exists on only one remote" >&2
+              exit 1
+            fi
+            if [[ "${origin_tag}" != "${github_tag}" ]]; then
+              echo "Runtime tag ${TAG_NAME} disagrees between Forgejo and GitHub" >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "sha=${origin_tag}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          notes_file=$(mktemp)
-          {
-            echo "Automated runtime package release."
-            echo
-            echo "- Version: ${RELEASE_VERSION}"
-            echo "- Commit: ${GITHUB_SHA}"
-          } > "$notes_file"
+          echo "exists=false" >> "$GITHUB_OUTPUT"
 
-          gh release create "$tag_name" \
-            --target "$GITHUB_SHA" \
-            --title "Runtime packages v${RELEASE_VERSION}" \
-            --notes-file "$notes_file"
+      - name: Create and push authoritative runtime tag
+        if: steps.tag_state.outputs.exists != 'true' && needs.plan_release.outputs.dry_run != 'true'
+        env:
+          TAG_NAME: ${{ needs.plan_release.outputs.tag_name }}
+          TARGET_VERSION: ${{ needs.plan_release.outputs.target_version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${TAG_NAME}" -m "Runtime packages v${TARGET_VERSION}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG_NAME}"
+          git push github "refs/tags/${TAG_NAME}"
+
+      - name: Create GitHub release
+        if: needs.plan_release.outputs.dry_run != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.plan_release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG_NAME} already exists; skipping creation"
+            exit 0
+          fi
+
+          gh release create "${TAG_NAME}" \
+            --verify-tag \
+            --title "Runtime packages v${{ needs.plan_release.outputs.target_version }}" \
+            --notes-file build/runtime-release-notes.md
 
       - name: Publish runtime package set to npm
         env:
-          NPM_DIST_TAG: ${{ steps.release_meta.outputs.npm_tag }}
-          DRY_RUN: ${{ steps.release_meta.outputs.dry_run }}
-          TARGET_VERSION: ${{ steps.release_meta.outputs.version }}
+          NPM_DIST_TAG: ${{ needs.plan_release.outputs.npm_tag }}
+          DRY_RUN: ${{ needs.plan_release.outputs.dry_run }}
+          TARGET_VERSION: ${{ needs.plan_release.outputs.target_version }}
         run: |
           set -euo pipefail
           bun scripts/publish-runtime-package-set.ts

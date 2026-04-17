@@ -16,6 +16,12 @@ export interface RuntimePackageManifest {
   version: string
 }
 
+export interface StableSemver {
+  major: number
+  minor: number
+  patch: number
+}
+
 export function loadRuntimePackages(rootDir: string): RuntimePackageManifest[] {
   return RUNTIME_PACKAGE_DIRS.map((dir) => {
     const manifest = JSON.parse(readFileSync(join(rootDir, dir, 'package.json'), 'utf8'))
@@ -80,7 +86,7 @@ export function determineRuntimeReleaseVersion(options: {
   return incrementPatch(publishedVersion)
 }
 
-function compareStableSemver(left: string, right: string): number {
+export function compareStableSemver(left: string, right: string): number {
   const leftVersion = parseStableSemver(left)
   const rightVersion = parseStableSemver(right)
 
@@ -93,12 +99,22 @@ function compareStableSemver(left: string, right: string): number {
   return leftVersion.patch - rightVersion.patch
 }
 
-function incrementPatch(version: string): string {
+export function incrementPatch(version: string): string {
   const parsed = parseStableSemver(version)
   return `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`
 }
 
-function parseStableSemver(version: string): { major: number; minor: number; patch: number } {
+export function incrementMinor(version: string): string {
+  const parsed = parseStableSemver(version)
+  return `${parsed.major}.${parsed.minor + 1}.0`
+}
+
+export function incrementMajor(version: string): string {
+  const parsed = parseStableSemver(version)
+  return `${parsed.major + 1}.0.0`
+}
+
+export function parseStableSemver(version: string): StableSemver {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version)
   if (!match) {
     throw new Error(`Expected stable semver version, received ${version}`)

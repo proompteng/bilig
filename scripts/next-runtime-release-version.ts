@@ -1,60 +1,67 @@
 #!/usr/bin/env bun
 
-import { assertAlignedVersions, determineRuntimeReleaseVersion, loadRuntimePackages } from './runtime-package-set.ts'
-
 const rootDir = new URL('..', import.meta.url).pathname
-const runtimePackages = loadRuntimePackages(rootDir)
-const manifestVersion = assertAlignedVersions(runtimePackages)
-const publishedVersions = runtimePackages.map((runtimePackage) => ({
-  name: runtimePackage.name,
-  version: getPublishedVersion(runtimePackage.name),
-}))
+const passthroughArgs = process.argv.slice(2)
 
-const publishedVersionSet = new Set(
-  publishedVersions.map((entry) => entry.version).filter((version): version is string => typeof version === 'string'),
-)
+const result = Bun.spawnSync(['bun', 'scripts/plan-runtime-release.ts', ...passthroughArgs], {
+  cwd: rootDir,
+  env: process.env,
+  stdin: 'ignore',
+  stdout: 'pipe',
+  stderr: 'pipe',
+})
 
-if (publishedVersionSet.size > 1) {
-  throw new Error(
-    `Published runtime package versions are not aligned (${publishedVersions
-      .map((entry) => `${entry.name}@${entry.version ?? 'unpublished'}`)
-      .join(', ')})`,
-  )
+if (result.exitCode !== 0) {
+  const stderr = new TextDecoder().decode(result.stderr).trim()
+  throw new Error(stderr || 'Unable to derive the next runtime release version')
 }
 
-const [publishedVersion] = publishedVersionSet
-const targetVersion = determineRuntimeReleaseVersion({
-  autoIncrement: true,
-  manifestVersion,
-  publishedVersion: publishedVersion ?? null,
-})
+const rawOutput = new TextDecoder().decode(result.stdout).trim()
+const parsed = JSON.parse(rawOutput)
+if (!isRuntimeReleaseSummary(parsed)) {
+  throw new Error('Runtime release planner returned an invalid JSON payload')
+}
+const plan = parsed
 
 console.log(
   JSON.stringify(
     {
-      manifestVersion,
-      publishedVersion: publishedVersion ?? null,
-      targetVersion,
+      manifestVersion: plan.manifestVersion,
+      publishedVersion: plan.publishedVersion,
+      lastTag: plan.lastTag,
+      releaseNeeded: plan.releaseNeeded,
+      bootstrapRequired: plan.bootstrapRequired,
+      reason: plan.reason,
+      targetVersion: plan.targetVersion,
     },
     null,
     2,
   ),
 )
 
-function getPublishedVersion(packageName: string): string | null {
-  const result = Bun.spawnSync(['npm', 'view', packageName, 'dist-tags.latest', '--json'], {
-    cwd: rootDir,
-    env: process.env,
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (result.exitCode !== 0) {
-    return null
+function isRuntimeReleaseSummary(value: unknown): value is {
+  manifestVersion: string
+  publishedVersion: string | null
+  targetVersion: string | null
+  releaseNeeded: boolean
+  bootstrapRequired: boolean
+  lastTag: string | null
+  reason: string
+} {
+  if (!isRecord(value)) {
+    return false
   }
-  const output = new TextDecoder().decode(result.stdout).trim()
-  if (output.length === 0 || output === 'null') {
-    return null
-  }
-  return JSON.parse(output)
+  return (
+    typeof value.manifestVersion === 'string' &&
+    (typeof value.publishedVersion === 'string' || value.publishedVersion === null) &&
+    (typeof value.targetVersion === 'string' || value.targetVersion === null) &&
+    typeof value.releaseNeeded === 'boolean' &&
+    typeof value.bootstrapRequired === 'boolean' &&
+    (typeof value.lastTag === 'string' || value.lastTag === null) &&
+    typeof value.reason === 'string'
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object'
 }

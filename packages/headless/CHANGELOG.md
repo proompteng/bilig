@@ -2,7 +2,7 @@
 
 All notable changes to `@bilig/headless` will be documented in this file.
 
-This package uses release-please to manage versioned release notes.
+This package is released as part of the aligned bilig runtime package set.
 
 ## 0.1.1
 

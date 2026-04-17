@@ -8,10 +8,47 @@ on:
   workflow_dispatch:
 
 jobs:
+  runtime-commit-policy:
+    name: runtime-commit-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Enable Corepack
+        run: |
+          set -eu
+          corepack enable
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Validate runtime release commit policy
+        run: |
+          set -eu
+          pnpm runtime:commit-policy
+
   verify:
     name: verify-node-24
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: runtime-commit-policy
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
