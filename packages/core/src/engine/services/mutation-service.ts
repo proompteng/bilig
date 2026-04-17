@@ -684,6 +684,7 @@ export function createEngineMutationService(args: {
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
           ...args.captureRowRangeCellState(op.sheetName, op.start, op.count),
+          ...captureFormulaCellStateForStructuralUndo(op.sheetName, 'row', op.start, op.count),
           ...captureStructuralWorkbookMetadataOps(),
         ]
       }
@@ -713,6 +714,7 @@ export function createEngineMutationService(args: {
           },
           ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
           ...args.captureColumnRangeCellState(op.sheetName, op.start, op.count),
+          ...captureFormulaCellStateForStructuralUndo(op.sheetName, 'column', op.start, op.count),
           ...captureStructuralWorkbookMetadataOps(),
         ]
       }
@@ -1149,6 +1151,31 @@ export function createEngineMutationService(args: {
       }
     }
     return inverseOps
+  }
+
+  const captureFormulaCellStateForStructuralUndo = (
+    sheetName: string,
+    axis: 'row' | 'column',
+    start: number,
+    count: number,
+  ): EngineOp[] => {
+    const captured: EngineOp[] = []
+    args.state.formulas.forEach((_formula, cellIndex) => {
+      const ownerSheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+      if (ownerSheetId === undefined) {
+        return
+      }
+      const ownerSheetName = args.state.workbook.getSheetNameById(ownerSheetId)
+      if (!ownerSheetName) {
+        return
+      }
+      const axisIndex = axis === 'row' ? args.state.workbook.cellStore.rows[cellIndex] : args.state.workbook.cellStore.cols[cellIndex]
+      if (ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start && axisIndex < start + count) {
+        return
+      }
+      captured.push(...args.toCellStateOps(ownerSheetName, args.state.workbook.getAddress(cellIndex), args.getCellByIndex(cellIndex)))
+    })
+    return captured
   }
 
   const canonicalizeForwardOps = (ops: readonly EngineOp[]): EngineOp[] =>
