@@ -192,7 +192,7 @@ export function setStyleRanges(
       }
     },
   )
-  sheet.styleRanges = coalesceStyleRangeRecords(nextRanges)
+  sheet.styleRanges = nextRanges
   return listStyleRanges(sheet)
 }
 
