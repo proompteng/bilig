@@ -1,6 +1,6 @@
 import { incrementMajor, incrementMinor, incrementPatch } from './runtime-package-set.ts'
 
-export const RUNTIME_RELEASE_TAG_PREFIX = 'runtime-packages-v'
+export const RUNTIME_RELEASE_TAG_PREFIX = 'libraries-v'
 
 export const RUNTIME_AFFECTING_PATH_PATTERNS = [
   'packages/protocol/**',
@@ -127,7 +127,7 @@ export function summarizeReleaseNotes(input: {
     (commit) => commit.runtimeAffecting && commit.releaseType === 'none' && commit.conventional !== null,
   )
 
-  const lines = [`# Runtime packages v${input.targetVersion}`, '']
+  const lines = [`# Libraries v${input.targetVersion}`, '']
 
   lines.push(`- Release type: ${input.releaseType}`)
   lines.push(`- Previous runtime tag: ${input.lastTag ?? 'none'}`)

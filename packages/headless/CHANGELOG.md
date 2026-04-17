@@ -2,7 +2,7 @@
 
 All notable changes to `@bilig/headless` will be documented in this file.
 
-This package is released as part of the aligned bilig runtime package set.
+This package is released as part of the aligned bilig library package set.
 
 ## 0.1.1
 
@@ -10,4 +10,4 @@ This package is released as part of the aligned bilig runtime package set.
 
 ## 0.1.2
 
-- Align the headless runtime package set onto a single publish version for npm consumers.
+- Align the headless library package set onto a single publish version for npm consumers.

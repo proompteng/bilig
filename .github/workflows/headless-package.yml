@@ -278,10 +278,10 @@ jobs:
           while read -r tag; do
             [[ -n "$tag" ]] || continue
             git tag -d "$tag"
-          done < <(git tag --list 'runtime-packages-v*')
+          done < <(git tag --list 'libraries-v*')
 
           git fetch --force origin main
-          git fetch --force origin 'refs/tags/runtime-packages-v*:refs/tags/runtime-packages-v*'
+          git fetch --force origin 'refs/tags/libraries-v*:refs/tags/libraries-v*'
           git fetch --force github main
 
       - name: Validate Forgejo and GitHub branch alignment
@@ -380,10 +380,10 @@ jobs:
           while read -r tag; do
             [[ -n "$tag" ]] || continue
             git tag -d "$tag"
-          done < <(git tag --list 'runtime-packages-v*')
+          done < <(git tag --list 'libraries-v*')
 
           git fetch --force origin main
-          git fetch --force origin 'refs/tags/runtime-packages-v*:refs/tags/runtime-packages-v*'
+          git fetch --force origin 'refs/tags/libraries-v*:refs/tags/libraries-v*'
           git fetch --force github main
 
       - name: Validate Forgejo and GitHub branch alignment
@@ -496,7 +496,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "${TAG_NAME}" -m "Runtime packages v${TARGET_VERSION}" "${GITHUB_SHA}"
+          git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" "${GITHUB_SHA}"
           git push origin "refs/tags/${TAG_NAME}"
           git push github "refs/tags/${TAG_NAME}"
 
@@ -515,7 +515,7 @@ jobs:
 
           gh release create "${TAG_NAME}" \
             --verify-tag \
-            --title "Runtime packages v${{ needs.plan_release.outputs.target_version }}" \
+            --title "Libraries v${{ needs.plan_release.outputs.target_version }}" \
             --notes-file build/runtime-release-notes.md
 
       - name: Publish runtime package set to npm

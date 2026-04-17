@@ -6,15 +6,15 @@ Date: 2026-04-16
 
 ## Objective
 
-Replace the current runtime package release versioning logic with a production release system that:
+Replace the current aligned library package release versioning logic with a production release system that:
 
 - derives semver from Conventional Commits instead of always patch-bumping
-- publishes the aligned runtime package set to npm from GitHub Actions
+- publishes the aligned library package set to npm from GitHub Actions
 - creates authoritative release tags and releases for each published version
 - generates stable changelog content from the same release metadata
 - respects the repo rule that Forgejo `origin` remains the source of truth
 
-This program applies to the aligned runtime package set:
+This program applies to the aligned library package set:
 
 - `@bilig/protocol`
 - `@bilig/workbook-domain`
@@ -40,7 +40,7 @@ The current runtime release path is centered on:
 - [/Users/gregkonush/github.com/bilig/scripts/next-runtime-release-version.ts](/Users/gregkonush/github.com/bilig/scripts/next-runtime-release-version.ts)
 - [/Users/gregkonush/github.com/bilig/scripts/publish-runtime-package-set.ts](/Users/gregkonush/github.com/bilig/scripts/publish-runtime-package-set.ts)
 
-Today, the next runtime package version is chosen as follows:
+Today, the next library package version is chosen as follows:
 
 1. If the package manifest version is ahead of npm, use the manifest version.
 2. Otherwise, increment the published version by one patch.
@@ -69,7 +69,7 @@ The current workflow also creates a GitHub release and tag, but the repo policy 
 4. Changelog ownership is unclear.
    `packages/headless/CHANGELOG.md` claims release-please ownership, but the repo does not actually run release-please.
 
-5. The runtime package set is special.
+5. The aligned library package set is special.
    These six packages are version-locked as one train. The release system must treat them as one release unit, not as six unrelated npm packages.
 
 ## Decision
@@ -85,7 +85,7 @@ The important design choice is this:
 This is the right tradeoff for `bilig` because:
 
 - the source of truth is Forgejo `origin`, not GitHub
-- the runtime package set is custom and aligned
+- the aligned library package set is custom and aligned
 - the publish path already uses custom staging and pack/publish logic
 - we need deterministic control over tags, changelog content, and sync behavior between remotes
 
@@ -95,7 +95,7 @@ This is the right tradeoff for `bilig` because:
 
 The release boundary is the most recent reachable annotated tag matching:
 
-- `runtime-packages-vX.Y.Z`
+- `libraries-vX.Y.Z`
 
 This tag becomes the only input for "what was the last release?".
 
@@ -110,7 +110,7 @@ Version bump rules:
 - any `!` or `BREAKING CHANGE:` footer -> major
 - `docs`, `chore`, `test`, `build`, `ci`, `style`, and `refactor` without breaking markers -> no release by default
 
-If multiple commits exist since the last runtime release tag, the strongest bump wins:
+If multiple commits exist since the last library release tag, the strongest bump wins:
 
 - major > minor > patch
 
@@ -118,7 +118,7 @@ If no runtime-affecting commits exist since the last tag, no runtime release is 
 
 ### Commit Scope Policy
 
-Because the runtime package set is one aligned train, the release planner must consider both commit metadata and touched paths.
+Because the aligned library package set is one train, the release planner must consider both commit metadata and touched paths.
 
 The planner should treat a commit as runtime-affecting when either of the following is true:
 
@@ -159,7 +159,7 @@ This keeps release choice tied to real published surface, not just commit wordin
 
 - `release-please-action` as the primary runtime release owner
 - `semantic-release` as a black-box monorepo publisher
-- `changesets` for the runtime package train
+- `changesets` for the aligned library package train
 
 Why:
 
@@ -175,7 +175,7 @@ Add a required CI gate that enforces Conventional Commit release inputs.
 
 Requirements:
 
-- commits merged to `main` that are intended to affect the runtime package set must use Conventional Commits
+- commits merged to `main` that are intended to affect the aligned library package set must use Conventional Commits
 - if the team uses squash merges, the PR title must also satisfy the same format
 - breaking changes must use either `!` or a `BREAKING CHANGE:` footer
 
@@ -192,7 +192,7 @@ Add a new repo-owned script:
 
 Responsibilities:
 
-- locate the last `runtime-packages-v*` tag
+- locate the last `libraries-v*` tag
 - collect commits since that tag
 - determine whether each commit is runtime-affecting
 - compute the strongest required bump
@@ -205,7 +205,7 @@ Example output shape:
 ```json
 {
   "releaseNeeded": true,
-  "lastTag": "runtime-packages-v0.1.2",
+  "lastTag": "libraries-v0.1.2",
   "targetVersion": "0.2.0",
   "bump": "minor",
   "commits": [
@@ -241,7 +241,7 @@ Refactor [/Users/gregkonush/github.com/bilig/.github/workflows/headless-package.
 
 ### 4. Tag Authority
 
-The runtime release tag must exist on Forgejo `origin` and GitHub, with the same object and target SHA.
+The library release tag must exist on Forgejo `origin` and GitHub, with the same object and target SHA.
 
 Required behavior:
 
@@ -254,10 +254,10 @@ The workflow must not create a release tag that exists only on GitHub.
 
 ### 5. GitHub Release
 
-Create one GitHub Release per runtime package version:
+Create one GitHub Release per aligned library package version:
 
-- tag: `runtime-packages-vX.Y.Z`
-- title: `Runtime packages vX.Y.Z`
+- tag: `libraries-vX.Y.Z`
+- title: `Libraries vX.Y.Z`
 - notes: planner-generated release notes
 
 The GitHub Release is the external consumer changelog artifact for the published version.
@@ -285,7 +285,7 @@ There are two changelog layers.
 
 External changelog:
 
-- canonical source: GitHub Release notes for `runtime-packages-vX.Y.Z`
+- canonical source: GitHub Release notes for `libraries-vX.Y.Z`
 
 Repo-visible changelog:
 
@@ -296,7 +296,7 @@ The repo-visible changelog should not block npm publish. It is metadata sync, no
 Initial repo-visible change set:
 
 - update `packages/headless/CHANGELOG.md`
-- update aligned runtime package manifest versions to the released version
+- update aligned library package manifest versions to the released version
 - optionally add a root `docs/runtime-package-releases.md`
 
 This sync should be created as a Forgejo PR, not as an unreviewed GitHub-only branch mutation.
@@ -306,7 +306,7 @@ This sync should be created as a Forgejo PR, not as an unreviewed GitHub-only br
 ### Phase 0: Cleanup Current Misstatements
 
 - remove the false release-please claim from `packages/headless/CHANGELOG.md`
-- rename the workflow internally from "headless package" semantics to "runtime package set" semantics where appropriate
+- rename the workflow internally from "headless package" semantics to "aligned library package set" semantics where appropriate
 
 ### Phase 1: Enforce Conventional Commits
 
@@ -345,13 +345,13 @@ Acceptance criteria:
 ### Phase 4: Fix Tag Authority
 
 - add explicit remote alignment check between Forgejo and GitHub
-- create and push runtime release tags in a way that guarantees both remotes converge
+- create and push library release tags in a way that guarantees both remotes converge
 - fail release if remotes differ
 
 Acceptance criteria:
 
 - every published npm version has one matching git tag on both remotes
-- no GitHub-only runtime release tags exist
+- no GitHub-only library release tags exist
 
 ### Phase 5: Changelog And Repo Metadata Sync
 
@@ -390,8 +390,8 @@ Acceptance criteria:
 The program is complete when all of the following are true:
 
 - runtime releases derive major/minor/patch from Conventional Commits
-- the runtime package set still publishes as one aligned train
-- the release boundary is the last `runtime-packages-vX.Y.Z` git tag
+- the aligned library package set still publishes as one train
+- the release boundary is the last `libraries-vX.Y.Z` git tag
 - GitHub Actions only publishes when Forgejo and GitHub point at the same source commit
 - npm publish, git tag, and GitHub Release all refer to the same version and commit
 - package and docs changelog claims no longer mention tools the repo does not actually use
