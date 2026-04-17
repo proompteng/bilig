@@ -32,4 +32,24 @@ describe('EngineCompiledPlanService', () => {
     expect(second.id).not.toBe(first.id)
     expect([...second.compiled.constants]).not.toEqual([...first.compiled.constants])
   })
+
+  it('interns a new plan when replace targets a missing plan id', () => {
+    const service = createEngineCompiledPlanService()
+    const compiled = compileFormula('3+4')
+
+    const record = service.replace(999_999, '3+4', compiled)
+
+    expect(record.source).toBe('3+4')
+    expect(record.compiled).toBe(compiled)
+    expect(service.get(record.id)).toBe(record)
+  })
+
+  it('treats release on a missing plan id as a no-op', () => {
+    const service = createEngineCompiledPlanService()
+    const record = service.intern('5+6', compileFormula('5+6'))
+
+    service.release(record.id + 1)
+
+    expect(service.get(record.id)).toBe(record)
+  })
 })
