@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 import {
   formatAddress,
   parseCellAddress,
+  parseRangeAddress,
   rewriteAddressForStructuralTransform,
   rewriteRangeForStructuralTransform,
   translateFormulaReferences,
@@ -94,6 +95,35 @@ function translateFormulaForTarget(
   const source = parseCellAddress(sourceAddress, sourceSheetName)
   const target = parseCellAddress(targetAddress, targetSheetName)
   return translateFormulaReferences(formula, target.row - source.row, target.col - source.col)
+}
+
+function dependencyTouchesStructuralDeleteSpan(
+  dependency: string,
+  ownerSheetName: string,
+  targetSheetName: string,
+  axis: 'row' | 'column',
+  start: number,
+): boolean {
+  if (dependency.includes(':')) {
+    const parsed = parseRangeAddress(dependency, ownerSheetName)
+    const dependencySheetName = parsed.sheetName ?? ownerSheetName
+    if (dependencySheetName !== targetSheetName) {
+      return false
+    }
+    if (parsed.kind === 'cells') {
+      return (axis === 'row' ? parsed.end.row : parsed.end.col) >= start
+    }
+    if (parsed.kind === 'rows') {
+      return axis === 'row' && parsed.end.row >= start
+    }
+    return axis === 'column' && parsed.end.col >= start
+  }
+  const parsed = parseCellAddress(dependency, ownerSheetName)
+  const dependencySheetName = parsed.sheetName ?? ownerSheetName
+  if (dependencySheetName !== targetSheetName) {
+    return false
+  }
+  return (axis === 'row' ? parsed.row : parsed.col) >= start
 }
 
 export interface EngineMutationService {
@@ -1161,7 +1191,7 @@ export function createEngineMutationService(args: {
     count: number,
   ): EngineOp[] => {
     const captured: EngineOp[] = []
-    args.state.formulas.forEach((_formula, cellIndex) => {
+    args.state.formulas.forEach((formula, cellIndex) => {
       const ownerSheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
       if (ownerSheetId === undefined) {
         return
@@ -1172,6 +1202,17 @@ export function createEngineMutationService(args: {
       }
       const axisIndex = axis === 'row' ? args.state.workbook.cellStore.rows[cellIndex] : args.state.workbook.cellStore.cols[cellIndex]
       if (ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start && axisIndex < start + count) {
+        return
+      }
+      const ownerPositionAffected = ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start + count
+      const dependencyPositionAffected = formula.compiled.deps.some((dependency) =>
+        dependencyTouchesStructuralDeleteSpan(dependency, ownerSheetName, sheetName, axis, start),
+      )
+      const metadataSensitive =
+        formula.compiled.symbolicNames.length > 0 ||
+        formula.compiled.symbolicTables.length > 0 ||
+        formula.compiled.symbolicSpills.length > 0
+      if (!ownerPositionAffected && !dependencyPositionAffected && !metadataSensitive) {
         return
       }
       captured.push(...args.captureStoredCellOps(cellIndex, ownerSheetName, args.state.workbook.getAddress(cellIndex)))

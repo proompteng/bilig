@@ -337,6 +337,34 @@ describe('EngineMutationService', () => {
     })
   })
 
+  it('does not snapshot unaffected formulas above a deleted row span', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-rows-formula-narrow' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([{ kind: 'deleteRows', sheetName: 'Sheet1', start: 1, count: 1 }]),
+    )
+
+    const formulaOps = inverseOps?.filter(
+      (op): op is Extract<(typeof inverseOps)[number], { kind: 'setCellFormula' }> => op.kind === 'setCellFormula',
+    )
+    expect(formulaOps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sheetName: 'Sheet1', address: 'B2', formula: 'SUM(A1:A2)' }),
+        expect.objectContaining({ sheetName: 'Sheet1', address: 'B3', formula: 'SUM(A1:A3)' }),
+        expect.objectContaining({ sheetName: 'Sheet1', address: 'B4', formula: 'SUM(A1:A4)' }),
+      ]),
+    )
+    expect(formulaOps).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ sheetName: 'Sheet1', address: 'B1', formula: 'SUM(A1:A1)' })]),
+    )
+  })
+
   it('fast-paths simple cell mutation history without restore callbacks', () => {
     const replicaState = createReplicaState('local')
     const workbook = new WorkbookStore('fast-history')

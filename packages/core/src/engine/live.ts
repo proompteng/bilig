@@ -406,10 +406,10 @@ export function createEngineServiceRuntime(args: {
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
-      pending.forEach(({ cellIndex, ownerSheetName, source, compiled }) => {
+      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, preservesBinding }) => {
         try {
           if (compiled) {
-            if (binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled)) {
+            if (preservesBinding === true && binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled)) {
               return
             }
             binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled)

@@ -345,7 +345,7 @@ interface IndexedExactLookupCandidate {
 
 interface PreparedFormulaBindingShape {
   readonly dependencies: {
-    readonly rangeDependencies: ArrayLike<number>
+    readonly rangeDependencies: Uint32Array
   }
   readonly compiled: CompiledFormula
   readonly directLookup: RuntimeDirectLookupDescriptor | undefined
@@ -353,10 +353,47 @@ interface PreparedFormulaBindingShape {
   readonly directCriteria: RuntimeDirectCriteriaDescriptor | undefined
 }
 
+function floatArrayEqual(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+function hasStableSymbolicRangeLayout(
+  current: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
+  next: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
+  rangeDependencyCount: number,
+): boolean {
+  if (current.symbolicRanges.length !== next.symbolicRanges.length) {
+    return false
+  }
+  if (rangeDependencyCount !== current.symbolicRanges.length) {
+    return false
+  }
+  if (current.parsedSymbolicRanges === undefined || next.parsedSymbolicRanges === undefined) {
+    return current.parsedSymbolicRanges === next.parsedSymbolicRanges
+  }
+  if (current.parsedSymbolicRanges.length !== next.parsedSymbolicRanges.length) {
+    return false
+  }
+  for (let index = 0; index < current.parsedSymbolicRanges.length; index += 1) {
+    if (current.parsedSymbolicRanges[index]?.refKind !== next.parsedSymbolicRanges[index]?.refKind) {
+      return false
+    }
+  }
+  return true
+}
+
 function hasInPlaceDependencyRebindShape(existing: RuntimeFormula, prepared: PreparedFormulaBindingShape): boolean {
   return (
-    existing.rangeDependencies.length === 0 &&
-    prepared.dependencies.rangeDependencies.length === 0 &&
+    uint32ArrayEqual(existing.rangeDependencies, prepared.dependencies.rangeDependencies) &&
+    hasStableSymbolicRangeLayout(existing.compiled, prepared.compiled, existing.rangeDependencies.length) &&
     existing.compiled.symbolicNames.length === 0 &&
     prepared.compiled.symbolicNames.length === 0 &&
     existing.compiled.symbolicTables.length === 0 &&
@@ -374,19 +411,18 @@ function hasInPlaceDependencyRebindShape(existing: RuntimeFormula, prepared: Pre
 
 function canRewriteCompiledPreservingBindings(existing: RuntimeFormula, compiled: CompiledFormula): boolean {
   return (
-    existing.rangeDependencies.length === 0 &&
+    hasStableSymbolicRangeLayout(existing.compiled, compiled, existing.rangeDependencies.length) &&
     existing.compiled.symbolicNames.length === 0 &&
     existing.compiled.symbolicTables.length === 0 &&
     existing.compiled.symbolicSpills.length === 0 &&
     compiled.symbolicNames.length === 0 &&
     compiled.symbolicTables.length === 0 &&
     compiled.symbolicSpills.length === 0 &&
-    compiled.symbolicRanges.length === 0 &&
     existing.directLookup === undefined &&
     existing.directAggregate === undefined &&
     existing.directCriteria === undefined &&
-    existing.programLength === compiled.program.length &&
-    existing.constNumberLength === compiled.constants.length &&
+    uint32ArrayEqual(existing.compiled.program, compiled.program) &&
+    floatArrayEqual(existing.compiled.constants, compiled.constants) &&
     existing.compiled.mode === compiled.mode
   )
 }
@@ -1072,6 +1108,9 @@ export function createEngineFormulaBindingService(args: {
     })
   }
 
+  const rangeDependenciesHaveNoFormulaMembers = (rangeDependencies: Uint32Array): boolean =>
+    rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0)
+
   const appendDefinedNameReverseEdge = (name: string, dependentCellIndex: number): void => {
     appendTrackedReverseEdge(args.reverseState.reverseDefinedNameEdges, normalizeDefinedName(name), dependentCellIndex)
   }
@@ -1171,7 +1210,7 @@ export function createEngineFormulaBindingService(args: {
       return false
     }
     let nextDirectAggregate: RuntimeDirectAggregateDescriptor | undefined
-    if (canRewriteCompiledPreservingBindings(existing, compiled)) {
+    if (canRewriteCompiledPreservingBindings(existing, compiled) && rangeDependenciesHaveNoFormulaMembers(existing.rangeDependencies)) {
       nextDirectAggregate = undefined
     } else if (canRewriteCompiledPreservingDirectAggregate(existing, compiled)) {
       nextDirectAggregate = buildDirectAggregateDescriptor({
@@ -1190,6 +1229,7 @@ export function createEngineFormulaBindingService(args: {
     existing.planId = plan.id
     existing.compiled = plan.compiled
     existing.plan = plan
+    existing.constants = compiled.constants
     existing.programLength = compiled.program.length
     existing.constNumberLength = compiled.constants.length
     existing.directAggregate = nextDirectAggregate

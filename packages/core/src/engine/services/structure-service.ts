@@ -117,6 +117,43 @@ function isStructurallyStableSimpleFormulaNode(node: CompiledFormula['optimizedA
   }
 }
 
+function arrayValuesEqual(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+function hasStableStructuralSymbolicRangeLayout(
+  current: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
+  next: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
+  rangeDependencyCount: number,
+): boolean {
+  if (current.symbolicRanges.length !== next.symbolicRanges.length) {
+    return false
+  }
+  if (rangeDependencyCount !== current.symbolicRanges.length) {
+    return false
+  }
+  if (current.parsedSymbolicRanges === undefined || next.parsedSymbolicRanges === undefined) {
+    return current.parsedSymbolicRanges === next.parsedSymbolicRanges
+  }
+  if (current.parsedSymbolicRanges.length !== next.parsedSymbolicRanges.length) {
+    return false
+  }
+  for (let index = 0; index < current.parsedSymbolicRanges.length; index += 1) {
+    if (current.parsedSymbolicRanges[index]?.refKind !== next.parsedSymbolicRanges[index]?.refKind) {
+      return false
+    }
+  }
+  return true
+}
+
 function structuralRewritePreservesValue(
   formula: RuntimeFormula,
   rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
@@ -139,10 +176,13 @@ function structuralRewritePreservesValue(
 function structuralRewritePreservesBinding(
   formula: RuntimeFormula,
   rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
+  allowsRangeReuse: boolean,
 ): boolean {
   return (
     rewritten.reusedProgram &&
-    formula.rangeDependencies.length === 0 &&
+    (formula.directAggregate !== undefined ||
+      (allowsRangeReuse &&
+        hasStableStructuralSymbolicRangeLayout(formula.compiled, rewritten.compiled, formula.rangeDependencies.length))) &&
     formula.compiled.symbolicNames.length === 0 &&
     formula.compiled.symbolicTables.length === 0 &&
     formula.compiled.symbolicSpills.length === 0 &&
@@ -151,10 +191,10 @@ function structuralRewritePreservesBinding(
     rewritten.compiled.symbolicSpills.length === 0 &&
     formula.directLookup === undefined &&
     formula.directCriteria === undefined &&
-    formula.programLength === rewritten.compiled.program.length &&
-    formula.constNumberLength === rewritten.compiled.constants.length &&
+    arrayValuesEqual(formula.compiled.program, rewritten.compiled.program) &&
+    arrayValuesEqual(formula.compiled.constants, rewritten.compiled.constants) &&
     formula.compiled.mode === rewritten.compiled.mode &&
-    ((formula.directAggregate === undefined && rewritten.compiled.symbolicRanges.length === 0) || formula.directAggregate !== undefined)
+    (formula.directAggregate !== undefined || rewritten.compiled.symbolicRanges.length === formula.rangeDependencies.length)
   )
 }
 
@@ -186,6 +226,7 @@ export interface EngineStructureService {
       changedCellIndices: number[]
       formulaCellIndices: number[]
       topologyChanged: boolean
+      graphRefreshRequired: boolean
     },
     EngineStructureError
   >
@@ -464,7 +505,11 @@ export function createEngineStructureService(args: {
         })
         return
       }
-      const preservesBinding = structuralRewritePreservesBinding(formula, rewritten)
+      const preservesBinding = structuralRewritePreservesBinding(
+        formula,
+        rewritten,
+        formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
+      )
       inputs.push({
         cellIndex,
         ownerSheetName,
@@ -973,6 +1018,17 @@ export function createEngineStructureService(args: {
               throw new Error(`Missing sheet for structural op: ${sheetName}`)
             })()
 
+          const hadCycleFormulas = (() => {
+            let found = false
+            args.state.formulas.forEach((_formula, cellIndex) => {
+              if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+                found = true
+              }
+            })
+            return found
+          })()
+          const removedFormulaCellIndices = transaction.removedCellIndices.filter((cellIndex) => args.state.formulas.has(cellIndex))
+          const removedFormulaCellIndexSet = new Set<number>(removedFormulaCellIndices)
           transaction.removedCellIndices.forEach((cellIndex) => {
             clearDerivedCellArtifacts(cellIndex)
             args.removeFormula(cellIndex)
@@ -997,17 +1053,20 @@ export function createEngineStructureService(args: {
           args.rebindFormulaCells(rebindInputs)
           const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
           const preservedFormulaCellIndices = new Set(rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex))
-          const topologyChanged =
-            transaction.removedCellIndices.some((cellIndex) => args.state.formulas.has(cellIndex)) ||
-            rebindInputs.some((input) => input.preservesBinding !== true) ||
-            impactedFormulas.formulaCellIndices.some(
-              (cellIndex) => !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex),
-            )
+          const lostSurvivingFormulaCells = impactedFormulas.formulaCellIndices.some(
+            (cellIndex) =>
+              !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex) && !removedFormulaCellIndexSet.has(cellIndex),
+          )
+          const hasNonPreservedRebind = rebindInputs.some((input) => input.preservesBinding !== true)
+          const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
+          const graphRefreshRequired =
+            hasNonPreservedRebind || lostSurvivingFormulaCells || (removedFormulaCellIndices.length > 0 && hadCycleFormulas)
           return {
             transaction,
             changedCellIndices: [...transaction.removedCellIndices],
             formulaCellIndices: formulaCellIndices.filter((cellIndex) => !preservedFormulaCellIndices.has(cellIndex)),
             topologyChanged,
+            graphRefreshRequired,
           }
         },
         catch: (cause) =>

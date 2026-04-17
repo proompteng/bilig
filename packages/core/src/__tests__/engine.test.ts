@@ -6318,6 +6318,41 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getCellValue('Sheet1', 'D2')).toEqual({ tag: ValueTag.Number, value: 10 })
   })
 
+  it('keeps packed range entity ids and plan ids stable across structural row deletes when the range survives', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'symbolic-structural-delete-spec' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 10)
+      engine.setCellValue('Sheet1', `C${row}`, row * 100)
+    }
+    engine.setCellFormula('Sheet1', 'D5', 'SUM(A1:B4)+C4')
+
+    const beforeCellIndex = engine.workbook.getCellIndex('Sheet1', 'D5')
+    expect(beforeCellIndex).toBeDefined()
+    const beforeRuntimeFormula = readRuntimeFormula(engine, beforeCellIndex!)
+    expect(isRuntimeFormulaWithRanges(beforeRuntimeFormula)).toBe(true)
+    expect(isRuntimeFormulaWithCompiled(beforeRuntimeFormula)).toBe(true)
+
+    const beforePlanId = beforeRuntimeFormula?.planId
+    const beforeRangeIndex = beforeRuntimeFormula?.rangeDependencies[0]
+    expect(beforePlanId).toBeDefined()
+    expect(beforeRangeIndex).toBeDefined()
+
+    engine.deleteRows('Sheet1', 1, 1)
+
+    const afterCellIndex = engine.workbook.getCellIndex('Sheet1', 'D4')
+    expect(afterCellIndex).toBeDefined()
+    const afterRuntimeFormula = readRuntimeFormula(engine, afterCellIndex!)
+    expect(isRuntimeFormulaWithRanges(afterRuntimeFormula)).toBe(true)
+    expect(isRuntimeFormulaWithCompiled(afterRuntimeFormula)).toBe(true)
+    expect(afterRuntimeFormula?.planId).toBe(beforePlanId)
+    expect(afterRuntimeFormula?.rangeDependencies[0]).toBe(beforeRangeIndex)
+    expect(engine.getCell('Sheet1', 'D4').formula).toBe('SUM(A1:B3)+C3')
+    expect(engine.getCellValue('Sheet1', 'D4')).toEqual({ tag: ValueTag.Number, value: 488 })
+  })
+
   it('tracks literal-backed ranges through range entities without inflating topo dependency cells', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'range-topology-spec' })
     await engine.ready()

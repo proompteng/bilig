@@ -233,6 +233,7 @@ export function createEngineOperationService(args: {
     changedCellIndices: number[]
     formulaCellIndices: number[]
     topologyChanged: boolean
+    graphRefreshRequired: boolean
   }
   readonly clearOwnedSpill: (cellIndex: number) => number[]
   readonly clearPivotForCell: (cellIndex: number) => number[]
@@ -1199,7 +1200,7 @@ export function createEngineOperationService(args: {
                 endIndex: invalidation.end - 1,
               })
             })
-            topologyChanged = structural.topologyChanged || topologyChanged
+            topologyChanged = structural.graphRefreshRequired || topologyChanged
             refreshAllPivots = true
             setEntityVersionForOp(op, order)
             break

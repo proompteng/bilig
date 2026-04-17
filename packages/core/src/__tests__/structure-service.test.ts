@@ -226,6 +226,29 @@ describe('EngineStructureService', () => {
     expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Number, value: 10 })
   })
 
+  it('avoids full graph refresh when a structural delete only removes preserved aggregate nodes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-row-aggregates' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'deleteRows',
+        sheetName: 'Sheet1',
+        start: 1,
+        count: 1,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(true)
+    expect(result.graphRefreshRequired).toBe(false)
+    expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A1:A3)')
+  })
+
   it('keeps repeated simple column families off the topology and dirty-formula path for inserts', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-column-families' })
     await engine.ready()
@@ -254,5 +277,30 @@ describe('EngineStructureService', () => {
       expect(engine.getCellValue('Sheet1', `D${row}`)).toEqual({ tag: ValueTag.Number, value: row * 3 })
       expect(engine.getCellValue('Sheet1', `E${row}`)).toEqual({ tag: ValueTag.Number, value: row * 6 })
     }
+  })
+
+  it('keeps surviving range-backed row deletes off the topology churn path', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-range-delete' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 10)
+      engine.setCellValue('Sheet1', `C${row}`, row * 100)
+    }
+    engine.setCellFormula('Sheet1', 'D5', 'SUM(A1:B4)+C4')
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'deleteRows',
+        sheetName: 'Sheet1',
+        start: 1,
+        count: 1,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(false)
+    expect(engine.getCell('Sheet1', 'D4').formula).toBe('SUM(A1:B3)+C3')
+    expect(result.formulaCellIndices).toEqual([engine.workbook.getCellIndex('Sheet1', 'D4')!])
   })
 })
