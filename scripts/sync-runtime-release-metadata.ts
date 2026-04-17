@@ -40,8 +40,9 @@ const changelogPath = join(rootDir, 'packages/headless/CHANGELOG.md')
 const existingChangelog = readFileSync(changelogPath, 'utf8')
 const releaseHeading = `## ${version}`
 if (!existingChangelog.includes(releaseHeading)) {
-  const header = '# Changelog\n\nAll notable changes to `@bilig/headless` will be documented in this file.\n'
-  const nextContent = `${header}\n${releaseHeading}\n\n${notesMarkdown}\n\n${stripHeader(existingChangelog)}`
+  const intro = extractChangelogIntro(existingChangelog)
+  const normalizedNotes = normalizeReleaseNotes(version, notesMarkdown)
+  const nextContent = `${intro}\n\n${releaseHeading}\n\n${normalizedNotes}\n\n${stripExistingReleaseSections(existingChangelog)}`
   writeFileSync(changelogPath, nextContent)
 }
 
@@ -57,15 +58,26 @@ console.log(
   ),
 )
 
-function stripHeader(content: string): string {
+function extractChangelogIntro(content: string): string {
   const lines = content.trim().split('\n')
-  const filtered = lines.filter(
-    (line) =>
-      line.trim() !== '# Changelog' &&
-      line.trim() !== 'All notable changes to `@bilig/headless` will be documented in this file.' &&
-      line.trim() !== 'This package uses release-please to manage versioned release notes.',
-  )
-  return `${filtered.join('\n').trim()}\n`
+  const releaseIndex = lines.findIndex((line) => line.startsWith('## '))
+  const introLines = releaseIndex >= 0 ? lines.slice(0, releaseIndex) : lines
+  return introLines.join('\n').trim()
+}
+
+function stripExistingReleaseSections(content: string): string {
+  const lines = content.trim().split('\n')
+  const firstReleaseIndex = lines.findIndex((line) => line.startsWith('## '))
+  if (firstReleaseIndex < 0) {
+    return ''
+  }
+  return lines.slice(firstReleaseIndex).join('\n').trim()
+}
+
+function normalizeReleaseNotes(releaseVersion: string, notes: string): string {
+  const lines = notes.trim().split('\n')
+  const filtered = lines.filter((line, index) => !(index === 0 && line.trim() === `# Libraries v${releaseVersion}`))
+  return filtered.join('\n').trim()
 }
 
 function readRequiredStringArg(name: string): string {
