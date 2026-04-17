@@ -498,7 +498,19 @@ jobs:
 
           git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" "${GITHUB_SHA}"
           git push origin "refs/tags/${TAG_NAME}"
-          git push github "refs/tags/${TAG_NAME}"
+
+          if git ls-remote --exit-code --tags github "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "GitHub already has ${TAG_NAME}; skipping explicit mirror push"
+            exit 0
+          fi
+
+          if ! git push github "refs/tags/${TAG_NAME}"; then
+            if git ls-remote --exit-code --tags github "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+              echo "GitHub acquired ${TAG_NAME} during push race; continuing"
+              exit 0
+            fi
+            exit 1
+          fi
 
       - name: Create GitHub release
         if: needs.plan_release.outputs.dry_run != 'true'
