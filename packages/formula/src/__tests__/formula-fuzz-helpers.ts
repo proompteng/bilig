@@ -1,4 +1,4 @@
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { FormulaMode, ValueTag, type CellValue } from '@bilig/protocol'
 import { compileFormula } from '../compiler.js'
 

@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { formatAddress } from '@bilig/formula'
 import type { CellNumberFormatInput, CellRangeRef, CellStylePatch, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineOpBatch } from '@bilig/workbook-domain'

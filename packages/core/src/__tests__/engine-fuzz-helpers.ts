@@ -1,5 +1,5 @@
 import { deepStrictEqual } from 'node:assert'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { CellNumberFormatInput, CellRangeRef, CellStylePatch, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'

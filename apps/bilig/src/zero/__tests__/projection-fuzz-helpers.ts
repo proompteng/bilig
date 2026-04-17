@@ -1,4 +1,4 @@
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { SpreadsheetEngine } from '@bilig/core'
 import type { CellNumberFormatInput, CellRangeRef, CellStylePatch, LiteralInput } from '@bilig/protocol'
 import {

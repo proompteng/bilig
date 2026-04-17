@@ -2,7 +2,6 @@ import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import { Toaster, toast } from 'sonner'
 import type { ExternalToast } from 'sonner'
-import 'sonner/dist/styles.css'
 
 export interface WorkbookToastAction {
   readonly label: string

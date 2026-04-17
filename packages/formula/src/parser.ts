@@ -151,12 +151,10 @@ export function parseFormula(source: string): FormulaNode {
     eat('lparen')
     const args: FormulaNode[] = []
     if (current().kind !== 'rparen') {
-      while (true) {
-        args.push(parseExpression())
-        if (current().kind !== 'comma') {
-          break
-        }
+      args.push(parseExpression())
+      while (current().kind === 'comma') {
         eat('comma')
+        args.push(parseExpression())
       }
     }
     eat('rparen')
@@ -332,14 +330,9 @@ export function parseFormula(source: string): FormulaNode {
 
   function parseExpression(minPrecedence = 0): FormulaNode {
     let left = parsePrimary()
-
-    while (true) {
+    let precedence = PRECEDENCE[current().kind]
+    while (precedence !== undefined && precedence >= minPrecedence) {
       const token = current()
-      const precedence = PRECEDENCE[token.kind]
-      if (!precedence || precedence < minPrecedence) {
-        break
-      }
-
       eat(token.kind)
 
       if (token.kind === 'colon') {
@@ -353,6 +346,7 @@ export function parseFormula(source: string): FormulaNode {
           throw new Error('Range end must be a cell reference')
         }
         left = buildRange(start, end)
+        precedence = PRECEDENCE[current().kind]
         continue
       }
 
@@ -381,6 +375,7 @@ export function parseFormula(source: string): FormulaNode {
         left,
         right,
       }
+      precedence = PRECEDENCE[current().kind]
     }
 
     return left

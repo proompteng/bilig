@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { formatAddress } from '@bilig/formula'
 import { ValueTag, type LiteralInput } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'

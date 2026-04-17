@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { ErrorCode, ValueTag, type CellSnapshot, type WorkbookDefinedNameSnapshot } from '@bilig/protocol'
 import { runProperty } from '@bilig/test-fuzz'
 import {

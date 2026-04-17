@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import fc, { type AsyncCommand, type IAsyncProperty, type IProperty, type Parameters, type RunDetails, type Scheduler } from 'fast-check'
+import * as fc from 'fast-check'
+import type { AsyncCommand, IAsyncProperty, IProperty, Parameters, RunDetails, Scheduler } from 'fast-check'
 
 export type FuzzProfile = 'default' | 'main' | 'nightly' | 'replay'
 export type FuzzSuiteKind = 'property' | 'model' | 'scheduled' | 'browser'

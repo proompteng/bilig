@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import type { CellSnapshot, RecalcMetrics } from '@bilig/protocol'
 import { ValueTag } from '@bilig/protocol'
 import type { ViewportPatch } from '@bilig/worker-transport'

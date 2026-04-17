@@ -1,4 +1,4 @@
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ValueTag } from '@bilig/protocol'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'

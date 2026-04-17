@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { parseFormula } from '../parser.js'
 import { renameFormulaSheetReferences, serializeFormula } from '../translation.js'
 import { renameScopedFormulaArbitrary, sheetNameArbitrary } from './formula-fuzz-helpers.js'

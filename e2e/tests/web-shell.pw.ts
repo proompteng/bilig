@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { runProperty, shouldRunFuzzSuite } from '../../packages/test-fuzz/src/index.ts'
 import {
   PRIMARY_MODIFIER,
