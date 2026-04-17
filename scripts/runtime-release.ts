@@ -130,7 +130,7 @@ export function summarizeReleaseNotes(input: {
   const lines = [`# Libraries v${input.targetVersion}`, '']
 
   lines.push(`- Release type: ${input.releaseType}`)
-  lines.push(`- Previous runtime tag: ${input.lastTag ?? 'none'}`)
+  lines.push(`- Previous libraries tag: ${input.lastTag ?? 'none'}`)
   lines.push(`- Manual override: ${input.manualOverride ? 'yes' : 'no'}`)
   lines.push('')
 

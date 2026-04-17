@@ -203,7 +203,14 @@ function buildRuntimeReleasePlan(input: {
         ? bumpVersion(baselineVersion, strongestReleaseType)
         : manifestVersion)
 
-  if ((lastTag !== null || publishedVersion !== null) && compareStableSemver(targetVersion, baselineVersion) <= 0) {
+  const versionComparison = compareStableSemver(targetVersion, baselineVersion)
+  const allowSameVersionRerun = Boolean(releaseAs) && versionComparison === 0 && lastTag !== null
+
+  if ((lastTag !== null || publishedVersion !== null) && versionComparison < 0) {
+    throw new Error(`Target runtime release version ${targetVersion} must be greater than baseline ${baselineVersion}`)
+  }
+
+  if ((lastTag !== null || publishedVersion !== null) && versionComparison === 0 && !allowSameVersionRerun) {
     throw new Error(`Target runtime release version ${targetVersion} must be greater than baseline ${baselineVersion}`)
   }
 
