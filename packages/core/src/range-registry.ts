@@ -1,5 +1,7 @@
 import { MAX_COLS, MAX_ROWS, MAX_WASM_RANGE_CELLS, type RangeIndex } from '@bilig/protocol'
+import type { StructuralAxisTransform } from '@bilig/formula'
 import type { CellAddress, CellRangeAddress, RangeAddress } from '@bilig/formula'
+import type { StructuralTransaction } from './engine/structural-transaction.js'
 import { makeCellEntity, makeRangeEntity } from './entity-ids.js'
 import { EdgeArena, type EdgeSlice } from './edge-arena.js'
 
@@ -37,6 +39,12 @@ export interface RegisteredCellRange {
   rangeIndex: number
   cellRange: CellRangeAddress
   materialized: boolean
+}
+
+export interface RetargetedRangeDependencies {
+  rangeIndex: RangeIndex
+  oldDependencySources: Uint32Array
+  newDependencySources: Uint32Array
 }
 
 export class RangeRegistry {
@@ -262,12 +270,15 @@ export class RangeRegistry {
   ): { oldDependencySources: Uint32Array; newDependencySources: Uint32Array } {
     const descriptor = this.getDescriptor(rangeIndex)
     const oldDependencySources = this.getDependencySourceEntities(rangeIndex)
+    const previousParentRangeIndex = descriptor.parentRangeIndex
     let memberIndices: Uint32Array
     let formulaMemberIndices: Uint32Array
     let dependencySourceEntities: Uint32Array
+    let nextParentRangeIndex: RangeIndex | undefined
     if (descriptor.kind === 'cells') {
       const range = descriptorToCellRangeAddress(descriptor)
       const sourceReuse = resolveCellRangeDependencyReuse(this.descriptors, this.byKey, descriptor.sheetId, range)
+      nextParentRangeIndex = sourceReuse?.parentRangeIndex
       const isFormulaCell =
         materializer.isFormulaCell === undefined ? undefined : (cellIndex: number): boolean => materializer.isFormulaCell!(cellIndex)
       memberIndices = materializeBoundedMembers(descriptor.sheetId, range, materializer, this, sourceReuse)
@@ -301,9 +312,157 @@ export class RangeRegistry {
     syncDescriptorMembers(descriptor, memberSlice)
     syncDescriptorFormulaMembers(descriptor, formulaMemberSlice)
     syncDescriptorDependencySources(descriptor, dependencySourceSlice)
+    if (previousParentRangeIndex !== nextParentRangeIndex) {
+      if (previousParentRangeIndex !== undefined) {
+        this.release(previousParentRangeIndex)
+      }
+      if (nextParentRangeIndex !== undefined) {
+        this.descriptors[nextParentRangeIndex]!.refCount += 1
+      }
+      descriptor.parentRangeIndex = nextParentRangeIndex
+    }
     return {
       oldDependencySources,
       newDependencySources: this.getDependencySourceEntities(rangeIndex),
+    }
+  }
+
+  applyStructuralTransaction(
+    transaction: StructuralTransaction,
+    rangeIndices: readonly RangeIndex[],
+    materializer: RangeMaterializer,
+  ): RetargetedRangeDependencies[] {
+    const touched: RetargetedRangeDependencies[] = []
+    const seen = new Set<number>()
+    rangeIndices.forEach((rangeIndex) => {
+      if (seen.has(rangeIndex)) {
+        return
+      }
+      seen.add(rangeIndex)
+      const descriptor = this.descriptors[rangeIndex]
+      if (!descriptor || descriptor.refCount <= 0 || descriptor.sheetId !== transaction.sheetId) {
+        return
+      }
+      const nextBounds = remapDescriptorBounds(descriptor, transaction.transform)
+      if (!nextBounds) {
+        return
+      }
+      const keyBefore = keyForDescriptor(descriptor)
+      this.byKey.delete(keyBefore)
+      descriptor.row1 = nextBounds.row1
+      descriptor.row2 = nextBounds.row2
+      descriptor.col1 = nextBounds.col1
+      descriptor.col2 = nextBounds.col2
+      this.byKey.set(keyForDescriptor(descriptor), rangeIndex)
+      touched.push({
+        rangeIndex,
+        ...this.refresh(rangeIndex, materializer),
+      })
+    })
+    return touched
+  }
+}
+
+function remapDescriptorBounds(
+  descriptor: RangeDescriptor,
+  transform: StructuralAxisTransform,
+): { row1: number; row2: number; col1: number; col2: number } | undefined {
+  const rowInterval =
+    transform.axis === 'row'
+      ? mapDescriptorInterval(descriptor.row1, descriptor.row2, transform)
+      : { start: descriptor.row1, end: descriptor.row2 }
+  const colInterval =
+    transform.axis === 'column'
+      ? mapDescriptorInterval(descriptor.col1, descriptor.col2, transform)
+      : { start: descriptor.col1, end: descriptor.col2 }
+  if (!rowInterval || !colInterval) {
+    return undefined
+  }
+  return {
+    row1: rowInterval.start,
+    row2: rowInterval.end,
+    col1: colInterval.start,
+    col2: colInterval.end,
+  }
+}
+
+function mapDescriptorInterval(start: number, end: number, transform: StructuralAxisTransform): { start: number; end: number } | undefined {
+  switch (transform.kind) {
+    case 'insert': {
+      if (transform.start <= start) {
+        return { start: start + transform.count, end: end + transform.count }
+      }
+      if (transform.start <= end) {
+        return { start, end: end + transform.count }
+      }
+      return { start, end }
+    }
+    case 'delete': {
+      const deleteEnd = transform.start + transform.count - 1
+      if (deleteEnd < start) {
+        return { start: start - transform.count, end: end - transform.count }
+      }
+      if (transform.start > end) {
+        return { start, end }
+      }
+      const survivingStart = start < transform.start ? start : deleteEnd + 1
+      const survivingEnd = end > deleteEnd ? end : transform.start - 1
+      if (survivingStart > survivingEnd) {
+        return undefined
+      }
+      return {
+        start: survivingStart < transform.start ? survivingStart : survivingStart - transform.count,
+        end: survivingEnd - (survivingEnd > deleteEnd ? transform.count : 0),
+      }
+    }
+    case 'move': {
+      const segments =
+        transform.target < transform.start
+          ? [
+              { start: 0, end: transform.target - 1, delta: 0 },
+              { start: transform.target, end: transform.start - 1, delta: transform.count },
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              { start: transform.start + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
+            ]
+          : [
+              { start: 0, end: transform.start - 1, delta: 0 },
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              {
+                start: transform.start + transform.count,
+                end: transform.target + transform.count - 1,
+                delta: -transform.count,
+              },
+              { start: transform.target + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
+            ]
+      let nextStart: number | undefined
+      let nextEnd: number | undefined
+      segments.forEach((segment) => {
+        const overlapStart = Math.max(start, segment.start)
+        const overlapEnd = Math.min(end, segment.end)
+        if (overlapStart > overlapEnd) {
+          return
+        }
+        const mappedStart = overlapStart + segment.delta
+        const mappedEnd = overlapEnd + segment.delta
+        nextStart = nextStart === undefined ? mappedStart : Math.min(nextStart, mappedStart)
+        nextEnd = nextEnd === undefined ? mappedEnd : Math.max(nextEnd, mappedEnd)
+      })
+      if (nextStart === undefined || nextEnd === undefined) {
+        return undefined
+      }
+      return { start: nextStart, end: nextEnd }
+    }
+    default: {
+      const exhaustive: never = transform
+      return exhaustive
     }
   }
 }

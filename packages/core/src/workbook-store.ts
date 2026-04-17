@@ -24,9 +24,11 @@ import {
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
 } from '@bilig/protocol'
-import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress, type StructuralAxisTransform } from '@bilig/formula'
 import { SheetGrid, type SheetGridAxisRemapScope } from './sheet-grid.js'
 import { CellFlags, CellStore } from './cell-store.js'
+import { mapStructuralAxisIndex } from './engine-structural-utils.js'
+import { buildStructuralTransaction, structuralScopeForTransform, type StructuralTransaction } from './engine/structural-transaction.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
 import {
   createWorkbookMetadataRecord,
@@ -905,6 +907,41 @@ export class WorkbookStore {
     }
 
     return { changedCellIndices: [], removedCellIndices }
+  }
+
+  applyStructuralAxisTransform(sheetName: string, transform: StructuralAxisTransform): StructuralTransaction | undefined {
+    const sheet = this.getSheet(sheetName)
+    if (!sheet) {
+      return undefined
+    }
+
+    const scope = structuralScopeForTransform(transform)
+    const remappedEntries = sheet.grid.remapAxis(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
+    remappedEntries.forEach(({ row, col }) => {
+      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
+    })
+
+    const remappedCells = remappedEntries.map(({ cellIndex, row, col, nextRow, nextCol }) => {
+      if (nextRow !== undefined && nextCol !== undefined) {
+        this.cellStore.rows[cellIndex] = nextRow
+        this.cellStore.cols[cellIndex] = nextCol
+        this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
+      }
+      return {
+        cellIndex,
+        fromRow: row,
+        fromCol: col,
+        toRow: nextRow,
+        toCol: nextCol,
+      }
+    })
+
+    return buildStructuralTransaction({
+      sheetName,
+      sheetId: sheet.id,
+      transform,
+      remappedCells,
+    })
   }
 
   reset(workbookName = 'Workbook'): void {

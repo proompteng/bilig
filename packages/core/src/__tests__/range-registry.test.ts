@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildStructuralTransaction } from '../engine/structural-transaction.js'
 import { makeCellEntity, makeRangeEntity } from '../entity-ids.js'
 import { RangeRegistry } from '../range-registry.js'
 
@@ -198,6 +199,76 @@ describe('RangeRegistry', () => {
     expect(registry.getFormulaMembers(range.rangeIndex)).toEqual(Uint32Array.from([101]))
     expect(registry.getDependencySourceEntities(range.rangeIndex)).toEqual(
       Uint32Array.from([makeRangeEntity(prefix.rangeIndex), makeCellEntity(101)]),
+    )
+  })
+
+  it('retargets bounded ranges in place from a structural transaction', () => {
+    const registry = new RangeRegistry()
+    let entries = [
+      { cellIndex: 100, row: 0, col: 0 },
+      { cellIndex: 101, row: 1, col: 0 },
+      { cellIndex: 102, row: 2, col: 0 },
+    ]
+    const materializer = {
+      ensureCell: (_sheetId: number, row: number, col: number) => {
+        const entry = entries.find((current) => current.row === row && current.col === col)
+        if (!entry) {
+          throw new Error(`Missing materialized cell for ${row},${col}`)
+        }
+        return entry.cellIndex
+      },
+      forEachSheetCell: (_sheetId: number, fn: (cellIndex: number, row: number, col: number) => void) => {
+        entries.forEach(({ cellIndex, row, col }) => {
+          fn(cellIndex, row, col)
+        })
+      },
+      isFormulaCell: (cellIndex: number) => cellIndex === 101,
+    }
+
+    const prefix = registry.intern(
+      1,
+      {
+        kind: 'cells',
+        start: { row: 0, col: 0, text: 'A1' },
+        end: { row: 1, col: 0, text: 'A2' },
+      },
+      materializer,
+    )
+    const range = registry.intern(
+      1,
+      {
+        kind: 'cells',
+        start: { row: 0, col: 0, text: 'A1' },
+        end: { row: 2, col: 0, text: 'A3' },
+      },
+      materializer,
+    )
+
+    entries = [
+      { cellIndex: 101, row: 0, col: 0 },
+      { cellIndex: 102, row: 1, col: 0 },
+    ]
+
+    const transaction = buildStructuralTransaction({
+      sheetName: 'Sheet1',
+      sheetId: 1,
+      transform: { axis: 'row', kind: 'delete', start: 0, count: 1 },
+      remappedCells: [
+        { cellIndex: 100, fromRow: 0, fromCol: 0, toRow: undefined, toCol: 0 },
+        { cellIndex: 101, fromRow: 1, fromCol: 0, toRow: 0, toCol: 0 },
+        { cellIndex: 102, fromRow: 2, fromCol: 0, toRow: 1, toCol: 0 },
+      ],
+    })
+
+    const refreshed = registry.applyStructuralTransaction(transaction, [prefix.rangeIndex, range.rangeIndex], materializer)
+
+    expect(refreshed).toHaveLength(2)
+    expect(registry.getDescriptor(prefix.rangeIndex)).toMatchObject({ row1: 0, row2: 0 })
+    expect(registry.getDescriptor(range.rangeIndex)).toMatchObject({ row1: 0, row2: 1 })
+    expect(registry.getMembers(prefix.rangeIndex)).toEqual(Uint32Array.from([101]))
+    expect(registry.getMembers(range.rangeIndex)).toEqual(Uint32Array.from([101, 102]))
+    expect(registry.getDependencySourceEntities(range.rangeIndex)).toEqual(
+      Uint32Array.from([makeRangeEntity(prefix.rangeIndex), makeCellEntity(102)]),
     )
   })
 })

@@ -14,6 +14,7 @@ import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue } from '../../engine-value-utils.js'
 import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
+import type { StructuralTransaction } from '../structural-transaction.js'
 import type { FormulaTable } from '../../formula-table.js'
 import type { RuntimeFormula } from '../runtime-state.js'
 import { EngineStructureError } from '../errors.js'
@@ -175,32 +176,13 @@ function structuralDirectAggregateRewritePreservesValue(
   )
 }
 
-function structuralRemapScope(transform: StructuralAxisTransform): { start: number; end?: number } {
-  switch (transform.kind) {
-    case 'insert':
-    case 'delete':
-      return { start: transform.start }
-    case 'move':
-      if (transform.target < transform.start) {
-        return { start: transform.target, end: transform.start + transform.count }
-      }
-      if (transform.target > transform.start) {
-        return { start: transform.start, end: transform.target + transform.count }
-      }
-      return { start: transform.start, end: transform.start }
-    default: {
-      const exhaustive: never = transform
-      return exhaustive
-    }
-  }
-}
-
 export interface EngineStructureService {
   readonly captureSheetCellState: (sheetName: string) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly captureColumnRangeCellState: (sheetName: string, start: number, count: number) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly applyStructuralAxisOp: (op: StructuralAxisOp) => Effect.Effect<
     {
+      transaction: StructuralTransaction
       changedCellIndices: number[]
       formulaCellIndices: number[]
       topologyChanged: boolean
@@ -221,6 +203,7 @@ export function createEngineStructureService(args: {
   readonly removeFormula: (cellIndex: number) => boolean
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[]
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
+  readonly retargetRangeDependencies: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
   readonly rebindFormulaCells: (inputs: readonly StructuralFormulaRebindInput[]) => void
 }): EngineStructureService {
   const shouldCaptureStoredCell = (cellIndex: number): boolean => {
@@ -944,7 +927,6 @@ export function createEngineStructureService(args: {
     applyStructuralAxisOp(op) {
       return Effect.try({
         try: () => {
-          const axis = op.kind.includes('Rows') ? 'row' : 'column'
           const transform = structuralTransformForOp(op)
           const sheetName = op.sheetName
           const targetSheetId = args.state.workbook.getSheet(sheetName)?.id
@@ -985,13 +967,13 @@ export function createEngineStructureService(args: {
             formulaCellIndices: impactedFormulas.formulaCellIndices,
           })
 
-          const remapped = args.state.workbook.remapSheetCells(
-            sheetName,
-            axis,
-            (index) => mapStructuralAxisIndex(index, transform),
-            structuralRemapScope(transform),
-          )
-          remapped.removedCellIndices.forEach((cellIndex) => {
+          const transaction =
+            args.state.workbook.applyStructuralAxisTransform(sheetName, transform) ??
+            (() => {
+              throw new Error(`Missing sheet for structural op: ${sheetName}`)
+            })()
+
+          transaction.removedCellIndices.forEach((cellIndex) => {
             clearDerivedCellArtifacts(cellIndex)
             args.removeFormula(cellIndex)
             args.state.workbook.setCellFormat(cellIndex, null)
@@ -1004,7 +986,7 @@ export function createEngineStructureService(args: {
 
           clearSpillMetadataForSheet(sheetName)
           const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex))
-          args.refreshRangeDependencies(structuralRangeDependencies)
+          args.retargetRangeDependencies(transaction, structuralRangeDependencies)
           const rebindInputs = resolveStructuralFormulaRebindInputs({
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex)),
             sheetName,
@@ -1016,13 +998,14 @@ export function createEngineStructureService(args: {
           const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
           const preservedFormulaCellIndices = new Set(rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex))
           const topologyChanged =
-            remapped.removedCellIndices.some((cellIndex) => args.state.formulas.has(cellIndex)) ||
+            transaction.removedCellIndices.some((cellIndex) => args.state.formulas.has(cellIndex)) ||
             rebindInputs.some((input) => input.preservesBinding !== true) ||
             impactedFormulas.formulaCellIndices.some(
               (cellIndex) => !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex),
             )
           return {
-            changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
+            transaction,
+            changedCellIndices: [...transaction.removedCellIndices],
             formulaCellIndices: formulaCellIndices.filter((cellIndex) => !preservedFormulaCellIndices.has(cellIndex)),
             topologyChanged,
           }

@@ -24,6 +24,7 @@ import { CellFlags } from '../../cell-store.js'
 import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { spillDependencyKey, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from '../../workbook-store.js'
+import type { StructuralTransaction } from '../structural-transaction.js'
 import type { EngineRuntimeState, PreparedCellAddress, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 
@@ -191,27 +192,6 @@ function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly
   return Uint32Array.from(merged)
 }
 
-function structuralInvalidationRange(op: StructuralAxisOp): { startIndex: number; endIndex: number } {
-  switch (op.kind) {
-    case 'insertRows':
-    case 'deleteRows':
-    case 'insertColumns':
-    case 'deleteColumns':
-      return {
-        startIndex: op.start,
-        endIndex: op.start + Math.max(op.count - 1, 0),
-      }
-    case 'moveRows':
-    case 'moveColumns':
-      return {
-        startIndex: Math.min(op.start, op.target),
-        endIndex: Math.max(op.start + op.count - 1, op.target + op.count - 1),
-      }
-    default:
-      return assertNever(op)
-  }
-}
-
 export function createEngineOperationService(args: {
   readonly state: Pick<
     EngineRuntimeState,
@@ -249,6 +229,7 @@ export function createEngineOperationService(args: {
     explicitChangedCount: number,
   ) => { changedInputCount: number; formulaChangedCount: number; explicitChangedCount: number }
   readonly applyStructuralAxisOp: (op: StructuralAxisOp) => {
+    transaction: StructuralTransaction
     changedCellIndices: number[]
     formulaCellIndices: number[]
     topologyChanged: boolean
@@ -1203,20 +1184,21 @@ export function createEngineOperationService(args: {
             structural.formulaCellIndices.forEach((cellIndex) => {
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
             })
-            const invalidation = structuralInvalidationRange(op)
-            if (op.kind.includes('Rows')) {
-              invalidatedRows.push({
-                sheetName: op.sheetName,
-                startIndex: invalidation.startIndex,
-                endIndex: invalidation.endIndex,
-              })
-            } else {
+            structural.transaction.invalidationSpans.forEach((invalidation) => {
+              if (invalidation.axis === 'row') {
+                invalidatedRows.push({
+                  sheetName: op.sheetName,
+                  startIndex: invalidation.start,
+                  endIndex: invalidation.end - 1,
+                })
+                return
+              }
               invalidatedColumns.push({
                 sheetName: op.sheetName,
-                startIndex: invalidation.startIndex,
-                endIndex: invalidation.endIndex,
+                startIndex: invalidation.start,
+                endIndex: invalidation.end - 1,
               })
-            }
+            })
             topologyChanged = structural.topologyChanged || topologyChanged
             refreshAllPivots = true
             setEntityVersionForOp(op, order)

@@ -1,8 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { ValueTag, createCellNumberFormatRecord } from '@bilig/protocol'
+import type { StructuralAxisTransform } from '@bilig/formula'
 import { writeLiteralToCellStore } from '../engine-value-utils.js'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
+
+function hasStructuralAxisTransform(value: unknown): value is {
+  applyStructuralAxisTransform: (
+    sheetName: string,
+    transform: StructuralAxisTransform,
+  ) => {
+    removedCellIndices: number[]
+    remappedCells: Array<{ toRow: number | undefined }>
+  }
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'applyStructuralAxisTransform' in value &&
+    typeof value.applyStructuralAxisTransform === 'function'
+  )
+}
 
 describe('WorkbookStore', () => {
   it('does not mutate existing style ranges when bulk style restoration includes an unknown style', () => {
@@ -482,5 +500,32 @@ describe('WorkbookStore', () => {
     expect(workbook.cellStore.cols[leftCellIndex]).toBe(0)
     expect(workbook.cellStore.cols[movedCellIndex]).toBe(2)
     expect(workbook.cellStore.cols[farCellIndex]).toBe(4)
+  })
+
+  it('builds one structural transaction from workbook remaps and tracks removed cells', () => {
+    const workbook = new WorkbookStore('structural-transaction')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    const removedCellIndex = workbook.ensureCell('Sheet1', 'C11')
+    const movedCellIndex = workbook.ensureCell('Sheet1', 'C12')
+    writeLiteralToCellStore(workbook.cellStore, removedCellIndex, 7, strings)
+    writeLiteralToCellStore(workbook.cellStore, movedCellIndex, 8, strings)
+
+    expect(hasStructuralAxisTransform(workbook)).toBe(true)
+
+    const transaction = hasStructuralAxisTransform(workbook)
+      ? workbook.applyStructuralAxisTransform('Sheet1', {
+          axis: 'row',
+          kind: 'delete',
+          start: 10,
+          count: 1,
+        })
+      : undefined
+
+    expect(transaction).toBeDefined()
+    expect(transaction?.removedCellIndices).toEqual([removedCellIndex])
+    expect(transaction?.remappedCells.some((entry) => entry.toRow === 10)).toBe(true)
+    expect(workbook.getCellIndex('Sheet1', 'C11')).toBe(movedCellIndex)
   })
 })

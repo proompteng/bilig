@@ -33,6 +33,7 @@ import { growUint32 } from '../../engine-buffer-utils.js'
 import { resolveMetadataReferencesInAst, spillDependencyKeyFromRef, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
+import type { StructuralTransaction } from '../structural-transaction.js'
 import {
   type EngineRuntimeState,
   type MaterializedDependencies,
@@ -82,6 +83,7 @@ export interface EngineFormulaBindingService {
   readonly clearFormulaNow: (cellIndex: number) => boolean
   readonly invalidateFormulaNow: (cellIndex: number) => void
   readonly refreshRangeDependenciesNow: (rangeIndices: readonly number[]) => void
+  readonly retargetRangeDependenciesNow: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
   readonly rebindFormulaCellsNow: (candidates: readonly number[], formulaChangedCount: number) => number
   readonly rebindDefinedNameDependentsNow: (names: readonly string[], formulaChangedCount: number) => number
   readonly rebindTableDependentsNow: (tableNames: readonly string[], formulaChangedCount: number) => number
@@ -1035,20 +1037,38 @@ export function createEngineFormulaBindingService(args: {
         return
       }
       refreshed.add(rangeIndex)
-      const rangeEntity = makeRangeEntity(rangeIndex)
-      const { oldDependencySources, newDependencySources } = args.state.ranges.refresh(rangeIndex, materializer)
-      const nextSources = new Set<number>(newDependencySources)
-      oldDependencySources.forEach((dependencyEntity) => {
-        if (!nextSources.has(dependencyEntity)) {
-          removeReverseEdge(dependencyEntity, rangeEntity)
-        }
-      })
-      const priorSources = new Set<number>(oldDependencySources)
-      newDependencySources.forEach((dependencyEntity) => {
-        if (!priorSources.has(dependencyEntity)) {
-          appendReverseEdge(dependencyEntity, rangeEntity)
-        }
-      })
+      syncRangeDependencyEdges(rangeIndex, args.state.ranges.refresh(rangeIndex, materializer))
+    })
+  }
+
+  const retargetRangeDependenciesNow = (transaction: StructuralTransaction, rangeIndices: readonly number[]): void => {
+    const materializer = {
+      ensureCell: (sheetId: number, row: number, col: number) => args.ensureCellTrackedByCoords(sheetId, row, col),
+      forEachSheetCell: (sheetId: number, fn: (cellIndex: number, row: number, col: number) => void) => args.forEachSheetCell(sheetId, fn),
+      isFormulaCell: (cellIndex: number) => (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0,
+    }
+    const touched = args.state.ranges.applyStructuralTransaction(transaction, rangeIndices, materializer)
+    touched.forEach(({ rangeIndex, oldDependencySources, newDependencySources }) => {
+      syncRangeDependencyEdges(rangeIndex, { oldDependencySources, newDependencySources })
+    })
+  }
+
+  const syncRangeDependencyEdges = (
+    rangeIndex: number,
+    deps: { oldDependencySources: Uint32Array; newDependencySources: Uint32Array },
+  ): void => {
+    const rangeEntity = makeRangeEntity(rangeIndex)
+    const nextSources = new Set<number>(deps.newDependencySources)
+    deps.oldDependencySources.forEach((dependencyEntity) => {
+      if (!nextSources.has(dependencyEntity)) {
+        removeReverseEdge(dependencyEntity, rangeEntity)
+      }
+    })
+    const priorSources = new Set<number>(deps.oldDependencySources)
+    deps.newDependencySources.forEach((dependencyEntity) => {
+      if (!priorSources.has(dependencyEntity)) {
+        appendReverseEdge(dependencyEntity, rangeEntity)
+      }
     })
   }
 
@@ -2124,6 +2144,7 @@ export function createEngineFormulaBindingService(args: {
     clearFormulaNow,
     invalidateFormulaNow,
     refreshRangeDependenciesNow,
+    retargetRangeDependenciesNow,
     rebindFormulaCellsNow,
     rebindDefinedNameDependentsNow(names, formulaChangedCount) {
       return rebindFormulaCellsNow(collectTrackedDependents(args.reverseState.reverseDefinedNameEdges, names), formulaChangedCount)

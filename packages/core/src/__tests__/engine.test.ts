@@ -6291,6 +6291,33 @@ describe('SpreadsheetEngine', () => {
     expect(pushRange! & 0x00ff_ffff).toBe(runtimeFormula?.rangeDependencies[0])
   })
 
+  it('keeps packed range entity ids stable across structural inserts when the range survives', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'symbolic-structural-spec' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 2)
+    engine.setCellValue('Sheet1', 'B1', 3)
+    engine.setCellValue('Sheet1', 'C1', 5)
+    engine.setCellFormula('Sheet1', 'D1', 'SUM(A1:B1)+C1')
+
+    const beforeCellIndex = engine.workbook.getCellIndex('Sheet1', 'D1')
+    expect(beforeCellIndex).toBeDefined()
+    const beforeRuntimeFormula = readRuntimeFormula(engine, beforeCellIndex!)
+    expect(isRuntimeFormulaWithRanges(beforeRuntimeFormula)).toBe(true)
+
+    const beforeRangeIndex = beforeRuntimeFormula?.rangeDependencies[0]
+    expect(beforeRangeIndex).toBeDefined()
+
+    engine.insertRows('Sheet1', 0, 1)
+
+    const afterCellIndex = engine.workbook.getCellIndex('Sheet1', 'D2')
+    expect(afterCellIndex).toBeDefined()
+    const afterRuntimeFormula = readRuntimeFormula(engine, afterCellIndex!)
+    expect(isRuntimeFormulaWithRanges(afterRuntimeFormula)).toBe(true)
+    expect(afterRuntimeFormula?.rangeDependencies[0]).toBe(beforeRangeIndex)
+    expect(engine.getCellValue('Sheet1', 'D2')).toEqual({ tag: ValueTag.Number, value: 10 })
+  })
+
   it('tracks literal-backed ranges through range entities without inflating topo dependency cells', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'range-topology-spec' })
     await engine.ready()

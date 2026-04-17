@@ -403,6 +403,7 @@ export function createEngineServiceRuntime(args: {
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     clearOwnedPivot: (pivotRecord) => requireService(pivot, 'pivot').clearOwnedPivotNow(pivotRecord),
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
+    retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
       pending.forEach(({ cellIndex, ownerSheetName, source, compiled }) => {
