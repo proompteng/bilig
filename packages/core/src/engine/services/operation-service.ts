@@ -182,6 +182,27 @@ function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly
   return Uint32Array.from(merged)
 }
 
+function structuralInvalidationRange(op: StructuralAxisOp): { startIndex: number; endIndex: number } {
+  switch (op.kind) {
+    case 'insertRows':
+    case 'deleteRows':
+    case 'insertColumns':
+    case 'deleteColumns':
+      return {
+        startIndex: op.start,
+        endIndex: op.start + Math.max(op.count - 1, 0),
+      }
+    case 'moveRows':
+    case 'moveColumns':
+      return {
+        startIndex: Math.min(op.start, op.target),
+        endIndex: Math.max(op.start + op.count - 1, op.target + op.count - 1),
+      }
+    default:
+      return assertNever(op)
+  }
+}
+
 export function createEngineOperationService(args: {
   readonly state: Pick<
     EngineRuntimeState,
@@ -221,6 +242,7 @@ export function createEngineOperationService(args: {
   readonly applyStructuralAxisOp: (op: StructuralAxisOp) => {
     changedCellIndices: number[]
     formulaCellIndices: number[]
+    topologyChanged: boolean
   }
   readonly clearOwnedSpill: (cellIndex: number) => number[]
   readonly clearPivotForCell: (cellIndex: number) => number[]
@@ -1169,13 +1191,24 @@ export function createEngineOperationService(args: {
           case 'deleteColumns':
           case 'moveColumns': {
             const structural = args.applyStructuralAxisOp(op)
-            structural.changedCellIndices.forEach((cellIndex) => {
-              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
-            })
             structural.formulaCellIndices.forEach((cellIndex) => {
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
             })
-            topologyChanged = true
+            const invalidation = structuralInvalidationRange(op)
+            if (op.kind.includes('Rows')) {
+              invalidatedRows.push({
+                sheetName: op.sheetName,
+                startIndex: invalidation.startIndex,
+                endIndex: invalidation.endIndex,
+              })
+            } else {
+              invalidatedColumns.push({
+                sheetName: op.sheetName,
+                startIndex: invalidation.startIndex,
+                endIndex: invalidation.endIndex,
+              })
+            }
+            topologyChanged = structural.topologyChanged || topologyChanged
             refreshAllPivots = true
             setEntityVersionForOp(op, order)
             break

@@ -474,8 +474,7 @@ describe('WorkbookStore', () => {
 
     const remapped = workbook.remapSheetCells('Sheet1', 'column', (index) => (index < 1 ? index : index + 1))
 
-    expect(remapped.changedCellIndices).toEqual(expect.arrayContaining([movedCellIndex, farCellIndex]))
-    expect(remapped.changedCellIndices).not.toContain(leftCellIndex)
+    expect(remapped.changedCellIndices).toEqual([])
     expect(workbook.getCellIndex('Sheet1', 'A1')).toBe(leftCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'C1')).toBe(movedCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'E1')).toBe(farCellIndex)

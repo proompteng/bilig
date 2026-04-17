@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 import type { SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from '@bilig/protocol'
 import {
   formatAddress,
+  parseCellAddress,
   rewriteAddressForStructuralTransform,
   rewriteCompiledFormulaForStructuralTransform,
   rewriteFormulaForStructuralTransform,
@@ -39,6 +40,7 @@ interface StructuralFormulaRebindInput {
   readonly ownerSheetName: string
   readonly source: string
   readonly compiled?: CompiledFormula
+  readonly preservesBinding?: boolean
   readonly preservesValue?: boolean
 }
 
@@ -134,22 +136,62 @@ function structuralRewritePreservesValue(
   )
 }
 
+function structuralRewritePreservesBinding(
+  formula: RuntimeFormula,
+  rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
+): boolean {
+  return (
+    rewritten.reusedProgram &&
+    formula.rangeDependencies.length === 0 &&
+    formula.compiled.symbolicNames.length === 0 &&
+    formula.compiled.symbolicTables.length === 0 &&
+    formula.compiled.symbolicSpills.length === 0 &&
+    rewritten.compiled.symbolicNames.length === 0 &&
+    rewritten.compiled.symbolicTables.length === 0 &&
+    rewritten.compiled.symbolicSpills.length === 0 &&
+    formula.directLookup === undefined &&
+    formula.directCriteria === undefined &&
+    formula.programLength === rewritten.compiled.program.length &&
+    formula.constNumberLength === rewritten.compiled.constants.length &&
+    formula.compiled.mode === rewritten.compiled.mode &&
+    ((formula.directAggregate === undefined && rewritten.compiled.symbolicRanges.length === 0) || formula.directAggregate !== undefined)
+  )
+}
+
+function structuralDirectAggregateRewritePreservesValue(
+  formula: RuntimeFormula,
+  rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
+  transform: StructuralAxisTransform,
+): boolean {
+  return (
+    transform.kind === 'insert' &&
+    formula.directAggregate !== undefined &&
+    rewritten.reusedProgram &&
+    !rewritten.compiled.volatile &&
+    formula.compiled.symbolicNames.length === 0 &&
+    formula.compiled.symbolicTables.length === 0 &&
+    formula.compiled.symbolicSpills.length === 0 &&
+    formula.directLookup === undefined &&
+    formula.directCriteria === undefined
+  )
+}
+
 function structuralRemapScope(transform: StructuralAxisTransform): { start: number; end?: number } {
   switch (transform.kind) {
-    case "insert":
-    case "delete":
-      return { start: transform.start };
-    case "move":
+    case 'insert':
+    case 'delete':
+      return { start: transform.start }
+    case 'move':
       if (transform.target < transform.start) {
-        return { start: transform.target, end: transform.start + transform.count };
+        return { start: transform.target, end: transform.start + transform.count }
       }
       if (transform.target > transform.start) {
-        return { start: transform.start, end: transform.target + transform.count };
+        return { start: transform.start, end: transform.target + transform.count }
       }
-      return { start: transform.start, end: transform.start };
+      return { start: transform.start, end: transform.start }
     default: {
-      const exhaustive: never = transform;
-      return exhaustive;
+      const exhaustive: never = transform
+      return exhaustive
     }
   }
 }
@@ -162,6 +204,7 @@ export interface EngineStructureService {
     {
       changedCellIndices: number[]
       formulaCellIndices: number[]
+      topologyChanged: boolean
     },
     EngineStructureError
   >
@@ -326,6 +369,70 @@ export function createEngineStructureService(args: {
     sheetName: string,
     transform: StructuralAxisTransform,
   ): ReturnType<typeof rewriteCompiledFormulaForStructuralTransform> | undefined => {
+    if (formula.directAggregate) {
+      const directAggregateCandidate = formula.compiled.directAggregateCandidate
+      const rangeIndex = directAggregateCandidate?.symbolicRangeIndex
+      const parsedRange = rangeIndex === undefined ? undefined : formula.compiled.parsedSymbolicRanges?.[rangeIndex]
+      if (
+        directAggregateCandidate &&
+        rangeIndex !== undefined &&
+        parsedRange &&
+        parsedRange.refKind === 'cells' &&
+        (parsedRange.sheetName ?? ownerSheetName) === sheetName
+      ) {
+        const candidateRangeIndex = rangeIndex
+        const nextRange = rewriteRangeForStructuralTransform(parsedRange.startAddress, parsedRange.endAddress, transform)
+        if (nextRange) {
+          const rangePrefix = parsedRange.address.includes('!')
+            ? parsedRange.address.slice(0, parsedRange.address.lastIndexOf('!') + 1)
+            : ''
+          const nextAddress = `${rangePrefix}${nextRange.startAddress}:${nextRange.endAddress}`
+          const nextStart = parseCellAddress(nextRange.startAddress, parsedRange.sheetName ?? ownerSheetName)
+          const nextEnd = parseCellAddress(nextRange.endAddress, parsedRange.sheetName ?? ownerSheetName)
+          const nextParsedRange = {
+            ...parsedRange,
+            address: nextAddress,
+            startAddress: nextRange.startAddress,
+            endAddress: nextRange.endAddress,
+            startRow: nextStart.row,
+            endRow: nextEnd.row,
+            startCol: nextStart.col,
+            endCol: nextEnd.col,
+          }
+          const nextParsedSymbolicRanges = formula.compiled.parsedSymbolicRanges?.slice()
+          if (nextParsedSymbolicRanges) {
+            nextParsedSymbolicRanges[candidateRangeIndex] = nextParsedRange
+          }
+          const nextParsedDeps = formula.compiled.parsedDeps?.map((dependency) =>
+            dependency.kind === 'range' && dependency.address === parsedRange.address
+              ? {
+                  ...dependency,
+                  address: nextAddress,
+                  startAddress: nextRange.startAddress,
+                  endAddress: nextRange.endAddress,
+                  startRow: nextStart.row,
+                  endRow: nextEnd.row,
+                  startCol: nextStart.col,
+                  endCol: nextEnd.col,
+                }
+              : dependency,
+          )
+          return {
+            source: `${directAggregateCandidate.callee}(${nextAddress})`,
+            compiled: {
+              ...formula.compiled,
+              source: `${directAggregateCandidate.callee}(${nextAddress})`,
+              astMatchesSource: false,
+              deps: formula.compiled.deps.map((dependency) => (dependency === parsedRange.address ? nextAddress : dependency)),
+              symbolicRanges: formula.compiled.symbolicRanges.map((range, index) => (index === candidateRangeIndex ? nextAddress : range)),
+              ...(nextParsedDeps ? { parsedDeps: nextParsedDeps } : {}),
+              ...(nextParsedSymbolicRanges ? { parsedSymbolicRanges: nextParsedSymbolicRanges } : {}),
+            },
+            reusedProgram: true,
+          }
+        }
+      }
+    }
     const rewritten = rewriteCompiledFormulaForStructuralTransform(formula.compiled, ownerSheetName, sheetName, transform)
     return rewritten.source === formula.source ? undefined : rewritten
   }
@@ -375,12 +482,16 @@ export function createEngineStructureService(args: {
         })
         return
       }
+      const preservesBinding = structuralRewritePreservesBinding(formula, rewritten)
       inputs.push({
         cellIndex,
         ownerSheetName,
         source: rewritten.source,
         compiled: rewritten.compiled,
-        preservesValue: structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform),
+        preservesBinding,
+        preservesValue:
+          structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
+          structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform),
       })
     })
     return inputs
@@ -880,7 +991,7 @@ export function createEngineStructureService(args: {
             axis,
             (index) => mapStructuralAxisIndex(index, transform),
             structuralRemapScope(transform),
-          );
+          )
           remapped.removedCellIndices.forEach((cellIndex) => {
             clearDerivedCellArtifacts(cellIndex)
             args.removeFormula(cellIndex)
@@ -903,10 +1014,18 @@ export function createEngineStructureService(args: {
             changedTableNames,
           })
           args.rebindFormulaCells(rebindInputs)
+          const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
           const preservedFormulaCellIndices = new Set(rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex))
+          const topologyChanged =
+            remapped.removedCellIndices.some((cellIndex) => args.state.formulas.has(cellIndex)) ||
+            rebindInputs.some((input) => input.preservesBinding !== true) ||
+            impactedFormulas.formulaCellIndices.some(
+              (cellIndex) => !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex),
+            )
           return {
             changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
             formulaCellIndices: formulaCellIndices.filter((cellIndex) => !preservedFormulaCellIndices.has(cellIndex)),
+            topologyChanged,
           }
         },
         catch: (cause) =>

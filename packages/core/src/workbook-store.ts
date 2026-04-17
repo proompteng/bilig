@@ -23,14 +23,11 @@ import {
   type WorkbookShapeSnapshot,
   type WorkbookTableSnapshot,
   type WorkbookVolatileContextSnapshot,
-} from "@bilig/protocol";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
-import { SheetGrid, type SheetGridAxisRemapScope } from "./sheet-grid.js";
-import { CellFlags, CellStore } from "./cell-store.js";
-import {
-  createWorkbookMetadataService,
-  runWorkbookMetadataEffect,
-} from "./workbook-metadata-service.js";
+} from '@bilig/protocol'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { SheetGrid, type SheetGridAxisRemapScope } from './sheet-grid.js'
+import { CellFlags, CellStore } from './cell-store.js'
+import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
 import {
   createWorkbookMetadataRecord,
   type WorkbookAxisEntryRecord,
@@ -891,14 +888,13 @@ export class WorkbookStore {
     if (!sheet) {
       return { changedCellIndices: [], removedCellIndices: [] }
     }
-    const changedEntries = sheet.grid.remapAxis(axis, remapIndex, scope);
+    const changedEntries = sheet.grid.remapAxis(axis, remapIndex, scope)
     changedEntries.forEach(({ row, col }) => {
       this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
     })
 
-    const changedCellIndices: number[] = []
     const removedCellIndices: number[] = []
-    for (const { cellIndex, row, col, nextRow, nextCol } of changedEntries) {
+    for (const { cellIndex, nextRow, nextCol } of changedEntries) {
       if (nextRow === undefined || nextCol === undefined) {
         removedCellIndices.push(cellIndex)
         continue
@@ -906,12 +902,9 @@ export class WorkbookStore {
       this.cellStore.rows[cellIndex] = nextRow
       this.cellStore.cols[cellIndex] = nextCol
       this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
-      if (nextRow !== row || nextCol !== col) {
-        changedCellIndices.push(cellIndex)
-      }
     }
 
-    return { changedCellIndices, removedCellIndices }
+    return { changedCellIndices: [], removedCellIndices }
   }
 
   reset(workbookName = 'Workbook'): void {

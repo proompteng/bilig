@@ -1,5 +1,6 @@
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
+import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import type { EngineStructureService } from '../engine/services/structure-service.js'
 
@@ -86,7 +87,7 @@ describe('EngineStructureService', () => {
       }),
     )
 
-    expect(result.changedCellIndices.length).toBeGreaterThan(0)
+    expect(result.changedCellIndices).toEqual([])
     expect(engine.getDefinedName('SalesRange')).toEqual({
       name: 'SalesRange',
       value: '=Data!A2:B5',
@@ -195,5 +196,63 @@ describe('EngineStructureService', () => {
 
     expect(engine.getCell('Sheet1', 'D2').formula).toBe('A1')
     expect(engine.getColumnAxisEntries('Sheet1')).toEqual([{ id: 'column-2', index: 0, size: 110, hidden: false }])
+  })
+
+  it('keeps repeated direct aggregate row inserts off the topology and dirty-formula path', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-row-aggregates' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'insertRows',
+        sheetName: 'Sheet1',
+        start: 1,
+        count: 1,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(false)
+    expect(result.formulaCellIndices).toEqual([])
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('SUM(A1:A1)')
+    expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A1:A3)')
+    expect(engine.getCell('Sheet1', 'B5').formula).toBe('SUM(A1:A5)')
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Number, value: 10 })
+  })
+
+  it('keeps repeated simple column families off the topology and dirty-formula path for inserts', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-column-families' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+    }
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'insertColumns',
+        sheetName: 'Sheet1',
+        start: 1,
+        count: 1,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(false)
+    expect(result.formulaCellIndices).toEqual([])
+    for (let row = 1; row <= 4; row += 1) {
+      expect(engine.getCell('Sheet1', `D${row}`).formula).toBe(`A${row}+C${row}`)
+      expect(engine.getCell('Sheet1', `E${row}`).formula).toBe(`D${row}*2`)
+      expect(engine.getCellValue('Sheet1', `D${row}`)).toEqual({ tag: ValueTag.Number, value: row * 3 })
+      expect(engine.getCellValue('Sheet1', `E${row}`)).toEqual({ tag: ValueTag.Number, value: row * 6 })
+    }
   })
 })

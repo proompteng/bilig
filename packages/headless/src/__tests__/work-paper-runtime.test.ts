@@ -737,6 +737,53 @@ describe('WorkPaper', () => {
     expect(workbook.getRangeFormulas({ start: cell(sheetId, 0, 0), end: cell(sheetId, 0, 1) })).toEqual([[undefined, '=A1+1']])
   })
 
+  it('returns no value changes for structural row inserts when repeated direct aggregates preserve values', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [
+        [1, '=SUM(A1:A1)'],
+        [2, '=SUM(A1:A2)'],
+        [3, '=SUM(A1:A3)'],
+        [4, '=SUM(A1:A4)'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Sheet1')!
+
+    const changes = workbook.addRows(sheetId, [1, 1])
+
+    expect(changes).toEqual([])
+    expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 2, height: 5 })
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 1))).toBe('=SUM(A1:A1)')
+    expect(workbook.getCellSerialized(cell(sheetId, 2, 1))).toBe('=SUM(A1:A3)')
+    expect(workbook.getCellSerialized(cell(sheetId, 4, 1))).toBe('=SUM(A1:A5)')
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(workbook.getCellValue(cell(sheetId, 2, 1))).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(workbook.getCellValue(cell(sheetId, 4, 1))).toEqual({ tag: ValueTag.Number, value: 10 })
+  })
+
+  it('returns no value changes for structural column inserts when repeated simple families preserve values', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [
+        [1, 2, '=A1+B1', '=C1*2'],
+        [2, 4, '=A2+B2', '=C2*2'],
+        [3, 6, '=A3+B3', '=C3*2'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Sheet1')!
+
+    const changes = workbook.addColumns(sheetId, [1, 1])
+
+    expect(changes).toEqual([])
+    expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 5, height: 3 })
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 3))).toBe('=A1+C1')
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 4))).toBe('=D1*2')
+    expect(workbook.getCellSerialized(cell(sheetId, 2, 3))).toBe('=A3+C3')
+    expect(workbook.getCellSerialized(cell(sheetId, 2, 4))).toBe('=D3*2')
+    expect(workbook.getCellValue(cell(sheetId, 0, 3))).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 6 })
+    expect(workbook.getCellValue(cell(sheetId, 2, 3))).toEqual({ tag: ValueTag.Number, value: 9 })
+    expect(workbook.getCellValue(cell(sheetId, 2, 4))).toEqual({ tag: ValueTag.Number, value: 18 })
+  })
+
   it('applies function translations to registered languages and exposes license validity', () => {
     WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} })
     WorkPaper.registerFunctionPlugin(
