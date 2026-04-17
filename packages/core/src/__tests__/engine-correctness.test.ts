@@ -682,6 +682,33 @@ describe('engine correctness', () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot)
   })
 
+  it('coalesces adjacent style ranges before structural insert replay', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-style-range-coalesce',
+      replicaId: 'correctness-style-range-coalesce',
+    })
+    await engine.ready()
+    engine.createSheet(sheetName)
+    engine.setRangeValues(toRangeRef(0, 0, 3, 0), [[1], [2], [3], [4]])
+
+    engine.setRangeStyle(toRangeRef(2, 0, 3, 0), { fill: { backgroundColor: '#dbeafe' } })
+    engine.setRangeStyle(toRangeRef(2, 0, 2, 0), { font: { bold: true } })
+
+    expect(engine.undo()).toBe(true)
+    engine.insertRows(sheetName, 3, 1)
+
+    expect(engine.exportSnapshot().sheets[0]?.metadata?.styleRanges).toEqual([
+      {
+        range: {
+          sheetName,
+          startAddress: 'A3',
+          endAddress: 'A5',
+        },
+        styleId: expect.any(String),
+      },
+    ])
+  })
+
   it('drops orphaned formula dependents during structural undo replay', async () => {
     const initialSnapshot = await createBaselineSnapshot('correctness-orphan-formula-undo')
     const engine = new SpreadsheetEngine({

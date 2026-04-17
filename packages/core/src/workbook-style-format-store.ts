@@ -6,6 +6,7 @@ import {
   type SheetFormatRangeSnapshot,
   type SheetStyleRangeSnapshot,
 } from '@bilig/protocol'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type {
   WorkbookCellNumberFormatRecord,
   WorkbookCellStyleRecord,
@@ -160,6 +161,7 @@ export function setStyleRange(
     }),
     (record) => record.styleId === defaultStyleId,
   )
+  sheet.styleRanges = coalesceStyleRangeRecords(sheet.styleRanges)
   return stored
 }
 
@@ -190,7 +192,7 @@ export function setStyleRanges(
       }
     },
   )
-  sheet.styleRanges = nextRanges
+  sheet.styleRanges = coalesceStyleRangeRecords(nextRanges)
   return listStyleRanges(sheet)
 }
 
@@ -224,6 +226,7 @@ export function setFormatRange(
     }),
     (record) => record.formatId === defaultFormatId,
   )
+  sheet.formatRanges = coalesceFormatRangeRecords(sheet.formatRanges)
   return stored
 }
 
@@ -254,7 +257,7 @@ export function setFormatRanges(
       }
     },
   )
-  sheet.formatRanges = nextRanges
+  sheet.formatRanges = coalesceFormatRangeRecords(nextRanges)
   return listFormatRanges(sheet)
 }
 
@@ -263,4 +266,101 @@ export function getRangeFormatId(sheet: WorkbookStyleFormatSheet | undefined, ro
     return defaultFormatId
   }
   return findWorkbookRangeRecord(sheet.formatRanges, row, col)?.formatId ?? defaultFormatId
+}
+
+function coalesceStyleRangeRecords(records: readonly WorkbookStyleRangeRecord[]): WorkbookStyleRangeRecord[] {
+  return coalesceWorkbookRangeRecords(
+    records,
+    (left, right) => left.styleId === right.styleId,
+    (range, record) => ({
+      range,
+      styleId: record.styleId,
+    }),
+  )
+}
+
+function coalesceFormatRangeRecords(records: readonly WorkbookFormatRangeRecord[]): WorkbookFormatRangeRecord[] {
+  return coalesceWorkbookRangeRecords(
+    records,
+    (left, right) => left.formatId === right.formatId,
+    (range, record) => ({
+      range,
+      formatId: record.formatId,
+    }),
+  )
+}
+
+function coalesceWorkbookRangeRecords<RecordType extends { range: CellRangeRef }>(
+  records: readonly RecordType[],
+  canMerge: (left: RecordType, right: RecordType) => boolean,
+  cloneRecord: (range: CellRangeRef, record: RecordType) => RecordType,
+): RecordType[] {
+  const sorted = records
+    .map((record) => ({
+      record,
+      start: parseCellAddress(record.range.startAddress, record.range.sheetName),
+      end: parseCellAddress(record.range.endAddress, record.range.sheetName),
+    }))
+    .toSorted((left, right) => {
+      const sheetCompare = left.record.range.sheetName.localeCompare(right.record.range.sheetName)
+      if (sheetCompare !== 0) {
+        return sheetCompare
+      }
+      if (left.start.row !== right.start.row) {
+        return left.start.row - right.start.row
+      }
+      if (left.start.col !== right.start.col) {
+        return left.start.col - right.start.col
+      }
+      if (left.end.row !== right.end.row) {
+        return left.end.row - right.end.row
+      }
+      return left.end.col - right.end.col
+    })
+
+  const merged: Array<{ record: RecordType; startRow: number; endRow: number; startCol: number; endCol: number }> = []
+  sorted.forEach(({ record, start, end }) => {
+    const startRow = Math.min(start.row, end.row)
+    const endRow = Math.max(start.row, end.row)
+    const startCol = Math.min(start.col, end.col)
+    const endCol = Math.max(start.col, end.col)
+    const previous = merged[merged.length - 1]
+    if (
+      previous &&
+      canMerge(previous.record, record) &&
+      previous.record.range.sheetName === record.range.sheetName &&
+      ((previous.startCol === startCol && previous.endCol === endCol && startRow <= previous.endRow + 1) ||
+        (previous.startRow === startRow && previous.endRow === endRow && startCol <= previous.endCol + 1))
+    ) {
+      previous.startRow = Math.min(previous.startRow, startRow)
+      previous.endRow = Math.max(previous.endRow, endRow)
+      previous.startCol = Math.min(previous.startCol, startCol)
+      previous.endCol = Math.max(previous.endCol, endCol)
+      previous.record = cloneRecord(
+        {
+          sheetName: record.range.sheetName,
+          startAddress: formatAddress(previous.startRow, previous.startCol),
+          endAddress: formatAddress(previous.endRow, previous.endCol),
+        },
+        previous.record,
+      )
+      return
+    }
+    merged.push({
+      record: cloneRecord(
+        {
+          sheetName: record.range.sheetName,
+          startAddress: formatAddress(startRow, startCol),
+          endAddress: formatAddress(endRow, endCol),
+        },
+        record,
+      ),
+      startRow,
+      endRow,
+      startCol,
+      endCol,
+    })
+  })
+
+  return merged.map(({ record }) => record)
 }
