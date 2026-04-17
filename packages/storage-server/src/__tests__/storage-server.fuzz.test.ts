@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
 import { runProperty } from '@bilig/test-fuzz'
 import { createInMemoryDocumentPersistence } from '../index.js'

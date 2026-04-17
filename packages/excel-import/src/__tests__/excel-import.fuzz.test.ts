@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import * as XLSX from 'xlsx'
 import { formatAddress } from '@bilig/formula'
 import { runProperty } from '@bilig/test-fuzz'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import type { EngineOp, EngineOpBatch } from '../index.js'
 import { isEngineOp, isEngineOpBatch } from '../index.js'
 import { runProperty } from '@bilig/test-fuzz'

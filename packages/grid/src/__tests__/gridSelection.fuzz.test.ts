@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { runProperty } from '@bilig/test-fuzz'
 import { clampSelectionRange, createRectangleSelectionFromRange, rectangleToAddresses, selectionToAddresses } from '../gridSelection.js'

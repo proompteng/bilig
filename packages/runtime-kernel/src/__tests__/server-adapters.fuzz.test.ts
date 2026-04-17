@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import { runProperty } from '@bilig/test-fuzz'
 import { normalizeBaseUrl, normalizeWebSocket, resolveRequestBaseUrl, resolveServerRuntimeConfig, toMessageBytes } from '../index.js'
 

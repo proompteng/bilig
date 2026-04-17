@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fc from 'fast-check'
+import * as fc from 'fast-check'
 import type { CommitOp } from '@bilig/core'
 import { runProperty } from '@bilig/test-fuzz'
 import type { CellDescriptor, SheetDescriptor, WorkbookDescriptor } from '../descriptors.js'
