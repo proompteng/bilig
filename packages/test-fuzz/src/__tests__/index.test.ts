@@ -41,7 +41,6 @@ function createRunDetails(seed: number, counterexamplePath: string, counterexamp
     numShrinks: 0,
     seed,
     counterexample,
-    error: null,
     errorInstance: null,
     counterexamplePath,
     failures: [],
