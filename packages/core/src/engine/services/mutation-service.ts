@@ -121,6 +121,52 @@ function createLazyRenderCommitTransactionRecord(
   return record
 }
 
+function collectLiveCreatedSheetNames(
+  existingSheetNames: Iterable<string>,
+  ops: ReadonlyArray<{
+    readonly kind: string
+    readonly name?: string
+    readonly oldName?: string
+    readonly newName?: string
+  }>,
+): ReadonlySet<string> {
+  const knownSheetNames = new Set(existingSheetNames)
+  const liveCreatedSheetNames = new Set<string>()
+
+  for (let index = 0; index < ops.length; index += 1) {
+    const op = ops[index]
+    if (!op) {
+      continue
+    }
+    if (op.kind === 'upsertSheet') {
+      const sheetName = op.name
+      if (typeof sheetName === 'string' && !knownSheetNames.has(sheetName)) {
+        liveCreatedSheetNames.add(sheetName)
+      }
+      if (typeof sheetName === 'string') {
+        knownSheetNames.add(sheetName)
+      }
+      continue
+    }
+    if (op.kind !== 'renameSheet') {
+      continue
+    }
+    const oldName = op.oldName
+    const newName = op.newName
+    if (typeof oldName === 'string' && typeof newName === 'string' && liveCreatedSheetNames.delete(oldName)) {
+      liveCreatedSheetNames.add(newName)
+    }
+    if (typeof oldName === 'string') {
+      knownSheetNames.delete(oldName)
+    }
+    if (typeof newName === 'string') {
+      knownSheetNames.add(newName)
+    }
+  }
+
+  return liveCreatedSheetNames
+}
+
 function transactionRecordOps(record: TransactionRecord): readonly EngineOp[] {
   return record.kind === 'single-op' ? [record.op] : record.ops
 }
@@ -1470,6 +1516,7 @@ export function createEngineMutationService(args: {
       return false
     }
 
+    const createdSheetNames = collectLiveCreatedSheetNames(args.state.workbook.sheetsByName.keys(), ops)
     const prefixOps: EngineOp[] = []
     const cellMutations: RenderCommitCellMutation[] = []
     let potentialNewCells = 0
@@ -1583,11 +1630,22 @@ export function createEngineMutationService(args: {
         }
       }
 
-      cellUndoOps = applyCellMutationsAtNow(refs, {
-        captureUndo: true,
+      const inverseOps: EngineOp[] = []
+      for (let index = refs.length - 1; index >= 0; index -= 1) {
+        const ref = refs[index]!
+        const sheetName = cellMutations[index]!.sheetName
+        if (createdSheetNames.has(sheetName)) {
+          continue
+        }
+        inverseOps.push(restoreCellOpFromRef(ref))
+      }
+      cellUndoOps = inverseOps
+
+      applyCellMutationsAtNow(refs, {
+        captureUndo: false,
         source: 'local',
         potentialNewCells,
-        returnUndoOps: true,
+        returnUndoOps: false,
         reuseRefs: true,
       })
     } finally {

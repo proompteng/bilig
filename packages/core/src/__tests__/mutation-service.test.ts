@@ -284,6 +284,69 @@ describe('EngineMutationService', () => {
     ])
   })
 
+  it('does not record redundant per-cell undo ops for render commits that populate a newly created sheet', () => {
+    const workbook = new WorkbookStore('before-render-commit')
+    let replayDepth = 0
+    const undoStack: Array<{
+      forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
+      inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
+    }> = []
+    const service = createEngineMutationService({
+      state: {
+        workbook,
+        replicaState: createReplicaState('local'),
+        undoStack,
+        redoStack: [],
+        trackReplicaVersions: false,
+        getSyncClientConnection: () => null,
+        batchListeners: new Set(),
+        formulas: new Map(),
+        getTransactionReplayDepth: () => replayDepth,
+        setTransactionReplayDepth: (next) => {
+          replayDepth = next
+        },
+      },
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      captureStoredCellOps: () => [],
+      restoreCellOps: () => [],
+      readRangeCells: () => [],
+      toCellStateOps: () => [],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
+      applyBatchNow: (batch) => {
+        for (const op of batch.ops) {
+          if (op.kind === 'upsertWorkbook') {
+            workbook.workbookName = op.name
+          } else if (op.kind === 'upsertSheet') {
+            workbook.getOrCreateSheet(op.name, op.order)
+          }
+        }
+      },
+      applyCellMutationsAtBatchNow: () => {},
+    })
+
+    Effect.runSync(
+      service.renderCommit([
+        { kind: 'upsertWorkbook', name: 'after-render-commit' },
+        { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A1', value: 1 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A2', value: 2 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A3', value: 3 },
+      ]),
+    )
+
+    expect(undoStack).toHaveLength(1)
+    expect(undoStack[0]?.inverse).toEqual({
+      kind: 'ops',
+      ops: [
+        { kind: 'deleteSheet', name: 'Sheet1' },
+        { kind: 'upsertWorkbook', name: 'before-render-commit' },
+      ],
+      potentialNewCells: 2,
+    })
+  })
+
   it('captures sheet metadata and cells when building delete-sheet undo ops', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'undo-sheet' })
     await engine.ready()
