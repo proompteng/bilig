@@ -1,6 +1,5 @@
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as ChildProcess from 'node:child_process'
 import type * as NodeUrl from 'node:url'
 
 type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
@@ -155,7 +154,6 @@ interface EnsureWasmBinaryPathForNodeOptions {
   readonly importMetaUrl: string
   readonly existsSync: (path: string) => boolean
   readonly fileURLToPath: (url: URL) => string
-  readonly runBuildSync: ((packageRootPath: string) => void) | null
 }
 
 export function ensureWasmBinaryPathForNode(options: EnsureWasmBinaryPathForNodeOptions): string {
@@ -163,42 +161,7 @@ export function ensureWasmBinaryPathForNode(options: EnsureWasmBinaryPathForNode
   if (options.existsSync(wasmPath)) {
     return wasmPath
   }
-
-  const packageRootPath = options.fileURLToPath(new URL('..', options.importMetaUrl))
-  const buildScriptPath = options.fileURLToPath(new URL('../scripts/build.ts', options.importMetaUrl))
-  if (options.existsSync(buildScriptPath) && options.runBuildSync) {
-    options.runBuildSync(packageRootPath)
-    if (options.existsSync(wasmPath)) {
-      return wasmPath
-    }
-  }
-
   throw new Error(`Unable to locate wasm kernel binary at '${wasmPath}'. Run 'pnpm wasm:build' before using @bilig/wasm-kernel.`)
-}
-
-function createWasmBuildRunner(): ((packageRootPath: string) => void) | null {
-  if (!isNodeLike()) {
-    return null
-  }
-  const childProcess = process.getBuiltinModule('node:child_process') as typeof ChildProcess | undefined
-  if (!childProcess) {
-    return null
-  }
-  return (packageRootPath) => {
-    const command = process.versions['bun'] ? process.execPath : 'bun'
-    const result = childProcess.spawnSync(command, ['./scripts/build.ts'], {
-      cwd: packageRootPath,
-      stdio: 'pipe',
-      env: process.env,
-    })
-    if (result.status === 0) {
-      return
-    }
-    const stderr = result.stderr?.toString().trim()
-    const stdout = result.stdout?.toString().trim()
-    const detail = stderr || stdout || `Exited with status ${String(result.status)}`
-    throw new Error(`Failed to build wasm kernel artifact: ${detail}`)
-  }
 }
 
 export interface SpreadsheetKernel {
@@ -781,7 +744,6 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
       importMetaUrl: import.meta.url,
       existsSync: fs.existsSync,
       fileURLToPath: url.fileURLToPath,
-      runBuildSync: createWasmBuildRunner(),
     })
     const { readFile } = fsPromises
     const bytes = await readFile(wasmPath)
@@ -820,7 +782,6 @@ function loadWasmModuleSync(): WebAssembly.WebAssemblyInstantiatedSource {
     importMetaUrl: import.meta.url,
     existsSync: fs.existsSync,
     fileURLToPath: url.fileURLToPath,
-    runBuildSync: createWasmBuildRunner(),
   })
   const bytes = fs.readFileSync(wasmPath)
   const module = new WebAssembly.Module(bytes)
