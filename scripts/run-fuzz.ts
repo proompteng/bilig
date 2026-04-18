@@ -4,7 +4,6 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 type FuzzMode = 'default' | 'main' | 'nightly' | 'replay'
-const VITEST_FUZZ_TEST_TIMEOUT_MS = '15000'
 
 function parseMode(value: string | undefined): FuzzMode {
   if (value === 'main' || value === 'nightly' || value === 'replay') {
@@ -86,7 +85,7 @@ const env = {
 }
 
 const vitestFuzzFiles = selectVitestFuzzFiles(mode, listVitestFuzzFiles())
-runCommand(['pnpm', 'exec', 'vitest', 'run', '--testTimeout', VITEST_FUZZ_TEST_TIMEOUT_MS, ...vitestFuzzFiles], env)
+runCommand(['pnpm', 'exec', 'vitest', 'run', ...vitestFuzzFiles], env)
 
 if (shouldRunBrowserFuzz(mode, replayKind, resolvedReplayFixture !== null)) {
   runCommand(['bun', 'scripts/run-browser-tests.ts', '--grep', '@fuzz-browser'], {

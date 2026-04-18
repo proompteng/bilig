@@ -808,7 +808,7 @@ export async function loadWorkbookChange(db: Queryable, documentId: string, revi
   return row ? normalizeWorkbookChangeRecord(row) : null
 }
 
-export async function listWorkbookChangesForActor(
+async function listWorkbookChangesForActor(
   db: Queryable,
   input: {
     readonly documentId: string
