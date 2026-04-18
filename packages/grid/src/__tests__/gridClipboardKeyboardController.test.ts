@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import { createGridSelection } from '../gridSelection.js'
 import {
@@ -9,6 +11,7 @@ import {
   shouldHandleGridSurfaceKey,
   shouldHandleGridWindowKey,
 } from '../gridClipboardKeyboardController.js'
+import { useWorkbookGridKeyboardHandler } from '../useWorkbookGridKeyboardHandler.js'
 import { describe, expect, test, vi } from 'vitest'
 import type { GridEngineLike } from '../grid-engine.js'
 
@@ -32,6 +35,45 @@ function createEngine(cells: Record<string, string>): GridEngineLike {
       getSheet: () => undefined,
     },
   }
+}
+
+function KeyboardHandlerHarness(props: {
+  beginSelectedEdit: ReturnType<typeof vi.fn>
+  setGridSelection: ReturnType<typeof vi.fn>
+  onSelectionChange: ReturnType<typeof vi.fn>
+}) {
+  const hostRef = { current: null as HTMLDivElement | null }
+
+  useWorkbookGridKeyboardHandler({
+    applyClipboardValues: vi.fn(),
+    beginSelectedEdit: props.beginSelectedEdit,
+    captureInternalClipboardSelection: vi.fn(),
+    editorValue: '',
+    engine: {
+      getCell: () => ({ value: { tag: ValueTag.String } }),
+    },
+    gridSelection: createGridSelection(1, 1),
+    hostRef,
+    isEditingCell: false,
+    onCancelEdit: vi.fn(),
+    onClearCell: vi.fn(),
+    onCommitEdit: vi.fn(),
+    onEditorChange: vi.fn(),
+    onSelectionChange: props.onSelectionChange,
+    pendingKeyboardPasteSequenceRef: { current: 0 },
+    pendingTypeSeedRef: { current: null },
+    selectedCell: { col: 1, row: 1 },
+    setGridSelection: props.setGridSelection,
+    sheetName: 'Sheet1',
+    suppressNextNativePasteRef: { current: false },
+    toggleSelectedBooleanCell: vi.fn(),
+  })
+
+  return createElement('div', {
+    ref: (node: HTMLDivElement | null) => {
+      hostRef.current = node
+    },
+  })
 }
 
 describe('gridClipboardKeyboardController', () => {
@@ -263,6 +305,64 @@ describe('gridClipboardKeyboardController', () => {
     expect(shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: false, shiftKey: false }, input, host)).toBe(
       false,
     )
+  })
+
+  test('does not claim global grid shortcuts while a modal dialog is open', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    const modal = document.createElement('div')
+    modal.setAttribute('aria-modal', 'true')
+    modal.setAttribute('role', 'dialog')
+    document.body.append(modal)
+
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'r', metaKey: false, shiftKey: false }, document.body, host),
+    ).toBe(false)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Tab', metaKey: false, shiftKey: false }, document.body, host),
+    ).toBe(false)
+  })
+
+  test('ignores globally prevented keydown events before routing them into the grid', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const beginSelectedEdit = vi.fn()
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(KeyboardHandlerHarness, {
+          beginSelectedEdit,
+          onSelectionChange,
+          setGridSelection,
+        }),
+      )
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: '?',
+      shiftKey: true,
+    })
+    event.preventDefault()
+
+    await act(async () => {
+      window.dispatchEvent(event)
+    })
+
+    expect(beginSelectedEdit).not.toHaveBeenCalled()
+    expect(setGridSelection).not.toHaveBeenCalled()
+    expect(onSelectionChange).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
   })
 
   test('filters grid-surface key handling to grid-relevant keys', () => {

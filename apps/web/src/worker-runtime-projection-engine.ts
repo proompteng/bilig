@@ -48,6 +48,7 @@ export function scheduleProjectionEngineMaterialization(args: {
   hasBootstrapOptions: () => boolean
   getProjectionBuildVersion: () => number
   getProjectionEngine: () => Promise<unknown>
+  onProjectionEngineMaterialized?: () => void
   schedule: (callback: () => void) => void
 }): void {
   if (args.hasInstalledEngine() || args.hasProjectionEnginePromise() || !args.hasBootstrapOptions()) {
@@ -62,6 +63,7 @@ export function scheduleProjectionEngineMaterialization(args: {
     void (async () => {
       try {
         await args.getProjectionEngine()
+        args.onProjectionEngineMaterialized?.()
       } catch {}
     })()
   })

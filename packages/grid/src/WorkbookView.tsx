@@ -3,6 +3,7 @@ import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from '@bilig
 import { FormulaBar } from './FormulaBar.js'
 import type { GridEngineLike } from './grid-engine.js'
 import { formatSelectionSnapshotSummary } from './gridSelection.js'
+import { WorkbookSelectionStatus } from './WorkbookSelectionStatus.js'
 import { WorkbookSheetTabs } from './WorkbookSheetTabs.js'
 import {
   WorkbookGridSurface,
@@ -261,7 +262,9 @@ export function WorkbookView({
             onSelectSheet={onSelectSheet}
             sheetName={sheetName}
             sheetNames={sheetNames}
-            trailingContent={<span data-testid="workbook-selection-summary">{selectionLabel}</span>}
+            trailingContent={
+              <WorkbookSelectionStatus engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />
+            }
           />
         </div>
         {sidePanel ? (

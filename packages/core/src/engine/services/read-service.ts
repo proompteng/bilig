@@ -1,5 +1,14 @@
 import { Effect } from 'effect'
-import type { CellRangeRef, CellSnapshot, CellValue, DependencySnapshot, ExplainCellSnapshot } from '@bilig/protocol'
+import {
+  formulaLooksDateLike,
+  isDateLikeHeaderValue,
+  isLikelyExcelDateSerialValue,
+  type CellRangeRef,
+  type CellSnapshot,
+  type CellValue,
+  type DependencySnapshot,
+  type ExplainCellSnapshot,
+} from '@bilig/protocol'
 import { parseCellAddress } from '@bilig/formula'
 import { CellFlags } from '../../cell-store.js'
 import { entityPayload, isExactLookupColumnEntity, isRangeEntity, isSortedLookupColumnEntity, makeCellEntity } from '../../entity-ids.js'
@@ -28,25 +37,40 @@ export function createEngineReadService(args: {
   readonly cellToCsvValue: (cell: CellSnapshot) => string
   readonly serializeCsv: (rows: string[][]) => string
 }): EngineReadService {
+  const inferDateFormat = (
+    sheetName: string,
+    row: number,
+    col: number,
+    value: CellValue,
+    formula: string | undefined,
+  ): string | undefined => {
+    if (!isLikelyExcelDateSerialValue(value)) {
+      return undefined
+    }
+    if (formulaLooksDateLike(formula)) {
+      return 'date:short'
+    }
+    if (row === 0) {
+      return undefined
+    }
+    const headerValue = args.runtimeColumnStore.readCellValue(sheetName, row - 1, col)
+    return isDateLikeHeaderValue(headerValue) ? 'date:short' : undefined
+  }
+
   const getCellByIndex = (cellIndex: number): CellSnapshot => {
+    const row = args.state.workbook.cellStore.rows[cellIndex]!
+    const col = args.state.workbook.cellStore.cols[cellIndex]!
     const address = args.state.workbook.getAddress(cellIndex)
     const sheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+    const formula = args.state.formulas.get(cellIndex)?.source
     const snapshot: CellSnapshot = {
       sheetName,
       address,
-      value: args.runtimeColumnStore.readCellValue(
-        sheetName,
-        args.state.workbook.cellStore.rows[cellIndex]!,
-        args.state.workbook.cellStore.cols[cellIndex]!,
-      ),
+      value: args.runtimeColumnStore.readCellValue(sheetName, row, col),
       flags: args.state.workbook.cellStore.flags[cellIndex]!,
       version: args.state.workbook.cellStore.versions[cellIndex] ?? 0,
     }
-    const styleId = args.state.workbook.getStyleId(
-      sheetName,
-      args.state.workbook.cellStore.rows[cellIndex]!,
-      args.state.workbook.cellStore.cols[cellIndex]!,
-    )
+    const styleId = args.state.workbook.getStyleId(sheetName, row, col)
     if (styleId !== WorkbookStore.defaultStyleId) {
       snapshot.styleId = styleId
     }
@@ -54,11 +78,7 @@ export function createEngineReadService(args: {
     const numberFormatId =
       explicitFormat !== undefined
         ? args.state.workbook.internCellNumberFormat(explicitFormat).id
-        : args.state.workbook.getRangeFormatId(
-            sheetName,
-            args.state.workbook.cellStore.rows[cellIndex]!,
-            args.state.workbook.cellStore.cols[cellIndex]!,
-          )
+        : args.state.workbook.getRangeFormatId(sheetName, row, col)
     const formatRecord = args.state.workbook.getCellNumberFormat(numberFormatId)
     if (numberFormatId !== WorkbookStore.defaultFormatId) {
       snapshot.numberFormatId = numberFormatId
@@ -67,8 +87,12 @@ export function createEngineReadService(args: {
       snapshot.format = explicitFormat
     } else if (formatRecord && numberFormatId !== WorkbookStore.defaultFormatId) {
       snapshot.format = formatRecord.code
+    } else {
+      const inferredFormat = inferDateFormat(sheetName, row, col, snapshot.value, formula)
+      if (inferredFormat !== undefined) {
+        snapshot.format = inferredFormat
+      }
     }
-    const formula = args.state.formulas.get(cellIndex)?.source
     if (formula !== undefined) {
       snapshot.formula = formula
     }

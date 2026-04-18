@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
+import { parseCellAddress } from '@bilig/formula'
 import type { GridEngineLike } from '@bilig/grid'
 import { WorkbookView } from '../../../../packages/grid/src/WorkbookView.js'
 
@@ -25,6 +26,54 @@ vi.mock('../../../../packages/grid/src/WorkbookSheetTabs.js', () => ({
 afterEach(() => {
   document.body.innerHTML = ''
 })
+
+function createEngineWithCells(
+  cells: Record<string, { tag: typeof ValueTag.Number; value: number } | { tag: typeof ValueTag.String; value: string }>,
+): GridEngineLike {
+  return {
+    getCell: (_sheetName, address) => {
+      const current = cells[address]
+      if (!current) {
+        return {
+          sheetName: 'Sheet1',
+          address,
+          value: { tag: ValueTag.Empty },
+          flags: 0,
+          version: 0,
+        }
+      }
+      return current.tag === ValueTag.Number
+        ? {
+            sheetName: 'Sheet1',
+            address,
+            value: { tag: ValueTag.Number, value: current.value },
+            flags: 0,
+            version: 1,
+          }
+        : {
+            sheetName: 'Sheet1',
+            address,
+            value: { tag: ValueTag.String, value: current.value, stringId: 1 },
+            flags: 0,
+            version: 1,
+          }
+    },
+    getCellStyle: () => undefined,
+    subscribeCells: () => () => {},
+    workbook: {
+      getSheet: () => ({
+        grid: {
+          forEachCellEntry(listener) {
+            Object.keys(cells).forEach((address, index) => {
+              const parsed = parseCellAddress(address, 'Sheet1')
+              listener(index, parsed.row, parsed.col)
+            })
+          },
+        },
+      }),
+    },
+  }
+}
 
 describe('workbook layout', () => {
   it('renders the side panel beside the spreadsheet using the controlled panel width', async () => {
@@ -194,6 +243,150 @@ describe('workbook layout', () => {
     const trailing = host.querySelector("[data-testid='sheet-tabs-trailing']")
     expect(trailing?.textContent).toBe('A3:C10')
     expect(trailing?.textContent).not.toContain('Selection')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('shows a sum summary chip in the footer for numeric range selections', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const engine = createEngineWithCells({
+      A3: { tag: ValueTag.Number, value: 10 },
+      B3: { tag: ValueTag.Number, value: 20 },
+      C3: { tag: ValueTag.String, value: 'ignore' },
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookView
+          engine={engine}
+          sheetNames={['Sheet1']}
+          sheetName="Sheet1"
+          selectedAddr="A3"
+          selectedCellSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            value: { tag: ValueTag.Number, value: 10 },
+            flags: 0,
+            version: 1,
+          }}
+          selectionSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            kind: 'range',
+            range: {
+              startAddress: 'A3',
+              endAddress: 'C3',
+            },
+          }}
+          editorValue=""
+          editorSelectionBehavior="select-all"
+          resolvedValue=""
+          isEditing={false}
+          isEditingCell={false}
+          onSelectSheet={() => {}}
+          onSelectionChange={() => {}}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onBeginFormulaEdit={() => {}}
+          onEditorChange={() => {}}
+          onCommitEdit={() => {}}
+          onCancelEdit={() => {}}
+          onClearCell={() => {}}
+          onFillRange={() => {}}
+          onCopyRange={() => {}}
+          onMoveRange={() => {}}
+          onPaste={() => {}}
+        />,
+      )
+    })
+
+    const summary = host.querySelector("[data-testid='workbook-selection-summary']")
+    expect(summary?.textContent).toContain('Sum: 30.00')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('switches footer aggregate metrics from the chevron menu', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const engine = createEngineWithCells({
+      A3: { tag: ValueTag.Number, value: 10 },
+      B3: { tag: ValueTag.Number, value: 20 },
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookView
+          engine={engine}
+          sheetNames={['Sheet1']}
+          sheetName="Sheet1"
+          selectedAddr="A3"
+          selectedCellSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            value: { tag: ValueTag.Number, value: 10 },
+            flags: 0,
+            version: 1,
+          }}
+          selectionSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            kind: 'range',
+            range: {
+              startAddress: 'A3',
+              endAddress: 'B3',
+            },
+          }}
+          editorValue=""
+          editorSelectionBehavior="select-all"
+          resolvedValue=""
+          isEditing={false}
+          isEditingCell={false}
+          onSelectSheet={() => {}}
+          onSelectionChange={() => {}}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onBeginFormulaEdit={() => {}}
+          onEditorChange={() => {}}
+          onCommitEdit={() => {}}
+          onCancelEdit={() => {}}
+          onClearCell={() => {}}
+          onFillRange={() => {}}
+          onCopyRange={() => {}}
+          onMoveRange={() => {}}
+          onPaste={() => {}}
+        />,
+      )
+    })
+
+    const trigger = host.querySelector("[data-testid='workbook-selection-status-trigger']")
+    expect(trigger?.textContent).toContain('Sum: 30.00')
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const avgOption = document.querySelector("[data-testid='workbook-selection-status-option-avg']")
+    expect(avgOption?.textContent).toContain('Avg: 15.00')
+
+    await act(async () => {
+      avgOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(trigger?.textContent).toContain('Avg: 15.00')
 
     await act(async () => {
       root.unmount()

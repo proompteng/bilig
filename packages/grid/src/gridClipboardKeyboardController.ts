@@ -107,6 +107,14 @@ function isEditableElement(element: Element | null): element is HTMLElement {
   return element instanceof HTMLElement && element.isContentEditable
 }
 
+function hasOpenModalDialog(): boolean {
+  if (typeof document === 'undefined') {
+    return false
+  }
+
+  return document.querySelector('[aria-modal="true"]') !== null
+}
+
 export function applyGridClipboardValues({
   internalClipboardRef,
   onCopyRange,
@@ -360,6 +368,10 @@ export function shouldHandleGridWindowKey(
   activeElement: Element | null,
   host: HTMLDivElement | null,
 ): boolean {
+  if (hasOpenModalDialog()) {
+    return false
+  }
+
   if (
     activeElement instanceof HTMLInputElement ||
     activeElement instanceof HTMLTextAreaElement ||

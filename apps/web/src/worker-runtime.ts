@@ -782,6 +782,11 @@ export class WorkbookWorkerRuntime {
       hasBootstrapOptions: () => this.bootstrapOptions !== null,
       getProjectionBuildVersion: () => this.projectionBuildVersion,
       getProjectionEngine: () => this.getProjectionEngine(),
+      onProjectionEngineMaterialized: () => {
+        if (this.engine) {
+          this.broadcastViewportPatches(null, this.getCurrentMetrics())
+        }
+      },
       schedule: (callback) => {
         setTimeout(() => {
           callback()

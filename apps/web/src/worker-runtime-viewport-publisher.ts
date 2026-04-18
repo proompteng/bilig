@@ -1,5 +1,14 @@
 import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
-import { ValueTag, type CellSnapshot, type CellStyleRecord, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
+import {
+  ValueTag,
+  formulaLooksDateLike,
+  isDateLikeHeaderValue,
+  isLikelyExcelDateSerialValue,
+  type CellSnapshot,
+  type CellStyleRecord,
+  type EngineEvent,
+  type RecalcMetrics,
+} from '@bilig/protocol'
 import { encodeViewportPatch, type ViewportPatch, type ViewportPatchSubscription } from '@bilig/worker-transport'
 import {
   normalizeViewport,
@@ -9,6 +18,24 @@ import {
   type WorkerEngine,
 } from './worker-runtime-support.js'
 import { DEFAULT_STYLE_ID, buildViewportPatchFromEngine, buildViewportPatchFromLocalBase } from './worker-runtime-viewport.js'
+
+function hasFormulaErrorCells(base: WorkbookLocalViewportBase): boolean {
+  return base.cells.some((cell) => cell.snapshot.formula !== undefined && cell.snapshot.value.tag === ValueTag.Error)
+}
+
+function hasUnformattedDateSerialCells(base: WorkbookLocalViewportBase): boolean {
+  const cellsByPosition = new Map(base.cells.map((cell) => [`${cell.row}:${cell.col}`, cell.snapshot]))
+  return base.cells.some((cell) => {
+    if (cell.snapshot.format !== undefined || !isLikelyExcelDateSerialValue(cell.snapshot.value)) {
+      return false
+    }
+    if (formulaLooksDateLike(cell.snapshot.formula)) {
+      return true
+    }
+    const header = cellsByPosition.get(`${cell.row - 1}:${cell.col}`)
+    return header !== undefined && isDateLikeHeaderValue(header.value)
+  })
+}
 
 export function createEmptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   return {
@@ -85,7 +112,10 @@ export class WorkerViewportPatchPublisher {
   ): ViewportPatch {
     if ((event === null || event.invalidation === 'full') && this.options.canReadLocalProjectionForViewport()) {
       const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
-      if (localBase) {
+      if (
+        localBase &&
+        (!this.options.hasProjectionEngine() || (!hasFormulaErrorCells(localBase) && !hasUnformattedDateSerialCells(localBase)))
+      ) {
         return buildViewportPatchFromLocalBase({
           state,
           metrics,

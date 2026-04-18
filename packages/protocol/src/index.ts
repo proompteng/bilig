@@ -1,4 +1,5 @@
 export * from './constants.js'
+export * from './date-format-inference.js'
 export * from './enums.js'
 export * from './formatting.js'
 export * from './guards.js'

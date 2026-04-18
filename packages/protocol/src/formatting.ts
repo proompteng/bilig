@@ -240,17 +240,20 @@ function formatDateSerial(serial: number, style: CellDateStyle | undefined, kind
   switch (kind) {
     case 'date':
       return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
       }).format(date)
     case 'time':
       return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
         hour: 'numeric',
         minute: '2-digit',
       }).format(date)
     case 'datetime':
       return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',

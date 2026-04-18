@@ -3,7 +3,7 @@ import { SpreadsheetEngine } from '@bilig/core'
 import { formatAddress } from '@bilig/formula'
 import type { WorkbookLocalMutationRecord, WorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { WorkbookLocalStoreLockedError, createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
-import { isWorkbookSnapshot, ValueTag } from '@bilig/protocol'
+import { ErrorCode, createCellNumberFormatRecord, formatCellDisplayValue, isWorkbookSnapshot, ValueTag } from '@bilig/protocol'
 import { decodeViewportPatch } from '@bilig/worker-transport'
 import { buildWorkbookLocalAuthoritativeBase } from '../worker-local-base.js'
 import { collectChangedCellsBySheet, collectViewportCells } from '../worker-runtime-support.js'
@@ -645,6 +645,253 @@ describe('WorkbookWorkerRuntime', () => {
     expect(received[0]?.cells[0]?.displayText).toBe('42')
   })
 
+  it('prefers installed engine calculations over stale persisted local projection on first viewport patch', async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'formula-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+    seedEngine.setCellValue('Sheet1', 'A1', 12)
+    seedEngine.setCellFormula('Sheet1', 'B1', 'A1/2')
+    let viewportReadCount = 0
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        onReadViewportProjection() {
+          viewportReadCount += 1
+        },
+        projectionOverlay: {
+          cells: [
+            {
+              sheetId: 1,
+              sheetName: 'Sheet1',
+              address: 'B1',
+              rowNum: 0,
+              colNum: 1,
+              value: { tag: ValueTag.Error, code: ErrorCode.Div0 },
+              flags: 0,
+              version: 2,
+              input: '=A1/2',
+              formula: 'A1/2',
+              format: undefined,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+          ],
+          rowAxisEntries: [],
+          columnAxisEntries: [],
+          styles: [],
+        },
+      }),
+    })
+
+    await runtime.bootstrap({
+      documentId: 'formula-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    expect(viewportReadCount).toBe(1)
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'B1')?.displayText).toBe('6')
+  })
+
+  it('renders date-formatted cells from persisted local projection on the first viewport patch', async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'date-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+    seedEngine.setCellValue('Sheet1', 'A1', 46023)
+    seedEngine.workbook.upsertCellNumberFormat(createCellNumberFormatRecord('format-date', 'm/d/yyyy'))
+    seedEngine.workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, 'format-date')
+    const expectedDisplay = formatCellDisplayValue(seedEngine.getCell('Sheet1', 'A1').value, seedEngine.getCell('Sheet1', 'A1').format)
+    let viewportReadCount = 0
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        onReadViewportProjection() {
+          viewportReadCount += 1
+        },
+      }),
+    })
+
+    await runtime.bootstrap({
+      documentId: 'date-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    expect(viewportReadCount).toBe(1)
+    expect(received[0]?.cells[0]?.displayText).toBe(expectedDisplay)
+  })
+
+  it('renders readable dates for inferred date cells on the first viewport patch', async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'date-inference-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+    seedEngine.setCellValue('Sheet1', 'A1', 'Month')
+    seedEngine.setCellFormula('Sheet1', 'A2', 'DATE(2026,12,1)')
+    seedEngine.setCellValue('Sheet1', 'B1', 'Start Date')
+    seedEngine.setCellValue('Sheet1', 'B2', 46023)
+    let viewportReadCount = 0
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        onReadViewportProjection() {
+          viewportReadCount += 1
+        },
+      }),
+    })
+
+    await runtime.bootstrap({
+      documentId: 'date-inference-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    expect(viewportReadCount).toBe(1)
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('12/01/2026')
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'B2')?.displayText).toBe('01/01/2026')
+  })
+
+  it('prefers installed engine date inference over stale persisted local projection on first viewport patch', async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'date-projection-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+    seedEngine.setCellValue('Sheet1', 'A1', 'Month')
+    seedEngine.setCellFormula('Sheet1', 'A2', 'DATE(2026,12,1)')
+    seedEngine.setCellValue('Sheet1', 'B1', 'Start Date')
+    seedEngine.setCellValue('Sheet1', 'B2', 46023)
+    let viewportReadCount = 0
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        onReadViewportProjection() {
+          viewportReadCount += 1
+        },
+        projectionOverlay: {
+          cells: [
+            {
+              sheetId: 1,
+              sheetName: 'Sheet1',
+              address: 'A2',
+              rowNum: 1,
+              colNum: 0,
+              value: { tag: ValueTag.Number, value: 46357 },
+              flags: 0,
+              version: 2,
+              input: '=DATE(2026,12,1)',
+              formula: 'DATE(2026,12,1)',
+              format: undefined,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+            {
+              sheetId: 1,
+              sheetName: 'Sheet1',
+              address: 'B2',
+              rowNum: 1,
+              colNum: 1,
+              value: { tag: ValueTag.Number, value: 46023 },
+              flags: 0,
+              version: 2,
+              input: 46023,
+              formula: undefined,
+              format: undefined,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+          ],
+          rowAxisEntries: [],
+          columnAxisEntries: [],
+          styles: [],
+        },
+      }),
+    })
+
+    await runtime.bootstrap({
+      documentId: 'date-projection-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    expect(viewportReadCount).toBe(1)
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('12/01/2026')
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'B2')?.displayText).toBe('01/01/2026')
+  })
+
   it('defers persisted snapshot parsing until the projection engine is actually needed', async () => {
     vi.useFakeTimers()
     const seedEngine = new SpreadsheetEngine({ workbookName: 'lazy-doc', replicaId: 'seed' })
@@ -736,6 +983,141 @@ describe('WorkbookWorkerRuntime', () => {
       tag: ValueTag.Number,
       value: 99,
     })
+  })
+
+  it('rebroadcasts corrected inferred dates after deferred projection engine materialization', async () => {
+    vi.useFakeTimers()
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'lazy-date-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+    seedEngine.setCellValue('Sheet1', 'A1', 'Month')
+    seedEngine.setCellFormula('Sheet1', 'A2', 'DATE(2026,12,1)')
+    seedEngine.setCellValue('Sheet1', 'B1', 'Start Date')
+    seedEngine.setCellValue('Sheet1', 'B2', 46023)
+
+    let loadStateCount = 0
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          return {
+            async loadBootstrapState() {
+              return {
+                workbookName: 'lazy-date-doc',
+                sheetNames: ['Sheet1'],
+                materializedCellCount: 250_000,
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              }
+            },
+            async loadState() {
+              loadStateCount += 1
+              return {
+                snapshot: seedEngine.exportSnapshot(),
+                replica: seedEngine.exportReplicaSnapshot(),
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              }
+            },
+            async persistProjectionState() {},
+            async ingestAuthoritativeDelta() {},
+            async listPendingMutations() {
+              return []
+            },
+            async listMutationJournalEntries() {
+              return []
+            },
+            async appendPendingMutation() {},
+            async updatePendingMutation() {},
+            async removePendingMutation() {},
+            readViewportProjection() {
+              return {
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                cells: [
+                  {
+                    row: 0,
+                    col: 0,
+                    snapshot: {
+                      sheetName: 'Sheet1',
+                      address: 'A1',
+                      value: { tag: ValueTag.String, value: 'Month' },
+                      flags: 0,
+                      version: 1,
+                    },
+                  },
+                  {
+                    row: 1,
+                    col: 0,
+                    snapshot: {
+                      sheetName: 'Sheet1',
+                      address: 'A2',
+                      value: { tag: ValueTag.Number, value: 46357 },
+                      flags: 0,
+                      version: 1,
+                      formula: 'DATE(2026,12,1)',
+                    },
+                  },
+                  {
+                    row: 0,
+                    col: 1,
+                    snapshot: {
+                      sheetName: 'Sheet1',
+                      address: 'B1',
+                      value: { tag: ValueTag.String, value: 'Start Date' },
+                      flags: 0,
+                      version: 1,
+                    },
+                  },
+                  {
+                    row: 1,
+                    col: 1,
+                    snapshot: {
+                      sheetName: 'Sheet1',
+                      address: 'B2',
+                      value: { tag: ValueTag.Number, value: 46023 },
+                      flags: 0,
+                      version: 1,
+                    },
+                  },
+                ],
+                rowAxisEntries: [],
+                columnAxisEntries: [],
+                styles: [{ id: 'style-0' }],
+              }
+            },
+            close() {},
+          }
+        },
+      },
+    })
+
+    await runtime.bootstrap({
+      documentId: 'lazy-date-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('46357')
+    expect(loadStateCount).toBe(0)
+
+    await vi.runAllTimersAsync()
+
+    expect(loadStateCount).toBe(1)
+    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('12/01/2026')
+    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === 'B2')?.displayText).toBe('01/01/2026')
   })
 
   it('does not rewrite normalized sqlite state on a clean persisted restore', async () => {

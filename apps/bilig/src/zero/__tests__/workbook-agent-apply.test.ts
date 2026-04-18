@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import type { WorkbookAgentCommandBundle } from '@bilig/agent-api'
-import { ValueTag } from '@bilig/protocol'
+import { ValueTag, formatCellDisplayValue } from '@bilig/protocol'
 import { applyWorkbookAgentCommandBundleWithUndoCapture } from '../workbook-agent-apply.js'
 
 function createBundle(overrides: Partial<WorkbookAgentCommandBundle> = {}): WorkbookAgentCommandBundle {
@@ -109,6 +109,29 @@ describe('workbook agent apply', () => {
     )
   })
 
+  it('infers date formatting for numeric serials written under a date-like header', async () => {
+    const engine = new SpreadsheetEngine()
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: 'writeRange',
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          values: [['Month'], [46023], [46054]],
+        },
+      ],
+    })
+
+    applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+
+    const firstMonth = engine.getCell('Sheet1', 'A2')
+    expect(firstMonth.format).toBeDefined()
+    expect(formatCellDisplayValue(firstMonth.value, firstMonth.format)).not.toBe('46023')
+  })
+
   it('captures one undo bundle for setRangeFormulas commands', async () => {
     const engine = new SpreadsheetEngine()
     await engine.ready()
@@ -151,6 +174,36 @@ describe('workbook agent apply', () => {
     expect(engine.getCell('Sheet1', 'B2').value).toEqual({
       tag: ValueTag.Empty,
     })
+  })
+
+  it('infers date formatting for formula results when a date-like header sits above the written range', async () => {
+    const engine = new SpreadsheetEngine()
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 'End Date')
+
+    const bundle = createBundle({
+      commands: [
+        {
+          kind: 'setRangeFormulas',
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'A2',
+            endAddress: 'A3',
+          },
+          formulas: [['=DATE(2026,1,1)'], ['=DATE(2026,2,1)']],
+        },
+      ],
+    })
+
+    applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+
+    const firstEndDate = engine.getCell('Sheet1', 'A2')
+    expect(firstEndDate.format).toBeDefined()
+    if (firstEndDate.value.tag !== ValueTag.Number) {
+      throw new Error('Expected numeric date serial result')
+    }
+    expect(formatCellDisplayValue(firstEndDate.value, firstEndDate.format)).not.toBe(String(firstEndDate.value.value))
   })
 
   it('captures undo for structural and cell commands in the same bundle', async () => {

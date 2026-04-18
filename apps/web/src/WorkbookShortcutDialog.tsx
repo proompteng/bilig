@@ -1,5 +1,5 @@
 import { cva } from 'class-variance-authority'
-import { useMemo, useRef, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { Search, X } from 'lucide-react'
 import { Dialog } from '@base-ui/react/dialog'
 import {
@@ -84,12 +84,30 @@ export function WorkbookShortcutDialog(props: {
   const filteredEntries = useMemo(() => searchWorkbookShortcutEntries(props.query), [props.query])
   const groupedEntries = useMemo(() => groupWorkbookShortcutEntries(filteredEntries), [filteredEntries])
 
+  useEffect(() => {
+    if (!props.open) {
+      return
+    }
+
+    const focusSearchInput = () => {
+      searchInputRef.current?.focus({ preventScroll: true })
+    }
+
+    focusSearchInput()
+    const timeoutId = window.setTimeout(focusSearchInput, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [props.open])
+
   return (
     <Dialog.Root open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-[1200] bg-black/35" />
         <Dialog.Popup
           aria-label="Keyboard shortcuts"
+          aria-modal="true"
           className="fixed left-1/2 top-1/2 z-[1201] flex w-[min(56rem,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--wb-border)] bg-[var(--color-mauve-50)] shadow-[var(--wb-shadow-md)]"
           data-testid="workbook-shortcut-dialog"
           initialFocus={searchInputRef}

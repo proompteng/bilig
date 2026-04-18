@@ -51,6 +51,7 @@ describe('workbook shortcut dialog', () => {
 
     expect(document.querySelector("[data-testid='workbook-shortcut-dialog']")).not.toBeNull()
     expect(document.querySelector("[data-testid='workbook-shortcut-search']")).not.toBeNull()
+    expect(document.activeElement).toBe(document.querySelector("[data-testid='workbook-shortcut-search']"))
 
     await act(async () => {
       root.unmount()
@@ -99,6 +100,7 @@ describe('workbook shortcut dialog', () => {
     })
 
     const dialog = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-dialog']")
+    expect(dialog?.getAttribute('aria-modal')).toBe('true')
     expect(dialog?.getAttribute('class')).toContain('w-[min(56rem,calc(100vw-3rem))]')
     expect(dialog?.getAttribute('class')).toContain('bg-[var(--color-mauve-50)]')
 
