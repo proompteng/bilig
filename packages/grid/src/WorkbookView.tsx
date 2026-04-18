@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from '@bilig/protocol'
 import { FormulaBar } from './FormulaBar.js'
 import type { GridEngineLike } from './grid-engine.js'
+import { formatSelectionSnapshotSummary } from './gridSelection.js'
 import { WorkbookSheetTabs } from './WorkbookSheetTabs.js'
 import {
   WorkbookGridSurface,
@@ -150,18 +151,14 @@ export function WorkbookView({
     startX: number
     startWidth: number
   } | null>(null)
-  const previousSheetNameRef = useRef(sheetName)
   const [isResizingSidePanel, setIsResizingSidePanel] = useState(false)
-  const [selectionLabel, setSelectionLabel] = useState(selectedAddr)
+  const [selectionLabel, setSelectionLabel] = useState(formatSelectionSnapshotSummary(selectionSnapshot))
   const resolvedSidePanelWidth = clampSidePanelWidth(sidePanelWidth ?? 344)
 
   useEffect(() => {
-    if (previousSheetNameRef.current === sheetName) {
-      return
-    }
-    previousSheetNameRef.current = sheetName
-    setSelectionLabel(selectedAddr)
-  }, [selectedAddr, sheetName])
+    const nextSelectionLabel = formatSelectionSnapshotSummary(selectionSnapshot)
+    setSelectionLabel(nextSelectionLabel)
+  }, [selectionSnapshot, sheetName])
 
   const handleSelectionLabelChange = useCallback(
     (label: string) => {

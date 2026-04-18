@@ -336,15 +336,23 @@ export function useWorkerWorkbookAppState(input: {
 
   const completeEditNavigation = useCallback(
     (targetSelection: WorkerRuntimeSelection, movement?: EditMovement) => {
+      const syncSelectionSnapshot = (nextSelection: WorkerRuntimeSelection) => {
+        const nextSelectionSnapshot = createSingleCellSelectionSnapshot(nextSelection)
+        selectionSnapshotRef.current = nextSelectionSnapshot
+        selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
+        setSelectionSnapshot(nextSelectionSnapshot)
+      }
       if (!movement) {
         selectionRef.current = targetSelection
         editorTargetRef.current = targetSelection
+        syncSelectionSnapshot(targetSelection)
         return targetSelection
       }
       const nextAddress = clampSelectionMovement(targetSelection.address, targetSelection.sheetName, movement)
       const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress }
       selectionRef.current = nextSelection
       editorTargetRef.current = nextSelection
+      syncSelectionSnapshot(nextSelection)
       runtimeActorRef.send({ type: 'selection.changed', selection: nextSelection })
       return nextSelection
     },

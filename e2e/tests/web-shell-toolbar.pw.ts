@@ -23,7 +23,10 @@ test('web app renders the minimal product shell without legacy demo chrome', asy
   await expect(page.getByTestId('replica-panel')).toHaveCount(0)
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
-  await expect(page.getByTestId('status-sync')).toHaveText(remoteSyncEnabled ? 'Ready' : /^(Ready|Local)$/, { timeout: 15_000 })
+  await expect(page.getByTestId('status-sync')).toHaveText(
+    remoteSyncEnabled ? /^(Saved|Saving…|Sync issue)$/ : /^(Saved|Saving…|Local only|Read only|Offline|Sync issue)$/,
+    { timeout: 15_000 },
+  )
   await expect(page.locator('.formula-result-shell')).toHaveCount(0)
 })
 

@@ -5,7 +5,7 @@ export const formulaBarRootClass = cva(
 )
 
 export const formulaFieldShellClass = cva(
-  'box-border flex min-h-8 items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[border-color,box-shadow]',
+  'box-border flex h-8 min-h-8 items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[border-color,box-shadow]',
   {
     variants: {
       focused: {
@@ -24,7 +24,7 @@ export const formulaFieldAddonClass = cva(
 )
 
 export const formulaInputClass = cva(
-  'min-h-8 min-w-0 flex-1 border-0 bg-transparent px-3 py-1.5 text-[12px] leading-5 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
+  'min-h-8 min-w-0 flex-1 border-0 bg-transparent px-3 py-1 text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
 )
 
 export const formulaStandaloneInputClass = cva(

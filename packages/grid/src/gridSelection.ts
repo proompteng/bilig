@@ -218,6 +218,33 @@ export function formatSelectionSummary(selection: GridSelection, fallbackAddress
   return `${start}:${end}`
 }
 
+export function formatSelectionSnapshotSummary(selection: GridSelectionSnapshot): string {
+  switch (selection.kind) {
+    case 'sheet':
+      return 'All'
+    case 'column': {
+      const start = parseCellAddress(selection.range.startAddress, selection.sheetName)
+      const end = parseCellAddress(selection.range.endAddress, selection.sheetName)
+      const startLabel = indexToColumn(start.col)
+      const endLabel = indexToColumn(end.col)
+      return startLabel === endLabel ? `${startLabel}:${startLabel}` : `${startLabel}:${endLabel}`
+    }
+    case 'row': {
+      const start = parseCellAddress(selection.range.startAddress, selection.sheetName)
+      const end = parseCellAddress(selection.range.endAddress, selection.sheetName)
+      const startLabel = String(start.row + 1)
+      const endLabel = String(end.row + 1)
+      return startLabel === endLabel ? `${startLabel}:${startLabel}` : `${startLabel}:${endLabel}`
+    }
+    case 'range':
+      return selection.range.startAddress === selection.range.endAddress
+        ? selection.range.startAddress
+        : `${selection.range.startAddress}:${selection.range.endAddress}`
+    case 'cell':
+      return selection.address
+  }
+}
+
 export function createColumnSelection(col: number, row: number): GridSelection {
   return {
     current: {
