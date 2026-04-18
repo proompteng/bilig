@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { ErrorCode, ValueTag, type CellSnapshot, type CellStyleRecord } from '@bilig/protocol'
 import { GridCellKind, cellStyleToThemeOverride, cellToEditorSeed, snapshotToGridCell, snapshotToRenderCell } from '../gridCells.js'
+import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 
 function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
   const snapshot: CellSnapshot = {
@@ -68,7 +69,7 @@ describe('gridCells', () => {
       fontSize: 15,
       underline: true,
     })
-    expect(renderCell.font).toBe('italic 400 15px "Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif')
+    expect(renderCell.font).toBe(`italic 400 15px ${WORKBOOK_FONT_SANS}`)
 
     expect(snapshotToRenderCell(makeSnapshot({ value: { tag: ValueTag.Boolean, value: false } }))).toMatchObject({
       kind: 'boolean',
@@ -94,7 +95,7 @@ describe('gridCells', () => {
     expect(cellStyleToThemeOverride(fontAndFillStyle)).toEqual({
       textDark: '#202124',
       baseFontStyle: '400 12px',
-      fontFamily: '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif',
+      fontFamily: WORKBOOK_FONT_SANS,
     })
   })
 
@@ -104,7 +105,7 @@ describe('gridCells', () => {
     })
     expect(textCell.kind).toBe(GridCellKind.Text)
     expect(textCell.themeOverride).toEqual({
-      textDark: 'rgba(32, 33, 36, 0)',
+      textDark: 'rgba(31, 41, 51, 0)',
     })
 
     const booleanCell = snapshotToGridCell(makeSnapshot({ value: { tag: ValueTag.Boolean, value: true } }), undefined, {
