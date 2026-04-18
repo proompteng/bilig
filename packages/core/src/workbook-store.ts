@@ -133,6 +133,7 @@ export interface SheetRecord {
   order: number
   grid: SheetGrid
   axisMap: SheetAxisMap
+  logicalAxisMap: SheetAxisMap
   logical: LogicalSheetStore
   columnVersions: Uint32Array
   structureVersion: number
@@ -197,15 +198,17 @@ export class WorkbookStore {
       return existing
     }
     const axisMap = new SheetAxisMap()
+    const logicalAxisMap = new SheetAxisMap()
     const sheet: SheetRecord = {
       id: id ?? this.nextSheetId++,
       name,
       order,
       grid: new SheetGrid(),
       axisMap,
+      logicalAxisMap,
       logical: new LogicalSheetStore(
         id ?? this.nextSheetId - 1,
-        axisMap,
+        logicalAxisMap,
         new CellPageStore(new Map<string, number>(), (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId)),
       ),
       columnVersions: new Uint32Array(MAX_COLS),
@@ -1272,11 +1275,13 @@ export class WorkbookStore {
       insertCount,
       snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, insertCount),
     )
+    sheet.logicalAxisMap.splice(axis, start, deleteCount, insertCount, [])
     return removed
   }
 
   private moveAxisEntries(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number, target: number): void {
     sheet.axisMap.move(axis, start, count, target)
+    sheet.logicalAxisMap.move(axis, start, count, target)
     moveAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, target, () => this.createAxisEntry(axis))
   }
 
