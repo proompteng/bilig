@@ -33,12 +33,12 @@ describe('EngineFormulaTemplateNormalizationService', () => {
   it('clears cached families between initialization batches', () => {
     const service = createEngineFormulaTemplateNormalizationService()
 
-    const first = service.compileForCell('A1+B1', 0, 2)
-    service.clear()
-    const second = service.compileForCell('A2+B2', 1, 2)
+    const first = service.resolveForCell('A1+B1', 0, 2)
+    service.reset()
+    const second = service.resolveForCell('A2+B2', 1, 2)
 
-    expect(second.ast).not.toBe(first.ast)
-    expect(second.deps).toEqual(['A2', 'B2'])
+    expect(second.compiled.ast).not.toBe(first.compiled.ast)
+    expect(second.compiled.deps).toEqual(['A2', 'B2'])
   })
 
   it('reuses an existing family when the recent-column cache was displaced', () => {
@@ -74,5 +74,16 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     service.compileForCell('A1*B1', 0, 2)
 
     expect(counters.formulasParsed).toBe(2)
+  })
+
+  it('keeps template families as runtime owners across transient cache clears', () => {
+    const service = createEngineFormulaTemplateNormalizationService()
+
+    const first = service.resolveForCell('A1+B1', 0, 2)
+    service.clear()
+    const second = service.resolveForCell('A2+B2', 1, 2)
+
+    expect(second.templateId).toBe(first.templateId)
+    expect(service.listTemplates()).toHaveLength(1)
   })
 })

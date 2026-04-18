@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 import type { CompiledFormula } from '@bilig/formula'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
+import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 
@@ -15,6 +16,20 @@ export interface EngineFormulaInitializationService {
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>
   readonly initializeCellFormulasAtNow: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializePreparedCellFormulasAt: (
+    refs: readonly PreparedFormulaInitializationRef[],
+    potentialNewCells?: number,
+  ) => Effect.Effect<void, EngineMutationError>
+  readonly initializePreparedCellFormulasAtNow: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
+}
+
+export interface PreparedFormulaInitializationRef {
+  readonly sheetId: number
+  readonly row: number
+  readonly col: number
+  readonly source: string
+  readonly compiled: CompiledFormula
+  readonly templateId?: number
 }
 
 export function createEngineFormulaInitializationService(args: {
@@ -24,8 +39,14 @@ export function createEngineFormulaInitializationService(args: {
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
   readonly resetMaterializedCellScratch: (expectedSize: number) => void
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void
-  readonly bindPreparedFormula: (cellIndex: number, ownerSheetName: string, source: string, compiled: CompiledFormula) => void
-  readonly compileTemplateFormula: (source: string, row: number, col: number) => CompiledFormula
+  readonly bindPreparedFormula: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ) => void
+  readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly clearTemplateFormulaCache: () => void
   readonly removeFormula: (cellIndex: number) => boolean
   readonly setInvalidFormulaValue: (cellIndex: number) => void
@@ -43,7 +64,32 @@ export function createEngineFormulaInitializationService(args: {
   readonly setBatchMutationDepth: (next: number) => void
   readonly flushWasmProgramSync: () => void
 }): EngineFormulaInitializationService {
-  const initializeCellFormulasAtNow = (refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void => {
+  const sheetNameById = new Map<number, string>()
+  const resolveSheetName = (sheetId: number): string => {
+    const cached = sheetNameById.get(sheetId)
+    if (cached !== undefined) {
+      return cached
+    }
+    const sheet = args.state.workbook.getSheetById(sheetId)
+    if (!sheet) {
+      throw new Error(`Unknown sheet id: ${sheetId}`)
+    }
+    sheetNameById.set(sheetId, sheet.name)
+    return sheet.name
+  }
+
+  const initializeFormulaEntriesNow = <Entry>(
+    refs: readonly Entry[],
+    potentialNewCells: number | undefined,
+    resolveCellIndex: (ref: Entry) => number,
+    resolveEntry: (ref: Entry) => {
+      cellIndex: number
+      ownerSheetName: string
+      source: string
+      compiled: CompiledFormula
+      templateId?: number
+    },
+  ): void => {
     if (refs.length === 0) {
       return
     }
@@ -58,43 +104,21 @@ export function createEngineFormulaInitializationService(args: {
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
 
-    const sheetNameById = new Map<number, string>()
-    const resolveSheetName = (sheetId: number): string => {
-      const cached = sheetNameById.get(sheetId)
-      if (cached !== undefined) {
-        return cached
-      }
-      const sheet = args.state.workbook.getSheetById(sheetId)
-      if (!sheet) {
-        throw new Error(`Unknown sheet id: ${sheetId}`)
-      }
-      sheetNameById.set(sheetId, sheet.name)
-      return sheet.name
-    }
-
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
         refs.forEach((ref) => {
-          if (ref.mutation.kind !== 'setCellFormula') {
-            throw new Error('initializeCellFormulasAt only supports setCellFormula coordinate mutations')
-          }
-          const sheetName = resolveSheetName(ref.sheetId)
-          const cellIndex = args.ensureCellTrackedByCoords(ref.sheetId, ref.mutation.row, ref.mutation.col)
           const compileStarted = performance.now()
           try {
-            args.bindPreparedFormula(
-              cellIndex,
-              sheetName,
-              ref.mutation.formula,
-              args.compileTemplateFormula(ref.mutation.formula, ref.mutation.row, ref.mutation.col),
-            )
+            const prepared = resolveEntry(ref)
+            args.bindPreparedFormula(prepared.cellIndex, prepared.ownerSheetName, prepared.source, prepared.compiled, prepared.templateId)
             compileMs += performance.now() - compileStarted
-            formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
+            formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
             topologyChanged = true
           } catch {
             compileMs += performance.now() - compileStarted
+            const cellIndex = resolveCellIndex(ref)
             topologyChanged = args.removeFormula(cellIndex) || topologyChanged
             args.setInvalidFormulaValue(cellIndex)
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
@@ -132,6 +156,49 @@ export function createEngineFormulaInitializationService(args: {
     })
   }
 
+  const initializeCellFormulasAtNow = (refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void => {
+    initializeFormulaEntriesNow(
+      refs,
+      potentialNewCells,
+      (ref) => {
+        if (ref.mutation.kind !== 'setCellFormula') {
+          throw new Error('initializeCellFormulasAt only supports setCellFormula coordinate mutations')
+        }
+        return args.ensureCellTrackedByCoords(ref.sheetId, ref.mutation.row, ref.mutation.col)
+      },
+      (ref) => {
+        if (ref.mutation.kind !== 'setCellFormula') {
+          throw new Error('initializeCellFormulasAt only supports setCellFormula coordinate mutations')
+        }
+        const ownerSheetName = resolveSheetName(ref.sheetId)
+        const cellIndex = args.ensureCellTrackedByCoords(ref.sheetId, ref.mutation.row, ref.mutation.col)
+        const template = args.compileTemplateFormula(ref.mutation.formula, ref.mutation.row, ref.mutation.col)
+        return {
+          cellIndex,
+          ownerSheetName,
+          source: ref.mutation.formula,
+          compiled: template.compiled,
+          templateId: template.templateId,
+        }
+      },
+    )
+  }
+
+  const initializePreparedCellFormulasAtNow = (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number): void => {
+    initializeFormulaEntriesNow(
+      refs,
+      potentialNewCells,
+      (ref) => args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col),
+      (ref) => ({
+        cellIndex: args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col),
+        ownerSheetName: resolveSheetName(ref.sheetId),
+        source: ref.source,
+        compiled: ref.compiled,
+        ...(ref.templateId !== undefined ? { templateId: ref.templateId } : {}),
+      }),
+    )
+  }
+
   return {
     initializeCellFormulasAt(refs, potentialNewCells) {
       return Effect.try({
@@ -145,6 +212,19 @@ export function createEngineFormulaInitializationService(args: {
           }),
       })
     },
+    initializePreparedCellFormulasAt(refs, potentialNewCells) {
+      return Effect.try({
+        try: () => {
+          initializePreparedCellFormulasAtNow(refs, potentialNewCells)
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage('Failed to initialize prepared cell formulas', cause),
+            cause,
+          }),
+      })
+    },
     initializeCellFormulasAtNow,
+    initializePreparedCellFormulasAtNow,
   }
 }

@@ -1,4 +1,11 @@
-import { SpreadsheetEngine, makeCellKey, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
+import {
+  SpreadsheetEngine,
+  attachRuntimeSnapshot,
+  makeCellKey,
+  readRuntimeSnapshot,
+  type EngineCellMutationRef,
+  type SheetRecord,
+} from '@bilig/core'
 import {
   ErrorCode,
   MAX_COLS,
@@ -1057,10 +1064,19 @@ export class WorkPaper {
     namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
   ): WorkPaper {
     const workbook = new WorkPaper(configInput)
+    const runtimeSnapshot = namedExpressions.length === 0 ? readRuntimeSnapshot(sheets) : undefined
+    const runtimeSnapshotMatchesSheets =
+      runtimeSnapshot !== undefined &&
+      runtimeSnapshot.sheets.length === Object.keys(sheets).length &&
+      runtimeSnapshot.sheets.every((sheet: { name: string }) => Object.prototype.hasOwnProperty.call(sheets, sheet.name))
     Object.entries(sheets).forEach(([sheetName, sheet]) => {
       validateSheetWithinLimits(sheetName, sheet, workbook.config)
     })
     workbook.withEngineEventCaptureDisabled(() => {
+      if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
+        workbook.engine.importSnapshot(runtimeSnapshot)
+        return
+      }
       Object.keys(sheets).forEach((sheetName) => {
         workbook.engine.createSheet(sheetName)
       })
@@ -1645,7 +1661,9 @@ export class WorkPaper {
   }
 
   getAllSheetsSerialized(): Record<string, RawCellContent[][]> {
-    return Object.fromEntries(this.listSheetRecords().map((sheet) => [sheet.name, this.getSheetSerialized(sheet.id)]))
+    const serialized = Object.fromEntries(this.listSheetRecords().map((sheet) => [sheet.name, this.getSheetSerialized(sheet.id)]))
+    attachRuntimeSnapshot(serialized, this.engine.exportSnapshot())
+    return serialized
   }
 
   getAllSheetsDimensions(): Record<string, WorkPaperSheetDimensions> {

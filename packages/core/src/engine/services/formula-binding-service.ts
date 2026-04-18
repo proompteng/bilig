@@ -1,6 +1,5 @@
 import { Effect } from 'effect'
 import {
-  compileFormula,
   compileFormulaAst,
   type CompiledFormula,
   type DirectAggregateCandidate,
@@ -32,7 +31,10 @@ import {
 import { growUint32 } from '../../engine-buffer-utils.js'
 import { resolveMetadataReferencesInAst, spillDependencyKeyFromRef, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
+import type { FormulaInstanceTable } from '../../formula/formula-instance-table.js'
+import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
+import { retargetFormulaInstance } from '../../formula/structural-retargeting.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import {
@@ -78,8 +80,19 @@ export interface EngineFormulaBindingService {
     candidates?: readonly number[] | U32,
   ) => Effect.Effect<number, EngineFormulaBindingError>
   readonly bindFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean
-  readonly bindPreparedFormulaNow: (cellIndex: number, ownerSheetName: string, source: string, compiled: CompiledFormula) => boolean
-  readonly rewriteFormulaCompiledPreservingBindingNow: (cellIndex: number, source: string, compiled: CompiledFormula) => boolean
+  readonly bindPreparedFormulaNow: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ) => boolean
+  readonly rewriteFormulaCompiledPreservingBindingNow: (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ) => boolean
   readonly bindInitialFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void
   readonly clearFormulaNow: (cellIndex: number) => boolean
   readonly invalidateFormulaNow: (cellIndex: number) => void
@@ -510,7 +523,7 @@ interface DirectApproximateLookupCandidate {
   endCol: number
 }
 
-type ParsedCompiledFormula = ReturnType<typeof compileFormula> & {
+type ParsedCompiledFormula = CompiledFormula & {
   parsedDeps?: ParsedDependencyReference[]
   parsedSymbolicRefs?: ParsedCellReferenceInfo[]
   parsedSymbolicRanges?: ParsedRangeReferenceInfo[]
@@ -927,6 +940,8 @@ export function createEngineFormulaBindingService(args: {
     counters?: EngineCounters
   }
   readonly compiledPlans: EngineCompiledPlanService
+  readonly formulaInstances: FormulaInstanceTable
+  readonly resolveTemplateForCell: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly edgeArena: EdgeArena
@@ -967,7 +982,6 @@ export function createEngineFormulaBindingService(args: {
   readonly getSymbolicRangeBindings: () => U32
   readonly setSymbolicRangeBindings: (next: U32) => void
 }): EngineFormulaBindingService {
-  const compiledSourceCache = new Map<string, ParsedCompiledFormula>()
   const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>()
   const formulaColumnCounts = new Map<number, number>()
 
@@ -1176,10 +1190,11 @@ export function createEngineFormulaBindingService(args: {
       appendReverseEdge(dependencyEntity, formulaEntity)
     })
 
-    const plan = args.compiledPlans.replace(existing.planId, source, prepared.plan.compiled)
+    const plan = args.compiledPlans.replace(existing.planId, source, prepared.plan.compiled, prepared.templateId)
     args.compiledPlans.release(prepared.plan.id)
     existing.source = source
     existing.planId = plan.id
+    existing.templateId = prepared.templateId
     existing.compiled = plan.compiled
     existing.plan = plan
     existing.dependencyIndices = prepared.dependencies.dependencyIndices
@@ -1199,11 +1214,17 @@ export function createEngineFormulaBindingService(args: {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
     args.scheduleWasmProgramSync()
+    recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
 
     primeLookupCandidatesNow(ownerSheetName, undefined, prepared.indexedExactLookupCandidates, prepared.directApproximateLookupCandidates)
   }
 
-  const rewriteFormulaCompiledPreservingBindingNow = (cellIndex: number, source: string, compiled: CompiledFormula): boolean => {
+  const rewriteFormulaCompiledPreservingBindingNow = (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (!existing) {
       return false
@@ -1226,10 +1247,12 @@ export function createEngineFormulaBindingService(args: {
     } else {
       return false
     }
-    const plan = args.compiledPlans.replace(existing.planId, source, compiled)
+    const nextTemplateId = templateId ?? existing.templateId
+    const plan = args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
     const previousDirectAggregate = existing.directAggregate
     existing.source = source
     existing.planId = plan.id
+    existing.templateId = nextTemplateId
     existing.compiled = plan.compiled
     existing.plan = plan
     existing.constants = compiled.constants
@@ -1261,6 +1284,7 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
+    recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
     return true
   }
 
@@ -1275,14 +1299,23 @@ export function createEngineFormulaBindingService(args: {
     return sheet?.grid.get(row, col) === cellIndex
   }
 
-  const compileFormulaForSheet = (currentSheetName: string, source: string): ReturnType<typeof compileFormula> => {
-    let compiled = compiledSourceCache.get(source)
-    if (!compiled) {
-      compiled = normalizeLookupCompileMode(compileFormula(source) as ParsedCompiledFormula)
-      compiledSourceCache.set(source, compiled)
+  const compileFormulaForCell = (
+    cellIndex: number,
+    currentSheetName: string,
+    source: string,
+  ): { compiled: ParsedCompiledFormula; templateResolution: FormulaTemplateResolution } => {
+    const row = args.state.workbook.cellStore.rows[cellIndex]
+    const col = args.state.workbook.cellStore.cols[cellIndex]
+    if (row === undefined || col === undefined) {
+      throw new Error(`Cannot resolve formula template without coordinates for cell ${cellIndex}`)
     }
+    const templateResolution = args.resolveTemplateForCell(source, row, col)
+    const compiled = normalizeLookupCompileMode(templateResolution.compiled as ParsedCompiledFormula)
     if (compiled.symbolicNames.length === 0 && compiled.symbolicTables.length === 0 && compiled.symbolicSpills.length === 0) {
-      return compiled
+      return {
+        compiled,
+        templateResolution,
+      }
     }
 
     const resolved = resolveMetadataReferencesInAst(compiled.ast, {
@@ -1291,7 +1324,10 @@ export function createEngineFormulaBindingService(args: {
       resolveSpillReference: (sheetName, address) => args.resolveSpillReference(currentSheetName, sheetName, address),
     })
     if (!resolved.substituted || !resolved.fullyResolved) {
-      return compiled
+      return {
+        compiled,
+        templateResolution,
+      }
     }
 
     const resolvedCacheKey = `${currentSheetName}\u0000${source}\u0000${serializeFormula(resolved.node)}`
@@ -1307,7 +1343,46 @@ export function createEngineFormulaBindingService(args: {
       )
       resolvedCompiledCache.set(resolvedCacheKey, resolvedCompiled)
     }
-    return resolvedCompiled
+    return {
+      compiled: resolvedCompiled,
+      templateResolution,
+    }
+  }
+
+  const recordFormulaInstanceNow = (cellIndex: number, source: string, templateId: number | undefined): void => {
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+    const row = args.state.workbook.cellStore.rows[cellIndex]
+    const col = args.state.workbook.cellStore.cols[cellIndex]
+    if (sheetId === undefined || row === undefined || col === undefined) {
+      args.formulaInstances.delete(cellIndex)
+      return
+    }
+    const sheetName = args.state.workbook.getSheetNameById(sheetId)
+    if (!sheetName) {
+      args.formulaInstances.delete(cellIndex)
+      return
+    }
+    const existing = args.formulaInstances.get(cellIndex)
+    if (existing) {
+      args.formulaInstances.upsert(
+        retargetFormulaInstance(existing, {
+          sheetName,
+          row,
+          col,
+          source,
+          ...(templateId !== undefined ? { templateId } : {}),
+        }),
+      )
+      return
+    }
+    args.formulaInstances.upsert({
+      cellIndex,
+      sheetName,
+      row,
+      col,
+      source,
+      ...(templateId !== undefined ? { templateId } : {}),
+    })
   }
 
   const materializeDependencies = (
@@ -1618,6 +1693,7 @@ export function createEngineFormulaBindingService(args: {
       args.edgeArena.free(existing.dependencyEntities)
       args.compiledPlans.release(existing.planId)
     }
+    args.formulaInstances.delete(cellIndex)
     args.state.formulas.delete(cellIndex)
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
@@ -1648,6 +1724,7 @@ export function createEngineFormulaBindingService(args: {
       args.compiledPlans.release(existing.planId)
       existing.source = source
       existing.planId = prepared.plan.id
+      existing.templateId = prepared.templateId
       existing.compiled = prepared.plan.compiled
       existing.plan = prepared.plan
       existing.dependencyIndices = prepared.dependencies.dependencyIndices
@@ -1666,6 +1743,7 @@ export function createEngineFormulaBindingService(args: {
         args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
       }
       args.scheduleWasmProgramSync()
+      recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
 
       primeLookupCandidatesNow(
         ownerSheetName,
@@ -1693,12 +1771,18 @@ export function createEngineFormulaBindingService(args: {
     return bindPreparedFormulaPreparedNow(cellIndex, ownerSheetName, source, prepareFormulaBindingNow(cellIndex, ownerSheetName, source))
   }
 
-  const bindPreparedFormulaNow = (cellIndex: number, ownerSheetName: string, source: string, compiled: CompiledFormula): boolean =>
+  const bindPreparedFormulaNow = (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ): boolean =>
     bindPreparedFormulaPreparedNow(
       cellIndex,
       ownerSheetName,
       source,
-      prepareFormulaBindingFromCompiledNow(cellIndex, ownerSheetName, source, compiled as ParsedCompiledFormula),
+      prepareFormulaBindingFromCompiledNow(cellIndex, ownerSheetName, source, compiled as ParsedCompiledFormula, templateId),
     )
 
   const bindInitialFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
@@ -1719,6 +1803,7 @@ export function createEngineFormulaBindingService(args: {
       cellIndex,
       formulaSlotId: 0,
       planId: prepared.plan.id,
+      templateId: prepared.templateId,
       source,
       compiled: prepared.plan.compiled,
       plan: prepared.plan,
@@ -1752,6 +1837,7 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
+    recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
 
     for (let rangeCursor = 0; rangeCursor < prepared.dependencies.newRangeCount; rangeCursor += 1) {
       const rangeIndex = prepared.dependencies.newRangeIndices[rangeCursor]!
@@ -1846,6 +1932,7 @@ export function createEngineFormulaBindingService(args: {
     ownerSheetName: string,
     source: string,
     compiledInput: ParsedCompiledFormula,
+    templateId?: number,
   ) => {
     const ownerSheetId = args.state.workbook.getSheet(ownerSheetName)?.id
     let compiled = normalizeLookupCompileMode(compiledInput)
@@ -1935,19 +2022,17 @@ export function createEngineFormulaBindingService(args: {
       directAggregate,
       directCriteria,
       runtimeProgram,
-      plan: args.compiledPlans.intern(source, compiled),
+      plan: args.compiledPlans.intern(source, compiled, templateId),
+      templateId,
       indexedExactLookupCandidates,
       directApproximateLookupCandidates,
     }
   }
 
-  const prepareFormulaBindingNow = (cellIndex: number, ownerSheetName: string, source: string) =>
-    prepareFormulaBindingFromCompiledNow(
-      cellIndex,
-      ownerSheetName,
-      source,
-      compileFormulaForSheet(ownerSheetName, source) as ParsedCompiledFormula,
-    )
+  const prepareFormulaBindingNow = (cellIndex: number, ownerSheetName: string, source: string) => {
+    const { compiled, templateResolution } = compileFormulaForCell(cellIndex, ownerSheetName, source)
+    return prepareFormulaBindingFromCompiledNow(cellIndex, ownerSheetName, source, compiled, templateResolution.templateId)
+  }
 
   const invalidateFormulaNow = (cellIndex: number): void => {
     clearFormulaNow(cellIndex)
@@ -2100,6 +2185,7 @@ export function createEngineFormulaBindingService(args: {
             args.compiledPlans.release(planId)
           })
           args.state.formulas.clear()
+          args.formulaInstances.clear()
           args.state.ranges.reset()
           args.edgeArena.reset()
           args.programArena.reset()

@@ -66,6 +66,7 @@ export function createEngineMaintenanceService(args: {
   readonly captureColumnRangeCellState: (sheetName: string, start: number, count: number) => EngineOp[]
   readonly setWasmProgramSyncPending: (next: boolean) => void
   readonly setMaterializedCellCount: (next: number) => void
+  readonly resetFormulaRuntimeCaches: () => void
   readonly scheduleWasmProgramSync: () => void
   readonly resetWasmState: () => void
 }): EngineMaintenanceService {
@@ -103,6 +104,7 @@ export function createEngineMaintenanceService(args: {
       ...createInitialRecalcMetrics(),
       batchId: previousBatchId,
     })
+    args.resetFormulaRuntimeCaches()
     args.setWasmProgramSyncPending(false)
     args.setMaterializedCellCount(0)
     args.resetWasmState()

@@ -1,93 +1,48 @@
-import {
-  buildRelativeFormulaTemplateTokenKey,
-  canTranslateCompiledFormulaWithoutAst,
-  compileFormulaAst,
-  parseFormula,
-  translateCompiledFormula,
-  translateCompiledFormulaWithoutAst,
-  type CompiledFormula,
-} from '@bilig/formula'
-import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
+import type { CompiledFormula } from '@bilig/formula'
+import { createTemplateBank, type FormulaTemplateResolution, type FormulaTemplateSnapshot } from '../../formula/template-bank.js'
+import type { EngineCounters } from '../../perf/engine-counters.js'
 
 export interface EngineFormulaTemplateNormalizationService {
   readonly clear: () => void
+  readonly reset: () => void
   readonly compileForCell: (source: string, ownerRow: number, ownerCol: number) => CompiledFormula
-}
-
-interface TemplateEntry {
-  readonly templateKey: string
-  readonly baseRow: number
-  readonly baseCol: number
-  readonly compiled: CompiledFormula
+  readonly resolveForCell: (source: string, ownerRow: number, ownerCol: number) => FormulaTemplateResolution
+  readonly resolveByTemplateId: (
+    templateId: number,
+    source: string,
+    ownerRow: number,
+    ownerCol: number,
+  ) => FormulaTemplateResolution | undefined
+  readonly listTemplates: () => FormulaTemplateSnapshot[]
+  readonly hydrateTemplates: (snapshots: readonly FormulaTemplateSnapshot[]) => void
 }
 
 export function createEngineFormulaTemplateNormalizationService(args?: {
   readonly counters?: EngineCounters
 }): EngineFormulaTemplateNormalizationService {
-  const templates = new Map<string, TemplateEntry>()
-  const recentByColumn = new Map<number, TemplateEntry>()
-  const translateTemplate = (compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula =>
-    (canTranslateCompiledFormulaWithoutAst(compiled)
-      ? translateCompiledFormulaWithoutAst(compiled, rowDelta, colDelta, source)
-      : translateCompiledFormula(compiled, rowDelta, colDelta, source)
-    ).compiled
+  const templateBank = createTemplateBank(args)
 
   return {
     clear() {
-      templates.clear()
-      recentByColumn.clear()
+      templateBank.clearTransientCache()
+    },
+    reset() {
+      templateBank.reset()
     },
     compileForCell(source, ownerRow, ownerCol) {
-      const templateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
-      const recent = recentByColumn.get(ownerCol)
-      if (recent && recent.templateKey === templateKey) {
-        const rowDelta = ownerRow - recent.baseRow
-        const colDelta = ownerCol - recent.baseCol
-        const translated =
-          rowDelta === 0 && colDelta === 0 ? recent.compiled : translateTemplate(recent.compiled, rowDelta, colDelta, source)
-        recentByColumn.set(ownerCol, {
-          templateKey,
-          baseRow: ownerRow,
-          baseCol: ownerCol,
-          compiled: translated,
-        })
-        return translated
-      }
-      const existing = templates.get(templateKey)
-      if (!existing) {
-        if (args?.counters) {
-          addEngineCounter(args.counters, 'formulasParsed')
-        }
-        const ast = parseFormula(source)
-        const compiled = compileFormulaAst(source, ast)
-        templates.set(templateKey, {
-          templateKey,
-          baseRow: ownerRow,
-          baseCol: ownerCol,
-          compiled,
-        })
-        recentByColumn.set(ownerCol, {
-          templateKey,
-          baseRow: ownerRow,
-          baseCol: ownerCol,
-          compiled,
-        })
-        return compiled
-      }
-      const rowDelta = ownerRow - existing.baseRow
-      const colDelta = ownerCol - existing.baseCol
-      if (rowDelta === 0 && colDelta === 0) {
-        recentByColumn.set(ownerCol, existing)
-        return existing.compiled
-      }
-      const translated = translateTemplate(existing.compiled, rowDelta, colDelta, source)
-      recentByColumn.set(ownerCol, {
-        templateKey,
-        baseRow: ownerRow,
-        baseCol: ownerCol,
-        compiled: translated,
-      })
-      return translated
+      return templateBank.resolve(source, ownerRow, ownerCol).compiled
+    },
+    resolveForCell(source, ownerRow, ownerCol) {
+      return templateBank.resolve(source, ownerRow, ownerCol)
+    },
+    resolveByTemplateId(templateId, source, ownerRow, ownerCol) {
+      return templateBank.resolveById(templateId, source, ownerRow, ownerCol)
+    },
+    listTemplates() {
+      return templateBank.list()
+    },
+    hydrateTemplates(snapshots) {
+      templateBank.hydrate(snapshots)
     },
   }
 }

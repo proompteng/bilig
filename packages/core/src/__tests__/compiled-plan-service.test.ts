@@ -52,4 +52,16 @@ describe('EngineCompiledPlanService', () => {
 
     expect(service.get(record.id)).toBe(record)
   })
+
+  it('tracks template ownership on compiled plans and clears all plan records', () => {
+    const service = createEngineCompiledPlanService()
+    const compiled = compileFormula('A1+B1')
+
+    const record = service.intern('A1+B1', compiled, 7)
+    expect(record.templateId).toBe(7)
+
+    service.clear()
+
+    expect(service.get(record.id)).toBeUndefined()
+  })
 })

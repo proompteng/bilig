@@ -17,6 +17,7 @@ import {
 } from './services/formula-initialization-service.js'
 import { createEngineFormulaTemplateNormalizationService } from './services/formula-template-normalization-service.js'
 import { createEngineCompiledPlanService } from './services/compiled-plan-service.js'
+import { createFormulaInstanceTable } from '../formula/formula-instance-table.js'
 import { createEngineFormulaGraphService, type EngineFormulaGraphService } from './services/formula-graph-service.js'
 import { createEngineHistoryService, type EngineHistoryService } from './services/history-service.js'
 import { createEngineMaintenanceService, type EngineMaintenanceService } from './services/maintenance-service.js'
@@ -109,6 +110,8 @@ type EngineMutationSupportRuntimeConfig = Omit<
 type EngineFormulaBindingRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaBindingService>[0],
   | 'compiledPlans'
+  | 'formulaInstances'
+  | 'resolveTemplateForCell'
   | 'exactLookup'
   | 'sortedLookup'
   | 'ensureCellTracked'
@@ -161,6 +164,7 @@ type EngineMaintenanceRuntimeConfig = Omit<
   | 'captureRowRangeCellState'
   | 'captureColumnRangeCellState'
   | 'setMaterializedCellCount'
+  | 'resetFormulaRuntimeCaches'
   | 'scheduleWasmProgramSync'
 >
 
@@ -252,6 +256,7 @@ export function createEngineServiceRuntime(args: {
   const columnIndexStore = createColumnIndexStore({ state: args.state, runtimeColumnStore })
   const compiledPlans = createEngineCompiledPlanService()
   const formulaTemplates = createEngineFormulaTemplateNormalizationService({ counters: args.state.counters })
+  const formulaInstances = createFormulaInstanceTable()
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
   const aggregateCache = createRangeAggregateCacheService({
     state: args.state,
@@ -369,6 +374,8 @@ export function createEngineServiceRuntime(args: {
   binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
     compiledPlans,
+    formulaInstances,
+    resolveTemplateForCell: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     exactLookup,
     sortedLookup,
     ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
@@ -433,6 +440,11 @@ export function createEngineServiceRuntime(args: {
     setMaterializedCellCount: (next) => {
       scratch.setMaterializedCellCountNow(next)
     },
+    resetFormulaRuntimeCaches: () => {
+      compiledPlans.clear()
+      formulaTemplates.reset()
+      formulaInstances.clear()
+    },
     resetWasmState: () => {
       args.state.wasm.resetStoreState()
     },
@@ -479,9 +491,9 @@ export function createEngineServiceRuntime(args: {
     ensureCellTrackedByCoords: (sheetId, row, col) => support.ensureCellTrackedByCoordsNow(sheetId, row, col),
     resetMaterializedCellScratch: (expectedSize) => support.resetMaterializedCellScratchNow(expectedSize),
     bindFormula: (cellIndex, ownerSheetName, source) => binding.bindInitialFormulaNow(cellIndex, ownerSheetName, source),
-    bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled) =>
-      binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled),
-    compileTemplateFormula: (source, row, col) => formulaTemplates.compileForCell(source, row, col),
+    bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled, templateId) =>
+      binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId),
+    compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     setInvalidFormulaValue: (cellIndex) => binding.invalidateFormulaNow(cellIndex),
@@ -605,6 +617,14 @@ export function createEngineServiceRuntime(args: {
     getCellByIndex: args.getCellByIndex,
     resetWorkbook: (workbookName) => runEngineEffect(maintenance.resetWorkbook(workbookName)),
     executeRestoreTransaction: (transaction) => runEngineEffect(mutation.executeTransaction(transaction, 'restore')),
+    exportTemplateBank: () => formulaTemplates.listTemplates(),
+    exportFormulaInstances: () => formulaInstances.list(),
+    hydrateTemplateBank: (templates) => formulaTemplates.hydrateTemplates(templates),
+    resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveByTemplateId(templateId, source, row, col),
+    initializeCellFormulasAt: (refs, potentialNewCells) =>
+      requireService(formulaInitialization, 'formulaInitialization').initializeCellFormulasAtNow(refs, potentialNewCells),
+    initializePreparedCellFormulasAt: (refs, potentialNewCells) =>
+      requireService(formulaInitialization, 'formulaInitialization').initializePreparedCellFormulasAtNow(refs, potentialNewCells),
   })
   const sync = createEngineReplicaSyncService({
     state: args.state,

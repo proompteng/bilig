@@ -209,12 +209,14 @@ export interface CompiledPlanRecord {
   readonly id: number
   readonly source: string
   readonly compiled: CompiledFormula
+  readonly templateId?: number
 }
 
 export interface RuntimeFormula {
   cellIndex: number
   formulaSlotId: number
   planId: number
+  templateId: number | undefined
   source: string
   compiled: CompiledFormula
   plan: CompiledPlanRecord

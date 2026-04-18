@@ -58,4 +58,28 @@ describe('initial mixed sheet load', () => {
       parseSpy.mockRestore()
     }
   })
+
+  it('rebuilds from serialized sheets through the runtime-image fast path when available', () => {
+    const source = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2, '=A1+B1', '=C1*2'],
+        [2, 4, '=A2+B2', '=C2*2'],
+      ],
+    })
+    const serialized = source.getAllSheetsSerialized()
+    source.dispose()
+
+    const rebuilt = WorkPaper.buildFromSheets(serialized)
+    const sheetId = rebuilt.getSheetId('Bench')!
+
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 0, col: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    })
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 1, col: 3 })).toEqual({
+      tag: ValueTag.Number,
+      value: 12,
+    })
+    expect(rebuilt.getPerformanceCounters().snapshotOpsReplayed).toBe(0)
+  })
 })

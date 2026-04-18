@@ -36,6 +36,12 @@ function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unkno
   return Reflect.get(formulas, 'get').call(formulas, cellIndex)
 }
 
+function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): number | undefined {
+  const formula = readRuntimeFormula(engine, cellIndex)
+  const templateId = typeof formula === 'object' && formula !== null ? Reflect.get(formula, 'templateId') : undefined
+  return typeof templateId === 'number' ? templateId : undefined
+}
+
 function isRuntimeFormulaWithDirectCriteria(value: unknown): value is {
   directCriteria: {
     aggregateKind: string
@@ -115,6 +121,13 @@ describe('EngineFormulaBindingService', () => {
     expect(engine.getCellValue('Sheet1', 'F1')).toEqual({ tag: ValueTag.Number, value: 22 })
     expect(engine.getCellValue('Sheet1', 'E2')).toEqual({ tag: ValueTag.Number, value: 22 })
     expect(engine.getCellValue('Sheet1', 'F2')).toEqual({ tag: ValueTag.Number, value: 44 })
+    expect(readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'E1')!)).toBeDefined()
+    expect(readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'E2')!)).toBe(
+      readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'E1')!),
+    )
+    expect(readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'F2')!)).toBe(
+      readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'F1')!),
+    )
   })
 
   it('runs tracked rebinding wrappers through the service surface', async () => {

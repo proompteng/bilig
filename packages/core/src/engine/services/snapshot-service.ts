@@ -1,10 +1,16 @@
 import { Effect } from 'effect'
 import type { EngineOp } from '@bilig/workbook-domain'
 import { ValueTag, type CellSnapshot, type WorkbookAxisEntrySnapshot, type WorkbookSnapshot } from '@bilig/protocol'
+import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
 import { exportSheetMetadata } from '../../engine-snapshot-utils.js'
+import type { PreparedFormulaInitializationRef } from './formula-initialization-service.js'
+import type { FormulaInstanceSnapshot } from '../../formula/formula-instance-table.js'
+import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../../formula/template-bank.js'
 import { exportReplicaSnapshot as exportReplicaStateSnapshot, hydrateReplicaState } from '../../replica-state.js'
+import { attachRuntimeImage, readRuntimeImage } from '../../snapshot/runtime-image-codec.js'
+import { restoreWorkbookFromRuntimeImage, type RuntimeImage } from '../../snapshot/runtime-image.js'
 import type { EngineRuntimeState, EngineReplicaSnapshot, TransactionRecord } from '../runtime-state.js'
 import { EngineSnapshotError } from '../errors.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
@@ -26,6 +32,12 @@ export function createEngineSnapshotService(args: {
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
   readonly resetWorkbook: (workbookName?: string) => void
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void
+  readonly exportTemplateBank?: () => readonly FormulaTemplateSnapshot[]
+  readonly exportFormulaInstances?: () => readonly FormulaInstanceSnapshot[]
+  readonly hydrateTemplateBank?: (templates: readonly FormulaTemplateSnapshot[]) => void
+  readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
+  readonly initializeCellFormulasAt?: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
 }): EngineSnapshotService {
   return {
     exportWorkbook() {
@@ -135,7 +147,7 @@ export function createEngineSnapshotService(args: {
             }
           }
 
-          return {
+          const workbookSnapshot: WorkbookSnapshot = {
             version: 1,
             workbook,
             sheets: [...args.state.workbook.sheetsByName.values()]
@@ -144,33 +156,33 @@ export function createEngineSnapshotService(args: {
                 const metadata = exportSheetMetadata(args.state.workbook, sheet.name)
                 const cells: WorkbookSnapshot['sheets'][number]['cells'] = []
                 sheet.grid.forEachCell((cellIndex) => {
-                  const snapshot = args.getCellByIndex(cellIndex)
+                  const cellSnapshot = args.getCellByIndex(cellIndex)
                   const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
-                  if ((snapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
+                  if ((cellSnapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
                     return
                   }
                   if (
-                    snapshot.formula === undefined &&
+                    cellSnapshot.formula === undefined &&
                     explicitFormat === undefined &&
-                    (snapshot.flags & CellFlags.AuthoredBlank) === 0 &&
-                    (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
+                    (cellSnapshot.flags & CellFlags.AuthoredBlank) === 0 &&
+                    (cellSnapshot.value.tag === ValueTag.Empty || cellSnapshot.value.tag === ValueTag.Error)
                   ) {
                     return
                   }
                   const cell: WorkbookSnapshot['sheets'][number]['cells'][number] = {
-                    address: snapshot.address,
+                    address: cellSnapshot.address,
                   }
                   if (explicitFormat !== undefined) {
                     cell.format = explicitFormat
                   }
-                  if (snapshot.formula) {
-                    cell.formula = snapshot.formula
-                  } else if (snapshot.value.tag === ValueTag.Number) {
-                    cell.value = snapshot.value.value
-                  } else if (snapshot.value.tag === ValueTag.Boolean) {
-                    cell.value = snapshot.value.value
-                  } else if (snapshot.value.tag === ValueTag.String) {
-                    cell.value = snapshot.value.value
+                  if (cellSnapshot.formula) {
+                    cell.formula = cellSnapshot.formula
+                  } else if (cellSnapshot.value.tag === ValueTag.Number) {
+                    cell.value = cellSnapshot.value.value
+                  } else if (cellSnapshot.value.tag === ValueTag.Boolean) {
+                    cell.value = cellSnapshot.value.value
+                  } else if (cellSnapshot.value.tag === ValueTag.String) {
+                    cell.value = cellSnapshot.value.value
                   } else {
                     cell.value = null
                   }
@@ -181,6 +193,14 @@ export function createEngineSnapshotService(args: {
                   : { id: sheet.id, name: sheet.name, order: sheet.order, cells }
               }),
           }
+          if (args.exportTemplateBank && args.exportFormulaInstances) {
+            attachRuntimeImage(workbookSnapshot, {
+              version: 1,
+              templateBank: args.exportTemplateBank(),
+              formulaInstances: args.exportFormulaInstances(),
+            } satisfies RuntimeImage)
+          }
+          return workbookSnapshot
         },
         catch: (cause) =>
           new EngineSnapshotError({
@@ -192,6 +212,21 @@ export function createEngineSnapshotService(args: {
     importWorkbook(snapshot) {
       return Effect.try({
         try: () => {
+          const runtimeImage = readRuntimeImage(snapshot)
+          if (runtimeImage && args.hydrateTemplateBank && args.initializeCellFormulasAt) {
+            restoreWorkbookFromRuntimeImage({
+              snapshot,
+              runtimeImage,
+              workbook: args.state.workbook,
+              strings: args.state.strings,
+              resetWorkbook: args.resetWorkbook,
+              hydrateTemplateBank: args.hydrateTemplateBank,
+              initializeCellFormulasAt: args.initializeCellFormulasAt,
+              ...(args.resolveTemplateById ? { resolveTemplateById: args.resolveTemplateById } : {}),
+              ...(args.initializePreparedCellFormulasAt ? { initializePreparedCellFormulasAt: args.initializePreparedCellFormulasAt } : {}),
+            })
+            return
+          }
           args.resetWorkbook()
           const ops: EngineOp[] = [{ kind: 'upsertWorkbook', name: snapshot.workbook.name }]
           snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {

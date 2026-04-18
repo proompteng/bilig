@@ -1,5 +1,6 @@
 import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vitest'
+import { ValueTag } from '@bilig/protocol'
 import { FormulaTable } from '../formula-table.js'
 import { createReplicaState } from '../replica-state.js'
 import { createEngineSnapshotService } from '../engine/services/snapshot-service.js'
@@ -7,6 +8,7 @@ import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
+import { readRuntimeImage } from '../snapshot/runtime-image-codec.js'
 
 describe('EngineSnapshotService', () => {
   it('normalizes thrown import failures into tagged snapshot errors', () => {
@@ -125,6 +127,38 @@ describe('EngineSnapshotService', () => {
     await restored.ready()
     restored.importSnapshot(snapshot)
 
+    expect(restored.exportSnapshot()).toEqual(snapshot)
+  })
+
+  it('attaches a runtime image to exported snapshots and restores without replay when reused in-process', async () => {
+    const source = new SpreadsheetEngine({
+      workbookName: 'snapshot-runtime-image-source',
+      replicaId: 'snapshot-runtime-image-source',
+    })
+    await source.ready()
+    source.createSheet('Sheet1')
+    source.setCellValue('Sheet1', 'A1', 4)
+    source.setCellValue('Sheet1', 'B1', 7)
+    source.setCellFormula('Sheet1', 'C1', 'A1+B1')
+    source.setCellFormula('Sheet1', 'D1', 'C1*2')
+
+    const snapshot = source.exportSnapshot()
+    const runtimeImage = readRuntimeImage(snapshot)
+    expect(runtimeImage).toBeDefined()
+    expect(runtimeImage?.templateBank.length).toBeGreaterThan(0)
+    expect(runtimeImage?.formulaInstances.length).toBe(2)
+
+    const restored = new SpreadsheetEngine({
+      workbookName: 'snapshot-runtime-image-restored',
+      replicaId: 'snapshot-runtime-image-restored',
+    })
+    await restored.ready()
+    restored.resetPerformanceCounters()
+    restored.importSnapshot(snapshot)
+
+    expect(restored.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(restored.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 22 })
+    expect(restored.getPerformanceCounters().snapshotOpsReplayed).toBe(0)
     expect(restored.exportSnapshot()).toEqual(snapshot)
   })
 })
