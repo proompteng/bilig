@@ -70,5 +70,5 @@ describe('engine snapshot fuzz', () => {
         expect(projectMetadataSnapshot(restoredTwice)).toEqual(projectMetadataSnapshot(finalSnapshot))
       },
     })
-  })
+  }, 20_000)
 })

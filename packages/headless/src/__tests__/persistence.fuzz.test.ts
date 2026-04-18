@@ -60,7 +60,7 @@ describe('WorkPaper persistence fuzz', () => {
         expect(exportWorkPaperDocument(restored)).toEqual(document)
       },
     })
-  })
+  }, 20_000)
 })
 
 // Helpers

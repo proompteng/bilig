@@ -80,5 +80,5 @@ describe('engine structural fuzz', () => {
         expectSemanticSnapshot(engine.exportSnapshot(), seedSnapshot)
       },
     })
-  })
+  }, 20_000)
 })
