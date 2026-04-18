@@ -1,6 +1,5 @@
 import { MAX_COLS, MAX_ROWS, MAX_WASM_RANGE_CELLS, type RangeIndex } from '@bilig/protocol'
-import type { StructuralAxisTransform } from '@bilig/formula'
-import type { CellAddress, CellRangeAddress, RangeAddress } from '@bilig/formula'
+import type { CellAddress, CellRangeAddress, RangeAddress, StructuralAxisTransform } from '@bilig/formula'
 import type { StructuralTransaction } from './engine/structural-transaction.js'
 import { makeCellEntity, makeRangeEntity } from './entity-ids.js'
 import { EdgeArena, type EdgeSlice } from './edge-arena.js'

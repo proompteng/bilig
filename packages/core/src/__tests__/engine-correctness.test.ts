@@ -790,7 +790,6 @@ describe('engine correctness', () => {
     expect(engine.undo()).toBe(true)
     expect(engine.undo()).toBe(true)
     expect(engine.undo()).toBe(false)
->>>>>>> 0ae55808 (perf(engine): streamline tracked structural event delivery)
   })
 
   it('reverses random local edit streams through undo and redo', async () => {

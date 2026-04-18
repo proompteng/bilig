@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
-import type { EngineRuntimeState } from '../engine/runtime-state.js'
+import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../engine/runtime-state.js'
 import { createSortedColumnSearchService } from '../engine/services/sorted-column-search-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
 import type {
@@ -10,7 +10,6 @@ import type {
   RuntimeColumnOwner,
   RuntimeColumnView,
 } from '../engine/services/runtime-column-store-service.js'
-import type { PreparedApproximateVectorLookup } from '../engine/runtime-state.js'
 
 function setStoredNumber(workbook: WorkbookStore, strings: StringPool, address: string, value: number): void {
   const cellIndex = workbook.ensureCell('Sheet1', address)

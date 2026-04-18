@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
-import type { EngineRuntimeState } from '../engine/runtime-state.js'
+import type { EngineRuntimeState, PreparedExactVectorLookup } from '../engine/runtime-state.js'
 import { createExactColumnIndexService } from '../engine/services/exact-column-index-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
 import type {
@@ -10,7 +10,6 @@ import type {
   RuntimeColumnOwner,
   RuntimeColumnView,
 } from '../engine/services/runtime-column-store-service.js'
-import type { PreparedExactVectorLookup } from '../engine/runtime-state.js'
 
 function setStoredCellValue(
   workbook: WorkbookStore,
