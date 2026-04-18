@@ -29,6 +29,8 @@ import { SheetGrid, type SheetGridAxisRemapScope } from './sheet-grid.js'
 import { CellFlags, CellStore } from './cell-store.js'
 import { mapStructuralAxisIndex } from './engine-structural-utils.js'
 import { buildStructuralTransaction, structuralScopeForTransform, type StructuralTransaction } from './engine/structural-transaction.js'
+import { CellPageStore } from './storage/cell-page-store.js'
+import { LogicalSheetStore } from './storage/logical-sheet-store.js'
 import { SheetAxisMap } from './storage/sheet-axis-map.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
 import {
@@ -130,6 +132,7 @@ export interface SheetRecord {
   order: number
   grid: SheetGrid
   axisMap: SheetAxisMap
+  logical: LogicalSheetStore
   columnVersions: Uint32Array
   structureVersion: number
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>
@@ -181,17 +184,24 @@ export class WorkbookStore {
       if (id !== undefined && existing.id !== id) {
         this.sheetsById.delete(existing.id)
         existing.id = id
+        existing.logical.setSheetId(id)
         this.sheetsById.set(existing.id, existing)
         this.bumpSheetId(id)
       }
       return existing
     }
+    const axisMap = new SheetAxisMap()
     const sheet: SheetRecord = {
       id: id ?? this.nextSheetId++,
       name,
       order,
       grid: new SheetGrid(),
-      axisMap: new SheetAxisMap(),
+      axisMap,
+      logical: new LogicalSheetStore(
+        id ?? this.nextSheetId - 1,
+        axisMap,
+        new CellPageStore(this.cellKeyToIndex, (location) => makeCellKey(location.sheetId, location.row, location.col)),
+      ),
       columnVersions: new Uint32Array(MAX_COLS),
       structureVersion: 1,
       rowAxis: [],
@@ -290,13 +300,12 @@ export class WorkbookStore {
     if (!sheet) {
       throw new Error(`Unknown sheet id: ${sheetId}`)
     }
-    const key = makeCellKey(sheet.id, row, col)
-    const existing = this.cellKeyToIndex.get(key)
+    const existing = sheet.logical.getVisibleCell(row, col)
     if (existing !== undefined) {
       return { cellIndex: existing, created: false }
     }
     const cellIndex = this.cellStore.allocate(sheet.id, row, col)
-    this.cellKeyToIndex.set(key, cellIndex)
+    sheet.logical.setVisibleCell(row, col, cellIndex)
     sheet.grid.set(row, col, cellIndex)
     return { cellIndex, created: true }
   }
@@ -351,7 +360,7 @@ export class WorkbookStore {
     const sheet = this.getSheet(sheetName)
     if (!sheet) return undefined
     const parsed = parseCellAddress(address, sheetName)
-    return this.cellKeyToIndex.get(makeCellKey(sheet.id, parsed.row, parsed.col))
+    return sheet.logical.getVisibleCell(parsed.row, parsed.col)
   }
 
   getSheetNameById(id: number): string {
@@ -375,9 +384,8 @@ export class WorkbookStore {
     const row = this.cellStore.rows[index]
     const col = this.cellStore.cols[index]
     if (sheet && row !== undefined && col !== undefined) {
-      const key = makeCellKey(sheet.id, row, col)
-      if (this.cellKeyToIndex.get(key) === index) {
-        this.cellKeyToIndex.delete(key)
+      if (sheet.logical.getVisibleCell(row, col) === index) {
+        sheet.logical.deleteVisibleCell(row, col)
       }
       if (sheet.grid.get(row, col) === index) {
         sheet.grid.clear(row, col)
@@ -904,7 +912,7 @@ export class WorkbookStore {
     }
     const changedEntries = sheet.grid.remapAxis(axis, remapIndex, scope)
     changedEntries.forEach(({ row, col }) => {
-      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
+      sheet.logical.deleteVisibleCell(row, col)
     })
 
     const removedCellIndices: number[] = []
@@ -915,7 +923,7 @@ export class WorkbookStore {
       }
       this.cellStore.rows[cellIndex] = nextRow
       this.cellStore.cols[cellIndex] = nextCol
-      this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
+      sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex)
     }
 
     return { changedCellIndices: [], removedCellIndices }
@@ -930,14 +938,14 @@ export class WorkbookStore {
     const scope = structuralScopeForTransform(transform)
     const remappedEntries = sheet.grid.remapAxis(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
     remappedEntries.forEach(({ row, col }) => {
-      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
+      sheet.logical.deleteVisibleCell(row, col)
     })
 
     const remappedCells = remappedEntries.map(({ cellIndex, row, col, nextRow, nextCol }) => {
       if (nextRow !== undefined && nextCol !== undefined) {
         this.cellStore.rows[cellIndex] = nextRow
         this.cellStore.cols[cellIndex] = nextCol
-        this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
+        sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex)
       }
       return {
         cellIndex,
