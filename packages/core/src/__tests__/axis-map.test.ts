@@ -76,4 +76,30 @@ describe('AxisMap', () => {
     expect(axisMap.indexOf('row-a')).toBe(2)
     expect(axisMap.indexOf('row-missing')).toBe(-1)
   })
+
+  it('reports length and no-ops for empty snapshots or moves', () => {
+    const axisMap = new AxisMap()
+
+    expect(axisMap.length).toBe(0)
+    expect(axisMap.snapshot(0, 0)).toEqual([])
+
+    axisMap.replaceRange(0, [
+      { id: 'row-a', index: 0 },
+      { id: 'row-b', index: 1 },
+    ])
+
+    expect(axisMap.length).toBe(2)
+
+    axisMap.move(0, 0, 1)
+    expect(axisMap.list()).toEqual([
+      { id: 'row-a', index: 0 },
+      { id: 'row-b', index: 1 },
+    ])
+
+    axisMap.move(1, 1, 1)
+    expect(axisMap.list()).toEqual([
+      { id: 'row-a', index: 0 },
+      { id: 'row-b', index: 1 },
+    ])
+  })
 })
