@@ -380,7 +380,16 @@ describe('workbook layout', () => {
     })
 
     const avgOption = document.querySelector("[data-testid='workbook-selection-status-option-avg']")
+    const avgOptionText = document.querySelector("[data-testid='workbook-selection-status-option-avg-text']")
+    const avgIndicatorSlot = document.querySelector("[data-testid='workbook-selection-status-option-avg-indicator-slot']")
+    const sumIndicatorSlot = document.querySelector("[data-testid='workbook-selection-status-option-sum-indicator-slot']")
+    const menu = document.querySelector("[data-testid='workbook-selection-status-menu']")
     expect(avgOption?.textContent).toContain('Avg: 15.00')
+    expect(menu?.getAttribute('class')).toContain('w-max')
+    expect(avgOption?.getAttribute('class')).toContain('whitespace-nowrap')
+    expect(avgOptionText?.getAttribute('class')).toContain('whitespace-nowrap')
+    expect(avgIndicatorSlot).not.toBeNull()
+    expect(sumIndicatorSlot).not.toBeNull()
 
     await act(async () => {
       avgOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
