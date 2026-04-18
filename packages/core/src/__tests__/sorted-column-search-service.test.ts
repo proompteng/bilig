@@ -112,6 +112,42 @@ describe('createSortedColumnSearchService', () => {
     expect(getColumnSliceSpy.mock.calls.length).toBe(sliceCallsAfterPrepare)
   })
 
+  it('prepares overlapping approximate lookups from shared column owners instead of copied slices', () => {
+    const workbook = new WorkbookStore('sorted-index-column-owner')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `A${index + 1}`, value)
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
+    const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
+
+    sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    })
+    sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 1,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(getColumnViewSpy).toHaveBeenCalledTimes(2)
+    expect(getColumnSliceSpy).not.toHaveBeenCalled()
+  })
+
   it('refreshes prepared lookups after structural remaps and rejects unsupported lookup shapes', () => {
     const workbook = new WorkbookStore('sorted-index-prepared')
     const strings = new StringPool()

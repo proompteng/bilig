@@ -394,6 +394,45 @@ describe('createExactColumnIndexService', () => {
     expect(getColumnSliceSpy.mock.calls.length).toBe(sliceCallsAfterPrepare)
   })
 
+  it('prepares overlapping exact lookups from shared column owners instead of copied slices', () => {
+    const workbook = new WorkbookStore('exact-index-column-owner')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 2, 3, 4].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
+    const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
+
+    exact.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    })
+    exact.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 1,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(getColumnViewSpy).toHaveBeenCalledTimes(2)
+    expect(getColumnSliceSpy).not.toHaveBeenCalled()
+  })
+
   it('falls back to rebuilds when incremental literal writes invalidate comparable kinds or structure versions', () => {
     const workbook = new WorkbookStore('exact-index-rebuild-fallbacks')
     const strings = new StringPool()

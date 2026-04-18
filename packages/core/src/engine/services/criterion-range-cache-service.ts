@@ -1,6 +1,6 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { compileCriteriaMatcher, matchesCompiledCriteria, type CompiledCriteriaMatcher, type CriteriaOperator } from '@bilig/formula'
-import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 
 export interface CriterionRangeDescriptor {
   readonly sheetName: string
@@ -105,17 +105,17 @@ function normalizeSliceString(runtimeColumnStore: EngineRuntimeColumnStoreServic
   return stringId === 0 ? '' : runtimeColumnStore.normalizeStringId(stringId)
 }
 
-function materializeSliceValue(slice: RuntimeColumnSlice, offset: number, runtimeColumnStore: EngineRuntimeColumnStoreService): CellValue {
-  const tag = decodeValueTag(slice.tags[offset])
+function materializeSliceValue(view: RuntimeColumnView, offset: number, runtimeColumnStore: EngineRuntimeColumnStoreService): CellValue {
+  const tag = decodeValueTag(view.readTagAt(offset))
   switch (tag) {
     case ValueTag.Empty:
       return { tag: ValueTag.Empty }
     case ValueTag.Number:
-      return { tag: ValueTag.Number, value: slice.numbers[offset] ?? 0 }
+      return { tag: ValueTag.Number, value: view.readNumberAt(offset) }
     case ValueTag.Boolean:
-      return { tag: ValueTag.Boolean, value: (slice.numbers[offset] ?? 0) !== 0 }
+      return { tag: ValueTag.Boolean, value: view.readNumberAt(offset) !== 0 }
     case ValueTag.String: {
-      const stringId = slice.stringIds[offset] ?? 0
+      const stringId = view.readStringIdAt(offset)
       return {
         tag: ValueTag.String,
         value: stringId === 0 ? '' : runtimeColumnStore.normalizeStringId(stringId),
@@ -123,7 +123,7 @@ function materializeSliceValue(slice: RuntimeColumnSlice, offset: number, runtim
       }
     }
     case ValueTag.Error:
-      return { tag: ValueTag.Error, code: slice.errors[offset] ?? ErrorCode.None }
+      return { tag: ValueTag.Error, code: view.readErrorAt(offset) ?? ErrorCode.None }
   }
 }
 
@@ -163,43 +163,42 @@ function buildSlicePredicate(compiled: CompiledCriteriaMatcher): SliceFastPredic
 
 function slicePredicateMatches(
   predicate: SliceFastPredicate,
-  slice: RuntimeColumnSlice,
+  view: RuntimeColumnView,
   offset: number,
   runtimeColumnStore: EngineRuntimeColumnStoreService,
 ): boolean {
   switch (predicate.kind) {
     case 'eq-empty': {
-      const tag = decodeValueTag(slice.tags[offset])
+      const tag = decodeValueTag(view.readTagAt(offset))
       const matches =
-        tag === ValueTag.Empty || (tag === ValueTag.String && normalizeSliceString(runtimeColumnStore, slice.stringIds[offset] ?? 0) === '')
+        tag === ValueTag.Empty || (tag === ValueTag.String && normalizeSliceString(runtimeColumnStore, view.readStringIdAt(offset)) === '')
       return predicate.negate ? !matches : matches
     }
     case 'eq-bool': {
-      const tag = decodeValueTag(slice.tags[offset])
-      const numeric =
-        tag === ValueTag.Number || tag === ValueTag.Boolean || tag === ValueTag.Empty ? (slice.numbers[offset] ?? 0) : undefined
+      const tag = decodeValueTag(view.readTagAt(offset))
+      const numeric = tag === ValueTag.Number || tag === ValueTag.Boolean || tag === ValueTag.Empty ? view.readNumberAt(offset) : undefined
       const matches = numeric !== undefined && (Object.is(numeric, -0) ? 0 : numeric) === (predicate.value ? 1 : 0)
       return predicate.negate ? !matches : matches
     }
     case 'eq-number': {
-      const tag = decodeValueTag(slice.tags[offset])
-      const numeric = Object.is(slice.numbers[offset] ?? 0, -0) ? 0 : (slice.numbers[offset] ?? 0)
+      const tag = decodeValueTag(view.readTagAt(offset))
+      const numeric = Object.is(view.readNumberAt(offset), -0) ? 0 : view.readNumberAt(offset)
       const matches = (tag === ValueTag.Number || tag === ValueTag.Boolean || tag === ValueTag.Empty) && numeric === predicate.value
       return predicate.negate ? !matches : matches
     }
     case 'eq-string': {
-      const tag = decodeValueTag(slice.tags[offset])
+      const tag = decodeValueTag(view.readTagAt(offset))
       const matches =
         (tag === ValueTag.String || tag === ValueTag.Empty) &&
-        (tag === ValueTag.Empty ? '' : normalizeSliceString(runtimeColumnStore, slice.stringIds[offset] ?? 0)) === predicate.value
+        (tag === ValueTag.Empty ? '' : normalizeSliceString(runtimeColumnStore, view.readStringIdAt(offset))) === predicate.value
       return predicate.negate ? !matches : matches
     }
     case 'cmp-number': {
-      const tag = decodeValueTag(slice.tags[offset])
+      const tag = decodeValueTag(view.readTagAt(offset))
       if (tag !== ValueTag.Number && tag !== ValueTag.Boolean && tag !== ValueTag.Empty) {
         return false
       }
-      const numeric = Object.is(slice.numbers[offset] ?? 0, -0) ? 0 : (slice.numbers[offset] ?? 0)
+      const numeric = Object.is(view.readNumberAt(offset), -0) ? 0 : view.readNumberAt(offset)
       switch (predicate.operator) {
         case '>':
           return numeric > predicate.value
@@ -214,7 +213,7 @@ function slicePredicateMatches(
       }
     }
     case 'generic':
-      return matchesCompiledCriteria(materializeSliceValue(slice, offset, runtimeColumnStore), predicate.compiled)
+      return matchesCompiledCriteria(materializeSliceValue(view, offset, runtimeColumnStore), predicate.compiled)
   }
 }
 
@@ -229,6 +228,47 @@ export function createCriterionRangeCacheService(args: {
 }): CriterionRangeCacheService {
   const cache = new Map<string, CriterionCacheEntry>()
 
+  const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
+    const direct = Reflect.get(args.runtimeColumnStore, 'getColumnView')
+    if (typeof direct === 'function') {
+      return direct.call(args.runtimeColumnStore, request)
+    }
+    const slice = args.runtimeColumnStore.getColumnSlice(request)
+    return {
+      owner: {
+        sheetName: slice.sheetName,
+        col: slice.col,
+        columnVersion: slice.columnVersion,
+        structureVersion: slice.structureVersion,
+        sheetColumnVersions: slice.sheetColumnVersions,
+        pages: new Map(),
+      },
+      sheetName: slice.sheetName,
+      rowStart: slice.rowStart,
+      rowEnd: slice.rowEnd,
+      col: slice.col,
+      length: slice.length,
+      columnVersion: slice.columnVersion,
+      structureVersion: slice.structureVersion,
+      sheetColumnVersions: slice.sheetColumnVersions,
+      readTagAt(offset) {
+        return slice.tags[offset] ?? ValueTag.Empty
+      },
+      readNumberAt(offset) {
+        return slice.numbers[offset] ?? 0
+      },
+      readStringIdAt(offset) {
+        return slice.stringIds[offset] ?? 0
+      },
+      readErrorAt(offset) {
+        return slice.errors[offset] ?? ErrorCode.None
+      },
+      readCellValueAt(offset) {
+        return materializeSliceValue(this, offset, args.runtimeColumnStore)
+      },
+    }
+  }
+
   const getOrBuildMatchingRows = (request: { criteriaPairs: readonly CriterionRangePair[] }): CriterionRangeMatch | CellValue => {
     const { criteriaPairs } = request
     if (criteriaPairs.length === 0) {
@@ -240,7 +280,7 @@ export function createCriterionRangeCacheService(args: {
     }
 
     const slices = criteriaPairs.map((pair) =>
-      args.runtimeColumnStore.getColumnSlice({
+      getColumnView({
         sheetName: pair.range.sheetName,
         rowStart: pair.range.rowStart,
         rowEnd: pair.range.rowEnd,

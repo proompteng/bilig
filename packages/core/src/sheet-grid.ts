@@ -1,5 +1,5 @@
-const BLOCK_ROWS = 128
-const BLOCK_COLS = 32
+export const BLOCK_ROWS = 128
+export const BLOCK_COLS = 32
 
 function blockKey(row: number, col: number): number {
   return Math.floor(row / BLOCK_ROWS) * 1_000_000 + Math.floor(col / BLOCK_COLS)

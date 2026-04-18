@@ -62,6 +62,48 @@ describe('createEngineRuntimeColumnStoreService', () => {
     expect(Array.from(refreshedSlice.numbers)).toEqual([1, 5, 0])
   })
 
+  it('reuses a shared column owner across overlapping view requests', () => {
+    const workbook = new WorkbookStore('runtime-column-store-owner-view')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A1', { tag: ValueTag.Number, value: 1 })
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A2', { tag: ValueTag.String, value: 'pear' })
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A4', { tag: ValueTag.Boolean, value: true })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+
+    const firstView = runtimeColumnStore.getColumnView({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    })
+    const overlappingView = runtimeColumnStore.getColumnView({
+      sheetName: 'Sheet1',
+      rowStart: 1,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(overlappingView.owner).toBe(firstView.owner)
+    expect(firstView.readCellValueAt(0)).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(firstView.readCellValueAt(1)).toEqual({
+      tag: ValueTag.String,
+      value: 'pear',
+      stringId: expect.any(Number),
+    })
+    expect(overlappingView.readCellValueAt(0)).toEqual({
+      tag: ValueTag.String,
+      value: 'pear',
+      stringId: expect.any(Number),
+    })
+    expect(overlappingView.readCellValueAt(1)).toEqual({ tag: ValueTag.Empty })
+    expect(overlappingView.readCellValueAt(2)).toEqual({ tag: ValueTag.Boolean, value: true })
+  })
+
   it('materializes row-major cell values from cached column slices', () => {
     const workbook = new WorkbookStore('runtime-column-store-read')
     const strings = new StringPool()
@@ -181,7 +223,8 @@ describe('createEngineRuntimeColumnStoreService', () => {
     slice.tags[0] = 99
 
     expect(runtimeColumnStore.readCellValue('Sheet1', 0, 0)).toEqual({
-      tag: ValueTag.Empty,
+      tag: ValueTag.Error,
+      code: 42,
     })
   })
 })

@@ -1,5 +1,6 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
+import { BLOCK_COLS, BLOCK_ROWS } from '../../sheet-grid.js'
 
 export interface RuntimeColumnSlice {
   readonly sheetName: string
@@ -16,7 +17,42 @@ export interface RuntimeColumnSlice {
   errors: Uint16Array
 }
 
+interface RuntimeColumnPage {
+  readonly rowStart: number
+  readonly tags: Uint8Array
+  readonly numbers: Float64Array
+  readonly stringIds: Uint32Array
+  readonly errors: Uint16Array
+}
+
+export interface RuntimeColumnOwner {
+  readonly sheetName: string
+  readonly col: number
+  columnVersion: number
+  structureVersion: number
+  sheetColumnVersions: Uint32Array
+  readonly pages: ReadonlyMap<number, RuntimeColumnPage>
+}
+
+export interface RuntimeColumnView {
+  readonly owner: RuntimeColumnOwner
+  readonly sheetName: string
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly col: number
+  readonly length: number
+  readonly columnVersion: number
+  readonly structureVersion: number
+  readonly sheetColumnVersions: Uint32Array
+  readonly readTagAt: (offset: number) => number
+  readonly readNumberAt: (offset: number) => number
+  readonly readStringIdAt: (offset: number) => number
+  readonly readErrorAt: (offset: number) => number
+  readonly readCellValueAt: (offset: number) => CellValue
+}
+
 export interface EngineRuntimeColumnStoreService {
+  readonly getColumnView: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => RuntimeColumnView
   readonly getColumnSlice: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => RuntimeColumnSlice
   readonly readCellValue: (sheetName: string, row: number, col: number) => CellValue
   readonly readRangeValues: (request: {
@@ -32,6 +68,10 @@ export interface EngineRuntimeColumnStoreService {
 
 function getColumnSliceCacheKey(sheetName: string, col: number, rowStart: number, rowEnd: number): string {
   return `${sheetName}\t${col}\t${rowStart}\t${rowEnd}`
+}
+
+function getColumnOwnerCacheKey(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
@@ -58,6 +98,7 @@ export function createEngineRuntimeColumnStoreService(args: {
 }): EngineRuntimeColumnStoreService {
   const emptyColumnVersions = new Uint32Array(0)
   const normalizedStrings = new Map<number, string>()
+  const columnOwnerCache = new Map<string, RuntimeColumnOwner>()
   const columnSliceCache = new Map<string, RuntimeColumnSlice>()
 
   const normalizeStringId = (stringId: number): string => {
@@ -94,50 +135,194 @@ export function createEngineRuntimeColumnStoreService(args: {
     }
   }
 
-  const buildColumnSlice = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnSlice => {
+  const readOwnerPageEntry = (
+    owner: RuntimeColumnOwner,
+    absoluteRow: number,
+  ): {
+    rawTag: number
+    number: number
+    stringId: number
+    error: number
+  } => {
+    const pageRowStart = Math.floor(absoluteRow / BLOCK_ROWS) * BLOCK_ROWS
+    const page = owner.pages.get(pageRowStart)
+    if (!page) {
+      return {
+        rawTag: ValueTag.Empty,
+        number: 0,
+        stringId: 0,
+        error: 0,
+      }
+    }
+    const localRow = absoluteRow - pageRowStart
+    return {
+      rawTag: page.tags[localRow] ?? ValueTag.Empty,
+      number: page.numbers[localRow] ?? 0,
+      stringId: page.stringIds[localRow] ?? 0,
+      error: page.errors[localRow] ?? 0,
+    }
+  }
+
+  const materializeCellValueFromOwner = (owner: RuntimeColumnOwner, absoluteRow: number): CellValue => {
+    const entry = readOwnerPageEntry(owner, absoluteRow)
+    const tag = decodeValueTag(entry.rawTag)
+    switch (tag) {
+      case ValueTag.Empty:
+        return { tag: ValueTag.Empty }
+      case ValueTag.Number:
+        return { tag: ValueTag.Number, value: entry.number }
+      case ValueTag.Boolean:
+        return { tag: ValueTag.Boolean, value: entry.number !== 0 }
+      case ValueTag.String:
+        return {
+          tag: ValueTag.String,
+          value: entry.stringId === 0 ? '' : args.state.strings.get(entry.stringId),
+          stringId: entry.stringId,
+        }
+      case ValueTag.Error:
+        return { tag: ValueTag.Error, code: entry.error }
+      default:
+        return { tag: ValueTag.Empty }
+    }
+  }
+
+  const buildColumnOwner = (request: { sheetName: string; col: number }): RuntimeColumnOwner => {
     const sheet = args.state.workbook.getSheet(request.sheetName)
     const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions
     const structureVersion = sheet?.structureVersion ?? 0
-    const length = request.rowEnd - request.rowStart + 1
-    const tags = new Uint8Array(length)
-    const numbers = new Float64Array(length)
-    const stringIds = new Uint32Array(length)
-    const errors = new Uint16Array(length)
+    const pages = new Map<number, RuntimeColumnPage>()
 
     if (sheet) {
-      for (let offset = 0; offset < length; offset += 1) {
-        const row = request.rowStart + offset
-        const cellIndex = sheet.grid.get(row, request.col)
-        if (cellIndex === -1) {
-          tags[offset] = ValueTag.Empty
-          continue
+      const targetBlockCol = Math.floor(request.col / BLOCK_COLS)
+      const localCol = request.col % BLOCK_COLS
+      sheet.grid.blocks.forEach((block, key) => {
+        const blockCol = key % 1_000_000
+        if (blockCol !== targetBlockCol) {
+          return
         }
-        const tag = decodeValueTag(args.state.workbook.cellStore.tags[cellIndex])
-        tags[offset] = tag
-        if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
-          const numeric = args.state.workbook.cellStore.numbers[cellIndex] ?? 0
-          numbers[offset] = Object.is(numeric, -0) ? 0 : numeric
-          continue
+        const pageRowStart = Math.floor(key / 1_000_000) * BLOCK_ROWS
+        const tags = new Uint8Array(BLOCK_ROWS)
+        const numbers = new Float64Array(BLOCK_ROWS)
+        const stringIds = new Uint32Array(BLOCK_ROWS)
+        const errors = new Uint16Array(BLOCK_ROWS)
+        let populated = false
+        for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
+          const offset = localRow * BLOCK_COLS + localCol
+          const encodedCellIndex = block[offset] ?? 0
+          if (encodedCellIndex === 0) {
+            tags[localRow] = ValueTag.Empty
+            continue
+          }
+          populated = true
+          const cellIndex = encodedCellIndex - 1
+          const tag = decodeValueTag(args.state.workbook.cellStore.tags[cellIndex])
+          tags[localRow] = tag
+          if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
+            const numeric = args.state.workbook.cellStore.numbers[cellIndex] ?? 0
+            numbers[localRow] = Object.is(numeric, -0) ? 0 : numeric
+            continue
+          }
+          if (tag === ValueTag.String) {
+            stringIds[localRow] = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
+            continue
+          }
+          if (tag === ValueTag.Error) {
+            errors[localRow] = args.state.workbook.cellStore.errors[cellIndex] ?? 0
+          }
         }
-        if (tag === ValueTag.String) {
-          stringIds[offset] = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
-          continue
+        if (!populated) {
+          return
         }
-        if (tag === ValueTag.Error) {
-          errors[offset] = args.state.workbook.cellStore.errors[cellIndex] ?? 0
-        }
-      }
+        pages.set(pageRowStart, {
+          rowStart: pageRowStart,
+          tags,
+          numbers,
+          stringIds,
+          errors,
+        })
+      })
     }
 
+    return {
+      sheetName: request.sheetName,
+      col: request.col,
+      columnVersion: sheetColumnVersions[request.col] ?? 0,
+      structureVersion,
+      sheetColumnVersions,
+      pages,
+    }
+  }
+
+  const getColumnOwner = (request: { sheetName: string; col: number }): RuntimeColumnOwner => {
+    const cacheKey = getColumnOwnerCacheKey(request.sheetName, request.col)
+    const currentSheet = args.state.workbook.getSheet(request.sheetName)
+    const currentSheetColumnVersions = currentSheet?.columnVersions ?? emptyColumnVersions
+    const currentColumnVersion = currentSheetColumnVersions[request.col] ?? 0
+    const currentStructureVersion = currentSheet?.structureVersion ?? 0
+    let owner = columnOwnerCache.get(cacheKey)
+    if (
+      !owner ||
+      owner.columnVersion !== currentColumnVersion ||
+      owner.structureVersion !== currentStructureVersion ||
+      owner.sheetColumnVersions !== currentSheetColumnVersions
+    ) {
+      owner = buildColumnOwner(request)
+      columnOwnerCache.set(cacheKey, owner)
+    }
+    return owner
+  }
+
+  const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
+    const owner = getColumnOwner(request)
+    return {
+      owner,
+      sheetName: request.sheetName,
+      rowStart: request.rowStart,
+      rowEnd: request.rowEnd,
+      col: request.col,
+      length: request.rowEnd - request.rowStart + 1,
+      columnVersion: owner.columnVersion,
+      structureVersion: owner.structureVersion,
+      sheetColumnVersions: owner.sheetColumnVersions,
+      readTagAt(offset) {
+        return readOwnerPageEntry(owner, request.rowStart + offset).rawTag
+      },
+      readNumberAt(offset) {
+        return readOwnerPageEntry(owner, request.rowStart + offset).number
+      },
+      readStringIdAt(offset) {
+        return readOwnerPageEntry(owner, request.rowStart + offset).stringId
+      },
+      readErrorAt(offset) {
+        return readOwnerPageEntry(owner, request.rowStart + offset).error
+      },
+      readCellValueAt(offset) {
+        return materializeCellValueFromOwner(owner, request.rowStart + offset)
+      },
+    }
+  }
+
+  const buildColumnSlice = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnSlice => {
+    const view = getColumnView(request)
+    const tags = new Uint8Array(view.length)
+    const numbers = new Float64Array(view.length)
+    const stringIds = new Uint32Array(view.length)
+    const errors = new Uint16Array(view.length)
+    for (let offset = 0; offset < view.length; offset += 1) {
+      tags[offset] = view.readTagAt(offset)
+      numbers[offset] = view.readNumberAt(offset)
+      stringIds[offset] = view.readStringIdAt(offset)
+      errors[offset] = view.readErrorAt(offset)
+    }
     return {
       sheetName: request.sheetName,
       rowStart: request.rowStart,
       rowEnd: request.rowEnd,
       col: request.col,
-      length,
-      columnVersion: sheetColumnVersions[request.col] ?? 0,
-      structureVersion,
-      sheetColumnVersions,
+      length: view.length,
+      columnVersion: view.columnVersion,
+      structureVersion: view.structureVersion,
+      sheetColumnVersions: view.sheetColumnVersions,
       tags,
       numbers,
       stringIds,
@@ -165,10 +350,11 @@ export function createEngineRuntimeColumnStoreService(args: {
   }
 
   return {
+    getColumnView,
     getColumnSlice,
     readCellValue(sheetName, row, col) {
-      const slice = getColumnSlice({ sheetName, rowStart: row, rowEnd: row, col })
-      return materializeCellValueFromSlice(slice, 0)
+      const view = getColumnView({ sheetName, rowStart: row, rowEnd: row, col })
+      return view.readCellValueAt(0)
     },
     readRangeValues({ sheetName, rowStart, rowEnd, colStart, colEnd }) {
       const columnSlices: RuntimeColumnSlice[] = []

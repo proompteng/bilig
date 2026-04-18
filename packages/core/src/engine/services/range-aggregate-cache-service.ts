@@ -1,6 +1,6 @@
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
-import type { EngineRuntimeColumnStoreService } from './runtime-column-store-service.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 
 interface AggregatePrefixEntry {
   sheetName: string
@@ -45,6 +45,18 @@ function decodeValueTag(rawTag: number | undefined): ValueTag {
   }
 }
 
+function rawTagAt(view: RuntimeColumnView, offset: number): number {
+  return view.readTagAt(offset)
+}
+
+function numericAt(view: RuntimeColumnView, offset: number): number {
+  return view.readNumberAt(offset)
+}
+
+function errorAt(view: RuntimeColumnView, offset: number): number {
+  return view.readErrorAt(offset)
+}
+
 function ensurePrefixCapacity(existing: AggregatePrefixEntry, totalLength: number): void {
   if (existing.prefixSums.length >= totalLength) {
     return
@@ -81,6 +93,61 @@ export function createRangeAggregateCacheService(args: {
   const emptyColumnVersions = new Uint32Array(0)
   const cache = new Map<string, AggregatePrefixEntry>()
 
+  const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
+    const direct = Reflect.get(args.runtimeColumnStore, 'getColumnView')
+    if (typeof direct === 'function') {
+      return direct.call(args.runtimeColumnStore, request)
+    }
+    const slice = args.runtimeColumnStore.getColumnSlice(request)
+    return {
+      owner: {
+        sheetName: slice.sheetName,
+        col: slice.col,
+        columnVersion: slice.columnVersion,
+        structureVersion: slice.structureVersion,
+        sheetColumnVersions: slice.sheetColumnVersions,
+        pages: new Map(),
+      },
+      sheetName: slice.sheetName,
+      rowStart: slice.rowStart,
+      rowEnd: slice.rowEnd,
+      col: slice.col,
+      length: slice.length,
+      columnVersion: slice.columnVersion,
+      structureVersion: slice.structureVersion,
+      sheetColumnVersions: slice.sheetColumnVersions,
+      readTagAt(offset) {
+        return slice.tags[offset] ?? ValueTag.Empty
+      },
+      readNumberAt(offset) {
+        return slice.numbers[offset] ?? 0
+      },
+      readStringIdAt(offset) {
+        return slice.stringIds[offset] ?? 0
+      },
+      readErrorAt(offset) {
+        return slice.errors[offset] ?? ErrorCode.None
+      },
+      readCellValueAt(offset) {
+        const tag = decodeValueTag(slice.tags[offset])
+        switch (tag) {
+          case ValueTag.Empty:
+            return { tag: ValueTag.Empty }
+          case ValueTag.Number:
+            return { tag: ValueTag.Number, value: slice.numbers[offset] ?? 0 }
+          case ValueTag.Boolean:
+            return { tag: ValueTag.Boolean, value: (slice.numbers[offset] ?? 0) !== 0 }
+          case ValueTag.String:
+            return { tag: ValueTag.String, value: '', stringId: slice.stringIds[offset] ?? 0 }
+          case ValueTag.Error:
+            return { tag: ValueTag.Error, code: slice.errors[offset] ?? ErrorCode.None }
+          default:
+            return { tag: ValueTag.Empty }
+        }
+      },
+    }
+  }
+
   const getCurrentVersions = (sheetName: string, col: number) => {
     const sheet = args.state.workbook.getSheet(sheetName)
     const columnVersions = sheet?.columnVersions ?? emptyColumnVersions
@@ -91,14 +158,14 @@ export function createRangeAggregateCacheService(args: {
   }
 
   const buildPrefix = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): AggregatePrefixEntry => {
-    const slice = args.runtimeColumnStore.getColumnSlice(request)
-    const prefixSums = new Float64Array(slice.length)
-    const prefixCount = new Uint32Array(slice.length)
-    const prefixAverageCount = new Uint32Array(slice.length)
-    const prefixErrorCodes = new Uint16Array(slice.length)
-    const prefixErrorCounts = new Uint32Array(slice.length)
-    const prefixMinimums = new Float64Array(slice.length)
-    const prefixMaximums = new Float64Array(slice.length)
+    const view = getColumnView(request)
+    const prefixSums = new Float64Array(view.length)
+    const prefixCount = new Uint32Array(view.length)
+    const prefixAverageCount = new Uint32Array(view.length)
+    const prefixErrorCodes = new Uint16Array(view.length)
+    const prefixErrorCounts = new Uint32Array(view.length)
+    const prefixMinimums = new Float64Array(view.length)
+    const prefixMaximums = new Float64Array(view.length)
     let runningSum = 0
     let runningCount = 0
     let runningAverageCount = 0
@@ -106,18 +173,18 @@ export function createRangeAggregateCacheService(args: {
     let runningErrorCount = 0
     let runningMinimum = Number.POSITIVE_INFINITY
     let runningMaximum = Number.NEGATIVE_INFINITY
-    for (let offset = 0; offset < slice.length; offset += 1) {
-      const tag = decodeValueTag(slice.tags[offset])
+    for (let offset = 0; offset < view.length; offset += 1) {
+      const tag = decodeValueTag(rawTagAt(view, offset))
       switch (tag) {
         case ValueTag.Number:
-          runningSum += slice.numbers[offset] ?? 0
+          runningSum += numericAt(view, offset)
           runningCount += 1
           runningAverageCount += 1
-          runningMinimum = Math.min(runningMinimum, slice.numbers[offset] ?? 0)
-          runningMaximum = Math.max(runningMaximum, slice.numbers[offset] ?? 0)
+          runningMinimum = Math.min(runningMinimum, numericAt(view, offset))
+          runningMaximum = Math.max(runningMaximum, numericAt(view, offset))
           break
         case ValueTag.Boolean:
-          const booleanNumber = (slice.numbers[offset] ?? 0) !== 0 ? 1 : 0
+          const booleanNumber = numericAt(view, offset) !== 0 ? 1 : 0
           runningSum += booleanNumber
           runningCount += 1
           runningAverageCount += 1
@@ -130,7 +197,7 @@ export function createRangeAggregateCacheService(args: {
           runningMaximum = Math.max(runningMaximum, 0)
           break
         case ValueTag.Error:
-          runningErrorCode ||= slice.errors[offset] ?? ErrorCode.None
+          runningErrorCode ||= errorAt(view, offset) ?? ErrorCode.None
           runningErrorCount += 1
           break
         case ValueTag.String:
@@ -150,8 +217,8 @@ export function createRangeAggregateCacheService(args: {
       rowStart: request.rowStart,
       rowEnd: request.rowEnd,
       col: request.col,
-      columnVersion: slice.columnVersion,
-      structureVersion: slice.structureVersion,
+      columnVersion: view.columnVersion,
+      structureVersion: view.structureVersion,
       prefixSums,
       prefixCount,
       prefixAverageCount,
@@ -171,7 +238,7 @@ export function createRangeAggregateCacheService(args: {
       col: number
     },
   ): AggregatePrefixEntry => {
-    const deltaSlice = args.runtimeColumnStore.getColumnSlice({
+    const deltaView = getColumnView({
       sheetName: request.sheetName,
       rowStart: existing.rowEnd + 1,
       rowEnd: request.rowEnd,
@@ -187,18 +254,18 @@ export function createRangeAggregateCacheService(args: {
     let runningErrorCount = existing.prefixErrorCounts[currentLength - 1] ?? 0
     let runningMinimum = existing.prefixMinimums[currentLength - 1] ?? Number.POSITIVE_INFINITY
     let runningMaximum = existing.prefixMaximums[currentLength - 1] ?? Number.NEGATIVE_INFINITY
-    for (let offset = 0; offset < deltaSlice.length; offset += 1) {
-      const tag = decodeValueTag(deltaSlice.tags[offset])
+    for (let offset = 0; offset < deltaView.length; offset += 1) {
+      const tag = decodeValueTag(rawTagAt(deltaView, offset))
       switch (tag) {
         case ValueTag.Number:
-          runningSum += deltaSlice.numbers[offset] ?? 0
+          runningSum += numericAt(deltaView, offset)
           runningCount += 1
           runningAverageCount += 1
-          runningMinimum = Math.min(runningMinimum, deltaSlice.numbers[offset] ?? 0)
-          runningMaximum = Math.max(runningMaximum, deltaSlice.numbers[offset] ?? 0)
+          runningMinimum = Math.min(runningMinimum, numericAt(deltaView, offset))
+          runningMaximum = Math.max(runningMaximum, numericAt(deltaView, offset))
           break
         case ValueTag.Boolean:
-          const booleanNumber = (deltaSlice.numbers[offset] ?? 0) !== 0 ? 1 : 0
+          const booleanNumber = numericAt(deltaView, offset) !== 0 ? 1 : 0
           runningSum += booleanNumber
           runningCount += 1
           runningAverageCount += 1
@@ -211,7 +278,7 @@ export function createRangeAggregateCacheService(args: {
           runningMaximum = Math.max(runningMaximum, 0)
           break
         case ValueTag.Error:
-          runningErrorCode ||= deltaSlice.errors[offset] ?? ErrorCode.None
+          runningErrorCode ||= errorAt(deltaView, offset) ?? ErrorCode.None
           runningErrorCount += 1
           break
         case ValueTag.String:
@@ -228,8 +295,8 @@ export function createRangeAggregateCacheService(args: {
       existing.prefixMaximums[targetOffset] = runningMaximum
     }
     existing.rowEnd = request.rowEnd
-    existing.columnVersion = deltaSlice.columnVersion
-    existing.structureVersion = deltaSlice.structureVersion
+    existing.columnVersion = deltaView.columnVersion
+    existing.structureVersion = deltaView.structureVersion
     return existing
   }
 

@@ -2,7 +2,7 @@ import { ValueTag, type CellValue } from '@bilig/protocol'
 import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../runtime-state.js'
 import type { ExactVectorMatchResult } from './exact-column-index-service.js'
-import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 
 export interface ApproximateVectorMatchRequest {
   lookupValue: CellValue
@@ -229,19 +229,19 @@ export function createSortedColumnSearchService(args: {
     trackCacheKey(entry.sheetName, entry.col, cacheKey)
   }
 
-  const comparableAtOffset = (slice: RuntimeColumnSlice, offset: number): ApproximateComparable => {
-    const tag = decodeValueTag(slice.tags[offset])
+  const comparableAtOffset = (view: RuntimeColumnView, offset: number): ApproximateComparable => {
+    const tag = decodeValueTag(view.readTagAt(offset))
     switch (tag) {
       case ValueTag.Empty:
         return { kind: 'empty' }
       case ValueTag.Number:
-        return { kind: 'numeric', value: slice.numbers[offset] ?? 0 }
+        return { kind: 'numeric', value: view.readNumberAt(offset) }
       case ValueTag.Boolean:
-        return { kind: 'numeric', value: (slice.numbers[offset] ?? 0) !== 0 ? 1 : 0 }
+        return { kind: 'numeric', value: view.readNumberAt(offset) !== 0 ? 1 : 0 }
       case ValueTag.String:
         return {
           kind: 'text',
-          value: args.runtimeColumnStore.normalizeStringId(slice.stringIds[offset] ?? 0),
+          value: args.runtimeColumnStore.normalizeStringId(view.readStringIdAt(offset)),
         }
       case ValueTag.Error:
       default:
@@ -250,7 +250,7 @@ export function createSortedColumnSearchService(args: {
   }
 
   const buildApproximateColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ApproximateColumnIndexEntry => {
-    const slice = args.runtimeColumnStore.getColumnSlice({
+    const view = args.runtimeColumnStore.getColumnView({
       sheetName,
       rowStart,
       rowEnd,
@@ -260,8 +260,8 @@ export function createSortedColumnSearchService(args: {
     let hasNumeric = false
     let hasText = false
     let hasInvalid = false
-    for (let offset = 0; offset < slice.length; offset += 1) {
-      const comparable = comparableAtOffset(slice, offset)
+    for (let offset = 0; offset < view.length; offset += 1) {
+      const comparable = comparableAtOffset(view, offset)
       rawValues.push(comparable)
       hasNumeric ||= comparable.kind === 'numeric'
       hasText ||= comparable.kind === 'text'
@@ -274,8 +274,8 @@ export function createSortedColumnSearchService(args: {
         rowStart,
         rowEnd,
         col,
-        columnVersion: slice.columnVersion,
-        structureVersion: slice.structureVersion,
+        columnVersion: view.columnVersion,
+        structureVersion: view.structureVersion,
         comparableKind: undefined,
         uniformStart: undefined,
         uniformStep: undefined,
@@ -304,8 +304,8 @@ export function createSortedColumnSearchService(args: {
         rowStart,
         rowEnd,
         col,
-        columnVersion: slice.columnVersion,
-        structureVersion: slice.structureVersion,
+        columnVersion: view.columnVersion,
+        structureVersion: view.structureVersion,
         comparableKind: 'text',
         uniformStart: undefined,
         uniformStep: undefined,
@@ -334,8 +334,8 @@ export function createSortedColumnSearchService(args: {
       rowStart,
       rowEnd,
       col,
-      columnVersion: slice.columnVersion,
-      structureVersion: slice.structureVersion,
+      columnVersion: view.columnVersion,
+      structureVersion: view.structureVersion,
       comparableKind: 'numeric',
       uniformStart: uniformNumericStep?.start,
       uniformStep: uniformNumericStep?.step,

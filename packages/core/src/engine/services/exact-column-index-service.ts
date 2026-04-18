@@ -1,7 +1,7 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedExactVectorLookup } from '../runtime-state.js'
-import type { EngineRuntimeColumnStoreService, RuntimeColumnSlice } from './runtime-column-store-service.js'
+import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 
 export interface ExactVectorMatchRequest {
   lookupValue: CellValue
@@ -245,17 +245,17 @@ export function createExactColumnIndexService(args: {
     trackCacheKey(entry.sheetName, entry.col, cacheKey)
   }
 
-  const keyAtOffset = (slice: RuntimeColumnSlice, offset: number): string | undefined => {
-    const tag = decodeValueTag(slice.tags[offset])
+  const keyAtOffset = (view: RuntimeColumnView, offset: number): string | undefined => {
+    const tag = decodeValueTag(view.readTagAt(offset))
     switch (tag) {
       case ValueTag.Empty:
         return 'e:'
       case ValueTag.Number:
-        return `n:${slice.numbers[offset] ?? 0}`
+        return `n:${view.readNumberAt(offset)}`
       case ValueTag.Boolean:
-        return (slice.numbers[offset] ?? 0) !== 0 ? 'b:1' : 'b:0'
+        return view.readNumberAt(offset) !== 0 ? 'b:1' : 'b:0'
       case ValueTag.String: {
-        const stringId = slice.stringIds[offset] ?? 0
+        const stringId = view.readStringIdAt(offset)
         return `s:${args.runtimeColumnStore.normalizeStringId(stringId)}`
       }
       case ValueTag.Error:
@@ -265,7 +265,7 @@ export function createExactColumnIndexService(args: {
   }
 
   const buildExactColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ExactColumnIndexEntry => {
-    const slice = args.runtimeColumnStore.getColumnSlice({
+    const view = args.runtimeColumnStore.getColumnView({
       sheetName,
       rowStart,
       rowEnd,
@@ -282,9 +282,9 @@ export function createExactColumnIndexService(args: {
     let sawNumeric = false
     let sawText = false
     let sawOther = false
-    for (let offset = 0; offset < slice.length; offset += 1) {
+    for (let offset = 0; offset < view.length; offset += 1) {
       const row = rowStart + offset
-      const key = keyAtOffset(slice, offset)
+      const key = keyAtOffset(view, offset)
       if (key === undefined) {
         continue
       }
@@ -326,8 +326,8 @@ export function createExactColumnIndexService(args: {
       rowStart,
       rowEnd,
       col,
-      columnVersion: slice.columnVersion,
-      structureVersion: slice.structureVersion,
+      columnVersion: view.columnVersion,
+      structureVersion: view.structureVersion,
       comparableKind,
       uniformStart: uniformNumericStep?.start,
       uniformStep: uniformNumericStep?.step,
