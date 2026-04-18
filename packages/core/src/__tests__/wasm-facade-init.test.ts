@@ -12,7 +12,25 @@ describe('WasmKernelFacade init failures', () => {
     const facade = new WasmKernelFacade()
 
     expect(facade.initSyncIfPossible()).toBe(true)
+    expect(facade.initSyncIfPossible()).toBe(true)
     expect(facade.ready).toBe(true)
+  })
+
+  it('reports sync initialization failure when kernel creation throws', async () => {
+    vi.doMock('@bilig/wasm-kernel', () => ({
+      createKernel: vi.fn(async () => {
+        throw new Error('kernel init failed')
+      }),
+      createKernelSync: vi.fn(() => {
+        throw new Error('kernel init failed')
+      }),
+    }))
+
+    const { WasmKernelFacade } = await import('../wasm-facade.js')
+    const facade = new WasmKernelFacade()
+
+    expect(facade.initSyncIfPossible()).toBe(false)
+    expect(facade.ready).toBe(false)
   })
 
   it('keeps the facade unready when kernel creation fails', async () => {

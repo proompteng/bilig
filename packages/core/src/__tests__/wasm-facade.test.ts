@@ -7,6 +7,7 @@ import { WasmKernelFacade } from '../wasm-facade.js'
 describe('WasmKernelFacade', () => {
   it('returns undefined for reads that have no initialized kernel or no spill shape', async () => {
     const uninitialized = new WasmKernelFacade()
+    uninitialized.resetStoreState()
     expect(uninitialized.readSpill(0, new StringPool())).toBeUndefined()
     expect(uninitialized.materializePivotTable(0, 1, new Uint32Array(), new Uint32Array(), new Uint8Array())).toBeUndefined()
     expect(uninitialized.stringIds).toEqual(new Uint32Array())
@@ -74,7 +75,7 @@ describe('WasmKernelFacade', () => {
     expect(facade.stringIds[sourceIndex]).toBe(0)
 
     facade.evalBatch(new Uint32Array([targetIndex]))
-    facade.syncToStore(store, new Uint32Array([targetIndex]), new StringPool())
+    facade.syncToStore(store, new Uint32Array([targetIndex, store.size + 10]), new StringPool())
 
     expect(store.numbers[targetIndex]).toBe(20)
     expect(store.versions[targetIndex]).toBe(1)
@@ -197,7 +198,7 @@ describe('WasmKernelFacade', () => {
     facade.syncStringPool(strings.exportLayout())
     facade.syncFromStore(store, Uint32Array.from([a1, b1, a2, b2, targetIndex]))
     facade.evalBatch(new Uint32Array([targetIndex]))
-    facade.syncToStore(store, new Uint32Array([targetIndex]), strings)
+    facade.syncToStore(store, new Uint32Array([targetIndex, store.size + 10]), strings)
 
     expect(facade.readSpill(targetIndex, strings)).toEqual({
       rows: 2,
