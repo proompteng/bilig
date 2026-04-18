@@ -217,6 +217,73 @@ describe('EngineMutationService', () => {
     expect(engine.exportSnapshot()).toMatchObject({ sheets: [] })
   })
 
+  it('routes simple render-commit cell upserts through the cell-mutation fast path when no replica batch is needed', () => {
+    const workbook = new WorkbookStore('render-commit-fast-path')
+    let replayDepth = 0
+    const applyBatchCalls: Array<readonly unknown[]> = []
+    const applyCellMutationCalls: Array<readonly unknown[]> = []
+    const service = createEngineMutationService({
+      state: {
+        workbook,
+        replicaState: createReplicaState('local'),
+        undoStack: [],
+        redoStack: [],
+        trackReplicaVersions: false,
+        getSyncClientConnection: () => null,
+        batchListeners: new Set(),
+        formulas: new Map(),
+        getTransactionReplayDepth: () => replayDepth,
+        setTransactionReplayDepth: (next) => {
+          replayDepth = next
+        },
+      },
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      captureStoredCellOps: () => [],
+      restoreCellOps: () => [],
+      readRangeCells: () => [],
+      toCellStateOps: () => [],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
+      applyBatchNow: (batch) => {
+        applyBatchCalls.push(batch.ops)
+        for (const op of batch.ops) {
+          if (op.kind === 'upsertWorkbook') {
+            workbook.workbookName = op.name
+          } else if (op.kind === 'upsertSheet') {
+            workbook.getOrCreateSheet(op.name, op.order)
+          }
+        }
+      },
+      applyCellMutationsAtBatchNow: (refs) => {
+        applyCellMutationCalls.push(refs)
+      },
+    })
+
+    Effect.runSync(
+      service.renderCommit([
+        { kind: 'upsertWorkbook', name: 'after-render-commit' },
+        { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A1', value: 1 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A2', value: 2 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A3', formula: 'A1+A2' },
+      ]),
+    )
+
+    expect(applyBatchCalls).toEqual([
+      [
+        { kind: 'upsertWorkbook', name: 'after-render-commit' },
+        { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+      ],
+    ])
+    expect(applyCellMutationCalls).toHaveLength(1)
+    expect(applyCellMutationCalls[0]).toEqual([
+      { sheetId: 1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 1 } },
+      { sheetId: 1, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 2 } },
+      { sheetId: 1, mutation: { kind: 'setCellFormula', row: 2, col: 0, formula: 'A1+A2' } },
+    ])
+  })
+
   it('captures sheet metadata and cells when building delete-sheet undo ops', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'undo-sheet' })
     await engine.ready()

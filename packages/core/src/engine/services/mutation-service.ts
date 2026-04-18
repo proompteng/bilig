@@ -22,6 +22,7 @@ import {
   cellMutationRefToEngineOp,
   cloneCellMutationRef,
   countPotentialNewCellsForMutationRefs,
+  type EngineCellMutationAt,
   type EngineCellMutationRef,
 } from '../../cell-mutations-at.js'
 import type { CommitOp, EngineRuntimeState, PreparedCellAddress, TransactionRecord } from '../runtime-state.js'
@@ -57,6 +58,59 @@ function createLazyCellMutationTransactionRecord(
     kind: 'ops',
     get ops() {
       cachedOps ??= refs.map((ref) => cellMutationRefToEngineOp(workbook, ref))
+      return cachedOps
+    },
+  }
+  let cachedOps: EngineOp[] | undefined
+  if (potentialNewCells !== undefined) {
+    record.potentialNewCells = potentialNewCells
+  }
+  return record
+}
+
+interface RenderCommitCellMutation {
+  readonly sheetName: string
+  readonly mutation: EngineCellMutationAt
+}
+
+function renderCommitCellMutationToEngineOp(entry: RenderCommitCellMutation): EngineOp {
+  const address = formatAddress(entry.mutation.row, entry.mutation.col)
+  switch (entry.mutation.kind) {
+    case 'setCellValue':
+      return {
+        kind: 'setCellValue',
+        sheetName: entry.sheetName,
+        address,
+        value: entry.mutation.value,
+      }
+    case 'setCellFormula':
+      return {
+        kind: 'setCellFormula',
+        sheetName: entry.sheetName,
+        address,
+        formula: entry.mutation.formula,
+      }
+    case 'clearCell':
+      return {
+        kind: 'clearCell',
+        sheetName: entry.sheetName,
+        address,
+      }
+  }
+}
+
+function createLazyRenderCommitTransactionRecord(
+  prefixOps: readonly EngineOp[],
+  cellMutations: readonly RenderCommitCellMutation[],
+  potentialNewCells?: number,
+): TransactionRecord {
+  const record: { kind: 'ops'; ops: EngineOp[]; potentialNewCells?: number } = {
+    kind: 'ops',
+    get ops() {
+      cachedOps ??= [
+        ...prefixOps.map((op) => structuredClone(op)),
+        ...cellMutations.map((entry) => renderCommitCellMutationToEngineOp(entry)),
+      ]
       return cachedOps
     },
   }
@@ -1411,6 +1465,151 @@ export function createEngineMutationService(args: {
     return fastHistory?.undoOps ?? cloneTransactionRecordOps(inverse)
   }
 
+  const tryExecuteRenderCommitCellMutationFastPath = (ops: readonly CommitOp[]): boolean => {
+    if (shouldCreateLocalBatch()) {
+      return false
+    }
+
+    const prefixOps: EngineOp[] = []
+    const cellMutations: RenderCommitCellMutation[] = []
+    let potentialNewCells = 0
+    let sawCellMutation = false
+
+    for (let index = 0; index < ops.length; index += 1) {
+      const op = ops[index]
+      if (!op) {
+        continue
+      }
+      switch (op.kind) {
+        case 'upsertWorkbook':
+          if (sawCellMutation) {
+            return false
+          }
+          if (op.name) {
+            prefixOps.push({ kind: 'upsertWorkbook', name: op.name })
+          }
+          break
+        case 'upsertSheet':
+          if (sawCellMutation) {
+            return false
+          }
+          if (op.name) {
+            prefixOps.push({ kind: 'upsertSheet', name: op.name, order: op.order ?? 0 })
+          }
+          break
+        case 'renameSheet':
+          if (sawCellMutation) {
+            return false
+          }
+          if (op.oldName && op.newName) {
+            prefixOps.push({
+              kind: 'renameSheet',
+              oldName: op.oldName,
+              newName: op.newName,
+            })
+          }
+          break
+        case 'deleteSheet':
+          if (sawCellMutation) {
+            return false
+          }
+          if (op.name) {
+            prefixOps.push({ kind: 'deleteSheet', name: op.name })
+          }
+          break
+        case 'upsertCell': {
+          if (!op.sheetName || !op.addr || op.format !== undefined) {
+            return false
+          }
+          const preparedCellAddress = parseCellAddress(op.addr, op.sheetName)
+          cellMutations.push({
+            sheetName: op.sheetName,
+            mutation:
+              op.formula !== undefined
+                ? { kind: 'setCellFormula', row: preparedCellAddress.row, col: preparedCellAddress.col, formula: op.formula }
+                : { kind: 'setCellValue', row: preparedCellAddress.row, col: preparedCellAddress.col, value: op.value ?? null },
+          })
+          potentialNewCells += 1
+          sawCellMutation = true
+          break
+        }
+        case 'deleteCell': {
+          if (!op.sheetName || !op.addr) {
+            return false
+          }
+          const preparedCellAddress = parseCellAddress(op.addr, op.sheetName)
+          cellMutations.push({
+            sheetName: op.sheetName,
+            mutation: { kind: 'clearCell', row: preparedCellAddress.row, col: preparedCellAddress.col },
+          })
+          sawCellMutation = true
+          break
+        }
+        default:
+          return false
+      }
+    }
+
+    if (cellMutations.length === 0) {
+      return false
+    }
+
+    const priorReplayDepth = args.state.getTransactionReplayDepth()
+    let prefixUndoOps: readonly EngineOp[] | null = null
+    let cellUndoOps: readonly EngineOp[] | null = null
+    args.state.setTransactionReplayDepth(priorReplayDepth + 1)
+    try {
+      if (prefixOps.length > 0) {
+        prefixUndoOps = executeLocalNowWithCustomApply(
+          prefixOps,
+          undefined,
+          (forward) => {
+            executeTransactionNow(forward, 'local')
+          },
+          { returnUndoOps: true, reuseForwardOps: true },
+        )
+      }
+
+      const refs: EngineCellMutationRef[] = Array.from({ length: cellMutations.length })
+      for (let index = 0; index < cellMutations.length; index += 1) {
+        const mutation = cellMutations[index]!
+        const sheet = args.state.workbook.getSheet(mutation.sheetName)
+        if (!sheet) {
+          throw new Error(`Unknown sheet: ${mutation.sheetName}`)
+        }
+        refs[index] = {
+          sheetId: sheet.id,
+          mutation: mutation.mutation,
+        }
+      }
+
+      cellUndoOps = applyCellMutationsAtNow(refs, {
+        captureUndo: true,
+        source: 'local',
+        potentialNewCells,
+        returnUndoOps: true,
+        reuseRefs: true,
+      })
+    } finally {
+      args.state.setTransactionReplayDepth(priorReplayDepth)
+    }
+
+    if (priorReplayDepth === 0) {
+      const inverseOps = [...(cellUndoOps ?? []), ...(prefixUndoOps ?? [])]
+      args.state.undoStack.push({
+        forward: createLazyRenderCommitTransactionRecord(prefixOps, cellMutations, potentialNewCells),
+        inverse: {
+          kind: 'ops',
+          ops: inverseOps,
+          potentialNewCells: inverseOps.length,
+        },
+      })
+      args.state.redoStack.length = 0
+    }
+
+    return true
+  }
+
   const applyCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
     options: {
@@ -1839,6 +2038,9 @@ export function createEngineMutationService(args: {
       return Effect.flatMap(
         Effect.try({
           try: () => {
+            if (tryExecuteRenderCommitCellMutationFastPath(ops)) {
+              return null
+            }
             const maxEngineOpCount = ops.length * 2
             const engineOps: EngineOp[] = []
             engineOps.length = maxEngineOpCount
@@ -1950,8 +2152,12 @@ export function createEngineMutationService(args: {
               cause,
             }),
         }),
-        ({ engineOps, potentialNewCells, preparedCellAddressesByOpIndex }) =>
-          Effect.try({
+        (normalized) => {
+          if (normalized === null) {
+            return Effect.void
+          }
+          const { engineOps, potentialNewCells, preparedCellAddressesByOpIndex } = normalized
+          return Effect.try({
             try: () => {
               executeLocalNowWithCustomApply(
                 engineOps,
@@ -1977,7 +2183,8 @@ export function createEngineMutationService(args: {
                 message: 'Failed to execute render commit transaction',
                 cause,
               }),
-          }),
+          })
+        },
       ).pipe(Effect.asVoid)
     },
   }
