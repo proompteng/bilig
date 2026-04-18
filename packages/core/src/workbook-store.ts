@@ -1201,6 +1201,7 @@ export class WorkbookStore {
   }
 
   private materializeAxisEntries(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number): WorkbookAxisEntrySnapshot[] {
+    this.hydrateAxisEntriesFromMap(sheet, axis, start, count)
     const entries = materializeAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () =>
       this.createAxisEntry(axis),
     )
@@ -1220,7 +1221,27 @@ export class WorkbookStore {
     return snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count)
   }
 
+  private hydrateAxisEntriesFromMap(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number): void {
+    if (count <= 0) {
+      return
+    }
+    const entries = axis === 'row' ? sheet.rowAxis : sheet.columnAxis
+    const snapshots = sheet.axisMap.snapshot(axis, start, count)
+    for (let index = 0; index < snapshots.length; index += 1) {
+      const snapshot = snapshots[index]!
+      if (entries[snapshot.index]) {
+        continue
+      }
+      entries[snapshot.index] = {
+        id: snapshot.id,
+        size: null,
+        hidden: null,
+      }
+    }
+  }
+
   private materializeAxisEntryRecords(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number): WorkbookAxisEntryRecord[] {
+    this.hydrateAxisEntriesFromMap(sheet, axis, start, count)
     const entries = materializeAxisEntryRecords(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () =>
       this.createAxisEntry(axis),
     )

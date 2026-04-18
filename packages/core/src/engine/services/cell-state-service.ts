@@ -70,6 +70,10 @@ export function createEngineCellStateService(args: {
     sourceSheetName?: string,
     sourceAddress?: string,
     formatOverride: string | null = snapshot.format ?? null,
+    options: {
+      clearExistingFormat?: boolean
+      forceFormatWrite?: boolean
+    } = { clearExistingFormat: true },
   ): EngineOp[] => {
     const ops: EngineOp[] = []
     const targetCellIndex = args.state.workbook.getCellIndex(sheetName, address)
@@ -99,7 +103,14 @@ export function createEngineCellStateService(args: {
           break
       }
     }
-    if (nextFormat !== currentFormat) {
+    if (nextFormat !== null && (options.forceFormatWrite === true || nextFormat !== currentFormat)) {
+      ops.push({
+        kind: 'setCellFormat',
+        sheetName,
+        address,
+        format: nextFormat,
+      })
+    } else if (nextFormat === null && options.clearExistingFormat === true && currentFormat !== null) {
       ops.push({
         kind: 'setCellFormat',
         sheetName,
@@ -124,6 +135,7 @@ export function createEngineCellStateService(args: {
       sourceSheetName,
       sourceAddress,
       args.state.workbook.getCellFormat(cellIndex) ?? null,
+      { forceFormatWrite: true },
     )
 
   const restoreCellOpsNow = (sheetName: string, address: string): EngineOp[] => {
@@ -193,7 +205,10 @@ export function createEngineCellStateService(args: {
     },
     toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress) {
       return Effect.try({
-        try: () => toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),
+        try: () =>
+          toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress, snapshot.format ?? null, {
+            clearExistingFormat: true,
+          }),
         catch: (cause) =>
           new EngineCellStateError({
             message: cellStateErrorMessage(`Failed to materialize cell state ops for ${sheetName}!${address}`, cause),
