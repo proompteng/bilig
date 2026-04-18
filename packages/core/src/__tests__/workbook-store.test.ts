@@ -28,6 +28,23 @@ function projectAxisEntryIds(entries: Array<{ id: string; index: number }>): Arr
 }
 
 describe('WorkbookStore', () => {
+  it('keeps logical cell lookups stable when metadata materializes structural axis entries', () => {
+    const workbook = new WorkbookStore('logical-axis-stability')
+    workbook.createSheet('Sheet1')
+
+    const cellIndex = workbook.ensureCellRecord('Sheet1', 'B2').cellIndex
+
+    expect(workbook.snapshotRowAxisEntries('Missing', 0, 1)).toEqual([])
+    expect(workbook.materializeRowAxisEntries('Sheet1', 0, 0)).toEqual([])
+
+    workbook.setRowMetadata('Sheet1', 1, 1, 30, false)
+    workbook.setColumnMetadata('Sheet1', 1, 1, 120, true)
+
+    expect(workbook.getCellIndex('Sheet1', 'B2')).toBe(cellIndex)
+    expect(workbook.listRowAxisEntries('Sheet1')).toEqual([{ id: 'row-1', index: 1, size: 30, hidden: false }])
+    expect(workbook.listColumnAxisEntries('Sheet1')).toEqual([{ id: 'column-1', index: 1, size: 120, hidden: true }])
+  })
+
   it('does not mutate existing style ranges when bulk style restoration includes an unknown style', () => {
     const workbook = new WorkbookStore('style-ranges')
     workbook.createSheet('Sheet1')
