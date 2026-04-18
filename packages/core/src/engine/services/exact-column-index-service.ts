@@ -2,14 +2,8 @@ import { ValueTag, type CellValue } from '@bilig/protocol'
 import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedExactVectorLookup } from '../runtime-state.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
-import {
-  applyLookupColumnOwnerLiteralWrite,
-  buildLookupColumnOwner,
-  findExactMatchInRange,
-  isLookupColumnOwner,
-  summarizeExactRange,
-  type LookupColumnOwner,
-} from './lookup-column-owner.js'
+import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
+import { findExactMatchInRange, isLookupColumnOwner, summarizeExactRange, type LookupColumnOwner } from './lookup-column-owner.js'
 
 export interface ExactVectorMatchRequest {
   lookupValue: CellValue
@@ -196,11 +190,11 @@ function setPositionsForKey(entry: ExactColumnIndexEntry, key: string): void {
 export function createExactColumnIndexService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
+  readonly columnIndexStore: ColumnIndexStore
 }): ExactColumnIndexService {
   const emptyColumnVersions = new Uint32Array(0)
   const exactColumnIndices = new Map<string, ExactColumnIndexEntry>()
   const cacheKeysByColumn = new Map<string, Set<string>>()
-  const ownerIndices = new Map<string, LookupColumnOwner>()
 
   const readPreparedOwner = (prepared: PreparedExactVectorLookup): LookupColumnOwner | undefined =>
     isLookupColumnOwner(prepared.internalOwner) ? prepared.internalOwner : undefined
@@ -233,26 +227,7 @@ export function createExactColumnIndexService(args: {
   }
 
   const ensureOwnerIndex = (sheetName: string, col: number): LookupColumnOwner | undefined => {
-    const registryKey = columnRegistryKey(sheetName, col)
-    const currentVersions = getCurrentColumnVersions(sheetName, col)
-    let owner = ownerIndices.get(registryKey)
-    if (
-      !owner ||
-      owner.columnVersion !== currentVersions.columnVersion ||
-      owner.structureVersion !== currentVersions.structureVersion ||
-      owner.sheetColumnVersions !== currentVersions.sheetColumnVersions
-    ) {
-      owner = buildLookupColumnOwner({
-        owner: args.runtimeColumnStore.getColumnOwner({ sheetName, col }),
-        normalizeStringId: args.runtimeColumnStore.normalizeStringId,
-      })
-      if (owner) {
-        ownerIndices.set(registryKey, owner)
-      } else {
-        ownerIndices.delete(registryKey)
-      }
-    }
-    return owner
+    return args.columnIndexStore.getLookupColumnOwner({ sheetName, col })
   }
 
   const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
@@ -643,7 +618,7 @@ export function createExactColumnIndexService(args: {
     },
     /* c8 ignore start */
     invalidateColumn(request) {
-      ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
+      args.columnIndexStore.invalidateColumn({ sheetName: request.sheetName, col: request.col })
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
       if (!cacheKeys) {
         return
@@ -654,22 +629,7 @@ export function createExactColumnIndexService(args: {
     },
     recordLiteralWrite(request) {
       const registryKey = columnRegistryKey(request.sheetName, request.col)
-      const owner = ownerIndices.get(registryKey)
-      if (owner) {
-        const currentVersions = getCurrentColumnVersions(request.sheetName, request.col)
-        owner.columnVersion = currentVersions.columnVersion
-        owner.structureVersion = currentVersions.structureVersion
-        owner.sheetColumnVersions = currentVersions.sheetColumnVersions
-        if (
-          !applyLookupColumnOwnerLiteralWrite({
-            owner,
-            write: request,
-            normalizeStringId: args.runtimeColumnStore.normalizeStringId,
-          })
-        ) {
-          ownerIndices.delete(registryKey)
-        }
-      }
+      args.columnIndexStore.recordLiteralWrite(request)
       const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
         return

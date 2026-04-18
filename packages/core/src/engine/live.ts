@@ -1,5 +1,6 @@
 import { Effect, Exit, Cause } from 'effect'
 import type { CellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState } from './runtime-state.js'
 import { createEngineCellStateService, type EngineCellStateService } from './services/cell-state-service.js'
 import { createEngineEventService, type EngineEventService } from './services/event-service.js'
@@ -248,6 +249,7 @@ export function createEngineServiceRuntime(args: {
   const traversal = createEngineTraversalService(args.traversal)
   const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state })
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state })
+  const columnIndexStore = createColumnIndexStore({ state: args.state, runtimeColumnStore })
   const compiledPlans = createEngineCompiledPlanService()
   const formulaTemplates = createEngineFormulaTemplateNormalizationService()
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
@@ -255,8 +257,8 @@ export function createEngineServiceRuntime(args: {
     state: args.state,
     runtimeColumnStore,
   })
-  const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore })
-  const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore })
+  const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore, columnIndexStore })
+  const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore, columnIndexStore })
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
     notifyCellValueWritten: (cellIndex) => args.state.workbook.notifyCellValueWritten(cellIndex),

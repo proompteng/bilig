@@ -22,6 +22,10 @@ function hasStructuralAxisTransform(value: unknown): value is {
   )
 }
 
+function projectAxisEntryIds(entries: Array<{ id: string; index: number }>): Array<{ id: string; index: number }> {
+  return entries.map(({ id, index }) => ({ id, index }))
+}
+
 describe('WorkbookStore', () => {
   it('does not mutate existing style ranges when bulk style restoration includes an unknown style', () => {
     const workbook = new WorkbookStore('style-ranges')
@@ -476,6 +480,62 @@ describe('WorkbookStore', () => {
     workbook.insertColumns('Sheet1', 0, 2, captured)
 
     expect(workbook.listColumnAxisEntries('Sheet1')).toEqual([{ id: 'column-1', index: 1, size: 120, hidden: false }])
+  })
+
+  it('mirrors inserted, moved, and deleted column axis ids in lockstep with workbook snapshots', () => {
+    const workbook = new WorkbookStore('axis-map-mirror')
+    workbook.createSheet('Sheet1')
+    const sheet = workbook.getSheet('Sheet1')
+
+    expect(sheet).toBeDefined()
+    if (!sheet) {
+      throw new Error('Expected Sheet1 to exist')
+    }
+
+    workbook.insertColumns('Sheet1', 0, 3, [
+      { id: 'column-a', index: 0, size: 120, hidden: false },
+      { id: 'column-b', index: 1, size: 90, hidden: true },
+      { id: 'column-c', index: 2, size: null, hidden: null },
+    ])
+
+    expect(workbook.snapshotColumnAxisEntries('Sheet1', 0, 3)).toEqual([
+      { id: 'column-a', index: 0, size: 120, hidden: false },
+      { id: 'column-b', index: 1, size: 90, hidden: true },
+      { id: 'column-c', index: 2 },
+    ])
+    expect(sheet.axisMap.list('column')).toEqual([
+      { id: 'column-a', index: 0 },
+      { id: 'column-b', index: 1 },
+      { id: 'column-c', index: 2 },
+    ])
+    expect(sheet.axisMap.snapshot('column', 0, 3)).toEqual(projectAxisEntryIds(workbook.snapshotColumnAxisEntries('Sheet1', 0, 3)))
+
+    workbook.moveColumns('Sheet1', 0, 1, 3)
+
+    expect(workbook.snapshotColumnAxisEntries('Sheet1', 0, 3)).toEqual([
+      { id: 'column-b', index: 0, size: 90, hidden: true },
+      { id: 'column-c', index: 1 },
+      { id: 'column-a', index: 2, size: 120, hidden: false },
+    ])
+    expect(sheet.axisMap.list('column')).toEqual([
+      { id: 'column-b', index: 0 },
+      { id: 'column-c', index: 1 },
+      { id: 'column-a', index: 2 },
+    ])
+    expect(sheet.axisMap.snapshot('column', 0, 3)).toEqual(projectAxisEntryIds(workbook.snapshotColumnAxisEntries('Sheet1', 0, 3)))
+
+    const deleted = workbook.deleteColumns('Sheet1', 1, 1)
+
+    expect(deleted).toEqual([{ id: 'column-c', index: 1 }])
+    expect(workbook.snapshotColumnAxisEntries('Sheet1', 0, 2)).toEqual([
+      { id: 'column-b', index: 0, size: 90, hidden: true },
+      { id: 'column-a', index: 1, size: 120, hidden: false },
+    ])
+    expect(sheet.axisMap.list('column')).toEqual([
+      { id: 'column-b', index: 0 },
+      { id: 'column-a', index: 1 },
+    ])
+    expect(sheet.axisMap.snapshot('column', 0, 2)).toEqual(projectAxisEntryIds(workbook.snapshotColumnAxisEntries('Sheet1', 0, 2)))
   })
 
   it('remaps only affected cells during structural column shifts', () => {

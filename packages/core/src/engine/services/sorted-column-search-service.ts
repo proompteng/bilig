@@ -3,9 +3,8 @@ import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../runtime-state.js'
 import type { ExactVectorMatchResult } from './exact-column-index-service.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
+import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
 import {
-  applyLookupColumnOwnerLiteralWrite,
-  buildLookupColumnOwner,
   isLookupColumnOwner,
   sliceOffsetBounds,
   summarizeApproximateRange,
@@ -182,11 +181,11 @@ function columnRegistryKey(sheetName: string, col: number): string {
 export function createSortedColumnSearchService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
+  readonly columnIndexStore: ColumnIndexStore
 }): SortedColumnSearchService {
   const emptyColumnVersions = new Uint32Array(0)
   const approximateColumnIndices = new Map<string, ApproximateColumnIndexEntry>()
   const cacheKeysByColumn = new Map<string, Set<string>>()
-  const ownerIndices = new Map<string, LookupColumnOwner>()
 
   const readPreparedOwner = (prepared: PreparedApproximateVectorLookup): LookupColumnOwner | undefined =>
     isLookupColumnOwner(prepared.internalOwner) ? prepared.internalOwner : undefined
@@ -219,26 +218,7 @@ export function createSortedColumnSearchService(args: {
   }
 
   const ensureOwnerIndex = (sheetName: string, col: number): LookupColumnOwner | undefined => {
-    const registryKey = columnRegistryKey(sheetName, col)
-    const currentVersions = getCurrentColumnVersions(sheetName, col)
-    let owner = ownerIndices.get(registryKey)
-    if (
-      !owner ||
-      owner.columnVersion !== currentVersions.columnVersion ||
-      owner.structureVersion !== currentVersions.structureVersion ||
-      owner.sheetColumnVersions !== currentVersions.sheetColumnVersions
-    ) {
-      owner = buildLookupColumnOwner({
-        owner: args.runtimeColumnStore.getColumnOwner({ sheetName, col }),
-        normalizeStringId: args.runtimeColumnStore.normalizeStringId,
-      })
-      if (owner) {
-        ownerIndices.set(registryKey, owner)
-      } else {
-        ownerIndices.delete(registryKey)
-      }
-    }
-    return owner
+    return args.columnIndexStore.getLookupColumnOwner({ sheetName, col })
   }
 
   const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
@@ -836,7 +816,7 @@ export function createSortedColumnSearchService(args: {
     },
     /* c8 ignore start */
     invalidateColumn(request) {
-      ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
+      args.columnIndexStore.invalidateColumn({ sheetName: request.sheetName, col: request.col })
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
       if (!cacheKeys) {
         return
@@ -847,22 +827,7 @@ export function createSortedColumnSearchService(args: {
     },
     recordLiteralWrite(request) {
       const registryKey = columnRegistryKey(request.sheetName, request.col)
-      const owner = ownerIndices.get(registryKey)
-      if (owner) {
-        const currentVersions = getCurrentColumnVersions(request.sheetName, request.col)
-        owner.columnVersion = currentVersions.columnVersion
-        owner.structureVersion = currentVersions.structureVersion
-        owner.sheetColumnVersions = currentVersions.sheetColumnVersions
-        if (
-          !applyLookupColumnOwnerLiteralWrite({
-            owner,
-            write: request,
-            normalizeStringId: args.runtimeColumnStore.normalizeStringId,
-          })
-        ) {
-          ownerIndices.delete(registryKey)
-        }
-      }
+      args.columnIndexStore.recordLiteralWrite(request)
       const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
         return

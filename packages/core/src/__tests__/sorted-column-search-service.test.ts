@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
+import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../engine/runtime-state.js'
 import { createSortedColumnSearchService } from '../engine/services/sorted-column-search-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
@@ -22,6 +23,21 @@ function setStoredString(workbook: WorkbookStore, strings: StringPool, address: 
   workbook.cellStore.setValue(cellIndex, { tag: ValueTag.String, value }, strings.intern(value))
 }
 
+function createSorted(workbook: WorkbookStore, strings: StringPool) {
+  const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+    state: { workbook, strings },
+  })
+  const columnIndexStore = createColumnIndexStore({
+    state: { workbook, strings },
+    runtimeColumnStore,
+  })
+  return createSortedColumnSearchService({
+    state: { workbook, strings },
+    runtimeColumnStore,
+    columnIndexStore,
+  })
+}
+
 describe('createSortedColumnSearchService', () => {
   it('serves approximate matches from a primed sorted column and invalidates by column version', () => {
     const workbook = new WorkbookStore('sorted-index')
@@ -32,13 +48,7 @@ describe('createSortedColumnSearchService', () => {
       setStoredNumber(workbook, strings, `A${index + 1}`, value)
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const sorted = createSortedColumnSearchService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const sorted = createSorted(workbook, strings)
 
     sorted.primeColumnIndex({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 3, col: 0 })
 
@@ -86,9 +96,14 @@ describe('createSortedColumnSearchService', () => {
       state: { workbook, strings },
     })
     const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const sorted = createSortedColumnSearchService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
 
     const prepared = sorted.prepareVectorLookup({
@@ -133,9 +148,14 @@ describe('createSortedColumnSearchService', () => {
     const getColumnOwnerSpy = vi.spyOn(runtimeColumnStore, 'getColumnOwner')
     const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
     const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const sorted = createSortedColumnSearchService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
 
     sorted.prepareVectorLookup({
@@ -168,13 +188,7 @@ describe('createSortedColumnSearchService', () => {
       setStoredString(workbook, strings, `B${index + 1}`, value)
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const sorted = createSortedColumnSearchService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const sorted = createSorted(workbook, strings)
 
     const numericPrepared = sorted.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -319,6 +333,10 @@ describe('createSortedColumnSearchService', () => {
     const sorted = createSortedColumnSearchService({
       state,
       runtimeColumnStore,
+      columnIndexStore: createColumnIndexStore({
+        state,
+        runtimeColumnStore,
+      }),
     })
 
     const numericPrepared = sorted.prepareVectorLookup({
@@ -460,13 +478,7 @@ describe('createSortedColumnSearchService', () => {
     setStoredString(workbook, strings, 'D2', 'mixed')
     setStoredNumber(workbook, strings, 'D3', 3)
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const sorted = createSortedColumnSearchService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const sorted = createSorted(workbook, strings)
 
     const ascendingPrepared = sorted.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -613,9 +625,14 @@ describe('createSortedColumnSearchService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const sorted = createSortedColumnSearchService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
     const sheetColumnVersions = workbook.getSheet('Sheet1')?.columnVersions
     expect(sheetColumnVersions).toBeDefined()

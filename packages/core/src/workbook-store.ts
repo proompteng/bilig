@@ -29,6 +29,7 @@ import { SheetGrid, type SheetGridAxisRemapScope } from './sheet-grid.js'
 import { CellFlags, CellStore } from './cell-store.js'
 import { mapStructuralAxisIndex } from './engine-structural-utils.js'
 import { buildStructuralTransaction, structuralScopeForTransform, type StructuralTransaction } from './engine/structural-transaction.js'
+import { SheetAxisMap } from './storage/sheet-axis-map.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
 import {
   createWorkbookMetadataRecord,
@@ -128,6 +129,7 @@ export interface SheetRecord {
   name: string
   order: number
   grid: SheetGrid
+  axisMap: SheetAxisMap
   columnVersions: Uint32Array
   structureVersion: number
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>
@@ -189,6 +191,7 @@ export class WorkbookStore {
       name,
       order,
       grid: new SheetGrid(),
+      axisMap: new SheetAxisMap(),
       columnVersions: new Uint32Array(MAX_COLS),
       structureVersion: 1,
       rowAxis: [],
@@ -1076,7 +1079,11 @@ export class WorkbookStore {
   }
 
   private materializeAxisEntries(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number): WorkbookAxisEntrySnapshot[] {
-    return materializeAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () => this.createAxisEntry(axis))
+    const entries = materializeAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () =>
+      this.createAxisEntry(axis),
+    )
+    sheet.axisMap.replaceRange(axis, start, entries)
+    return entries
   }
 
   private snapshotAxisEntriesInRange(
@@ -1092,7 +1099,11 @@ export class WorkbookStore {
   }
 
   private materializeAxisEntryRecords(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number): WorkbookAxisEntryRecord[] {
-    return materializeAxisEntryRecords(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () => this.createAxisEntry(axis))
+    const entries = materializeAxisEntryRecords(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, () =>
+      this.createAxisEntry(axis),
+    )
+    sheet.axisMap.replaceRange(axis, start, snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count))
+    return entries
   }
 
   private spliceAxisEntries(
@@ -1103,7 +1114,7 @@ export class WorkbookStore {
     insertCount: number,
     entries?: readonly WorkbookAxisEntrySnapshot[],
   ): WorkbookAxisEntrySnapshot[] {
-    return spliceAxisEntries(
+    const removed = spliceAxisEntries(
       axis === 'row' ? sheet.rowAxis : sheet.columnAxis,
       start,
       deleteCount,
@@ -1111,9 +1122,17 @@ export class WorkbookStore {
       () => this.createAxisEntry(axis),
       entries,
     )
+    sheet.axisMap.splice(
+      axis,
+      start,
+      deleteCount,
+      snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, insertCount),
+    )
+    return removed
   }
 
   private moveAxisEntries(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number, target: number): void {
+    sheet.axisMap.move(axis, start, count, target)
     moveAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, target, () => this.createAxisEntry(axis))
   }
 

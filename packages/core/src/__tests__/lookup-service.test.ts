@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
+import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import { createEngineLookupService } from '../engine/services/lookup-service.js'
 import { createExactColumnIndexService } from '../engine/services/exact-column-index-service.js'
 import { createSortedColumnSearchService } from '../engine/services/sorted-column-search-service.js'
@@ -12,19 +13,34 @@ function setStoredCellValue(workbook: WorkbookStore, strings: StringPool, sheetN
   workbook.cellStore.setValue(cellIndex, value, value.tag === ValueTag.String ? strings.intern(value.value) : 0)
 }
 
-function createLookup(workbook: WorkbookStore, strings: StringPool) {
+function createLookupEnvironment(workbook: WorkbookStore, strings: StringPool) {
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({
     state: { workbook, strings },
+  })
+  const columnIndexStore = createColumnIndexStore({
+    state: { workbook, strings },
+    runtimeColumnStore,
   })
   const exact = createExactColumnIndexService({
     state: { workbook, strings },
     runtimeColumnStore,
+    columnIndexStore,
   })
   const sorted = createSortedColumnSearchService({
     state: { workbook, strings },
     runtimeColumnStore,
+    columnIndexStore,
   })
-  return createEngineLookupService({ exact, sorted })
+  return {
+    runtimeColumnStore,
+    exact,
+    sorted,
+    lookup: createEngineLookupService({ exact, sorted }),
+  }
+}
+
+function createLookup(workbook: WorkbookStore, strings: StringPool) {
+  return createLookupEnvironment(workbook, strings).lookup
 }
 
 describe('createEngineLookupService', () => {
@@ -241,6 +257,155 @@ describe('createEngineLookupService', () => {
         matchMode: -1,
       }),
     ).toEqual({ handled: true, position: 2 })
+  })
+
+  it('shares owner-backed state between exact and approximate lookups after a single literal write', () => {
+    const workbook = new WorkbookStore('lookup-service-shared-owner-single-write')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      })
+    })
+
+    const { runtimeColumnStore, exact, sorted } = createLookupEnvironment(workbook, strings)
+    const getColumnOwnerSpy = vi.spyOn(runtimeColumnStore, 'getColumnOwner')
+
+    const exactPrepared = exact.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+    const approximatePrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(exactPrepared.internalOwner).toBeDefined()
+    expect(exactPrepared.internalOwner).toBe(approximatePrepared.internalOwner)
+    expect(getColumnOwnerSpy).toHaveBeenCalledTimes(1)
+
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A3', {
+      tag: ValueTag.Number,
+      value: 6,
+    })
+    exact.recordLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 2,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 5 },
+      newValue: { tag: ValueTag.Number, value: 6 },
+    })
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: exactPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: approximatePrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 })
+    expect(getColumnOwnerSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps exact and approximate lookups correct after batched literal writes on the shared owner', () => {
+    const workbook = new WorkbookStore('lookup-service-shared-owner-batch-write')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      })
+    })
+
+    const { runtimeColumnStore, exact, sorted } = createLookupEnvironment(workbook, strings)
+    const getColumnOwnerSpy = vi.spyOn(runtimeColumnStore, 'getColumnOwner')
+
+    const exactPrepared = exact.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+    const approximatePrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(exactPrepared.internalOwner).toBeDefined()
+    expect(exactPrepared.internalOwner).toBe(approximatePrepared.internalOwner)
+    expect(getColumnOwnerSpy).toHaveBeenCalledTimes(1)
+
+    workbook.withBatchedColumnVersionUpdates(() => {
+      setStoredCellValue(workbook, strings, 'Sheet1', 'A2', {
+        tag: ValueTag.Number,
+        value: 4,
+      })
+      setStoredCellValue(workbook, strings, 'Sheet1', 'A3', {
+        tag: ValueTag.Number,
+        value: 6,
+      })
+    })
+    exact.recordLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 1,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 3 },
+      newValue: { tag: ValueTag.Number, value: 4 },
+    })
+    exact.recordLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 2,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 5 },
+      newValue: { tag: ValueTag.Number, value: 6 },
+    })
+
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: exactPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: approximatePrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 })
+    expect(
+      exact.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: exactPrepared,
+        searchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 6 },
+        prepared: approximatePrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 3 })
+    expect(getColumnOwnerSpy).toHaveBeenCalledTimes(1)
   })
 
   it('falls back when approximate lookup cannot safely use a sorted column path', () => {

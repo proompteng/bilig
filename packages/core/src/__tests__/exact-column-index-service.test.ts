@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
+import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState, PreparedExactVectorLookup } from '../engine/runtime-state.js'
 import { createExactColumnIndexService } from '../engine/services/exact-column-index-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
@@ -22,6 +23,21 @@ function setStoredCellValue(
   workbook.cellStore.setValue(cellIndex, value, value.tag === ValueTag.String ? strings.intern(value.value) : 0)
 }
 
+function createExact(workbook: WorkbookStore, strings: StringPool) {
+  const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+    state: { workbook, strings },
+  })
+  const columnIndexStore = createColumnIndexStore({
+    state: { workbook, strings },
+    runtimeColumnStore,
+  })
+  return createExactColumnIndexService({
+    state: { workbook, strings },
+    runtimeColumnStore,
+    columnIndexStore,
+  })
+}
+
 describe('createExactColumnIndexService', () => {
   it('serves exact matches from a primed column index and invalidates by column version', () => {
     const workbook = new WorkbookStore('exact-index')
@@ -35,13 +51,7 @@ describe('createExactColumnIndexService', () => {
     })
     setStoredCellValue(workbook, strings, 'Sheet1', 'A3', { tag: ValueTag.String, value: 'pear' })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
 
     exact.primeColumnIndex({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 })
 
@@ -106,13 +116,7 @@ describe('createExactColumnIndexService', () => {
       value: false,
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
 
     const numericPrepared = exact.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -301,13 +305,7 @@ describe('createExactColumnIndexService', () => {
       })
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
 
     const prepared = exact.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -365,9 +363,14 @@ describe('createExactColumnIndexService', () => {
       state: { workbook, strings },
     })
     const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const exact = createExactColumnIndexService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
 
     const prepared = exact.prepareVectorLookup({
@@ -418,9 +421,14 @@ describe('createExactColumnIndexService', () => {
     const getColumnOwnerSpy = vi.spyOn(runtimeColumnStore, 'getColumnOwner')
     const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
     const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const exact = createExactColumnIndexService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
 
     exact.prepareVectorLookup({
@@ -453,13 +461,7 @@ describe('createExactColumnIndexService', () => {
       setStoredCellValue(workbook, strings, 'Sheet1', `B${index + 1}`, { tag: ValueTag.String, value })
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
 
     const numericPrepared = exact.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -606,6 +608,10 @@ describe('createExactColumnIndexService', () => {
     const exact = createExactColumnIndexService({
       state,
       runtimeColumnStore,
+      columnIndexStore: createColumnIndexStore({
+        state,
+        runtimeColumnStore,
+      }),
     })
 
     const numericPrepared = exact.prepareVectorLookup({
@@ -765,9 +771,14 @@ describe('createExactColumnIndexService', () => {
         }
       },
     }
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
     const exact = createExactColumnIndexService({
       state: { workbook, strings },
       runtimeColumnStore,
+      columnIndexStore,
     })
 
     const numericPrepared = exact.prepareVectorLookup({
@@ -839,13 +850,7 @@ describe('createExactColumnIndexService', () => {
     const workbook = new WorkbookStore('exact-index-manual-prepared')
     const strings = new StringPool()
     workbook.createSheet('Sheet1')
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
     const sheetColumnVersions = workbook.getSheet('Sheet1')?.columnVersions
     expect(sheetColumnVersions).toBeDefined()
 
@@ -949,13 +954,7 @@ describe('createExactColumnIndexService', () => {
       })
     })
 
-    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
-    })
-    const exact = createExactColumnIndexService({
-      state: { workbook, strings },
-      runtimeColumnStore,
-    })
+    const exact = createExact(workbook, strings)
 
     const prepared = exact.prepareVectorLookup({
       sheetName: 'Sheet1',

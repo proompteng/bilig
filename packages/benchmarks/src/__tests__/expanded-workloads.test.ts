@@ -4,8 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   EXPANDED_COMPARATIVE_WORKLOADS,
+  buildExpandedComparativeBenchmarkReport,
   type ExpandedComparativeBenchmarkWorkload,
 } from '../benchmark-workpaper-vs-hyperformula-expanded.js'
+import {
+  EXPANDED_COMPARATIVE_FAMILY_GROUPS,
+  EXPANDED_COMPARATIVE_FAMILY_ORDER,
+  formatExpandedCompetitiveFamilyReport,
+  EXPANDED_COMPARATIVE_WORKLOAD_FAMILY,
+  type ExpandedCompetitiveFamily,
+} from '../report-competitive-families.js'
 
 const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'build-dense-literals',
@@ -73,5 +81,56 @@ describe('expanded comparative benchmark workloads', () => {
 
   it('checked-in expanded baseline covers every expanded workload exactly once', () => {
     expect(readExpandedBaselineWorkloads(expandedBaselinePath)).toEqual(expectedExpandedWorkloads)
+  })
+
+  it('assigns every expanded workload to exactly one family', () => {
+    const seen = new Map<ExpandedComparativeBenchmarkWorkload, ExpandedCompetitiveFamily>()
+
+    for (const family of EXPANDED_COMPARATIVE_FAMILY_ORDER) {
+      const workloads = EXPANDED_COMPARATIVE_FAMILY_GROUPS[family]
+      for (const workload of workloads) {
+        expect(EXPANDED_COMPARATIVE_WORKLOAD_FAMILY[workload]).toBe(family)
+        expect(seen.has(workload)).toBe(false)
+        seen.set(workload, family)
+      }
+    }
+
+    expect(seen.size).toBe(expectedExpandedWorkloads.length)
+    expect([...seen.keys()].toSorted()).toEqual([...expectedExpandedWorkloads].toSorted())
+  })
+
+  it('formats an expanded family report with a machine-readable top-level families array', () => {
+    const parsed: unknown = JSON.parse(formatExpandedCompetitiveFamilyReport([]))
+
+    expect(parsed).toEqual({
+      suite: 'workpaper-vs-hyperformula-expanded',
+      families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
+        family,
+        workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
+        resultCount: 0,
+        comparableCount: 0,
+        leadershipCount: 0,
+        workpaperWins: 0,
+        hyperformulaWins: 0,
+        meanSpeedupGeomean: null,
+      })),
+    })
+  })
+
+  it('builds an expanded benchmark report with attached family summaries', () => {
+    expect(buildExpandedComparativeBenchmarkReport([])).toEqual({
+      suite: 'workpaper-vs-hyperformula-expanded',
+      results: [],
+      families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
+        family,
+        workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
+        resultCount: 0,
+        comparableCount: 0,
+        leadershipCount: 0,
+        workpaperWins: 0,
+        hyperformulaWins: 0,
+        meanSpeedupGeomean: null,
+      })),
+    })
   })
 })
