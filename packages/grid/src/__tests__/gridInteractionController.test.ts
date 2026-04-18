@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handleGridPointerDown } from '../gridInteractionController.js'
+import { handleGridPointerDown, handleGridPointerMove } from '../gridInteractionController.js'
 
 function createInteractionState() {
   return {
@@ -61,5 +61,49 @@ describe('gridInteractionController', () => {
     expect(onCommitEdit).toHaveBeenCalledTimes(1)
     expect(onSelectionChange).toHaveBeenCalledTimes(1)
     expect(order).toEqual(['commit', 'selection'])
+  })
+
+  it('publishes the live rectangular drag selection instead of keeping it only in local grid state', () => {
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+
+    handleGridPointerMove({
+      event: {
+        clientX: 80,
+        clientY: 120,
+        buttons: 1,
+      },
+      dragAnchorCell: [1, 22],
+      dragHeaderSelection: null,
+      dragPointerCell: [1, 22],
+      dragViewport: null,
+      dragGeometry: null,
+      interactionState: createInteractionState(),
+      resolvePointerCell: vi.fn(() => [4, 31] as const),
+      resolveHeaderSelectionForPointerDrag: vi.fn(),
+      selectedCell: [1, 22],
+      setGridSelection,
+      visibleRegion: {
+        firstRow: 0,
+        lastRow: 40,
+        firstCol: 0,
+        lastCol: 20,
+        topOffset: 0,
+        leftOffset: 0,
+      },
+      onSelectionChange,
+      isEditingCell: false,
+      onCommitEdit: vi.fn(),
+    })
+
+    expect(setGridSelection).toHaveBeenCalledTimes(1)
+    expect(onSelectionChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: expect.objectContaining({
+          cell: [1, 22],
+          range: { x: 1, y: 22, width: 4, height: 10 },
+        }),
+      }),
+    )
   })
 })

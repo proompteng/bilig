@@ -145,10 +145,10 @@ describe('workbook changes', () => {
 
     const rows = host.querySelectorAll<HTMLElement>("[data-testid='workbook-change-row']")
     expect(rows).toHaveLength(2)
+    expect(host.textContent).toContain('Apr 6')
     expect(rows[0]?.textContent).toContain('Filled Sheet1!B1:B3')
     expect(rows[0]?.textContent).toContain('Amy Smith')
-    expect(rows[0]?.querySelector("[data-testid='workbook-change-revision']")?.textContent).toBe('r12')
-    expect(rows[0]?.querySelector("[data-testid='workbook-change-target']")?.textContent).toBe('Location Sheet1!B1:B3')
+    expect(rows[0]?.textContent).not.toContain('r12')
     expect(rows[0]?.getAttribute('class')).toContain('border-b')
     expect(rows[0]?.getAttribute('class')).not.toContain('rounded-')
     expect(rows[1]?.textContent).toContain('Deleted sheet Archive')
@@ -215,8 +215,7 @@ describe('workbook changes', () => {
     })
   })
 
-  it('routes revert actions through the authoritative workbook change mutator', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  it('does not render per-row revert controls in the revision feed', async () => {
     const changes = createMockZeroChangeHarness([
       {
         revision: 21,
@@ -254,11 +253,9 @@ describe('workbook changes', () => {
       )
     })
 
-    await act(async () => {
-      host.querySelector("[data-testid='workbook-change-revert']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(changes.mutations).toHaveLength(1)
+    expect(host.querySelector("[data-testid='workbook-change-revert']")).toBeNull()
+    expect(host.textContent).not.toContain('Revert')
+    expect(changes.mutations).toHaveLength(0)
 
     await act(async () => {
       root.unmount()

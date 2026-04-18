@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { mutators } from '@bilig/zero-sync'
 import { WorkbookChangesPanel } from './WorkbookChangesPanel.js'
 import { useWorkbookChanges, type ZeroWorkbookChangeQuerySource } from './use-workbook-changes.js'
-import { selectWorkbookHistoryState, type WorkbookChangeEntry } from './workbook-changes-model.js'
+import { selectWorkbookHistoryState } from './workbook-changes-model.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -35,41 +35,12 @@ export function useWorkbookChangesPane(input: {
     zero,
     enabled,
   })
-  const [pendingRevisions, setPendingRevisions] = useState<readonly number[]>([])
   const [isUndoPending, setIsUndoPending] = useState(false)
   const [isRedoPending, setIsRedoPending] = useState(false)
   const changeCount = changes.length
   const historyState = useMemo(() => selectWorkbookHistoryState({ entries: changes, currentUserId }), [changes, currentUserId])
 
-  const revertChange = useCallback(
-    (change: WorkbookChangeEntry) => {
-      if (!enabled || !change.canRevert || pendingRevisions.includes(change.revision)) {
-        return
-      }
-      setPendingRevisions((current) => [...current, change.revision])
-      const observer = observeZeroMutationResult(
-        zero.mutate(
-          mutators.workbook.revertChange({
-            documentId,
-            revision: change.revision,
-          }),
-        ),
-      )
-      void (async () => {
-        try {
-          await (observer ?? Promise.resolve())
-        } finally {
-          setPendingRevisions((current) => current.filter((revision) => revision !== change.revision))
-        }
-      })()
-    },
-    [documentId, enabled, pendingRevisions, zero],
-  )
-
-  const changesPanel = useMemo(
-    () => <WorkbookChangesPanel changes={changes} onJump={onJump} onRevert={revertChange} pendingRevisions={pendingRevisions} />,
-    [changes, onJump, pendingRevisions, revertChange],
-  )
+  const changesPanel = useMemo(() => <WorkbookChangesPanel changes={changes} onJump={onJump} />, [changes, onJump])
 
   const undoLatestChange = useCallback(() => {
     if (!enabled || isUndoPending || historyState.undoRevision === null) {

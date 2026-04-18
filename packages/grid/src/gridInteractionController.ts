@@ -198,6 +198,7 @@ export function handleGridPointerMove({
   dragViewport,
   dragGeometry,
   interactionState,
+  onSelectionChange,
   resolvePointerCell,
   resolveHeaderSelectionForPointerDrag,
   selectedCell,
@@ -223,7 +224,9 @@ export function handleGridPointerMove({
     }
     interactionState.dragPointerCellRef.current = null
     interactionState.dragDidMoveRef.current = true
-    setGridSelection(resolveHeaderDragSelection(dragHeaderSelection, nextHeader.index, selectedCell).selection)
+    const nextSelection = resolveHeaderDragSelection(dragHeaderSelection, nextHeader.index, selectedCell).selection
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
     return
   }
   if (dragAnchorCell === null) {
@@ -240,7 +243,9 @@ export function handleGridPointerMove({
   if (pointerCell[0] !== dragAnchorCell[0] || pointerCell[1] !== dragAnchorCell[1]) {
     interactionState.dragDidMoveRef.current = true
     interactionState.ignoreNextPointerSelectionRef.current = false
-    setGridSelection(resolveBodyDragSelection(dragAnchorCell, pointerCell))
+    const nextSelection = resolveBodyDragSelection(dragAnchorCell, pointerCell)
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
   }
 }
 

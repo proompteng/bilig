@@ -129,10 +129,15 @@ function formatChangeTarget(range: WorkbookChangeRange | null, fallbackAddress: 
   return fallbackAddress ? fallbackAddress : null
 }
 
-export function formatWorkbookChangeTimestamp(createdAt: number): string {
+export function formatWorkbookChangeDay(createdAt: number): string {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
+  }).format(new Date(createdAt))
+}
+
+export function formatWorkbookChangeTime(createdAt: number): string {
+  return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(createdAt))
