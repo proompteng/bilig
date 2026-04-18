@@ -177,4 +177,33 @@ describe('WorkbookSheetTabs', () => {
       root.unmount()
     })
   })
+
+  it('renders trailing selection text without bordered chip chrome', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookSheetTabs
+          onSelectSheet={() => {}}
+          sheetName="Sheet1"
+          sheetNames={['Sheet1']}
+          trailingContent={<span data-testid="selection-summary">A3:C10</span>}
+        />,
+      )
+    })
+
+    const trailing = host.querySelector("[data-testid='selection-summary']")
+    expect(trailing?.textContent).toBe('A3:C10')
+    expect(trailing?.parentElement?.className).not.toContain('border')
+    expect(trailing?.parentElement?.className).not.toContain('bg-[')
+    expect(trailing?.parentElement?.className).not.toContain('shadow-[')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

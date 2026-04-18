@@ -15,7 +15,7 @@ interface FormulaBarProps {
   isEditing: boolean
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   onBeginEdit(this: void, seed?: string): void
-  onAddressCommit(this: void, next: string): void
+  onAddressCommit(this: void, next: string): boolean
   onChange(this: void, next: string): void
   onCommit(this: void): void
   onCancel(this: void): void
@@ -35,14 +35,13 @@ export function FormulaBar({
   onCommit,
   onCancel,
 }: FormulaBarProps) {
-  const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const nameBoxRef = useRef<HTMLInputElement | null>(null)
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
   const [formulaCaret, setFormulaCaret] = useState(value.length)
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
   const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
-  const MAX_FORMULA_HEIGHT = 128
 
   useEffect(() => {
     setFormulaCaret((current) => Math.min(value.length, current === 0 ? value.length : current))
@@ -50,17 +49,6 @@ export function FormulaBar({
       setDismissedAutocompleteValue(null)
     }
   }, [dismissedAutocompleteValue, value])
-
-  useEffect(() => {
-    const textarea = inputRef.current
-    if (!textarea) {
-      return
-    }
-    textarea.style.height = '0px'
-    const measuredHeight = Math.min(Math.max(textarea.scrollHeight, 32), MAX_FORMULA_HEIGHT)
-    textarea.style.height = `${measuredHeight}px`
-    textarea.style.overflowY = textarea.scrollHeight > MAX_FORMULA_HEIGHT ? 'auto' : 'hidden'
-  }, [value])
 
   useEffect(() => {
     const pending = pendingSelectionRef.current
@@ -154,7 +142,7 @@ export function FormulaBar({
             <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-10`}>
               fx
             </span>
-            <textarea
+            <input
               aria-activedescendant={showAutocomplete ? `formula-autocomplete-option-${highlightedSuggestionIndex}` : undefined}
               aria-controls={showAutocomplete ? 'formula-autocomplete' : undefined}
               aria-expanded={showAutocomplete ? 'true' : 'false'}
@@ -165,8 +153,8 @@ export function FormulaBar({
               placeholder="Type a literal or =formula"
               ref={inputRef}
               role="combobox"
+              type="text"
               value={value}
-              rows={1}
               onBlur={(event) => {
                 setIsFormulaFocused(false)
                 const nextTarget = event.relatedTarget
@@ -236,15 +224,6 @@ export function FormulaBar({
                 setFormulaCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
               }}
             />
-          </div>
-          <div
-            className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[var(--wb-text-subtle)]"
-            data-testid="formula-bar-meta"
-          >
-            <span className="truncate font-medium text-[var(--wb-text-muted)]" data-testid="formula-selection-label">
-              {selectionLabel ?? address}
-            </span>
-            <span className="truncate">{resolvedValue || '∅'}</span>
           </div>
           {showAutocomplete ? (
             <FormulaAutocomplete

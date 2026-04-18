@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { queries } from '@bilig/zero-sync'
-import { normalizeWorkbookChangeRows, selectWorkbookChangeEntries, type WorkbookChangeEntry } from './workbook-changes-model.js'
+import {
+  normalizeWorkbookChangeRows,
+  selectWorkbookChangeEntries,
+  type WorkbookChangeEntry,
+  type WorkbookChangeRow,
+} from './workbook-changes-model.js'
 
 interface ZeroLiveView<T> {
   readonly data: T
@@ -10,6 +15,11 @@ interface ZeroLiveView<T> {
 
 export interface ZeroWorkbookChangeQuerySource {
   materialize(query: unknown): unknown
+}
+
+export interface WorkbookChangesViewModel {
+  readonly rows: readonly WorkbookChangeRow[]
+  readonly entries: readonly WorkbookChangeEntry[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,7 +35,7 @@ export function useWorkbookChanges(input: {
   readonly sheetNames: readonly string[]
   readonly zero: ZeroWorkbookChangeQuerySource
   readonly enabled: boolean
-}): readonly WorkbookChangeEntry[] {
+}): WorkbookChangesViewModel {
   const { documentId, enabled, sheetNames, zero } = input
   const [rows, setRows] = useState([] as readonly ReturnType<typeof normalizeWorkbookChangeRows>[number][])
 
@@ -52,11 +62,13 @@ export function useWorkbookChanges(input: {
   }, [documentId, enabled, zero])
 
   return useMemo(
-    () =>
-      selectWorkbookChangeEntries({
+    () => ({
+      rows,
+      entries: selectWorkbookChangeEntries({
         rows,
         knownSheetNames: sheetNames,
       }),
+    }),
     [rows, sheetNames],
   )
 }

@@ -350,4 +350,122 @@ describe('workbook changes', () => {
       root.unmount()
     })
   })
+
+  it('keeps redo available when a longer undo chain still has older reverted entries after a newer redo', async () => {
+    const changes = createMockZeroChangeHarness([
+      {
+        revision: 25,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-25',
+        eventKind: 'redoChange',
+        summary: 'Redid r24: Reverted r21: Updated Sheet1!A1',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+        },
+        revertedByRevision: null,
+        revertsRevision: 24,
+        createdAt: Date.parse('2026-04-18T09:15:00.000Z'),
+      },
+      {
+        revision: 24,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-24',
+        eventKind: 'revertChange',
+        summary: 'Reverted r21: Updated Sheet1!A1',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 'a1' }],
+        },
+        revertedByRevision: 25,
+        revertsRevision: 21,
+        createdAt: Date.parse('2026-04-18T09:14:00.000Z'),
+      },
+      {
+        revision: 23,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-23',
+        eventKind: 'revertChange',
+        summary: 'Reverted r22: Updated Sheet1!B1',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'B1',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'B1', value: 'b1' }],
+        },
+        revertedByRevision: null,
+        revertsRevision: 22,
+        createdAt: Date.parse('2026-04-18T09:13:00.000Z'),
+      },
+      {
+        revision: 22,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-22',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!B1',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'B1',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'B1' }],
+        },
+        revertedByRevision: 23,
+        revertsRevision: null,
+        createdAt: Date.parse('2026-04-18T09:12:00.000Z'),
+      },
+      {
+        revision: 21,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-21',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!A1',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+        },
+        revertedByRevision: 24,
+        revertsRevision: null,
+        createdAt: Date.parse('2026-04-18T09:11:00.000Z'),
+      },
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          sheetNames={['Sheet1']}
+          zero={changes.zero}
+        />,
+      )
+    })
+
+    expect(host.querySelector("[data-testid='workbook-can-undo']")?.textContent).toBe('true')
+    expect(host.querySelector("[data-testid='workbook-can-redo']")?.textContent).toBe('true')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

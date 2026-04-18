@@ -6,6 +6,21 @@ export interface RuntimeConfig {
   currentUserId: string
 }
 
+export function normalizeRuntimeConfigUserId<T extends { currentUserId: string }>(
+  config: T,
+  session: {
+    readonly userId: string
+  },
+): T {
+  if (config.currentUserId === session.userId) {
+    return config
+  }
+  return {
+    ...config,
+    currentUserId: session.userId,
+  }
+}
+
 function createSessionDocumentId(defaultDocumentId: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${defaultDocumentId}:${crypto.randomUUID()}`

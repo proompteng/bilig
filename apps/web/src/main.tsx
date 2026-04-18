@@ -6,7 +6,7 @@ import { createBootstrapMachine } from '@bilig/actors'
 import { loadRuntimeConfig, mutators, schema } from '@bilig/zero-sync'
 import type { RuntimeSession } from '@bilig/contracts'
 import { App } from './App.js'
-import { resolveRuntimeConfig, type RuntimeConfig } from './runtime-config'
+import { normalizeRuntimeConfigUserId, resolveRuntimeConfig, type RuntimeConfig } from './runtime-config'
 import { loadRuntimeSession } from './session'
 import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from './zero-connection'
 import type { ZeroConnectionState } from './worker-workbook-app-model.js'
@@ -133,8 +133,10 @@ function BootstrapRoot() {
     )
   }
 
+  const appConfig = normalizeRuntimeConfigUserId(config.rawConfig, session)
+
   if (!remoteSyncEnabled) {
-    return <App config={config.rawConfig} connectionState={LOCAL_ONLY_CONNECTION_STATE} />
+    return <App config={appConfig} connectionState={LOCAL_ONLY_CONNECTION_STATE} />
   }
 
   return (
@@ -146,7 +148,7 @@ function BootstrapRoot() {
       mutators={mutators}
       maxHeaderLength={ZERO_CONNECT_MAX_HEADER_LENGTH}
     >
-      <App config={config.rawConfig} />
+      <App config={appConfig} />
     </ZeroProvider>
   )
 }

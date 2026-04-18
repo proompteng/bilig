@@ -63,6 +63,7 @@ interface WorkbookHeaderStatusChipProps {
 }
 
 export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral' }: WorkbookHeaderStatusChipProps) {
+  const isDotOnlySavedState = syncLabel === 'Saved'
   const toneClass =
     tone === 'positive'
       ? 'bg-[var(--wb-success)]'
@@ -76,26 +77,26 @@ export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral
 
   const surfaceClass =
     tone === 'positive'
-      ? 'border-[var(--wb-accent-ring)] bg-[var(--wb-success-soft)] text-[var(--wb-success)]'
+      ? 'text-[var(--wb-success)]'
       : tone === 'progress'
-        ? 'border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] text-[var(--wb-accent)]'
+        ? 'text-[var(--wb-accent)]'
         : tone === 'warning'
-          ? 'border-[rgba(138,91,15,0.16)] bg-[var(--wb-warning-soft)] text-[var(--wb-warning)]'
+          ? 'text-[var(--wb-warning)]'
           : tone === 'danger'
-            ? 'border-[rgba(143,47,40,0.14)] bg-[var(--wb-danger-soft)] text-[var(--wb-danger-text)]'
-            : 'border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-muted)]'
+            ? 'text-[var(--wb-danger-text)]'
+            : 'text-[var(--wb-text-muted)]'
 
   return (
     <>
       <span
         aria-label={`Workbook status: ${modeLabel}, ${syncLabel}`}
-        className={`inline-flex h-8 items-center gap-2 rounded-[var(--wb-radius-control)] border px-2.5 text-[12px] font-medium shadow-[var(--wb-shadow-sm)] ${surfaceClass}`}
+        className={`inline-flex h-8 items-center px-0 text-[12px] font-medium ${isDotOnlySavedState ? 'gap-0' : 'gap-2'} ${surfaceClass}`}
         data-testid="status-mode"
         role="status"
         title={`${modeLabel} • ${syncLabel}`}
       >
         <span aria-hidden="true" className={cn('size-2 rounded-full', toneClass)} />
-        <span data-testid="status-label">{syncLabel}</span>
+        {isDotOnlySavedState ? null : <span data-testid="status-label">{syncLabel}</span>}
       </span>
       <span className="sr-only" data-testid="status-sync">
         {syncLabel}

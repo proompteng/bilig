@@ -9,6 +9,28 @@ afterEach(() => {
 })
 
 describe('CellEditorOverlay', () => {
+  it('renders a flat single-frame editor without rounded or shadow chrome', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <CellEditorOverlay label="Sheet1!B2" onCancel={() => {}} onChange={() => {}} onCommit={() => {}} resolvedValue="" value="draft" />,
+      )
+    })
+
+    const overlay = host.querySelector<HTMLElement>("[data-testid='cell-editor-overlay']")
+    expect(overlay?.getAttribute('class')).not.toContain('rounded-')
+    expect(overlay?.getAttribute('class')).not.toContain('shadow-')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('renders a textarea editor and keeps Alt+Enter for multiline input instead of committing', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

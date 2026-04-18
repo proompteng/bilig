@@ -5,7 +5,7 @@ export const formulaBarRootClass = cva(
 )
 
 export const formulaFieldShellClass = cva(
-  'box-border flex h-8 min-h-8 items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[border-color,box-shadow]',
+  'box-border flex h-8 min-h-8 items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] transition-[border-color,box-shadow]',
   {
     variants: {
       focused: {
@@ -24,12 +24,25 @@ export const formulaFieldAddonClass = cva(
 )
 
 export const formulaInputClass = cva(
-  'min-h-8 min-w-0 flex-1 border-0 bg-transparent px-3 py-1 text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
+  'h-full min-w-0 flex-1 border-0 bg-transparent px-3 text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
 )
 
 export const formulaStandaloneInputClass = cva(
-  'box-border h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--wb-text-subtle)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]',
+  'box-border h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,color] placeholder:text-[var(--wb-text-subtle)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]',
+  {
+    variants: {
+      invalid: {
+        true: 'border-[var(--wb-danger)] text-[var(--wb-danger-text)] focus-visible:border-[var(--wb-danger)] focus-visible:ring-[color-mix(in_srgb,var(--wb-danger)_20%,transparent)]',
+        false: '',
+      },
+    },
+    defaultVariants: {
+      invalid: false,
+    },
+  },
 )
+
+export const formulaInlineMessageClass = cva('mt-1 text-[11px] font-medium text-[var(--wb-danger-text)]')
 
 export const formulaPopupClass = cva(
   'overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-md)]',

@@ -206,9 +206,11 @@ function WorkerWorkbookAppInner({
               isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
               onAddressCommit={(input) => {
                 const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
-                if (nextTarget) {
-                  app.selectSelectionSnapshot(nextTarget)
+                if (!nextTarget) {
+                  return false
                 }
+                app.selectSelectionSnapshot(nextTarget)
+                return true
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
                 return (async () => {

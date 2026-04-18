@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveRuntimeConfig } from '../runtime-config'
+import { normalizeRuntimeConfigUserId, resolveRuntimeConfig } from '../runtime-config'
 import { resolveZeroCacheUrl } from '../zero-connection'
 
 const BASE_CONFIG = {
@@ -37,5 +37,16 @@ describe('resolveRuntimeConfig', () => {
 
   it('resolves relative zero cache URLs against the current origin', () => {
     expect(resolveZeroCacheUrl('/zero', 'http://127.0.0.1:4180')).toBe('http://127.0.0.1:4180/zero')
+  })
+
+  it('normalizes the workbook current user id to the resolved runtime session user', () => {
+    expect(
+      normalizeRuntimeConfigUserId(BASE_CONFIG, {
+        userId: 'guest:session-user',
+      }),
+    ).toEqual({
+      ...BASE_CONFIG,
+      currentUserId: 'guest:session-user',
+    })
   })
 })

@@ -37,10 +37,10 @@ export function useWorkbookChangesPane(input: {
   })
   const [isUndoPending, setIsUndoPending] = useState(false)
   const [isRedoPending, setIsRedoPending] = useState(false)
-  const changeCount = changes.length
-  const historyState = useMemo(() => selectWorkbookHistoryState({ entries: changes, currentUserId }), [changes, currentUserId])
+  const changeCount = changes.entries.length
+  const historyState = useMemo(() => selectWorkbookHistoryState({ rows: changes.rows, currentUserId }), [changes.rows, currentUserId])
 
-  const changesPanel = useMemo(() => <WorkbookChangesPanel changes={changes} onJump={onJump} />, [changes, onJump])
+  const changesPanel = useMemo(() => <WorkbookChangesPanel changes={changes.entries} onJump={onJump} />, [changes.entries, onJump])
 
   const undoLatestChange = useCallback(() => {
     if (!enabled || isUndoPending || historyState.undoRevision === null) {

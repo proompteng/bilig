@@ -520,6 +520,121 @@ test('web app supports fill-handle propagation', async ({ page }) => {
   await expect(resolvedValue).toHaveText('7')
 })
 
+test('web app enables undo and redo for a normal edit', async ({ page }) => {
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+  const resolvedValue = page.getByTestId('formula-resolved-value')
+
+  await expect(undoButton).toBeDisabled()
+  await expect(redoButton).toBeDisabled()
+
+  await nameBox.fill('A1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('undo-check')
+  await formulaInput.press('Enter')
+
+  await expect(undoButton).toBeEnabled()
+  await expect(redoButton).toBeDisabled()
+  await expect(formulaInput).toHaveValue('undo-check')
+  await expect(resolvedValue).toHaveText('undo-check')
+
+  await undoButton.click()
+  await expect(redoButton).toBeEnabled()
+  await expect(formulaInput).toHaveValue('')
+  await expect(resolvedValue).toHaveText('∅')
+
+  await redoButton.click()
+  await expect(undoButton).toBeEnabled()
+  await expect(formulaInput).toHaveValue('undo-check')
+  await expect(resolvedValue).toHaveText('undo-check')
+})
+
+test('web app preserves redo across a longer undo history', async ({ page }) => {
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await nameBox.fill('A1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('alpha')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('B1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('beta')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('C1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('gamma')
+  await formulaInput.press('Enter')
+
+  await expect(undoButton).toBeEnabled()
+  await undoButton.click()
+  await expect(redoButton).toBeEnabled()
+  await expect(undoButton).toBeEnabled()
+  await undoButton.click()
+  await expect(redoButton).toBeEnabled()
+  await expect(undoButton).toBeEnabled()
+  await undoButton.click()
+  await expect(redoButton).toBeEnabled()
+
+  await redoButton.click()
+  await expect(redoButton).toBeEnabled()
+  await expect(undoButton).toBeEnabled()
+
+  await redoButton.click()
+  await expect(redoButton).toBeEnabled()
+  await expect(undoButton).toBeEnabled()
+
+  await redoButton.click()
+  await expect(redoButton).toBeDisabled()
+
+  await nameBox.fill('A1')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('alpha')
+  await nameBox.fill('B1')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('beta')
+  await nameBox.fill('C1')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('gamma')
+})
+
+test('web app clears redo after a fresh edit branches history', async ({ page }) => {
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await nameBox.fill('A1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('seed')
+  await formulaInput.press('Enter')
+
+  await undoButton.click()
+  await expect(redoButton).toBeEnabled()
+
+  await nameBox.fill('D1')
+  await nameBox.press('Enter')
+  await formulaInput.fill('branch')
+  await formulaInput.press('Enter')
+
+  await expect(redoButton).toBeDisabled()
+})
+
 test('web app previews and fills rightward autofill like Sheets', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

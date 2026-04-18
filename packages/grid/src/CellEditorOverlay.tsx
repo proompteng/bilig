@@ -112,7 +112,7 @@ export function CellEditorOverlay({
 
   return (
     <div
-      className="cell-editor-overlay overflow-hidden rounded-[6px] border border-[var(--wb-accent)] bg-[var(--wb-surface-elevated)] shadow-[var(--wb-shadow-md)]"
+      className="cell-editor-overlay overflow-hidden border border-[var(--wb-accent)] bg-[var(--wb-surface)]"
       data-testid="cell-editor-overlay"
       style={{ ...style, backgroundColor }}
     >

@@ -17,6 +17,10 @@ export interface SessionIdentity {
   roles: string[]
 }
 
+interface HeadersRequestLike {
+  readonly headers: FastifyRequest['headers']
+}
+
 function parseCookieHeader(header: string | undefined): ReadonlyMap<string, string> {
   if (!header) {
     return new Map()
@@ -43,6 +47,18 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+function parseBearerToken(header: string | undefined): string | undefined {
+  if (!header) {
+    return undefined
+  }
+  const match = /^\s*Bearer\s+(.+?)\s*$/iu.exec(header)
+  if (!match) {
+    return undefined
+  }
+  const token = match[1]?.trim()
+  return token && token.length > 0 ? token : undefined
+}
+
 function parseRoleHeader(value: string | undefined): string[] {
   if (!value) {
     return []
@@ -53,12 +69,14 @@ function parseRoleHeader(value: string | undefined): string[] {
     .filter((entry) => entry.length > 0)
 }
 
-export function resolveRequestSession(request: FastifyRequest): BiligRequestSession {
+export function resolveRequestSession(request: HeadersRequestLike): BiligRequestSession {
   const cookieMap = parseCookieHeader(firstHeaderValue(request.headers.cookie))
+  const bearerUserId = parseBearerToken(firstHeaderValue(request.headers.authorization))
   const headerUserId =
     firstHeaderValue(request.headers['x-bilig-user-id']) ??
     firstHeaderValue(request.headers['x-forwarded-user']) ??
-    firstHeaderValue(request.headers['x-auth-request-user'])
+    firstHeaderValue(request.headers['x-auth-request-user']) ??
+    bearerUserId
   const cookieUserId = cookieMap.get(SESSION_COOKIE_NAME)
 
   if (headerUserId) {
@@ -67,11 +85,12 @@ export function resolveRequestSession(request: FastifyRequest): BiligRequestSess
         firstHeaderValue(request.headers['x-forwarded-groups']) ??
         firstHeaderValue(request.headers['x-auth-request-groups']),
     )
+    const isBearerResolvedUser = bearerUserId === headerUserId
     return {
       userId: headerUserId,
       roles: roles.length > 0 ? roles : ['editor'],
       authSource: 'header',
-      isAuthenticated: true,
+      isAuthenticated: isBearerResolvedUser ? !headerUserId.startsWith('guest:') : true,
       setCookie: cookieUserId !== headerUserId,
     }
   }

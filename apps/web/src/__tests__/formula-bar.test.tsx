@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkbookDefinedNameSnapshot } from '@bilig/protocol'
@@ -10,6 +11,7 @@ function FormulaBarHarness(props: {
   initialEditing?: boolean
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   selectionLabel?: string
+  onAddressCommitResult?: (next: string) => boolean
 }) {
   const [value, setValue] = useState(props.initialValue)
   const [isEditing, setIsEditing] = useState(props.initialEditing ?? true)
@@ -18,7 +20,7 @@ function FormulaBarHarness(props: {
       address="B2"
       definedNames={props.definedNames}
       isEditing={isEditing}
-      onAddressCommit={() => {}}
+      onAddressCommit={(next) => props.onAddressCommitResult?.(next) ?? true}
       onBeginEdit={(seed) => {
         if (seed !== undefined) {
           setValue(seed)
@@ -40,6 +42,20 @@ function FormulaBarHarness(props: {
       value={value}
     />
   )
+}
+
+function dispatchInputValue(input: HTMLInputElement, value: string) {
+  flushSync(() => {
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+function dispatchTextControlValue(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  flushSync(() => {
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 
 afterEach(() => {
@@ -102,7 +118,7 @@ describe('FormulaBar', () => {
     })
   })
 
-  it('publishes the canonical selection label for status consumers', async () => {
+  it('keeps selection and resolved status hidden instead of rendering a visible metadata strip', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -113,10 +129,12 @@ describe('FormulaBar', () => {
       root.render(<FormulaBarHarness initialEditing={false} initialValue="" selectionLabel="B2:D5" />)
     })
 
-    const visibleSelectionLabel = host.querySelector("[data-testid='formula-selection-label']")
+    const visibleMeta = host.querySelector("[data-testid='formula-bar-meta']")
     const selectionStatus = host.querySelector("[data-testid='status-selection']")
-    expect(visibleSelectionLabel?.textContent).toBe('B2:D5')
+    const resolvedValue = host.querySelector("[data-testid='formula-resolved-value']")
+    expect(visibleMeta).toBeNull()
     expect(selectionStatus?.textContent).toBe('Sheet1!B2:D5')
+    expect(resolvedValue?.textContent).toBe('∅')
 
     await act(async () => {
       root.unmount()
@@ -176,6 +194,105 @@ describe('FormulaBar', () => {
 
     const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
     expect(document.activeElement).toBe(nameBox)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('shows an inline validation message for invalid name-box input and clears it on escape', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <FormulaBarHarness initialEditing={false} initialValue="" onAddressCommitResult={(next) => next === 'B2'} selectionLabel="B2" />,
+      )
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    expect(nameBox).not.toBeNull()
+    if (!nameBox) {
+      throw new Error('Expected name box input')
+    }
+
+    dispatchInputValue(nameBox, 'NotARange')
+    await act(async () => {
+      nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(nameBox.getAttribute('aria-invalid')).toBe('true')
+    const errorMessage = host.querySelector("[data-testid='name-box-error']")
+    expect(errorMessage?.textContent).toBe('Unknown range or name')
+
+    await act(async () => {
+      nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+
+    expect(nameBox.getAttribute('aria-invalid')).toBeNull()
+    expect(nameBox.value).toBe('B2')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps the formula bar as a compact single-line input without inline action buttons', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={true} initialValue="=SUM(B2:B4)" />)
+    })
+
+    const commitButton = host.querySelector<HTMLButtonElement>("[data-testid='formula-commit']")
+    const cancelButton = host.querySelector<HTMLButtonElement>("[data-testid='formula-cancel']")
+    const input = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    expect(commitButton).toBeNull()
+    expect(cancelButton).toBeNull()
+    expect(input).not.toBeNull()
+
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    expect(input.tagName).toBe('INPUT')
+    dispatchTextControlValue(input, '=SUM(B2:B5)')
+    expect(input.value).toBe('=SUM(B2:B5)')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps the name box and formula frame flat without raised shadow chrome', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={false} initialValue="" selectionLabel="D4" />)
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    const formulaFrame = host.querySelector<HTMLDivElement>("[data-testid='formula-input-frame']")
+    expect(nameBox).not.toBeNull()
+    expect(formulaFrame).not.toBeNull()
+
+    if (!nameBox || !formulaFrame) {
+      throw new Error('Expected formula bar controls')
+    }
+
+    expect(nameBox.className).not.toContain('shadow-[')
+    expect(formulaFrame.className).not.toContain('shadow-[')
 
     await act(async () => {
       root.unmount()

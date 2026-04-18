@@ -31,7 +31,7 @@ interface WorkbookViewProps {
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined
   onDeleteSheet?: ((sheetName: string) => void) | undefined
   onSelectionChange(this: void, selection: GridSelectionSnapshot): void
-  onAddressCommit(this: void, addr: string): void
+  onAddressCommit(this: void, addr: string): boolean
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onBeginFormulaEdit(this: void, seed?: string): void
   onEditorChange(this: void, next: string): void
@@ -261,7 +261,7 @@ export function WorkbookView({
             onSelectSheet={onSelectSheet}
             sheetName={sheetName}
             sheetNames={sheetNames}
-            trailingContent={<span data-testid="workbook-selection-summary">Selection {selectionLabel}</span>}
+            trailingContent={<span data-testid="workbook-selection-summary">{selectionLabel}</span>}
           />
         </div>
         {sidePanel ? (

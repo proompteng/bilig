@@ -16,11 +16,11 @@ export function getOverlayStyle(isEditingCell: boolean, overlayBounds: Rectangle
     return undefined
   }
   return {
-    height: overlayBounds.height + 2,
-    left: overlayBounds.x - 1,
+    height: overlayBounds.height,
+    left: overlayBounds.x,
     position: 'fixed' as const,
-    top: overlayBounds.y - 1,
-    width: overlayBounds.width + 2,
+    top: overlayBounds.y,
+    width: overlayBounds.width,
   }
 }
 

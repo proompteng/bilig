@@ -8,6 +8,7 @@ import {
 import type { CellRangeRef } from '@bilig/protocol'
 import type { QueryResultRow, Queryable } from './store.js'
 import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
+import { selectLatestRedoableWorkbookChangeRevision, selectLatestUndoableWorkbookChangeRevision } from './workbook-history-selector.js'
 
 export interface WorkbookChangeRange {
   readonly sheetName: string
@@ -807,14 +808,13 @@ export async function loadWorkbookChange(db: Queryable, documentId: string, revi
   return row ? normalizeWorkbookChangeRecord(row) : null
 }
 
-async function loadWorkbookChangeFromWhere(
+export async function listWorkbookChangesForActor(
   db: Queryable,
   input: {
     readonly documentId: string
-    readonly whereClause: string
-    readonly values: readonly unknown[]
+    readonly actorUserId: string
   },
-): Promise<WorkbookChangeRecord | null> {
+): Promise<WorkbookChangeRecord[]> {
   const result = await db.query<WorkbookChangeSelectRow>(
     `
       SELECT revision AS "revision",
@@ -832,14 +832,15 @@ async function loadWorkbookChangeFromWhere(
              created_at AS "createdAtUnixMs"
         FROM workbook_change
        WHERE workbook_id = $1
-         AND ${input.whereClause}
-       ORDER BY revision DESC
-       LIMIT 1
+         AND actor_user_id = $2
+       ORDER BY revision ASC
     `,
-    [input.documentId, ...input.values],
+    [input.documentId, input.actorUserId],
   )
-  const row = result.rows[0]
-  return row ? normalizeWorkbookChangeRecord(row) : null
+  return result.rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(row)
+    return record ? [record] : []
+  })
 }
 
 export async function loadLatestUndoableWorkbookChange(
@@ -849,16 +850,12 @@ export async function loadLatestUndoableWorkbookChange(
     readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
-  return await loadWorkbookChangeFromWhere(db, {
-    documentId: input.documentId,
-    whereClause: `
-      actor_user_id = $2
-      AND undo_bundle_json IS NOT NULL
-      AND reverted_by_revision IS NULL
-      AND event_kind <> 'revertChange'
-    `,
-    values: [input.actorUserId],
+  const rows = await listWorkbookChangesForActor(db, input)
+  const revision = selectLatestUndoableWorkbookChangeRevision({
+    actorUserId: input.actorUserId,
+    rows,
   })
+  return revision === null ? null : (rows.find((row) => row.revision === revision) ?? null)
 }
 
 export async function loadLatestRedoableWorkbookChange(
@@ -868,16 +865,12 @@ export async function loadLatestRedoableWorkbookChange(
     readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
-  return await loadWorkbookChangeFromWhere(db, {
-    documentId: input.documentId,
-    whereClause: `
-      actor_user_id = $2
-      AND undo_bundle_json IS NOT NULL
-      AND reverted_by_revision IS NULL
-      AND event_kind = 'revertChange'
-    `,
-    values: [input.actorUserId],
+  const rows = await listWorkbookChangesForActor(db, input)
+  const revision = selectLatestRedoableWorkbookChangeRevision({
+    actorUserId: input.actorUserId,
+    rows,
   })
+  return revision === null ? null : (rows.find((row) => row.revision === revision) ?? null)
 }
 
 export async function listWorkbookChanges(

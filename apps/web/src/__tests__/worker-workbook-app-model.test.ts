@@ -7,6 +7,7 @@ import {
   parsedEditorInputFromSnapshot,
   parsedEditorInputMatchesSnapshot,
   sameCellContent,
+  toEditorValue,
 } from '../worker-workbook-app-model.js'
 
 describe('worker workbook app model', () => {
@@ -139,6 +140,16 @@ describe('worker workbook app model', () => {
       kind: 'value',
       value: '   ',
     })
+  })
+
+  it('keeps formula source text visible even when the evaluated value is an error', () => {
+    expect(
+      toEditorValue({
+        ...emptyCellSnapshot('Sheet1', 'F7'),
+        formula: 'SUM(A1:A3)',
+        value: { tag: ValueTag.Error, code: ErrorCode.Value },
+      }),
+    ).toBe('=SUM(A1:A3)')
   })
 
   it('resolves cell ranges, row ranges, column ranges, quoted sheets, and range-ref defined names', () => {

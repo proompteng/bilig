@@ -15,7 +15,11 @@ vi.mock('../../../../packages/grid/src/WorkbookGridSurface.js', () => ({
 }))
 
 vi.mock('../../../../packages/grid/src/WorkbookSheetTabs.js', () => ({
-  WorkbookSheetTabs: () => <div data-testid="sheet-tabs" />,
+  WorkbookSheetTabs: (props: { trailingContent?: React.ReactNode }) => (
+    <div data-testid="sheet-tabs">
+      <div data-testid="sheet-tabs-trailing">{props.trailingContent}</div>
+    </div>
+  ),
 }))
 
 afterEach(() => {
@@ -75,7 +79,7 @@ describe('workbook layout', () => {
           isEditingCell={false}
           onSelectSheet={() => {}}
           onSelectionChange={() => {}}
-          onAddressCommit={() => {}}
+          onAddressCommit={() => true}
           onBeginEdit={() => {}}
           onBeginFormulaEdit={() => {}}
           onEditorChange={() => {}}
@@ -114,6 +118,82 @@ describe('workbook layout', () => {
     expect(gridSurface instanceof Node && sidePanel instanceof Node ? gridSurface.compareDocumentPosition(sidePanel) : 0).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     )
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('passes raw selection coordinates to the footer without the Selection label', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const engine: GridEngineLike = {
+      getCell: () => ({
+        sheetName: 'Sheet1',
+        address: 'A1',
+        value: { tag: ValueTag.Empty },
+        flags: 0,
+        version: 0,
+      }),
+      getCellStyle: () => undefined,
+      subscribeCells: () => () => {},
+      workbook: {
+        getSheet: () => undefined,
+      },
+    }
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookView
+          engine={engine}
+          sheetNames={['Sheet1']}
+          sheetName="Sheet1"
+          selectedAddr="A3"
+          selectedCellSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            value: { tag: ValueTag.Empty },
+            flags: 0,
+            version: 0,
+          }}
+          selectionSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A3',
+            kind: 'range',
+            range: {
+              startAddress: 'A3',
+              endAddress: 'C10',
+            },
+          }}
+          editorValue=""
+          editorSelectionBehavior="select-all"
+          resolvedValue=""
+          isEditing={false}
+          isEditingCell={false}
+          onSelectSheet={() => {}}
+          onSelectionChange={() => {}}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onBeginFormulaEdit={() => {}}
+          onEditorChange={() => {}}
+          onCommitEdit={() => {}}
+          onCancelEdit={() => {}}
+          onClearCell={() => {}}
+          onFillRange={() => {}}
+          onCopyRange={() => {}}
+          onMoveRange={() => {}}
+          onPaste={() => {}}
+        />,
+      )
+    })
+
+    const trailing = host.querySelector("[data-testid='sheet-tabs-trailing']")
+    expect(trailing?.textContent).toBe('A3:C10')
+    expect(trailing?.textContent).not.toContain('Selection')
 
     await act(async () => {
       root.unmount()

@@ -79,11 +79,11 @@ export function toResolvedValue(cell: CellSnapshot): string {
 }
 
 export function toEditorValue(cell: CellSnapshot): string {
-  if (cell.value.tag === ValueTag.Error) {
-    return formatErrorCode(cell.value.code)
-  }
   if (cell.formula) {
     return `=${cell.formula}`
+  }
+  if (cell.value.tag === ValueTag.Error) {
+    return formatErrorCode(cell.value.code)
   }
   if (cell.input === null || cell.input === undefined) {
     return toResolvedValue(cell)

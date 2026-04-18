@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { getEditorPresentation } from '../gridPresentation.js'
+import { getEditorPresentation, getOverlayStyle } from '../gridPresentation.js'
 
 describe('gridPresentation', () => {
   test('uses the cell fill and text styling for the in-cell editor', () => {
@@ -50,6 +50,23 @@ describe('gridPresentation', () => {
       font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
       fontSize: 13,
       underline: false,
+    })
+  })
+
+  test('matches the edited cell bounds exactly instead of expanding the overlay frame', () => {
+    expect(
+      getOverlayStyle(true, {
+        x: 240,
+        y: 96,
+        width: 104,
+        height: 22,
+      }),
+    ).toEqual({
+      height: 22,
+      left: 240,
+      position: 'fixed',
+      top: 96,
+      width: 104,
     })
   })
 })

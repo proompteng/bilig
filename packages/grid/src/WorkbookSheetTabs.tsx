@@ -63,9 +63,7 @@ const sheetContextMenuItemClass = cva(
 
 const sheetContextMenuSeparatorClass = cva('my-1 h-px bg-[var(--wb-border)]')
 
-const sheetTrailingContentClass = cva(
-  'inline-flex min-h-8 shrink-0 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[11px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]',
-)
+const sheetTrailingContentClass = cva('shrink-0 text-[11px] font-medium text-[var(--wb-text-muted)]')
 
 function SheetAddIcon() {
   return (
