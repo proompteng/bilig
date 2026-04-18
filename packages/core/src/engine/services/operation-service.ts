@@ -25,7 +25,7 @@ import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engin
 import { spillDependencyKey, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
-import type { EngineRuntimeState, PreparedCellAddress, U32 } from '../runtime-state.js'
+import type { EngineRuntimeState, PreparedCellAddress, RuntimeDirectLookupDescriptor, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
@@ -173,6 +173,33 @@ function normalizeExactLookupKey(value: CellValue, lookupString: (id: number) =>
       return value.value ? 'b:1' : 'b:0'
     case ValueTag.String:
       return `s:${(stringId !== 0 ? lookupString(stringId) : value.value).toUpperCase()}`
+    case ValueTag.Error:
+      return undefined
+  }
+}
+
+function normalizeApproximateNumericValue(value: CellValue): number | undefined {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return 0
+    case ValueTag.Number:
+      return Object.is(value.value, -0) ? 0 : value.value
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined
+  }
+}
+
+function normalizeApproximateTextValue(value: CellValue, lookupString: (id: number) => string, stringId = 0): string | undefined {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return ''
+    case ValueTag.String:
+      return (stringId !== 0 ? lookupString(stringId) : value.value).toUpperCase()
+    case ValueTag.Number:
+    case ValueTag.Boolean:
     case ValueTag.Error:
       return undefined
   }
@@ -536,6 +563,130 @@ export function createEngineOperationService(args: {
     }
   }
 
+  const readCellValueAtForLookup = (sheetName: string, row: number, col: number): { value: CellValue; stringId: number | undefined } => {
+    const sheet = args.state.workbook.getSheet(sheetName)
+    if (!sheet) {
+      return { value: emptyValue(), stringId: undefined }
+    }
+    return readCellValueForLookup(sheet.logical.getVisibleCell(row, col))
+  }
+
+  const isLocallySortedNumericWrite = (
+    sheetName: string,
+    row: number,
+    col: number,
+    rowStart: number,
+    rowEnd: number,
+    matchMode: 1 | -1,
+  ): boolean => {
+    const current = normalizeApproximateNumericValue(readCellValueAtForLookup(sheetName, row, col).value)
+    if (current === undefined) {
+      return false
+    }
+    if (row > rowStart) {
+      const previous = normalizeApproximateNumericValue(readCellValueAtForLookup(sheetName, row - 1, col).value)
+      if (previous === undefined || (matchMode === 1 ? previous > current : previous < current)) {
+        return false
+      }
+    }
+    if (row < rowEnd) {
+      const next = normalizeApproximateNumericValue(readCellValueAtForLookup(sheetName, row + 1, col).value)
+      if (next === undefined || (matchMode === 1 ? current > next : current < next)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const isLocallySortedTextWrite = (
+    sheetName: string,
+    row: number,
+    col: number,
+    rowStart: number,
+    rowEnd: number,
+    matchMode: 1 | -1,
+  ): boolean => {
+    const currentCell = readCellValueAtForLookup(sheetName, row, col)
+    const current = normalizeApproximateTextValue(currentCell.value, (id) => args.state.strings.get(id), currentCell.stringId)
+    if (current === undefined) {
+      return false
+    }
+    if (row > rowStart) {
+      const previousCell = readCellValueAtForLookup(sheetName, row - 1, col)
+      const previous = normalizeApproximateTextValue(previousCell.value, (id) => args.state.strings.get(id), previousCell.stringId)
+      if (previous === undefined || (matchMode === 1 ? previous > current : previous < current)) {
+        return false
+      }
+    }
+    if (row < rowEnd) {
+      const nextCell = readCellValueAtForLookup(sheetName, row + 1, col)
+      const next = normalizeApproximateTextValue(nextCell.value, (id) => args.state.strings.get(id), nextCell.stringId)
+      if (next === undefined || (matchMode === 1 ? current > next : current < next)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const canSkipApproximateLookupDirtyMark = (
+    directLookup: Extract<RuntimeDirectLookupDescriptor, { kind: 'approximate' | 'approximate-uniform-numeric' }>,
+    request: {
+      sheetName: string
+      row: number
+      col: number
+      oldValue: CellValue
+      newValue: CellValue
+      oldStringId?: number
+      newStringId?: number
+    },
+  ): boolean => {
+    const rowStart = directLookup.kind === 'approximate' ? directLookup.prepared.rowStart : directLookup.rowStart
+    const rowEnd = directLookup.kind === 'approximate' ? directLookup.prepared.rowEnd : directLookup.rowEnd
+    const matchMode = directLookup.kind === 'approximate' ? directLookup.matchMode : directLookup.matchMode
+    const operand = readCellValueForLookup(directLookup.operandCellIndex)
+    const operandNumeric = normalizeApproximateNumericValue(operand.value)
+    if (operandNumeric !== undefined) {
+      const oldNumeric = normalizeApproximateNumericValue(request.oldValue)
+      const newNumeric = normalizeApproximateNumericValue(request.newValue)
+      if (oldNumeric === undefined || newNumeric === undefined) {
+        return false
+      }
+      if (matchMode === 1) {
+        return (
+          oldNumeric > operandNumeric &&
+          newNumeric > operandNumeric &&
+          isLocallySortedNumericWrite(request.sheetName, request.row, request.col, rowStart, rowEnd, matchMode)
+        )
+      }
+      return (
+        oldNumeric < operandNumeric &&
+        newNumeric < operandNumeric &&
+        isLocallySortedNumericWrite(request.sheetName, request.row, request.col, rowStart, rowEnd, matchMode)
+      )
+    }
+    const operandText = normalizeApproximateTextValue(operand.value, (id) => args.state.strings.get(id), operand.stringId)
+    if (operandText === undefined) {
+      return false
+    }
+    const oldText = normalizeApproximateTextValue(request.oldValue, (id) => args.state.strings.get(id), request.oldStringId)
+    const newText = normalizeApproximateTextValue(request.newValue, (id) => args.state.strings.get(id), request.newStringId)
+    if (oldText === undefined || newText === undefined) {
+      return false
+    }
+    if (matchMode === 1) {
+      return (
+        oldText > operandText &&
+        newText > operandText &&
+        isLocallySortedTextWrite(request.sheetName, request.row, request.col, rowStart, rowEnd, matchMode)
+      )
+    }
+    return (
+      oldText < operandText &&
+      newText < operandText &&
+      isLocallySortedTextWrite(request.sheetName, request.row, request.col, rowStart, rowEnd, matchMode)
+    )
+  }
+
   const pruneCellIfOrphaned = (cellIndex: number): void => {
     if (args.collectFormulaDependents(makeCellEntity(cellIndex)).length > 0) {
       return
@@ -648,6 +799,10 @@ export function createEngineOperationService(args: {
       sheetName: string
       row: number
       col: number
+      oldValue: CellValue
+      newValue: CellValue
+      oldStringId?: number
+      newStringId?: number
     },
     formulaChangedCount: number,
   ): number => {
@@ -668,6 +823,9 @@ export function createEngineOperationService(args: {
       const rowStart = directLookup.kind === 'approximate' ? directLookup.prepared.rowStart : directLookup.rowStart
       const rowEnd = directLookup.kind === 'approximate' ? directLookup.prepared.rowEnd : directLookup.rowEnd
       if (request.row < rowStart || request.row > rowEnd) {
+        continue
+      }
+      if (canSkipApproximateLookupDirtyMark(directLookup, request)) {
         continue
       }
       formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount)

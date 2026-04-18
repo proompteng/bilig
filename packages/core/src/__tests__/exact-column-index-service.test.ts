@@ -450,6 +450,52 @@ describe('createExactColumnIndexService', () => {
     expect(getColumnSliceSpy).not.toHaveBeenCalled()
   })
 
+  it('primes owner-backed exact ranges without building window indices', () => {
+    const workbook = new WorkbookStore('exact-index-owner-prime')
+    const strings = new StringPool()
+    const counters = createEngineCounters()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 2, 3, 4].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.Number,
+        value,
+      })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings, counters },
+    })
+    const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
+    const exact = createExactColumnIndexService({
+      state: { workbook, strings, counters },
+      runtimeColumnStore,
+      columnIndexStore,
+    })
+
+    exact.primeColumnIndex({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(counters.exactIndexBuilds).toBe(0)
+    expect(getColumnViewSpy).not.toHaveBeenCalled()
+
+    const prepared = exact.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+    expect(prepared.internalOwner).toBeDefined()
+  })
+
   it('uses owner-backed prepared exact lookups for numeric and text subranges after writes', () => {
     const workbook = new WorkbookStore('exact-index-owner-prepared')
     const strings = new StringPool()

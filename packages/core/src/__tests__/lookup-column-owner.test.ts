@@ -124,6 +124,53 @@ describe('lookup column owner helpers', () => {
     ).toBe(false)
   })
 
+  it('patches numeric approximate summaries incrementally after monotonic writes', () => {
+    const workbook = new WorkbookStore('lookup-owner-numeric-incremental')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, { tag: ValueTag.Number, value })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const owner = buildLookupColumnOwner({
+      owner: runtimeColumnStore.getColumnOwner({ sheetName: 'Sheet1', col: 0 }),
+      normalizeStringId: runtimeColumnStore.normalizeStringId,
+    })
+
+    expect(owner).toBeDefined()
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: 1,
+      uniformStep: 2,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+    expect(owner!.summariesDirty).toBe(false)
+
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: 3,
+          oldValue: { tag: ValueTag.Number, value: 7 },
+          newValue: { tag: ValueTag.Number, value: 9 },
+        },
+        normalizeStringId: runtimeColumnStore.normalizeStringId,
+      }),
+    ).toBe(true)
+    expect(owner!.summariesDirty).toBe(false)
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+  })
+
   it('handles mixed and invalid owners conservatively', () => {
     const workbook = new WorkbookStore('lookup-owner-mixed')
     const strings = new StringPool()

@@ -177,6 +177,49 @@ describe('createSortedColumnSearchService', () => {
     expect(getColumnSliceSpy).not.toHaveBeenCalled()
   })
 
+  it('primes owner-backed approximate ranges without building window indices', () => {
+    const workbook = new WorkbookStore('sorted-index-owner-prime')
+    const strings = new StringPool()
+    const counters = createEngineCounters()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `A${index + 1}`, value)
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings, counters },
+    })
+    const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
+    const columnIndexStore = createColumnIndexStore({
+      state: { workbook, strings },
+      runtimeColumnStore,
+    })
+    const sorted = createSortedColumnSearchService({
+      state: { workbook, strings, counters },
+      runtimeColumnStore,
+      columnIndexStore,
+    })
+
+    sorted.primeColumnIndex({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+
+    expect(counters.approxIndexBuilds).toBe(0)
+    expect(getColumnViewSpy).not.toHaveBeenCalled()
+
+    const prepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+    expect(prepared.internalOwner).toBeDefined()
+  })
+
   it('uses owner-backed prepared approximate lookups for numeric and text subranges after writes', () => {
     const workbook = new WorkbookStore('sorted-index-owner-prepared')
     const strings = new StringPool()

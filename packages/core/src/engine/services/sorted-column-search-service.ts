@@ -793,6 +793,10 @@ export function createSortedColumnSearchService(args: {
 
   return {
     primeColumnIndex(request) {
+      const owner = ensureOwnerIndex(request.sheetName, request.col)
+      if (owner && request.rowStart >= owner.rowStart && request.rowEnd <= owner.rowEnd) {
+        return
+      }
       ensureColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
     },
     prepareVectorLookup(request) {

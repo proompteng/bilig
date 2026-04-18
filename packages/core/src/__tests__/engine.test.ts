@@ -3241,6 +3241,28 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
   })
 
+  it('skips dirtying approximate MATCH when an irrelevant high-side tail value changes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'approx-lookup-tail' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    ;[1, 2, 3, 4, 5].forEach((value, index) => {
+      engine.setCellValue('Sheet1', `A${index + 1}`, value)
+    })
+    engine.setCellValue('Sheet1', 'D1', 2.5)
+    engine.setCellFormula('Sheet1', 'E1', 'MATCH(D1,A1:A5,1)')
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 2 })
+
+    engine.setCellValue('Sheet1', 'A5', 6)
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+  })
+
   it('uses the direct indexed path for exact MATCH when column indexing is enabled', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'indexed-lookup', useColumnIndex: true })
     await engine.ready()

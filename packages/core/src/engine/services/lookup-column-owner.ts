@@ -42,13 +42,18 @@ export interface LookupColumnOwner {
   readonly kindCodes: Uint8Array
   readonly numericValues: Float64Array
   readonly textValues: string[]
+  readonly firstPositions: Map<string, number>
+  readonly lastPositions: Map<string, number>
   readonly rowLists: Map<string, number[]>
   sortedNumericAscendingBreaks: Uint32Array | undefined
   sortedNumericDescendingBreaks: Uint32Array | undefined
+  numericUniformBreakOffsets: Uint32Array | undefined
   sortedTextAscendingBreaks: Uint32Array | undefined
   sortedTextDescendingBreaks: Uint32Array | undefined
-  incompatibleNumericPrefix: Uint32Array | undefined
-  incompatibleTextPrefix: Uint32Array | undefined
+  incompatibleNumericOffsets: Uint32Array | undefined
+  incompatibleTextOffsets: Uint32Array | undefined
+  exactNumericIncompatibleOffsets: Uint32Array | undefined
+  exactTextIncompatibleOffsets: Uint32Array | undefined
   summariesDirty: boolean
 }
 
@@ -227,11 +232,227 @@ function upperBound(rows: readonly number[], target: number): number {
   return low
 }
 
+function exactLowerBound(rows: Uint32Array, target: number): number {
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if ((rows[mid] ?? 0) < target) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  return low
+}
+
+function hasOffsetInRange(offsets: Uint32Array | undefined, start: number, end: number): boolean {
+  if (!offsets || offsets.length === 0 || start > end) {
+    return false
+  }
+  const index = exactLowerBound(offsets, start)
+  return index < offsets.length && (offsets[index] ?? 0) <= end
+}
+
+function withOffsetMembership(offsets: Uint32Array | undefined, target: number, present: boolean): Uint32Array {
+  const source = offsets ?? new Uint32Array(0)
+  const index = exactLowerBound(source, target)
+  const exists = index < source.length && (source[index] ?? 0) === target
+  if (exists === present) {
+    return source
+  }
+  if (present) {
+    const result = new Uint32Array(source.length + 1)
+    result.set(source.subarray(0, index), 0)
+    result[index] = target
+    result.set(source.subarray(index), index + 1)
+    return result
+  }
+  const result = new Uint32Array(source.length - 1)
+  result.set(source.subarray(0, index), 0)
+  result.set(source.subarray(index + 1), index)
+  return result
+}
+
+function isNumericApproximateIncompatibleKind(kind: ComparableKindCode): boolean {
+  return kind === TEXT_KIND || kind === INVALID_KIND
+}
+
+function isTextApproximateIncompatibleKind(kind: ComparableKindCode): boolean {
+  return kind === NUMERIC_KIND || kind === BOOLEAN_KIND || kind === INVALID_KIND
+}
+
+function initializeApproximateLookupSummaries(owner: LookupColumnOwner): void {
+  const numericAscendingBreaks: number[] = []
+  const numericDescendingBreaks: number[] = []
+  const numericUniformBreakOffsets: number[] = []
+  const textAscendingBreaks: number[] = []
+  const textDescendingBreaks: number[] = []
+  const incompatibleNumericOffsets: number[] = []
+  const incompatibleTextOffsets: number[] = []
+  const exactNumericIncompatibleOffsets: number[] = []
+  const exactTextIncompatibleOffsets: number[] = []
+
+  for (let offset = 0; offset < owner.length; offset += 1) {
+    const kind = decodeComparableKindCode(owner.kindCodes[offset])
+    if (isNumericApproximateIncompatibleKind(kind)) {
+      incompatibleNumericOffsets.push(offset)
+    }
+    if (isTextApproximateIncompatibleKind(kind)) {
+      incompatibleTextOffsets.push(offset)
+    }
+    if (kind !== NUMERIC_KIND) {
+      exactNumericIncompatibleOffsets.push(offset)
+    }
+    if (kind !== TEXT_KIND) {
+      exactTextIncompatibleOffsets.push(offset)
+    }
+    if (offset === 0) {
+      continue
+    }
+    if (owner.numericValues[offset - 1]! > owner.numericValues[offset]!) {
+      numericAscendingBreaks.push(offset)
+    }
+    if (owner.numericValues[offset - 1]! < owner.numericValues[offset]!) {
+      numericDescendingBreaks.push(offset)
+    }
+    if (
+      offset >= 2 &&
+      owner.numericValues[offset - 2]! - owner.numericValues[offset - 1]! !==
+        owner.numericValues[offset - 1]! - owner.numericValues[offset]!
+    ) {
+      numericUniformBreakOffsets.push(offset)
+    }
+    if ((owner.textValues[offset - 1] ?? '') > (owner.textValues[offset] ?? '')) {
+      textAscendingBreaks.push(offset)
+    }
+    if ((owner.textValues[offset - 1] ?? '') < (owner.textValues[offset] ?? '')) {
+      textDescendingBreaks.push(offset)
+    }
+  }
+
+  owner.incompatibleNumericOffsets = Uint32Array.from(incompatibleNumericOffsets)
+  owner.incompatibleTextOffsets = Uint32Array.from(incompatibleTextOffsets)
+  owner.exactNumericIncompatibleOffsets = Uint32Array.from(exactNumericIncompatibleOffsets)
+  owner.exactTextIncompatibleOffsets = Uint32Array.from(exactTextIncompatibleOffsets)
+  owner.sortedNumericAscendingBreaks = Uint32Array.from(numericAscendingBreaks)
+  owner.sortedNumericDescendingBreaks = Uint32Array.from(numericDescendingBreaks)
+  owner.numericUniformBreakOffsets = Uint32Array.from(numericUniformBreakOffsets)
+  owner.sortedTextAscendingBreaks = Uint32Array.from(textAscendingBreaks)
+  owner.sortedTextDescendingBreaks = Uint32Array.from(textDescendingBreaks)
+  owner.summariesDirty = false
+}
+
+function refreshApproximateLookupCompatibility(owner: LookupColumnOwner, offset: number): void {
+  const kind = decodeComparableKindCode(owner.kindCodes[offset])
+  owner.incompatibleNumericOffsets = withOffsetMembership(
+    owner.incompatibleNumericOffsets,
+    offset,
+    isNumericApproximateIncompatibleKind(kind),
+  )
+  owner.incompatibleTextOffsets = withOffsetMembership(owner.incompatibleTextOffsets, offset, isTextApproximateIncompatibleKind(kind))
+  owner.exactNumericIncompatibleOffsets = withOffsetMembership(owner.exactNumericIncompatibleOffsets, offset, kind !== NUMERIC_KIND)
+  owner.exactTextIncompatibleOffsets = withOffsetMembership(owner.exactTextIncompatibleOffsets, offset, kind !== TEXT_KIND)
+}
+
+function refreshApproximateLookupBreaks(owner: LookupColumnOwner, offset: number): void {
+  if (offset <= 0 || offset >= owner.length) {
+    return
+  }
+  owner.sortedNumericAscendingBreaks = withOffsetMembership(
+    owner.sortedNumericAscendingBreaks,
+    offset,
+    owner.numericValues[offset - 1]! > owner.numericValues[offset]!,
+  )
+  owner.sortedNumericDescendingBreaks = withOffsetMembership(
+    owner.sortedNumericDescendingBreaks,
+    offset,
+    owner.numericValues[offset - 1]! < owner.numericValues[offset]!,
+  )
+  owner.sortedTextAscendingBreaks = withOffsetMembership(
+    owner.sortedTextAscendingBreaks,
+    offset,
+    (owner.textValues[offset - 1] ?? '') > (owner.textValues[offset] ?? ''),
+  )
+  owner.sortedTextDescendingBreaks = withOffsetMembership(
+    owner.sortedTextDescendingBreaks,
+    offset,
+    (owner.textValues[offset - 1] ?? '') < (owner.textValues[offset] ?? ''),
+  )
+}
+
+function refreshNumericUniformBreak(owner: LookupColumnOwner, offset: number): void {
+  if (offset <= 1 || offset >= owner.length) {
+    return
+  }
+  owner.numericUniformBreakOffsets = withOffsetMembership(
+    owner.numericUniformBreakOffsets,
+    offset,
+    owner.numericValues[offset - 2]! - owner.numericValues[offset - 1]! !== owner.numericValues[offset - 1]! - owner.numericValues[offset]!,
+  )
+}
+
+function removeOwnerKeyRow(owner: LookupColumnOwner, key: string, row: number): boolean {
+  const rows = owner.rowLists.get(key)
+  if (rows) {
+    const rowIndex = rows.indexOf(row)
+    if (rowIndex === -1) {
+      return false
+    }
+    rows.splice(rowIndex, 1)
+    if (rows.length === 0) {
+      owner.rowLists.delete(key)
+      owner.firstPositions.delete(key)
+      owner.lastPositions.delete(key)
+      return true
+    }
+    if (rows.length === 1) {
+      const onlyRow = rows[0]!
+      owner.rowLists.delete(key)
+      owner.firstPositions.set(key, onlyRow)
+      owner.lastPositions.set(key, onlyRow)
+      return true
+    }
+    owner.firstPositions.set(key, rows[0]!)
+    owner.lastPositions.set(key, rows[rows.length - 1]!)
+    return true
+  }
+  const firstRow = owner.firstPositions.get(key)
+  const lastRow = owner.lastPositions.get(key)
+  if (firstRow === undefined || lastRow === undefined || firstRow !== row || lastRow !== row) {
+    return false
+  }
+  owner.firstPositions.delete(key)
+  owner.lastPositions.delete(key)
+  return true
+}
+
+function insertOwnerKeyRow(owner: LookupColumnOwner, key: string, row: number): void {
+  const rows = owner.rowLists.get(key)
+  if (rows) {
+    insertRowSorted(rows, row)
+    owner.firstPositions.set(key, rows[0]!)
+    owner.lastPositions.set(key, rows[rows.length - 1]!)
+    return
+  }
+  const firstRow = owner.firstPositions.get(key)
+  if (firstRow !== undefined) {
+    const nextRows = firstRow < row ? [firstRow, row] : [row, firstRow]
+    owner.rowLists.set(key, nextRows)
+    owner.firstPositions.set(key, nextRows[0]!)
+    owner.lastPositions.set(key, nextRows[nextRows.length - 1]!)
+    return
+  }
+  owner.firstPositions.set(key, row)
+  owner.lastPositions.set(key, row)
+}
+
 function detectUniformNumericStepInOwner(
   owner: LookupColumnOwner,
   start: number,
   end: number,
 ): { start: number; step: number } | undefined {
+  ensureApproximateLookupSummaries(owner)
   if (end - start < 1) {
     return undefined
   }
@@ -240,10 +461,8 @@ function detectUniformNumericStepInOwner(
   if (!Number.isFinite(step) || step === 0) {
     return undefined
   }
-  for (let offset = start + 2; offset <= end; offset += 1) {
-    if (owner.numericValues[offset]! - owner.numericValues[offset - 1]! !== step) {
-      return undefined
-    }
+  if (hasOffsetInRange(owner.numericUniformBreakOffsets, start + 2, end)) {
+    return undefined
   }
   return { start: first, step }
 }
@@ -256,17 +475,18 @@ export function findExactMatchInRange(
   searchMode: 1 | -1,
 ): number | undefined {
   const rows = owner.rowLists.get(key)
-  if (!rows || rows.length === 0) {
-    return undefined
-  }
-  if (searchMode === 1) {
-    const index = lowerBound(rows, rowStart)
+  if (rows && rows.length > 0) {
+    if (searchMode === 1) {
+      const index = lowerBound(rows, rowStart)
+      const row = rows[index]
+      return row !== undefined && row <= rowEnd ? row : undefined
+    }
+    const index = upperBound(rows, rowEnd) - 1
     const row = rows[index]
-    return row !== undefined && row <= rowEnd ? row : undefined
+    return row !== undefined && row >= rowStart ? row : undefined
   }
-  const index = upperBound(rows, rowEnd) - 1
-  const row = rows[index]
-  return row !== undefined && row >= rowStart ? row : undefined
+  const row = searchMode === 1 ? owner.firstPositions.get(key) : owner.lastPositions.get(key)
+  return row !== undefined && row >= rowStart && row <= rowEnd ? row : undefined
 }
 
 export function buildLookupColumnOwner(args: {
@@ -330,42 +550,7 @@ export function buildLookupColumnOwner(args: {
     }
   })
 
-  const rowLists = new Map<string, number[]>()
-  for (let offset = 0; offset < length; offset += 1) {
-    const row = minRow + offset
-    const key = exactLookupKeyAt(
-      {
-        sheetName: args.owner.sheetName,
-        col: args.owner.col,
-        columnVersion: args.owner.columnVersion,
-        structureVersion: args.owner.structureVersion,
-        sheetColumnVersions: args.owner.sheetColumnVersions,
-        rowStart: minRow,
-        rowEnd: maxRow,
-        length,
-        kindCodes,
-        numericValues,
-        textValues,
-        rowLists: new Map(),
-        sortedNumericAscendingBreaks: undefined,
-        sortedNumericDescendingBreaks: undefined,
-        sortedTextAscendingBreaks: undefined,
-        sortedTextDescendingBreaks: undefined,
-        incompatibleNumericPrefix: undefined,
-        incompatibleTextPrefix: undefined,
-        summariesDirty: true,
-      },
-      offset,
-    )
-    const rows = rowLists.get(key)
-    if (rows) {
-      rows.push(row)
-    } else {
-      rowLists.set(key, [row])
-    }
-  }
-
-  return {
+  const owner: LookupColumnOwner = {
     sheetName: args.owner.sheetName,
     col: args.owner.col,
     columnVersion: args.owner.columnVersion,
@@ -377,15 +562,28 @@ export function buildLookupColumnOwner(args: {
     kindCodes,
     numericValues,
     textValues,
-    rowLists,
+    firstPositions: new Map(),
+    lastPositions: new Map(),
+    rowLists: new Map(),
     sortedNumericAscendingBreaks: undefined,
     sortedNumericDescendingBreaks: undefined,
+    numericUniformBreakOffsets: undefined,
     sortedTextAscendingBreaks: undefined,
     sortedTextDescendingBreaks: undefined,
-    incompatibleNumericPrefix: undefined,
-    incompatibleTextPrefix: undefined,
+    incompatibleNumericOffsets: undefined,
+    incompatibleTextOffsets: undefined,
+    exactNumericIncompatibleOffsets: undefined,
+    exactTextIncompatibleOffsets: undefined,
     summariesDirty: true,
   }
+
+  for (let offset = 0; offset < length; offset += 1) {
+    const row = minRow + offset
+    const key = exactLookupKeyAt(owner, offset)
+    insertOwnerKeyRow(owner, key, row)
+  }
+  initializeApproximateLookupSummaries(owner)
+  return owner
 }
 
 export function applyLookupColumnOwnerLiteralWrite(args: {
@@ -401,83 +599,51 @@ export function applyLookupColumnOwnerLiteralWrite(args: {
   const newKey = exactLookupKeyForValue(args.write.newValue, args.normalizeStringId, args.write.newStringId)
 
   if (oldKey !== undefined) {
-    const rows = args.owner.rowLists.get(oldKey)
-    if (!rows) {
+    if (!removeOwnerKeyRow(args.owner, oldKey, args.write.row)) {
       return false
-    }
-    const rowIndex = rows.indexOf(args.write.row)
-    if (rowIndex === -1) {
-      return false
-    }
-    rows.splice(rowIndex, 1)
-    if (rows.length === 0) {
-      args.owner.rowLists.delete(oldKey)
     }
   }
 
   if (newKey !== undefined) {
-    const rows = args.owner.rowLists.get(newKey)
-    if (rows) {
-      insertRowSorted(rows, args.write.row)
-    } else {
-      args.owner.rowLists.set(newKey, [args.write.row])
-    }
+    insertOwnerKeyRow(args.owner, newKey, args.write.row)
   }
 
+  const previousKind = decodeComparableKindCode(args.owner.kindCodes[offset])
   args.owner.kindCodes[offset] = kindCodeForValue(args.write.newValue)
   args.owner.numericValues[offset] = numericValueForValue(args.write.newValue)
   args.owner.textValues[offset] = textValueForValue(args.write.newValue, args.normalizeStringId, args.write.newStringId)
-  args.owner.summariesDirty = true
+  if (args.owner.summariesDirty) {
+    initializeApproximateLookupSummaries(args.owner)
+  }
+  const nextKind = decodeComparableKindCode(args.owner.kindCodes[offset])
+  if (previousKind !== nextKind) {
+    refreshApproximateLookupCompatibility(args.owner, offset)
+  }
+  refreshApproximateLookupBreaks(args.owner, offset)
+  refreshApproximateLookupBreaks(args.owner, offset + 1)
+  refreshNumericUniformBreak(args.owner, offset)
+  refreshNumericUniformBreak(args.owner, offset + 1)
+  refreshNumericUniformBreak(args.owner, offset + 2)
+  args.owner.summariesDirty = false
   return true
 }
 
 export function ensureApproximateLookupSummaries(owner: LookupColumnOwner): void {
-  if (!owner.summariesDirty) {
+  if (
+    !owner.summariesDirty &&
+    owner.incompatibleNumericOffsets &&
+    owner.incompatibleTextOffsets &&
+    owner.exactNumericIncompatibleOffsets &&
+    owner.exactTextIncompatibleOffsets &&
+    owner.sortedNumericAscendingBreaks &&
+    owner.sortedNumericDescendingBreaks &&
+    owner.numericUniformBreakOffsets &&
+    owner.sortedTextAscendingBreaks &&
+    owner.sortedTextDescendingBreaks
+  ) {
     return
   }
-
-  const incompatibleNumericPrefix = new Uint32Array(owner.length + 1)
-  const incompatibleTextPrefix = new Uint32Array(owner.length + 1)
-  const sortedNumericAscendingBreaks = new Uint32Array(owner.length + 1)
-  const sortedNumericDescendingBreaks = new Uint32Array(owner.length + 1)
-  const sortedTextAscendingBreaks = new Uint32Array(owner.length + 1)
-  const sortedTextDescendingBreaks = new Uint32Array(owner.length + 1)
-
-  for (let offset = 0; offset < owner.length; offset += 1) {
-    const kind = decodeComparableKindCode(owner.kindCodes[offset])
-    incompatibleNumericPrefix[offset + 1] = incompatibleNumericPrefix[offset]! + (kind === TEXT_KIND || kind === INVALID_KIND ? 1 : 0)
-    incompatibleTextPrefix[offset + 1] =
-      incompatibleTextPrefix[offset]! + (kind === NUMERIC_KIND || kind === BOOLEAN_KIND || kind === INVALID_KIND ? 1 : 0)
-    sortedNumericAscendingBreaks[offset + 1] = sortedNumericAscendingBreaks[offset]!
-    sortedNumericDescendingBreaks[offset + 1] = sortedNumericDescendingBreaks[offset]!
-    sortedTextAscendingBreaks[offset + 1] = sortedTextAscendingBreaks[offset]!
-    sortedTextDescendingBreaks[offset + 1] = sortedTextDescendingBreaks[offset]!
-
-    if (offset === 0) {
-      continue
-    }
-
-    if (owner.numericValues[offset - 1]! > owner.numericValues[offset]!) {
-      sortedNumericAscendingBreaks[offset + 1] = sortedNumericAscendingBreaks[offset + 1]! + 1
-    }
-    if (owner.numericValues[offset - 1]! < owner.numericValues[offset]!) {
-      sortedNumericDescendingBreaks[offset + 1] = sortedNumericDescendingBreaks[offset + 1]! + 1
-    }
-    if ((owner.textValues[offset - 1] ?? '') > (owner.textValues[offset] ?? '')) {
-      sortedTextAscendingBreaks[offset + 1] = sortedTextAscendingBreaks[offset + 1]! + 1
-    }
-    if ((owner.textValues[offset - 1] ?? '') < (owner.textValues[offset] ?? '')) {
-      sortedTextDescendingBreaks[offset + 1] = sortedTextDescendingBreaks[offset + 1]! + 1
-    }
-  }
-
-  owner.incompatibleNumericPrefix = incompatibleNumericPrefix
-  owner.incompatibleTextPrefix = incompatibleTextPrefix
-  owner.sortedNumericAscendingBreaks = sortedNumericAscendingBreaks
-  owner.sortedNumericDescendingBreaks = sortedNumericDescendingBreaks
-  owner.sortedTextAscendingBreaks = sortedTextAscendingBreaks
-  owner.sortedTextDescendingBreaks = sortedTextDescendingBreaks
-  owner.summariesDirty = false
+  initializeApproximateLookupSummaries(owner)
 }
 
 export function supportsNumericApproximateRange(owner: LookupColumnOwner, rowStart: number, rowEnd: number, matchMode: 1 | -1): boolean {
@@ -487,14 +653,10 @@ export function supportsNumericApproximateRange(owner: LookupColumnOwner, rowSta
   if (start < 0 || end >= owner.length) {
     return false
   }
-  if (owner.incompatibleNumericPrefix![end + 1]! - owner.incompatibleNumericPrefix![start]! !== 0) {
+  if (hasOffsetInRange(owner.incompatibleNumericOffsets, start, end)) {
     return false
   }
-  const breaks =
-    matchMode === 1
-      ? owner.sortedNumericAscendingBreaks![end + 1]! - owner.sortedNumericAscendingBreaks![start + 1]!
-      : owner.sortedNumericDescendingBreaks![end + 1]! - owner.sortedNumericDescendingBreaks![start + 1]!
-  return breaks === 0
+  return !hasOffsetInRange(matchMode === 1 ? owner.sortedNumericAscendingBreaks : owner.sortedNumericDescendingBreaks, start + 1, end)
 }
 
 export function supportsTextApproximateRange(owner: LookupColumnOwner, rowStart: number, rowEnd: number, matchMode: 1 | -1): boolean {
@@ -504,14 +666,10 @@ export function supportsTextApproximateRange(owner: LookupColumnOwner, rowStart:
   if (start < 0 || end >= owner.length) {
     return false
   }
-  if (owner.incompatibleTextPrefix![end + 1]! - owner.incompatibleTextPrefix![start]! !== 0) {
+  if (hasOffsetInRange(owner.incompatibleTextOffsets, start, end)) {
     return false
   }
-  const breaks =
-    matchMode === 1
-      ? owner.sortedTextAscendingBreaks![end + 1]! - owner.sortedTextAscendingBreaks![start + 1]!
-      : owner.sortedTextDescendingBreaks![end + 1]! - owner.sortedTextDescendingBreaks![start + 1]!
-  return breaks === 0
+  return !hasOffsetInRange(matchMode === 1 ? owner.sortedTextAscendingBreaks : owner.sortedTextDescendingBreaks, start + 1, end)
 }
 
 export function sliceOffsetBounds(owner: LookupColumnOwner, rowStart: number, rowEnd: number): { start: number; end: number } | undefined {
@@ -524,24 +682,12 @@ export function sliceOffsetBounds(owner: LookupColumnOwner, rowStart: number, ro
 }
 
 export function summarizeExactRange(owner: LookupColumnOwner, rowStart: number, rowEnd: number): ExactRangeSummary | undefined {
+  ensureApproximateLookupSummaries(owner)
   const bounds = sliceOffsetBounds(owner, rowStart, rowEnd)
   if (!bounds) {
     return undefined
   }
-  let allNumeric = true
-  let allText = true
-  for (let offset = bounds.start; offset <= bounds.end; offset += 1) {
-    const kind = decodeComparableKindCode(owner.kindCodes[offset])
-    allNumeric &&= kind === NUMERIC_KIND
-    allText &&= kind === TEXT_KIND
-    if (!allNumeric && !allText) {
-      return {
-        comparableKind: 'mixed',
-        uniformStart: undefined,
-        uniformStep: undefined,
-      }
-    }
-  }
+  const allNumeric = !hasOffsetInRange(owner.exactNumericIncompatibleOffsets, bounds.start, bounds.end)
   if (allNumeric) {
     const uniform = detectUniformNumericStepInOwner(owner, bounds.start, bounds.end)
     return {
@@ -550,6 +696,7 @@ export function summarizeExactRange(owner: LookupColumnOwner, rowStart: number, 
       uniformStep: uniform?.step,
     }
   }
+  const allText = !hasOffsetInRange(owner.exactTextIncompatibleOffsets, bounds.start, bounds.end)
   if (allText) {
     return {
       comparableKind: 'text',
