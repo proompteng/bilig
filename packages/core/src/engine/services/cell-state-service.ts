@@ -72,7 +72,9 @@ export function createEngineCellStateService(args: {
     formatOverride: string | null = snapshot.format ?? null,
   ): EngineOp[] => {
     const ops: EngineOp[] = []
-    const shouldEmitFormat = formatOverride !== null && formatOverride !== undefined && formatOverride !== ''
+    const targetCellIndex = args.state.workbook.getCellIndex(sheetName, address)
+    const currentFormat = targetCellIndex === undefined ? null : (args.state.workbook.getCellFormat(targetCellIndex) ?? null)
+    const nextFormat = formatOverride === '' ? null : formatOverride
     const isAuthoredBlank = (snapshot.flags & CellFlags.AuthoredBlank) !== 0
     const explicitBlankOp = { kind: 'setCellValue' as const, sheetName, address, value: null }
     const shouldRestoreExplicitBlank = (snapshot.version ?? 0) !== 0 || isAuthoredBlank
@@ -97,12 +99,12 @@ export function createEngineCellStateService(args: {
           break
       }
     }
-    if (shouldEmitFormat) {
+    if (nextFormat !== currentFormat) {
       ops.push({
         kind: 'setCellFormat',
         sheetName,
         address,
-        format: formatOverride,
+        format: nextFormat,
       })
     }
     return ops

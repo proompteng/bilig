@@ -81,6 +81,31 @@ describe('engine fuzz regressions', () => {
     expect(engine.undo()).toBe(false)
   })
 
+  it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'move-empty-format-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setRangeNumberFormat({ sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B2' }, '0.00')
+    engine.fillRange(
+      { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' },
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' },
+    )
+
+    expect(engine.getCell('Sheet1', 'A1').format).toBe('0.00')
+
+    engine.moveRange(
+      { sheetName: 'Sheet1', startAddress: 'B4', endAddress: 'C4' },
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+    )
+
+    expect(engine.getCell('Sheet1', 'A1').format).toBeUndefined()
+    expect(engine.exportSnapshot().sheets[0]?.cells ?? []).toEqual([])
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'A1').format).toBe('0.00')
+  })
+
   it('propagates cycle errors to dependent formulas after direct formula writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'cycle-dependent-regression' })
     await engine.ready()

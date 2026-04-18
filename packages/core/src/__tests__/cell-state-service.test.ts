@@ -117,45 +117,60 @@ describe('EngineCellStateService', () => {
     ])
   })
 
-  it("replays explicit blank snapshots as null writes instead of clear ops", async () => {
-    const engine = new SpreadsheetEngine({ workbookName: "cell-state-explicit-blank" });
-    await engine.ready();
-    engine.createSheet("Sheet1");
+  it('clears an existing target format when replaying an unformatted empty snapshot', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'cell-state-clear-format' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellFormat('Sheet1', 'A1', '0.00')
+
+    const snapshot = engine.getCell('Sheet1', 'B1')
+    const ops = Effect.runSync(getCellStateService(engine).toCellStateOps('Sheet1', 'A1', snapshot, 'Sheet1', 'B1'))
+
+    expect(ops).toEqual([
+      { kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' },
+      { kind: 'setCellFormat', sheetName: 'Sheet1', address: 'A1', format: null },
+    ])
+  })
+
+  it('replays explicit blank snapshots as null writes instead of clear ops', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'cell-state-explicit-blank' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
     engine.importSnapshot({
       version: 1,
-      workbook: { name: "cell-state-explicit-blank" },
+      workbook: { name: 'cell-state-explicit-blank' },
       sheets: [
         {
           id: 1,
-          name: "Sheet1",
+          name: 'Sheet1',
           order: 0,
-          cells: [{ address: "D3", value: null }],
+          cells: [{ address: 'D3', value: null }],
         },
       ],
-    });
+    })
 
-    const cellState = getCellStateService(engine);
+    const cellState = getCellStateService(engine)
 
-    expect(Effect.runSync(cellState.restoreCellOps("Sheet1", "D3"))).toEqual([
-      { kind: "setCellValue", sheetName: "Sheet1", address: "D3", value: null },
-    ]);
+    expect(Effect.runSync(cellState.restoreCellOps('Sheet1', 'D3'))).toEqual([
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'D3', value: null },
+    ])
 
     expect(
       Effect.runSync(
-        cellState.toCellStateOps("Sheet1", "E4", {
-          address: "D3",
-          sheetName: "Sheet1",
+        cellState.toCellStateOps('Sheet1', 'E4', {
+          address: 'D3',
+          sheetName: 'Sheet1',
           value: { tag: ValueTag.Empty },
           flags: 0,
           version: 1,
         }),
       ),
-    ).toEqual([{ kind: "setCellValue", sheetName: "Sheet1", address: "E4", value: null }]);
-  });
+    ).toEqual([{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'E4', value: null }])
+  })
 
-  it("wraps service failures with contextual EngineCellStateError messages", () => {
-    const workbook = new WorkbookStore("cell-state-errors");
-    workbook.createSheet("Sheet1");
+  it('wraps service failures with contextual EngineCellStateError messages', () => {
+    const workbook = new WorkbookStore('cell-state-errors')
+    workbook.createSheet('Sheet1')
     const manual = createEngineCellStateService({
       state: { workbook },
       getCell: () => {
