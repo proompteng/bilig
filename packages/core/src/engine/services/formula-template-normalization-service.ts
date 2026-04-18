@@ -7,6 +7,7 @@ import {
   translateCompiledFormulaWithoutAst,
   type CompiledFormula,
 } from '@bilig/formula'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface EngineFormulaTemplateNormalizationService {
   readonly clear: () => void
@@ -20,7 +21,9 @@ interface TemplateEntry {
   readonly compiled: CompiledFormula
 }
 
-export function createEngineFormulaTemplateNormalizationService(): EngineFormulaTemplateNormalizationService {
+export function createEngineFormulaTemplateNormalizationService(args?: {
+  readonly counters?: EngineCounters
+}): EngineFormulaTemplateNormalizationService {
   const templates = new Map<string, TemplateEntry>()
   const recentByColumn = new Map<number, TemplateEntry>()
   const translateTemplate = (compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula =>
@@ -52,6 +55,9 @@ export function createEngineFormulaTemplateNormalizationService(): EngineFormula
       }
       const existing = templates.get(templateKey)
       if (!existing) {
+        if (args?.counters) {
+          addEngineCounter(args.counters, 'formulasParsed')
+        }
         const ast = parseFormula(source)
         const compiled = compileFormulaAst(source, ast)
         templates.set(templateKey, {

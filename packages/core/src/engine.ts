@@ -67,6 +67,7 @@ import {
   type WorkbookNoteRecord,
 } from './workbook-store.js'
 import { cellToCsvValue, serializeCsv } from './csv.js'
+import { cloneEngineCounters, createEngineCounters, resetEngineCounters, type EngineCounters } from './perf/engine-counters.js'
 import { canonicalWorkbookRangeRef } from './workbook-range-records.js'
 import {
   createEngineRuntimeState,
@@ -94,11 +95,12 @@ export type {
 } from './engine/runtime-state.js'
 
 export class SpreadsheetEngine {
+  private readonly performanceCounters = createEngineCounters()
   readonly workbook: WorkbookStore
   readonly strings = new StringPool()
   readonly events = new EngineEventBus()
   private readonly replicaState: ReplicaState
-  readonly ranges = new RangeRegistry()
+  readonly ranges = new RangeRegistry(this.performanceCounters)
   readonly scheduler = new RecalcScheduler()
   readonly wasm = new WasmKernelFacade()
 
@@ -154,7 +156,7 @@ export class SpreadsheetEngine {
   private readonly runtime: EngineServiceRuntime
 
   constructor(options: SpreadsheetEngineOptions = {}) {
-    this.workbook = new WorkbookStore(options.workbookName ?? 'Workbook')
+    this.workbook = new WorkbookStore(options.workbookName ?? 'Workbook', this.performanceCounters)
     this.formulas = new FormulaTable(this.workbook.cellStore)
     this.replicaState = createReplicaState(options.replicaId ?? 'local')
     this.useColumnIndexEnabled = options.useColumnIndex ?? false
@@ -173,6 +175,7 @@ export class SpreadsheetEngine {
       selectionListeners: this.selectionListeners,
       undoStack: this.undoStack,
       redoStack: this.redoStack,
+      counters: this.performanceCounters,
       trackReplicaVersions: options.trackReplicaVersions ?? true,
       getUseColumnIndex: () => this.useColumnIndexEnabled,
       setUseColumnIndex: (enabled) => {
@@ -456,6 +459,14 @@ export class SpreadsheetEngine {
 
   getLastMetrics(): RecalcMetrics {
     return this.lastMetrics
+  }
+
+  getPerformanceCounters(): EngineCounters {
+    return cloneEngineCounters(this.performanceCounters)
+  }
+
+  resetPerformanceCounters(): void {
+    resetEngineCounters(this.performanceCounters)
   }
 
   setUseColumnIndexEnabled(enabled: boolean): void {

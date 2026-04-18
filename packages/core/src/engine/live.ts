@@ -251,7 +251,7 @@ export function createEngineServiceRuntime(args: {
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state })
   const columnIndexStore = createColumnIndexStore({ state: args.state, runtimeColumnStore })
   const compiledPlans = createEngineCompiledPlanService()
-  const formulaTemplates = createEngineFormulaTemplateNormalizationService()
+  const formulaTemplates = createEngineFormulaTemplateNormalizationService({ counters: args.state.counters })
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
   const aggregateCache = createRangeAggregateCacheService({
     state: args.state,

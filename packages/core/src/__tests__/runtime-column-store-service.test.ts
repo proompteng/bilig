@@ -3,6 +3,7 @@ import { ValueTag } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 
 function setStoredCellValue(
   workbook: WorkbookStore,
@@ -19,6 +20,7 @@ describe('createEngineRuntimeColumnStoreService', () => {
   it('reuses typed column slices until the source column version changes', () => {
     const workbook = new WorkbookStore('runtime-column-store')
     const strings = new StringPool()
+    const counters = createEngineCounters()
     workbook.createSheet('Sheet1')
 
     setStoredCellValue(workbook, strings, 'Sheet1', 'A1', { tag: ValueTag.Number, value: 1 })
@@ -26,7 +28,7 @@ describe('createEngineRuntimeColumnStoreService', () => {
     setStoredCellValue(workbook, strings, 'Sheet1', 'A3', { tag: ValueTag.String, value: 'pear' })
 
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-      state: { workbook, strings },
+      state: { workbook, strings, counters },
     })
 
     const firstSlice = runtimeColumnStore.getColumnSlice({
@@ -43,6 +45,7 @@ describe('createEngineRuntimeColumnStoreService', () => {
     })
 
     expect(reusedSlice).toBe(firstSlice)
+    expect(counters.columnSliceBuilds).toBe(1)
     expect(Array.from(firstSlice.tags)).toEqual([ValueTag.Number, ValueTag.Boolean, ValueTag.String])
     expect(Array.from(firstSlice.numbers)).toEqual([1, 1, 0])
     expect(firstSlice.stringIds[2]).not.toBe(0)
@@ -60,6 +63,7 @@ describe('createEngineRuntimeColumnStoreService', () => {
     expect(refreshedSlice).not.toBe(firstSlice)
     expect(Array.from(refreshedSlice.tags)).toEqual([ValueTag.Number, ValueTag.Number, ValueTag.String])
     expect(Array.from(refreshedSlice.numbers)).toEqual([1, 5, 0])
+    expect(counters.columnSliceBuilds).toBe(2)
   })
 
   it('reuses a shared column owner across overlapping view requests', () => {

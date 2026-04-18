@@ -32,6 +32,7 @@ import { buildStructuralTransaction, structuralScopeForTransform, type Structura
 import { CellPageStore } from './storage/cell-page-store.js'
 import { LogicalSheetStore } from './storage/logical-sheet-store.js'
 import { SheetAxisMap } from './storage/sheet-axis-map.js'
+import { addEngineCounter, type EngineCounters } from './perf/engine-counters.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
 import {
   createWorkbookMetadataRecord,
@@ -168,7 +169,10 @@ export class WorkbookStore {
   private nextStyleId = 1
   private nextFormatId = 1
 
-  constructor(workbookName = 'Workbook') {
+  constructor(
+    workbookName = 'Workbook',
+    private readonly counters?: EngineCounters,
+  ) {
     this.workbookName = workbookName
     this.cellStore.onSetValue = (index) => {
       this.notifyCellValueWritten(index)
@@ -911,6 +915,9 @@ export class WorkbookStore {
       return { changedCellIndices: [], removedCellIndices: [] }
     }
     const changedEntries = sheet.grid.remapAxis(axis, remapIndex, scope)
+    if (this.counters && changedEntries.length > 0) {
+      addEngineCounter(this.counters, 'cellsRemapped', changedEntries.length)
+    }
     changedEntries.forEach(({ row, col }) => {
       sheet.logical.deleteVisibleCell(row, col)
     })
@@ -937,6 +944,9 @@ export class WorkbookStore {
 
     const scope = structuralScopeForTransform(transform)
     const remappedEntries = sheet.grid.remapAxis(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
+    if (this.counters && remappedEntries.length > 0) {
+      addEngineCounter(this.counters, 'cellsRemapped', remappedEntries.length)
+    }
     remappedEntries.forEach(({ row, col }) => {
       sheet.logical.deleteVisibleCell(row, col)
     })

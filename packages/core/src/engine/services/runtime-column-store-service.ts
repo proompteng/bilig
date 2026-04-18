@@ -1,6 +1,7 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
 import { BLOCK_COLS, BLOCK_ROWS } from '../../sheet-grid.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface RuntimeColumnSlice {
   readonly sheetName: string
@@ -95,7 +96,7 @@ function decodeValueTag(rawTag: number | undefined): ValueTag {
 }
 
 export function createEngineRuntimeColumnStoreService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineCounters }
 }): EngineRuntimeColumnStoreService {
   const emptyColumnVersions = new Uint32Array(0)
   const normalizedStrings = new Map<number, string>()
@@ -304,6 +305,9 @@ export function createEngineRuntimeColumnStoreService(args: {
   }
 
   const buildColumnSlice = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnSlice => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'columnSliceBuilds')
+    }
     const view = getColumnView(request)
     const tags = new Uint8Array(view.length)
     const numbers = new Float64Array(view.length)

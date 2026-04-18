@@ -57,6 +57,40 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
 const benchmarkDir = dirname(fileURLToPath(import.meta.url))
 const expandedBaselinePath = join(benchmarkDir, '..', '..', 'baselines', 'workpaper-vs-hyperformula-expanded.json')
 
+function familyEligibility(family: ExpandedCompetitiveFamily): { scorecardEligible: boolean; exclusionReason: string | null } {
+  switch (family) {
+    case 'build':
+    case 'rebuild':
+    case 'runtime-restore':
+    case 'config-toggle':
+      return family === 'config-toggle'
+        ? {
+            scorecardEligible: false,
+            exclusionReason: 'Control-only rebuild toggle; not evidence of broad competitive victory.',
+          }
+        : { scorecardEligible: true, exclusionReason: null }
+    case 'dirty-execution':
+    case 'batch-edit':
+    case 'structural-rows':
+    case 'structural-columns':
+    case 'range-read':
+    case 'overlapping-aggregate':
+    case 'sliding-window-aggregate':
+    case 'conditional-aggregation':
+    case 'lookup-exact':
+    case 'lookup-after-write':
+    case 'lookup-approximate':
+    case 'lookup-approximate-after-write':
+    case 'lookup-text':
+    case 'dynamic-array':
+      return {
+        scorecardEligible: family !== 'dynamic-array',
+        exclusionReason:
+          family === 'dynamic-array' ? 'Leadership-only support lane; not an apples-to-apples performance scorecard input.' : null,
+      }
+  }
+}
+
 function readExpandedBaselineWorkloads(path: string): string[] {
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
   if (
@@ -107,6 +141,7 @@ describe('expanded comparative benchmark workloads', () => {
       families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
         family,
         workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
+        ...familyEligibility(family),
         resultCount: 0,
         comparableCount: 0,
         leadershipCount: 0,
@@ -114,6 +149,13 @@ describe('expanded comparative benchmark workloads', () => {
         hyperformulaWins: 0,
         meanSpeedupGeomean: null,
       })),
+      scorecard: {
+        eligibleFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => familyEligibility(family).scorecardEligible),
+        excludedFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => !familyEligibility(family).scorecardEligible),
+        comparableCount: 0,
+        workpaperWins: 0,
+        hyperformulaWins: 0,
+      },
     })
   })
 
@@ -124,6 +166,7 @@ describe('expanded comparative benchmark workloads', () => {
       families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
         family,
         workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
+        ...familyEligibility(family),
         resultCount: 0,
         comparableCount: 0,
         leadershipCount: 0,
@@ -131,6 +174,13 @@ describe('expanded comparative benchmark workloads', () => {
         hyperformulaWins: 0,
         meanSpeedupGeomean: null,
       })),
+      scorecard: {
+        eligibleFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => familyEligibility(family).scorecardEligible),
+        excludedFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => !familyEligibility(family).scorecardEligible),
+        comparableCount: 0,
+        workpaperWins: 0,
+        hyperformulaWins: 0,
+      },
     })
   })
 })

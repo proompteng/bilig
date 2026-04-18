@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks'
-import { WorkPaper } from '@bilig/headless'
+import { ENGINE_COUNTER_KEYS, type EngineCounters } from '../../core/src/perf/engine-counters.js'
+import { WorkPaper } from '../../headless/src/work-paper.js'
 import { ValueTag } from '@bilig/protocol'
 import type { RawCellContent as HyperFormulaRawCellContent, Sheet as HyperFormulaSheet } from 'hyperformula'
 import type {
@@ -17,7 +18,7 @@ import {
 } from './benchmark-workpaper-vs-hyperformula.js'
 import type { MemoryMeasurement } from './metrics.js'
 import { measureMemory, sampleMemory } from './metrics.js'
-import { summarizeNumbers } from './stats.js'
+import { summarizeNumbers, type NumericSummary } from './stats.js'
 import {
   address,
   buildApproxLookupSheet,
@@ -119,7 +120,16 @@ interface BenchmarkSample {
   elapsedMs: number
   memory: MemoryMeasurement
   verification: Record<string, unknown>
+  engineCounters?: EngineCounterSummary
 }
+
+type EngineCounterSummary = Record<keyof EngineCounters, number>
+type CounterAwareWorkPaper = WorkPaper & {
+  getPerformanceCounters(): EngineCounterSummary
+  resetPerformanceCounters(): void
+}
+
+export type EngineCounterNumericSummary = Record<keyof EngineCounters, NumericSummary>
 
 export type ExpandedComparativeBenchmarkResult = ExpandedComparativeComparableResult | ExpandedComparativeLeadershipResult
 
@@ -127,6 +137,7 @@ export interface ExpandedComparativeBenchmarkReport {
   suite: 'workpaper-vs-hyperformula-expanded'
   results: readonly ExpandedComparativeBenchmarkResult[]
   families: readonly ExpandedCompetitiveFamilySummary[]
+  scorecard: ReturnType<typeof buildExpandedCompetitiveFamilyReport>['scorecard']
 }
 
 export function buildExpandedComparativeBenchmarkReport(
@@ -137,6 +148,7 @@ export function buildExpandedComparativeBenchmarkReport(
     suite: familyReport.suite,
     results: [...results],
     families: familyReport.families,
+    scorecard: familyReport.scorecard,
   }
 }
 
@@ -491,11 +503,13 @@ function benchmarkSupportedEngine(
   if (verificationStrings.size !== 1) {
     throw new Error('Benchmark verification drifted across samples')
   }
+  const engineCounters = summarizeEngineCounters(samples)
 
   return {
     status: 'supported',
     elapsedMs: summarizeNumbers(samples.map((sample) => sample.elapsedMs)),
     memoryDeltaBytes: summarizeMemory(samples.map((sample) => sample.memory)),
+    ...(engineCounters ? { engineCounters } : {}),
     verification: samples[0]?.verification ?? {},
   }
 }
@@ -898,9 +912,12 @@ function measureWorkPaperBuildFromSheets(
   const elapsedMs = performance.now() - started
   const memoryAfter = sampleMemory()
   const result = verification(workbook)
+  const counterAwareWorkbook = workbook as CounterAwareWorkPaper
+  const engineCounters = counterAwareWorkbook.getPerformanceCounters()
   workbook.dispose()
   return {
     elapsedMs,
+    engineCounters,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: result,
   }
@@ -931,15 +948,19 @@ function measureMutationSample<Result>(
   execute: () => Result,
   verification: (result: Result) => Record<string, unknown>,
 ): BenchmarkSample {
+  const counterAwareWorkbook = workbook as CounterAwareWorkPaper
+  counterAwareWorkbook.resetPerformanceCounters()
   const memoryBefore = sampleMemory()
   const started = performance.now()
   const result = execute()
   const elapsedMs = performance.now() - started
   const memoryAfter = sampleMemory()
   const resolvedVerification = verification(result)
+  const engineCounters = counterAwareWorkbook.getPerformanceCounters()
   workbook.dispose()
   return {
     elapsedMs,
+    engineCounters,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: resolvedVerification,
   }
@@ -972,6 +993,34 @@ function summarizeMemory(samples: readonly MemoryMeasurement[]): ComparativeMemo
     externalBytes: summarizeNumbers(samples.map((sample) => sample.delta.externalBytes)),
     arrayBuffersBytes: summarizeNumbers(samples.map((sample) => sample.delta.arrayBuffersBytes)),
   }
+}
+
+function summarizeEngineCounters(samples: readonly BenchmarkSample[]): EngineCounterNumericSummary | undefined {
+  const counterSamples = samples
+    .map((sample) => sample.engineCounters)
+    .filter((counters): counters is EngineCounterSummary => counters !== undefined)
+  if (counterSamples.length === 0) {
+    return undefined
+  }
+  const zeroSummary = summarizeNumbers([0])
+  const summaries: EngineCounterNumericSummary = {
+    cellsRemapped: zeroSummary,
+    rangesMaterialized: zeroSummary,
+    rangeMembersExpanded: zeroSummary,
+    formulasParsed: zeroSummary,
+    formulasBound: zeroSummary,
+    columnSliceBuilds: zeroSummary,
+    exactIndexBuilds: zeroSummary,
+    approxIndexBuilds: zeroSummary,
+    topoRebuilds: zeroSummary,
+    changedCellPayloadsBuilt: zeroSummary,
+    snapshotOpsReplayed: zeroSummary,
+    wasmFullUploads: zeroSummary,
+  }
+  for (const key of ENGINE_COUNTER_KEYS) {
+    summaries[key] = summarizeNumbers(counterSamples.map((counters) => counters[key]))
+  }
+  return summaries
 }
 
 function normalizeWorkPaperValue(value: unknown): boolean | number | string | null | { error: unknown } {

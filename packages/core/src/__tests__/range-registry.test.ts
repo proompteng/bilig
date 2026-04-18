@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildStructuralTransaction } from '../engine/structural-transaction.js'
 import { makeCellEntity, makeRangeEntity } from '../entity-ids.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 import { RangeRegistry } from '../range-registry.js'
 
 describe('RangeRegistry', () => {
@@ -60,6 +61,30 @@ describe('RangeRegistry', () => {
     expect(registry.getMemberPoolView().subarray(after.membersOffset, after.membersOffset + after.membersLength)).toEqual(
       Uint32Array.from([4, 9]),
     )
+  })
+
+  it('tracks materialized ranges and expanded members', () => {
+    const counters = createEngineCounters()
+    const registry = new RangeRegistry(counters)
+    let nextCellIndex = 50
+
+    const registered = registry.intern(
+      1,
+      {
+        kind: 'cells',
+        start: { row: 0, col: 0, text: 'A1' },
+        end: { row: 1, col: 0, text: 'A2' },
+      },
+      {
+        ensureCell: () => nextCellIndex++,
+        forEachSheetCell: () => {},
+      },
+    )
+
+    registry.expandToCells(registered.rangeIndex)
+
+    expect(counters.rangesMaterialized).toBe(1)
+    expect(counters.rangeMembersExpanded).toBe(4)
   })
 
   it('clears descriptor slices when the last reference is released', () => {

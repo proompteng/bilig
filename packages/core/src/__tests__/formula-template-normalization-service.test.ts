@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createEngineFormulaTemplateNormalizationService } from '../engine/services/formula-template-normalization-service.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 
 describe('EngineFormulaTemplateNormalizationService', () => {
   it('compiles repeated row-shifted templates once and translates later instances', () => {
@@ -62,5 +63,16 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     expect(translated.ast).toBe(first.ast)
     expect(translated.astMatchesSource).toBe(false)
     expect(translated.deps).toEqual(['A2', 'B2'])
+  })
+
+  it('tracks parse work only when a new template family is compiled', () => {
+    const counters = createEngineCounters()
+    const service = createEngineFormulaTemplateNormalizationService({ counters })
+
+    service.compileForCell('A1+B1', 0, 2)
+    service.compileForCell('A2+B2', 1, 2)
+    service.compileForCell('A1*B1', 0, 2)
+
+    expect(counters.formulasParsed).toBe(2)
   })
 })

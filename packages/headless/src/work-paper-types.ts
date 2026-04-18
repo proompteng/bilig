@@ -1,5 +1,6 @@
 import type { CellValue, LiteralInput, RecalcMetrics } from '@bilig/protocol'
 import type { EvaluationResult } from '@bilig/formula'
+import type { EngineCounters } from '../../core/src/perf/engine-counters.js'
 
 export type RawCellContent = LiteralInput | string
 
@@ -223,6 +224,8 @@ export interface WorkPaperStats {
   evaluationSuspended: boolean
   lastMetrics: RecalcMetrics
 }
+
+export type WorkPaperEngineCounters = EngineCounters
 
 export interface WorkPaperGraphAdapter {
   getDependents(reference: WorkPaperAddressLike): WorkPaperDependencyRef[]

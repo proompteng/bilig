@@ -1,13 +1,14 @@
 import { formatAddress } from '@bilig/formula'
 import type { EngineChangedCell } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface EngineChangeSetEmitterService {
   readonly captureChangedCells: (changedCellIndices: readonly number[] | Uint32Array) => readonly EngineChangedCell[]
 }
 
 export function createEngineChangeSetEmitterService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineCounters }
 }): EngineChangeSetEmitterService {
   const readChangedCell = (cellIndex: number, fallbackSheetName?: string): EngineChangedCell | null => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
@@ -41,6 +42,9 @@ export function createEngineChangeSetEmitterService(args: {
           return []
         }
         if (changedCellIndices.length === 1) {
+          if (args.state.counters) {
+            addEngineCounter(args.state.counters, 'changedCellPayloadsBuilt', 1)
+          }
           return [first]
         }
         const secondCellIndex = changedCellIndices[1]!
@@ -49,7 +53,11 @@ export function createEngineChangeSetEmitterService(args: {
           secondSheetId !== undefined && secondSheetId === first.address.sheet
             ? readChangedCell(secondCellIndex, first.sheetName)
             : readChangedCell(secondCellIndex)
-        return second ? [first, second] : [first]
+        const changes = second ? [first, second] : [first]
+        if (args.state.counters) {
+          addEngineCounter(args.state.counters, 'changedCellPayloadsBuilt', changes.length)
+        }
+        return changes
       }
       const sheetNames = new Map<number, string>()
       const changes: EngineChangedCell[] = []
@@ -71,6 +79,9 @@ export function createEngineChangeSetEmitterService(args: {
         if (changedCell) {
           changes.push(changedCell)
         }
+      }
+      if (args.state.counters) {
+        addEngineCounter(args.state.counters, 'changedCellPayloadsBuilt', changes.length)
       }
       return changes
     },

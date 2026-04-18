@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ValueTag, createCellNumberFormatRecord } from '@bilig/protocol'
 import type { StructuralAxisTransform } from '@bilig/formula'
 import { writeLiteralToCellStore } from '../engine-value-utils.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 
@@ -563,7 +564,8 @@ describe('WorkbookStore', () => {
   })
 
   it('builds one structural transaction from workbook remaps and tracks removed cells', () => {
-    const workbook = new WorkbookStore('structural-transaction')
+    const counters = createEngineCounters()
+    const workbook = new WorkbookStore('structural-transaction', counters)
     const strings = new StringPool()
     workbook.createSheet('Sheet1')
 
@@ -587,5 +589,6 @@ describe('WorkbookStore', () => {
     expect(transaction?.removedCellIndices).toEqual([removedCellIndex])
     expect(transaction?.remappedCells.some((entry) => entry.toRow === 10)).toBe(true)
     expect(workbook.getCellIndex('Sheet1', 'C11')).toBe(movedCellIndex)
+    expect(counters.cellsRemapped).toBeGreaterThan(0)
   })
 })

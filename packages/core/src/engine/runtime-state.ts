@@ -18,6 +18,7 @@ import type { RecalcScheduler } from '../scheduler.js'
 import type { StringPool } from '../string-pool.js'
 import type { WasmKernelFacade } from '../wasm-facade.js'
 import type { WorkbookStore } from '../workbook-store.js'
+import type { EngineCounters } from '../perf/engine-counters.js'
 
 export interface CommitOp {
   kind: 'upsertWorkbook' | 'upsertSheet' | 'renameSheet' | 'deleteSheet' | 'upsertCell' | 'deleteCell'
@@ -275,6 +276,7 @@ export interface EngineRuntimeState {
   readonly selectionListeners: Set<() => void>
   readonly undoStack: TransactionLogEntry[]
   readonly redoStack: TransactionLogEntry[]
+  readonly counters: EngineCounters
   readonly trackReplicaVersions: boolean
   getUseColumnIndex(): boolean
   setUseColumnIndex(enabled: boolean): void
@@ -305,6 +307,7 @@ export interface EngineRuntimeStateController {
   readonly selectionListeners: Set<() => void>
   readonly undoStack: TransactionLogEntry[]
   readonly redoStack: TransactionLogEntry[]
+  readonly counters: EngineCounters
   readonly trackReplicaVersions: boolean
   getUseColumnIndex(): boolean
   setUseColumnIndex(enabled: boolean): void

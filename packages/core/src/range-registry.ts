@@ -3,6 +3,7 @@ import type { CellAddress, CellRangeAddress, RangeAddress, StructuralAxisTransfo
 import type { StructuralTransaction } from './engine/structural-transaction.js'
 import { makeCellEntity, makeRangeEntity } from './entity-ids.js'
 import { EdgeArena, type EdgeSlice } from './edge-arena.js'
+import { addEngineCounter, type EngineCounters } from './perf/engine-counters.js'
 
 export interface RangeDescriptor {
   index: RangeIndex
@@ -56,6 +57,8 @@ export class RangeRegistry {
   private readonly formulaMemberSlices: EdgeSlice[] = []
   private readonly dependencySources = new EdgeArena()
   private readonly dependencySourceSlices: EdgeSlice[] = []
+
+  constructor(private readonly counters?: EngineCounters) {}
 
   get size(): number {
     return this.descriptors.length
@@ -128,6 +131,10 @@ export class RangeRegistry {
     const memberSlice = this.members.replace(this.members.empty(), memberIndices)
     const formulaMemberSlice = this.formulaMembers.replace(this.formulaMembers.empty(), formulaMemberIndices)
     const dependencySourceSlice = this.dependencySources.replace(this.dependencySources.empty(), dependencySourceEntities)
+    if (this.counters) {
+      addEngineCounter(this.counters, 'rangesMaterialized')
+      addEngineCounter(this.counters, 'rangeMembersExpanded', memberIndices.length)
+    }
     this.memberSlices[descriptor.index] = memberSlice
     this.formulaMemberSlices[descriptor.index] = formulaMemberSlice
     this.dependencySourceSlices[descriptor.index] = dependencySourceSlice
@@ -260,7 +267,11 @@ export class RangeRegistry {
   }
 
   expandToCells(rangeIndex: RangeIndex): Uint32Array {
-    return this.getMembersView(rangeIndex)
+    const members = this.getMembersView(rangeIndex)
+    if (this.counters) {
+      addEngineCounter(this.counters, 'rangeMembersExpanded', members.length)
+    }
+    return members
   }
 
   refresh(
@@ -305,6 +316,10 @@ export class RangeRegistry {
       this.dependencySourceSlices[rangeIndex] ?? this.dependencySources.empty(),
       dependencySourceEntities,
     )
+    if (this.counters) {
+      addEngineCounter(this.counters, 'rangesMaterialized')
+      addEngineCounter(this.counters, 'rangeMembersExpanded', memberIndices.length)
+    }
     this.memberSlices[rangeIndex] = memberSlice
     this.formulaMemberSlices[rangeIndex] = formulaMemberSlice
     this.dependencySourceSlices[rangeIndex] = dependencySourceSlice

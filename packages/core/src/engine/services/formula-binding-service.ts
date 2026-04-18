@@ -32,6 +32,7 @@ import {
 import { growUint32 } from '../../engine-buffer-utils.js'
 import { resolveMetadataReferencesInAst, spillDependencyKeyFromRef, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import {
@@ -922,7 +923,9 @@ const PUSH_RANGE_OPCODE = Number(Opcode.PushRange)
 const PUSH_STRING_OPCODE = Number(Opcode.PushString)
 
 export function createEngineFormulaBindingService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges' | 'getUseColumnIndex'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges' | 'getUseColumnIndex'> & {
+    counters?: EngineCounters
+  }
   readonly compiledPlans: EngineCompiledPlanService
   readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'primeColumnIndex' | 'prepareVectorLookup'>
@@ -1683,8 +1686,12 @@ export function createEngineFormulaBindingService(args: {
     return topologyChanged
   }
 
-  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean =>
-    bindPreparedFormulaPreparedNow(cellIndex, ownerSheetName, source, prepareFormulaBindingNow(cellIndex, ownerSheetName, source))
+  const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'formulasBound')
+    }
+    return bindPreparedFormulaPreparedNow(cellIndex, ownerSheetName, source, prepareFormulaBindingNow(cellIndex, ownerSheetName, source))
+  }
 
   const bindPreparedFormulaNow = (cellIndex: number, ownerSheetName: string, source: string, compiled: CompiledFormula): boolean =>
     bindPreparedFormulaPreparedNow(
@@ -1695,6 +1702,9 @@ export function createEngineFormulaBindingService(args: {
     )
 
   const bindInitialFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'formulasBound')
+    }
     installFreshFormulaNow(cellIndex, ownerSheetName, source, prepareFormulaBindingNow(cellIndex, ownerSheetName, source))
   }
 

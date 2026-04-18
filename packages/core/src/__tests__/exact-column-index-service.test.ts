@@ -6,6 +6,7 @@ import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState, PreparedExactVectorLookup } from '../engine/runtime-state.js'
 import { createExactColumnIndexService } from '../engine/services/exact-column-index-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 import type {
   EngineRuntimeColumnStoreService,
   RuntimeColumnOwner,
@@ -23,16 +24,16 @@ function setStoredCellValue(
   workbook.cellStore.setValue(cellIndex, value, value.tag === ValueTag.String ? strings.intern(value.value) : 0)
 }
 
-function createExact(workbook: WorkbookStore, strings: StringPool) {
+function createExact(workbook: WorkbookStore, strings: StringPool, counters = createEngineCounters()) {
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-    state: { workbook, strings },
+    state: { workbook, strings, counters },
   })
   const columnIndexStore = createColumnIndexStore({
     state: { workbook, strings },
     runtimeColumnStore,
   })
   return createExactColumnIndexService({
-    state: { workbook, strings },
+    state: { workbook, strings, counters },
     runtimeColumnStore,
     columnIndexStore,
   })
@@ -594,7 +595,8 @@ describe('createExactColumnIndexService', () => {
       },
     }
 
-    const state: Pick<EngineRuntimeState, 'workbook' | 'strings'> = {
+    const counters = createEngineCounters()
+    const state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters: typeof counters } = {
       workbook: {
         getSheet() {
           return sheetAvailable ? { columnVersions, structureVersion } : undefined
@@ -604,6 +606,7 @@ describe('createExactColumnIndexService', () => {
         },
       },
       strings,
+      counters,
     }
     const exact = createExactColumnIndexService({
       state,
@@ -629,6 +632,7 @@ describe('createExactColumnIndexService', () => {
         searchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 })
+    expect(counters.exactIndexBuilds).toBe(1)
 
     const textPrepared = exact.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -645,6 +649,7 @@ describe('createExactColumnIndexService', () => {
         searchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 })
+    expect(counters.exactIndexBuilds).toBe(2)
     expect(
       exact.findVectorMatch({
         lookupValue: { tag: ValueTag.Number, value: 5 },

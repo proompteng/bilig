@@ -42,6 +42,7 @@ export interface ComparativeMeasuredEngineResult {
   status: 'supported'
   elapsedMs: NumericSummary
   memoryDeltaBytes: ComparativeMemorySummary
+  engineCounters?: Record<string, NumericSummary>
   verification: Record<string, unknown>
 }
 

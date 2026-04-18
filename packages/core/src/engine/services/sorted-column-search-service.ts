@@ -4,6 +4,7 @@ import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../run
 import type { ExactVectorMatchResult } from './exact-column-index-service.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 import {
   isLookupColumnOwner,
   sliceOffsetBounds,
@@ -179,7 +180,7 @@ function columnRegistryKey(sheetName: string, col: number): string {
 }
 
 export function createSortedColumnSearchService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineCounters }
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
   readonly columnIndexStore: ColumnIndexStore
 }): SortedColumnSearchService {
@@ -267,6 +268,9 @@ export function createSortedColumnSearchService(args: {
   }
 
   const buildApproximateColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ApproximateColumnIndexEntry => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'approxIndexBuilds')
+    }
     const view = args.runtimeColumnStore.getColumnView({
       sheetName,
       rowStart,

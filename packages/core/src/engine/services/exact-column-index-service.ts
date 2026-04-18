@@ -4,6 +4,7 @@ import type { EngineRuntimeState, PreparedExactVectorLookup } from '../runtime-s
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
 import { findExactMatchInRange, isLookupColumnOwner, summarizeExactRange, type LookupColumnOwner } from './lookup-column-owner.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface ExactVectorMatchRequest {
   lookupValue: CellValue
@@ -188,7 +189,7 @@ function setPositionsForKey(entry: ExactColumnIndexEntry, key: string): void {
 }
 
 export function createExactColumnIndexService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineCounters }
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
   readonly columnIndexStore: ColumnIndexStore
 }): ExactColumnIndexService {
@@ -275,6 +276,9 @@ export function createExactColumnIndexService(args: {
   }
 
   const buildExactColumnIndex = (sheetName: string, col: number, rowStart: number, rowEnd: number): ExactColumnIndexEntry => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'exactIndexBuilds')
+    }
     const view = args.runtimeColumnStore.getColumnView({
       sheetName,
       rowStart,

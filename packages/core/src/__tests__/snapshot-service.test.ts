@@ -6,6 +6,7 @@ import { createEngineSnapshotService } from '../engine/services/snapshot-service
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { SpreadsheetEngine } from '../engine.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 
 describe('EngineSnapshotService', () => {
   it('normalizes thrown import failures into tagged snapshot errors', () => {
@@ -48,6 +49,7 @@ describe('EngineSnapshotService', () => {
       replicaState: createReplicaState('replica'),
       entityVersions: new Map([['cell:1', { counter: 2, replicaId: 'replica', batchId: 'replica:2', opIndex: 0 }]]),
       sheetDeleteVersions: new Map([['Sheet1', { counter: 3, replicaId: 'replica', batchId: 'replica:3', opIndex: 0 }]]),
+      counters: createEngineCounters(),
     }
     const service = createEngineSnapshotService({
       state,
@@ -66,6 +68,38 @@ describe('EngineSnapshotService', () => {
 
     expect(state.entityVersions.get('cell:1')).toEqual(exported.entityVersions[0]?.order)
     expect(state.sheetDeleteVersions.get('Sheet1')).toEqual(exported.sheetDeleteVersions[0]?.order)
+  })
+
+  it('counts replayed restore ops during snapshot import', () => {
+    const workbook = new WorkbookStore('book')
+    const counters = createEngineCounters()
+    const state = {
+      workbook,
+      strings: new StringPool(),
+      formulas: new FormulaTable(workbook.cellStore),
+      replicaState: createReplicaState('replica'),
+      entityVersions: new Map(),
+      sheetDeleteVersions: new Map(),
+      counters,
+    }
+    const service = createEngineSnapshotService({
+      state,
+      getCellByIndex: () => {
+        throw new Error('unused')
+      },
+      resetWorkbook: () => {},
+      executeRestoreTransaction: () => {},
+    })
+
+    Effect.runSync(
+      service.importWorkbook({
+        version: 1,
+        workbook: { name: 'book' },
+        sheets: [{ id: 1, name: 'Sheet1', order: 0, cells: [{ address: 'A1', value: 1 }] }],
+      }),
+    )
+
+    expect(counters.snapshotOpsReplayed).toBeGreaterThan(0)
   })
 
   it('preserves explicit authored blank cells through snapshot import', async () => {

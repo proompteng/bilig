@@ -4,6 +4,8 @@ import type { ExpandedComparativeBenchmarkResult } from './benchmark-workpaper-v
 export type ExpandedCompetitiveFamily =
   | 'build'
   | 'rebuild'
+  | 'runtime-restore'
+  | 'config-toggle'
   | 'dirty-execution'
   | 'batch-edit'
   | 'structural-rows'
@@ -22,6 +24,8 @@ export type ExpandedCompetitiveFamily =
 export const EXPANDED_COMPARATIVE_FAMILY_ORDER = [
   'build',
   'rebuild',
+  'runtime-restore',
+  'config-toggle',
   'dirty-execution',
   'batch-edit',
   'structural-rows',
@@ -38,6 +42,33 @@ export const EXPANDED_COMPARATIVE_FAMILY_ORDER = [
   'dynamic-array',
 ] as const satisfies readonly ExpandedCompetitiveFamily[]
 
+const EXPANDED_COMPARATIVE_FAMILY_METADATA = {
+  build: { scorecardEligible: true },
+  rebuild: { scorecardEligible: true },
+  'runtime-restore': { scorecardEligible: true },
+  'config-toggle': {
+    scorecardEligible: false,
+    exclusionReason: 'Control-only rebuild toggle; not evidence of broad competitive victory.',
+  },
+  'dirty-execution': { scorecardEligible: true },
+  'batch-edit': { scorecardEligible: true },
+  'structural-rows': { scorecardEligible: true },
+  'structural-columns': { scorecardEligible: true },
+  'range-read': { scorecardEligible: true },
+  'overlapping-aggregate': { scorecardEligible: true },
+  'sliding-window-aggregate': { scorecardEligible: true },
+  'conditional-aggregation': { scorecardEligible: true },
+  'lookup-exact': { scorecardEligible: true },
+  'lookup-after-write': { scorecardEligible: true },
+  'lookup-approximate': { scorecardEligible: true },
+  'lookup-approximate-after-write': { scorecardEligible: true },
+  'lookup-text': { scorecardEligible: true },
+  'dynamic-array': {
+    scorecardEligible: false,
+    exclusionReason: 'Leadership-only support lane; not an apples-to-apples performance scorecard input.',
+  },
+} as const satisfies Record<ExpandedCompetitiveFamily, { scorecardEligible: boolean; exclusionReason?: string }>
+
 export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   build: [
     'build-dense-literals',
@@ -46,7 +77,9 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'build-parser-cache-mixed-templates',
     'build-many-sheets',
   ],
-  rebuild: ['rebuild-and-recalculate', 'rebuild-config-toggle', 'rebuild-runtime-from-snapshot'],
+  rebuild: ['rebuild-and-recalculate'],
+  'runtime-restore': ['rebuild-runtime-from-snapshot'],
+  'config-toggle': ['rebuild-config-toggle'],
   'dirty-execution': ['single-edit-chain', 'single-edit-fanout', 'partial-recompute-mixed-frontier', 'single-formula-edit-recalc'],
   'batch-edit': [
     'batch-edit-single-column',
@@ -74,6 +107,8 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_FAMILY = buildExpandedComparativeWork
 export interface ExpandedCompetitiveFamilySummary {
   family: ExpandedCompetitiveFamily
   workloads: readonly ExpandedComparativeBenchmarkWorkload[]
+  scorecardEligible: boolean
+  exclusionReason: string | null
   resultCount: number
   comparableCount: number
   leadershipCount: number
@@ -82,9 +117,18 @@ export interface ExpandedCompetitiveFamilySummary {
   meanSpeedupGeomean: number | null
 }
 
+export interface ExpandedCompetitiveScorecardSummary {
+  eligibleFamilies: readonly ExpandedCompetitiveFamily[]
+  excludedFamilies: readonly ExpandedCompetitiveFamily[]
+  comparableCount: number
+  workpaperWins: number
+  hyperformulaWins: number
+}
+
 export interface ExpandedCompetitiveFamilyReport {
   suite: 'workpaper-vs-hyperformula-expanded'
   families: readonly ExpandedCompetitiveFamilySummary[]
+  scorecard: ExpandedCompetitiveScorecardSummary
 }
 
 export function getExpandedCompetitiveFamily(workload: ExpandedComparativeBenchmarkWorkload): ExpandedCompetitiveFamily {
@@ -97,6 +141,8 @@ export function groupExpandedCompetitiveBenchmarkResultsByFamily(
   return {
     build: results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'build'),
     rebuild: results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'rebuild'),
+    'runtime-restore': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'runtime-restore'),
+    'config-toggle': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'config-toggle'),
     'dirty-execution': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'dirty-execution'),
     'batch-edit': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'batch-edit'),
     'structural-rows': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'structural-rows'),
@@ -125,9 +171,12 @@ export function summarizeExpandedCompetitiveFamilies(
     const comparableResults = familyResults.filter((result) => result.comparable)
     const workpaperWins = comparableResults.filter((result) => result.comparison.fasterEngine === 'workpaper').length
     const hyperformulaWins = comparableResults.length - workpaperWins
+    const metadata = EXPANDED_COMPARATIVE_FAMILY_METADATA[family]
     return {
       family,
       workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
+      scorecardEligible: metadata.scorecardEligible,
+      exclusionReason: 'exclusionReason' in metadata ? metadata.exclusionReason : null,
       resultCount: familyResults.length,
       comparableCount: comparableResults.length,
       leadershipCount: familyResults.length - comparableResults.length,
@@ -142,9 +191,18 @@ export function summarizeExpandedCompetitiveFamilies(
 export function buildExpandedCompetitiveFamilyReport(
   results: readonly ExpandedComparativeBenchmarkResult[],
 ): ExpandedCompetitiveFamilyReport {
+  const families = summarizeExpandedCompetitiveFamilies(results)
+  const scorecardFamilies = families.filter((family) => family.scorecardEligible)
   return {
     suite: 'workpaper-vs-hyperformula-expanded',
-    families: summarizeExpandedCompetitiveFamilies(results),
+    families,
+    scorecard: {
+      eligibleFamilies: scorecardFamilies.map((family) => family.family),
+      excludedFamilies: families.filter((family) => !family.scorecardEligible).map((family) => family.family),
+      comparableCount: scorecardFamilies.reduce((sum, family) => sum + family.comparableCount, 0),
+      workpaperWins: scorecardFamilies.reduce((sum, family) => sum + family.workpaperWins, 0),
+      hyperformulaWins: scorecardFamilies.reduce((sum, family) => sum + family.hyperformulaWins, 0),
+    },
   }
 }
 

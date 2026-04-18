@@ -91,6 +91,7 @@ import type {
   WorkPaperSheetMappingAdapter,
   WorkPaperSheets,
   WorkPaperStats,
+  WorkPaperEngineCounters,
   WorkPaperDetailedEventMap,
   WorkPaperDetailedListener,
   WorkPaperEventName,
@@ -1306,6 +1307,22 @@ export class WorkPaper {
       evaluationSuspended: this.evaluationSuspended,
       lastMetrics: structuredClone(this.engine.getLastMetrics()),
     }
+  }
+
+  getPerformanceCounters(): WorkPaperEngineCounters {
+    this.assertNotDisposed()
+    const counterAwareEngine = this.engine as SpreadsheetEngine & {
+      getPerformanceCounters(): WorkPaperEngineCounters
+    }
+    return structuredClone(counterAwareEngine.getPerformanceCounters())
+  }
+
+  resetPerformanceCounters(): void {
+    this.assertNotDisposed()
+    const counterAwareEngine = this.engine as SpreadsheetEngine & {
+      resetPerformanceCounters(): void
+    }
+    counterAwareEngine.resetPerformanceCounters()
   }
 
   rebuildAndRecalculate(): WorkPaperChange[] {

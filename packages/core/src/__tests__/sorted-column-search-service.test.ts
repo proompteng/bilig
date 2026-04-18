@@ -6,6 +6,7 @@ import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../engine/runtime-state.js'
 import { createSortedColumnSearchService } from '../engine/services/sorted-column-search-service.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 import type {
   EngineRuntimeColumnStoreService,
   RuntimeColumnOwner,
@@ -23,16 +24,16 @@ function setStoredString(workbook: WorkbookStore, strings: StringPool, address: 
   workbook.cellStore.setValue(cellIndex, { tag: ValueTag.String, value }, strings.intern(value))
 }
 
-function createSorted(workbook: WorkbookStore, strings: StringPool) {
+function createSorted(workbook: WorkbookStore, strings: StringPool, counters = createEngineCounters()) {
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({
-    state: { workbook, strings },
+    state: { workbook, strings, counters },
   })
   const columnIndexStore = createColumnIndexStore({
     state: { workbook, strings },
     runtimeColumnStore,
   })
   return createSortedColumnSearchService({
-    state: { workbook, strings },
+    state: { workbook, strings, counters },
     runtimeColumnStore,
     columnIndexStore,
   })
@@ -322,13 +323,15 @@ describe('createSortedColumnSearchService', () => {
       },
     }
 
-    const state: Pick<EngineRuntimeState, 'workbook' | 'strings'> = {
+    const counters = createEngineCounters()
+    const state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters: typeof counters } = {
       workbook: {
         getSheet() {
           return sheetAvailable ? { columnVersions, structureVersion } : undefined
         },
       },
       strings,
+      counters,
     }
     const sorted = createSortedColumnSearchService({
       state,
@@ -354,6 +357,7 @@ describe('createSortedColumnSearchService', () => {
         matchMode: 1,
       }),
     ).toEqual({ handled: true, position: 3 })
+    expect(counters.approxIndexBuilds).toBe(1)
 
     const textPrepared = sorted.prepareVectorLookup({
       sheetName: 'Sheet1',
@@ -370,6 +374,7 @@ describe('createSortedColumnSearchService', () => {
         matchMode: 1,
       }),
     ).toEqual({ handled: true, position: 2 })
+    expect(counters.approxIndexBuilds).toBe(2)
     expect(
       sorted.findVectorMatch({
         lookupValue: { tag: ValueTag.Number, value: 6 },

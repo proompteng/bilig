@@ -90,6 +90,29 @@ const baseBudgets = {
 const toleranceMultiplier = Number.parseFloat(process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? '1.5' : '1'))
 const budgets = Object.fromEntries(Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier]))
 
+const BENCH_CONTRACT_FAMILY_TRUTH = {
+  'cold-build': {
+    benchmarks: ['load100k', 'load250k'],
+    note: 'Cold workbook construction and initial materialization. Keep separate from warm rebuild and runtime restore.',
+  },
+  'dirty-execution': {
+    benchmarks: ['edit10k', 'rangeAggregates10k', 'topologyEdit10k'],
+    note: 'Compute-dominated edit and recalc paths.',
+  },
+  'render-commit': {
+    benchmarks: ['renderCommit10k'],
+    note: 'Renderer-facing commit ingestion cost. Do not blend with dirty execution.',
+  },
+  'runtime-restore': {
+    benchmarks: ['workerWarmStart100k', 'workerWarmStart250k'],
+    note: 'Worker/runtime restore cost. Keep separate from warm rebuild and cold build.',
+  },
+  'patch-emission': {
+    benchmarks: ['workerVisibleEdit10k', 'workerReconnectCatchUp100Pending'],
+    note: 'Patch-materialization and catch-up delivery cost. Keep separate from compute-dominated edit timings.',
+  },
+} as const
+
 function assertBudget(label, actual, threshold, formatter = formatMs) {
   if (actual > threshold) {
     throw new Error(`${label} exceeded budget: ${formatter(actual)} > ${formatter(threshold)}`)
@@ -378,6 +401,22 @@ export async function runBenchContracts(): Promise<void> {
           workerWarmStart250k: workerWarmStart250kRuns.length,
           workerVisibleEdit10k: workerVisibleEditRuns.length,
           workerReconnectCatchUp100Pending: workerReconnectCatchUpRuns.length,
+        },
+        truthModel: {
+          families: BENCH_CONTRACT_FAMILY_TRUTH,
+          computeCostMetrics: [
+            'results.edit10k.elapsedMs',
+            'results.rangeAggregates10k.elapsedMs',
+            'results.topologyEdit10k.elapsedMs',
+            'results.renderCommit10k.elapsedMs',
+          ],
+          patchMaterializationMetrics: [
+            'results.workerVisibleEdit10k.visiblePatchMs',
+            'results.workerReconnectCatchUp100Pending.catchUpMs',
+            'results.workerReconnectCatchUp100Pending.rebaseMs',
+            'results.workerReconnectCatchUp100Pending.submitDrainMs',
+            'results.workerReconnectCatchUp100Pending.ackMs',
+          ],
         },
         results: {
           load100k: {

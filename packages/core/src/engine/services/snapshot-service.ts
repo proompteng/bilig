@@ -7,6 +7,7 @@ import { exportSheetMetadata } from '../../engine-snapshot-utils.js'
 import { exportReplicaSnapshot as exportReplicaStateSnapshot, hydrateReplicaState } from '../../replica-state.js'
 import type { EngineRuntimeState, EngineReplicaSnapshot, TransactionRecord } from '../runtime-state.js'
 import { EngineSnapshotError } from '../errors.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface EngineSnapshotService {
   readonly exportWorkbook: () => Effect.Effect<WorkbookSnapshot, EngineSnapshotError>
@@ -16,7 +17,12 @@ export interface EngineSnapshotService {
 }
 
 export function createEngineSnapshotService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'replicaState' | 'entityVersions' | 'sheetDeleteVersions'>
+  readonly state: Pick<
+    EngineRuntimeState,
+    'workbook' | 'strings' | 'formulas' | 'replicaState' | 'entityVersions' | 'sheetDeleteVersions'
+  > & {
+    counters?: EngineCounters
+  }
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
   readonly resetWorkbook: (workbookName?: string) => void
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void
@@ -425,6 +431,9 @@ export function createEngineSnapshotService(args: {
             })
           })
           const potentialNewCells = snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0)
+          if (args.state.counters) {
+            addEngineCounter(args.state.counters, 'snapshotOpsReplayed', ops.length)
+          }
           args.executeRestoreTransaction(potentialNewCells > 0 ? { kind: 'ops', ops, potentialNewCells } : { kind: 'ops', ops })
         },
         catch: (cause) =>

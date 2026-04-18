@@ -8,6 +8,7 @@ import { errorValue } from '../../engine-value-utils.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import { EngineFormulaGraphError } from '../errors.js'
 import type { Float64Arena, Uint32Arena } from '@bilig/formula'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface EngineFormulaGraphService {
   readonly rebuildTopoRanks: () => Effect.Effect<void, EngineFormulaGraphError>
@@ -31,7 +32,7 @@ function graphErrorMessage(message: string, cause: unknown): string {
 const SYNC_WASM_INIT_FORMULA_THRESHOLD = 64
 
 export function createEngineFormulaGraphService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'ranges' | 'wasm'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'ranges' | 'wasm'> & { counters?: EngineCounters }
   readonly cycleDetector: CycleDetector
   readonly programArena: Uint32Arena
   readonly constantArena: Float64Arena
@@ -105,6 +106,9 @@ export function createEngineFormulaGraphService(args: {
   }
 
   const rebuildTopoRanksNow = (): void => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'topoRebuilds')
+    }
     const requiredCellCapacity = args.state.workbook.cellStore.size + 1
     ensureTopoScratchCapacity(requiredCellCapacity)
 
@@ -171,6 +175,9 @@ export function createEngineFormulaGraphService(args: {
   }
 
   const syncWasmProgramsNow = (): void => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'wasmFullUploads')
+    }
     args.programArena.reset()
     args.constantArena.reset()
     args.rangeListArena.reset()

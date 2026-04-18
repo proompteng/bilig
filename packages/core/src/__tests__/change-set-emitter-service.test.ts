@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineChangeSetEmitterService } from '../engine/services/change-set-emitter-service.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 
 describe('EngineChangeSetEmitterService', () => {
   it('returns empty results for empty and unresolvable change sets', () => {
@@ -48,6 +49,7 @@ describe('EngineChangeSetEmitterService', () => {
 
   it('captures tiny same-sheet change sets without requiring per-cell sheet-name lookups', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter' })
+    const counters = createEngineCounters()
     engine.createSheet('Sheet1')
     engine.setCellValue('Sheet1', 'A1', 1)
     engine.setCellValue('Sheet1', 'B1', 2)
@@ -56,6 +58,7 @@ describe('EngineChangeSetEmitterService', () => {
       state: {
         workbook: engine.workbook,
         strings: engine.strings,
+        counters,
       },
     })
 
@@ -71,6 +74,7 @@ describe('EngineChangeSetEmitterService', () => {
     expect(changes[1]?.sheetName).toBe('Sheet1')
     expect(changes[0]?.newValue).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(changes[1]?.newValue).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(counters.changedCellPayloadsBuilt).toBe(2)
   })
 
   it('captures larger cross-sheet change sets while skipping unresolved entries', () => {
