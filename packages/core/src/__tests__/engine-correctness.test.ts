@@ -5,6 +5,7 @@ import { formatAddress } from '@bilig/formula'
 import type { CellNumberFormatInput, CellRangeRef, CellStylePatch, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
 import { SpreadsheetEngine } from '../engine.js'
+import { makeCellKey } from '../workbook-store.js'
 import { runProperty } from '@bilig/test-fuzz'
 
 type CoreCorrectnessAction =
@@ -525,6 +526,38 @@ describe('engine correctness', () => {
     })
     expect(engine.getCell(sheetName, 'C1').formula).toBe('SUM(SalesRange)')
     expect(engine.getCellValue(sheetName, 'C1')).toMatchObject({ tag: 1, value: 33 })
+  })
+
+  it('restores shifted relative references after insert-column undo', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-structural-relative-reference-undo',
+      replicaId: 'correctness-structural-relative-reference-undo',
+    })
+    await engine.ready()
+    engine.createSheet(sheetName)
+    engine.setRangeValues({ sheetName, startAddress: 'A1', endAddress: 'B2' }, [
+      [4, 2],
+      [3, 7],
+    ])
+    engine.setCellFormula(sheetName, 'C1', 'A1+B2')
+    engine.setCellFormula(sheetName, 'D2', 'C1*A2')
+    engine.setCellFormula(sheetName, 'E3', 'SUM(A1:B2)')
+
+    const initialSnapshot = engine.exportSnapshot()
+    const sheetId = engine.workbook.getSheet(sheetName)!.id
+
+    engine.insertColumns(sheetName, 1, 2)
+    expect(engine.workbook.cellKeyToIndex.get(makeCellKey(sheetId, 0, 4))).toBe(engine.workbook.getCellIndex(sheetName, 'E1'))
+    expect(engine.getCell(sheetName, 'E1').formula).toBe('A1+D2')
+    expect(engine.getCell(sheetName, 'F2').formula).toBe('E1*A2')
+    expect(engine.getCell(sheetName, 'G3').formula).toBe('SUM(A1:D2)')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.workbook.cellKeyToIndex.get(makeCellKey(sheetId, 0, 2))).toBe(engine.workbook.getCellIndex(sheetName, 'C1'))
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot)
+    expect(engine.getCell(sheetName, 'C1').formula).toBe('A1+B2')
+    expect(engine.getCell(sheetName, 'D2').formula).toBe('C1*A2')
+    expect(engine.getCell(sheetName, 'E3').formula).toBe('SUM(A1:B2)')
   })
 
   it('restores named-range structures after delete-row undo', async () => {

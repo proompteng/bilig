@@ -40,6 +40,22 @@ describe('loadLiteralSheetIntoEmptySheet', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 7 })
   })
 
+  it('keeps loaded literals addressable for direct-reference formulas', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'literal-direct-reference-load' })
+    engine.workbook.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+
+    loadLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, [
+      [4, 2],
+      [3, 7],
+    ])
+    engine.setCellFormula('Sheet1', 'C1', 'A1+B2')
+
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 7 })
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 11 })
+  })
+
   it('can skip formula-like strings while bulk-loading the literal subset', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'literal-filtered-load' })
     engine.workbook.createSheet('Sheet1')

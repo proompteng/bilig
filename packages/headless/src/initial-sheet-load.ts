@@ -1,4 +1,4 @@
-import { CellFlags, loadLiteralSheetIntoEmptySheet, makeCellKey, type SpreadsheetEngine, type EngineCellMutationRef } from '@bilig/core'
+import { CellFlags, loadLiteralSheetIntoEmptySheet, type SpreadsheetEngine, type EngineCellMutationRef } from '@bilig/core'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import type { WorkPaperCellAddress, WorkPaperSheet } from './work-paper-types.js'
 
@@ -25,8 +25,7 @@ export function prepareInitialMixedSheetLoad(args: {
   content: WorkPaperSheet
   rewriteFormula: (formula: string, destination: WorkPaperCellAddress) => string
 }): PreparedInitialMixedSheetLoad {
-  const sheet = args.engine.workbook.getSheetById(args.sheetId)
-  if (!sheet) {
+  if (!args.engine.workbook.getSheetById(args.sheetId)) {
     throw new Error(`Unknown sheet id: ${args.sheetId}`)
   }
 
@@ -82,9 +81,7 @@ export function prepareInitialMixedSheetLoad(args: {
         if (raw === null) {
           continue
         }
-        const cellIndex = cellStore.allocate(args.sheetId, rowIndex, colIndex)
-        args.engine.workbook.cellKeyToIndex.set(makeCellKey(args.sheetId, rowIndex, colIndex), cellIndex)
-        sheet.grid.set(rowIndex, colIndex, cellIndex)
+        const { cellIndex } = args.engine.workbook.ensureCellAt(args.sheetId, rowIndex, colIndex)
         cellStore.flags[cellIndex] = CellFlags.Materialized
         cellStore.formulaIds[cellIndex] = 0
         cellStore.errors[cellIndex] = ErrorCode.None

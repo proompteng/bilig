@@ -166,6 +166,8 @@ export class WorkbookStore {
   private nextSheetId = 1
   private nextRowAxisId = 1
   private nextColumnAxisId = 1
+  private nextLogicalRowAxisId = 1
+  private nextLogicalColumnAxisId = 1
   private nextStyleId = 1
   private nextFormatId = 1
 
@@ -204,7 +206,7 @@ export class WorkbookStore {
       logical: new LogicalSheetStore(
         id ?? this.nextSheetId - 1,
         axisMap,
-        new CellPageStore(this.cellKeyToIndex, (location) => makeCellKey(location.sheetId, location.row, location.col)),
+        new CellPageStore(new Map<string, number>(), (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId)),
       ),
       columnVersions: new Uint32Array(MAX_COLS),
       structureVersion: 1,
@@ -309,9 +311,21 @@ export class WorkbookStore {
       return { cellIndex: existing, created: false }
     }
     const cellIndex = this.cellStore.allocate(sheet.id, row, col)
-    sheet.logical.setVisibleCell(row, col, cellIndex)
-    sheet.grid.set(row, col, cellIndex)
+    this.attachAllocatedCell(sheet.id, row, col, cellIndex)
     return { cellIndex, created: true }
+  }
+
+  attachAllocatedCell(sheetId: number, row: number, col: number, cellIndex: number): void {
+    const sheet = this.getSheetById(sheetId)
+    if (!sheet) {
+      throw new Error(`Unknown sheet id: ${sheetId}`)
+    }
+    sheet.logical.setVisibleCell(row, col, cellIndex, {
+      createRowId: () => this.createLogicalAxisId('row'),
+      createColumnId: () => this.createLogicalAxisId('column'),
+    })
+    this.cellKeyToIndex.set(makeCellKey(sheet.id, row, col), cellIndex)
+    sheet.grid.set(row, col, cellIndex)
   }
 
   withBatchedColumnVersionUpdates<T>(execute: () => T): T {
@@ -390,6 +404,10 @@ export class WorkbookStore {
     if (sheet && row !== undefined && col !== undefined) {
       if (sheet.logical.getVisibleCell(row, col) === index) {
         sheet.logical.deleteVisibleCell(row, col)
+      }
+      const key = makeCellKey(sheet.id, row, col)
+      if (this.cellKeyToIndex.get(key) === index) {
+        this.cellKeyToIndex.delete(key)
       }
       if (sheet.grid.get(row, col) === index) {
         sheet.grid.clear(row, col)
@@ -920,8 +938,10 @@ export class WorkbookStore {
     }
     changedEntries.forEach(({ row, col }) => {
       sheet.logical.deleteVisibleCell(row, col)
+      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
     })
 
+    const changedCellIndices: number[] = []
     const removedCellIndices: number[] = []
     for (const { cellIndex, nextRow, nextCol } of changedEntries) {
       if (nextRow === undefined || nextCol === undefined) {
@@ -930,10 +950,79 @@ export class WorkbookStore {
       }
       this.cellStore.rows[cellIndex] = nextRow
       this.cellStore.cols[cellIndex] = nextCol
-      sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex)
+      this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
+      sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex, {
+        createRowId: () => this.createLogicalAxisId('row'),
+        createColumnId: () => this.createLogicalAxisId('column'),
+      })
+      changedCellIndices.push(cellIndex)
     }
 
-    return { changedCellIndices: [], removedCellIndices }
+    return { changedCellIndices, removedCellIndices }
+  }
+
+  planStructuralAxisTransform(sheetName: string, transform: StructuralAxisTransform): StructuralTransaction | undefined {
+    const sheet = this.getSheet(sheetName)
+    if (!sheet) {
+      return undefined
+    }
+    const scope = structuralScopeForTransform(transform)
+    const remappedCells: Array<StructuralTransaction['remappedCells'][number]> = []
+    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      const axisIndex = transform.axis === 'row' ? row : col
+      if (axisIndex < scope.start || (scope.end !== undefined && axisIndex >= scope.end)) {
+        return
+      }
+      const nextAxisIndex = mapStructuralAxisIndex(axisIndex, transform)
+      if (nextAxisIndex === axisIndex) {
+        return
+      }
+      const logicalRef = sheet.logical.resolveVisibleCell(row, col)
+      remappedCells.push({
+        cellIndex,
+        fromRow: row,
+        fromCol: col,
+        ...(logicalRef.rowRef.id === undefined ? {} : { fromRowId: logicalRef.rowRef.id }),
+        ...(logicalRef.colRef.id === undefined ? {} : { fromColId: logicalRef.colRef.id }),
+        toRow: transform.axis === 'row' ? nextAxisIndex : row,
+        toCol: transform.axis === 'column' ? nextAxisIndex : col,
+      })
+    })
+    return buildStructuralTransaction({
+      sheetName,
+      sheetId: sheet.id,
+      transform,
+      remappedCells,
+    })
+  }
+
+  applyPlannedStructuralTransaction(transaction: StructuralTransaction): StructuralTransaction | undefined {
+    const sheet = this.getSheet(transaction.sheetName)
+    if (!sheet) {
+      return undefined
+    }
+    if (this.counters && transaction.remappedCells.length > 0) {
+      addEngineCounter(this.counters, 'cellsRemapped', transaction.remappedCells.length)
+    }
+    for (const entry of transaction.remappedCells) {
+      this.cellKeyToIndex.delete(makeCellKey(sheet.id, entry.fromRow, entry.fromCol))
+      if (sheet.grid.get(entry.fromRow, entry.fromCol) === entry.cellIndex) {
+        sheet.grid.clear(entry.fromRow, entry.fromCol)
+      }
+      if ((entry.toRow === undefined || entry.toCol === undefined) && entry.fromRowId && entry.fromColId) {
+        sheet.logical.deleteVisibleCellByIds(entry.fromRowId, entry.fromColId)
+      }
+    }
+    for (const entry of transaction.remappedCells) {
+      if (entry.toRow === undefined || entry.toCol === undefined) {
+        continue
+      }
+      this.cellStore.rows[entry.cellIndex] = entry.toRow
+      this.cellStore.cols[entry.cellIndex] = entry.toCol
+      this.cellKeyToIndex.set(makeCellKey(sheet.id, entry.toRow, entry.toCol), entry.cellIndex)
+      sheet.grid.set(entry.toRow, entry.toCol, entry.cellIndex)
+    }
+    return transaction
   }
 
   applyStructuralAxisTransform(sheetName: string, transform: StructuralAxisTransform): StructuralTransaction | undefined {
@@ -949,13 +1038,18 @@ export class WorkbookStore {
     }
     remappedEntries.forEach(({ row, col }) => {
       sheet.logical.deleteVisibleCell(row, col)
+      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col))
     })
 
     const remappedCells = remappedEntries.map(({ cellIndex, row, col, nextRow, nextCol }) => {
       if (nextRow !== undefined && nextCol !== undefined) {
         this.cellStore.rows[cellIndex] = nextRow
         this.cellStore.cols[cellIndex] = nextCol
-        sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex)
+        this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex)
+        sheet.logical.setVisibleCell(nextRow, nextCol, cellIndex, {
+          createRowId: () => this.createLogicalAxisId('row'),
+          createColumnId: () => this.createLogicalAxisId('column'),
+        })
       }
       return {
         cellIndex,
@@ -988,6 +1082,8 @@ export class WorkbookStore {
     this.nextSheetId = 1
     this.nextRowAxisId = 1
     this.nextColumnAxisId = 1
+    this.nextLogicalRowAxisId = 1
+    this.nextLogicalColumnAxisId = 1
     this.nextStyleId = 1
     this.nextFormatId = 1
     this.cellStore.reset()
@@ -1045,10 +1141,18 @@ export class WorkbookStore {
 
   private createAxisEntry(axis: 'row' | 'column'): WorkbookAxisEntryRecord {
     return {
-      id: axis === 'row' ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
+      id: this.createAxisId(axis),
       size: null,
       hidden: null,
     }
+  }
+
+  private createAxisId(axis: 'row' | 'column'): string {
+    return axis === 'row' ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`
+  }
+
+  private createLogicalAxisId(axis: 'row' | 'column'): string {
+    return axis === 'row' ? `logical-row-${this.nextLogicalRowAxisId++}` : `logical-column-${this.nextLogicalColumnAxisId++}`
   }
 
   private setAxisMetadata(
@@ -1144,6 +1248,7 @@ export class WorkbookStore {
       axis,
       start,
       deleteCount,
+      insertCount,
       snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, insertCount),
     )
     return removed
@@ -1176,4 +1281,8 @@ export class WorkbookStore {
 
 export function makeCellKey(sheetId: number, row: number, col: number): number {
   return sheetId * SHEET_STRIDE + row * MAX_COLS + col
+}
+
+export function makeLogicalCellKey(sheetId: number, rowId: string, colId: string): string {
+  return `${sheetId}\t${rowId}\t${colId}`
 }

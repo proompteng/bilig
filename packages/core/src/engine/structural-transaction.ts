@@ -5,6 +5,8 @@ export interface StructuralRemappedCell {
   readonly cellIndex: number
   readonly fromRow: number
   readonly fromCol: number
+  readonly fromRowId?: string
+  readonly fromColId?: string
   readonly toRow: number | undefined
   readonly toCol: number | undefined
 }

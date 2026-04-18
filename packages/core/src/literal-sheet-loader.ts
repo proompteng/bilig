@@ -1,7 +1,6 @@
 import { ErrorCode, ValueTag, type LiteralInput } from '@bilig/protocol'
 import type { StringPool } from './string-pool.js'
 import type { WorkbookStore } from './workbook-store.js'
-import { makeCellKey } from './workbook-store.js'
 import { CellFlags } from './cell-store.js'
 
 export function loadLiteralSheetIntoEmptySheet(
@@ -32,8 +31,7 @@ export function loadLiteralSheetIntoEmptySheet(
           return
         }
         const cellIndex = cellStore.allocate(sheetId, rowIndex, colIndex)
-        workbook.cellKeyToIndex.set(makeCellKey(sheetId, rowIndex, colIndex), cellIndex)
-        sheet.grid.set(rowIndex, colIndex, cellIndex)
+        workbook.attachAllocatedCell(sheetId, rowIndex, colIndex, cellIndex)
         writeLiteralCell(cellStore, strings, cellIndex, raw)
         workbook.notifyCellValueWritten(cellIndex)
       })

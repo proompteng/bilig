@@ -1003,6 +1003,12 @@ export function createEngineStructureService(args: {
             changedTableNames,
           })
 
+          const transaction =
+            args.state.workbook.planStructuralAxisTransform(sheetName, transform) ??
+            (() => {
+              throw new Error(`Missing sheet for structural op: ${sheetName}`)
+            })()
+
           switch (op.kind) {
             case 'insertRows':
               args.state.workbook.insertRows(sheetName, op.start, op.count, op.entries)
@@ -1024,15 +1030,11 @@ export function createEngineStructureService(args: {
               break
           }
 
+          args.state.workbook.applyPlannedStructuralTransaction(transaction)
+
           const structuralRangeDependencies = collectStructuralRangeDependencies({
             formulaCellIndices: impactedFormulas.formulaCellIndices,
           })
-
-          const transaction =
-            args.state.workbook.applyStructuralAxisTransform(sheetName, transform) ??
-            (() => {
-              throw new Error(`Missing sheet for structural op: ${sheetName}`)
-            })()
 
           const hadCycleFormulas = (() => {
             let found = false
@@ -1057,7 +1059,6 @@ export function createEngineStructureService(args: {
           })
 
           clearSpillMetadataForSheet(sheetName)
-          const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex))
           args.retargetRangeDependencies(transaction, structuralRangeDependencies)
           const rebindInputs = resolveStructuralFormulaRebindInputs({
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex)),
@@ -1066,6 +1067,10 @@ export function createEngineStructureService(args: {
             changedDefinedNames,
             changedTableNames,
           })
+          const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex))
+          const onlyDirectAggregateFormulaCells =
+            formulaCellIndices.length > 0 &&
+            formulaCellIndices.every((cellIndex) => args.state.formulas.get(cellIndex)?.directAggregate !== undefined)
           args.rebindFormulaCells(rebindInputs)
           const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
           const preservedFormulaCellIndices = new Set(rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex))
@@ -1076,7 +1081,8 @@ export function createEngineStructureService(args: {
           const hasNonPreservedRebind = rebindInputs.some((input) => input.preservesBinding !== true)
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
           const graphRefreshRequired =
-            hasNonPreservedRebind || lostSurvivingFormulaCells || (removedFormulaCellIndices.length > 0 && hadCycleFormulas)
+            ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells) ||
+            (removedFormulaCellIndices.length > 0 && hadCycleFormulas)
           return {
             transaction,
             changedCellIndices: [...transaction.removedCellIndices],

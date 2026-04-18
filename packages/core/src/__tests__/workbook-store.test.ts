@@ -553,7 +553,7 @@ describe('WorkbookStore', () => {
 
     const remapped = workbook.remapSheetCells('Sheet1', 'column', (index) => (index < 1 ? index : index + 1))
 
-    expect(remapped.changedCellIndices).toEqual([])
+    expect(remapped.changedCellIndices).toEqual([movedCellIndex, farCellIndex])
     expect(workbook.getCellIndex('Sheet1', 'A1')).toBe(leftCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'C1')).toBe(movedCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'E1')).toBe(farCellIndex)
@@ -561,6 +561,20 @@ describe('WorkbookStore', () => {
     expect(workbook.cellStore.cols[leftCellIndex]).toBe(0)
     expect(workbook.cellStore.cols[movedCellIndex]).toBe(2)
     expect(workbook.cellStore.cols[farCellIndex]).toBe(4)
+  })
+
+  it('follows axis-map row inserts through the logical store before physical remap runs', () => {
+    const workbook = new WorkbookStore('logical-axis-row-insert')
+    workbook.createSheet('Sheet1')
+
+    const cellIndex = workbook.ensureCell('Sheet1', 'A1')
+
+    expect(workbook.getCellIndex('Sheet1', 'A1')).toBe(cellIndex)
+
+    workbook.insertRows('Sheet1', 0, 1)
+
+    expect(workbook.getCellIndex('Sheet1', 'A1')).toBeUndefined()
+    expect(workbook.getCellIndex('Sheet1', 'A2')).toBe(cellIndex)
   })
 
   it('builds one structural transaction from workbook remaps and tracks removed cells', () => {

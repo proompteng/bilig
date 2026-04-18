@@ -195,7 +195,55 @@ describe('EngineStructureService', () => {
     )
 
     expect(engine.getCell('Sheet1', 'D2').formula).toBe('A1')
-    expect(engine.getColumnAxisEntries('Sheet1')).toEqual([{ id: 'column-2', index: 0, size: 110, hidden: false }])
+    expect(engine.getColumnAxisEntries('Sheet1')).toEqual([{ id: expect.any(String), index: 0, size: 110, hidden: false }])
+  })
+
+  it('plans the structural transaction before mutating workbook axis metadata', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-transaction-order' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+
+    const workbook = engine.workbook
+    if (typeof workbook !== 'object' || workbook === null) {
+      throw new TypeError('Expected workbook store')
+    }
+
+    const events: string[] = []
+    const originalPlanStructuralAxisTransform = Reflect.get(workbook, 'planStructuralAxisTransform')
+    const originalApplyPlannedStructuralTransaction = Reflect.get(workbook, 'applyPlannedStructuralTransaction')
+    const originalInsertRows = Reflect.get(workbook, 'insertRows')
+    if (
+      typeof originalPlanStructuralAxisTransform !== 'function' ||
+      typeof originalApplyPlannedStructuralTransaction !== 'function' ||
+      typeof originalInsertRows !== 'function'
+    ) {
+      throw new TypeError('Expected structural workbook methods')
+    }
+
+    Reflect.set(workbook, 'planStructuralAxisTransform', (...args: unknown[]) => {
+      events.push('planStructuralAxisTransform')
+      return originalPlanStructuralAxisTransform.apply(workbook, args)
+    })
+    Reflect.set(workbook, 'applyPlannedStructuralTransaction', (...args: unknown[]) => {
+      events.push('applyPlannedStructuralTransaction')
+      return originalApplyPlannedStructuralTransaction.apply(workbook, args)
+    })
+    Reflect.set(workbook, 'insertRows', (...args: unknown[]) => {
+      events.push('insertRows')
+      return originalInsertRows.apply(workbook, args)
+    })
+
+    Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'insertRows',
+        sheetName: 'Sheet1',
+        start: 0,
+        count: 1,
+      }),
+    )
+
+    expect(events).toEqual(['planStructuralAxisTransform', 'insertRows', 'applyPlannedStructuralTransaction'])
   })
 
   it('keeps repeated direct aggregate row inserts off the topology and dirty-formula path', async () => {

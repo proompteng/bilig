@@ -1,28 +1,28 @@
-export interface VisibleCellLocation {
+export interface LogicalCellLocation {
   readonly sheetId: number
-  readonly row: number
-  readonly col: number
+  readonly rowId: string
+  readonly colId: string
 }
 
 export class CellPageStore {
   constructor(
-    private readonly cells: Map<number, number>,
-    private readonly keyForLocation: (location: VisibleCellLocation) => number,
+    private readonly cells: Map<string, number>,
+    private readonly keyForLocation: (location: LogicalCellLocation) => string,
   ) {}
 
-  key(location: VisibleCellLocation): number {
+  key(location: LogicalCellLocation): string {
     return this.keyForLocation(location)
   }
 
-  get(location: VisibleCellLocation): number | undefined {
+  get(location: LogicalCellLocation): number | undefined {
     return this.cells.get(this.key(location))
   }
 
-  set(location: VisibleCellLocation, cellIndex: number): void {
+  set(location: LogicalCellLocation, cellIndex: number): void {
     this.cells.set(this.key(location), cellIndex)
   }
 
-  delete(location: VisibleCellLocation): boolean {
+  delete(location: LogicalCellLocation): boolean {
     return this.cells.delete(this.key(location))
   }
 }
