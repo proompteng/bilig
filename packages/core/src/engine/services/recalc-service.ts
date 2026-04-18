@@ -348,7 +348,12 @@ export function createEngineRecalcService(args: {
           materializeCycleDependentError(cellIndex)
           continue
         }
-        if (formula.directLookup !== undefined || formula.directAggregate !== undefined || formula.directCriteria !== undefined) {
+        if (
+          formula.directLookup !== undefined ||
+          formula.directAggregate !== undefined ||
+          formula.directScalar !== undefined ||
+          formula.directCriteria !== undefined
+        ) {
           if (wasmBatchCount > 0) {
             wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
             wasmBatchCount = 0

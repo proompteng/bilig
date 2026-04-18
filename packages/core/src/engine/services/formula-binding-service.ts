@@ -924,6 +924,9 @@ function buildDirectScalarDescriptor(args: {
   readonly ownerSheetName: string
   readonly ensureCellTracked: (sheetName: string, address: string) => number
 }): RuntimeDirectScalarDescriptor | undefined {
+  if (args.compiled.astMatchesSource === false) {
+    return undefined
+  }
   if (args.compiled.symbolicNames.length > 0 || args.compiled.symbolicTables.length > 0 || args.compiled.symbolicSpills.length > 0) {
     return undefined
   }
@@ -1356,8 +1359,20 @@ export function createEngineFormulaBindingService(args: {
       return false
     }
     let nextDirectAggregate: RuntimeDirectAggregateDescriptor | undefined
+    let nextDirectScalar: RuntimeDirectScalarDescriptor | undefined
     if (canRewriteCompiledPreservingBindings(existing, compiled) && rangeDependenciesHaveNoFormulaMembers(existing.rangeDependencies)) {
       nextDirectAggregate = undefined
+      nextDirectScalar =
+        existing.directScalar === undefined
+          ? undefined
+          : buildDirectScalarDescriptor({
+              compiled: compiled as ParsedCompiledFormula,
+              ownerSheetName,
+              ensureCellTracked: args.ensureCellTracked,
+            })
+      if (existing.directScalar !== undefined && !nextDirectScalar) {
+        return false
+      }
     } else if (canRewriteCompiledPreservingDirectAggregate(existing, compiled)) {
       nextDirectAggregate = buildDirectAggregateDescriptor({
         compiled: compiled as ParsedCompiledFormula,
@@ -1390,6 +1405,7 @@ export function createEngineFormulaBindingService(args: {
     existing.programLength = compiled.program.length
     existing.constNumberLength = compiled.constants.length
     existing.directAggregate = nextDirectAggregate
+    existing.directScalar = nextDirectScalar
     if (previousDirectAggregate || nextDirectAggregate) {
       const previousSheet = previousDirectAggregate ? args.state.workbook.getSheet(previousDirectAggregate.sheetName) : undefined
       if (previousDirectAggregate && previousSheet) {
