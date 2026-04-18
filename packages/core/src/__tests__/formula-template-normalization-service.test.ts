@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FormulaMode } from '@bilig/protocol'
 import { createEngineFormulaTemplateNormalizationService } from '../engine/services/formula-template-normalization-service.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 
@@ -85,5 +86,19 @@ describe('EngineFormulaTemplateNormalizationService', () => {
 
     expect(second.templateId).toBe(first.templateId)
     expect(service.listTemplates()).toHaveLength(1)
+  })
+
+  it('fast-compiles simple direct aggregate families and translates reusable shifted windows', () => {
+    const service = createEngineFormulaTemplateNormalizationService()
+
+    const first = service.resolveForCell('SUM(A1:A3)', 0, 1)
+    const second = service.resolveForCell('SUM(A2:A4)', 1, 1)
+
+    expect(first.compiled.directAggregateCandidate?.aggregateKind).toBe('sum')
+    expect(first.compiled.mode).toBe(FormulaMode.WasmFastPath)
+    expect(second.templateId).toBe(first.templateId)
+    expect(second.compiled.deps).toEqual(['A2:A4'])
+    expect(second.compiled.symbolicRanges).toEqual(['A2:A4'])
+    expect(second.compiled.astMatchesSource).toBe(false)
   })
 })

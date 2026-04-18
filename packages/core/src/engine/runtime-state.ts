@@ -205,6 +205,28 @@ export interface RuntimeDirectAggregateDescriptor {
   readonly length: number
 }
 
+export type RuntimeDirectScalarOperand =
+  | {
+      kind: 'cell'
+      cellIndex: number
+    }
+  | {
+      kind: 'literal-number'
+      value: number
+    }
+
+export type RuntimeDirectScalarDescriptor =
+  | {
+      kind: 'binary'
+      operator: '+' | '-' | '*' | '/'
+      left: RuntimeDirectScalarOperand
+      right: RuntimeDirectScalarOperand
+    }
+  | {
+      kind: 'abs'
+      operand: RuntimeDirectScalarOperand
+    }
+
 export interface CompiledPlanRecord {
   readonly id: number
   readonly source: string
@@ -233,6 +255,7 @@ export interface RuntimeFormula {
   rangeListLength: number
   directLookup: RuntimeDirectLookupDescriptor | undefined
   directAggregate: RuntimeDirectAggregateDescriptor | undefined
+  directScalar: RuntimeDirectScalarDescriptor | undefined
   directCriteria: RuntimeDirectCriteriaDescriptor | undefined
 }
 

@@ -1,5 +1,6 @@
 import { Effect } from 'effect'
 import type { CompiledFormula } from '@bilig/formula'
+import type { CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
@@ -21,6 +22,14 @@ export interface EngineFormulaInitializationService {
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>
   readonly initializePreparedCellFormulasAtNow: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
+  readonly initializeHydratedPreparedCellFormulasAt: (
+    refs: readonly HydratedPreparedFormulaInitializationRef[],
+    potentialNewCells?: number,
+  ) => Effect.Effect<void, EngineMutationError>
+  readonly initializeHydratedPreparedCellFormulasAtNow: (
+    refs: readonly HydratedPreparedFormulaInitializationRef[],
+    potentialNewCells?: number,
+  ) => void
 }
 
 export interface PreparedFormulaInitializationRef {
@@ -30,6 +39,10 @@ export interface PreparedFormulaInitializationRef {
   readonly source: string
   readonly compiled: CompiledFormula
   readonly templateId?: number
+}
+
+export interface HydratedPreparedFormulaInitializationRef extends PreparedFormulaInitializationRef {
+  readonly value: CellValue
 }
 
 export function createEngineFormulaInitializationService(args: {
@@ -45,7 +58,7 @@ export function createEngineFormulaInitializationService(args: {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
-  ) => void
+  ) => boolean
   readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly clearTemplateFormulaCache: () => void
   readonly removeFormula: (cellIndex: number) => boolean
@@ -63,6 +76,7 @@ export function createEngineFormulaInitializationService(args: {
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
   readonly flushWasmProgramSync: () => void
+  readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
 }): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
   const resolveSheetName = (sheetId: number): string => {
@@ -199,6 +213,54 @@ export function createEngineFormulaInitializationService(args: {
     )
   }
 
+  const initializeHydratedPreparedCellFormulasAtNow = (
+    refs: readonly HydratedPreparedFormulaInitializationRef[],
+    potentialNewCells?: number,
+  ): void => {
+    if (refs.length === 0) {
+      return
+    }
+
+    args.beginMutationCollection()
+    let topologyChanged = false
+    let compileMs = 0
+    const reservedNewCells = Math.max(potentialNewCells ?? refs.length, refs.length)
+    args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
+    args.resetMaterializedCellScratch(reservedNewCells)
+
+    args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
+    try {
+      args.clearTemplateFormulaCache()
+      args.state.workbook.withBatchedColumnVersionUpdates(() => {
+        refs.forEach((ref) => {
+          const compileStarted = performance.now()
+          const cellIndex = args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col)
+          const ownerSheetName = resolveSheetName(ref.sheetId)
+          topologyChanged = args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId) || topologyChanged
+          args.writeHydratedFormulaValue(cellIndex, ref.value)
+          compileMs += performance.now() - compileStarted
+        })
+      })
+    } finally {
+      args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
+      args.flushWasmProgramSync()
+    }
+
+    if (topologyChanged) {
+      args.rebuildTopoRanks()
+      args.detectCycles()
+    }
+    const lastMetrics = args.state.getLastMetrics()
+    args.state.setLastMetrics({
+      ...lastMetrics,
+      batchId: lastMetrics.batchId + 1,
+      changedInputCount: 0,
+      compileMs,
+      recalcMs: 0,
+    })
+  }
+
   return {
     initializeCellFormulasAt(refs, potentialNewCells) {
       return Effect.try({
@@ -224,7 +286,20 @@ export function createEngineFormulaInitializationService(args: {
           }),
       })
     },
+    initializeHydratedPreparedCellFormulasAt(refs, potentialNewCells) {
+      return Effect.try({
+        try: () => {
+          initializeHydratedPreparedCellFormulasAtNow(refs, potentialNewCells)
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage('Failed to initialize hydrated prepared cell formulas', cause),
+            cause,
+          }),
+      })
+    },
     initializeCellFormulasAtNow,
     initializePreparedCellFormulasAtNow,
+    initializeHydratedPreparedCellFormulasAtNow,
   }
 }

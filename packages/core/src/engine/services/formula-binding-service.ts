@@ -41,6 +41,8 @@ import {
   type EngineRuntimeState,
   type MaterializedDependencies,
   type RuntimeDirectAggregateDescriptor,
+  type RuntimeDirectScalarOperand,
+  type RuntimeDirectScalarDescriptor,
   type RuntimeDirectLookupDescriptor,
   type RuntimeDirectCriteriaDescriptor,
   type RuntimeFormula,
@@ -321,6 +323,40 @@ function directAggregateStructureEqual(
   )
 }
 
+function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, right: RuntimeDirectScalarOperand | undefined): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.kind !== right.kind) {
+    return false
+  }
+  if (left.kind === 'cell') {
+    return right.kind === 'cell' && left.cellIndex === right.cellIndex
+  }
+  return right.kind === 'literal-number' && left.value === right.value
+}
+
+function directScalarStructureEqual(
+  left: RuntimeDirectScalarDescriptor | undefined,
+  right: RuntimeDirectScalarDescriptor | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.kind !== right.kind) {
+    return false
+  }
+  if (left.kind === 'abs') {
+    return right.kind === 'abs' && directScalarOperandEqual(left.operand, right.operand)
+  }
+  return (
+    right.kind === 'binary' &&
+    left.operator === right.operator &&
+    directScalarOperandEqual(left.left, right.left) &&
+    directScalarOperandEqual(left.right, right.right)
+  )
+}
+
 function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
   if (!node) {
     return undefined
@@ -364,6 +400,7 @@ interface PreparedFormulaBindingShape {
   readonly compiled: CompiledFormula
   readonly directLookup: RuntimeDirectLookupDescriptor | undefined
   readonly directAggregate: RuntimeDirectAggregateDescriptor | undefined
+  readonly directScalar: RuntimeDirectScalarDescriptor | undefined
   readonly directCriteria: RuntimeDirectCriteriaDescriptor | undefined
 }
 
@@ -418,6 +455,7 @@ function hasInPlaceDependencyRebindShape(existing: RuntimeFormula, prepared: Pre
     prepared.directLookup === undefined &&
     existing.directAggregate === undefined &&
     prepared.directAggregate === undefined &&
+    directScalarStructureEqual(existing.directScalar, prepared.directScalar) &&
     existing.directCriteria === undefined &&
     prepared.directCriteria === undefined
   )
@@ -455,6 +493,23 @@ function canRewriteCompiledPreservingDirectAggregate(existing: RuntimeFormula, c
     existing.directCriteria === undefined &&
     existing.programLength === compiled.program.length &&
     existing.constNumberLength === compiled.constants.length &&
+    existing.compiled.mode === compiled.mode
+  )
+}
+
+function canRewriteCompiledPreservingDirectScalar(existing: RuntimeFormula, compiled: CompiledFormula): boolean {
+  return (
+    existing.rangeDependencies.length === 0 &&
+    existing.compiled.symbolicNames.length === 0 &&
+    existing.compiled.symbolicTables.length === 0 &&
+    existing.compiled.symbolicSpills.length === 0 &&
+    compiled.symbolicNames.length === 0 &&
+    compiled.symbolicTables.length === 0 &&
+    compiled.symbolicSpills.length === 0 &&
+    existing.directLookup === undefined &&
+    existing.directAggregate === undefined &&
+    existing.directScalar !== undefined &&
+    existing.directCriteria === undefined &&
     existing.compiled.mode === compiled.mode
   )
 }
@@ -843,6 +898,72 @@ function buildDirectAggregateDescriptor(args: {
   }
 }
 
+function buildDirectScalarOperand(args: {
+  readonly node: FormulaNode
+  readonly ownerSheetName: string
+  readonly ensureCellTracked: (sheetName: string, address: string) => number
+}): RuntimeDirectScalarOperand | undefined {
+  if (args.node.kind === 'NumberLiteral') {
+    return { kind: 'literal-number', value: args.node.value }
+  }
+  if (args.node.kind === 'CellRef') {
+    if (args.node.sheetName && !args.ownerSheetName) {
+      return undefined
+    }
+    const parsed = parseCellAddress(args.node.ref, args.node.sheetName ?? args.ownerSheetName)
+    return {
+      kind: 'cell',
+      cellIndex: args.ensureCellTracked(parsed.sheetName ?? args.ownerSheetName, parsed.text),
+    }
+  }
+  return undefined
+}
+
+function buildDirectScalarDescriptor(args: {
+  readonly compiled: ParsedCompiledFormula
+  readonly ownerSheetName: string
+  readonly ensureCellTracked: (sheetName: string, address: string) => number
+}): RuntimeDirectScalarDescriptor | undefined {
+  if (args.compiled.symbolicNames.length > 0 || args.compiled.symbolicTables.length > 0 || args.compiled.symbolicSpills.length > 0) {
+    return undefined
+  }
+  const node = args.compiled.optimizedAst
+  if (node.kind === 'BinaryExpr' && (node.operator === '+' || node.operator === '-' || node.operator === '*' || node.operator === '/')) {
+    const left = buildDirectScalarOperand({
+      node: node.left,
+      ownerSheetName: args.ownerSheetName,
+      ensureCellTracked: args.ensureCellTracked,
+    })
+    const right = buildDirectScalarOperand({
+      node: node.right,
+      ownerSheetName: args.ownerSheetName,
+      ensureCellTracked: args.ensureCellTracked,
+    })
+    if (left && right) {
+      return {
+        kind: 'binary',
+        operator: node.operator,
+        left,
+        right,
+      }
+    }
+  }
+  if (node.kind === 'CallExpr' && node.callee.trim().toUpperCase() === 'ABS' && node.args.length === 1) {
+    const operand = buildDirectScalarOperand({
+      node: node.args[0]!,
+      ownerSheetName: args.ownerSheetName,
+      ensureCellTracked: args.ensureCellTracked,
+    })
+    if (operand) {
+      return {
+        kind: 'abs',
+        operand,
+      }
+    }
+  }
+  return undefined
+}
+
 function buildDirectLookupDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
@@ -1205,6 +1326,7 @@ export function createEngineFormulaBindingService(args: {
     existing.constNumberLength = prepared.compiled.constants.length
     existing.directLookup = undefined
     existing.directAggregate = undefined
+    existing.directScalar = prepared.directScalar
     existing.directCriteria = undefined
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
@@ -1244,6 +1366,15 @@ export function createEngineFormulaBindingService(args: {
       if (!nextDirectAggregate) {
         return false
       }
+    } else if (canRewriteCompiledPreservingDirectScalar(existing, compiled)) {
+      updateFormulaDependenciesInPlaceNow(
+        cellIndex,
+        existing,
+        prepareFormulaBindingFromCompiledNow(cellIndex, ownerSheetName, source, compiled as ParsedCompiledFormula, templateId),
+        ownerSheetName,
+        source,
+      )
+      return true
     } else {
       return false
     }
@@ -1718,6 +1849,7 @@ export function createEngineFormulaBindingService(args: {
       !stringArrayEqual(existing.compiled.symbolicSpills, prepared.compiled.symbolicSpills) ||
       !directLookupStructureEqual(existing.directLookup, prepared.directLookup) ||
       !directAggregateStructureEqual(existing.directAggregate, prepared.directAggregate) ||
+      !directScalarStructureEqual(existing.directScalar, prepared.directScalar) ||
       !directCriteriaStructureEqual(existing.directCriteria, prepared.directCriteria)
 
     if (existing && !topologyChanged) {
@@ -1734,6 +1866,7 @@ export function createEngineFormulaBindingService(args: {
       existing.constNumberLength = prepared.compiled.constants.length
       existing.directLookup = prepared.directLookup
       existing.directAggregate = prepared.directAggregate
+      existing.directScalar = prepared.directScalar
       existing.directCriteria = prepared.directCriteria
       args.state.workbook.cellStore.flags[cellIndex] =
         ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
@@ -1820,6 +1953,7 @@ export function createEngineFormulaBindingService(args: {
       rangeListLength: prepared.dependencies.rangeDependencies.length,
       directLookup: prepared.directLookup,
       directAggregate: prepared.directAggregate,
+      directScalar: prepared.directScalar,
       directCriteria: prepared.directCriteria,
     }
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula)
@@ -1943,6 +2077,11 @@ export function createEngineFormulaBindingService(args: {
       ownerSheetName,
     })
     const directAggregate = directAggregateCandidate
+    const directScalar = buildDirectScalarDescriptor({
+      compiled,
+      ownerSheetName,
+      ensureCellTracked: args.ensureCellTracked,
+    })
     const directCriteria = buildDirectCriteriaDescriptor({
       compiled,
       ownerSheetName,
@@ -2020,6 +2159,7 @@ export function createEngineFormulaBindingService(args: {
       dependencies,
       directLookup,
       directAggregate,
+      directScalar,
       directCriteria,
       runtimeProgram,
       plan: args.compiledPlans.intern(source, compiled, templateId),

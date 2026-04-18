@@ -8,6 +8,7 @@ import {
   type CompiledFormula,
 } from '@bilig/formula'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
+import { tryCompileSimpleDirectAggregateFormula } from './simple-direct-aggregate-compile.js'
 
 export interface FormulaTemplateSnapshot {
   readonly id: number
@@ -63,7 +64,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
     if (args?.counters) {
       addEngineCounter(args.counters, 'formulasParsed')
     }
-    const compiled = compileFormulaAst(source, parseFormula(source))
+    const compiled = tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
     const record: MutableTemplateRecord = {
       id: nextTemplateId,
       templateKey,

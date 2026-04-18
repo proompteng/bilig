@@ -5,7 +5,7 @@ import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
 import { exportSheetMetadata } from '../../engine-snapshot-utils.js'
-import type { PreparedFormulaInitializationRef } from './formula-initialization-service.js'
+import type { HydratedPreparedFormulaInitializationRef, PreparedFormulaInitializationRef } from './formula-initialization-service.js'
 import type { FormulaInstanceSnapshot } from '../../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../../formula/template-bank.js'
 import { exportReplicaSnapshot as exportReplicaStateSnapshot, hydrateReplicaState } from '../../replica-state.js'
@@ -38,6 +38,10 @@ export function createEngineSnapshotService(args: {
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
   readonly initializeCellFormulasAt?: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
   readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
+  readonly initializeHydratedPreparedCellFormulasAt?: (
+    refs: readonly HydratedPreparedFormulaInitializationRef[],
+    potentialNewCells?: number,
+  ) => void
 }): EngineSnapshotService {
   return {
     exportWorkbook() {
@@ -194,10 +198,17 @@ export function createEngineSnapshotService(args: {
               }),
           }
           if (args.exportTemplateBank && args.exportFormulaInstances) {
+            const formulaInstances = args.exportFormulaInstances()
             attachRuntimeImage(workbookSnapshot, {
               version: 1,
               templateBank: args.exportTemplateBank(),
-              formulaInstances: args.exportFormulaInstances(),
+              formulaInstances,
+              formulaValues: formulaInstances.map((record) => ({
+                sheetName: record.sheetName,
+                row: record.row,
+                col: record.col,
+                value: args.getCellByIndex(record.cellIndex).value,
+              })),
             } satisfies RuntimeImage)
           }
           return workbookSnapshot
@@ -224,6 +235,9 @@ export function createEngineSnapshotService(args: {
               initializeCellFormulasAt: args.initializeCellFormulasAt,
               ...(args.resolveTemplateById ? { resolveTemplateById: args.resolveTemplateById } : {}),
               ...(args.initializePreparedCellFormulasAt ? { initializePreparedCellFormulasAt: args.initializePreparedCellFormulasAt } : {}),
+              ...(args.initializeHydratedPreparedCellFormulasAt
+                ? { initializeHydratedPreparedCellFormulasAt: args.initializeHydratedPreparedCellFormulasAt }
+                : {}),
             })
             return
           }

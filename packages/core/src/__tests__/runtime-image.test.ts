@@ -51,6 +51,14 @@ describe('restoreWorkbookFromRuntimeImage', () => {
             templateId: 7,
           },
         ],
+        formulaValues: [
+          {
+            sheetName: 'Sheet1',
+            row: 0,
+            col: 1,
+            value: { tag: ValueTag.Number, value: 2 },
+          },
+        ],
       },
       workbook,
       strings: new StringPool(),

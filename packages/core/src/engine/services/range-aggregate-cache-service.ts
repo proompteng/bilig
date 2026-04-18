@@ -22,8 +22,8 @@ export interface RangeAggregateCacheService {
   readonly getOrBuildPrefix: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => AggregatePrefixEntry
 }
 
-function cacheKey(sheetName: string, col: number, rowStart: number): string {
-  return `${sheetName}\t${col}\t${rowStart}`
+function cacheKey(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
@@ -91,7 +91,7 @@ export function createRangeAggregateCacheService(args: {
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
 }): RangeAggregateCacheService {
   const emptyColumnVersions = new Uint32Array(0)
-  const cache = new Map<string, AggregatePrefixEntry>()
+  const cache = new Map<string, AggregatePrefixEntry[]>()
 
   const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
     const direct = Reflect.get(args.runtimeColumnStore, 'getColumnView')
@@ -244,7 +244,7 @@ export function createRangeAggregateCacheService(args: {
       rowEnd: request.rowEnd,
       col: request.col,
     })
-    const totalLength = request.rowEnd - request.rowStart + 1
+    const totalLength = request.rowEnd - existing.rowStart + 1
     ensurePrefixCapacity(existing, totalLength)
     const currentLength = existing.rowEnd - existing.rowStart + 1
     let runningSum = existing.prefixSums[currentLength - 1] ?? 0
@@ -302,29 +302,34 @@ export function createRangeAggregateCacheService(args: {
 
   return {
     getOrBuildPrefix(request) {
-      const key = cacheKey(request.sheetName, request.col, request.rowStart)
+      const key = cacheKey(request.sheetName, request.col)
       const currentVersions = getCurrentVersions(request.sheetName, request.col)
-      const existing = cache.get(key)
-      if (
-        existing &&
-        existing.rowEnd >= request.rowEnd &&
-        existing.columnVersion === currentVersions.columnVersion &&
-        existing.structureVersion === currentVersions.structureVersion
-      ) {
-        return existing
-      }
-      if (
-        existing &&
-        existing.rowEnd < request.rowEnd &&
-        existing.columnVersion === currentVersions.columnVersion &&
-        existing.structureVersion === currentVersions.structureVersion
-      ) {
-        const extended = extendPrefix(existing, request)
-        cache.set(key, extended)
-        return extended
+      const compatibleEntries =
+        cache
+          .get(key)
+          ?.filter(
+            (entry) => entry.columnVersion === currentVersions.columnVersion && entry.structureVersion === currentVersions.structureVersion,
+          ) ?? []
+      if (compatibleEntries.length > 0) {
+        cache.set(key, compatibleEntries)
+        const reusable = compatibleEntries
+          .filter((entry) => entry.rowStart <= request.rowStart)
+          .toSorted((left, right) => left.rowStart - right.rowStart)[0]
+        if (reusable) {
+          if (reusable.rowEnd >= request.rowEnd) {
+            return reusable
+          }
+          return extendPrefix(reusable, {
+            sheetName: request.sheetName,
+            rowStart: reusable.rowStart,
+            rowEnd: request.rowEnd,
+            col: request.col,
+          })
+        }
       }
       const built = buildPrefix(request)
-      cache.set(key, built)
+      compatibleEntries.push(built)
+      cache.set(key, compatibleEntries)
       return built
     },
   }

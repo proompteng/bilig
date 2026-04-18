@@ -19,6 +19,7 @@ import type {
   EngineRuntimeState,
   PreparedApproximateVectorLookup,
   PreparedExactVectorLookup,
+  RuntimeDirectScalarOperand,
   RuntimeFormula,
   SpillMaterialization,
 } from '../runtime-state.js'
@@ -624,9 +625,9 @@ export function createEngineFormulaEvaluationService(args: {
       }
       return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum)
     }
-    // SUM/AVERAGE ranges must avoid subtracting large nearly-equal prefixes or
-    // they can drift on exact integer inputs after import. Reuse still happens
-    // per range family via the rowStart-keyed aggregate cache.
+    // SUM/AVERAGE ranges should reuse any compatible lower-start prefix to
+    // avoid rescanning shifted windows, while still allowing narrower anchors
+    // when no compatible reusable prefix exists.
     const sharedPrefixStart = directAggregate.aggregateKind === 'count' ? 0 : directAggregate.rowStart
     const prefix = args.aggregateCache.getOrBuildPrefix({
       sheetName: directAggregate.sheetName,
@@ -634,8 +635,8 @@ export function createEngineFormulaEvaluationService(args: {
       rowEnd: directAggregate.rowEnd,
       col: directAggregate.col,
     })
-    const endOffset = directAggregate.rowEnd - sharedPrefixStart
-    const startOffset = directAggregate.rowStart - sharedPrefixStart - 1
+    const endOffset = directAggregate.rowEnd - prefix.rowStart
+    const startOffset = directAggregate.rowStart - prefix.rowStart - 1
     const errorCode = prefix.prefixErrorCodes[endOffset]
     const prefixSum = prefix.prefixSums[endOffset] ?? 0
     const prefixCount = prefix.prefixCount[endOffset] ?? 0
@@ -861,13 +862,62 @@ export function createEngineFormulaEvaluationService(args: {
     return emptyChangedCellIndices
   }
 
+  const readDirectScalarOperand = (operand: RuntimeDirectScalarOperand): number | undefined => {
+    if (operand.kind === 'literal-number') {
+      return operand.value
+    }
+    const value = readCellValueByIndex(operand.cellIndex)
+    switch (value.tag) {
+      case ValueTag.Number:
+        return value.value
+      case ValueTag.Boolean:
+        return value.value ? 1 : 0
+      case ValueTag.Empty:
+        return 0
+      case ValueTag.String:
+      case ValueTag.Error:
+        return undefined
+      default:
+        return undefined
+    }
+  }
+
+  const tryEvaluateDirectScalar = (formula: RuntimeFormula): CellValue | undefined => {
+    const directScalar = formula.directScalar
+    if (!directScalar) {
+      return undefined
+    }
+    if (directScalar.kind === 'abs') {
+      const operand = readDirectScalarOperand(directScalar.operand)
+      return operand === undefined ? undefined : directNumberResult(Math.abs(operand))
+    }
+    const left = readDirectScalarOperand(directScalar.left)
+    const right = readDirectScalarOperand(directScalar.right)
+    if (left === undefined || right === undefined) {
+      return undefined
+    }
+    switch (directScalar.operator) {
+      case '+':
+        return directNumberResult(left + right)
+      case '-':
+        return directNumberResult(left - right)
+      case '*':
+        return directNumberResult(left * right)
+      case '/':
+        return right === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(left / right)
+    }
+  }
+
   const evaluateDirectLookupFormulaNow = (cellIndex: number): number[] | undefined => {
     const formula = args.state.formulas.get(cellIndex)
     if (!formula) {
       return undefined
     }
     const directResult =
-      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectAggregate(formula) ?? tryEvaluateDirectCriteriaAggregate(formula)
+      tryEvaluateDirectVectorLookup(formula) ??
+      tryEvaluateDirectScalar(formula) ??
+      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectCriteriaAggregate(formula)
     return directResult === undefined
       ? undefined
       : formula.compiled.producesSpill
@@ -883,7 +933,10 @@ export function createEngineFormulaEvaluationService(args: {
     }
 
     const directResult =
-      tryEvaluateDirectVectorLookup(formula) ?? tryEvaluateDirectAggregate(formula) ?? tryEvaluateDirectCriteriaAggregate(formula)
+      tryEvaluateDirectVectorLookup(formula) ??
+      tryEvaluateDirectScalar(formula) ??
+      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectCriteriaAggregate(formula)
     if (directResult !== undefined) {
       return storeFormulaResult(cellIndex, formula, directResult)
     }

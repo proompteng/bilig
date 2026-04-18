@@ -1,5 +1,6 @@
 import { Effect, Exit, Cause } from 'effect'
-import type { CellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
+import { CellFlags } from '../cell-store.js'
 import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState } from './runtime-state.js'
 import { createEngineCellStateService, type EngineCellStateService } from './services/cell-state-service.js'
@@ -514,6 +515,12 @@ export function createEngineServiceRuntime(args: {
       args.operation.setBatchMutationDepth(next)
     },
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
+    writeHydratedFormulaValue: (cellIndex, value) => {
+      args.state.workbook.cellStore.flags[cellIndex] =
+        (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+      args.state.workbook.cellStore.setValue(cellIndex, value, value.tag === ValueTag.String ? args.state.strings.intern(value.value) : 0)
+      args.state.workbook.notifyCellValueWritten(cellIndex)
+    },
   })
   operations = createEngineOperationService({
     ...args.operation,
@@ -625,6 +632,8 @@ export function createEngineServiceRuntime(args: {
       requireService(formulaInitialization, 'formulaInitialization').initializeCellFormulasAtNow(refs, potentialNewCells),
     initializePreparedCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializePreparedCellFormulasAtNow(refs, potentialNewCells),
+    initializeHydratedPreparedCellFormulasAt: (refs, potentialNewCells) =>
+      requireService(formulaInitialization, 'formulaInitialization').initializeHydratedPreparedCellFormulasAtNow(refs, potentialNewCells),
   })
   const sync = createEngineReplicaSyncService({
     state: args.state,

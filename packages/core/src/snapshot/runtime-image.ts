@@ -1,5 +1,6 @@
 import { parseCellAddress, type CompiledFormula } from '@bilig/formula'
 import type {
+  CellValue,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
@@ -23,6 +24,14 @@ export interface RuntimeImage {
   readonly version: 1
   readonly templateBank: readonly FormulaTemplateSnapshot[]
   readonly formulaInstances: readonly FormulaInstanceSnapshot[]
+  readonly formulaValues: readonly RuntimeImageFormulaValueSnapshot[]
+}
+
+export interface RuntimeImageFormulaValueSnapshot {
+  readonly sheetName: string
+  readonly row: number
+  readonly col: number
+  readonly value: CellValue
 }
 
 export interface RuntimeImageRestoreArgs {
@@ -35,6 +44,10 @@ export interface RuntimeImageRestoreArgs {
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
   readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
   readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedRuntimeFormulaRef[], potentialNewCells?: number) => void
+  readonly initializeHydratedPreparedCellFormulasAt?: (
+    refs: readonly HydratedPreparedRuntimeFormulaRef[],
+    potentialNewCells?: number,
+  ) => void
 }
 
 export interface PreparedRuntimeFormulaRef {
@@ -44,6 +57,10 @@ export interface PreparedRuntimeFormulaRef {
   readonly source: string
   readonly compiled: CompiledFormula
   readonly templateId?: number
+}
+
+export interface HydratedPreparedRuntimeFormulaRef extends PreparedRuntimeFormulaRef {
+  readonly value: CellValue
 }
 
 function toFormulaInstanceKey(sheetName: string, row: number, col: number): string {
@@ -218,9 +235,14 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
   args.runtimeImage.formulaInstances.forEach((record) => {
     formulaInstancesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record)
   })
+  const formulaValuesByAddress = new Map<string, CellValue>()
+  args.runtimeImage.formulaValues.forEach((record) => {
+    formulaValuesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record.value)
+  })
 
   const formulaRefs: EngineCellMutationRef[] = []
   const preparedFormulaRefs: PreparedRuntimeFormulaRef[] = []
+  const hydratedPreparedFormulaRefs: HydratedPreparedRuntimeFormulaRef[] = []
   orderedSheets.forEach((sheet) => {
     const sheetId = args.workbook.getSheet(sheet.name)?.id
     if (sheetId === undefined) {
@@ -241,6 +263,27 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
         args.workbook.setCellFormat(ensured.cellIndex, cell.format)
       }
       if (formulaInstance) {
+        const cachedValue = formulaValuesByAddress.get(toFormulaInstanceKey(sheet.name, parsed.row, parsed.col))
+        if (
+          formulaInstance.templateId !== undefined &&
+          args.resolveTemplateById &&
+          args.initializeHydratedPreparedCellFormulasAt &&
+          cachedValue !== undefined
+        ) {
+          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, parsed.row, parsed.col)
+          if (template && !template.compiled.volatile && !template.compiled.producesSpill) {
+            hydratedPreparedFormulaRefs.push({
+              sheetId,
+              row: parsed.row,
+              col: parsed.col,
+              source: formulaInstance.source,
+              compiled: template.compiled,
+              templateId: template.templateId,
+              value: cachedValue,
+            })
+            return
+          }
+        }
         if (formulaInstance.templateId !== undefined && args.resolveTemplateById && args.initializePreparedCellFormulasAt) {
           const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, parsed.row, parsed.col)
           if (template) {
@@ -278,6 +321,9 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     })
   })
 
+  if (hydratedPreparedFormulaRefs.length > 0 && args.initializeHydratedPreparedCellFormulasAt) {
+    args.initializeHydratedPreparedCellFormulasAt(hydratedPreparedFormulaRefs, hydratedPreparedFormulaRefs.length)
+  }
   if (preparedFormulaRefs.length > 0 && args.initializePreparedCellFormulasAt) {
     args.initializePreparedCellFormulasAt(preparedFormulaRefs, preparedFormulaRefs.length)
   }

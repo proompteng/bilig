@@ -181,6 +181,7 @@ function structuralRewritePreservesBinding(
   return (
     rewritten.reusedProgram &&
     (formula.directAggregate !== undefined ||
+      formula.directScalar !== undefined ||
       (allowsRangeReuse &&
         hasStableStructuralSymbolicRangeLayout(formula.compiled, rewritten.compiled, formula.rangeDependencies.length))) &&
     formula.compiled.symbolicNames.length === 0 &&
