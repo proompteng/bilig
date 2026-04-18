@@ -7,7 +7,7 @@ interface NameBoxProps {
   readonly address: string
   readonly definedNames?: readonly WorkbookDefinedNameSnapshot[]
   readonly sheetName: string
-  readonly selectionLabel?: string
+  readonly selectionLabel?: string | undefined
   readonly onCommit: (next: string) => void
 }
 
@@ -18,7 +18,7 @@ export const NameBox = forwardRef<HTMLInputElement, NameBoxProps>(function NameB
   const displayValue = resolveNameBoxDisplayValue({
     sheetName,
     address,
-    selectionLabel,
+    ...(selectionLabel !== undefined ? { selectionLabel } : {}),
     ...(definedNames ? { definedNames } : {}),
   })
   const [inputValue, setInputValue] = useState(displayValue)

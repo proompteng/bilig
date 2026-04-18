@@ -38,15 +38,17 @@ export interface WorkbookStatusPresentation {
 export function deriveWorkbookStatusPresentation(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower' | undefined
   remoteSyncAvailable: boolean
   zeroConfigured: boolean
   zeroHealthReady: boolean
   writesAllowed: boolean
-  pendingMutationSummary?: {
-    readonly activeCount: number
-    readonly failedCount: number
-  }
+  pendingMutationSummary?:
+    | {
+        readonly activeCount: number
+        readonly failedCount: number
+      }
+    | undefined
   failedPendingMutation?: unknown
 }): WorkbookStatusPresentation {
   const modeLabel = formatConnectionStateLabel(input.connectionStateName)
@@ -83,11 +85,13 @@ export function deriveWorkbookStatusPresentation(input: {
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
-  pendingMutationSummary?: {
-    readonly activeCount: number
-    readonly failedCount: number
-  }
+  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower' | undefined
+  pendingMutationSummary?:
+    | {
+        readonly activeCount: number
+        readonly failedCount: number
+      }
+    | undefined
   failedPendingMutation?: unknown
   remoteSyncAvailable: boolean
   zeroConfigured: boolean

@@ -141,8 +141,8 @@ export function FormulaBar({
         address={address}
         onCommit={onAddressCommit}
         ref={nameBoxRef}
-        selectionLabel={selectionLabel}
         sheetName={sheetName}
+        {...(selectionLabel !== undefined ? { selectionLabel } : {})}
         {...(definedNames ? { definedNames } : {})}
       />
       <div className="min-w-0 flex-1">

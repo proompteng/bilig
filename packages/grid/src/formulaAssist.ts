@@ -411,20 +411,29 @@ function formatDefinedNameSummary(value: WorkbookDefinedNameValueSnapshot): stri
 export function resolveNameBoxDisplayValue(input: {
   readonly sheetName: string
   readonly address: string
-  readonly selectionLabel?: string
-  readonly definedNames?: readonly WorkbookDefinedNameSnapshot[]
+  readonly selectionLabel?: string | undefined
+  readonly definedNames?: readonly WorkbookDefinedNameSnapshot[] | undefined
 }): string {
-  const match = input.definedNames?.find(
-    (entry) =>
-      entry.value &&
-      typeof entry.value === 'object' &&
-      'kind' in entry.value &&
-      entry.value.sheetName === input.sheetName &&
-      ((entry.value.kind === 'cell-ref' && entry.value.address.toUpperCase() === input.address.toUpperCase()) ||
-        (entry.value.kind === 'range-ref' &&
+  const match = input.definedNames?.find((entry) => {
+    const value = entry.value
+    if (!value || typeof value !== 'object' || !('kind' in value)) {
+      return false
+    }
+    switch (value.kind) {
+      case 'cell-ref':
+        return value.sheetName === input.sheetName && value.address.toUpperCase() === input.address.toUpperCase()
+      case 'range-ref':
+        return (
+          value.sheetName === input.sheetName &&
           input.selectionLabel !== undefined &&
-          `${entry.value.startAddress.toUpperCase()}:${entry.value.endAddress.toUpperCase()}` === input.selectionLabel.toUpperCase())),
-  )
+          `${value.startAddress.toUpperCase()}:${value.endAddress.toUpperCase()}` === input.selectionLabel.toUpperCase()
+        )
+      case 'scalar':
+      case 'structured-ref':
+      case 'formula':
+        return false
+    }
+  })
   return match?.name ?? input.selectionLabel ?? input.address
 }
 
