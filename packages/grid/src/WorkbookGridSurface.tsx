@@ -11,6 +11,7 @@ export { hasSelectionTargetChanged } from './workbookGridViewport.js'
 export type {
   EditMovement,
   EditSelectionBehavior,
+  GridSelectionSnapshot,
   SheetGridViewportSubscription,
   WorkbookGridPreviewRange,
   WorkbookGridSurfaceProps,
@@ -60,9 +61,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onInsertColumns: props.onInsertColumns,
     onDeleteColumns: props.onDeleteColumns,
     onSetFreezePane: props.onSetFreezePane,
-    onSelect: props.onSelect,
+    onSelectionChange: props.onSelectionChange,
     onSelectionLabelChange: props.onSelectionLabelChange,
-    onSelectionRangeChange: props.onSelectionRangeChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
     onRowHeightChange: props.onRowHeightChange,
     renderState,

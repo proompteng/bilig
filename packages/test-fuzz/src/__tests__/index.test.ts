@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RunDetails } from 'fast-check'
 import { afterEach, describe, expect, it } from 'vitest'
-import { captureCounterexample } from '../index.js'
+import { captureCounterexample, extractReplayPathForTest } from '../index.js'
 
 const tempDirs: string[] = []
 
@@ -58,7 +58,11 @@ function readReplayPath(artifactPath: string): string | null {
   return typeof raw['replayPath'] === 'string' ? raw['replayPath'] : null
 }
 
-describe('captureCounterexample', () => {
+describe('test-fuzz replay-path extraction', () => {
+  it('extracts replayPath from string counterexamples', () => {
+    expect(extractReplayPathForTest(['cmd replayPath="0:1:2"'])).toBe('0:1:2')
+  })
+
   it('extracts replayPath from nested command objects without string coercion', () => {
     const artifactPath = withTempCwd(() =>
       captureCounterexample({

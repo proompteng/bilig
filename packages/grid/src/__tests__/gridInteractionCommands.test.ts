@@ -120,22 +120,22 @@ describe('gridInteractionCommands', () => {
     // Arrange
     const onCommitEdit = vi.fn()
     const setGridSelection = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
     const focusGrid = vi.fn()
 
     // Act
     selectEntireWorkbookSheet({
       isEditingCell: true,
       onCommitEdit,
+      onSelectionChange,
       setGridSelection,
-      onSelect,
       focusGrid,
     })
 
     // Assert
     expect(onCommitEdit).toHaveBeenCalledTimes(1)
     expect(setGridSelection).toHaveBeenCalledTimes(1)
-    expect(onSelect).toHaveBeenCalledWith('A1')
+    expect(onSelectionChange).toHaveBeenCalledTimes(1)
     expect(focusGrid).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Button } from '@base-ui/react/button'
+import { Popover } from '@base-ui/react/popover'
 import { Tabs } from '@base-ui/react/tabs'
+import { History, Plus } from 'lucide-react'
 import type { WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { WorkbookAgentThreadSummary } from '@bilig/contracts'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
-import { workbookHeaderActionButtonClass, workbookHeaderCountClass } from './workbook-header-controls.js'
+import { workbookHeaderActionButtonClass } from './workbook-header-controls.js'
 import { WorkbookPresenceBar } from './WorkbookPresenceBar.js'
 import {
   panelCountClass,
@@ -17,6 +20,7 @@ import {
 import { cn } from './cn.js'
 import { useWorkbookAgentPane } from './use-workbook-agent-pane.js'
 import { useWorkbookPresence } from './use-workbook-presence.js'
+import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
 import { useWorkbookShellLayout } from './use-workbook-shell-layout.js'
 
 type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]['zero']
@@ -25,6 +29,96 @@ type WorkbookAgentContextGetter = Parameters<typeof useWorkbookAgentPane>[0]['ge
 type WorkbookAgentPreviewCommandBundle = (
   bundle: WorkbookAgentCommandBundle,
 ) => ReturnType<Parameters<typeof useWorkbookAgentPane>[0]['previewCommandBundle']>
+
+function summarizeThreadActivity(text: string | null): string | null {
+  if (!text) {
+    return null
+  }
+  const normalized = text.trim().replaceAll(/\s+/g, ' ')
+  if (normalized.length === 0) {
+    return null
+  }
+  return normalized.length <= 72 ? normalized : `${normalized.slice(0, 69)}...`
+}
+
+function formatThreadEntryCount(entryCount: number): string {
+  return `${entryCount} ${entryCount === 1 ? 'item' : 'items'}`
+}
+
+function WorkbookAgentHistoryMenu(props: {
+  readonly activeThreadId: string | null
+  readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
+  readonly onSelectThread: (threadId: string) => void
+}) {
+  const previousThreadSummaries = props.threadSummaries.filter((summary) => summary.threadId !== props.activeThreadId)
+  if (previousThreadSummaries.length === 0) {
+    return null
+  }
+
+  return (
+    <Popover.Root modal={false}>
+      <Popover.Trigger
+        aria-label="Previous conversations"
+        className={cn(
+          workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
+          'shrink-0 border-transparent bg-transparent shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+        )}
+        data-testid="workbook-agent-history-trigger"
+        title="Previous conversations"
+        type="button"
+      >
+        <History aria-hidden="true" className="size-4" strokeWidth={1.9} />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="end" className="z-[1100]" side="bottom" sideOffset={8}>
+          <Popover.Popup
+            aria-label="Previous conversations"
+            className="w-[280px] rounded-xl border border-[var(--color-mauve-200)] bg-white p-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.14)] outline-none"
+            data-testid="workbook-agent-history-menu"
+          >
+            <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-mauve-500)]">
+              Previous conversations
+            </div>
+            <div className="mt-1 flex max-h-[320px] flex-col gap-1 overflow-y-auto">
+              {previousThreadSummaries.map((threadSummary) => {
+                const latestActivity = summarizeThreadActivity(threadSummary.latestEntryText)
+                return (
+                  <Button
+                    key={threadSummary.threadId}
+                    aria-label={`Open previous conversation ${threadSummary.threadId}`}
+                    className="flex w-full items-start gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-[var(--color-mauve-200)] hover:bg-[var(--color-mauve-50)]"
+                    data-testid={`workbook-agent-history-thread-${threadSummary.threadId}`}
+                    type="button"
+                    onClick={() => {
+                      props.onSelectThread(threadSummary.threadId)
+                    }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-[12px] font-semibold text-[var(--color-mauve-900)]">
+                          {threadSummary.scope === 'shared' ? 'Shared' : 'Private'}
+                        </span>
+                        <span className="text-[11px] text-[var(--color-mauve-600)]">
+                          {threadSummary.scope === 'shared' ? formatWorkbookCollaboratorLabel(threadSummary.ownerUserId) : 'Just you'}
+                        </span>
+                        <span className="text-[11px] text-[var(--color-mauve-500)]">
+                          {formatThreadEntryCount(threadSummary.entryCount)}
+                        </span>
+                      </div>
+                      {latestActivity ? (
+                        <div className="mt-1 truncate text-[11px] text-[var(--color-mauve-600)]">{latestActivity}</div>
+                      ) : null}
+                    </div>
+                  </Button>
+                )
+              })}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
 
 export function useWorkbookAppPanels(input: {
   documentId: string
@@ -72,7 +166,17 @@ export function useWorkbookAppPanels(input: {
     enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   })
 
-  const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges, startNewThread } = useWorkbookAgentPane({
+  const {
+    activeThreadId,
+    agentPanel,
+    agentError,
+    clearAgentError,
+    pendingCommandCount,
+    previewRanges,
+    selectThread,
+    startNewThread,
+    threadSummaries,
+  } = useWorkbookAgentPane({
     currentUserId,
     documentId,
     enabled: runtimeReady,
@@ -100,13 +204,13 @@ export function useWorkbookAppPanels(input: {
     [agentPanel, changeCount, changesPanel, pendingCommandCount],
   )
   const visibleSidePanelTabs = useMemo(() => sidePanelTabs.filter((tab) => tab.panel != null), [sidePanelTabs])
-  const { activeSidePanelTab, isSidePanelOpen, openSidePanel, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth, toggleSidePanel } =
-    useWorkbookShellLayout({
-      documentId,
-      persistenceKey: `${documentId}:${currentUserId}`,
-      availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
-      defaultTab: null,
-    })
+  const { activeSidePanelTab, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth } = useWorkbookShellLayout({
+    documentId,
+    persistenceKey: `${documentId}:${currentUserId}`,
+    availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
+    defaultOpen: true,
+    defaultTab: 'assistant',
+  })
   const sidePanelId = `workbook-side-panel-${documentId}`
   const previousPendingCommandCountRef = useRef(pendingCommandCount)
 
@@ -120,50 +224,15 @@ export function useWorkbookAppPanels(input: {
     if (!visibleSidePanelTabs.some((tab) => tab.value === 'assistant')) {
       return
     }
-    openSidePanel('assistant')
-  }, [openSidePanel, pendingCommandCount, visibleSidePanelTabs])
-
-  const sidePanelToggleControls = useMemo(
-    () => (
-      <div
-        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-        data-testid="workbook-side-panel-toggle-group"
-      >
-        {visibleSidePanelTabs.map((tab) => {
-          const active = isSidePanelOpen && activeSidePanelTab === tab.value
-          return (
-            <Button
-              aria-controls={sidePanelId}
-              aria-expanded={active}
-              aria-pressed={active}
-              className={workbookHeaderActionButtonClass({
-                active,
-                grouped: true,
-              })}
-              data-testid={`workbook-side-panel-toggle-${tab.value}`}
-              key={tab.value}
-              type="button"
-              onClick={() => {
-                toggleSidePanel(tab.value)
-              }}
-            >
-              <span>{tab.label}</span>
-              {typeof tab.count === 'number' ? <span className={workbookHeaderCountClass}>{String(Math.min(tab.count, 99))}</span> : null}
-            </Button>
-          )
-        })}
-      </div>
-    ),
-    [activeSidePanelTab, isSidePanelOpen, sidePanelId, toggleSidePanel, visibleSidePanelTabs],
-  )
+    setActiveSidePanelTab('assistant')
+  }, [pendingCommandCount, setActiveSidePanelTab, visibleSidePanelTabs])
 
   const toolbarTrailingContent = useMemo(() => {
-    if (visibleSidePanelTabs.length === 0 && collaborators.length === 0) {
+    if (collaborators.length === 0) {
       return null
     }
     return (
       <>
-        {visibleSidePanelTabs.length > 0 ? sidePanelToggleControls : null}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -174,11 +243,11 @@ export function useWorkbookAppPanels(input: {
         ) : null}
       </>
     )
-  }, [collaborators, selectAddress, sidePanelToggleControls, visibleSidePanelTabs.length])
+  }, [collaborators, selectAddress])
 
   const sidePanel = useMemo(
     () =>
-      isSidePanelOpen && activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
+      activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
         <Tabs.Root
           className={panelRootClass()}
           value={activeSidePanelTab}
@@ -210,13 +279,22 @@ export function useWorkbookAppPanels(input: {
                 </Tabs.Tab>
               ))}
             </div>
+            {activeSidePanelTab === 'assistant' ? (
+              <WorkbookAgentHistoryMenu activeThreadId={activeThreadId} threadSummaries={threadSummaries} onSelectThread={selectThread} />
+            ) : null}
             <Button
-              className={cn(workbookHeaderActionButtonClass({ active: false }), 'ml-auto shrink-0 self-center')}
+              aria-label="New thread"
+              className={cn(
+                workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
+                'ml-auto shrink-0 self-center border-transparent bg-[var(--color-mauve-50)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+              )}
               data-testid="workbook-agent-new-thread"
+              title="New thread"
               type="button"
+              disabled={activeSidePanelTab !== 'assistant'}
               onClick={startNewThread}
             >
-              New thread
+              <Plus aria-hidden="true" className="size-4" strokeWidth={1.9} />
             </Button>
             <Tabs.Indicator className={panelIndicatorClass()} renderBeforeHydration />
           </Tabs.List>
@@ -233,7 +311,7 @@ export function useWorkbookAppPanels(input: {
           ))}
         </Tabs.Root>
       ) : null,
-    [activeSidePanelTab, isSidePanelOpen, setActiveSidePanelTab, startNewThread, visibleSidePanelTabs],
+    [activeSidePanelTab, activeThreadId, selectThread, setActiveSidePanelTab, startNewThread, threadSummaries, visibleSidePanelTabs],
   )
 
   return {

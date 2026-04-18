@@ -9,13 +9,11 @@ function Harness(props: {
   readonly selection: Parameters<typeof useWorkbookGridSelectionSummary>[0]['gridSelection']
   readonly selectedAddr: string
   readonly onSelectionLabelChange?: ((label: string) => void) | undefined
-  readonly onSelectionRangeChange?: ((range: { startAddress: string; endAddress: string }) => void) | undefined
 }) {
   useWorkbookGridSelectionSummary({
     gridSelection: props.selection,
     selectedAddr: props.selectedAddr,
     onSelectionLabelChange: props.onSelectionLabelChange,
-    onSelectionRangeChange: props.onSelectionRangeChange,
   })
   return null
 }
@@ -32,28 +30,16 @@ afterEach(() => {
 describe('useWorkbookGridSelectionSummary', () => {
   it('reports both the selection label and authoritative range bounds for rectangular ranges', async () => {
     const onSelectionLabelChange = vi.fn()
-    const onSelectionRangeChange = vi.fn()
     const selection = createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 4])
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
 
     await act(async () => {
-      root.render(
-        <Harness
-          selection={selection}
-          selectedAddr="B2"
-          onSelectionLabelChange={onSelectionLabelChange}
-          onSelectionRangeChange={onSelectionRangeChange}
-        />,
-      )
+      root.render(<Harness selection={selection} selectedAddr="B2" onSelectionLabelChange={onSelectionLabelChange} />)
     })
 
     expect(onSelectionLabelChange).toHaveBeenCalledWith('B2:D5')
-    expect(onSelectionRangeChange).toHaveBeenCalledWith({
-      startAddress: 'B2',
-      endAddress: 'D5',
-    })
 
     await act(async () => {
       root.unmount()
@@ -61,19 +47,16 @@ describe('useWorkbookGridSelectionSummary', () => {
   })
 
   it('reports full-sheet bounds without relying on the formatted label', async () => {
-    const onSelectionRangeChange = vi.fn()
+    const onSelectionLabelChange = vi.fn()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
 
     await act(async () => {
-      root.render(<Harness selection={createSheetSelection()} selectedAddr="A1" onSelectionRangeChange={onSelectionRangeChange} />)
+      root.render(<Harness selection={createSheetSelection()} selectedAddr="A1" onSelectionLabelChange={onSelectionLabelChange} />)
     })
 
-    expect(onSelectionRangeChange).toHaveBeenCalledWith({
-      startAddress: 'A1',
-      endAddress: 'XFD1048576',
-    })
+    expect(onSelectionLabelChange).toHaveBeenCalledWith('All')
 
     await act(async () => {
       root.unmount()

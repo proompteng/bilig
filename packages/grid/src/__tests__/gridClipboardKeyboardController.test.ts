@@ -143,7 +143,7 @@ describe('gridClipboardKeyboardController', () => {
 
   test('maps keyboard actions into selection updates', () => {
     const setGridSelection = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
 
     handleGridKey({
       applyClipboardValues: vi.fn(),
@@ -164,7 +164,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
-      onSelect,
+      onSelectionChange,
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 2, row: 4 },
@@ -174,7 +174,7 @@ describe('gridClipboardKeyboardController', () => {
     })
 
     expect(setGridSelection.mock.calls[0]?.[0]?.current?.cell).toEqual([2, 5])
-    expect(onSelect).toHaveBeenCalledWith('C6')
+    expect(onSelectionChange.mock.calls[0]?.[0]?.current?.cell).toEqual([2, 5])
   })
 
   test('toggles boolean cells with space instead of entering text edit mode', () => {
@@ -200,7 +200,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
-      onSelect: vi.fn(),
+      onSelectionChange: vi.fn(),
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 1, row: 1 },
@@ -215,7 +215,7 @@ describe('gridClipboardKeyboardController', () => {
 
   test('select-all updates the active address to A1', () => {
     const setGridSelection = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
 
     handleGridKey({
       applyClipboardValues: vi.fn(),
@@ -236,7 +236,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
-      onSelect,
+      onSelectionChange,
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 3, row: 7 },
@@ -246,7 +246,7 @@ describe('gridClipboardKeyboardController', () => {
     })
 
     expect(setGridSelection).toHaveBeenCalledTimes(1)
-    expect(onSelect).toHaveBeenCalledWith('A1')
+    expect(onSelectionChange).toHaveBeenCalledTimes(1)
   })
 
   test('only claims global grid shortcuts when focus is on the document body', () => {

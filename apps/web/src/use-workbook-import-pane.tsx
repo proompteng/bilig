@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@base-ui/react/button'
+import { Upload } from 'lucide-react'
 import type { WorkbookLoadedResponse } from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import { WorkbookImportPanel } from './WorkbookImportPanel.js'
+import { cn } from './cn.js'
 import { workbookHeaderActionButtonClass } from './workbook-header-controls.js'
 import {
   finalizeWorkbookImport,
@@ -102,15 +104,21 @@ export function useWorkbookImportPane(input: {
         aria-controls="workbook-import-panel"
         aria-expanded={isOpen}
         aria-label="Import workbook"
-        className={workbookHeaderActionButtonClass({ active: isOpen })}
+        className={cn(
+          workbookHeaderActionButtonClass({ active: isOpen, iconOnly: true }),
+          isOpen
+            ? 'border-transparent bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)] shadow-none'
+            : 'border-transparent bg-transparent text-[var(--color-mauve-700)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+        )}
         data-testid="workbook-import-toggle"
         disabled={!enabled}
+        title="Import workbook"
         type="button"
         onClick={() => {
           setIsOpen((current) => !current)
         }}
       >
-        Import
+        <Upload aria-hidden="true" className="size-4" strokeWidth={1.9} />
       </Button>
     ),
     [enabled, isOpen],

@@ -1,4 +1,4 @@
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from './gridMetrics.js'
@@ -60,7 +60,11 @@ const HEADER_HOVER_TEXT_COLOR = '#3c4043'
 const HEADER_SELECTED_TEXT_COLOR = '#1f7a43'
 const HEADER_DRAG_ANCHOR_TEXT_COLOR = '#176239'
 const HEADER_RESIZE_TEXT_COLOR = '#176239'
-const HEADER_FONT = `500 11px ${getResolvedCellFontFamily()}`
+const DEFAULT_HEADER_FONT_SIZE = 11
+
+function buildHeaderFont(fontSize: number): string {
+  return `500 ${fontSize}px ${getResolvedCellFontFamily()}`
+}
 
 export function buildGridTextScene({
   engine,
@@ -80,11 +84,21 @@ export function buildGridTextScene({
   hostBounds,
   getCellBounds,
 }: BuildGridTextSceneOptions): GridTextScene {
+  const fullSheetSelected =
+    selectionRange !== null &&
+    selectionRange.x === 0 &&
+    selectionRange.y === 0 &&
+    selectionRange.width === MAX_COLS &&
+    selectionRange.height === MAX_ROWS
+  const headerFontSize = fullSheetSelected
+    ? (engine.getCellStyle(selectedCellSnapshot?.styleId)?.font?.size ?? DEFAULT_HEADER_FONT_SIZE)
+    : DEFAULT_HEADER_FONT_SIZE
   const items: GridTextItem[] = []
 
   pushHeaderTextItems({
     columnWidths,
     gridMetrics,
+    headerFontSize,
     items,
     rowHeights,
     selectedCell,
@@ -294,6 +308,7 @@ function resolveTextRenderBounds(options: {
 function pushHeaderTextItems(options: {
   columnWidths: Readonly<Record<number, number>>
   gridMetrics: GridMetrics
+  headerFontSize: number
   items: GridTextItem[]
   rowHeights: Readonly<Record<number, number>>
   selectedCell: Item
@@ -314,6 +329,7 @@ function pushHeaderTextItems(options: {
   const {
     columnWidths,
     gridMetrics,
+    headerFontSize,
     items,
     rowHeights,
     selectedCell,
@@ -365,8 +381,8 @@ function pushHeaderTextItems(options: {
         kind: 'column',
         resizeGuideColumn,
       }),
-      font: HEADER_FONT,
-      fontSize: 11,
+      font: buildHeaderFont(headerFontSize),
+      fontSize: headerFontSize,
       underline: false,
       strike: false,
     })
@@ -402,8 +418,8 @@ function pushHeaderTextItems(options: {
         kind: 'row',
         resizeGuideColumn,
       }),
-      font: HEADER_FONT,
-      fontSize: 11,
+      font: buildHeaderFont(headerFontSize),
+      fontSize: headerFontSize,
       underline: false,
       strike: false,
     })

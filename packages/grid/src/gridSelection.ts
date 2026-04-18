@@ -1,6 +1,13 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { formatAddress, indexToColumn } from '@bilig/formula'
-import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
+import {
+  CompactSelection,
+  type GridSelection,
+  type GridSelectionKind,
+  type GridSelectionSnapshot,
+  type Item,
+  type Rectangle,
+} from './gridTypes.js'
 
 export function createGridSelection(col: number, row: number): GridSelection {
   return {
@@ -84,6 +91,34 @@ export function selectionToAddresses(
   }
 
   return rectangleToAddresses(range)
+}
+
+export function selectionToSnapshot(selection: GridSelection, sheetName: string, fallbackAddress: string): GridSelectionSnapshot {
+  const range = selectionToAddresses(selection, fallbackAddress)
+  const currentCell = selection.current?.cell
+  const address = currentCell ? formatAddress(currentCell[1], currentCell[0]) : fallbackAddress
+  let kind: GridSelectionKind = 'cell'
+  const selectedColumnStart = selection.columns.first()
+  const selectedColumnEnd = selection.columns.last()
+  const selectedRowStart = selection.rows.first()
+  const selectedRowEnd = selection.rows.last()
+
+  if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
+    kind = 'sheet'
+  } else if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
+    kind = 'column'
+  } else if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
+    kind = 'row'
+  } else if (range.startAddress !== range.endAddress) {
+    kind = 'range'
+  }
+
+  return {
+    sheetName,
+    address,
+    kind,
+    range,
+  }
 }
 
 export function createRangeSelection(base: GridSelection, anchor: Item, target: Item): GridSelection {

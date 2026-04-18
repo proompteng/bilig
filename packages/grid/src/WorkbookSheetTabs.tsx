@@ -23,18 +23,22 @@ const sheetListClass = cva(
 )
 
 const sheetTabClass = cva(
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border-b-2 border-transparent px-3 text-[12px] font-medium whitespace-nowrap text-[var(--color-mauve-600)] outline-none transition-[color] hover:text-[var(--color-mauve-900)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]',
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-[12px] font-medium whitespace-nowrap outline-none transition-[color,background-color] hover:bg-[var(--color-mauve-100)]/70 focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]',
   {
     variants: {
       active: {
-        true: 'border-[var(--color-mauve-700)] text-[var(--color-mauve-950)]',
-        false: 'border-transparent',
+        true: 'font-semibold text-[var(--color-mauve-950)]',
+        false: 'text-[var(--color-mauve-600)] hover:text-[var(--color-mauve-900)]',
       },
     },
     defaultVariants: {
       active: false,
     },
   },
+)
+
+const sheetIndicatorClass = cva(
+  'absolute bottom-0 left-0 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--color-mauve-700)] transition-[translate,width] duration-200 ease-out',
 )
 
 const sheetRenameShellClass = cva('inline-flex h-8 shrink-0 items-center border-b-2 border-[var(--color-mauve-700)] px-2')
@@ -268,6 +272,7 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
               })()
             ),
           )}
+          <Tabs.Indicator className={sheetIndicatorClass()} data-testid="workbook-sheet-tab-indicator" renderBeforeHydration />
         </Tabs.List>
         {onCreateSheet ? (
           <button

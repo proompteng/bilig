@@ -36,7 +36,7 @@ interface GridInteractionCommonOptions {
   interactionState: GridInteractionStateRefs
   isEditingCell: boolean
   onCommitEdit(this: void): void
-  onSelect(this: void, addr: string): void
+  onSelectionChange(this: void, selection: GridSelection): void
   selectedCell: Item
   setGridSelection(this: void, selection: GridSelection): void
   visibleRegion: VisibleRegionState
@@ -153,7 +153,7 @@ export function handleGridBodyDoubleClick({
   applyColumnWidth,
   computeAutofitColumnWidth,
   beginEditAt,
-  onSelect,
+  onSelectionChange,
   resolvePointerGeometry,
   resolvePointerCell,
   setGridSelection,
@@ -175,8 +175,9 @@ export function handleGridBodyDoubleClick({
   event.stopPropagation()
   if (doubleClickIntent.kind === 'edit-cell') {
     const editAddress = formatAddress(doubleClickIntent.cell[1], doubleClickIntent.cell[0])
-    setGridSelection(createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1]))
-    onSelect(editAddress)
+    const nextSelection = createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1])
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
     beginEditAt(editAddress)
     return
   }
@@ -251,7 +252,7 @@ export function handleGridPointerDown({
   interactionState,
   isEditingCell,
   onCommitEdit,
-  onSelect,
+  onSelectionChange,
   resolvePointerGeometry,
   resolveColumnResizeTargetAtPointer,
   resolveHeaderSelectionAtPointer,
@@ -280,14 +281,16 @@ export function handleGridPointerDown({
     beginGridHeaderDrag(interactionState, headerSelection, activeGeometry, visibleRegion)
     if (headerSelection.kind === 'row') {
       interactionState.ignoreNextPointerSelectionRef.current = true
-      setGridSelection(createRowSliceSelection(selectedCell[0], headerSelection.index, headerSelection.index))
-      onSelect(formatAddress(headerSelection.index, selectedCell[0]))
+      const nextSelection = createRowSliceSelection(selectedCell[0], headerSelection.index, headerSelection.index)
+      setGridSelection(nextSelection)
+      onSelectionChange(nextSelection)
       focusGrid()
       return
     }
     interactionState.ignoreNextPointerSelectionRef.current = true
-    setGridSelection(createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell[1]))
-    onSelect(formatAddress(selectedCell[1], headerSelection.index))
+    const nextSelection = createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell[1])
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
     focusGrid()
     return
   }
@@ -298,13 +301,14 @@ export function handleGridPointerDown({
     interactionState.dragAnchorCellRef.current = anchorCell
     interactionState.dragPointerCellRef.current = pointerCell
     interactionState.ignoreNextPointerSelectionRef.current = true
-    setGridSelection(
-      event.shiftKey ? resolveBodyDragSelection(anchorCell, pointerCell) : createGridSelection(pointerCell[0], pointerCell[1]),
-    )
     if (isEditingCell) {
       onCommitEdit()
     }
-    onSelect(formatAddress(event.shiftKey ? anchorCell[1] : pointerCell[1], event.shiftKey ? anchorCell[0] : pointerCell[0]))
+    const nextSelection = event.shiftKey
+      ? resolveBodyDragSelection(anchorCell, pointerCell)
+      : createGridSelection(pointerCell[0], pointerCell[1])
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
   } else {
     interactionState.dragAnchorCellRef.current = null
     interactionState.dragPointerCellRef.current = null
@@ -322,7 +326,7 @@ export function handleGridPointerUp({
   dragGeometry,
   interactionState,
   lastBodyClickCellRef,
-  onSelect,
+  onSelectionChange,
   postDragSelectionExpiryRef,
   resolvePointerCell,
   resolveHeaderSelectionForPointerDrag,
@@ -344,7 +348,7 @@ export function handleGridPointerUp({
       ) ?? dragHeaderSelection
     const resolvedHeaderDrag = resolveHeaderDragSelection(dragHeaderSelection, finalHeader.index, selectedCell)
     setGridSelection(resolvedHeaderDrag.selection)
-    onSelect(resolvedHeaderDrag.addr)
+    onSelectionChange(resolvedHeaderDrag.selection)
     scheduleGridPointerInteractionReset(interactionState, {
       clearPostDragSelectionExpiry: false,
     })
@@ -360,9 +364,7 @@ export function handleGridPointerUp({
     postDragSelectionExpiryRef.current = pointerUpResult.shouldSetDragExpiry ? window.performance.now() + 200 : 0
     if (pointerUpResult.selection) {
       setGridSelection(pointerUpResult.selection)
-    }
-    if (pointerUpResult.addr) {
-      onSelect(pointerUpResult.addr)
+      onSelectionChange(pointerUpResult.selection)
     }
     lastBodyClickCellRef.current = pointerUpResult.clickedCell
   } else {

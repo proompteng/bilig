@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -272,6 +272,60 @@ function AgentHarness(props: {
             : []
         }
       />
+      {agentPanel}
+    </div>
+  )
+}
+
+function LaggyContextHarness() {
+  const [selection, setSelection] = useState({
+    sheetName: 'Sheet1',
+    address: 'A1',
+  })
+  const selectionRef = useRef(selection)
+
+  useEffect(() => {
+    selectionRef.current = selection
+  }, [selection])
+
+  const getContext = useCallback(() => {
+    const currentSelection = selectionRef.current
+    return {
+      selection: {
+        sheetName: currentSelection.sheetName,
+        address: currentSelection.address,
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: 10,
+        colStart: 0,
+        colEnd: 5,
+      },
+    }
+  }, [])
+
+  const { agentPanel } = useWorkbookAgentPane({
+    currentUserId: 'alex@example.com',
+    documentId: 'doc-1',
+    enabled: true,
+    getContext,
+    previewCommandBundle: vi.fn(async () => createPreviewSummary()),
+  })
+
+  return (
+    <div>
+      <button
+        data-testid="switch-context"
+        type="button"
+        onClick={() => {
+          setSelection({
+            sheetName: 'sheet3',
+            address: 'A1',
+          })
+        }}
+      >
+        Switch
+      </button>
       {agentPanel}
     </div>
   )
@@ -1307,7 +1361,7 @@ describe('workbook agent pane', () => {
     })
   })
 
-  it('renders raw workbook tool payloads behind a collapsed human-readable tool row', async () => {
+  it('renders workbook inspection tool payloads as structured result cards instead of raw JSON blobs', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
       'bilig:workbook-agent:doc-1',
@@ -1324,21 +1378,29 @@ describe('workbook agent pane', () => {
               createSnapshot({
                 entries: [
                   {
-                    id: 'tool-read',
+                    id: 'tool-tables',
                     kind: 'tool',
                     turnId: 'turn-1',
                     text: null,
                     phase: null,
-                    toolName: 'read_workbook',
+                    toolName: 'list_tables',
                     toolStatus: 'completed',
-                    argumentsText: JSON.stringify({
-                      documentId: 'bilig-demo',
-                    }),
+                    argumentsText: '{}',
                     outputText: JSON.stringify({
-                      summary: {
-                        sheetCount: 2,
-                        totalCellCount: 0,
-                      },
+                      documentId: 'bilig-demo',
+                      tableCount: 1,
+                      tables: [
+                        {
+                          name: 'PrepaidExpenses',
+                          sheetName: 'sheet3',
+                          startAddress: 'A6',
+                          endAddress: 'K10',
+                          headerRowCount: 1,
+                          rowCount: 4,
+                          columnCount: 11,
+                          columnNames: ['Item', 'Vendor', 'Category'],
+                        },
+                      ],
                     }),
                     success: true,
                   },
@@ -1361,25 +1423,29 @@ describe('workbook agent pane', () => {
       root.render(<AgentHarness />)
     })
 
-    expect(host.textContent).toContain('Read Workbook')
-    expect(host.textContent).not.toContain('"documentId":"bilig-demo"')
-    expect(host.textContent).not.toContain('"sheetCount":2')
+    expect(host.textContent).toContain('List Tables')
+    expect(host.textContent).not.toContain('"documentId": "bilig-demo"')
+    expect(host.textContent).not.toContain('"tableCount": 1')
 
-    const readToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-read']")
+    const readToggle = host.querySelector("[data-testid='workbook-agent-tool-toggle-tool-tables']")
     expect(readToggle instanceof HTMLButtonElement).toBe(true)
 
     await act(async () => {
       if (!(readToggle instanceof HTMLButtonElement)) {
-        throw new Error('Read tool toggle not found')
+        throw new Error('List tables tool toggle not found')
       }
       readToggle.click()
     })
 
-    const readPanelViewport = host.querySelector("[data-testid='workbook-agent-tool-panel-tool-read-viewport']")
+    const readPanelViewport = host.querySelector("[data-testid='workbook-agent-tool-panel-tool-tables-viewport']")
     expect(readPanelViewport instanceof HTMLDivElement).toBe(true)
     expect(readPanelViewport?.className).toContain('h-44')
-    expect(host.textContent).toContain('"documentId":"bilig-demo"')
-    expect(host.textContent).toContain('"sheetCount":2')
+    expect(host.textContent).toContain('1 table')
+    expect(host.textContent).toContain('PrepaidExpenses')
+    expect(host.textContent).toContain('sheet3!A6:K10')
+    expect(host.textContent).toContain('4 rows')
+    expect(host.textContent).toContain('11 columns')
+    expect(host.textContent).not.toContain('"tables": [')
 
     await act(async () => {
       root.unmount()
@@ -1796,6 +1862,76 @@ describe('workbook agent pane', () => {
     expect(
       fetchSpy.mock.calls.filter(([input, init]) => requestUrl(input).endsWith('/chat/threads') && requestMethod(init) === 'GET'),
     ).toHaveLength(1)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('syncs the latest workbook context after a sheet change even when the context getter reads laggy refs', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      'bilig:workbook-agent:doc-1',
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1' })), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(<LaggyContextHarness />)
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      })
+
+      await act(async () => {
+        host.querySelector("[data-testid='switch-context']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      })
+
+      const contextCalls = fetchSpy.mock.calls.filter(
+        ([input, init]) => requestUrl(input).endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST',
+      )
+      expect(contextCalls.length).toBeGreaterThan(0)
+      expect(requestBody(contextCalls.at(-1)?.[1])).toMatchObject({
+        context: {
+          selection: {
+            sheetName: 'sheet3',
+            address: 'A1',
+          },
+        },
+      })
+    } finally {
+      // no-op
+    }
 
     await act(async () => {
       root.unmount()

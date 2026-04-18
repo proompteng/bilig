@@ -4,10 +4,12 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH, useWorkbookShellLayout } from '../use-workbook-shell-layout.js'
 
-function ShellLayoutHarness(props: { documentId: string }) {
+function ShellLayoutHarness(props: { documentId: string; defaultOpen?: boolean; defaultTab?: string | null }) {
   const layout = useWorkbookShellLayout({
     documentId: props.documentId,
     availableTabs: ['assistant', 'changes'],
+    defaultOpen: props.defaultOpen,
+    defaultTab: props.defaultTab,
   })
 
   return (
@@ -72,6 +74,26 @@ describe('workbook shell layout', () => {
     expect(state?.getAttribute('data-open')).toBe('false')
     expect(state?.getAttribute('data-tab')).toBe('')
     expect(state?.getAttribute('data-width')).toBe(String(DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH))
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('can default the side panel open when a default tab is provided', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness defaultOpen defaultTab="assistant" documentId="doc-default-open" />)
+    })
+
+    const state = host.querySelector("[data-testid='shell-layout-state']")
+    expect(state?.getAttribute('data-open')).toBe('true')
+    expect(state?.getAttribute('data-tab')).toBe('assistant')
 
     await act(async () => {
       root.unmount()

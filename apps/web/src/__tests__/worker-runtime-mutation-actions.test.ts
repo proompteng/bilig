@@ -90,6 +90,25 @@ describe('worker runtime mutation actions', () => {
     expect(result.pendingMutations).toEqual([local])
   })
 
+  it('ignores absorbed mutations that were already acked', () => {
+    const local = createMutation()
+    const acked = createMutation({
+      id: 'worker-doc:pending:2',
+      localSeq: 2,
+      status: 'acked',
+      ackedAtUnixMs: 180,
+    })
+
+    const result = ackAbsorbedMutations({
+      mutationJournalEntries: [local, acked],
+      absorbedMutationIds: new Set([acked.id]),
+      ackedAtUnixMs: 220,
+    })
+
+    expect(result.mutationJournalEntries).toEqual([local, acked])
+    expect(result.pendingMutations).toEqual([local])
+  })
+
   it('updates submitted, attempted, failed, acked, and retried mutations', () => {
     const local = createMutation()
     const submitted = markMutationSubmittedInJournal({

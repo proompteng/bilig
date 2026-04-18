@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { ValueTag, type CellStyleRecord } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, ValueTag, type CellStyleRecord } from '@bilig/protocol'
 import { buildGridTextScene } from '../gridTextScene.js'
 import { getResolvedCellFontFamily } from '../gridCells.js'
 import type { GridEngineLike } from '../grid-engine.js'
@@ -474,6 +474,75 @@ describe('gridTextScene', () => {
     })
 
     expect(scene.items.at(-1)?.text).toBe('engine text')
+  })
+
+  test('scales header text with the selected font size for full-sheet selections', () => {
+    const scene = buildGridTextScene({
+      engine: makeEngine(
+        {
+          'style-selected': {
+            id: 'style-selected',
+            font: { size: 20 },
+          },
+        },
+        {
+          A1: {
+            ...createCellSnapshot({ tag: ValueTag.Number, value: 1200 }, 'style-selected'),
+            address: 'A1',
+          },
+        },
+      ),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [0, 0],
+      selectedCellSnapshot: {
+        ...createCellSnapshot({ tag: ValueTag.Number, value: 1200 }, 'style-selected'),
+        address: 'A1',
+      },
+      selectionRange: { x: 0, y: 0, width: MAX_COLS, height: MAX_ROWS },
+      sheetName: 'Sheet1',
+      visibleItems: [[0, 0]],
+      visibleRegion: { range: { x: 0, y: 0, width: 1, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0, width: 320, height: 240 },
+      getCellBounds: () => ({ x: 46, y: 24, width: 104, height: 22 }),
+    })
+
+    expect(scene.items).toContainEqual({
+      x: 46,
+      y: 0,
+      width: 104,
+      height: 24,
+      clipInsetTop: 0,
+      clipInsetRight: 0,
+      clipInsetBottom: 0,
+      clipInsetLeft: 0,
+      text: 'A',
+      align: 'center',
+      wrap: false,
+      color: '#1f7a43',
+      font: `500 20px ${CELL_FONT_FAMILY}`,
+      fontSize: 20,
+      underline: false,
+      strike: false,
+    })
+    expect(scene.items).toContainEqual({
+      x: 0,
+      y: 24,
+      width: 46,
+      height: 22,
+      clipInsetTop: 0,
+      clipInsetRight: 0,
+      clipInsetBottom: 0,
+      clipInsetLeft: 0,
+      text: '1',
+      align: 'right',
+      wrap: false,
+      color: '#1f7a43',
+      font: `500 20px ${CELL_FONT_FAMILY}`,
+      fontSize: 20,
+      underline: false,
+      strike: false,
+    })
   })
 
   test('spills left-aligned string text across contiguous empty cells', () => {

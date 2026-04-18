@@ -87,6 +87,31 @@ describe('workbook shortcut dialog', () => {
     })
   })
 
+  it('uses a larger mauve dialog shell with flat shortcut rows', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ShortcutDialogFilterHarness />)
+    })
+
+    const dialog = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-dialog']")
+    expect(dialog?.getAttribute('class')).toContain('w-[min(56rem,calc(100vw-3rem))]')
+    expect(dialog?.getAttribute('class')).toContain('bg-[var(--color-mauve-50)]')
+
+    const firstEntry = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-entry']")
+    expect(firstEntry?.getAttribute('class')).toContain('border-b')
+    expect(firstEntry?.getAttribute('class')).not.toContain('rounded-')
+    expect(firstEntry?.getAttribute('class')).not.toContain('bg-[var(--wb-surface-muted)]')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('opens from the global question-mark shortcut when focus is not in text entry', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

@@ -175,6 +175,46 @@ describe('gridGpuScene', () => {
     expect(scene.fillRects.some((rect) => rect.width === 6 && rect.height === 6)).toBe(false)
   })
 
+  test('renders explicit cell borders above the active selection outline', () => {
+    const scene = buildGridGpuScene({
+      engine: makeEngine({
+        'style-1': {
+          borders: {
+            bottom: { color: '#111111', style: 'solid', weight: 'thin' },
+          },
+        },
+      }),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: createSelection(),
+      selectedCell: [1, 2],
+      selectionRange: { x: 1, y: 2, width: 1, height: 1 },
+      sheetName: 'Sheet1',
+      visibleItems: [[1, 2]],
+      visibleRegion: { range: { x: 1, y: 2, width: 1, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: () => ({
+        x: 100,
+        y: 48,
+        width: 100,
+        height: 24,
+      }),
+    })
+
+    expect(scene.borderRects.at(-1)).toEqual({
+      x: 100,
+      y: 70.5,
+      width: 100,
+      height: 1,
+      color: {
+        r: 0x11 / 255,
+        g: 0x11 / 255,
+        b: 0x11 / 255,
+        a: 1,
+      },
+    })
+  })
+
   test('adds GPU-backed header backgrounds and selection highlights', () => {
     const scene = buildGridGpuScene({
       engine: makeEngine({}),

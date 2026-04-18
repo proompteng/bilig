@@ -23,7 +23,7 @@ export function useWorkbookGridKeyboardHandler(input: {
   onClearCell: () => void
   onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1]) => void
   onEditorChange: (next: string) => void
-  onSelect: (addr: string) => void
+  onSelectionChange: (selection: GridSelection) => void
   pendingKeyboardPasteSequenceRef: MutableRefObject<number>
   pendingTypeSeedRef: MutableRefObject<string | null>
   selectedCell: { col: number; row: number }
@@ -49,7 +49,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         onClearCell: input.onClearCell,
         onCommitEdit: input.onCommitEdit,
         onEditorChange: input.onEditorChange,
-        onSelect: input.onSelect,
+        onSelectionChange: input.onSelectionChange,
         pendingKeyboardPasteSequenceRef: input.pendingKeyboardPasteSequenceRef,
         pendingTypeSeedRef: input.pendingTypeSeedRef,
         selectedCell: input.selectedCell,

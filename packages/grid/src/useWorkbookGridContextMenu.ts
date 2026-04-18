@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { formatAddress } from '@bilig/formula'
 import { createColumnSliceSelection, createRowSliceSelection } from './gridSelection.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import type { Item, GridSelection } from './gridTypes.js'
@@ -16,7 +15,7 @@ export function useWorkbookGridContextMenu(input: {
   onDeleteRows?: ((startRow: number, count: number) => void) | undefined
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined
   onInsertRows?: ((startRow: number, count: number) => void) | undefined
-  onSelect(this: void, addr: string): void
+  onSelectionChange(this: void, selection: GridSelection): void
   onSetFreezePane?: ((rows: number, cols: number) => void) | undefined
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined
@@ -35,7 +34,7 @@ export function useWorkbookGridContextMenu(input: {
     onDeleteRows,
     onInsertColumns,
     onInsertRows,
-    onSelect,
+    onSelectionChange,
     onSetFreezePane,
     onSetColumnHidden,
     onSetRowHidden,
@@ -175,11 +174,13 @@ export function useWorkbookGridContextMenu(input: {
       }
       focusGrid()
       if (target.kind === 'row') {
-        setGridSelection(createRowSliceSelection(selectedCell[0], target.index, target.index))
-        onSelect(formatAddress(target.index, selectedCell[0]))
+        const nextSelection = createRowSliceSelection(selectedCell[0], target.index, target.index)
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
       } else {
-        setGridSelection(createColumnSliceSelection(target.index, target.index, selectedCell[1]))
-        onSelect(formatAddress(selectedCell[1], target.index))
+        const nextSelection = createColumnSliceSelection(target.index, target.index, selectedCell[1])
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
       }
       setContextMenuState({
         x,
@@ -200,7 +201,7 @@ export function useWorkbookGridContextMenu(input: {
       onDeleteRows,
       onInsertColumns,
       onInsertRows,
-      onSelect,
+      onSelectionChange,
       onSetFreezePane,
       onSetColumnHidden,
       onSetRowHidden,

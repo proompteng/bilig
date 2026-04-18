@@ -173,7 +173,6 @@ export function useWorkbookAgentPane(input: {
   const lastContextKeyRef = useRef<string>('')
   const lastDraftKeyRef = useRef<string | null>(null)
   const getContextRef = useRef(getContext)
-  const currentContext = getContextRef.current()
   const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope)
   const perfSession = useMemo(
     () =>
@@ -742,16 +741,17 @@ export function useWorkbookAgentPane(input: {
     if (!enabled || !snapshot) {
       return
     }
-    const nextContextKey = JSON.stringify(currentContext)
-    if (lastContextKeyRef.current === nextContextKey) {
-      return
-    }
-    lastContextKeyRef.current = nextContextKey
     const timeout = window.setTimeout(() => {
       const activeSession = sessionRef.current
       if (!activeSession) {
         return
       }
+      const nextContext = getContextRef.current()
+      const nextContextKey = JSON.stringify(nextContext)
+      if (lastContextKeyRef.current === nextContextKey) {
+        return
+      }
+      lastContextKeyRef.current = nextContextKey
       void (async () => {
         try {
           await fetch(
@@ -762,7 +762,7 @@ export function useWorkbookAgentPane(input: {
                 'content-type': 'application/json',
               },
               body: JSON.stringify({
-                context: currentContext,
+                context: nextContext,
               }),
             },
           )
@@ -772,7 +772,7 @@ export function useWorkbookAgentPane(input: {
     return () => {
       window.clearTimeout(timeout)
     }
-  }, [currentContext, documentId, enabled, snapshot])
+  })
 
   const sendPrompt = useCallback(async () => {
     const prompt = draft.trim()
@@ -1010,11 +1010,14 @@ export function useWorkbookAgentPane(input: {
   )
 
   return {
+    activeThreadId,
     agentPanel,
     agentError: error ? normalizeWorkbookAgentErrorMessage(error) : null,
     clearAgentError,
     pendingCommandCount: reviewCommandCount,
     previewRanges: preview?.ranges ?? activeReviewBundle?.affectedRanges ?? [],
+    selectThread,
     startNewThread,
+    threadSummaries,
   }
 }

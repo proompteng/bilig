@@ -65,7 +65,7 @@ describe('workbook layout', () => {
           isEditing={false}
           isEditingCell={false}
           onSelectSheet={() => {}}
-          onSelect={() => {}}
+          onSelectionChange={() => {}}
           onAddressCommit={() => {}}
           onBeginEdit={() => {}}
           onBeginFormulaEdit={() => {}}

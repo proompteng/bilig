@@ -1,4 +1,3 @@
-import { formatAddress } from '@bilig/formula'
 import { createRectangleSelectionFromRange, rectangleToAddresses } from './gridSelection.js'
 import type { GridHoverState } from './gridHover.js'
 import { resolveMovedRange, sameRectangle } from './gridRangeMove.js'
@@ -21,7 +20,7 @@ export function beginWorkbookGridRangeMove(input: {
   pointerCell: Item
   resolvePointerCell: (clientX: number, clientY: number) => Item | null
   setGridSelection: (selection: ReturnType<typeof createRectangleSelectionFromRange>) => void
-  onSelect: (address: string) => void
+  onSelectionChange: (selection: ReturnType<typeof createRectangleSelectionFromRange>) => void
   onMoveRange: (sourceStartAddress: string, sourceEndAddress: string, targetStartAddress: string, targetEndAddress: string) => void
   refreshHoverState: (clientX: number, clientY: number, buttons: number) => void
   setIsRangeMoveDragging: (isDragging: boolean) => void
@@ -31,11 +30,11 @@ export function beginWorkbookGridRangeMove(input: {
     cleanupRef,
     listenerTarget,
     onMoveRange,
-    onSelect,
     pointerCell,
     refreshHoverState,
     resolvePointerCell,
     setGridSelection,
+    onSelectionChange,
     setHoverState,
     setIsRangeMoveDragging,
     sourceRange,
@@ -72,8 +71,9 @@ export function beginWorkbookGridRangeMove(input: {
 
   const up = (nativeEvent: PointerEventLike) => {
     cleanup(nativeEvent)
-    setGridSelection(createRectangleSelectionFromRange(previewRange))
-    onSelect(formatAddress(previewRange.y, previewRange.x))
+    const nextSelection = createRectangleSelectionFromRange(previewRange)
+    setGridSelection(nextSelection)
+    onSelectionChange(nextSelection)
     if (sameRectangle(sourceRange, previewRange)) {
       return
     }

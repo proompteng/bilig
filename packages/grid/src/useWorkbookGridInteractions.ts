@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { parseCellAddress } from '@bilig/formula'
-import { createRectangleSelectionFromRange, createGridSelection, rectangleToAddresses } from './gridSelection.js'
+import { createRectangleSelectionFromRange, createGridSelection, rectangleToAddresses, selectionToSnapshot } from './gridSelection.js'
 import { resolveFillHandlePreviewRange, resolveFillHandleSelectionRange } from './gridFillHandle.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import { resolveColumnResizeTarget, type HeaderSelection, type PointerGeometry, type VisibleRegionState } from './gridPointer.js'
@@ -41,7 +41,7 @@ import {
 import { beginWorkbookGridColumnResize, beginWorkbookGridRowResize } from './gridResizeInteractions.js'
 import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
-import type { Item } from './gridTypes.js'
+import type { GridSelection, Item } from './gridTypes.js'
 import type { EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
 import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler.js'
@@ -75,9 +75,8 @@ export function useWorkbookGridInteractions(
     | 'onInsertColumns'
     | 'onDeleteColumns'
     | 'onSetFreezePane'
-    | 'onSelect'
+    | 'onSelectionChange'
     | 'onSelectionLabelChange'
-    | 'onSelectionRangeChange'
     | 'onToggleBooleanCell'
   > & {
     engine: WorkbookGridSurfaceProps['engine']
@@ -109,9 +108,8 @@ export function useWorkbookGridInteractions(
     onInsertColumns,
     onDeleteColumns,
     onSetFreezePane,
-    onSelect,
+    onSelectionChange,
     onSelectionLabelChange,
-    onSelectionRangeChange,
     onToggleBooleanCell,
     sheetName,
     selectedAddr,
@@ -291,8 +289,13 @@ export function useWorkbookGridInteractions(
     gridSelection,
     selectedAddr,
     onSelectionLabelChange,
-    onSelectionRangeChange,
   })
+  const emitSelectionChange = useCallback(
+    (nextSelection: GridSelection) => {
+      onSelectionChange(selectionToSnapshot(nextSelection, sheetName, selectedAddr))
+    },
+    [onSelectionChange, selectedAddr, sheetName],
+  )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
   )
@@ -333,7 +336,7 @@ export function useWorkbookGridInteractions(
     onClearCell,
     onCommitEdit,
     onEditorChange,
-    onSelect,
+    onSelectionChange: emitSelectionChange,
     pendingKeyboardPasteSequenceRef,
     pendingTypeSeedRef,
     selectedCell,
@@ -350,7 +353,7 @@ export function useWorkbookGridInteractions(
     hiddenRowsByIndex: hiddenRows,
     isEditingCell,
     onCommitEdit: () => onCommitEdit(),
-    onSelect,
+    onSelectionChange: emitSelectionChange,
     onSetColumnHidden,
     onSetRowHidden,
     onInsertRows,
@@ -575,7 +578,7 @@ export function useWorkbookGridInteractions(
         pointerCell,
         resolvePointerCell,
         setGridSelection,
-        onSelect,
+        onSelectionChange: emitSelectionChange,
         onMoveRange,
         refreshHoverState,
         setIsRangeMoveDragging,
@@ -587,7 +590,7 @@ export function useWorkbookGridInteractions(
       isEditingCell,
       onCommitEdit,
       onMoveRange,
-      onSelect,
+      emitSelectionChange,
       refreshHoverState,
       resolvePointerCell,
       selectionRange,
@@ -666,10 +669,10 @@ export function useWorkbookGridInteractions(
       isEditingCell,
       onCommitEdit,
       setGridSelection,
-      onSelect,
+      onSelectionChange: emitSelectionChange,
       focusGrid,
     })
-  }, [focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection])
+  }, [emitSelectionChange, focusGrid, isEditingCell, onCommitEdit, setGridSelection])
 
   return {
     handleFillHandlePointerDown,
@@ -706,7 +709,7 @@ export function useWorkbookGridInteractions(
         lastBodyClickCell: lastBodyClickCellRef.current,
         onAutofitColumn,
         onCommitEdit: () => onCommitEdit(),
-        onSelect,
+        onSelectionChange: emitSelectionChange,
         resolvePointerCell,
         resolvePointerGeometry,
         selectedCell: activeSelectionCell,
@@ -829,7 +832,7 @@ export function useWorkbookGridInteractions(
         interactionState,
         isEditingCell,
         onCommitEdit: () => onCommitEdit(),
-        onSelect,
+        onSelectionChange: emitSelectionChange,
         resolveColumnResizeTargetAtPointer: resolveColumnResizeTarget,
         resolveHeaderSelectionAtPointer,
         resolvePointerCell,
@@ -863,7 +866,7 @@ export function useWorkbookGridInteractions(
         interactionState,
         isEditingCell,
         onCommitEdit: () => onCommitEdit(),
-        onSelect,
+        onSelectionChange: emitSelectionChange,
         resolveHeaderSelectionForPointerDrag,
         resolvePointerCell,
         selectedCell: activeSelectionCell,
@@ -889,7 +892,7 @@ export function useWorkbookGridInteractions(
         isEditingCell,
         lastBodyClickCellRef,
         onCommitEdit: () => onCommitEdit(),
-        onSelect,
+        onSelectionChange: emitSelectionChange,
         postDragSelectionExpiryRef,
         resolveHeaderSelectionForPointerDrag,
         resolvePointerCell,

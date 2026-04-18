@@ -2,22 +2,21 @@ import { Button } from '@base-ui/react/button'
 import { cva } from 'class-variance-authority'
 import { cn } from './cn.js'
 import { formatWorkbookChangeTimestamp, type WorkbookChangeEntry } from './workbook-changes-model.js'
-import { workbookButtonClass, workbookPillClass, workbookSurfaceClass } from './workbook-shell-chrome.js'
+import { workbookPillClass, workbookSurfaceClass } from './workbook-shell-chrome.js'
 
 const changeEventToneClass = cva('', {
   variants: {
     tone: {
       neutral: workbookPillClass({ tone: 'neutral', weight: 'strong' }),
-      danger: workbookPillClass({ tone: 'danger', weight: 'strong' }),
     },
   },
 })
 
-const CHANGE_EVENT_TONES: Record<string, 'neutral' | 'danger'> = {
+const CHANGE_EVENT_TONES: Record<string, 'neutral'> = {
   setCellValue: 'neutral',
   setCellFormula: 'neutral',
-  clearCell: 'danger',
-  clearRange: 'danger',
+  clearCell: 'neutral',
+  clearRange: 'neutral',
   fillRange: 'neutral',
   copyRange: 'neutral',
   moveRange: 'neutral',
@@ -31,7 +30,7 @@ const CHANGE_EVENT_TONES: Record<string, 'neutral' | 'danger'> = {
   clearRangeNumberFormat: 'neutral',
   renderCommit: 'neutral',
   restoreVersion: 'neutral',
-  revertChange: 'danger',
+  revertChange: 'neutral',
   redoChange: 'neutral',
   applyBatch: 'neutral',
 }
@@ -90,6 +89,7 @@ function WorkbookChangeRow(props: {
 }) {
   const { change, isPending } = props
   const statusLabel = renderChangeStatus(change)
+  const targetLabel = change.targetLabel ? `Location ${change.targetLabel}` : null
   const content = (
     <>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -111,15 +111,20 @@ function WorkbookChangeRow(props: {
           </span>
         ) : null}
       </div>
-      <div className="mt-1.5 text-[13px] font-medium leading-5 text-[var(--wb-text)]">{change.summary}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-[var(--wb-text-subtle)]">
+      <div className="mt-2 text-[13px] font-medium leading-5 text-[var(--wb-text)]">{change.summary}</div>
+      <div
+        className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] leading-4 text-[var(--wb-text-subtle)]"
+        data-testid="workbook-change-meta"
+      >
         <span>{change.actorLabel}</span>
         <span aria-hidden="true">•</span>
         <span>{formatWorkbookChangeTimestamp(change.createdAt)}</span>
-        {change.targetLabel ? (
+        {targetLabel ? (
           <>
             <span aria-hidden="true">•</span>
-            <span data-testid="workbook-change-target">{change.targetLabel}</span>
+            <span className="font-medium text-[var(--wb-text-muted)]" data-testid="workbook-change-target">
+              {targetLabel}
+            </span>
           </>
         ) : null}
       </div>
@@ -136,19 +141,19 @@ function WorkbookChangeRow(props: {
         }
       }}
     >
-      <div className="px-2 py-1.5">{content}</div>
+      <div className="px-4 py-3">{content}</div>
     </Button>
   ) : (
-    <div className="min-w-0 flex-1 px-2 py-1.5 opacity-90">{content}</div>
+    <div className="min-w-0 flex-1 px-4 py-3">{content}</div>
   )
 
   return (
-    <div className={cn(workbookSurfaceClass({ emphasis: 'flat' }), 'px-2.5 py-2')} data-testid="workbook-change-row">
-      <div className="flex items-start gap-2">
+    <div className="border-b border-[var(--wb-border)] last:border-b-0" data-testid="workbook-change-row">
+      <div className="flex items-start gap-3">
         {contentRegion}
         {change.canRevert ? (
           <Button
-            className={workbookButtonClass({ tone: 'danger', size: 'sm' })}
+            className="mt-3 mr-3 inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-transparent px-2.5 text-[11px] font-medium text-[var(--wb-text-subtle)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[#8f2d2d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="workbook-change-revert"
             disabled={isPending}
             type="button"
@@ -156,7 +161,7 @@ function WorkbookChangeRow(props: {
               props.onRevert(change)
             }}
           >
-            {isPending ? 'Reverting...' : 'Revert'}
+            {isPending ? 'Reverting…' : 'Revert'}
           </Button>
         ) : null}
       </div>
@@ -181,7 +186,7 @@ export function WorkbookChangesPanel(props: {
         {props.changes.length === 0 ? (
           <div />
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className={cn(workbookSurfaceClass({ emphasis: 'flat' }), 'overflow-hidden bg-[var(--color-mauve-50)]/35')}>
             {props.changes.map((change) => (
               <WorkbookChangeRow
                 key={`${change.revision}:${change.summary}`}

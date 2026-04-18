@@ -60,3 +60,15 @@ export interface GridSelection {
   columns: CompactSelectionState
   rows: CompactSelectionState
 }
+
+export type GridSelectionKind = 'cell' | 'range' | 'row' | 'column' | 'sheet'
+
+export interface GridSelectionSnapshot {
+  readonly sheetName: string
+  readonly address: string
+  readonly kind: GridSelectionKind
+  readonly range: {
+    readonly startAddress: string
+    readonly endAddress: string
+  }
+}

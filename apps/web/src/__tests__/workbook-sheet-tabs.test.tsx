@@ -31,9 +31,8 @@ describe('WorkbookSheetTabs', () => {
 
     expect(host.querySelector("[role='tablist']")?.getAttribute('aria-label')).toBe('Sheets')
     expect(host.querySelector("[data-testid='workbook-sheet-tab-Sheet1']")?.getAttribute('aria-selected')).toBe('true')
-    expect(host.querySelector("[data-testid='workbook-sheet-tab-Sheet1']")?.getAttribute('class')).toContain(
-      'border-[var(--color-mauve-700)]',
-    )
+    expect(host.querySelector("[data-testid='workbook-sheet-tab-Sheet1']")?.getAttribute('class')).toContain('font-semibold')
+    expect(host.querySelector("[data-testid='workbook-sheet-tab-indicator']")).not.toBeNull()
 
     await act(async () => {
       host.querySelector("[data-testid='workbook-sheet-tab-Sheet2']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

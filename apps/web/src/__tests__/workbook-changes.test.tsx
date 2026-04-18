@@ -148,7 +148,9 @@ describe('workbook changes', () => {
     expect(rows[0]?.textContent).toContain('Filled Sheet1!B1:B3')
     expect(rows[0]?.textContent).toContain('Amy Smith')
     expect(rows[0]?.querySelector("[data-testid='workbook-change-revision']")?.textContent).toBe('r12')
-    expect(rows[0]?.querySelector("[data-testid='workbook-change-target']")?.textContent).toBe('Sheet1!B1:B3')
+    expect(rows[0]?.querySelector("[data-testid='workbook-change-target']")?.textContent).toBe('Location Sheet1!B1:B3')
+    expect(rows[0]?.getAttribute('class')).toContain('border-b')
+    expect(rows[0]?.getAttribute('class')).not.toContain('rounded-')
     expect(rows[1]?.textContent).toContain('Deleted sheet Archive')
 
     await act(async () => {

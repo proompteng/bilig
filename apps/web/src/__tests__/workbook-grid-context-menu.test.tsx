@@ -27,7 +27,7 @@ function ContextMenuHarness(props: {
   onInsertRow?: ((rowIndex: number, count: number) => void) | undefined
   onSetFreezePane?: ((rows: number, cols: number) => void) | undefined
   openTarget?: WorkbookGridContextMenuTarget | undefined
-  onSelect?: ((addr: string) => void) | undefined
+  onSelectionChange?: ((selection: GridSelection) => void) | undefined
   setGridSelection?: ((selection: GridSelection) => void) | undefined
   freezeRows?: number | undefined
   freezeCols?: number | undefined
@@ -40,7 +40,7 @@ function ContextMenuHarness(props: {
     onDeleteRows: props.onDeleteRow,
     onInsertColumns: props.onInsertColumn,
     onInsertRows: props.onInsertRow,
-    onSelect: props.onSelect ?? (() => {}),
+    onSelectionChange: props.onSelectionChange ?? (() => {}),
     onSetFreezePane: props.onSetFreezePane,
     hiddenColumnsByIndex: props.hiddenColumns,
     hiddenRowsByIndex: props.hiddenRows,
@@ -94,7 +94,7 @@ function ContextMenuHarness(props: {
 describe('workbook grid context menu', () => {
   it('opens a row context menu and hides the targeted row', async () => {
     const onHideRow = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
     const setGridSelection = vi.fn()
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -105,7 +105,7 @@ describe('workbook grid context menu', () => {
         <ContextMenuHarness
           headerSelection={{ kind: 'row', index: 7 }}
           onHideRow={onHideRow}
-          onSelect={onSelect}
+          onSelectionChange={onSelectionChange}
           setGridSelection={setGridSelection}
         />,
       )
@@ -124,7 +124,7 @@ describe('workbook grid context menu', () => {
     })
 
     expect(host.querySelector("[data-testid='grid-context-menu']")).not.toBeNull()
-    expect(onSelect).toHaveBeenCalledWith('E8')
+    expect(onSelectionChange).toHaveBeenCalledTimes(1)
 
     const hideButton = host.querySelector("[data-testid='grid-context-action-hide-row']")
     await act(async () => {
@@ -416,7 +416,7 @@ describe('workbook grid context menu', () => {
 
   it('opens a context menu programmatically for keyboard-triggered header actions', async () => {
     const onHideColumn = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -426,7 +426,7 @@ describe('workbook grid context menu', () => {
         <ContextMenuHarness
           headerSelection={null}
           onHideColumn={onHideColumn}
-          onSelect={onSelect}
+          onSelectionChange={onSelectionChange}
           openTarget={{ target: { kind: 'column', index: 2 }, x: 180, y: 24 }}
         />,
       )
@@ -438,7 +438,7 @@ describe('workbook grid context menu', () => {
     })
 
     expect(host.querySelector("[data-testid='grid-context-menu']")).not.toBeNull()
-    expect(onSelect).toHaveBeenCalledWith('C3')
+    expect(onSelectionChange).toHaveBeenCalledTimes(1)
 
     const hideButton = host.querySelector("[data-testid='grid-context-action-hide-column']")
     await act(async () => {

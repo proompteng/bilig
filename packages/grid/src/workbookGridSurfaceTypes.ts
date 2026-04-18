@@ -1,5 +1,8 @@
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
+import type { GridSelectionSnapshot } from './gridTypes.js'
+
+export type { GridSelectionSnapshot } from './gridTypes.js'
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1]
 export type EditSelectionBehavior = 'select-all' | 'caret-end'
@@ -25,9 +28,8 @@ export interface WorkbookGridSurfaceProps {
   editorSelectionBehavior: EditSelectionBehavior
   resolvedValue: string
   isEditingCell: boolean
-  onSelect(this: void, addr: string): void
+  onSelectionChange(this: void, selection: GridSelectionSnapshot): void
   onSelectionLabelChange?: ((label: string) => void) | undefined
-  onSelectionRangeChange?: ((range: { startAddress: string; endAddress: string }) => void) | undefined
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onEditorChange(this: void, next: string): void
   onCommitEdit(this: void, movement?: EditMovement): void

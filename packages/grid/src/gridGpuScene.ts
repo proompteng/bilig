@@ -100,6 +100,7 @@ export function buildGridGpuScene({
 }: BuildGridGpuSceneOptions): GridGpuScene {
   const fillRects: GridGpuRect[] = []
   const borderRects: GridGpuRect[] = []
+  const explicitBorderRects: GridGpuRect[] = []
   const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
   const visibleColumnBounds = hasFrozenAxes
     ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
@@ -210,7 +211,7 @@ export function buildGridGpuScene({
       if (!border) {
         continue
       }
-      appendRects(borderRects, createBorderRects(rect, side, border))
+      explicitBorderRects.push(...createBorderRects(rect, side, border))
     }
   }
 
@@ -228,6 +229,10 @@ export function buildGridGpuScene({
       visibleMinRow,
     })
   }
+
+  // Keep authored cell borders visible when the active selection sits on the
+  // same edge; otherwise the selection outline completely hides border changes.
+  borderRects.push(...explicitBorderRects)
 
   if (activeHeaderDrag?.kind === 'column' && gridSelection.columns.length > 0) {
     pushColumnHeaderDragGuideRectsTopLayer({

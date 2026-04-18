@@ -10,6 +10,7 @@ import {
   isSheetSelection,
   rectangleToAddresses,
   selectionToAddresses,
+  selectionToSnapshot,
 } from '../gridSelection.js'
 
 describe('gridSelection', () => {
@@ -59,6 +60,45 @@ describe('gridSelection', () => {
     expect(selectionToAddresses(createSheetSelection(), 'A1')).toEqual({
       startAddress: 'A1',
       endAddress: 'XFD1048576',
+    })
+  })
+
+  test('builds an authoritative selection snapshot for rectangular, row, column, and sheet selections', () => {
+    expect(selectionToSnapshot(createRangeSelection(createGridSelection(1, 9), [1, 9], [7, 17]), 'Sheet1', 'B10')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B10',
+      kind: 'range',
+      range: {
+        startAddress: 'B10',
+        endAddress: 'H18',
+      },
+    })
+    expect(selectionToSnapshot(createRowSliceSelection(2, 4, 6), 'Sheet1', 'C5')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'C5',
+      kind: 'row',
+      range: {
+        startAddress: 'A5',
+        endAddress: 'XFD7',
+      },
+    })
+    expect(selectionToSnapshot(createColumnSliceSelection(1, 3, 0), 'Sheet1', 'B1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B1',
+      kind: 'column',
+      range: {
+        startAddress: 'B1',
+        endAddress: 'D1048576',
+      },
+    })
+    expect(selectionToSnapshot(createSheetSelection(), 'Sheet1', 'A1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'A1',
+      kind: 'sheet',
+      range: {
+        startAddress: 'A1',
+        endAddress: 'XFD1048576',
+      },
     })
   })
 })

@@ -1,5 +1,5 @@
 import { cva } from 'class-variance-authority'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type CSSProperties } from 'react'
 import { Search, X } from 'lucide-react'
 import { Dialog } from '@base-ui/react/dialog'
 import {
@@ -10,6 +10,25 @@ import {
 } from './shortcut-registry.js'
 
 const shortcutChordClass = cva('flex items-center gap-1.5')
+
+const shortcutDialogThemeStyle: CSSProperties & Record<`--${string}`, string> = {
+  '--wb-app-bg': 'var(--color-mauve-50)',
+  '--wb-surface': 'white',
+  '--wb-surface-subtle': 'var(--color-mauve-50)',
+  '--wb-surface-muted': 'var(--color-mauve-100)',
+  '--wb-border': 'var(--color-mauve-200)',
+  '--wb-border-strong': 'var(--color-mauve-300)',
+  '--wb-grid-border': 'var(--color-mauve-100)',
+  '--wb-text': 'var(--color-mauve-900)',
+  '--wb-text-muted': 'var(--color-mauve-700)',
+  '--wb-text-subtle': 'var(--color-mauve-600)',
+  '--wb-accent': 'var(--color-mauve-900)',
+  '--wb-accent-soft': 'var(--color-mauve-100)',
+  '--wb-accent-ring': 'var(--color-mauve-400)',
+  '--wb-hover': 'var(--color-mauve-100)',
+  '--wb-shadow-sm': '0 1px 2px rgba(15, 23, 42, 0.04)',
+  '--wb-shadow-md': '0 16px 40px rgba(15, 23, 42, 0.12)',
+}
 
 const shortcutKeyClass = cva(
   'inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-[var(--color-mauve-300)] bg-white px-2 text-[11px] font-semibold leading-none text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
@@ -71,30 +90,31 @@ export function WorkbookShortcutDialog(props: {
         <Dialog.Backdrop className="fixed inset-0 z-[1200] bg-black/35" />
         <Dialog.Popup
           aria-label="Keyboard shortcuts"
-          className="fixed left-1/2 top-1/2 z-[1201] flex w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]"
+          className="fixed left-1/2 top-1/2 z-[1201] flex w-[min(56rem,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--wb-border)] bg-[var(--color-mauve-50)] shadow-[var(--wb-shadow-md)]"
           data-testid="workbook-shortcut-dialog"
           initialFocus={searchInputRef}
+          style={shortcutDialogThemeStyle}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-[var(--wb-border)] px-4 py-3">
+          <div className="flex items-start justify-between gap-4 border-b border-[var(--wb-border)] bg-[var(--color-mauve-50)] px-5 py-4">
             <div className="min-w-0">
-              <Dialog.Title className="text-[14px] font-semibold text-[var(--wb-text)]">Keyboard shortcuts</Dialog.Title>
-              <Dialog.Description className="mt-1 text-[12px] text-[var(--wb-text-subtle)]">
+              <Dialog.Title className="text-[16px] font-semibold text-[var(--wb-text)]">Keyboard shortcuts</Dialog.Title>
+              <Dialog.Description className="mt-1 max-w-[48ch] text-[13px] text-[var(--wb-text-subtle)]">
                 Search shortcuts and commands already supported by the workbook shell.
               </Dialog.Description>
             </div>
             <Dialog.Close
               aria-label="Close shortcuts"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-transparent text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
             >
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
 
-          <div className="border-b border-[var(--wb-border)] px-4 py-3">
+          <div className="border-b border-[var(--wb-border)] bg-white px-5 py-4">
             <label className="sr-only" htmlFor="workbook-shortcut-search">
               Search shortcuts
             </label>
-            <div className="flex h-9 items-center gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3">
+            <div className="flex h-10 items-center gap-2 rounded-md border border-[var(--wb-border)] bg-white px-3 shadow-[var(--wb-shadow-sm)]">
               <Search className="h-4 w-4 shrink-0 text-[var(--wb-text-subtle)]" />
               <input
                 aria-label="Search shortcuts"
@@ -112,10 +132,10 @@ export function WorkbookShortcutDialog(props: {
             </div>
           </div>
 
-          <div className="max-h-[28rem] overflow-y-auto px-4 py-3">
+          <div className="max-h-[34rem] overflow-y-auto bg-[var(--color-mauve-50)] px-5 py-4">
             {groupedEntries.length === 0 ? (
               <div
-                className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] px-3 py-6 text-center text-[12px] text-[var(--wb-text-subtle)]"
+                className="rounded-md border border-dashed border-[var(--wb-border)] bg-white px-4 py-8 text-center text-[12px] text-[var(--wb-text-subtle)]"
                 data-testid="workbook-shortcut-empty"
               >
                 No shortcuts match that search.
@@ -124,13 +144,13 @@ export function WorkbookShortcutDialog(props: {
               <div className="flex flex-col gap-4">
                 {groupedEntries.map((group) => (
                   <section key={group.category}>
-                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--wb-text-subtle)]">
+                    <h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--wb-text-subtle)]">
                       {group.category}
                     </h3>
-                    <div className="grid gap-1.5">
+                    <div className="overflow-hidden rounded-lg border border-[var(--color-mauve-200)] bg-white">
                       {group.entries.map((entry) => (
                         <div
-                          className="flex items-center justify-between gap-3 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2"
+                          className="flex items-center justify-between gap-4 border-b border-[var(--color-mauve-200)] bg-transparent px-4 py-3 last:border-b-0"
                           data-testid="workbook-shortcut-entry"
                           key={entry.id}
                         >

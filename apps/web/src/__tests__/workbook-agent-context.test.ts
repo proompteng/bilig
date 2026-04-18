@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkbookAgentContext, singleCellAgentSelectionRange } from '../workbook-agent-context.js'
+import { buildWorkbookAgentContext, createSingleCellSelectionSnapshot } from '../workbook-agent-context.js'
 
 describe('workbook agent context', () => {
-  it('builds agent context from explicit selection geometry instead of a parsed label', () => {
+  it('builds agent context from one authoritative selection snapshot', () => {
     expect(
       buildWorkbookAgentContext({
         selection: {
           sheetName: 'Sheet1',
           address: 'B18',
-        },
-        selectionRange: {
-          startAddress: 'A6',
-          endAddress: 'H15',
+          kind: 'range',
+          range: {
+            startAddress: 'A6',
+            endAddress: 'H15',
+          },
         },
         viewport: {
           rowStart: 5,
@@ -38,15 +39,20 @@ describe('workbook agent context', () => {
     })
   })
 
-  it('creates a single-cell range fallback from the active address', () => {
+  it('creates a single-cell selection snapshot from the active address', () => {
     expect(
-      singleCellAgentSelectionRange({
+      createSingleCellSelectionSnapshot({
         sheetName: 'Sheet7',
         address: 'F9',
       }),
     ).toEqual({
-      startAddress: 'F9',
-      endAddress: 'F9',
+      sheetName: 'Sheet7',
+      address: 'F9',
+      kind: 'cell',
+      range: {
+        startAddress: 'F9',
+        endAddress: 'F9',
+      },
     })
   })
 })

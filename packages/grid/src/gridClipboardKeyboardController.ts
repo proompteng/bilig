@@ -71,7 +71,7 @@ interface HandleGridKeyOptions {
   onClearCell(this: void): void
   onCommitEdit(this: void, movement?: EditMovement): void
   onEditorChange(this: void, next: string): void
-  onSelect(this: void, addr: string): void
+  onSelectionChange(this: void, selection: GridSelection): void
   pendingKeyboardPasteSequenceRef: MutableRefObject<number>
   pendingTypeSeedRef: MutableRefObject<string | null>
   selectedCell: SelectedCellLike
@@ -171,7 +171,7 @@ export function handleGridKey({
   onClearCell,
   onCommitEdit,
   onEditorChange,
-  onSelect,
+  onSelectionChange,
   pendingKeyboardPasteSequenceRef,
   pendingTypeSeedRef,
   selectedCell,
@@ -230,11 +230,18 @@ export function handleGridKey({
       beginSelectedEdit(action.seed, action.selectionBehavior)
       return
     case 'move-selection':
-      setGridSelection(createGridSelection(action.cell[0], action.cell[1]))
-      onSelect(formatAddress(action.cell[1], action.cell[0]))
+      {
+        const nextSelection = createGridSelection(action.cell[0], action.cell[1])
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
       return
     case 'extend-selection':
-      setGridSelection(createRangeSelection(createGridSelection(action.anchor[0], action.anchor[1]), action.anchor, action.target))
+      {
+        const nextSelection = createRangeSelection(createGridSelection(action.anchor[0], action.anchor[1]), action.anchor, action.target)
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
       return
     case 'clear-cell':
       pendingTypeSeedRef.current = action.pendingTypeSeed
@@ -278,14 +285,25 @@ export function handleGridKey({
       return
     }
     case 'select-row':
-      setGridSelection(createRowSelection(action.col, action.row))
+      {
+        const nextSelection = createRowSelection(action.col, action.row)
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
       return
     case 'select-column':
-      setGridSelection(createColumnSelection(action.col, action.row))
+      {
+        const nextSelection = createColumnSelection(action.col, action.row)
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
       return
     case 'select-all':
-      setGridSelection(createSheetSelection())
-      onSelect(formatAddress(0, 0))
+      {
+        const nextSelection = createSheetSelection()
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
       return
   }
 }

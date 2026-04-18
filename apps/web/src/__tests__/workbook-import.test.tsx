@@ -128,6 +128,12 @@ describe('workbook import', () => {
       root.render(<ImportHarness finalizeImport={finalizeImport} navigateToWorkbook={navigateToWorkbook} previewFile={previewFile} />)
     })
 
+    const importToggle = host.querySelector<HTMLButtonElement>("[data-testid='workbook-import-toggle']")
+    expect(importToggle?.getAttribute('aria-label')).toBe('Import workbook')
+    expect(importToggle?.textContent?.trim()).toBe('')
+    expect(importToggle?.getAttribute('class')).toContain('border-transparent')
+    expect(importToggle?.getAttribute('class')).toContain('shadow-none')
+
     await act(async () => {
       host.querySelector("[data-testid='workbook-import-toggle']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

@@ -2,7 +2,7 @@ import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from
 import { Button } from '@base-ui/react/button'
 import { ScrollArea } from '@base-ui/react/scroll-area'
 import { ArrowUp, Square } from 'lucide-react'
-import { WORKBOOK_AGENT_TOOL_NAMES, describeWorkbookAgentCommand, normalizeWorkbookAgentToolName } from '@bilig/agent-api'
+import { describeWorkbookAgentCommand } from '@bilig/agent-api'
 import { cva } from 'class-variance-authority'
 import type {
   WorkbookAgentCommandBundle,
@@ -48,6 +48,7 @@ import {
   agentPanelThreadButtonClass,
   agentPanelThreadListClass,
 } from './workbook-agent-panel-primitives.js'
+import { renderToolDisplayName, safeParseToolOutput, StructuredToolOutput, summarizeToolEntry } from './workbook-agent-tool-output.js'
 import { WorkbookAgentMarkdown } from './workbook-agent-markdown.js'
 import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
 import { AssistantProgressRow, PreviewRangeList, WorkflowRunRow } from './workbook-agent-panel-history.js'
@@ -165,66 +166,6 @@ function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry['to
   )
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function readString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback
-}
-
-function readNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
-function safeParseToolOutput(outputText: string | null): unknown {
-  if (!outputText) {
-    return null
-  }
-  try {
-    return JSON.parse(outputText) as unknown
-  } catch {
-    return null
-  }
-}
-
-function renderToolDisplayName(toolName: string | null): string {
-  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null
-  if (!normalizedToolName) {
-    return 'Tool call'
-  }
-  return normalizedToolName
-    .split('_')
-    .map((segment) => (segment.length === 0 ? segment : `${segment[0]!.toUpperCase()}${segment.slice(1)}`))
-    .join(' ')
-}
-
-function supportsStructuredToolOutput(toolName: string | null): boolean {
-  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null
-  return (
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues ||
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook ||
-    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies
-  )
-}
-
-function renderReasonLabel(reason: string): string {
-  switch (reason) {
-    case 'sheet':
-      return 'sheet'
-    case 'address':
-      return 'address'
-    case 'formula':
-      return 'formula'
-    case 'input':
-      return 'input'
-    case 'value':
-      return 'value'
-    default:
-      return reason
-  }
-}
-
 function renderPreviewChangeKind(kind: WorkbookAgentPreviewChangeKind): string {
   switch (kind) {
     case 'input':
@@ -259,58 +200,6 @@ function summarizeDisclosureText(text: string | null): string | null {
     return null
   }
   return normalized.length <= 88 ? normalized : `${normalized.slice(0, 85)}...`
-}
-
-function summarizePlainText(text: string | null, maxLength = 88): string | null {
-  if (!text) {
-    return null
-  }
-  const normalized = text.trim().replaceAll(/\s+/g, ' ')
-  if (normalized.length === 0) {
-    return null
-  }
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`
-}
-
-function summarizeToolEntry(entry: WorkbookAgentTimelineEntry): string | null {
-  const parsed = safeParseToolOutput(entry.outputText)
-  if (isRecord(parsed)) {
-    if (typeof parsed['summary'] === 'string') {
-      return summarizePlainText(parsed['summary'], 96)
-    }
-    const workflowRun = isRecord(parsed['workflowRun']) ? parsed['workflowRun'] : null
-    if (typeof workflowRun?.['summary'] === 'string') {
-      return summarizePlainText(workflowRun['summary'], 96)
-    }
-    const selection = isRecord(parsed['selection']) ? parsed['selection'] : null
-    if (typeof selection?.['sheetName'] === 'string' && typeof selection['address'] === 'string') {
-      const selectionRange = isRecord(selection['range']) ? selection['range'] : null
-      const startAddress = typeof selectionRange?.['startAddress'] === 'string' ? selectionRange['startAddress'] : selection['address']
-      const endAddress = typeof selectionRange?.['endAddress'] === 'string' ? selectionRange['endAddress'] : selection['address']
-      return `${selection['sheetName']}!${startAddress}${startAddress === endAddress ? '' : `:${endAddress}`}`
-    }
-    const range = isRecord(parsed['range']) ? parsed['range'] : null
-    if (typeof range?.['sheetName'] === 'string' && typeof range['startAddress'] === 'string' && typeof range['endAddress'] === 'string') {
-      const startAddress = range['startAddress']
-      const endAddress = range['endAddress']
-      return `${range['sheetName']}!${startAddress}${startAddress === endAddress ? '' : `:${endAddress}`}`
-    }
-    if (typeof parsed['sheetCount'] === 'number') {
-      return `${String(parsed['sheetCount'])} ${parsed['sheetCount'] === 1 ? 'sheet' : 'sheets'}`
-    }
-    if (typeof parsed['changeCount'] === 'number') {
-      return `${String(parsed['changeCount'])} ${parsed['changeCount'] === 1 ? 'change' : 'changes'}`
-    }
-  }
-  const outputText = entry.outputText?.trim() ?? ''
-  if (outputText.length > 0 && !outputText.startsWith('{') && !outputText.startsWith('[')) {
-    return summarizePlainText(outputText, 96)
-  }
-  const argumentsText = entry.argumentsText?.trim() ?? ''
-  if (argumentsText.length > 0 && !argumentsText.startsWith('{') && !argumentsText.startsWith('[')) {
-    return summarizePlainText(argumentsText, 96)
-  }
-  return null
 }
 
 function isAppliedExecutionSystemEntry(entry: WorkbookAgentTimelineEntry): boolean {
@@ -349,177 +238,6 @@ function TextDisclosureEntryRow(props: { readonly entry: WorkbookAgentTimelineEn
       <TimelineCitationList citations={props.entry.citations} />
     </WorkbookAgentDisclosureRow>
   )
-}
-
-function StructuredToolOutput(props: { readonly toolName: string | null; readonly outputText: string | null }) {
-  const parsed = safeParseToolOutput(props.outputText)
-  const normalizedToolName = props.toolName ? normalizeWorkbookAgentToolName(props.toolName) : null
-  if (!normalizedToolName || !isRecord(parsed)) {
-    return null
-  }
-
-  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues && Array.isArray(parsed['issues'])) {
-    const summary = isRecord(parsed['summary']) ? parsed['summary'] : null
-    const issues = parsed['issues'].flatMap((issue) => (isRecord(issue) ? [issue] : []))
-    return (
-      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
-        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
-          <div>
-            {readNumber(summary?.['issueCount'], issues.length)} issues · {readNumber(summary?.['scannedFormulaCells'])} formulas
-          </div>
-          <div className={cn(agentPanelEyebrowTextClass(), 'text-right')}>
-            {readNumber(summary?.['errorCount'])} errors · {readNumber(summary?.['cycleCount'])} cycles ·{' '}
-            {readNumber(summary?.['unsupportedCount'])} JS-only
-          </div>
-        </div>
-        <div className="mt-2 flex flex-col gap-2">
-          {issues.slice(0, 8).map((issue) => (
-            <div
-              key={`${readString(issue['sheetName'])}:${readString(issue['address'])}`}
-              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>
-                    {readString(issue['sheetName'])}!{readString(issue['address'])}
-                  </div>
-                  <div className={cn(agentPanelMetaTextClass(), 'mt-1 break-all')}>{readString(issue['formula'])}</div>
-                </div>
-                <div className={cn(agentPanelEyebrowTextClass(), 'text-right')}>{readString(issue['valueText']) || '(empty)'}</div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {Array.isArray(issue['issueKinds'])
-                  ? issue['issueKinds'].map((kind) => (
-                      <span key={readString(kind)} className={workbookPillClass({ tone: 'danger', weight: 'strong' })}>
-                        {readString(kind)}
-                      </span>
-                    ))
-                  : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook && Array.isArray(parsed['matches'])) {
-    const matches = parsed['matches'].flatMap((match) => (isRecord(match) ? [match] : []))
-    return (
-      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
-        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
-          <div className="truncate">“{readString(parsed['query'])}”</div>
-          <div className={agentPanelEyebrowTextClass()}>
-            {readNumber(isRecord(parsed['summary']) ? parsed['summary']['matchCount'] : undefined, matches.length)} matches
-          </div>
-        </div>
-        <div className="mt-2 flex flex-col gap-2">
-          {matches.slice(0, 8).map((match) => (
-            <div
-              key={`${readString(match['kind'])}:${readString(match['sheetName'])}:${readString(match['address'])}`}
-              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>
-                    {readString(match['kind']) === 'sheet'
-                      ? `Sheet ${readString(match['sheetName'])}`
-                      : `${readString(match['sheetName'])}!${readString(match['address'])}`}
-                  </div>
-                  <div className={cn(agentPanelMetaTextClass(), 'mt-1 break-all')}>{readString(match['snippet'])}</div>
-                </div>
-                <div className={agentPanelEyebrowTextClass()}>score {readNumber(match['score'])}</div>
-              </div>
-              {Array.isArray(match['reasons']) ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {match['reasons'].map((reason) => (
-                    <span key={readString(reason)} className={workbookPillClass({ tone: 'neutral' })}>
-                      {renderReasonLabel(readString(reason))}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies && Array.isArray(parsed['layers'])) {
-    const root = isRecord(parsed['root']) ? parsed['root'] : null
-    const layers = parsed['layers'].flatMap((layer) => (isRecord(layer) ? [layer] : []))
-    return (
-      <div className={cn(workbookInsetClass(), 'mt-2 px-3 py-3')}>
-        <div className={cn(agentPanelMetaTextClass(), 'flex items-start justify-between gap-3')}>
-          <div>
-            {readString(root?.['sheetName'])}!{readString(root?.['address'])}
-          </div>
-          <div className={agentPanelEyebrowTextClass()}>
-            {readString(parsed['direction'], 'both')} · {readNumber(parsed['depth'])} hops
-          </div>
-        </div>
-        <div className="mt-2 flex flex-col gap-2">
-          {layers.map((layer) => (
-            <div
-              key={`trace-layer-${readNumber(layer['depth'])}`}
-              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
-            >
-              <div className={agentPanelEyebrowTextClass()}>Hop {readNumber(layer['depth'])}</div>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <div>
-                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>Precedents</div>
-                  <div className="mt-1 flex flex-col gap-1">
-                    {Array.isArray(layer['precedents']) && layer['precedents'].length > 0 ? (
-                      layer['precedents']
-                        .flatMap((node) => (isRecord(node) ? [node] : []))
-                        .map((node) => (
-                          <div
-                            key={`precedent:${readString(node['sheetName'])}:${readString(node['address'])}`}
-                            className={agentPanelMetaTextClass()}
-                          >
-                            {readString(node['sheetName'])}!{readString(node['address'])}{' '}
-                            <span className="text-[var(--wb-text-muted)]">
-                              {readString(node['formula']) || readString(node['valueText'])}
-                            </span>
-                          </div>
-                        ))
-                    ) : (
-                      <div className={agentPanelMetaTextClass()}>None</div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className={cn(agentPanelLabelTextClass(), 'font-semibold')}>Dependents</div>
-                  <div className="mt-1 flex flex-col gap-1">
-                    {Array.isArray(layer['dependents']) && layer['dependents'].length > 0 ? (
-                      layer['dependents']
-                        .flatMap((node) => (isRecord(node) ? [node] : []))
-                        .map((node) => (
-                          <div
-                            key={`dependent:${readString(node['sheetName'])}:${readString(node['address'])}`}
-                            className={agentPanelMetaTextClass()}
-                          >
-                            {readString(node['sheetName'])}!{readString(node['address'])}{' '}
-                            <span className="text-[var(--wb-text-muted)]">
-                              {readString(node['formula']) || readString(node['valueText'])}
-                            </span>
-                          </div>
-                        ))
-                    ) : (
-                      <div className={agentPanelMetaTextClass()}>None</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  return null
 }
 
 function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
@@ -566,7 +284,6 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   if (entry.kind === 'tool') {
     const displayName = renderToolDisplayName(entry.toolName)
     const summary = summarizeToolEntry(entry)
-    const hasStructuredOutput = supportsStructuredToolOutput(entry.toolName)
     const parsedOutput = safeParseToolOutput(entry.outputText)
     const hasDetails = (entry.argumentsText?.trim().length ?? 0) > 0 || (entry.outputText?.trim().length ?? 0) > 0
     if (!hasDetails) {
@@ -614,7 +331,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         {entry.outputText?.trim().length ? (
           <div className={entry.argumentsText?.trim().length ? 'mt-2' : undefined}>
             <div className={agentPanelEyebrowTextClass()}>Output</div>
-            {hasStructuredOutput && parsedOutput !== null ? (
+            {parsedOutput !== null ? (
               <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
             ) : (
               <pre

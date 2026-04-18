@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
-import type { EditMovement, EditSelectionBehavior } from '@bilig/grid'
+import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
 import { createWorkerRuntimeMachine } from './runtime-machine.js'
@@ -9,7 +9,7 @@ import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
 import { loadPersistedSelection, persistSelection } from './selection-persistence.js'
 import type { ProjectedViewportStore } from './projected-viewport-store.js'
-import { buildWorkbookAgentContext, singleCellAgentSelectionRange, type WorkbookAgentSelectionRange } from './workbook-agent-context.js'
+import { buildWorkbookAgentContext, createSingleCellSelectionSnapshot } from './workbook-agent-context.js'
 import {
   type EditingMode,
   type ParsedEditorInput,
@@ -64,6 +64,24 @@ function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
     colStart: parsed.col,
     colEnd: parsed.col,
   }
+}
+
+function selectionSnapshotToRangeRef(selection: GridSelectionSnapshot): CellRangeRef {
+  return {
+    sheetName: selection.sheetName,
+    startAddress: selection.range.startAddress,
+    endAddress: selection.range.endAddress,
+  }
+}
+
+function selectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelectionSnapshot): boolean {
+  return (
+    left.sheetName === right.sheetName &&
+    left.address === right.address &&
+    left.kind === right.kind &&
+    left.range.startAddress === right.range.startAddress &&
+    left.range.endAddress === right.range.endAddress
+  )
 }
 
 export function useWorkerWorkbookAppState(input: {
@@ -139,23 +157,29 @@ export function useWorkerWorkbookAppState(input: {
   const zeroRef = useRef<LocalOnlyZeroSource>(zeroSource)
   const connectionStateRef = useRef(connectionState.name)
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection))
-  const agentSelectionRangeRef = useRef<WorkbookAgentSelectionRange>(singleCellAgentSelectionRange(selection))
-  const selectionRangeRef = useRef<CellRangeRef>({
-    sheetName: selection.sheetName,
-    startAddress: selection.address,
-    endAddress: selection.address,
-  })
+  const selectionSnapshotRef = useRef<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
+  const selectionRangeRef = useRef<CellRangeRef>(selectionSnapshotToRangeRef(selectionSnapshotRef.current))
+  const pendingExternalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
 
   useEffect(() => {
     const previousSelection = selectionRef.current
     selectionRef.current = selection
+    const activeExternalSelection = pendingExternalSelectionRef.current
+    if (
+      activeExternalSelection &&
+      activeExternalSelection.sheetName === selection.sheetName &&
+      activeExternalSelection.address === selection.address
+    ) {
+      pendingExternalSelectionRef.current = null
+    }
     if (previousSelection.sheetName !== selection.sheetName || previousSelection.address !== selection.address) {
-      selectionRangeRef.current = {
-        sheetName: selection.sheetName,
-        startAddress: selection.address,
-        endAddress: selection.address,
+      const activeSelectionSnapshot = selectionSnapshotRef.current
+      if (activeSelectionSnapshot.sheetName === selection.sheetName && activeSelectionSnapshot.address === selection.address) {
+        return
       }
-      agentSelectionRangeRef.current = singleCellAgentSelectionRange(selection)
+      const nextSelectionSnapshot = createSingleCellSelectionSnapshot(selection)
+      selectionSnapshotRef.current = nextSelectionSnapshot
+      selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
     }
   }, [selection])
 
@@ -465,8 +489,9 @@ export function useWorkerWorkbookAppState(input: {
       setEditorSelectionBehavior,
     })
 
-  const selectAddress = useCallback(
-    (sheetName: string, address: string) => {
+  const applySelectionSnapshot = useCallback(
+    (selectionSnapshot: GridSelectionSnapshot, options?: { markAsExternal?: boolean }) => {
+      const { sheetName, address } = selectionSnapshot
       const previousSelection = selectionRef.current
       const previousRange = selectionRangeRef.current
       if (
@@ -474,8 +499,8 @@ export function useWorkerWorkbookAppState(input: {
         previousSelection.sheetName === sheetName &&
         previousSelection.address === address &&
         previousRange.sheetName === sheetName &&
-        previousRange.startAddress === address &&
-        previousRange.endAddress === address
+        previousRange.startAddress === selectionSnapshot.range.startAddress &&
+        previousRange.endAddress === selectionSnapshot.range.endAddress
       ) {
         return
       }
@@ -485,12 +510,9 @@ export function useWorkerWorkbookAppState(input: {
         setEditingMode('idle')
       }
       const nextSelection = { sheetName, address }
-      selectionRangeRef.current = {
-        sheetName,
-        startAddress: address,
-        endAddress: address,
-      }
-      agentSelectionRangeRef.current = singleCellAgentSelectionRange(nextSelection)
+      selectionSnapshotRef.current = selectionSnapshot
+      selectionRangeRef.current = selectionSnapshotToRangeRef(selectionSnapshot)
+      pendingExternalSelectionRef.current = options?.markAsExternal ? selectionSnapshot : null
       if (previousSelection.sheetName !== sheetName) {
         visibleViewportRef.current = selectionViewport(nextSelection)
       }
@@ -500,6 +522,19 @@ export function useWorkerWorkbookAppState(input: {
       runtimeActorRef.send({ type: 'selection.changed', selection: nextSelection })
     },
     [resetEditorConflictTracking, runtimeActorRef],
+  )
+
+  const selectAddress = useCallback(
+    (sheetName: string, address: string) => {
+      applySelectionSnapshot(
+        createSingleCellSelectionSnapshot({
+          sheetName,
+          address,
+        }),
+        { markAsExternal: true },
+      )
+    },
+    [applySelectionSnapshot],
   )
 
   const handleEditorChange = useCallback(
@@ -553,23 +588,21 @@ export function useWorkerWorkbookAppState(input: {
   const getAgentContext = useCallback(
     () =>
       buildWorkbookAgentContext({
-        selection: selectionRef.current,
-        selectionRange: agentSelectionRangeRef.current,
+        selection: selectionSnapshotRef.current,
         viewport: visibleViewportRef.current,
       }),
     [],
   )
-  const handleSelectionRangeChange = useCallback((range: { startAddress: string; endAddress: string }) => {
-    selectionRangeRef.current = {
-      sheetName: selectionRef.current.sheetName,
-      startAddress: range.startAddress,
-      endAddress: range.endAddress,
-    }
-    agentSelectionRangeRef.current = {
-      startAddress: range.startAddress,
-      endAddress: range.endAddress,
-    }
-  }, [])
+  const handleSelectionChange = useCallback(
+    (selectionSnapshot: GridSelectionSnapshot) => {
+      const activeExternalSelection = pendingExternalSelectionRef.current
+      if (activeExternalSelection && !selectionSnapshotsEqual(activeExternalSelection, selectionSnapshot)) {
+        return
+      }
+      applySelectionSnapshot(selectionSnapshot, { markAsExternal: false })
+    },
+    [applySelectionSnapshot],
+  )
 
   const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } = useWorkbookChangesPane({
     documentId,
@@ -822,7 +855,7 @@ export function useWorkerWorkbookAppState(input: {
     selection,
     sidePanelId,
     dismissPersistenceTransferRequest,
-    handleSelectionRangeChange,
+    handleSelectionChange,
     setSidePanelWidth,
     sheetNames,
     sidePanel,

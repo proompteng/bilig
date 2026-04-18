@@ -80,14 +80,15 @@ export function selectEntireWorkbookSheet(input: {
   isEditingCell: boolean
   onCommitEdit: WorkbookGridSurfaceProps['onCommitEdit']
   setGridSelection: (selection: GridSelection) => void
-  onSelect: WorkbookGridSurfaceProps['onSelect']
+  onSelectionChange: (selection: GridSelection) => void
   focusGrid: () => void
 }): void {
-  const { focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection } = input
+  const { focusGrid, isEditingCell, onCommitEdit, onSelectionChange, setGridSelection } = input
   if (isEditingCell) {
     onCommitEdit()
   }
-  setGridSelection(createSheetSelection())
-  onSelect(formatAddress(0, 0))
+  const nextSelection = createSheetSelection()
+  setGridSelection(nextSelection)
+  onSelectionChange(nextSelection)
   focusGrid()
 }

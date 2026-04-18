@@ -7,6 +7,7 @@ import {
   WorkbookGridSurface,
   type EditMovement,
   type EditSelectionBehavior,
+  type GridSelectionSnapshot,
   type WorkbookGridPreviewRange,
   type SheetGridViewportSubscription,
 } from './WorkbookGridSurface.js'
@@ -27,7 +28,7 @@ interface WorkbookViewProps {
   onCreateSheet?: (() => void) | undefined
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined
   onDeleteSheet?: ((sheetName: string) => void) | undefined
-  onSelect(this: void, addr: string): void
+  onSelectionChange(this: void, selection: GridSelectionSnapshot): void
   onAddressCommit(this: void, addr: string): void
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onBeginFormulaEdit(this: void, seed?: string): void
@@ -41,7 +42,6 @@ interface WorkbookViewProps {
   onToggleBooleanCell?: ((sheetName: string, address: string, nextValue: boolean) => void) | undefined
   onPaste(this: void, sheetName: string, addr: string, values: readonly (readonly string[])[]): void
   onSelectionLabelChange?: ((label: string) => void) | undefined
-  onSelectionRangeChange?: ((range: { startAddress: string; endAddress: string }) => void) | undefined
   ribbon?: React.ReactNode
   sidePanel?: React.ReactNode
   sidePanelId?: string | undefined
@@ -103,7 +103,7 @@ export function WorkbookView({
   onCreateSheet,
   onRenameSheet,
   onDeleteSheet,
-  onSelect,
+  onSelectionChange,
   onAddressCommit,
   onBeginEdit,
   onBeginFormulaEdit,
@@ -117,7 +117,6 @@ export function WorkbookView({
   onToggleBooleanCell,
   onPaste,
   onSelectionLabelChange,
-  onSelectionRangeChange,
   ribbon,
   sidePanel,
   sidePanelId,
@@ -229,8 +228,7 @@ export function WorkbookView({
             onPaste={onPaste}
             onToggleBooleanCell={onToggleBooleanCell}
             onSelectionLabelChange={handleSelectionLabelChange}
-            onSelectionRangeChange={onSelectionRangeChange}
-            onSelect={onSelect}
+            onSelectionChange={onSelectionChange}
             subscribeViewport={subscribeViewport}
             columnWidths={columnWidths}
             hiddenColumns={hiddenColumns}

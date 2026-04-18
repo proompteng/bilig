@@ -346,6 +346,8 @@ function extractReplayPath(counterexample: unknown): string | null {
   return null
 }
 
+export const extractReplayPathForTest = extractReplayPath
+
 async function runChecked<Ts extends unknown[]>(
   suite: string,
   kind: FuzzSuiteKind,

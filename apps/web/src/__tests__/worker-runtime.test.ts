@@ -520,6 +520,43 @@ describe('WorkbookWorkerRuntime', () => {
     expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id)
   })
 
+  it('publishes numeric cell font-size style updates through viewport patches', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'numeric-font-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+    await runtime.setCellValue('Sheet1', 'G8', 1200)
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 7,
+        rowEnd: 7,
+        colStart: 6,
+        colEnd: 6,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    await runtime.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'G8', endAddress: 'G8' }, { font: { size: 20 } })
+
+    const patch = received.at(-1)
+    expect(patch?.full).toBe(false)
+    expect(patch?.cells[0]?.snapshot.address).toBe('G8')
+    expect(patch?.cells[0]?.displayText).toBe('1200')
+    expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id)
+    expect(patch?.styles[0]).toMatchObject({
+      font: { size: 20 },
+    })
+  })
+
   it('builds the initial full viewport patch from the local projection store when it matches the worker projection', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'base-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')

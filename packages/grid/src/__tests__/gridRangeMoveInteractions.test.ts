@@ -8,7 +8,7 @@ describe('gridRangeMoveInteractions', () => {
     const cleanupRef = { current: null as (() => void) | null }
     const resolvePointerCell = vi.fn(() => [5, 5] as const)
     const setGridSelection = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
     const onMoveRange = vi.fn()
     const refreshHoverState = vi.fn()
     const setIsRangeMoveDragging = vi.fn()
@@ -22,7 +22,7 @@ describe('gridRangeMoveInteractions', () => {
       pointerCell: [2, 2],
       resolvePointerCell,
       setGridSelection,
-      onSelect,
+      onSelectionChange,
       onMoveRange,
       refreshHoverState,
       setIsRangeMoveDragging,
@@ -51,7 +51,13 @@ describe('gridRangeMoveInteractions', () => {
         }),
       }),
     )
-    expect(onSelect).toHaveBeenCalledWith('E5')
+    expect(onSelectionChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: expect.objectContaining({
+          range: { x: 4, y: 4, width: 2, height: 2 },
+        }),
+      }),
+    )
     expect(onMoveRange).toHaveBeenCalledWith('B2', 'C3', 'E5', 'F6')
     expect(refreshHoverState).toHaveBeenCalledWith(41, 51, 0)
     expect(cleanupRef.current).toBeNull()
@@ -63,7 +69,7 @@ describe('gridRangeMoveInteractions', () => {
     const cleanupRef = { current: null as (() => void) | null }
     const resolvePointerCell = vi.fn(() => [1, 1] as const)
     const setGridSelection = vi.fn()
-    const onSelect = vi.fn()
+    const onSelectionChange = vi.fn()
     const onMoveRange = vi.fn()
 
     // Act
@@ -74,7 +80,7 @@ describe('gridRangeMoveInteractions', () => {
       pointerCell: [1, 1],
       resolvePointerCell,
       setGridSelection,
-      onSelect,
+      onSelectionChange,
       onMoveRange,
       refreshHoverState: vi.fn(),
       setIsRangeMoveDragging: vi.fn(),
@@ -92,7 +98,7 @@ describe('gridRangeMoveInteractions', () => {
         }),
       }),
     )
-    expect(onSelect).toHaveBeenCalledWith('B2')
+    expect(onSelectionChange).toHaveBeenCalledTimes(1)
     expect(onMoveRange).not.toHaveBeenCalled()
   })
 
@@ -109,7 +115,7 @@ describe('gridRangeMoveInteractions', () => {
       pointerCell: [0, 0],
       resolvePointerCell: vi.fn(() => [0, 0] as const),
       setGridSelection: vi.fn(),
-      onSelect: vi.fn(),
+      onSelectionChange: vi.fn(),
       onMoveRange: vi.fn(),
       refreshHoverState: vi.fn(),
       setIsRangeMoveDragging: vi.fn(),

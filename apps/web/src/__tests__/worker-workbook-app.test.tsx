@@ -304,7 +304,7 @@ describe('WorkerWorkbookApp', () => {
     })
   })
 
-  it('passes an authoritative selection-range callback into the workbook view', async () => {
+  it('passes one authoritative selection-change callback into the workbook view', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     useWorkerWorkbookAppState.mockReturnValue({
@@ -329,7 +329,7 @@ describe('WorkerWorkbookApp', () => {
       workerHandle: {
         viewportStore: {},
       },
-      handleSelectionRangeChange: vi.fn(),
+      handleSelectionChange: vi.fn(),
       selection: { sheetName: 'Sheet1', address: 'B18' },
       selectedCell: { sheetName: 'Sheet1', address: 'B18' },
       sheetNames: ['Sheet1'],
@@ -405,7 +405,8 @@ describe('WorkerWorkbookApp', () => {
       )
     })
 
-    expect(typeof latestWorkbookViewProps.current?.['onSelectionRangeChange']).toBe('function')
+    expect(typeof latestWorkbookViewProps.current?.['onSelectionChange']).toBe('function')
+    expect(latestWorkbookViewProps.current?.['onSelectionRangeChange']).toBeUndefined()
 
     await act(async () => {
       root.unmount()

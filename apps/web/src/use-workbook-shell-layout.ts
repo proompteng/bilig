@@ -43,14 +43,19 @@ function normalizeStoredWorkbookShellLayout(
   value: unknown,
   availableTabs: readonly string[],
   defaultTab: string | null,
+  defaultOpen: boolean,
 ): WorkbookShellLayoutState {
   const activeSidePanelTab = isRecord(value) && typeof value['sidePanelTab'] === 'string' ? value['sidePanelTab'] : defaultTab
   const sidePanelWidth =
     isRecord(value) && typeof value['sidePanelWidth'] === 'number'
       ? clampWorkbookSidePanelWidth(value['sidePanelWidth'])
       : DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH
-  const isSidePanelOpen = isRecord(value) && value['sidePanelOpen'] === true && activeSidePanelTab !== null
   const resolvedActiveTab = activeSidePanelTab && availableTabs.includes(activeSidePanelTab) ? activeSidePanelTab : defaultTab
+  const hasStoredOpenPreference = isRecord(value) && 'sidePanelOpen' in value
+  const isSidePanelOpen =
+    hasStoredOpenPreference && isRecord(value)
+      ? value['sidePanelOpen'] === true && activeSidePanelTab !== null
+      : defaultOpen && resolvedActiveTab !== null
   return {
     isSidePanelOpen: isSidePanelOpen && resolvedActiveTab !== null,
     activeSidePanelTab: resolvedActiveTab,
@@ -62,16 +67,17 @@ function loadPersistedWorkbookShellLayout(
   scope: string,
   availableTabs: readonly string[],
   defaultTab: string | null,
+  defaultOpen: boolean,
 ): WorkbookShellLayoutState {
   try {
     const raw = window.localStorage.getItem(storageKey(scope))
     if (!raw) {
-      return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab)
+      return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab, defaultOpen)
     }
     const parsed = JSON.parse(raw) as unknown
-    return normalizeStoredWorkbookShellLayout(parsed, availableTabs, defaultTab)
+    return normalizeStoredWorkbookShellLayout(parsed, availableTabs, defaultTab, defaultOpen)
   } catch {
-    return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab)
+    return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab, defaultOpen)
   }
 }
 
@@ -95,8 +101,9 @@ export function useWorkbookShellLayout(input: {
   persistenceKey?: string
   availableTabs: readonly string[]
   defaultTab?: string | null
+  defaultOpen?: boolean
 }) {
-  const { availableTabs, defaultTab, documentId, persistenceKey } = input
+  const { availableTabs, defaultOpen = false, defaultTab, documentId, persistenceKey } = input
   const resolvedPersistenceKey = persistenceKey ?? documentId
   const resolvedDefaultTab = useMemo(() => {
     if (availableTabs.length === 0) {
@@ -110,11 +117,11 @@ export function useWorkbookShellLayout(input: {
   const [layout, setLayout] = useState<WorkbookShellLayoutState>(() =>
     typeof window === 'undefined'
       ? {
-          isSidePanelOpen: false,
+          isSidePanelOpen: defaultOpen && resolvedDefaultTab !== null,
           activeSidePanelTab: resolvedDefaultTab,
           sidePanelWidth: DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH,
         }
-      : loadPersistedWorkbookShellLayout(resolvedPersistenceKey, availableTabs, resolvedDefaultTab),
+      : loadPersistedWorkbookShellLayout(resolvedPersistenceKey, availableTabs, resolvedDefaultTab, defaultOpen),
   )
 
   useEffect(() => {

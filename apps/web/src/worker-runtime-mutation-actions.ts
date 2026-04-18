@@ -68,7 +68,7 @@ export function ackAbsorbedMutations(args: {
   pendingMutations: PendingWorkbookMutation[]
 } {
   const mutationJournalEntries = args.mutationJournalEntries.map((mutation) => {
-    if (!args.absorbedMutationIds.has(mutation.id)) {
+    if (!args.absorbedMutationIds.has(mutation.id) || mutation.status === 'acked') {
       return mutation
     }
     return Effect.runSync(markPendingWorkbookMutationAcked(mutation, args.ackedAtUnixMs))

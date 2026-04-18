@@ -2,7 +2,7 @@ import { cva } from 'class-variance-authority'
 import { cn } from './cn.js'
 
 export const workbookHeaderActionButtonClass = cva(
-  'inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-[12px] font-medium transition-[background-color,border-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50',
+  'inline-flex h-8 items-center justify-center rounded-md border text-[12px] font-medium transition-[background-color,border-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       active: {
@@ -12,6 +12,10 @@ export const workbookHeaderActionButtonClass = cva(
       grouped: {
         true: '',
         false: '',
+      },
+      iconOnly: {
+        true: 'w-8 gap-0 px-0',
+        false: 'gap-2 px-2.5',
       },
     },
     compoundVariants: [
@@ -24,7 +28,7 @@ export const workbookHeaderActionButtonClass = cva(
         active: false,
         grouped: true,
         className:
-          'border-transparent bg-transparent text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-200)] hover:text-[var(--color-mauve-900)]',
+          'border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] text-[var(--color-mauve-700)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] hover:border-[var(--color-mauve-300)] hover:bg-white hover:text-[var(--color-mauve-900)]',
       },
       {
         active: true,
@@ -42,6 +46,7 @@ export const workbookHeaderActionButtonClass = cva(
     defaultVariants: {
       active: false,
       grouped: false,
+      iconOnly: false,
     },
   },
 )
@@ -64,7 +69,7 @@ export function WorkbookHeaderStatusChip(props: { modeLabel: string; syncLabel: 
     <>
       <span
         aria-label={`Workbook status: ${props.modeLabel}, ${props.syncLabel}`}
-        className={cn(workbookHeaderSurfaceClass, 'w-8 justify-center text-[var(--color-mauve-700)]')}
+        className="inline-flex h-8 items-center justify-center rounded-md px-1.5 text-[var(--color-mauve-600)]"
         data-testid="status-mode"
         role="status"
         title={`${props.modeLabel} • ${props.syncLabel}`}

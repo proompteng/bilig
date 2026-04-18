@@ -384,6 +384,73 @@ describe('WorkbookToolbar', () => {
     })
   })
 
+  it('applies bottom border presets to the live selection range', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    selectionRangeRef.current = {
+      sheetName: 'Sheet1',
+      startAddress: 'B2',
+      endAddress: 'D5',
+    }
+
+    await act(async () => {
+      host.querySelector("[aria-label='Borders']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await act(async () => {
+      document.querySelector("[aria-label='Bottom border']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(invokeMutation.mock.calls).toEqual([
+      [
+        'clearRangeStyle',
+        {
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          endAddress: 'D5',
+        },
+        ['borderTop', 'borderRight', 'borderBottom', 'borderLeft'],
+      ],
+      [
+        'setRangeStyle',
+        {
+          sheetName: 'Sheet1',
+          startAddress: 'B5',
+          endAddress: 'D5',
+        },
+        {
+          borders: {
+            bottom: {
+              style: 'solid',
+              weight: 'thin',
+              color: '#111827',
+            },
+          },
+        },
+      ],
+    ])
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('hides native toolbar overflow scrollbars while preserving horizontal scrolling', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
