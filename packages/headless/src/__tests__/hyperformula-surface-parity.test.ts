@@ -6,7 +6,14 @@ import {
   parseHyperFormulaSurfaceSnapshot,
 } from '../../../../scripts/workpaper-surface-contract.js'
 
-const ALLOWED_BILIG_INSTANCE_METHODS = ['dispose', 'offDetailed', 'onDetailed', 'onceDetailed'] as const
+const ALLOWED_BILIG_INSTANCE_METHODS = [
+  'dispose',
+  'getPerformanceCounters',
+  'offDetailed',
+  'onDetailed',
+  'onceDetailed',
+  'resetPerformanceCounters',
+] as const
 
 describe('WorkPaper HyperFormula snapshot parity', () => {
   it('matches the checked-in HyperFormula class surface snapshot', () => {
