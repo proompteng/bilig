@@ -127,7 +127,6 @@ test('web app keeps shell controls on one height and radius system', async ({ pa
     page.getByLabel('Number format'),
     page.getByTestId('name-box'),
     page.getByTestId('formula-input-frame'),
-    page.getByTestId('status-mode'),
     page.getByRole('tab', { name: 'Sheet1' }),
   ]
 

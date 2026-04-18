@@ -13,6 +13,7 @@ import {
   getProductColumnLeft,
   getProductColumnWidth,
   gotoWorkbookShell,
+  remoteSyncEnabled,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 const fuzzBrowserEnabled = process.env['BILIG_FUZZ_BROWSER'] === '1'
@@ -521,8 +522,11 @@ test('web app supports fill-handle propagation', async ({ page }) => {
 })
 
 test('web app enables undo and redo for a normal edit', async ({ page }) => {
-  await page.goto('/')
+  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+  const documentId = `playwright-undo-redo-basic-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
+  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
@@ -555,8 +559,11 @@ test('web app enables undo and redo for a normal edit', async ({ page }) => {
 })
 
 test('web app preserves redo across a longer undo history', async ({ page }) => {
-  await page.goto('/')
+  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+  const documentId = `playwright-undo-redo-long-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
+  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
@@ -611,8 +618,11 @@ test('web app preserves redo across a longer undo history', async ({ page }) => 
 })
 
 test('web app clears redo after a fresh edit branches history', async ({ page }) => {
-  await page.goto('/')
+  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+  const documentId = `playwright-undo-redo-branch-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
+  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
