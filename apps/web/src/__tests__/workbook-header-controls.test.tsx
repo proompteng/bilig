@@ -17,13 +17,14 @@ describe('WorkbookHeaderStatusChip', () => {
     const root = createRoot(host)
 
     await act(async () => {
-      root.render(<WorkbookHeaderStatusChip modeLabel="Live" syncLabel="Ready" />)
+      root.render(<WorkbookHeaderStatusChip modeLabel="Live" syncLabel="Saved" tone="positive" />)
     })
 
     const status = host.querySelector<HTMLElement>("[data-testid='status-mode']")
     expect(status?.getAttribute('role')).toBe('status')
-    expect(status?.getAttribute('class')).not.toContain('border')
-    expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Ready')
+    expect(status?.getAttribute('class')).toContain('border')
+    expect(host.querySelector("[data-testid='status-label']")?.textContent).toBe('Saved')
+    expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saved')
 
     await act(async () => {
       root.unmount()

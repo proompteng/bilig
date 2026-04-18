@@ -60,9 +60,10 @@ export function CellEditorOverlay({
   onCancel,
   style,
 }: CellEditorOverlayProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
+  const MAX_EDITOR_HEIGHT = 220
 
   useEffect(() => {
     blurArmedRef.current = false
@@ -82,6 +83,17 @@ export function CellEditorOverlay({
     }
   }, [selectionBehavior, value.length])
 
+  useEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) {
+      return
+    }
+    textarea.style.height = '0px'
+    const measuredHeight = Math.min(Math.max(textarea.scrollHeight, fontSize + 16), MAX_EDITOR_HEIGHT)
+    textarea.style.height = `${measuredHeight}px`
+    textarea.style.overflowY = textarea.scrollHeight > MAX_EDITOR_HEIGHT ? 'auto' : 'hidden'
+  }, [fontSize, value])
+
   const commit = (movement?: EditMovement) => {
     if (completionRef.current !== 'idle') {
       return
@@ -99,16 +111,22 @@ export function CellEditorOverlay({
   }
 
   return (
-    <div className="cell-editor-overlay" data-testid="cell-editor-overlay" style={{ ...style, backgroundColor }}>
-      <input
+    <div
+      className="cell-editor-overlay overflow-hidden rounded-[6px] border border-[var(--wb-accent)] bg-[var(--wb-surface-elevated)] shadow-[var(--wb-shadow-md)]"
+      data-testid="cell-editor-overlay"
+      style={{ ...style, backgroundColor }}
+    >
+      <textarea
         aria-label={`${label} editor`}
-        className="h-full w-full border-0 bg-transparent px-2 leading-tight outline-none"
+        className="w-full resize-none border-0 bg-transparent px-2 py-1.5 leading-tight outline-none"
         data-testid="cell-editor-input"
         ref={inputRef}
+        rows={1}
         style={{
           color,
           font,
           fontSize,
+          minHeight: '100%',
           textAlign,
           textDecorationLine: underline ? 'underline' : undefined,
         }}
@@ -136,6 +154,9 @@ export function CellEditorOverlay({
             return
           }
           if (event.key === 'Enter') {
+            if (event.altKey) {
+              return
+            }
             event.preventDefault()
             commit([0, event.shiftKey ? -1 : 1])
             return

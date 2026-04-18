@@ -35,12 +35,14 @@ export function FormulaBar({
   onCommit,
   onCancel,
 }: FormulaBarProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const nameBoxRef = useRef<HTMLInputElement | null>(null)
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
   const [formulaCaret, setFormulaCaret] = useState(value.length)
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
   const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  const MAX_FORMULA_HEIGHT = 128
 
   useEffect(() => {
     setFormulaCaret((current) => Math.min(value.length, current === 0 ? value.length : current))
@@ -48,6 +50,17 @@ export function FormulaBar({
       setDismissedAutocompleteValue(null)
     }
   }, [dismissedAutocompleteValue, value])
+
+  useEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) {
+      return
+    }
+    textarea.style.height = '0px'
+    const measuredHeight = Math.min(Math.max(textarea.scrollHeight, 32), MAX_FORMULA_HEIGHT)
+    textarea.style.height = `${measuredHeight}px`
+    textarea.style.overflowY = textarea.scrollHeight > MAX_FORMULA_HEIGHT ? 'auto' : 'hidden'
+  }, [value])
 
   useEffect(() => {
     const pending = pendingSelectionRef.current
@@ -62,6 +75,26 @@ export function FormulaBar({
     input.setSelectionRange(pending.start, pending.end)
     pendingSelectionRef.current = null
   }, [value])
+
+  useEffect(() => {
+    const handleGoToShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) {
+        return
+      }
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey
+      if (!hasPrimaryModifier || event.key.toLowerCase() !== 'g') {
+        return
+      }
+      event.preventDefault()
+      nameBoxRef.current?.focus()
+      nameBoxRef.current?.select()
+    }
+
+    window.addEventListener('keydown', handleGoToShortcut, true)
+    return () => {
+      window.removeEventListener('keydown', handleGoToShortcut, true)
+    }
+  }, [])
 
   const assistState = useMemo(
     () =>
@@ -104,7 +137,14 @@ export function FormulaBar({
 
   return (
     <div className={formulaBarRootClass()} data-testid="formula-bar">
-      <NameBox address={address} onCommit={onAddressCommit} sheetName={sheetName} {...(definedNames ? { definedNames } : {})} />
+      <NameBox
+        address={address}
+        onCommit={onAddressCommit}
+        ref={nameBoxRef}
+        selectionLabel={selectionLabel}
+        sheetName={sheetName}
+        {...(definedNames ? { definedNames } : {})}
+      />
       <div className="min-w-0 flex-1">
         <label className="sr-only" htmlFor="formula-input">
           Formula
@@ -114,7 +154,7 @@ export function FormulaBar({
             <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-10`}>
               fx
             </span>
-            <input
+            <textarea
               aria-activedescendant={showAutocomplete ? `formula-autocomplete-option-${highlightedSuggestionIndex}` : undefined}
               aria-controls={showAutocomplete ? 'formula-autocomplete' : undefined}
               aria-expanded={showAutocomplete ? 'true' : 'false'}
@@ -126,6 +166,7 @@ export function FormulaBar({
               ref={inputRef}
               role="combobox"
               value={value}
+              rows={1}
               onBlur={(event) => {
                 setIsFormulaFocused(false)
                 const nextTarget = event.relatedTarget
@@ -156,6 +197,9 @@ export function FormulaBar({
               }}
               onKeyDown={(event) => {
                 event.stopPropagation()
+                if (event.key === 'Enter' && event.altKey) {
+                  return
+                }
                 if (showAutocomplete && event.key === 'ArrowDown') {
                   event.preventDefault()
                   setHighlightedSuggestionIndex((current) => Math.min(current + 1, assistState.suggestions.length - 1))
@@ -192,6 +236,15 @@ export function FormulaBar({
                 setFormulaCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
               }}
             />
+          </div>
+          <div
+            className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[var(--wb-text-subtle)]"
+            data-testid="formula-bar-meta"
+          >
+            <span className="truncate font-medium text-[var(--wb-text-muted)]" data-testid="formula-selection-label">
+              {selectionLabel ?? address}
+            </span>
+            <span className="truncate">{resolvedValue || '∅'}</span>
           </div>
           {showAutocomplete ? (
             <FormulaAutocomplete

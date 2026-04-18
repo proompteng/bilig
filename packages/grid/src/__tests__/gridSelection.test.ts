@@ -11,6 +11,7 @@ import {
   rectangleToAddresses,
   selectionToAddresses,
   selectionToSnapshot,
+  snapshotToSelection,
 } from '../gridSelection.js'
 
 describe('gridSelection', () => {
@@ -100,5 +101,66 @@ describe('gridSelection', () => {
         endAddress: 'XFD1048576',
       },
     })
+  })
+
+  test('reconstructs range, row, column, and sheet selections from authoritative snapshots', () => {
+    expect(
+      formatSelectionSummary(
+        snapshotToSelection({
+          sheetName: 'Sheet1',
+          address: 'B2',
+          kind: 'range',
+          range: {
+            startAddress: 'B2',
+            endAddress: 'D5',
+          },
+        }),
+        'A1',
+      ),
+    ).toBe('B2:D5')
+
+    expect(
+      formatSelectionSummary(
+        snapshotToSelection({
+          sheetName: 'Sheet1',
+          address: 'B1',
+          kind: 'column',
+          range: {
+            startAddress: 'B1',
+            endAddress: 'D1048576',
+          },
+        }),
+        'A1',
+      ),
+    ).toBe('B:D')
+
+    expect(
+      formatSelectionSummary(
+        snapshotToSelection({
+          sheetName: 'Sheet1',
+          address: 'A2',
+          kind: 'row',
+          range: {
+            startAddress: 'A2',
+            endAddress: 'XFD5',
+          },
+        }),
+        'A1',
+      ),
+    ).toBe('2:5')
+
+    expect(
+      isSheetSelection(
+        snapshotToSelection({
+          sheetName: 'Sheet1',
+          address: 'A1',
+          kind: 'sheet',
+          range: {
+            startAddress: 'A1',
+            endAddress: 'XFD1048576',
+          },
+        }),
+      ),
+    ).toBe(true)
   })
 })

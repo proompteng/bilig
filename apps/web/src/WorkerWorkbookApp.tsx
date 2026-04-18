@@ -207,7 +207,7 @@ function WorkerWorkbookAppInner({
               onAddressCommit={(input) => {
                 const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
                 if (nextTarget) {
-                  app.selectAddress(nextTarget.sheetName, nextTarget.address)
+                  app.selectSelectionSnapshot(nextTarget)
                 }
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
@@ -269,6 +269,7 @@ function WorkerWorkbookAppInner({
               resolvedValue={app.resolvedValue}
               selectedAddr={app.selection.address}
               selectedCellSnapshot={app.selectedCell}
+              selectionSnapshot={app.selectionSnapshot}
               sheetName={app.selection.sheetName}
               sheetNames={app.sheetNames}
               subscribeViewport={app.subscribeViewport}

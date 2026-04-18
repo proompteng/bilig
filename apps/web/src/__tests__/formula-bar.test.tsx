@@ -9,6 +9,7 @@ function FormulaBarHarness(props: {
   initialValue: string
   initialEditing?: boolean
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
+  selectionLabel?: string
 }) {
   const [value, setValue] = useState(props.initialValue)
   const [isEditing, setIsEditing] = useState(props.initialEditing ?? true)
@@ -34,6 +35,7 @@ function FormulaBarHarness(props: {
         setIsEditing(false)
       }}
       resolvedValue=""
+      selectionLabel={props.selectionLabel}
       sheetName="Sheet1"
       value={value}
     />
@@ -108,11 +110,72 @@ describe('FormulaBar', () => {
     const root = createRoot(host)
 
     await act(async () => {
-      root.render(<FormulaBarHarness initialEditing={false} initialValue="" />)
+      root.render(<FormulaBarHarness initialEditing={false} initialValue="" selectionLabel="B2:D5" />)
     })
 
+    const visibleSelectionLabel = host.querySelector("[data-testid='formula-selection-label']")
     const selectionStatus = host.querySelector("[data-testid='status-selection']")
-    expect(selectionStatus?.textContent).toBe('Sheet1!B2')
+    expect(visibleSelectionLabel?.textContent).toBe('B2:D5')
+    expect(selectionStatus?.textContent).toBe('Sheet1!B2:D5')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('shows the active range-ref defined name in the name box when the current selection matches it', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <FormulaBarHarness
+          initialEditing={false}
+          initialValue=""
+          selectionLabel="B2:D5"
+          definedNames={[
+            {
+              name: 'QuarterlyData',
+              value: {
+                kind: 'range-ref',
+                sheetName: 'Sheet1',
+                startAddress: 'B2',
+                endAddress: 'D5',
+              },
+            },
+          ]}
+        />,
+      )
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    expect(nameBox?.value).toBe('QuarterlyData')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('focuses the name box from the Go To shortcut', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={false} initialValue="" selectionLabel="B2:D5" />)
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true, bubbles: true }))
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    expect(document.activeElement).toBe(nameBox)
 
     await act(async () => {
       root.unmount()

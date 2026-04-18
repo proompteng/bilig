@@ -23,6 +23,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     sheetName: props.sheetName,
     selectedAddr: props.selectedAddr,
     selectedCellSnapshot: props.selectedCellSnapshot,
+    selectionSnapshot: props.selectionSnapshot,
     editorValue: props.editorValue,
     isEditingCell: props.isEditingCell,
     subscribeViewport: props.subscribeViewport,
@@ -163,7 +164,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         {renderState.fillHandleBounds ? (
           <button
             aria-label="Fill handle"
-            className="absolute z-30 cursor-crosshair rounded-full border-0 bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)] outline-none"
+            className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[var(--wb-accent)] shadow-[0_0_0_1px_rgba(33,86,58,0.32)] outline-none"
             data-grid-fill-handle="true"
             onClick={(event) => {
               event.preventDefault()

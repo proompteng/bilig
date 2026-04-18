@@ -6,10 +6,11 @@ import {
   type CellSnapshot,
   type CellStyleRecord,
 } from '@bilig/protocol'
+import { WORKBOOK_FONT_SANS, workbookThemeColors } from './workbookTheme.js'
 
-const DEFAULT_FONT_FALLBACK = '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif'
-const DEFAULT_TEXT_COLOR = '#202124'
-const TRANSPARENT_TEXT = 'rgba(32, 33, 36, 0)'
+const DEFAULT_FONT_FALLBACK = WORKBOOK_FONT_SANS
+const DEFAULT_TEXT_COLOR = workbookThemeColors.text
+const TRANSPARENT_TEXT = 'rgba(31, 41, 51, 0)'
 
 interface GridCellOptions {
   readonly booleanSurfaceEnabled?: boolean

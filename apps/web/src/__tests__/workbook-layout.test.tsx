@@ -59,6 +59,15 @@ describe('workbook layout', () => {
             flags: 0,
             version: 0,
           }}
+          selectionSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A1',
+            kind: 'cell',
+            range: {
+              startAddress: 'A1',
+              endAddress: 'A1',
+            },
+          }}
           editorValue=""
           editorSelectionBehavior="select-all"
           resolvedValue=""
@@ -99,7 +108,7 @@ describe('workbook layout', () => {
     expect(resizeHandle?.className).toContain('w-4')
     expect(resizeHandle?.className).toContain('cursor-ew-resize')
     expect(resizeHandle?.className).toContain('-translate-x-2')
-    expect(resizeHandle?.className).toContain('after:bg-[var(--color-mauve-200)]')
+    expect(resizeHandle?.className).toContain('after:bg-[var(--wb-border)]')
     expect(gridSurface instanceof Node).toBe(true)
     expect(sidePanel instanceof Node).toBe(true)
     expect(gridSurface instanceof Node && sidePanel instanceof Node ? gridSurface.compareDocumentPosition(sidePanel) : 0).toBe(

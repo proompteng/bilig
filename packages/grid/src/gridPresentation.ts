@@ -1,6 +1,7 @@
 import type { RenderCellSnapshot } from './gridCells.js'
 import { isNumericEditorSeed } from './gridKeyboard.js'
 import type { Rectangle } from './gridTypes.js'
+import { WORKBOOK_FONT_SANS, workbookThemeColors } from './workbookTheme.js'
 
 export interface GridEditorPresentation {
   readonly backgroundColor: string
@@ -33,7 +34,7 @@ export function getEditorPresentation(options: {
 }): GridEditorPresentation {
   const { renderCell, fillColor } = options
   return {
-    backgroundColor: fillColor?.trim() ? fillColor : '#ffffff',
+    backgroundColor: fillColor?.trim() ? fillColor : workbookThemeColors.surface,
     color: renderCell.color,
     font: renderCell.font,
     fontSize: renderCell.fontSize,
@@ -43,29 +44,29 @@ export function getEditorPresentation(options: {
 
 export function getGridTheme(options?: { gpuSurfaceEnabled?: boolean; textSurfaceEnabled?: boolean }) {
   void options
-  const fontFamily = '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif'
+  const fontFamily = WORKBOOK_FONT_SANS
   return {
-    accentColor: '#1f7a43',
-    accentFg: '#ffffff',
-    accentLight: 'rgba(31, 122, 67, 0.14)',
-    bgCell: '#ffffff',
-    bgCellMedium: '#f8f9fa',
-    bgHeader: '#f8f9fa',
-    bgHeaderHasFocus: '#e6f4ea',
-    bgHeaderHovered: '#f1f3f4',
-    borderColor: '#dadce0',
+    accentColor: workbookThemeColors.accent,
+    accentFg: workbookThemeColors.surface,
+    accentLight: workbookThemeColors.accentSoft,
+    bgCell: workbookThemeColors.surface,
+    bgCellMedium: workbookThemeColors.surfaceSubtle,
+    bgHeader: workbookThemeColors.surfaceSubtle,
+    bgHeaderHasFocus: workbookThemeColors.accentSoft,
+    bgHeaderHovered: workbookThemeColors.muted,
+    borderColor: workbookThemeColors.border,
     cellHorizontalPadding: 8,
     cellVerticalPadding: 4,
-    drilldownBorder: '#dadce0',
+    drilldownBorder: workbookThemeColors.border,
     editorFontSize: '12px',
     fontFamily,
     headerFontStyle: `600 11px ${fontFamily}`,
-    horizontalBorderColor: '#eceff1',
+    horizontalBorderColor: workbookThemeColors.gridBorder,
     lineHeight: 1.2,
-    textDark: '#202124',
-    textHeader: '#5f6368',
-    textHeaderSelected: '#ffffff',
-    textLight: '#80868b',
-    textMedium: '#5f6368',
+    textDark: workbookThemeColors.text,
+    textHeader: workbookThemeColors.textMuted,
+    textHeaderSelected: workbookThemeColors.surface,
+    textLight: workbookThemeColors.textSubtle,
+    textMedium: workbookThemeColors.textMuted,
   }
 }

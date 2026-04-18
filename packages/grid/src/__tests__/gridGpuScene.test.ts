@@ -4,6 +4,7 @@ import { buildGridGpuScene, parseGpuColor } from '../gridGpuScene.js'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { CompactSelection } from '../gridTypes.js'
+import { workbookThemeColors } from '../workbookTheme.js'
 
 function createCellSnapshot(styleId: string | undefined, value: CellSnapshot['value'] = { tag: ValueTag.String, value: '' }): CellSnapshot {
   return {
@@ -35,6 +36,16 @@ function createSelection() {
     current: undefined,
   }
 }
+
+const GRID_LINE_COLOR = parseGpuColor(workbookThemeColors.gridBorder)
+const HEADER_FILL_COLOR = parseGpuColor(workbookThemeColors.surfaceSubtle)
+const HEADER_SELECTED_FILL_COLOR = parseGpuColor(workbookThemeColors.accentSoft)
+const HEADER_HOVER_FILL_COLOR = parseGpuColor(workbookThemeColors.muted)
+const SELECTION_FILL_COLOR = parseGpuColor('rgba(33, 86, 58, 0.08)')
+const SELECTION_OUTLINE_COLOR = parseGpuColor(workbookThemeColors.accent)
+const HOVER_FILL_COLOR = parseGpuColor(workbookThemeColors.hoverFill)
+const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor('rgba(191, 213, 196, 0.28)')
+const RESIZE_GUIDE_COLOR = parseGpuColor('rgba(33, 86, 58, 0.72)')
 
 describe('gridGpuScene', () => {
   test('parses rgb and hex colors into normalized GPU channels', () => {
@@ -99,7 +110,7 @@ describe('gridGpuScene', () => {
       y: 20,
       width: 1,
       height: 22,
-      color: { r: 0xe3 / 255, g: 0xe9 / 255, b: 0xf0 / 255, a: 1 },
+      color: GRID_LINE_COLOR,
     })
   })
 
@@ -163,14 +174,14 @@ describe('gridGpuScene', () => {
       y: 49,
       width: 198,
       height: 70,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
+      color: SELECTION_FILL_COLOR,
     })
     expect(scene.borderRects).toContainEqual({
       x: 100,
       y: 48,
       width: 200,
       height: 1,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: SELECTION_OUTLINE_COLOR,
     })
     expect(scene.fillRects.some((rect) => rect.width === 6 && rect.height === 6)).toBe(false)
   })
@@ -235,21 +246,21 @@ describe('gridGpuScene', () => {
       y: 0,
       width: 46,
       height: 24,
-      color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
+      color: HEADER_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 46,
       y: 0,
       width: 104,
       height: 24,
-      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+      color: HEADER_SELECTED_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 0,
       y: 24,
       width: 46,
       height: 22,
-      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+      color: HEADER_SELECTED_FILL_COLOR,
     })
   })
 
@@ -288,28 +299,28 @@ describe('gridGpuScene', () => {
       y: 0,
       width: 104,
       height: 24,
-      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+      color: HEADER_SELECTED_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 150,
       y: 0,
       width: 104,
       height: 24,
-      color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
+      color: HEADER_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 0,
       y: 24,
       width: 46,
       height: 22,
-      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+      color: HEADER_SELECTED_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 0,
       y: 46,
       width: 46,
       height: 22,
-      color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
+      color: HEADER_FILL_COLOR,
     })
   })
 
@@ -334,14 +345,14 @@ describe('gridGpuScene', () => {
       y: 0,
       width: 104,
       height: 24,
-      color: { r: 241 / 255, g: 243 / 255, b: 244 / 255, a: 1 },
+      color: HEADER_HOVER_FILL_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 255,
       y: 91,
       width: 102,
       height: 20,
-      color: { r: 95 / 255, g: 99 / 255, b: 104 / 255, a: 0.06 },
+      color: HOVER_FILL_COLOR,
     })
   })
 
@@ -365,14 +376,14 @@ describe('gridGpuScene', () => {
       y: 0,
       width: 3,
       height: 68,
-      color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
+      color: RESIZE_GUIDE_GLOW_COLOR,
     })
     expect(scene.borderRects).toContainEqual({
       x: 149,
       y: 0,
       width: 1,
       height: 68,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
   })
 
@@ -399,14 +410,14 @@ describe('gridGpuScene', () => {
       y: 44,
       width: 254,
       height: 3,
-      color: { r: 168 / 255, g: 158 / 255, b: 169 / 255, a: 0.18 },
+      color: RESIZE_GUIDE_GLOW_COLOR,
     })
     expect(scene.borderRects).toContainEqual({
       x: 0,
       y: 45,
       width: 254,
       height: 1,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
   })
 
@@ -437,21 +448,21 @@ describe('gridGpuScene', () => {
       y: 0,
       width: 1,
       height: 68,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
     expect(scene.borderRects).toContainEqual({
       x: 253,
       y: 0,
       width: 1,
       height: 68,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 46,
       y: 21,
       width: 104,
       height: 3,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
   })
 
@@ -493,14 +504,14 @@ describe('gridGpuScene', () => {
       y: 240,
       width: 100,
       height: 1,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: SELECTION_OUTLINE_COLOR,
     })
     expect(
       scene.borderRects.some(
         (rect) =>
-          rect.color.r === 31 / 255 &&
-          rect.color.g === 122 / 255 &&
-          rect.color.b === 67 / 255 &&
+          rect.color.r === 33 / 255 &&
+          rect.color.g === 86 / 255 &&
+          rect.color.b === 58 / 255 &&
           rect.color.a === 1 &&
           rect.x === 100 &&
           rect.y === 240 &&
@@ -536,21 +547,21 @@ describe('gridGpuScene', () => {
       y: 24,
       width: 254,
       height: 1,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
     expect(scene.borderRects).toContainEqual({
       x: 0,
       y: 67,
       width: 254,
       height: 1,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
     expect(scene.fillRects).toContainEqual({
       x: 43,
       y: 24,
       width: 3,
       height: 22,
-      color: { r: 121 / 255, g: 105 / 255, b: 123 / 255, a: 0.82 },
+      color: RESIZE_GUIDE_COLOR,
     })
   })
 
@@ -582,14 +593,14 @@ describe('gridGpuScene', () => {
       y: 25,
       width: 206,
       height: 42,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
+      color: SELECTION_FILL_COLOR,
     })
     expect(
       scene.borderRects.filter(
         (rect) =>
-          rect.color.r === 31 / 255 &&
-          rect.color.g === 122 / 255 &&
-          rect.color.b === 67 / 255 &&
+          rect.color.r === 33 / 255 &&
+          rect.color.g === 86 / 255 &&
+          rect.color.b === 58 / 255 &&
           rect.color.a === 1 &&
           rect.width === 2 &&
           rect.height === 44,
@@ -625,14 +636,14 @@ describe('gridGpuScene', () => {
       y: 25,
       width: 206,
       height: 42,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
+      color: SELECTION_FILL_COLOR,
     })
     expect(
       scene.borderRects.filter(
         (rect) =>
-          rect.color.r === 31 / 255 &&
-          rect.color.g === 122 / 255 &&
-          rect.color.b === 67 / 255 &&
+          rect.color.r === 33 / 255 &&
+          rect.color.g === 86 / 255 &&
+          rect.color.b === 58 / 255 &&
           rect.color.a === 1 &&
           rect.width === 206 &&
           rect.height === 2,
@@ -659,7 +670,7 @@ describe('gridGpuScene', () => {
       y: 29,
       width: 14,
       height: 14,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+      color: SELECTION_OUTLINE_COLOR,
     })
     expect(
       scene.fillRects.filter((rect) => rect.color.r === 1 && rect.color.g === 1 && rect.color.b === 1 && rect.width === 2),

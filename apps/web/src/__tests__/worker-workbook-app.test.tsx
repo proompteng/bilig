@@ -412,4 +412,143 @@ describe('WorkerWorkbookApp', () => {
       root.unmount()
     })
   })
+
+  it('routes typed range targets from the name box into the authoritative selection snapshot path', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const selectSelectionSnapshot = vi.fn()
+
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      approvePersistenceTransfer: vi.fn(),
+      clearAgentError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      editorConflictBanner: null,
+      failedPendingMutation: null,
+      pendingTransferRequest: null,
+      requestPersistenceTransfer: vi.fn(),
+      retryFailedPendingMutation: vi.fn(),
+      remoteSyncAvailable: true,
+      runtimeError: null,
+      runtimeReady: true,
+      workbookReady: true,
+      zeroConfigured: true,
+      localPersistenceMode: 'persistent',
+      statusModeLabel: 'Live',
+      transferRequested: false,
+      workerHandle: {
+        viewportStore: {},
+      },
+      handleSelectionChange: vi.fn(),
+      selection: { sheetName: 'Sheet1', address: 'B2' },
+      selectionSnapshot: {
+        sheetName: 'Sheet1',
+        address: 'B2',
+        kind: 'cell',
+        range: {
+          startAddress: 'B2',
+          endAddress: 'B2',
+        },
+      },
+      selectedCell: { sheetName: 'Sheet1', address: 'B2' },
+      sheetNames: ['Sheet1'],
+      previewRanges: [],
+      resolvedValue: '',
+      sidePanel: null,
+      sidePanelId: undefined,
+      sidePanelWidth: undefined,
+      setSidePanelWidth: vi.fn(),
+      commitEditor: vi.fn(),
+      copySelectionRange: vi.fn(),
+      createSheet: vi.fn(),
+      fillSelectionRange: vi.fn(),
+      handleEditorChange: vi.fn(),
+      handleVisibleViewportChange: vi.fn(),
+      invokeColumnVisibilityMutation: vi.fn(),
+      invokeDeleteColumnsMutation: vi.fn(),
+      invokeDeleteRowsMutation: vi.fn(),
+      invokeInsertColumnsMutation: vi.fn(),
+      invokeInsertRowsMutation: vi.fn(),
+      invokeRowVisibilityMutation: vi.fn(),
+      invokeSetFreezePaneMutation: vi.fn(),
+      isEditing: false,
+      isEditingCell: false,
+      moveSelectionRange: vi.fn(),
+      pasteIntoSelection: vi.fn(),
+      renameSheet: vi.fn(),
+      reportRuntimeError: vi.fn(),
+      runtimeErrorBanner: null,
+      selectAddress: vi.fn(),
+      selectSelectionSnapshot,
+      approveBundle: vi.fn(),
+      ribbon: null,
+      dismissPersistenceTransferRequestBanner: null,
+      subscribeViewport: vi.fn(),
+      columnWidths: {},
+      hiddenColumns: {},
+      hiddenRows: {},
+      rowHeights: {},
+      freezeRows: 0,
+      freezeCols: 0,
+      toggleBooleanCell: vi.fn(),
+      visibleEditorValue: '',
+      importPanel: null,
+      importToggle: null,
+      clearImportError: vi.fn(),
+      pendingCommandCount: 0,
+      canUndo: false,
+      canRedo: false,
+      changeCount: 0,
+      changesPanel: null,
+      redoLatestChange: vi.fn(),
+      undoLatestChange: vi.fn(),
+      startNewThread: vi.fn(),
+      requestPersistenceTransferBanner: null,
+      localPersistenceBanner: null,
+      definedNames: [],
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: 'guest:test',
+            defaultDocumentId: 'doc-1',
+            persistState: true,
+            zeroCacheUrl: 'http://127.0.0.1:4848',
+          }}
+          connectionState={{ name: 'connected' }}
+        />,
+      )
+    })
+
+    const onAddressCommit = latestWorkbookViewProps.current?.['onAddressCommit']
+    expect(typeof onAddressCommit).toBe('function')
+    if (typeof onAddressCommit !== 'function') {
+      throw new Error('WorkbookView did not receive an address commit handler')
+    }
+
+    await act(async () => {
+      onAddressCommit('B2:D8')
+    })
+
+    expect(selectSelectionSnapshot).toHaveBeenCalledWith({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      kind: 'range',
+      range: {
+        startAddress: 'B2',
+        endAddress: 'D8',
+      },
+    })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

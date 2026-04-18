@@ -14,8 +14,10 @@
     --wb-surface: #ffffff;
     --wb-surface-subtle: #f3f2ee;
     --wb-surface-muted: #ece9e1;
+    --wb-surface-elevated: #fffcf7;
     --wb-border: #ddd8cc;
     --wb-border-strong: #cac3b4;
+    --wb-border-subtle: #e7e2d6;
     --wb-grid-border: #ece9e1;
     --wb-text: #1f2933;
     --wb-text-muted: #52606d;
@@ -23,6 +25,15 @@
     --wb-accent: #21563a;
     --wb-accent-soft: #e8f1eb;
     --wb-accent-ring: #bfd5c4;
+    --wb-muted: #f0ece3;
+    --wb-muted-strong: #e4ddd0;
+    --wb-success: #21563a;
+    --wb-success-soft: #e8f1eb;
+    --wb-warning: #8a5b0f;
+    --wb-warning-soft: #f9efd7;
+    --wb-danger: #8f2f28;
+    --wb-danger-soft: #f7e5e3;
+    --wb-danger-text: #7b251f;
     --wb-hover: #f1efe8;
     --wb-shadow-sm: 0 1px 1px rgba(15, 23, 42, 0.05);
     --wb-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.08);

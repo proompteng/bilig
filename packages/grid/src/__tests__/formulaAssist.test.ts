@@ -55,6 +55,27 @@ describe('formula assist helpers', () => {
     ).toBe('TaxRate')
   })
 
+  it('shows a range-ref defined name when the visible selection summary matches it', () => {
+    expect(
+      resolveNameBoxDisplayValue({
+        sheetName: 'Sheet1',
+        address: 'B2',
+        selectionLabel: 'B2:D5',
+        definedNames: [
+          {
+            name: 'QuarterlyData',
+            value: {
+              kind: 'range-ref',
+              sheetName: 'Sheet1',
+              startAddress: 'B2',
+              endAddress: 'D5',
+            },
+          },
+        ],
+      }),
+    ).toBe('QuarterlyData')
+  })
+
   it('replaces a function prefix with a callable suggestion and keeps the caret inside parens', () => {
     const next = applyFormulaSuggestion({
       value: '=su',

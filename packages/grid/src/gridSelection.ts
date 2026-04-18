@@ -1,5 +1,5 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import { formatAddress, indexToColumn } from '@bilig/formula'
+import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
 import {
   CompactSelection,
   type GridSelection,
@@ -118,6 +118,37 @@ export function selectionToSnapshot(selection: GridSelection, sheetName: string,
     address,
     kind,
     range,
+  }
+}
+
+export function snapshotToSelection(selection: GridSelectionSnapshot): GridSelection {
+  switch (selection.kind) {
+    case 'sheet':
+      return createSheetSelection()
+    case 'column': {
+      const start = parseCellAddress(selection.range.startAddress, selection.sheetName)
+      const end = parseCellAddress(selection.range.endAddress, selection.sheetName)
+      return createColumnSliceSelection(start.col, end.col, start.row)
+    }
+    case 'row': {
+      const start = parseCellAddress(selection.range.startAddress, selection.sheetName)
+      const end = parseCellAddress(selection.range.endAddress, selection.sheetName)
+      return createRowSliceSelection(start.col, start.row, end.row)
+    }
+    case 'range': {
+      const start = parseCellAddress(selection.range.startAddress, selection.sheetName)
+      const end = parseCellAddress(selection.range.endAddress, selection.sheetName)
+      return createRectangleSelectionFromRange({
+        x: Math.min(start.col, end.col),
+        y: Math.min(start.row, end.row),
+        width: Math.abs(end.col - start.col) + 1,
+        height: Math.abs(end.row - start.row) + 1,
+      })
+    }
+    case 'cell': {
+      const parsed = parseCellAddress(selection.address, selection.sheetName)
+      return createGridSelection(parsed.col, parsed.row)
+    }
   }
 }
 

@@ -24,6 +24,7 @@ export interface WorkbookGridSurfaceProps {
   sheetName: string
   selectedAddr: string
   selectedCellSnapshot: CellSnapshot
+  selectionSnapshot: GridSelectionSnapshot
   editorValue: string
   editorSelectionBehavior: EditSelectionBehavior
   resolvedValue: string

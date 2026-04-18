@@ -18,6 +18,7 @@ interface WorkbookViewProps {
   sheetName: string
   selectedAddr: string
   selectedCellSnapshot: CellSnapshot
+  selectionSnapshot: GridSelectionSnapshot
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   editorValue: string
   editorSelectionBehavior: EditSelectionBehavior
@@ -93,6 +94,7 @@ export function WorkbookView({
   sheetName,
   selectedAddr,
   selectedCellSnapshot,
+  selectionSnapshot,
   definedNames,
   editorValue,
   editorSelectionBehavior,
@@ -252,6 +254,7 @@ export function WorkbookView({
             resolvedValue={resolvedValue}
             selectedAddr={selectedAddr}
             selectedCellSnapshot={selectedCellSnapshot}
+            selectionSnapshot={selectionSnapshot}
             sheetName={sheetName}
           />
           <WorkbookSheetTabs
@@ -261,6 +264,7 @@ export function WorkbookView({
             onSelectSheet={onSelectSheet}
             sheetName={sheetName}
             sheetNames={sheetNames}
+            trailingContent={<span data-testid="workbook-selection-summary">Selection {selectionLabel}</span>}
           />
         </div>
         {sidePanel ? (
@@ -279,8 +283,8 @@ export function WorkbookView({
                 aria-orientation="vertical"
                 className={[
                   'absolute inset-y-0 left-0 z-10 w-4 -translate-x-2 cursor-ew-resize touch-none',
-                  'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--color-mauve-200)] after:transition-colors',
-                  isResizingSidePanel ? 'after:bg-[var(--color-mauve-500)]' : 'hover:after:bg-[var(--color-mauve-300)]',
+                  'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--wb-border)] after:transition-colors',
+                  isResizingSidePanel ? 'after:bg-[var(--wb-accent)]' : 'hover:after:bg-[var(--wb-border-strong)]',
                 ].join(' ')}
                 data-testid="workbook-side-panel-resize-handle"
                 role="separator"

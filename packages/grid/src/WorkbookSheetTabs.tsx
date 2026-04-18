@@ -6,6 +6,7 @@ import { cva } from 'class-variance-authority'
 interface WorkbookSheetTabsProps {
   sheetName: string
   sheetNames: string[]
+  trailingContent?: React.ReactNode
   onSelectSheet(this: void, sheetName: string): void
   onCreateSheet?: (() => void) | undefined
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined
@@ -13,22 +14,21 @@ interface WorkbookSheetTabsProps {
 }
 
 const sheetStripClass = cva(
-  'flex min-h-12 items-center justify-between gap-2 border-t border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] px-2.5 pt-1.5 pb-2',
+  'flex min-h-12 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 pt-1.5 pb-2',
 )
 
 const sheetTabsShellClass = cva('flex min-w-0 flex-1 items-end gap-2 overflow-hidden')
 
-const sheetListClass = cva(
-  'wb-scrollbar-none relative flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--color-mauve-200)]',
-)
+const sheetListClass = cva('wb-scrollbar-none relative flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden')
 
 const sheetTabClass = cva(
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-[12px] font-medium whitespace-nowrap outline-none transition-[color,background-color] hover:bg-[var(--color-mauve-100)]/70 focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)]',
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border px-3 text-[12px] font-medium whitespace-nowrap outline-none transition-[color,background-color,border-color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--wb-surface-subtle)]',
   {
     variants: {
       active: {
-        true: 'font-semibold text-[var(--color-mauve-950)]',
-        false: 'text-[var(--color-mauve-600)] hover:text-[var(--color-mauve-900)]',
+        true: 'border-[var(--wb-border-strong)] bg-[var(--wb-surface)] font-semibold text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)]',
+        false:
+          'border-transparent bg-transparent text-[var(--wb-text-muted)] hover:border-[var(--wb-border)] hover:bg-[var(--wb-muted)] hover:text-[var(--wb-text)]',
       },
     },
     defaultVariants: {
@@ -38,28 +38,34 @@ const sheetTabClass = cva(
 )
 
 const sheetIndicatorClass = cva(
-  'absolute bottom-0 left-0 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--color-mauve-700)] transition-[translate,width] duration-200 ease-out',
+  'absolute bottom-0 left-0 h-0.5 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] rounded-full bg-[var(--wb-accent)] transition-[translate,width] duration-200 ease-out',
 )
 
-const sheetRenameShellClass = cva('inline-flex h-8 shrink-0 items-center border-b-2 border-[var(--color-mauve-700)] px-2')
+const sheetRenameShellClass = cva(
+  'inline-flex h-8 shrink-0 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent)] bg-[var(--wb-surface)] px-2',
+)
 
 const sheetRenameInputClass = cva(
-  'w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-medium text-[var(--color-mauve-950)] outline-none',
+  'w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-medium text-[var(--wb-text)] outline-none',
 )
 
 const sheetActionButtonClass = cva(
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-[var(--color-mauve-700)] outline-none transition-colors hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)] focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50',
+  'inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-transparent bg-transparent text-[var(--wb-text-muted)] outline-none transition-colors hover:border-[var(--wb-border)] hover:bg-[var(--wb-muted)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--wb-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-50',
 )
 
 const sheetContextMenuPopupClass = cva(
-  'min-w-40 overflow-hidden rounded-lg border border-[var(--color-mauve-200)] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.12)] outline-none',
+  'min-w-40 overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-1 shadow-[var(--wb-shadow-md)] outline-none',
 )
 
 const sheetContextMenuItemClass = cva(
-  'flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium text-[var(--color-mauve-900)] outline-none transition-colors data-[highlighted]:bg-[var(--color-mauve-100)] data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+  'flex h-8 items-center rounded-[var(--wb-radius-control)] px-2.5 text-[12px] font-medium text-[var(--wb-text)] outline-none transition-colors data-[highlighted]:bg-[var(--wb-muted)] data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
 )
 
-const sheetContextMenuSeparatorClass = cva('my-1 h-px bg-[var(--color-mauve-200)]')
+const sheetContextMenuSeparatorClass = cva('my-1 h-px bg-[var(--wb-border)]')
+
+const sheetTrailingContentClass = cva(
+  'inline-flex min-h-8 shrink-0 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[11px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]',
+)
 
 function SheetAddIcon() {
   return (
@@ -72,6 +78,7 @@ function SheetAddIcon() {
 export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   sheetName,
   sheetNames,
+  trailingContent,
   onSelectSheet,
   onCreateSheet,
   onRenameSheet,
@@ -287,6 +294,7 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
           </button>
         ) : null}
       </div>
+      {trailingContent ? <div className={sheetTrailingContentClass()}>{trailingContent}</div> : null}
     </Tabs.Root>
   )
 })

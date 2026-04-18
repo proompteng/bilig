@@ -5,7 +5,7 @@ import { ValueTag, type CellRangeRef } from '@bilig/protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkbookShortcutLabel } from '../shortcut-registry.js'
 import { WorkbookToolbar } from '../workbook-toolbar.js'
-import { useWorkbookToolbar } from '../use-workbook-toolbar.js'
+import { deriveWorkbookStatusPresentation, useWorkbookToolbar } from '../use-workbook-toolbar.js'
 
 function ToolbarHookHarness(props: {
   readonly invokeMutation: (method: string, ...args: unknown[]) => Promise<void>
@@ -70,6 +70,90 @@ afterEach(() => {
 })
 
 describe('WorkbookToolbar', () => {
+  it('derives clear visible save states for saved, saving, local-only, offline, and sync issues', () => {
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'connected',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 0, failedCount: 0 },
+        remoteSyncAvailable: true,
+        zeroConfigured: true,
+        zeroHealthReady: true,
+        writesAllowed: true,
+      }),
+    ).toEqual({
+      modeLabel: 'Live',
+      syncLabel: 'Saved',
+      tone: 'positive',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'connected',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 2, failedCount: 0 },
+        remoteSyncAvailable: true,
+        zeroConfigured: true,
+        zeroHealthReady: true,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Saving…',
+      tone: 'progress',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'connected',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 0, failedCount: 0 },
+        remoteSyncAvailable: true,
+        zeroConfigured: false,
+        zeroHealthReady: true,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Local only',
+      tone: 'warning',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'disconnected',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 0, failedCount: 0 },
+        remoteSyncAvailable: false,
+        zeroConfigured: true,
+        zeroHealthReady: false,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Offline',
+      tone: 'warning',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'connected',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 0, failedCount: 1 },
+        failedPendingMutation: { id: 'pending-1' },
+        remoteSyncAvailable: true,
+        zeroConfigured: true,
+        zeroHealthReady: true,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Sync issue',
+      tone: 'danger',
+    })
+  })
+
   it('opens the structure menu and invokes current row actions', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

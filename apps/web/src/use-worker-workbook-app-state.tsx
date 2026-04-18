@@ -147,6 +147,7 @@ export function useWorkerWorkbookAppState(input: {
   const [editorSelectionBehavior, setEditorSelectionBehavior] = useState<EditSelectionBehavior>('select-all')
   const [editingMode, setEditingMode] = useState<EditingMode>('idle')
   const [editorConflict, setEditorConflict] = useState<WorkbookEditorConflict | null>(null)
+  const [selectionSnapshot, setSelectionSnapshot] = useState<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
   const selectionRef = useRef(selection)
   const workerHandleRef = useRef(workerHandle)
   const runtimeControllerRef = useRef(runtimeController)
@@ -180,6 +181,7 @@ export function useWorkerWorkbookAppState(input: {
       const nextSelectionSnapshot = createSingleCellSelectionSnapshot(selection)
       selectionSnapshotRef.current = nextSelectionSnapshot
       selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
+      setSelectionSnapshot(nextSelectionSnapshot)
     }
   }, [selection])
 
@@ -490,8 +492,8 @@ export function useWorkerWorkbookAppState(input: {
     })
 
   const applySelectionSnapshot = useCallback(
-    (selectionSnapshot: GridSelectionSnapshot, options?: { markAsExternal?: boolean }) => {
-      const { sheetName, address } = selectionSnapshot
+    (nextSelectionSnapshot: GridSelectionSnapshot, options?: { markAsExternal?: boolean }) => {
+      const { sheetName, address } = nextSelectionSnapshot
       const previousSelection = selectionRef.current
       const previousRange = selectionRangeRef.current
       if (
@@ -499,8 +501,8 @@ export function useWorkerWorkbookAppState(input: {
         previousSelection.sheetName === sheetName &&
         previousSelection.address === address &&
         previousRange.sheetName === sheetName &&
-        previousRange.startAddress === selectionSnapshot.range.startAddress &&
-        previousRange.endAddress === selectionSnapshot.range.endAddress
+        previousRange.startAddress === nextSelectionSnapshot.range.startAddress &&
+        previousRange.endAddress === nextSelectionSnapshot.range.endAddress
       ) {
         return
       }
@@ -510,9 +512,10 @@ export function useWorkerWorkbookAppState(input: {
         setEditingMode('idle')
       }
       const nextSelection = { sheetName, address }
-      selectionSnapshotRef.current = selectionSnapshot
-      selectionRangeRef.current = selectionSnapshotToRangeRef(selectionSnapshot)
-      pendingExternalSelectionRef.current = options?.markAsExternal ? selectionSnapshot : null
+      selectionSnapshotRef.current = nextSelectionSnapshot
+      selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
+      setSelectionSnapshot(nextSelectionSnapshot)
+      pendingExternalSelectionRef.current = options?.markAsExternal ? nextSelectionSnapshot : null
       if (previousSelection.sheetName !== sheetName) {
         visibleViewportRef.current = selectionViewport(nextSelection)
       }
@@ -533,6 +536,13 @@ export function useWorkerWorkbookAppState(input: {
         }),
         { markAsExternal: true },
       )
+    },
+    [applySelectionSnapshot],
+  )
+
+  const selectSelectionSnapshot = useCallback(
+    (nextSelectionSnapshot: GridSelectionSnapshot) => {
+      applySelectionSnapshot(nextSelectionSnapshot, { markAsExternal: true })
     },
     [applySelectionSnapshot],
   )
@@ -594,12 +604,12 @@ export function useWorkerWorkbookAppState(input: {
     [],
   )
   const handleSelectionChange = useCallback(
-    (selectionSnapshot: GridSelectionSnapshot) => {
+    (nextSelectionSnapshot: GridSelectionSnapshot) => {
       const activeExternalSelection = pendingExternalSelectionRef.current
-      if (activeExternalSelection && !selectionSnapshotsEqual(activeExternalSelection, selectionSnapshot)) {
+      if (activeExternalSelection && !selectionSnapshotsEqual(activeExternalSelection, nextSelectionSnapshot)) {
         return
       }
-      applySelectionSnapshot(selectionSnapshot, { markAsExternal: false })
+      applySelectionSnapshot(nextSelectionSnapshot, { markAsExternal: false })
     },
     [applySelectionSnapshot],
   )
@@ -677,6 +687,8 @@ export function useWorkerWorkbookAppState(input: {
     connectionStateName: connectionState.name,
     runtimeReady,
     localPersistenceMode,
+    pendingMutationSummary: runtimeState?.pendingMutationSummary,
+    failedPendingMutation,
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
@@ -851,8 +863,10 @@ export function useWorkerWorkbookAppState(input: {
     retryFailedPendingMutation,
     approvePersistenceTransfer,
     selectAddress,
+    selectSelectionSnapshot,
     selectedCell,
     selection,
+    selectionSnapshot,
     sidePanelId,
     dismissPersistenceTransferRequest,
     handleSelectionChange,

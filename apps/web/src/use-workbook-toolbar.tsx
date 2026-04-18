@@ -27,10 +27,68 @@ const DEFAULT_BORDER_SIDE = {
   color: '#111827',
 } as const
 
+type WorkbookHeaderStatusTone = 'positive' | 'progress' | 'warning' | 'danger' | 'neutral'
+
+export interface WorkbookStatusPresentation {
+  readonly modeLabel: string
+  readonly syncLabel: string
+  readonly tone: WorkbookHeaderStatusTone
+}
+
+export function deriveWorkbookStatusPresentation(input: {
+  connectionStateName: ZeroConnectionState['name']
+  runtimeReady: boolean
+  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  remoteSyncAvailable: boolean
+  zeroConfigured: boolean
+  zeroHealthReady: boolean
+  writesAllowed: boolean
+  pendingMutationSummary?: {
+    readonly activeCount: number
+    readonly failedCount: number
+  }
+  failedPendingMutation?: unknown
+}): WorkbookStatusPresentation {
+  const modeLabel = formatConnectionStateLabel(input.connectionStateName)
+  if (!input.runtimeReady) {
+    return { modeLabel, syncLabel: 'Loading…', tone: 'neutral' }
+  }
+  if (!input.writesAllowed) {
+    return { modeLabel, syncLabel: 'Read only', tone: 'warning' }
+  }
+  if (input.failedPendingMutation || (input.pendingMutationSummary?.failedCount ?? 0) > 0) {
+    return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
+  }
+  if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
+    return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
+  }
+  if (input.localPersistenceMode === 'follower' && !input.remoteSyncAvailable) {
+    return { modeLabel, syncLabel: 'Read only', tone: 'warning' }
+  }
+  if (!input.zeroConfigured) {
+    return { modeLabel, syncLabel: 'Local only', tone: 'warning' }
+  }
+  if (input.connectionStateName === 'needs-auth' || input.connectionStateName === 'error') {
+    return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
+  }
+  if (input.connectionStateName === 'disconnected' || input.connectionStateName === 'closed') {
+    return { modeLabel, syncLabel: 'Offline', tone: 'warning' }
+  }
+  if (input.connectionStateName === 'connecting' || !input.remoteSyncAvailable || !input.zeroHealthReady) {
+    return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
+  }
+  return { modeLabel, syncLabel: 'Saved', tone: 'positive' }
+}
+
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  pendingMutationSummary?: {
+    readonly activeCount: number
+    readonly failedCount: number
+  }
+  failedPendingMutation?: unknown
   remoteSyncAvailable: boolean
   zeroConfigured: boolean
   zeroHealthReady: boolean
@@ -57,6 +115,8 @@ export function useWorkbookToolbar(input: {
     connectionStateName,
     runtimeReady,
     localPersistenceMode,
+    pendingMutationSummary,
+    failedPendingMutation,
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
@@ -98,24 +158,18 @@ export function useWorkbookToolbar(input: {
     () => (isPresetColor(currentTextColor) ? recentTextColors : mergeRecentCustomColors(recentTextColors, currentTextColor)),
     [currentTextColor, recentTextColors],
   )
-  const statusModeLabel = formatConnectionStateLabel(connectionStateName)
-  const statusModeValue = remoteSyncAvailable ? 'Live' : statusModeLabel
-  const statusSyncValue =
-    localPersistenceMode === 'follower' && !remoteSyncAvailable
-      ? 'Follower'
-      : !runtimeReady
-        ? 'Loading'
-        : !zeroConfigured
-          ? 'Local'
-          : connectionStateName === 'connected'
-            ? zeroHealthReady
-              ? 'Ready'
-              : 'Syncing'
-            : connectionStateName === 'connecting'
-              ? 'Syncing'
-              : connectionStateName === 'disconnected'
-                ? 'Local'
-                : 'Unavailable'
+  const statusPresentation = deriveWorkbookStatusPresentation({
+    connectionStateName,
+    runtimeReady,
+    localPersistenceMode,
+    pendingMutationSummary,
+    failedPendingMutation,
+    remoteSyncAvailable,
+    zeroConfigured,
+    zeroHealthReady,
+    writesAllowed,
+  })
+  const statusModeLabel = statusPresentation.modeLabel
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
       await invokeMutation('setRangeStyle', selectionRangeRef.current, patch)
@@ -442,7 +496,11 @@ export function useWorkbookToolbar(input: {
         selectedFontSize={selectedFontSize}
         trailingContent={
           <>
-            <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />
+            <WorkbookHeaderStatusChip
+              modeLabel={statusPresentation.modeLabel}
+              syncLabel={statusPresentation.syncLabel}
+              tone={statusPresentation.tone}
+            />
             {trailingContent}
           </>
         }
@@ -479,8 +537,9 @@ export function useWorkbookToolbar(input: {
       resetTextColor,
       selectedFontSize,
       setNumberFormatPreset,
-      statusModeValue,
-      statusSyncValue,
+      statusPresentation.modeLabel,
+      statusPresentation.syncLabel,
+      statusPresentation.tone,
       trailingContent,
       visibleRecentFillColors,
       visibleRecentTextColors,

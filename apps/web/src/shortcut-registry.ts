@@ -38,6 +38,14 @@ const WORKBOOK_SHORTCUTS: readonly WorkbookShortcutEntry[] = [
     windows: 'Enter',
   },
   {
+    id: 'insert-line-break',
+    label: 'Insert line break',
+    category: 'Editing',
+    mac: '⌥Enter',
+    windows: 'Alt+Enter',
+    keywords: ['multiline', 'newline'],
+  },
+  {
     id: 'cancel-edit',
     label: 'Cancel edit',
     category: 'Editing',
@@ -122,6 +130,14 @@ const WORKBOOK_SHORTCUTS: readonly WorkbookShortcutEntry[] = [
     mac: 'Arrow keys',
     windows: 'Arrow keys',
     keywords: ['cell', 'navigate'],
+  },
+  {
+    id: 'goto-range',
+    label: 'Go to cell or range',
+    category: 'Navigation',
+    mac: '⌘G',
+    windows: 'Ctrl+G',
+    keywords: ['name box', 'jump', 'range'],
   },
   {
     id: 'jump-row-start',

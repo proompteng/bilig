@@ -411,6 +411,7 @@ function formatDefinedNameSummary(value: WorkbookDefinedNameValueSnapshot): stri
 export function resolveNameBoxDisplayValue(input: {
   readonly sheetName: string
   readonly address: string
+  readonly selectionLabel?: string
   readonly definedNames?: readonly WorkbookDefinedNameSnapshot[]
 }): string {
   const match = input.definedNames?.find(
@@ -418,11 +419,13 @@ export function resolveNameBoxDisplayValue(input: {
       entry.value &&
       typeof entry.value === 'object' &&
       'kind' in entry.value &&
-      entry.value.kind === 'cell-ref' &&
       entry.value.sheetName === input.sheetName &&
-      entry.value.address.toUpperCase() === input.address.toUpperCase(),
+      ((entry.value.kind === 'cell-ref' && entry.value.address.toUpperCase() === input.address.toUpperCase()) ||
+        (entry.value.kind === 'range-ref' &&
+          input.selectionLabel !== undefined &&
+          `${entry.value.startAddress.toUpperCase()}:${entry.value.endAddress.toUpperCase()}` === input.selectionLabel.toUpperCase())),
   )
-  return match?.name ?? input.address
+  return match?.name ?? input.selectionLabel ?? input.address
 }
 
 function buildDefinedNameSuggestions(

@@ -17,6 +17,20 @@ describe('use workbook selection action helpers', () => {
     ])
   })
 
+  it('preserves pasted whitespace and multiline literals instead of trimming them', () => {
+    expect(
+      buildPasteCommitOps('Sheet1', 'A1', [
+        ['  SKU  ', ' line 1\nline 2 '],
+        [' 42 ', ' TRUE '],
+      ]),
+    ).toEqual([
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A1', value: '  SKU  ' },
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'B1', value: ' line 1\nline 2 ' },
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A2', value: ' 42 ' },
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'B2', value: ' TRUE ' },
+    ])
+  })
+
   it('creates source and target ranges scoped to one sheet', () => {
     expect(createSheetScopedRangePair('Sheet1', 'A1', 'B2', 'C3', 'D4')).toEqual({
       source: {

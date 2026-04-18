@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import {
   emptyCellSnapshot,
+  parseEditorInput,
   parseSelectionTarget,
   parsedEditorInputFromSnapshot,
   parsedEditorInputMatchesSnapshot,
@@ -92,8 +93,115 @@ describe('worker workbook app model', () => {
         },
       ]),
     ).toEqual({
+      kind: 'cell',
       sheetName: 'Sheet2',
       address: 'C4',
+      range: {
+        startAddress: 'C4',
+        endAddress: 'C4',
+      },
+    })
+  })
+
+  it('preserves whitespace in literal inputs while still parsing formulas and compact scalars', () => {
+    expect(parseEditorInput('  SKU  ')).toEqual({
+      kind: 'value',
+      value: '  SKU  ',
+    })
+    expect(parseEditorInput('=SUM(A1:A3)')).toEqual({
+      kind: 'formula',
+      formula: 'SUM(A1:A3)',
+    })
+    expect(parseEditorInput('  =SUM(A1:A3)')).toEqual({
+      kind: 'value',
+      value: '  =SUM(A1:A3)',
+    })
+    expect(parseEditorInput('42')).toEqual({
+      kind: 'value',
+      value: 42,
+    })
+    expect(parseEditorInput(' 42 ')).toEqual({
+      kind: 'value',
+      value: ' 42 ',
+    })
+    expect(parseEditorInput('TRUE')).toEqual({
+      kind: 'value',
+      value: true,
+    })
+    expect(parseEditorInput(' TRUE ')).toEqual({
+      kind: 'value',
+      value: ' TRUE ',
+    })
+    expect(parseEditorInput('')).toEqual({
+      kind: 'clear',
+    })
+    expect(parseEditorInput('   ')).toEqual({
+      kind: 'value',
+      value: '   ',
+    })
+  })
+
+  it('resolves cell ranges, row ranges, column ranges, quoted sheets, and range-ref defined names', () => {
+    expect(parseSelectionTarget('B2:D8', 'Sheet1')).toEqual({
+      kind: 'range',
+      sheetName: 'Sheet1',
+      address: 'B2',
+      range: {
+        startAddress: 'B2',
+        endAddress: 'D8',
+      },
+    })
+
+    expect(parseSelectionTarget('B:D', 'Sheet1')).toEqual({
+      kind: 'column',
+      sheetName: 'Sheet1',
+      address: 'B1',
+      range: {
+        startAddress: 'B1',
+        endAddress: 'D1048576',
+      },
+    })
+
+    expect(parseSelectionTarget('2:5', 'Sheet1')).toEqual({
+      kind: 'row',
+      sheetName: 'Sheet1',
+      address: 'A2',
+      range: {
+        startAddress: 'A2',
+        endAddress: 'XFD5',
+      },
+    })
+
+    expect(parseSelectionTarget("'Ops Team'!C3:E7", 'Sheet1')).toEqual({
+      kind: 'range',
+      sheetName: 'Ops Team',
+      address: 'C3',
+      range: {
+        startAddress: 'C3',
+        endAddress: 'E7',
+      },
+    })
+
+    expect(
+      parseSelectionTarget('DataBlock', 'Sheet1', [
+        {
+          name: 'DataBlock',
+          value: {
+            kind: 'range-ref',
+            sheetName: 'Sheet2',
+            startAddress: 'B4',
+            endAddress: 'D9',
+          },
+        },
+      ]),
+    ).toEqual({
+      kind: 'range',
+      sheetName: 'Sheet2',
+      address: 'B4',
+      range: {
+        startAddress: 'B4',
+        endAddress: 'D9',
+      },
     })
   })
 })

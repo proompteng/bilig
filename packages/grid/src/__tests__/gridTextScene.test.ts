@@ -4,6 +4,7 @@ import { buildGridTextScene } from '../gridTextScene.js'
 import { getResolvedCellFontFamily } from '../gridCells.js'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
+import { workbookThemeColors } from '../workbookTheme.js'
 
 type TestCellValue =
   | { tag: ValueTag.Empty }
@@ -27,6 +28,10 @@ function createCellSnapshot(value: TestCellValue, styleId: string | undefined = 
 type TestCellSnapshot = ReturnType<typeof createCellSnapshot>
 const CELL_FONT_FAMILY = getResolvedCellFontFamily()
 const HEADER_FONT = `500 11px ${CELL_FONT_FAMILY}`
+const HEADER_SELECTED_COLOR = workbookThemeColors.accent
+const HEADER_DRAG_COLOR = workbookThemeColors.accentDark
+const HEADER_HOVER_COLOR = workbookThemeColors.text
+const CELL_TEXT_COLOR = workbookThemeColors.text
 
 function makeEngine(
   styles: Record<string, CellStyleRecord>,
@@ -113,7 +118,7 @@ describe('gridTextScene', () => {
       text: 'C',
       align: 'center',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -131,7 +136,7 @@ describe('gridTextScene', () => {
       text: '4',
       align: 'right',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -167,7 +172,7 @@ describe('gridTextScene', () => {
       text: 'C',
       align: 'center',
       wrap: false,
-      color: '#176239',
+      color: HEADER_DRAG_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -185,7 +190,7 @@ describe('gridTextScene', () => {
       text: '4',
       align: 'right',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -203,7 +208,7 @@ describe('gridTextScene', () => {
       text: '5',
       align: 'right',
       wrap: false,
-      color: '#3c4043',
+      color: HEADER_HOVER_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -253,7 +258,7 @@ describe('gridTextScene', () => {
       text: 'A',
       align: 'center',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -271,7 +276,7 @@ describe('gridTextScene', () => {
       text: 'C',
       align: 'center',
       wrap: false,
-      color: '#5f6368',
+      color: workbookThemeColors.textMuted,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -289,7 +294,7 @@ describe('gridTextScene', () => {
       text: '1',
       align: 'right',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -307,7 +312,7 @@ describe('gridTextScene', () => {
       text: '4',
       align: 'right',
       wrap: false,
-      color: '#5f6368',
+      color: workbookThemeColors.textMuted,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -341,7 +346,7 @@ describe('gridTextScene', () => {
       text: 'C',
       align: 'center',
       wrap: false,
-      color: '#176239',
+      color: HEADER_DRAG_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -376,7 +381,7 @@ describe('gridTextScene', () => {
       text: 'C',
       align: 'center',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: HEADER_FONT,
       fontSize: 11,
       underline: false,
@@ -418,7 +423,7 @@ describe('gridTextScene', () => {
       text: 'selected',
       align: 'left',
       wrap: false,
-      color: '#202124',
+      color: CELL_TEXT_COLOR,
       font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,
@@ -519,7 +524,7 @@ describe('gridTextScene', () => {
       text: 'A',
       align: 'center',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: `500 20px ${CELL_FONT_FAMILY}`,
       fontSize: 20,
       underline: false,
@@ -537,7 +542,7 @@ describe('gridTextScene', () => {
       text: '1',
       align: 'right',
       wrap: false,
-      color: '#1f7a43',
+      color: HEADER_SELECTED_COLOR,
       font: `500 20px ${CELL_FONT_FAMILY}`,
       fontSize: 20,
       underline: false,
@@ -586,7 +591,7 @@ describe('gridTextScene', () => {
       text: 'spill text',
       align: 'left',
       wrap: false,
-      color: '#202124',
+      color: CELL_TEXT_COLOR,
       font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,

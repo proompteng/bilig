@@ -10,8 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { parseCellAddress } from '@bilig/formula'
-import { createRectangleSelectionFromRange, createGridSelection, rectangleToAddresses, selectionToSnapshot } from './gridSelection.js'
+import { createRectangleSelectionFromRange, rectangleToAddresses, selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewRange, resolveFillHandleSelectionRange } from './gridFillHandle.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import { resolveColumnResizeTarget, type HeaderSelection, type PointerGeometry, type VisibleRegionState } from './gridPointer.js'
@@ -78,6 +77,7 @@ export function useWorkbookGridInteractions(
     | 'onSelectionChange'
     | 'onSelectionLabelChange'
     | 'onToggleBooleanCell'
+    | 'selectionSnapshot'
   > & {
     engine: WorkbookGridSurfaceProps['engine']
     sheetName: string
@@ -111,6 +111,7 @@ export function useWorkbookGridInteractions(
     onSelectionChange,
     onSelectionLabelChange,
     onToggleBooleanCell,
+    selectionSnapshot,
     sheetName,
     selectedAddr,
     renderState,
@@ -153,10 +154,6 @@ export function useWorkbookGridInteractions(
     () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
     [gridSelection.current, selectedCell.col, selectedCell.row],
   )
-  const externalSelectedCell = useMemo<Item>(() => {
-    const parsed = parseCellAddress(selectedAddr, sheetName)
-    return [parsed.col, parsed.row]
-  }, [selectedAddr, sheetName])
   const wasEditingOverlayRef = useRef(false)
   const ignoreNextPointerSelectionRef = useRef(false)
   const pendingPointerCellRef = useRef<Item | null>(null)
@@ -227,15 +224,22 @@ export function useWorkbookGridInteractions(
     const sheetChanged = activeSheetRef.current !== sheetName
     activeSheetRef.current = sheetName
     setGridSelection((current) => {
-      const currentCell = current.current?.cell
-      if (!sheetChanged && currentCell && currentCell[0] === externalSelectedCell[0] && currentCell[1] === externalSelectedCell[1]) {
+      const currentSnapshot = selectionToSnapshot(current, selectionSnapshot.sheetName, selectionSnapshot.address)
+      if (
+        !sheetChanged &&
+        currentSnapshot.sheetName === selectionSnapshot.sheetName &&
+        currentSnapshot.address === selectionSnapshot.address &&
+        currentSnapshot.kind === selectionSnapshot.kind &&
+        currentSnapshot.range.startAddress === selectionSnapshot.range.startAddress &&
+        currentSnapshot.range.endAddress === selectionSnapshot.range.endAddress
+      ) {
         return current
       }
       clearGridPendingPointerActivation(interactionState)
       dragGeometryRef.current = null
-      return createGridSelection(externalSelectedCell[0], externalSelectedCell[1])
+      return snapshotToSelection(selectionSnapshot)
     })
-  }, [externalSelectedCell, interactionState, setGridSelection, sheetName])
+  }, [interactionState, selectionSnapshot, setGridSelection, sheetName])
   useEffect(() => {
     if (wasEditingOverlayRef.current && !isEditingCell) {
       window.requestAnimationFrame(() => {
@@ -292,9 +296,9 @@ export function useWorkbookGridInteractions(
   })
   const emitSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
-      onSelectionChange(selectionToSnapshot(nextSelection, sheetName, selectedAddr))
+      onSelectionChange(selectionToSnapshot(nextSelection, sheetName, selectionSnapshot.address))
     },
-    [onSelectionChange, selectedAddr, sheetName],
+    [onSelectionChange, selectionSnapshot.address, sheetName],
   )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,

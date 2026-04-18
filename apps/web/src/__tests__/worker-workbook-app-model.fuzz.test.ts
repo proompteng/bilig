@@ -51,8 +51,13 @@ describe('worker workbook app model fuzz', () => {
           },
         ]
         expect(parseSelectionTarget(targetName, 'Sheet1', definedNames)).toEqual({
+          kind: 'cell',
           sheetName,
           address,
+          range: {
+            startAddress: address,
+            endAddress: address,
+          },
         })
 
         const clamped = clampSelectionMovement(address, sheetName, movement)

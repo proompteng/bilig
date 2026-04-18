@@ -6,6 +6,7 @@ import { buildGridGpuHeaderScene } from './gridGpuHeaderScene.js'
 import type { HeaderSelection } from './gridPointer.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGridAxes.js'
+import { workbookThemeColors } from './workbookTheme.js'
 
 export interface GridGpuColor {
   readonly r: number
@@ -60,24 +61,23 @@ interface BuildGridGpuSceneOptions {
 }
 
 const FALLBACK_COLOR: GridGpuColor = Object.freeze({ r: 0, g: 0, b: 0, a: 1 })
-const GRID_LINE_COLOR = parseGpuColor('#e3e9f0')
-const HEADER_FILL_COLOR = parseGpuColor('#f8f9fa')
-const HEADER_SELECTED_FILL_COLOR = parseGpuColor('#e6f4ea')
-const HEADER_HOVER_FILL_COLOR = parseGpuColor('#f1f3f4')
-const HEADER_DRAG_ANCHOR_FILL_COLOR = parseGpuColor('#d7eadf')
-const SELECTION_FILL_COLOR = parseGpuColor('rgba(31, 122, 67, 0.06)')
-const SELECTION_OUTLINE_COLOR = parseGpuColor('#1f7a43')
-const HOVER_FILL_COLOR = parseGpuColor('rgba(95, 99, 104, 0.06)')
-const HOVER_OUTLINE_COLOR = parseGpuColor('rgba(95, 99, 104, 0.45)')
-// Match the workbook chrome by using Tailwind's mauve guide tones instead of a saturated green.
-const RESIZE_GUIDE_COLOR = parseGpuColor('rgba(121, 105, 123, 0.82)')
-const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor('rgba(168, 158, 169, 0.18)')
+const GRID_LINE_COLOR = parseGpuColor(workbookThemeColors.gridBorder)
+const HEADER_FILL_COLOR = parseGpuColor(workbookThemeColors.surfaceSubtle)
+const HEADER_SELECTED_FILL_COLOR = parseGpuColor(workbookThemeColors.accentSoft)
+const HEADER_HOVER_FILL_COLOR = parseGpuColor(workbookThemeColors.muted)
+const HEADER_DRAG_ANCHOR_FILL_COLOR = parseGpuColor('rgba(33, 86, 58, 0.18)')
+const SELECTION_FILL_COLOR = parseGpuColor('rgba(33, 86, 58, 0.08)')
+const SELECTION_OUTLINE_COLOR = parseGpuColor(workbookThemeColors.accent)
+const HOVER_FILL_COLOR = parseGpuColor(workbookThemeColors.hoverFill)
+const HOVER_OUTLINE_COLOR = parseGpuColor(workbookThemeColors.hoverOutline)
+const RESIZE_GUIDE_COLOR = parseGpuColor('rgba(33, 86, 58, 0.72)')
+const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor('rgba(191, 213, 196, 0.28)')
 const RESIZE_GUIDE_CORE_THICKNESS = 1
 const RESIZE_GUIDE_GLOW_THICKNESS = 3
-const CHECKBOX_BORDER_COLOR = parseGpuColor('#5f6368')
-const CHECKBOX_SURFACE_COLOR = parseGpuColor('#ffffff')
-const CHECKBOX_SELECTED_COLOR = parseGpuColor('#1f7a43')
-const CHECKBOX_CHECK_COLOR = parseGpuColor('#ffffff')
+const CHECKBOX_BORDER_COLOR = parseGpuColor(workbookThemeColors.textMuted)
+const CHECKBOX_SURFACE_COLOR = parseGpuColor(workbookThemeColors.surface)
+const CHECKBOX_SELECTED_COLOR = parseGpuColor(workbookThemeColors.accent)
+const CHECKBOX_CHECK_COLOR = parseGpuColor(workbookThemeColors.surface)
 
 export function buildGridGpuScene({
   engine,

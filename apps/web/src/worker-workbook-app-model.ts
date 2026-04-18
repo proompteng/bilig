@@ -1,4 +1,5 @@
-import { formatAddress, parseCellAddress } from '@bilig/formula'
+import type { GridSelectionSnapshot } from '@bilig/grid'
+import { formatAddress, parseCellAddress, parseRangeAddress } from '@bilig/formula'
 import {
   MAX_COLS,
   MAX_ROWS,
@@ -13,6 +14,7 @@ import {
 export type EditingMode = 'idle' | 'cell' | 'formula'
 
 export type ParsedEditorInput = { kind: 'clear' } | { kind: 'formula'; formula: string } | { kind: 'value'; value: LiteralInput }
+export type ParsedSelectionTarget = GridSelectionSnapshot
 
 export interface WorkbookEditorConflict {
   readonly sheetName: string
@@ -93,21 +95,44 @@ export function toEditorValue(cell: CellSnapshot): string {
 }
 
 export function parseEditorInput(rawValue: string): ParsedEditorInput {
-  const normalized = rawValue.trim()
-  if (normalized.startsWith('=')) {
-    return { kind: 'formula', formula: normalized.slice(1) }
+  if (rawValue.startsWith('=')) {
+    return { kind: 'formula', formula: rawValue.slice(1) }
   }
-  if (normalized === '') {
+  if (rawValue.length === 0) {
     return { kind: 'clear' }
+  }
+  const normalized = rawValue.trim()
+  if (normalized.length !== rawValue.length) {
+    return { kind: 'value', value: rawValue }
   }
   if (normalized === 'TRUE' || normalized === 'FALSE') {
     return { kind: 'value', value: normalized === 'TRUE' }
   }
-  const numeric = Number(normalized)
-  if (!Number.isNaN(numeric) && /^-?\d+(\.\d+)?$/.test(normalized)) {
-    return { kind: 'value', value: numeric }
+  if (/^-?(?:\d+|\d+\.\d+|\.\d+)$/.test(normalized)) {
+    const numeric = Number(normalized)
+    if (!Number.isNaN(numeric)) {
+      return { kind: 'value', value: numeric }
+    }
   }
-  return { kind: 'value', value: normalized }
+  return { kind: 'value', value: rawValue }
+}
+
+function createSelectionTarget(
+  kind: ParsedSelectionTarget['kind'],
+  sheetName: string,
+  address: string,
+  startAddress: string,
+  endAddress: string,
+): ParsedSelectionTarget {
+  return {
+    kind,
+    sheetName,
+    address,
+    range: {
+      startAddress,
+      endAddress,
+    },
+  }
 }
 
 export function parsedEditorInputFromSnapshot(snapshot: CellSnapshot): ParsedEditorInput {
@@ -168,37 +193,80 @@ export function parseSelectionTarget(
   input: string,
   fallbackSheet: string,
   definedNames?: readonly WorkbookDefinedNameSnapshot[],
-): { sheetName: string; address: string } | null {
+): ParsedSelectionTarget | null {
   const trimmed = input.trim()
   if (trimmed.length === 0) {
     return null
   }
 
   const matchingDefinedName = definedNames?.find((entry) => entry.name.trim().toUpperCase() === trimmed.toUpperCase())
-  if (
-    matchingDefinedName?.value &&
-    typeof matchingDefinedName.value === 'object' &&
-    'kind' in matchingDefinedName.value &&
-    matchingDefinedName.value.kind === 'cell-ref'
-  ) {
-    return {
-      sheetName: matchingDefinedName.value.sheetName,
-      address: matchingDefinedName.value.address.toUpperCase(),
+  const matchingDefinedNameValue = matchingDefinedName?.value
+  if (matchingDefinedNameValue && typeof matchingDefinedNameValue === 'object' && 'kind' in matchingDefinedNameValue) {
+    switch (matchingDefinedNameValue.kind) {
+      case 'cell-ref':
+        return createSelectionTarget(
+          'cell',
+          matchingDefinedNameValue.sheetName,
+          matchingDefinedNameValue.address.toUpperCase(),
+          matchingDefinedNameValue.address.toUpperCase(),
+          matchingDefinedNameValue.address.toUpperCase(),
+        )
+      case 'range-ref':
+        return createSelectionTarget(
+          'range',
+          matchingDefinedNameValue.sheetName,
+          matchingDefinedNameValue.startAddress.toUpperCase(),
+          matchingDefinedNameValue.startAddress.toUpperCase(),
+          matchingDefinedNameValue.endAddress.toUpperCase(),
+        )
+      case 'formula':
+      case 'scalar':
+      case 'structured-ref':
+        return null
     }
   }
 
-  const bangIndex = trimmed.lastIndexOf('!')
-  const nextSheetName = bangIndex === -1 ? fallbackSheet : trimmed.slice(0, bangIndex)
-  const nextAddress = bangIndex === -1 ? trimmed : trimmed.slice(bangIndex + 1)
+  if (trimmed.toUpperCase() === 'ALL') {
+    return createSelectionTarget('sheet', fallbackSheet, 'A1', 'A1', formatAddress(MAX_ROWS - 1, MAX_COLS - 1))
+  }
 
   try {
-    const parsed = parseCellAddress(nextAddress.toUpperCase(), nextSheetName || fallbackSheet)
-    return {
-      sheetName: nextSheetName || fallbackSheet,
-      address: formatAddress(parsed.row, parsed.col),
+    const parsedRange = parseRangeAddress(trimmed, fallbackSheet)
+    const sheetName = parsedRange.sheetName ?? fallbackSheet
+    switch (parsedRange.kind) {
+      case 'cells':
+        return createSelectionTarget(
+          parsedRange.start.text === parsedRange.end.text ? 'cell' : 'range',
+          sheetName,
+          parsedRange.start.text,
+          parsedRange.start.text,
+          parsedRange.end.text,
+        )
+      case 'cols':
+        return createSelectionTarget(
+          'column',
+          sheetName,
+          formatAddress(0, parsedRange.start.col),
+          formatAddress(0, parsedRange.start.col),
+          formatAddress(MAX_ROWS - 1, parsedRange.end.col),
+        )
+      case 'rows':
+        return createSelectionTarget(
+          'row',
+          sheetName,
+          formatAddress(parsedRange.start.row, 0),
+          formatAddress(parsedRange.start.row, 0),
+          formatAddress(parsedRange.end.row, MAX_COLS - 1),
+        )
     }
   } catch {
-    return null
+    try {
+      const parsed = parseCellAddress(trimmed, fallbackSheet)
+      const address = formatAddress(parsed.row, parsed.col)
+      return createSelectionTarget('cell', parsed.sheetName ?? fallbackSheet, address, address, address)
+    } catch {
+      return null
+    }
   }
 }
 

@@ -6,6 +6,7 @@ import { indexToColumn } from '@bilig/formula'
 import type { HeaderSelection } from './gridPointer.js'
 import type { Item, Rectangle } from './gridTypes.js'
 import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGridAxes.js'
+import { workbookThemeColors } from './workbookTheme.js'
 
 export interface GridTextItem {
   readonly x: number
@@ -55,11 +56,11 @@ interface BuildGridTextSceneOptions {
   readonly getCellBounds: (col: number, row: number) => Rectangle | undefined
 }
 
-const HEADER_TEXT_COLOR = '#5f6368'
-const HEADER_HOVER_TEXT_COLOR = '#3c4043'
-const HEADER_SELECTED_TEXT_COLOR = '#1f7a43'
-const HEADER_DRAG_ANCHOR_TEXT_COLOR = '#176239'
-const HEADER_RESIZE_TEXT_COLOR = '#176239'
+const HEADER_TEXT_COLOR = workbookThemeColors.textMuted
+const HEADER_HOVER_TEXT_COLOR = workbookThemeColors.text
+const HEADER_SELECTED_TEXT_COLOR = workbookThemeColors.accent
+const HEADER_DRAG_ANCHOR_TEXT_COLOR = workbookThemeColors.accentDark
+const HEADER_RESIZE_TEXT_COLOR = workbookThemeColors.accentDark
 const DEFAULT_HEADER_FONT_SIZE = 11
 
 function buildHeaderFont(fontSize: number): string {
