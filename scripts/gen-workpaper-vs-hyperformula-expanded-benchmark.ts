@@ -9,6 +9,7 @@ import {
   DEFAULT_COMPETITIVE_WARMUP_COUNT,
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula.ts'
 import {
+  EXPANDED_COMPARATIVE_WORKLOADS,
   runWorkPaperVsHyperFormulaExpandedBenchmarkSuite,
   type ExpandedComparativeBenchmarkResult,
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts'
@@ -78,25 +79,18 @@ if (isCheckMode) {
 
   const existing = parseArtifactForShape(readFileSync(outputPath, 'utf8'))
   const actualShape = normalizeArtifactShape(existing)
+  const actualWorkloads = actualShape.workloads.map((workload) => workload.workload)
+  if (JSON.stringify(actualWorkloads) !== JSON.stringify([...EXPANDED_COMPARATIVE_WORKLOADS])) {
+    throw new Error(
+      'WorkPaper expanded competitive benchmark artifact workload coverage is out of date. Run: bun scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts',
+    )
+  }
   const expectedShape = normalizeArtifactShape({
     schemaVersion: 1,
     suite: 'workpaper-vs-hyperformula-expanded',
-    results: [
-      comparableShape('build-dense-literals', ['cols', 'materializedCells', 'rows'], ['dimensions', 'terminalValue']),
-      comparableShape('build-mixed-content', ['cols', 'rows'], ['dimensions', 'terminalFormulaValue']),
-      comparableShape('build-many-sheets', ['colsPerSheet', 'rowsPerSheet', 'sheetCount'], ['sheetCount', 'terminalValue']),
-      comparableShape('single-edit-chain', ['downstreamCount'], ['changeCount', 'terminalValue']),
-      comparableShape('single-edit-fanout', ['downstreamCount'], ['terminalValue', 'width']),
-      comparableShape('single-formula-edit-recalc', ['downstreamCount'], ['editedFormula', 'terminalValue']),
-      comparableShape('batch-edit-single-column', ['editCount'], ['sampleFormulaValue', 'width']),
-      comparableShape('batch-edit-multi-column', ['editsPerRow', 'rowCount'], ['sampleProductValue', 'sampleSumValue']),
-      comparableShape('range-read-dense', ['cols', 'materializedCells', 'rows'], ['readCols', 'readRows', 'terminalValue', 'topLeftValue']),
-      comparableShape('lookup-no-column-index', ['rowCount', 'useColumnIndex'], ['formulaValue']),
-      comparableShape('lookup-with-column-index', ['rowCount', 'useColumnIndex'], ['formulaValue']),
-      comparableShape('lookup-approximate-sorted', ['rowCount'], ['formulaValue']),
-      comparableShape('lookup-text-exact', ['rowCount'], ['formulaValue']),
-      leadershipShape('dynamic-array-filter', ['formula', 'rowCount'], ['spillHeight', 'spillIsArray', 'spillValue']),
-    ],
+    results: [...EXPANDED_COMPARATIVE_WORKLOADS].map((workload) =>
+      workload === 'dynamic-array-filter' ? leadershipShape(workload, [], []) : comparableShape(workload, [], []),
+    ),
   })
 
   if (JSON.stringify(actualShape) !== JSON.stringify(expectedShape)) {
@@ -229,25 +223,11 @@ function normalizeArtifactShape(input: ArtifactShapeInput) {
       workload: result.workload,
       category: result.category,
       comparable: result.comparable,
-      fixtureKeys: Object.keys(result.fixture).toSorted(),
       hasComparison: result.comparison !== undefined,
-      workpaperVerificationKeys: readVerificationKeys(result.engines.workpaper),
-      hyperformulaVerificationKeys: readVerificationKeys(result.engines.hyperformula),
       hasNote: result.note !== undefined,
       hyperformulaStatus: result.engines.hyperformula.status,
     })),
   }
-}
-
-function readVerificationKeys(engine: Record<string, unknown>): string[] {
-  if (engine.status !== 'supported') {
-    return []
-  }
-  const verification = engine.verification
-  if (!verification || typeof verification !== 'object') {
-    return []
-  }
-  return Object.keys(verification).toSorted()
 }
 
 function parseArtifactForShape(json: string): ArtifactShapeInput {

@@ -52,6 +52,7 @@ export interface RuntimeColumnView {
 }
 
 export interface EngineRuntimeColumnStoreService {
+  readonly getColumnOwner: (request: { sheetName: string; col: number }) => RuntimeColumnOwner
   readonly getColumnView: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => RuntimeColumnView
   readonly getColumnSlice: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => RuntimeColumnSlice
   readonly readCellValue: (sheetName: string, row: number, col: number) => CellValue
@@ -350,6 +351,7 @@ export function createEngineRuntimeColumnStoreService(args: {
   }
 
   return {
+    getColumnOwner,
     getColumnView,
     getColumnSlice,
     readCellValue(sheetName, row, col) {

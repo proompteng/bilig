@@ -2,6 +2,14 @@ import { ValueTag, type CellValue } from '@bilig/protocol'
 import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedExactVectorLookup } from '../runtime-state.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
+import {
+  applyLookupColumnOwnerLiteralWrite,
+  buildLookupColumnOwner,
+  findExactMatchInRange,
+  isLookupColumnOwner,
+  summarizeExactRange,
+  type LookupColumnOwner,
+} from './lookup-column-owner.js'
 
 export interface ExactVectorMatchRequest {
   lookupValue: CellValue
@@ -192,6 +200,10 @@ export function createExactColumnIndexService(args: {
   const emptyColumnVersions = new Uint32Array(0)
   const exactColumnIndices = new Map<string, ExactColumnIndexEntry>()
   const cacheKeysByColumn = new Map<string, Set<string>>()
+  const ownerIndices = new Map<string, LookupColumnOwner>()
+
+  const readPreparedOwner = (prepared: PreparedExactVectorLookup): LookupColumnOwner | undefined =>
+    isLookupColumnOwner(prepared.internalOwner) ? prepared.internalOwner : undefined
 
   const getCurrentColumnVersions = (
     sheetName: string,
@@ -218,6 +230,29 @@ export function createExactColumnIndexService(args: {
       return
     }
     cacheKeysByColumn.set(registryKey, new Set([cacheKey]))
+  }
+
+  const ensureOwnerIndex = (sheetName: string, col: number): LookupColumnOwner | undefined => {
+    const registryKey = columnRegistryKey(sheetName, col)
+    const currentVersions = getCurrentColumnVersions(sheetName, col)
+    let owner = ownerIndices.get(registryKey)
+    if (
+      !owner ||
+      owner.columnVersion !== currentVersions.columnVersion ||
+      owner.structureVersion !== currentVersions.structureVersion ||
+      owner.sheetColumnVersions !== currentVersions.sheetColumnVersions
+    ) {
+      owner = buildLookupColumnOwner({
+        owner: args.runtimeColumnStore.getColumnOwner({ sheetName, col }),
+        normalizeStringId: args.runtimeColumnStore.normalizeStringId,
+      })
+      if (owner) {
+        ownerIndices.set(registryKey, owner)
+      } else {
+        ownerIndices.delete(registryKey)
+      }
+    }
+    return owner
   }
 
   const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
@@ -417,6 +452,30 @@ export function createExactColumnIndexService(args: {
     rowEnd: number
     col: number
   }): PreparedExactVectorLookup => {
+    const owner = ensureOwnerIndex(request.sheetName, request.col)
+    if (owner && request.rowStart >= owner.rowStart && request.rowEnd <= owner.rowEnd) {
+      const summary = summarizeExactRange(owner, request.rowStart, request.rowEnd)
+      return {
+        sheetName: request.sheetName,
+        rowStart: request.rowStart,
+        rowEnd: request.rowEnd,
+        col: request.col,
+        length: request.rowEnd - request.rowStart + 1,
+        columnVersion: owner.columnVersion,
+        structureVersion: owner.structureVersion,
+        sheetColumnVersions: owner.sheetColumnVersions,
+        comparableKind: summary?.comparableKind ?? 'mixed',
+        uniformStart: summary?.uniformStart,
+        uniformStep: summary?.uniformStep,
+        firstPositions: new Map(),
+        lastPositions: new Map(),
+        firstNumericPositions: undefined,
+        lastNumericPositions: undefined,
+        firstTextPositions: undefined,
+        lastTextPositions: undefined,
+        internalOwner: owner,
+      }
+    }
     const entry = ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
     return {
       sheetName: request.sheetName,
@@ -436,10 +495,31 @@ export function createExactColumnIndexService(args: {
       lastNumericPositions: entry.lastNumericPositions,
       firstTextPositions: entry.firstTextPositions,
       lastTextPositions: entry.lastTextPositions,
+      internalOwner: undefined,
     }
   }
 
   const refreshPreparedVectorLookup = (prepared: PreparedExactVectorLookup): PreparedExactVectorLookup => {
+    const owner = readPreparedOwner(prepared)
+    if (owner) {
+      const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col)
+      if (currentVersions.columnVersion === prepared.columnVersion && currentVersions.structureVersion === prepared.structureVersion) {
+        return prepared
+      }
+      const refreshedOwner = ensureOwnerIndex(prepared.sheetName, prepared.col)
+      if (refreshedOwner && prepared.rowStart >= refreshedOwner.rowStart && prepared.rowEnd <= refreshedOwner.rowEnd) {
+        const summary = summarizeExactRange(refreshedOwner, prepared.rowStart, prepared.rowEnd)
+        prepared.length = prepared.rowEnd - prepared.rowStart + 1
+        prepared.columnVersion = refreshedOwner.columnVersion
+        prepared.structureVersion = refreshedOwner.structureVersion
+        prepared.sheetColumnVersions = refreshedOwner.sheetColumnVersions
+        prepared.comparableKind = summary?.comparableKind ?? 'mixed'
+        prepared.uniformStart = summary?.uniformStart
+        prepared.uniformStep = summary?.uniformStep
+        prepared.internalOwner = refreshedOwner
+        return prepared
+      }
+    }
     const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col)
     if (currentVersions.columnVersion === prepared.columnVersion && currentVersions.structureVersion === prepared.structureVersion) {
       return prepared
@@ -458,6 +538,7 @@ export function createExactColumnIndexService(args: {
     prepared.lastNumericPositions = refreshed.lastNumericPositions
     prepared.firstTextPositions = refreshed.firstTextPositions
     prepared.lastTextPositions = refreshed.lastTextPositions
+    prepared.internalOwner = refreshed.internalOwner
     return prepared
   }
 
@@ -467,6 +548,22 @@ export function createExactColumnIndexService(args: {
     searchMode: 1 | -1
   }): ExactVectorMatchResult => {
     const prepared = refreshPreparedVectorLookup(request.prepared)
+    const owner = readPreparedOwner(prepared)
+    if (owner) {
+      const normalizedLookupKey = normalizeExactLookupKey(
+        request.lookupValue,
+        (id) => args.state.strings.get(id),
+        request.lookupValue.tag === ValueTag.String ? request.lookupValue.stringId : 0,
+      )
+      if (normalizedLookupKey === undefined) {
+        return { handled: false }
+      }
+      const row = findExactMatchInRange(owner, normalizedLookupKey, prepared.rowStart, prepared.rowEnd, request.searchMode)
+      return {
+        handled: true,
+        position: row === undefined ? undefined : row - prepared.rowStart + 1,
+      }
+    }
     if (prepared.comparableKind === 'numeric') {
       if (request.lookupValue.tag === ValueTag.Error) {
         return { handled: false }
@@ -538,6 +635,15 @@ export function createExactColumnIndexService(args: {
         return { handled: false }
       }
 
+      const owner = ensureOwnerIndex(request.sheetName, bounds.col)
+      if (owner && bounds.rowStart >= owner.rowStart && bounds.rowEnd <= owner.rowEnd) {
+        const row = findExactMatchInRange(owner, normalizedLookupKey, bounds.rowStart, bounds.rowEnd, request.searchMode)
+        return {
+          handled: true,
+          position: row === undefined ? undefined : row - bounds.rowStart + 1,
+        }
+      }
+
       const entry = ensureExactColumnIndex(request.sheetName, bounds.col, bounds.rowStart, bounds.rowEnd)
       if (entry.comparableKind === 'numeric') {
         if (request.lookupValue.tag === ValueTag.Error) {
@@ -585,6 +691,7 @@ export function createExactColumnIndexService(args: {
       }
     },
     invalidateColumn(request) {
+      ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
       if (!cacheKeys) {
         return
@@ -595,6 +702,22 @@ export function createExactColumnIndexService(args: {
     },
     recordLiteralWrite(request) {
       const registryKey = columnRegistryKey(request.sheetName, request.col)
+      const owner = ownerIndices.get(registryKey)
+      if (owner) {
+        const currentVersions = getCurrentColumnVersions(request.sheetName, request.col)
+        owner.columnVersion = currentVersions.columnVersion
+        owner.structureVersion = currentVersions.structureVersion
+        owner.sheetColumnVersions = currentVersions.sheetColumnVersions
+        if (
+          !applyLookupColumnOwnerLiteralWrite({
+            owner,
+            write: request,
+            normalizeStringId: args.runtimeColumnStore.normalizeStringId,
+          })
+        ) {
+          ownerIndices.delete(registryKey)
+        }
+      }
       const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
         return

@@ -3,6 +3,16 @@ import { parseRangeAddress } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../runtime-state.js'
 import type { ExactVectorMatchResult } from './exact-column-index-service.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
+import {
+  applyLookupColumnOwnerLiteralWrite,
+  buildLookupColumnOwner,
+  isLookupColumnOwner,
+  sliceOffsetBounds,
+  summarizeApproximateRange,
+  supportsNumericApproximateRange,
+  supportsTextApproximateRange,
+  type LookupColumnOwner,
+} from './lookup-column-owner.js'
 
 export interface ApproximateVectorMatchRequest {
   lookupValue: CellValue
@@ -176,6 +186,10 @@ export function createSortedColumnSearchService(args: {
   const emptyColumnVersions = new Uint32Array(0)
   const approximateColumnIndices = new Map<string, ApproximateColumnIndexEntry>()
   const cacheKeysByColumn = new Map<string, Set<string>>()
+  const ownerIndices = new Map<string, LookupColumnOwner>()
+
+  const readPreparedOwner = (prepared: PreparedApproximateVectorLookup): LookupColumnOwner | undefined =>
+    isLookupColumnOwner(prepared.internalOwner) ? prepared.internalOwner : undefined
 
   const getCurrentColumnVersions = (
     sheetName: string,
@@ -202,6 +216,29 @@ export function createSortedColumnSearchService(args: {
       return
     }
     cacheKeysByColumn.set(registryKey, new Set([cacheKey]))
+  }
+
+  const ensureOwnerIndex = (sheetName: string, col: number): LookupColumnOwner | undefined => {
+    const registryKey = columnRegistryKey(sheetName, col)
+    const currentVersions = getCurrentColumnVersions(sheetName, col)
+    let owner = ownerIndices.get(registryKey)
+    if (
+      !owner ||
+      owner.columnVersion !== currentVersions.columnVersion ||
+      owner.structureVersion !== currentVersions.structureVersion ||
+      owner.sheetColumnVersions !== currentVersions.sheetColumnVersions
+    ) {
+      owner = buildLookupColumnOwner({
+        owner: args.runtimeColumnStore.getColumnOwner({ sheetName, col }),
+        normalizeStringId: args.runtimeColumnStore.normalizeStringId,
+      })
+      if (owner) {
+        ownerIndices.set(registryKey, owner)
+      } else {
+        ownerIndices.delete(registryKey)
+      }
+    }
+    return owner
   }
 
   const untrackCacheKey = (sheetName: string, col: number, cacheKey: string): void => {
@@ -440,6 +477,28 @@ export function createSortedColumnSearchService(args: {
     rowEnd: number
     col: number
   }): PreparedApproximateVectorLookup => {
+    const owner = ensureOwnerIndex(request.sheetName, request.col)
+    if (owner && request.rowStart >= owner.rowStart && request.rowEnd <= owner.rowEnd) {
+      const summary = summarizeApproximateRange(owner, request.rowStart, request.rowEnd)
+      return {
+        sheetName: request.sheetName,
+        rowStart: request.rowStart,
+        rowEnd: request.rowEnd,
+        col: request.col,
+        length: request.rowEnd - request.rowStart + 1,
+        columnVersion: owner.columnVersion,
+        structureVersion: owner.structureVersion,
+        sheetColumnVersions: owner.sheetColumnVersions,
+        comparableKind: summary?.comparableKind,
+        uniformStart: summary?.uniformStart,
+        uniformStep: summary?.uniformStep,
+        sortedAscending: summary?.sortedAscending ?? false,
+        sortedDescending: summary?.sortedDescending ?? false,
+        numericValues: undefined,
+        textValues: undefined,
+        internalOwner: owner,
+      }
+    }
     const entry = ensureColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
     return {
       sheetName: request.sheetName,
@@ -457,10 +516,33 @@ export function createSortedColumnSearchService(args: {
       sortedDescending: entry.sortedDescending,
       numericValues: entry.numericValues,
       textValues: entry.textValues,
+      internalOwner: undefined,
     }
   }
 
   const refreshPreparedVectorLookup = (prepared: PreparedApproximateVectorLookup): PreparedApproximateVectorLookup => {
+    const owner = readPreparedOwner(prepared)
+    if (owner) {
+      const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col)
+      if (currentVersions.columnVersion === prepared.columnVersion && currentVersions.structureVersion === prepared.structureVersion) {
+        return prepared
+      }
+      const refreshedOwner = ensureOwnerIndex(prepared.sheetName, prepared.col)
+      if (refreshedOwner && prepared.rowStart >= refreshedOwner.rowStart && prepared.rowEnd <= refreshedOwner.rowEnd) {
+        const summary = summarizeApproximateRange(refreshedOwner, prepared.rowStart, prepared.rowEnd)
+        prepared.length = prepared.rowEnd - prepared.rowStart + 1
+        prepared.columnVersion = refreshedOwner.columnVersion
+        prepared.structureVersion = refreshedOwner.structureVersion
+        prepared.sheetColumnVersions = refreshedOwner.sheetColumnVersions
+        prepared.comparableKind = summary?.comparableKind
+        prepared.uniformStart = summary?.uniformStart
+        prepared.uniformStep = summary?.uniformStep
+        prepared.sortedAscending = summary?.sortedAscending ?? false
+        prepared.sortedDescending = summary?.sortedDescending ?? false
+        prepared.internalOwner = refreshedOwner
+        return prepared
+      }
+    }
     const currentVersions = getCurrentColumnVersions(prepared.sheetName, prepared.col)
     if (currentVersions.columnVersion === prepared.columnVersion && currentVersions.structureVersion === prepared.structureVersion) {
       return prepared
@@ -477,6 +559,7 @@ export function createSortedColumnSearchService(args: {
     prepared.sortedDescending = refreshed.sortedDescending
     prepared.numericValues = refreshed.numericValues
     prepared.textValues = refreshed.textValues
+    prepared.internalOwner = refreshed.internalOwner
     return prepared
   }
 
@@ -486,6 +569,127 @@ export function createSortedColumnSearchService(args: {
     matchMode: 1 | -1
   }): ApproximateVectorMatchResult => {
     const prepared = refreshPreparedVectorLookup(request.prepared)
+    const owner = readPreparedOwner(prepared)
+    if (owner) {
+      const bounds = sliceOffsetBounds(owner, prepared.rowStart, prepared.rowEnd)
+      if (!bounds) {
+        return { handled: false }
+      }
+      if (request.lookupValue.tag === ValueTag.Empty) {
+        if (supportsNumericApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+          let low = bounds.start
+          let high = bounds.end
+          let best = -1
+          while (low <= high) {
+            const mid = (low + high) >> 1
+            const comparison = compareApproximateNumeric(owner.numericValues[mid]!, 0)
+            if (request.matchMode === 1) {
+              if (comparison <= 0) {
+                best = mid
+                low = mid + 1
+              } else {
+                high = mid - 1
+              }
+            } else if (comparison >= 0) {
+              best = mid
+              low = mid + 1
+            } else {
+              high = mid - 1
+            }
+          }
+          return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
+        }
+        if (!supportsTextApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+          return { handled: false }
+        }
+        let low = bounds.start
+        let high = bounds.end
+        let best = -1
+        while (low <= high) {
+          const mid = (low + high) >> 1
+          const comparison = compareApproximateText(owner.textValues[mid] ?? '', '')
+          if (request.matchMode === 1) {
+            if (comparison <= 0) {
+              best = mid
+              low = mid + 1
+            } else {
+              high = mid - 1
+            }
+          } else if (comparison >= 0) {
+            best = mid
+            low = mid + 1
+          } else {
+            high = mid - 1
+          }
+        }
+        return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
+      }
+      if (request.lookupValue.tag === ValueTag.Number || request.lookupValue.tag === ValueTag.Boolean) {
+        if (!supportsNumericApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+          return { handled: false }
+        }
+        let lookupValue: number
+        switch (request.lookupValue.tag) {
+          case ValueTag.Number:
+            lookupValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
+            break
+          case ValueTag.Boolean:
+            lookupValue = request.lookupValue.value ? 1 : 0
+            break
+          default:
+            return { handled: false }
+        }
+        let low = bounds.start
+        let high = bounds.end
+        let best = -1
+        while (low <= high) {
+          const mid = (low + high) >> 1
+          const comparison = compareApproximateNumeric(owner.numericValues[mid]!, lookupValue)
+          if (request.matchMode === 1) {
+            if (comparison <= 0) {
+              best = mid
+              low = mid + 1
+            } else {
+              high = mid - 1
+            }
+          } else if (comparison >= 0) {
+            best = mid
+            low = mid + 1
+          } else {
+            high = mid - 1
+          }
+        }
+        return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
+      }
+      if (request.lookupValue.tag === ValueTag.String) {
+        if (!supportsTextApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+          return { handled: false }
+        }
+        const lookupValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue)
+        let low = bounds.start
+        let high = bounds.end
+        let best = -1
+        while (low <= high) {
+          const mid = (low + high) >> 1
+          const comparison = compareApproximateText(owner.textValues[mid] ?? '', lookupValue)
+          if (request.matchMode === 1) {
+            if (comparison <= 0) {
+              best = mid
+              low = mid + 1
+            } else {
+              high = mid - 1
+            }
+          } else if (comparison >= 0) {
+            best = mid
+            low = mid + 1
+          } else {
+            high = mid - 1
+          }
+        }
+        return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
+      }
+      return { handled: false }
+    }
     if (prepared.comparableKind === undefined) {
       return { handled: false }
     }
@@ -619,6 +823,21 @@ export function createSortedColumnSearchService(args: {
         return { handled: false }
       }
 
+      const owner = ensureOwnerIndex(request.sheetName, bounds.col)
+      if (owner && bounds.rowStart >= owner.rowStart && bounds.rowEnd <= owner.rowEnd) {
+        const prepared = prepareVectorLookup({
+          sheetName: request.sheetName,
+          rowStart: bounds.rowStart,
+          rowEnd: bounds.rowEnd,
+          col: bounds.col,
+        })
+        return findPreparedVectorMatch({
+          lookupValue: request.lookupValue,
+          prepared,
+          matchMode: request.matchMode,
+        })
+      }
+
       const entry = ensureColumnIndex(request.sheetName, bounds.col, bounds.rowStart, bounds.rowEnd)
       if (entry.comparableKind === undefined) {
         return { handled: false }
@@ -729,6 +948,7 @@ export function createSortedColumnSearchService(args: {
       return { handled: true, position: best === -1 ? undefined : best + 1 }
     },
     invalidateColumn(request) {
+      ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
       if (!cacheKeys) {
         return
@@ -738,7 +958,24 @@ export function createSortedColumnSearchService(args: {
       }
     },
     recordLiteralWrite(request) {
-      const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
+      const registryKey = columnRegistryKey(request.sheetName, request.col)
+      const owner = ownerIndices.get(registryKey)
+      if (owner) {
+        const currentVersions = getCurrentColumnVersions(request.sheetName, request.col)
+        owner.columnVersion = currentVersions.columnVersion
+        owner.structureVersion = currentVersions.structureVersion
+        owner.sheetColumnVersions = currentVersions.sheetColumnVersions
+        if (
+          !applyLookupColumnOwnerLiteralWrite({
+            owner,
+            write: request,
+            normalizeStringId: args.runtimeColumnStore.normalizeStringId,
+          })
+        ) {
+          ownerIndices.delete(registryKey)
+        }
+      }
+      const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
         return
       }

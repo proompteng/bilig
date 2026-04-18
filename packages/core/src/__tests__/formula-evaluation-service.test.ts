@@ -418,7 +418,7 @@ describe('EngineFormulaEvaluationService', () => {
     exactEngine.setCellValue('Sheet1', 'B1', 32)
     Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!))
     expect(exactEngine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 3 })
-    expect(readRuntimeDirectLookupKind(exactEngine, 'Sheet1', 'C1')).toBe('exact')
+    expect(readRuntimeDirectLookupKind(exactEngine, 'Sheet1', 'C1')).toBe('exact-uniform-numeric')
 
     exactEngine.setCellValue('Sheet1', 'B1', '32')
     Effect.runSync(exactEvaluation.evaluateDirectLookupFormula(exactIndex!))

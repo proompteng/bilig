@@ -100,6 +100,7 @@ export interface PreparedExactVectorLookup {
   lastNumericPositions: Map<number, number> | undefined
   firstTextPositions: Map<string, number> | undefined
   lastTextPositions: Map<string, number> | undefined
+  internalOwner?: unknown
 }
 
 export interface PreparedApproximateVectorLookup {
@@ -118,6 +119,7 @@ export interface PreparedApproximateVectorLookup {
   sortedDescending: boolean
   numericValues: Float64Array | undefined
   textValues: string[] | undefined
+  internalOwner?: unknown
 }
 
 export type RuntimeDirectLookupDescriptor =

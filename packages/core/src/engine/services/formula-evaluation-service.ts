@@ -121,7 +121,6 @@ export function createEngineFormulaEvaluationService(args: {
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ) => CellValue
 }): EngineFormulaEvaluationService {
-  const normalizedStrings = new Map<number, string>()
   const emptyChangedCellIndices: number[] = []
   const reusableDirectNumberResult: CellValue = { tag: ValueTag.Number, value: 0 }
   const reusableDirectErrorResult: CellValue = { tag: ValueTag.Error, code: ErrorCode.None }
@@ -139,18 +138,6 @@ export function createEngineFormulaEvaluationService(args: {
   const readCellValue = (sheetName: string, address: string): CellValue => {
     const parsed = parseCellAddress(address, sheetName)
     return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col)
-  }
-
-  const readNormalizedString = (stringId: number, fallback = ''): string => {
-    if (stringId === 0) {
-      return fallback.toUpperCase()
-    }
-    let normalized = normalizedStrings.get(stringId)
-    if (normalized === undefined) {
-      normalized = args.state.strings.get(stringId).toUpperCase()
-      normalizedStrings.set(stringId, normalized)
-    }
-    return normalized
   }
 
   const readCellValueByIndex = (cellIndex: number): CellValue => {
@@ -422,63 +409,15 @@ export function createEngineFormulaEvaluationService(args: {
     if (directLookup.kind === 'exact') {
       const prepared = refreshDirectExactLookup(directLookup)
       const cellIndex = directLookup.operandCellIndex
-      const tag = cellStore.tags[cellIndex]
-      if (prepared.comparableKind === 'numeric') {
-        if (tag === ValueTag.Error) {
-          return undefined
-        }
-        if (tag !== ValueTag.Number) {
-          return directErrorResult(ErrorCode.NA)
-        }
-        const numericValue = Object.is(cellStore.numbers[cellIndex] ?? 0, -0) ? 0 : (cellStore.numbers[cellIndex] ?? 0)
-        if (prepared.uniformStart !== undefined && prepared.uniformStep !== undefined) {
-          const relative = (numericValue - prepared.uniformStart) / prepared.uniformStep
-          const position = Number.isInteger(relative) ? relative + 1 : undefined
-          return position !== undefined && position >= 1 && position <= prepared.length
-            ? directNumberResult(position)
-            : directErrorResult(ErrorCode.NA)
-        }
-        const row = (directLookup.searchMode === -1 ? prepared.lastNumericPositions : prepared.firstNumericPositions)?.get(numericValue)
-        return row === undefined ? directErrorResult(ErrorCode.NA) : directNumberResult(row - prepared.rowStart + 1)
-      }
-      if (prepared.comparableKind === 'text') {
-        if (tag === ValueTag.Error) {
-          return undefined
-        }
-        if (tag !== ValueTag.String) {
-          return directErrorResult(ErrorCode.NA)
-        }
-        const textValue = readNormalizedString(cellStore.stringIds[cellIndex] ?? 0)
-        const row = (directLookup.searchMode === -1 ? prepared.lastTextPositions : prepared.firstTextPositions)?.get(textValue)
-        return row === undefined ? directErrorResult(ErrorCode.NA) : directNumberResult(row - prepared.rowStart + 1)
-      }
-
-      let normalizedLookupKey: string | undefined
-      switch (tag) {
-        case undefined:
-        case ValueTag.Empty:
-          normalizedLookupKey = 'e:'
-          break
-        case ValueTag.Number: {
-          const numericValue = Object.is(cellStore.numbers[cellIndex] ?? 0, -0) ? 0 : (cellStore.numbers[cellIndex] ?? 0)
-          normalizedLookupKey = `n:${numericValue}`
-          break
-        }
-        case ValueTag.Boolean:
-          normalizedLookupKey = (cellStore.numbers[cellIndex] ?? 0) !== 0 ? 'b:1' : 'b:0'
-          break
-        case ValueTag.String:
-          normalizedLookupKey = `s:${readNormalizedString(cellStore.stringIds[cellIndex] ?? 0)}`
-          break
-        case ValueTag.Error:
-          normalizedLookupKey = undefined
-          break
-      }
-      if (normalizedLookupKey === undefined) {
+      const result = args.exactLookup.findPreparedVectorMatch({
+        lookupValue: readCellValueByIndex(cellIndex),
+        prepared,
+        searchMode: directLookup.searchMode,
+      })
+      if (!result.handled) {
         return undefined
       }
-      const row = (directLookup.searchMode === -1 ? prepared.lastPositions : prepared.firstPositions).get(normalizedLookupKey)
-      return row === undefined ? directErrorResult(ErrorCode.NA) : directNumberResult(row - prepared.rowStart + 1)
+      return result.position === undefined ? directErrorResult(ErrorCode.NA) : directNumberResult(result.position)
     }
     if (directLookup.kind === 'approximate-uniform-numeric') {
       const refreshed = refreshDirectApproximateUniformLookup(formula, directLookup)
@@ -528,130 +467,16 @@ export function createEngineFormulaEvaluationService(args: {
       return undefined
     }
     const prepared = refreshDirectApproximateLookup(directLookup)
-    if (prepared.comparableKind === undefined) {
-      return undefined
-    }
-    if (directLookup.matchMode === 1 && !prepared.sortedAscending) {
-      return undefined
-    }
-    if (directLookup.matchMode === -1 && !prepared.sortedDescending) {
-      return undefined
-    }
     const cellIndex = directLookup.operandCellIndex
-    const tag = cellStore.tags[cellIndex]
-    if (prepared.comparableKind === 'numeric') {
-      let lookupValue = 0
-      switch (tag) {
-        case undefined:
-        case ValueTag.Empty:
-          lookupValue = 0
-          break
-        case ValueTag.Number:
-          lookupValue = Object.is(cellStore.numbers[cellIndex] ?? 0, -0) ? 0 : (cellStore.numbers[cellIndex] ?? 0)
-          break
-        case ValueTag.Boolean:
-          lookupValue = (cellStore.numbers[cellIndex] ?? 0) !== 0 ? 1 : 0
-          break
-        case ValueTag.Error:
-        case ValueTag.String:
-          return undefined
-      }
-      const values = prepared.numericValues
-      if (!values) {
-        return undefined
-      }
-      if (prepared.uniformStart !== undefined && prepared.uniformStep !== undefined) {
-        const { uniformStart, uniformStep } = prepared
-        const lastValue = uniformStart + uniformStep * (values.length - 1)
-        if (directLookup.matchMode === 1 && uniformStep > 0) {
-          if (lookupValue < uniformStart) {
-            return directErrorResult(ErrorCode.NA)
-          }
-          if (lookupValue >= lastValue) {
-            return directNumberResult(values.length)
-          }
-          if (uniformStep === 1) {
-            return directNumberResult(Math.min(values.length, Math.max(1, Math.floor(lookupValue - uniformStart) + 1)))
-          }
-          const position = Math.floor((lookupValue - uniformStart) / uniformStep) + 1
-          return directNumberResult(Math.min(values.length, Math.max(1, position)))
-        }
-        if (directLookup.matchMode === -1 && uniformStep < 0) {
-          if (lookupValue > uniformStart) {
-            return directErrorResult(ErrorCode.NA)
-          }
-          if (lookupValue <= lastValue) {
-            return directNumberResult(values.length)
-          }
-          if (uniformStep === -1) {
-            return directNumberResult(Math.min(values.length, Math.max(1, Math.floor(uniformStart - lookupValue) + 1)))
-          }
-          const position = Math.floor((uniformStart - lookupValue) / -uniformStep) + 1
-          return directNumberResult(Math.min(values.length, Math.max(1, position)))
-        }
-      }
-      let low = 0
-      let high = values.length - 1
-      let best = -1
-      while (low <= high) {
-        const mid = (low + high) >> 1
-        const comparison = values[mid] === lookupValue ? 0 : values[mid]! < lookupValue ? -1 : 1
-        if (directLookup.matchMode === 1) {
-          if (comparison <= 0) {
-            best = mid
-            low = mid + 1
-          } else {
-            high = mid - 1
-          }
-        } else if (comparison >= 0) {
-          best = mid
-          low = mid + 1
-        } else {
-          high = mid - 1
-        }
-      }
-      return best === -1 ? directErrorResult(ErrorCode.NA) : directNumberResult(best + 1)
-    }
-
-    let lookupValue = ''
-    switch (tag) {
-      case undefined:
-      case ValueTag.Empty:
-        lookupValue = ''
-        break
-      case ValueTag.String:
-        lookupValue = readNormalizedString(cellStore.stringIds[cellIndex] ?? 0)
-        break
-      case ValueTag.Error:
-      case ValueTag.Number:
-      case ValueTag.Boolean:
-        return undefined
-    }
-    const values = prepared.textValues
-    if (!values) {
+    const result = args.sortedLookup.findPreparedVectorMatch({
+      lookupValue: readCellValueByIndex(cellIndex),
+      prepared,
+      matchMode: directLookup.matchMode,
+    })
+    if (!result.handled) {
       return undefined
     }
-    let low = 0
-    let high = values.length - 1
-    let best = -1
-    while (low <= high) {
-      const mid = (low + high) >> 1
-      const comparison = values[mid] === lookupValue ? 0 : values[mid]! < lookupValue ? -1 : 1
-      if (directLookup.matchMode === 1) {
-        if (comparison <= 0) {
-          best = mid
-          low = mid + 1
-        } else {
-          high = mid - 1
-        }
-      } else if (comparison >= 0) {
-        best = mid
-        low = mid + 1
-      } else {
-        high = mid - 1
-      }
-    }
-    return best === -1 ? directErrorResult(ErrorCode.NA) : directNumberResult(best + 1)
+    return result.position === undefined ? directErrorResult(ErrorCode.NA) : directNumberResult(result.position)
   }
 
   const tryEvaluateDirectCriteriaAggregate = (formula: RuntimeFormula): CellValue | undefined => {

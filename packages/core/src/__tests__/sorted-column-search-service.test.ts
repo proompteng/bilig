@@ -124,6 +124,7 @@ describe('createSortedColumnSearchService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
+    const getColumnOwnerSpy = vi.spyOn(runtimeColumnStore, 'getColumnOwner')
     const getColumnSliceSpy = vi.spyOn(runtimeColumnStore, 'getColumnSlice')
     const getColumnViewSpy = vi.spyOn(runtimeColumnStore, 'getColumnView')
     const sorted = createSortedColumnSearchService({
@@ -144,7 +145,8 @@ describe('createSortedColumnSearchService', () => {
       col: 0,
     })
 
-    expect(getColumnViewSpy).toHaveBeenCalledTimes(2)
+    expect(getColumnOwnerSpy).toHaveBeenCalledTimes(1)
+    expect(getColumnViewSpy).not.toHaveBeenCalled()
     expect(getColumnSliceSpy).not.toHaveBeenCalled()
   })
 
