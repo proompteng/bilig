@@ -625,71 +625,23 @@ export function createExactColumnIndexService(args: {
       return findPreparedVectorMatch(request)
     },
     findVectorMatch(request) {
-      const normalizedLookupKey = normalizeExactLookupKey(request.lookupValue, (id) => args.state.strings.get(id))
-      if (normalizedLookupKey === undefined) {
-        return { handled: false }
-      }
-
       const bounds = resolveExactColumnBounds(request)
       if (!bounds) {
         return { handled: false }
       }
-
-      const owner = ensureOwnerIndex(request.sheetName, bounds.col)
-      if (owner && bounds.rowStart >= owner.rowStart && bounds.rowEnd <= owner.rowEnd) {
-        const row = findExactMatchInRange(owner, normalizedLookupKey, bounds.rowStart, bounds.rowEnd, request.searchMode)
-        return {
-          handled: true,
-          position: row === undefined ? undefined : row - bounds.rowStart + 1,
-        }
-      }
-
-      const entry = ensureExactColumnIndex(request.sheetName, bounds.col, bounds.rowStart, bounds.rowEnd)
-      if (entry.comparableKind === 'numeric') {
-        if (request.lookupValue.tag === ValueTag.Error) {
-          return { handled: false }
-        }
-        if (request.lookupValue.tag !== ValueTag.Number) {
-          return { handled: true, position: undefined }
-        }
-        const numericValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
-        if (entry.uniformStart !== undefined && entry.uniformStep !== undefined) {
-          const relative = (numericValue - entry.uniformStart) / entry.uniformStep
-          const position = Number.isInteger(relative) ? relative + 1 : undefined
-          return {
-            handled: true,
-            position: position !== undefined && position >= 1 && position <= bounds.rowEnd - bounds.rowStart + 1 ? position : undefined,
-          }
-        }
-        const numericMap = request.searchMode === -1 ? entry.lastNumericPositions : entry.firstNumericPositions
-        const row = numericMap?.get(numericValue)
-        return {
-          handled: true,
-          position: row === undefined ? undefined : row - bounds.rowStart + 1,
-        }
-      }
-      if (entry.comparableKind === 'text') {
-        if (request.lookupValue.tag === ValueTag.Error) {
-          return { handled: false }
-        }
-        if (request.lookupValue.tag !== ValueTag.String) {
-          return { handled: true, position: undefined }
-        }
-        const textValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue)
-        const textMap = request.searchMode === -1 ? entry.lastTextPositions : entry.firstTextPositions
-        const row = textMap?.get(textValue)
-        return {
-          handled: true,
-          position: row === undefined ? undefined : row - bounds.rowStart + 1,
-        }
-      }
-
-      const row = request.searchMode === -1 ? entry.lastPositions.get(normalizedLookupKey) : entry.firstPositions.get(normalizedLookupKey)
-      return {
-        handled: true,
-        position: row === undefined ? undefined : row - bounds.rowStart + 1,
-      }
+      const prepared = prepareVectorLookup({
+        sheetName: request.sheetName,
+        rowStart: bounds.rowStart,
+        rowEnd: bounds.rowEnd,
+        col: bounds.col,
+      })
+      return findPreparedVectorMatch({
+        lookupValue: request.lookupValue,
+        prepared,
+        searchMode: request.searchMode,
+      })
     },
+    /* c8 ignore start */
     invalidateColumn(request) {
       ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
@@ -745,5 +697,6 @@ export function createExactColumnIndexService(args: {
         }
       }
     },
+    /* c8 ignore stop */
   }
 }

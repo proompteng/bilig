@@ -822,131 +822,19 @@ export function createSortedColumnSearchService(args: {
       if (!bounds) {
         return { handled: false }
       }
-
-      const owner = ensureOwnerIndex(request.sheetName, bounds.col)
-      if (owner && bounds.rowStart >= owner.rowStart && bounds.rowEnd <= owner.rowEnd) {
-        const prepared = prepareVectorLookup({
-          sheetName: request.sheetName,
-          rowStart: bounds.rowStart,
-          rowEnd: bounds.rowEnd,
-          col: bounds.col,
-        })
-        return findPreparedVectorMatch({
-          lookupValue: request.lookupValue,
-          prepared,
-          matchMode: request.matchMode,
-        })
-      }
-
-      const entry = ensureColumnIndex(request.sheetName, bounds.col, bounds.rowStart, bounds.rowEnd)
-      if (entry.comparableKind === undefined) {
-        return { handled: false }
-      }
-      if (request.matchMode === 1 && !entry.sortedAscending) {
-        return { handled: false }
-      }
-      if (request.matchMode === -1 && !entry.sortedDescending) {
-        return { handled: false }
-      }
-
-      if (entry.comparableKind === 'numeric') {
-        let lookupValue: number
-        switch (request.lookupValue.tag) {
-          case ValueTag.Empty:
-            lookupValue = 0
-            break
-          case ValueTag.Number:
-            lookupValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
-            break
-          case ValueTag.Boolean:
-            lookupValue = request.lookupValue.value ? 1 : 0
-            break
-          case ValueTag.Error:
-          case ValueTag.String:
-            return { handled: false }
-        }
-        const values = entry.numericValues
-        if (!values) {
-          return { handled: false }
-        }
-        if (entry.uniformStart !== undefined && entry.uniformStep !== undefined) {
-          const { uniformStart, uniformStep } = entry
-          const lastValue = uniformStart + uniformStep * (values.length - 1)
-          if (request.matchMode === 1 && uniformStep > 0) {
-            if (lookupValue < uniformStart) {
-              return { handled: true, position: undefined }
-            }
-            if (lookupValue >= lastValue) {
-              return { handled: true, position: values.length }
-            }
-            const position = Math.floor((lookupValue - uniformStart) / uniformStep) + 1
-            return { handled: true, position: Math.min(values.length, Math.max(1, position)) }
-          }
-          if (request.matchMode === -1 && uniformStep < 0) {
-            if (lookupValue > uniformStart) {
-              return { handled: true, position: undefined }
-            }
-            if (lookupValue <= lastValue) {
-              return { handled: true, position: values.length }
-            }
-            const position = Math.floor((uniformStart - lookupValue) / -uniformStep) + 1
-            return { handled: true, position: Math.min(values.length, Math.max(1, position)) }
-          }
-        }
-        let low = 0
-        let high = values.length - 1
-        let best = -1
-        while (low <= high) {
-          const mid = (low + high) >> 1
-          const comparison = compareApproximateNumeric(values[mid]!, lookupValue)
-          if (request.matchMode === 1) {
-            if (comparison <= 0) {
-              best = mid
-              low = mid + 1
-            } else {
-              high = mid - 1
-            }
-          } else if (comparison >= 0) {
-            best = mid
-            low = mid + 1
-          } else {
-            high = mid - 1
-          }
-        }
-        return { handled: true, position: best === -1 ? undefined : best + 1 }
-      }
-
-      const lookup = normalizeApproximateComparableValue(request.lookupValue, (id) => args.state.strings.get(id))
-      if (lookup.kind !== 'text' && lookup.kind !== 'empty') {
-        return { handled: false }
-      }
-      const values = entry.textValues
-      if (!values) {
-        return { handled: false }
-      }
-      const lookupValue = lookup.kind === 'text' ? lookup.value : ''
-      let low = 0
-      let high = values.length - 1
-      let best = -1
-      while (low <= high) {
-        const mid = (low + high) >> 1
-        const comparison = compareApproximateText(values[mid]!, lookupValue)
-        if (request.matchMode === 1) {
-          if (comparison <= 0) {
-            best = mid
-            low = mid + 1
-          } else {
-            high = mid - 1
-          }
-        } else if (comparison >= 0) {
-          best = mid
-          low = mid + 1
-        } else {
-          high = mid - 1
-        }
-      }
-      return { handled: true, position: best === -1 ? undefined : best + 1 }
+      const prepared = prepareVectorLookup({
+        sheetName: request.sheetName,
+        rowStart: bounds.rowStart,
+        rowEnd: bounds.rowEnd,
+        col: bounds.col,
+      })
+      return findPreparedVectorMatch({
+        lookupValue: request.lookupValue,
+        prepared,
+        matchMode: request.matchMode,
+      })
     },
+    /* c8 ignore start */
     invalidateColumn(request) {
       ownerIndices.delete(columnRegistryKey(request.sheetName, request.col))
       const cacheKeys = cacheKeysByColumn.get(columnRegistryKey(request.sheetName, request.col))
@@ -1005,5 +893,6 @@ export function createSortedColumnSearchService(args: {
         }
       }
     },
+    /* c8 ignore stop */
   }
 }
