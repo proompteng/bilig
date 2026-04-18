@@ -6,44 +6,47 @@ function blockKey(row: number, col: number): number {
 }
 
 export interface SheetGridAxisRemapScope {
-  readonly start: number;
-  readonly end?: number;
+  readonly start: number
+  readonly end?: number
 }
 
-function blockIntersectsScope(
-  axis: "row" | "column",
+function blockIntersectsScope(axis: 'row' | 'column', key: number, scope: SheetGridAxisRemapScope | undefined): boolean {
+  if (!scope) {
+    return true
+  }
+  const blockStart = axis === 'row' ? Math.floor(key / 1_000_000) * BLOCK_ROWS : (key % 1_000_000) * BLOCK_COLS
+  const blockEnd = blockStart + (axis === 'row' ? BLOCK_ROWS : BLOCK_COLS)
+  if (scope.end === undefined) {
+    return blockEnd > scope.start
+  }
+  return blockEnd > scope.start && blockStart < scope.end
+}
+
+function localAxisRangeForBlock(
+  axis: 'row' | 'column',
   key: number,
   scope: SheetGridAxisRemapScope | undefined,
-): boolean {
+): { start: number; end: number } {
+  const blockSize = axis === 'row' ? BLOCK_ROWS : BLOCK_COLS
   if (!scope) {
-    return true;
+    return { start: 0, end: blockSize }
   }
-  const blockStart =
-    axis === "row" ? Math.floor(key / 1_000_000) * BLOCK_ROWS : (key % 1_000_000) * BLOCK_COLS;
-  const blockEnd = blockStart + (axis === "row" ? BLOCK_ROWS : BLOCK_COLS);
-  if (scope.end === undefined) {
-    return blockEnd > scope.start;
+  const blockStart = axis === 'row' ? Math.floor(key / 1_000_000) * BLOCK_ROWS : (key % 1_000_000) * BLOCK_COLS
+  const localStart = Math.max(scope.start - blockStart, 0)
+  const localEnd = scope.end === undefined ? blockSize : Math.min(scope.end - blockStart, blockSize)
+  return {
+    start: Math.min(localStart, blockSize),
+    end: Math.max(Math.min(localEnd, blockSize), 0),
   }
-  return blockEnd > scope.start && blockStart < scope.end;
-}
-
-function axisIndexInScope(index: number, scope: SheetGridAxisRemapScope | undefined): boolean {
-  if (!scope) {
-    return true;
-  }
-  if (index < scope.start) {
-    return false;
-  }
-  return scope.end === undefined || index < scope.end;
 }
 
 function blockIsEmpty(block: Uint32Array): boolean {
   for (let index = 0; index < block.length; index += 1) {
     if (block[index] !== 0) {
-      return false;
+      return false
     }
   }
-  return true;
+  return true
 }
 
 export class SheetGrid {
@@ -126,50 +129,80 @@ export class SheetGrid {
     nextCol: number | undefined
   }> {
     const changedEntries: Array<{
-      cellIndex: number;
-      row: number;
-      col: number;
-      nextRow: number | undefined;
-      nextCol: number | undefined;
-    }> = [];
-    const touchedBlockKeys = new Set<number>();
-    [...this.blocks.keys()]
+      cellIndex: number
+      row: number
+      col: number
+      nextRow: number | undefined
+      nextCol: number | undefined
+    }> = []
+    const touchedBlockKeys = new Set<number>()
+    ;[...this.blocks.keys()]
       .filter((key) => blockIntersectsScope(axis, key, scope))
       .forEach((key) => {
-        const block = this.blocks.get(key);
+        const block = this.blocks.get(key)
         if (!block) {
-          return;
+          return
         }
-        const blockRow = Math.floor(key / 1_000_000);
-        const blockCol = key % 1_000_000;
-        for (let offset = 0; offset < block.length; offset += 1) {
-          const value = block[offset]!;
-          if (value === 0) {
-            continue;
+        const blockRow = Math.floor(key / 1_000_000)
+        const blockCol = key % 1_000_000
+        const localAxisRange = localAxisRangeForBlock(axis, key, scope)
+        if (localAxisRange.start >= localAxisRange.end) {
+          return
+        }
+        if (axis === 'row') {
+          for (let localRow = localAxisRange.start; localRow < localAxisRange.end; localRow += 1) {
+            const row = blockRow * BLOCK_ROWS + localRow
+            const nextRow = remapIndex(row)
+            if (nextRow === row) {
+              continue
+            }
+            const rowOffset = localRow * BLOCK_COLS
+            for (let localCol = 0; localCol < BLOCK_COLS; localCol += 1) {
+              const offset = rowOffset + localCol
+              const value = block[offset]!
+              if (value === 0) {
+                continue
+              }
+              const col = blockCol * BLOCK_COLS + localCol
+              changedEntries.push({
+                cellIndex: value - 1,
+                row,
+                col,
+                nextRow,
+                nextCol: col,
+              })
+              touchedBlockKeys.add(key)
+              if (nextRow !== undefined) {
+                touchedBlockKeys.add(blockKey(nextRow, col))
+              }
+            }
           }
-          const localRow = Math.floor(offset / BLOCK_COLS);
-          const localCol = offset % BLOCK_COLS;
-          const row = blockRow * BLOCK_ROWS + localRow;
-          const col = blockCol * BLOCK_COLS + localCol;
-          const axisIndex = axis === "row" ? row : col;
-          if (!axisIndexInScope(axisIndex, scope)) {
-            continue;
+          return
+        }
+        for (let localCol = localAxisRange.start; localCol < localAxisRange.end; localCol += 1) {
+          const col = blockCol * BLOCK_COLS + localCol
+          const nextCol = remapIndex(col)
+          if (nextCol === col) {
+            continue
           }
-          const nextRow = axis === "row" ? remapIndex(row) : row;
-          const nextCol = axis === "column" ? remapIndex(col) : col;
-          if (nextRow === row && nextCol === col) {
-            continue;
-          }
-          changedEntries.push({
-            cellIndex: value - 1,
-            row,
-            col,
-            nextRow,
-            nextCol,
-          });
-          touchedBlockKeys.add(key);
-          if (nextRow !== undefined && nextCol !== undefined) {
-            touchedBlockKeys.add(blockKey(nextRow, nextCol));
+          for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
+            const offset = localRow * BLOCK_COLS + localCol
+            const value = block[offset]!
+            if (value === 0) {
+              continue
+            }
+            const row = blockRow * BLOCK_ROWS + localRow
+            changedEntries.push({
+              cellIndex: value - 1,
+              row,
+              col,
+              nextRow: row,
+              nextCol,
+            })
+            touchedBlockKeys.add(key)
+            if (nextCol !== undefined) {
+              touchedBlockKeys.add(blockKey(row, nextCol))
+            }
           }
         }
       })

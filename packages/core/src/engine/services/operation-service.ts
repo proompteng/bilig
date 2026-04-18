@@ -1575,7 +1575,14 @@ export function createEngineOperationService(args: {
             }
             args.state.workbook.cellStore.flags[cellIndex] =
               (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
+              ~(
+                CellFlags.HasFormula |
+                CellFlags.JsOnly |
+                CellFlags.InCycle |
+                CellFlags.SpillChild |
+                CellFlags.PivotOutput |
+                CellFlags.AuthoredBlank
+              )
             normalizeHistoryDependencyPlaceholder(cellIndex, source)
             pruneCellIfOrphaned(cellIndex)
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
@@ -1701,8 +1708,11 @@ export function createEngineOperationService(args: {
       }
       recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots)
     }
-    const hasEventListeners = args.state.events.hasListeners() || args.state.events.hasCellListeners()
-    const changed: U32 = isRestore || !hasEventListeners ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
+    const hasGeneralEventListeners = args.state.events.hasListeners()
+    const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
+    const hasWatchedCellListeners = args.state.events.hasCellListeners()
+    const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
+    const changed: U32 = isRestore || !requiresChangedSet ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -1710,12 +1720,13 @@ export function createEngineOperationService(args: {
       compileMs,
     }
     args.state.setLastMetrics(lastMetrics)
-    if (hasEventListeners) {
+    const invalidation = isRestore || sheetDeleted || structuralInvalidation ? 'full' : 'cells'
+    if (hasGeneralEventListeners || hasWatchedCellListeners) {
       const event: EngineEvent & { explicitChangedCount: number } = {
         kind: 'batch',
-        invalidation: isRestore || sheetDeleted || structuralInvalidation ? 'full' : 'cells',
+        invalidation,
         changedCellIndices: changed,
-        changedCells: args.captureChangedCells(changed),
+        changedCells: hasGeneralEventListeners ? args.captureChangedCells(changed) : [],
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,
@@ -1727,6 +1738,18 @@ export function createEngineOperationService(args: {
       } else {
         args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
       }
+    }
+    if (hasTrackedEventListeners) {
+      args.state.events.emitTracked({
+        kind: 'batch',
+        invalidation,
+        changedCellIndices: changed,
+        invalidatedRanges,
+        invalidatedRows,
+        invalidatedColumns,
+        metrics: lastMetrics,
+        explicitChangedCount,
+      })
     }
     if (source === 'local') {
       void args.state.getSyncClientConnection()?.send(batch)
@@ -2143,8 +2166,11 @@ export function createEngineOperationService(args: {
       }
       recalculated = args.reconcilePivotOutputs(recalculated, false)
     }
-    const hasEventListeners = args.state.events.hasListeners() || args.state.events.hasCellListeners()
-    const changed: U32 = isRestore || !hasEventListeners ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
+    const hasGeneralEventListeners = args.state.events.hasListeners()
+    const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
+    const hasWatchedCellListeners = args.state.events.hasCellListeners()
+    const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
+    const changed: U32 = isRestore || !requiresChangedSet ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -2152,12 +2178,13 @@ export function createEngineOperationService(args: {
       compileMs,
     }
     args.state.setLastMetrics(lastMetrics)
-    if (hasEventListeners) {
+    const invalidation = isRestore ? 'full' : 'cells'
+    if (hasGeneralEventListeners || hasWatchedCellListeners) {
       const event: EngineEvent & { explicitChangedCount: number } = {
         kind: 'batch',
-        invalidation: isRestore ? 'full' : 'cells',
+        invalidation,
         changedCellIndices: changed,
-        changedCells: args.captureChangedCells(changed),
+        changedCells: hasGeneralEventListeners ? args.captureChangedCells(changed) : [],
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],
@@ -2166,11 +2193,26 @@ export function createEngineOperationService(args: {
       }
       if (isRestore) {
         args.state.events.emitAllWatched(event)
-        return
+        if (!hasTrackedEventListeners) {
+          return
+        }
+      } else {
+        args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
       }
-      args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
-    } else if (isRestore) {
+    } else if (isRestore && !hasTrackedEventListeners) {
       return
+    }
+    if (hasTrackedEventListeners) {
+      args.state.events.emitTracked({
+        kind: 'batch',
+        invalidation,
+        changedCellIndices: changed,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        metrics: lastMetrics,
+        explicitChangedCount,
+      })
     }
     if (batch) {
       void args.state.getSyncClientConnection()?.send(batch)

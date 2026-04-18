@@ -9,8 +9,20 @@ interface NormalizedRange {
   endCol: number
 }
 
+export interface EngineTrackedEvent {
+  kind: EngineEvent['kind']
+  invalidation: EngineEvent['invalidation']
+  changedCellIndices: EngineEvent['changedCellIndices']
+  invalidatedRanges: EngineEvent['invalidatedRanges']
+  invalidatedRows: EngineEvent['invalidatedRows']
+  invalidatedColumns: EngineEvent['invalidatedColumns']
+  metrics: EngineEvent['metrics']
+  explicitChangedCount?: number
+}
+
 export class EngineEventBus {
   private readonly listeners = new Set<(event: EngineEvent) => void>()
+  private readonly trackedListeners = new Set<(event: EngineTrackedEvent) => void>()
   private readonly cellIndexListeners = new Map<number, Set<() => void>>()
   private readonly addressListeners = new Map<string, Set<() => void>>()
   private readonly listenerIds = new WeakMap<() => void, number>()
@@ -20,6 +32,10 @@ export class EngineEventBus {
 
   hasListeners(): boolean {
     return this.listeners.size > 0
+  }
+
+  hasTrackedListeners(): boolean {
+    return this.trackedListeners.size > 0
   }
 
   hasCellListeners(): boolean {
@@ -34,6 +50,13 @@ export class EngineEventBus {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
+    }
+  }
+
+  subscribeTracked(listener: (event: EngineTrackedEvent) => void): () => void {
+    this.trackedListeners.add(listener)
+    return () => {
+      this.trackedListeners.delete(listener)
     }
   }
 
@@ -161,6 +184,12 @@ export class EngineEventBus {
         this.notifyListener(listener)
       })
     })
+  }
+
+  emitTracked(event: EngineTrackedEvent): void {
+    for (const listener of this.trackedListeners) {
+      listener(event)
+    }
   }
 
   private beginListenerEpoch(): void {

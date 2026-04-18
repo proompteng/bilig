@@ -773,6 +773,26 @@ describe('engine correctness', () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot)
   })
 
+  it('does not record extra undo history when clearing an explicit blank cell', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-explicit-blank-clear-history',
+      replicaId: 'correctness-explicit-blank-clear-history',
+    })
+    await engine.ready()
+    engine.importSnapshot({
+      version: 1,
+      workbook: { name: 'correctness-explicit-blank-clear-history' },
+      sheets: [{ id: 1, name: sheetName, order: 0, cells: [{ address: 'B4', value: 'Review' }] }],
+    })
+
+    engine.setCellValue(sheetName, 'B4', null)
+    engine.clearRange({ sheetName, startAddress: 'B4', endAddress: 'B4' })
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(false)
+>>>>>>> 0ae55808 (perf(engine): streamline tracked structural event delivery)
+  })
+
   it('reverses random local edit streams through undo and redo', async () => {
     await runProperty({
       suite: 'core/undo-redo-reversibility',

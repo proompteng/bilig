@@ -94,6 +94,39 @@ describe('EngineEventBus', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('tracks lightweight listeners separately from general event listeners', () => {
+    const events = new EngineEventBus()
+    const tracked = vi.fn()
+
+    expect(events.hasTrackedListeners()).toBe(false)
+
+    const unsubscribe = events.subscribeTracked(tracked)
+
+    expect(events.hasTrackedListeners()).toBe(true)
+
+    events.emitTracked({
+      kind: 'batch',
+      invalidation: 'cells',
+      changedCellIndices: new Uint32Array([1, 2]),
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [],
+      metrics: batchEvent().metrics,
+      explicitChangedCount: 1,
+    })
+
+    expect(tracked).toHaveBeenCalledTimes(1)
+    expect(tracked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changedCellIndices: new Uint32Array([1, 2]),
+        explicitChangedCount: 1,
+      }),
+    )
+
+    unsubscribe()
+    expect(events.hasTrackedListeners()).toBe(false)
+  })
+
   it('notifies watched addresses for range invalidations without changed cell indices', () => {
     const events = new EngineEventBus()
     const listener = vi.fn()

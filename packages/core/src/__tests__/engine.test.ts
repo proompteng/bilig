@@ -4048,6 +4048,30 @@ describe('SpreadsheetEngine', () => {
     })
   })
 
+  it('emits lightweight tracked events for ordinary mutations', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'tracked-events' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const tracked = vi.fn()
+
+    const unsubscribe = engine.events.subscribeTracked(tracked)
+
+    engine.setCellValue('Sheet1', 'A1', 7)
+
+    expect(tracked).toHaveBeenCalledTimes(1)
+    expect(tracked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'batch',
+        invalidation: 'cells',
+        changedCellIndices: new Uint32Array([0]),
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      }),
+    )
+
+    unsubscribe()
+  })
+
   it('skips no-op defined-name, sort, and table writes and reports missing clears', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()
@@ -4151,6 +4175,38 @@ describe('SpreadsheetEngine', () => {
     unsubscribeBatches()
     engine.setWorkbookMetadata('timezone', 'UTC')
     expect(outbound).toEqual([])
+  })
+
+  it('reads and clears data validations through the direct engine helpers', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'data-validation-helpers' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const range = {
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'A2',
+    } as const
+
+    engine.setDataValidation({
+      range,
+      rule: {
+        kind: 'list',
+        values: ['Draft', 'Final'],
+      },
+      allowBlank: true,
+    })
+
+    expect(engine.getDataValidation('Sheet1', range)).toEqual({
+      range,
+      rule: {
+        kind: 'list',
+        values: ['Draft', 'Final'],
+      },
+      allowBlank: true,
+    })
+    expect(engine.clearDataValidation('Sheet1', range)).toBe(true)
+    expect(engine.getDataValidation('Sheet1', range)).toBeUndefined()
+    expect(engine.clearDataValidation('Sheet1', range)).toBe(false)
   })
 
   it('persists workbook defined names through snapshot roundtrip', async () => {
@@ -6647,6 +6703,8 @@ describe('SpreadsheetEngine', () => {
     await engine.ready()
     engine.createSheet('Sheet1')
     const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const tracked = vi.fn()
+    const unsubscribe = engine.events.subscribeTracked(tracked)
 
     const undoOps = engine.applyCellMutationsAtWithOptions(
       [
@@ -6663,8 +6721,79 @@ describe('SpreadsheetEngine', () => {
     expect(undoOps).toBeNull()
     expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 5 })
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(tracked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'batch',
+        invalidation: 'full',
+      }),
+    )
     expect(engine.undo()).toBe(true)
     expect(engine.workbook.getSheet('Sheet1')).toBeUndefined()
+
+    unsubscribe()
+  })
+
+  it('applies coordinate-native restore mutations without listeners', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'restore-cell-mutation-refs-no-listeners' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+
+    const undoOps = engine.applyCellMutationsAtWithOptions([{ sheetId, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 9 } }], {
+      captureUndo: false,
+      potentialNewCells: 1,
+      source: 'restore',
+    })
+
+    expect(undoOps).toBeNull()
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 9 })
+    expect(engine.undo()).toBe(true)
+    expect(engine.workbook.getSheet('Sheet1')).toBeUndefined()
+  })
+
+  it('emits standard engine events for restore mutations without tracked listeners', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'restore-cell-mutation-general-events' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const listener = vi.fn()
+    const unsubscribe = engine.subscribe(listener)
+
+    const undoOps = engine.applyCellMutationsAtWithOptions([{ sheetId, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 11 } }], {
+      captureUndo: false,
+      potentialNewCells: 1,
+      source: 'restore',
+    })
+
+    expect(undoOps).toBeNull()
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'batch',
+        invalidation: 'full',
+      }),
+    )
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(engine.undo()).toBe(true)
+    expect(engine.workbook.getSheet('Sheet1')).toBeUndefined()
+
+    unsubscribe()
+  })
+
+  it('emits standard engine events for coordinate-native clear cell mutations', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'clear-cell-at-events' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 5)
+    const listener = vi.fn()
+    const unsubscribe = engine.subscribe(listener)
+
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    engine.clearCellAt(sheetId, 0, 0)
+
+    expect(listener).toHaveBeenCalled()
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Empty })
+
+    unsubscribe()
   })
 
   it('reads rectangular range values as a dense matrix without per-cell callers', async () => {

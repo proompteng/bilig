@@ -8,6 +8,7 @@ import {
   type CellSnapshot,
   type CellValue,
   type LiteralInput,
+  type RecalcMetrics,
   type WorkbookDefinedNameValueSnapshot,
 } from '@bilig/protocol'
 import {
@@ -116,6 +117,21 @@ type DetailedEvent = {
     payload: WorkPaperDetailedEventMap[EventName]
   }
 }[WorkPaperEventName]
+
+interface EngineTrackedEventSubscription {
+  subscribeTracked(
+    listener: (event: {
+      kind: 'batch'
+      invalidation: 'cells' | 'full'
+      changedCellIndices: number[] | Uint32Array
+      invalidatedRanges: CellRangeRef[]
+      invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[]
+      invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[]
+      metrics: RecalcMetrics
+      explicitChangedCount?: number
+    }) => void,
+  ): () => void
+}
 
 interface InternalNamedExpression {
   publicName: string
@@ -293,6 +309,10 @@ const globalCustomFunctions = new Map<string, (...args: CellValue[]) => Evaluati
 
 let customAdapterInstalled = false
 let nextWorkbookId = 1
+
+function hasTrackedEngineSubscription(value: unknown): value is EngineTrackedEventSubscription {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'subscribeTracked') === 'function'
+}
 
 function ensureCustomAdapterInstalled(): void {
   if (customAdapterInstalled) {
@@ -2672,7 +2692,10 @@ export class WorkPaper {
   private attachEngineEventTracking(): void {
     this.unsubscribeEngineEvents?.()
     this.trackedEngineEvents = []
-    this.unsubscribeEngineEvents = this.engine.subscribe((event) => {
+    if (!hasTrackedEngineSubscription(this.engine.events)) {
+      throw new WorkPaperOperationError('Tracked engine event subscription is unavailable')
+    }
+    this.unsubscribeEngineEvents = this.engine.events.subscribeTracked((event) => {
       if (!this.engineEventCaptureEnabled) {
         return
       }
@@ -3003,6 +3026,26 @@ export class WorkPaper {
     return orderWorkPaperCellChanges(cellChanges, this.listSheetRecords())
   }
 
+  private readTrackedCellChange(cellIndex: number): WorkPaperCellChange | undefined {
+    const sheetId = this.engine.workbook.cellStore.sheetIds[cellIndex]
+    const row = this.engine.workbook.cellStore.rows[cellIndex]
+    const col = this.engine.workbook.cellStore.cols[cellIndex]
+    if (sheetId === undefined || row === undefined || col === undefined) {
+      return undefined
+    }
+    const sheetName = this.engine.workbook.getSheetNameById(sheetId)
+    if (sheetName === undefined) {
+      return undefined
+    }
+    return {
+      kind: 'cell',
+      address: { sheet: sheetId, row, col },
+      sheetName,
+      a1: formatAddress(row, col),
+      newValue: this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id)),
+    }
+  }
+
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
@@ -3029,12 +3072,18 @@ export class WorkPaper {
     if (events.length === 1) {
       const event = events[0]!
       let hasDuplicateCellKey = false
-      if (event.changedCells.length <= 4) {
-        for (let index = 0; index < event.changedCells.length; index += 1) {
-          const change = event.changedCells[index]!
+      if (event.changedCellIndices.length <= 4) {
+        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
+          if (!change) {
+            continue
+          }
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-            const prior = event.changedCells[priorIndex]!
+            const prior = this.readTrackedCellChange(event.changedCellIndices[priorIndex]!)
+            if (!prior) {
+              continue
+            }
             if (makeCellKey(prior.address.sheet, prior.address.row, prior.address.col) === cellKey) {
               hasDuplicateCellKey = true
               break
@@ -3046,8 +3095,11 @@ export class WorkPaper {
         }
       } else {
         const seenCellKeys = new Set<number>()
-        for (let index = 0; index < event.changedCells.length; index += 1) {
-          const change = event.changedCells[index]!
+        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
+          if (!change) {
+            continue
+          }
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           if (seenCellKeys.has(cellKey)) {
             hasDuplicateCellKey = true
@@ -3062,8 +3114,11 @@ export class WorkPaper {
         let previousSheetOrder = -1
         let previousRow = -1
         let previousCol = -1
-        for (let index = 0; index < event.changedCells.length; index += 1) {
-          const change = event.changedCells[index]!
+        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
+          if (!change) {
+            continue
+          }
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
           if (
@@ -3099,8 +3154,11 @@ export class WorkPaper {
     }
     const latestChangesByKey = new Map<number, WorkPaperCellChange>()
     for (const event of events) {
-      for (let index = 0; index < event.changedCells.length; index += 1) {
-        const change = event.changedCells[index]!
+      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+        const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
+        if (!change) {
+          continue
+        }
         const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
         latestChangesByKey.delete(cellKey)
         latestChangesByKey.set(cellKey, {

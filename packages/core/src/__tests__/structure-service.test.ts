@@ -269,6 +269,34 @@ describe('EngineStructureService', () => {
     expect(result.graphRefreshRequired).toBe(true)
   })
 
+  it('keeps repeated direct aggregate row moves off the graph refresh path', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-move-row-aggregates' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'moveRows',
+        sheetName: 'Sheet1',
+        start: 2,
+        count: 1,
+        target: 0,
+      }),
+    )
+
+    expect(result.topologyChanged).toBe(false)
+    expect(result.graphRefreshRequired).toBe(false)
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('SUM(A1:A3)')
+    expect(engine.getCell('Sheet1', 'B2').formula).toBe('SUM(A2:A2)')
+    expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A2:A3)')
+    expect(engine.getCell('Sheet1', 'B4').formula).toBe('SUM(A1:A4)')
+    expect(result.formulaCellIndices).toHaveLength(4)
+  })
+
   it('keeps repeated simple column families off the topology and dirty-formula path for inserts', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-column-families' })
     await engine.ready()

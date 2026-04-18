@@ -93,4 +93,27 @@ describe('SheetGrid', () => {
     expect(grid.get(10, 2)).toBe(3)
     expect(grid.get(11, 2)).toBe(-1)
   })
+
+  it('remaps only cells inside the requested column scope', () => {
+    const grid = new SheetGrid()
+    grid.set(0, 0, 1)
+    grid.set(40, 33, 2)
+    grid.set(90, 65, 3)
+
+    const changed = grid.remapAxis('column', (col) => col + 1, { start: 32, end: 64 })
+
+    expect(changed).toEqual([
+      {
+        cellIndex: 2,
+        row: 40,
+        col: 33,
+        nextRow: 40,
+        nextCol: 34,
+      },
+    ])
+    expect(grid.get(0, 0)).toBe(1)
+    expect(grid.get(40, 33)).toBe(-1)
+    expect(grid.get(40, 34)).toBe(2)
+    expect(grid.get(90, 65)).toBe(3)
+  })
 })

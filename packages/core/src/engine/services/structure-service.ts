@@ -490,11 +490,27 @@ export function createEngineStructureService(args: {
       )
       const touchesChangedTable = formula.compiled.symbolicTables.some((name) => argsForResolve.changedTableNames.has(name))
       if (!rewritten) {
-        inputs.push({
-          cellIndex,
-          ownerSheetName,
-          source: formula.source,
-        })
+        if (!touchesChangedName && !touchesChangedTable && formula.directAggregate !== undefined) {
+          return
+        }
+        const canReuseCompiled =
+          formula.compiled.symbolicNames.length === 0 &&
+          formula.compiled.symbolicTables.length === 0 &&
+          formula.compiled.symbolicSpills.length === 0
+        inputs.push(
+          canReuseCompiled
+            ? {
+                cellIndex,
+                ownerSheetName,
+                source: formula.source,
+                compiled: formula.compiled,
+              }
+            : {
+                cellIndex,
+                ownerSheetName,
+                source: formula.source,
+              },
+        )
         return
       }
       if (touchesChangedName || touchesChangedTable) {

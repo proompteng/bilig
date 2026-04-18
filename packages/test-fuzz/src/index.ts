@@ -319,19 +319,6 @@ export function captureCounterexample<Ts extends unknown[]>(options: CaptureCoun
 }
 
 function extractReplayPath(counterexample: unknown): string | null {
-  if (typeof counterexample === 'string') {
-    const match = /replayPath="([^"]+)"/u.exec(counterexample)
-    return match?.[1] ?? null
-  }
-  if (Array.isArray(counterexample)) {
-    for (const entry of counterexample) {
-      const replayPath = extractReplayPath(entry)
-      if (replayPath) {
-        return replayPath
-      }
-    }
-    return null
-  }
   if (isRecord(counterexample)) {
     if (typeof counterexample['replayPath'] === 'string') {
       return counterexample['replayPath']

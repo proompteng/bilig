@@ -748,10 +748,16 @@ describe('WorkPaper', () => {
       ],
     })
     const sheetId = workbook.getSheetId('Sheet1')!
+    expect(hasCaptureVisibilitySnapshot(workbook)).toBe(true)
+    if (!hasCaptureVisibilitySnapshot(workbook)) {
+      throw new Error('Expected work paper runtime to expose captureVisibilitySnapshot in tests')
+    }
+    const captureVisibilitySnapshot = vi.spyOn(workbook, 'captureVisibilitySnapshot')
 
     const changes = workbook.addRows(sheetId, [1, 1])
 
     expect(changes).toEqual([])
+    expect(captureVisibilitySnapshot).not.toHaveBeenCalled()
     expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 2, height: 5 })
     expect(workbook.getCellSerialized(cell(sheetId, 0, 1))).toBe('=SUM(A1:A1)')
     expect(workbook.getCellSerialized(cell(sheetId, 2, 1))).toBe('=SUM(A1:A3)')
@@ -759,6 +765,7 @@ describe('WorkPaper', () => {
     expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(workbook.getCellValue(cell(sheetId, 2, 1))).toEqual({ tag: ValueTag.Number, value: 3 })
     expect(workbook.getCellValue(cell(sheetId, 4, 1))).toEqual({ tag: ValueTag.Number, value: 10 })
+    captureVisibilitySnapshot.mockRestore()
   })
 
   it('returns no value changes for structural column inserts when repeated simple families preserve values', () => {
