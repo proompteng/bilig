@@ -1,5 +1,7 @@
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
+import type * as ChildProcess from 'node:child_process'
+import type * as NodeUrl from 'node:url'
 
 type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
 
@@ -146,6 +148,56 @@ interface LoweredArraySpec<T extends TypedArrayValue> {
   classId: number
   ctor: {
     new (buffer: ArrayBufferLike, byteOffset: number, length: number): T
+  }
+}
+
+interface EnsureWasmBinaryPathForNodeOptions {
+  readonly importMetaUrl: string
+  readonly existsSync: (path: string) => boolean
+  readonly fileURLToPath: (url: URL) => string
+  readonly runBuildSync: ((packageRootPath: string) => void) | null
+}
+
+export function ensureWasmBinaryPathForNode(options: EnsureWasmBinaryPathForNodeOptions): string {
+  const wasmPath = options.fileURLToPath(new URL('../build/release.wasm', options.importMetaUrl))
+  if (options.existsSync(wasmPath)) {
+    return wasmPath
+  }
+
+  const packageRootPath = options.fileURLToPath(new URL('..', options.importMetaUrl))
+  const buildScriptPath = options.fileURLToPath(new URL('../scripts/build.ts', options.importMetaUrl))
+  if (options.existsSync(buildScriptPath) && options.runBuildSync) {
+    options.runBuildSync(packageRootPath)
+    if (options.existsSync(wasmPath)) {
+      return wasmPath
+    }
+  }
+
+  throw new Error(`Unable to locate wasm kernel binary at '${wasmPath}'. Run 'pnpm wasm:build' before using @bilig/wasm-kernel.`)
+}
+
+function createWasmBuildRunner(): ((packageRootPath: string) => void) | null {
+  if (!isNodeLike()) {
+    return null
+  }
+  const childProcess = process.getBuiltinModule('node:child_process') as typeof ChildProcess | undefined
+  if (!childProcess) {
+    return null
+  }
+  return (packageRootPath) => {
+    const command = process.versions['bun'] ? process.execPath : 'bun'
+    const result = childProcess.spawnSync(command, ['./scripts/build.ts'], {
+      cwd: packageRootPath,
+      stdio: 'pipe',
+      env: process.env,
+    })
+    if (result.status === 0) {
+      return
+    }
+    const stderr = result.stderr?.toString().trim()
+    const stdout = result.stdout?.toString().trim()
+    const detail = stderr || stdout || `Exited with status ${String(result.status)}`
+    throw new Error(`Failed to build wasm kernel artifact: ${detail}`)
   }
 }
 
@@ -704,7 +756,6 @@ function isNodeLike(): boolean {
 }
 
 async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
-  const wasmUrl = new URL('../build/release.wasm', import.meta.url)
   const imports = {
     env: {
       abort(_message: number, _fileName: number, lineNumber: number, columnNumber: number) {
@@ -715,14 +766,29 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
 
   if (isNodeLike()) {
     const fsPromises = process.getBuiltinModule('fs/promises') as typeof FsPromises | undefined
+    const fs = process.getBuiltinModule('fs') as typeof Fs | undefined
+    const url = process.getBuiltinModule('node:url') as typeof NodeUrl | undefined
     if (!fsPromises) {
       throw new Error('Node fs/promises module is unavailable')
     }
+    if (!fs) {
+      throw new Error('Node fs module is unavailable')
+    }
+    if (!url) {
+      throw new Error('Node url module is unavailable')
+    }
+    const wasmPath = ensureWasmBinaryPathForNode({
+      importMetaUrl: import.meta.url,
+      existsSync: fs.existsSync,
+      fileURLToPath: url.fileURLToPath,
+      runBuildSync: createWasmBuildRunner(),
+    })
     const { readFile } = fsPromises
-    const bytes = await readFile(wasmUrl)
+    const bytes = await readFile(wasmPath)
     return WebAssembly.instantiate(bytes, imports)
   }
 
+  const wasmUrl = new URL('../build/release.wasm', import.meta.url)
   const response = await fetch(wasmUrl)
   if (!response.ok) {
     throw new Error(`Failed to load wasm kernel: ${response.status} ${response.statusText}`)
@@ -735,7 +801,6 @@ function loadWasmModuleSync(): WebAssembly.WebAssemblyInstantiatedSource {
   if (!isNodeLike()) {
     throw new Error('Synchronous wasm kernel loading is only supported in Node-like runtimes')
   }
-  const wasmUrl = new URL('../build/release.wasm', import.meta.url)
   const imports = {
     env: {
       abort(_message: number, _fileName: number, lineNumber: number, columnNumber: number) {
@@ -744,10 +809,20 @@ function loadWasmModuleSync(): WebAssembly.WebAssemblyInstantiatedSource {
     },
   }
   const fs = process.getBuiltinModule('fs') as typeof Fs | undefined
+  const url = process.getBuiltinModule('node:url') as typeof NodeUrl | undefined
   if (!fs) {
     throw new Error('Node fs module is unavailable')
   }
-  const bytes = fs.readFileSync(wasmUrl)
+  if (!url) {
+    throw new Error('Node url module is unavailable')
+  }
+  const wasmPath = ensureWasmBinaryPathForNode({
+    importMetaUrl: import.meta.url,
+    existsSync: fs.existsSync,
+    fileURLToPath: url.fileURLToPath,
+    runBuildSync: createWasmBuildRunner(),
+  })
+  const bytes = fs.readFileSync(wasmPath)
   const module = new WebAssembly.Module(bytes)
   const instance = new WebAssembly.Instance(module, imports)
   return { module, instance }
