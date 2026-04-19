@@ -27,6 +27,7 @@ import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord }
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { EngineRuntimeState, PreparedCellAddress, RuntimeDirectLookupDescriptor, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
+import type { EngineCellPatch } from '../../patches/patch-types.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 
@@ -279,6 +280,7 @@ export function createEngineOperationService(args: {
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
   readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
+  readonly captureChangedPatches: (changedCellIndices: readonly number[] | U32) => readonly EngineCellPatch[]
   readonly getChangedInputBuffer: () => U32
   readonly ensureRecalcScratchCapacity: (size: number) => void
   readonly ensureCellTracked: (sheetName: string, address: string) => number
@@ -1902,6 +1904,7 @@ export function createEngineOperationService(args: {
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
+        patches: args.captureChangedPatches(changed),
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,
@@ -2419,6 +2422,7 @@ export function createEngineOperationService(args: {
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
+        patches: args.captureChangedPatches(changed),
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],

@@ -1,9 +1,23 @@
-import type { EngineEvent } from '@bilig/protocol'
+import type { CellValue, EngineEvent } from '@bilig/protocol'
+
+export interface TrackedCellPatch {
+  readonly kind: 'cell'
+  readonly cellIndex: number
+  readonly address: {
+    readonly sheet: number
+    readonly row: number
+    readonly col: number
+  }
+  readonly sheetName: string
+  readonly a1: string
+  readonly newValue: CellValue
+}
 
 interface CoreTrackedEngineEvent {
   kind: EngineEvent['kind']
   invalidation: EngineEvent['invalidation']
   changedCellIndices: EngineEvent['changedCellIndices']
+  patches?: readonly TrackedCellPatch[]
   invalidatedRanges: EngineEvent['invalidatedRanges']
   invalidatedRows: EngineEvent['invalidatedRows']
   invalidatedColumns: EngineEvent['invalidatedColumns']
@@ -14,6 +28,7 @@ interface CoreTrackedEngineEvent {
 export interface TrackedEngineEvent {
   invalidation: CoreTrackedEngineEvent['invalidation']
   changedCellIndices: CoreTrackedEngineEvent['changedCellIndices']
+  patches?: readonly TrackedCellPatch[]
   changedInputCount: number
   explicitChangedCount?: number
   hasInvalidatedRanges: boolean
@@ -31,6 +46,7 @@ export function captureTrackedEngineEvent(event: CoreTrackedEngineEvent): Tracke
     invalidation: event.invalidation,
     changedCellIndices:
       event.changedCellIndices instanceof Uint32Array ? Uint32Array.from(event.changedCellIndices) : [...event.changedCellIndices],
+    ...(event.patches ? { patches: [...event.patches] } : {}),
     changedInputCount: event.metrics.changedInputCount,
     explicitChangedCount: readExplicitChangedCount(event),
     hasInvalidatedRanges: event.invalidatedRanges.length > 0,

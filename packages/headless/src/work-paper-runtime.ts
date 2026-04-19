@@ -107,7 +107,7 @@ import type {
   RawCellContent,
   SerializedWorkPaperNamedExpression,
 } from './work-paper-types.js'
-import { captureTrackedEngineEvent, type TrackedEngineEvent } from './tracked-engine-event-refs.js'
+import { captureTrackedEngineEvent, type TrackedCellPatch, type TrackedEngineEvent } from './tracked-engine-event-refs.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
 
@@ -132,6 +132,7 @@ interface EngineTrackedEventSubscription {
       kind: 'batch'
       invalidation: 'cells' | 'full'
       changedCellIndices: number[] | Uint32Array
+      patches?: readonly TrackedCellPatch[]
       invalidatedRanges: CellRangeRef[]
       invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[]
       invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[]
@@ -173,6 +174,18 @@ interface ClipboardPayload {
   sourceAnchor: WorkPaperCellAddress
   serialized: RawCellContent[][]
   values: CellValue[][]
+}
+
+type TrackedCellLike = {
+  readonly kind: 'cell'
+  readonly address: {
+    readonly sheet: number
+    readonly row: number
+    readonly col: number
+  }
+  readonly sheetName: string
+  readonly a1: string
+  readonly newValue: CellValue
 }
 
 type QueuedEvent = Extract<
@@ -3092,6 +3105,20 @@ export class WorkPaper {
     }
   }
 
+  private materializeTrackedEventChanges(event: TrackedEngineEvent): readonly TrackedCellLike[] {
+    if (event.patches && event.patches.length > 0) {
+      return event.patches
+    }
+    const changes: TrackedCellLike[] = []
+    for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+      const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
+      if (change) {
+        changes.push(change)
+      }
+    }
+    return changes
+  }
+
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
@@ -3117,19 +3144,14 @@ export class WorkPaper {
     }
     if (events.length === 1) {
       const event = events[0]!
+      const eventChanges = this.materializeTrackedEventChanges(event)
       let hasDuplicateCellKey = false
-      if (event.changedCellIndices.length <= 4) {
-        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
-          if (!change) {
-            continue
-          }
+      if (eventChanges.length <= 4) {
+        for (let index = 0; index < eventChanges.length; index += 1) {
+          const change = eventChanges[index]!
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-            const prior = this.readTrackedCellChange(event.changedCellIndices[priorIndex]!)
-            if (!prior) {
-              continue
-            }
+            const prior = eventChanges[priorIndex]!
             if (makeCellKey(prior.address.sheet, prior.address.row, prior.address.col) === cellKey) {
               hasDuplicateCellKey = true
               break
@@ -3141,11 +3163,8 @@ export class WorkPaper {
         }
       } else {
         const seenCellKeys = new Set<number>()
-        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
-          if (!change) {
-            continue
-          }
+        for (let index = 0; index < eventChanges.length; index += 1) {
+          const change = eventChanges[index]!
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           if (seenCellKeys.has(cellKey)) {
             hasDuplicateCellKey = true
@@ -3160,11 +3179,8 @@ export class WorkPaper {
         let previousSheetOrder = -1
         let previousRow = -1
         let previousCol = -1
-        for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-          const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
-          if (!change) {
-            continue
-          }
+        for (let index = 0; index < eventChanges.length; index += 1) {
+          const change = eventChanges[index]!
           const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
           const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
           if (
@@ -3200,11 +3216,9 @@ export class WorkPaper {
     }
     const latestChangesByKey = new Map<number, WorkPaperCellChange>()
     for (const event of events) {
-      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-        const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
-        if (!change) {
-          continue
-        }
+      const eventChanges = this.materializeTrackedEventChanges(event)
+      for (let index = 0; index < eventChanges.length; index += 1) {
+        const change = eventChanges[index]!
         const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
         latestChangesByKey.delete(cellKey)
         latestChangesByKey.set(cellKey, {
@@ -3476,20 +3490,41 @@ export class WorkPaper {
     }
   }
 
+  private tryMergeTypedCellMutationHistory(entries: readonly HistoryRecord[]): HistoryRecord | null {
+    if (
+      entries.length === 0 ||
+      entries.some((entry) => entry.forward.kind !== 'cell-mutations' || entry.inverse.kind !== 'cell-mutations')
+    ) {
+      return null
+    }
+    return {
+      forward: {
+        kind: 'cell-mutations',
+        refs: entries.flatMap((entry) => (entry.forward.kind === 'cell-mutations' ? entry.forward.refs : [])),
+        potentialNewCells: sumNumbers(entries.map((entry) => entry.forward.potentialNewCells)),
+      },
+      inverse: {
+        kind: 'cell-mutations',
+        refs: entries.toReversed().flatMap((entry) => (entry.inverse.kind === 'cell-mutations' ? entry.inverse.refs : [])),
+        potentialNewCells: sumNumbers(entries.map((entry) => entry.inverse.potentialNewCells)),
+      },
+    }
+  }
+
   private mergeUndoHistory(startIndex: number): void {
     const undoStack = this.getUndoStack()
     if (undoStack.length - startIndex <= 1) {
       return
     }
     const entries = undoStack.splice(startIndex)
-    const merged: HistoryRecord = {
+    const merged = this.tryMergeTypedCellMutationHistory(entries) ?? {
       forward: {
-        kind: 'ops',
+        kind: 'ops' as const,
         ops: entries.flatMap((entry) => this.historyTransactionOps(entry.forward)),
         potentialNewCells: sumNumbers(entries.map((entry) => entry.forward.potentialNewCells)),
       },
       inverse: {
-        kind: 'ops',
+        kind: 'ops' as const,
         ops: entries.toReversed().flatMap((entry) => this.historyTransactionOps(entry.inverse)),
         potentialNewCells: sumNumbers(entries.map((entry) => entry.inverse.potentialNewCells)),
       },

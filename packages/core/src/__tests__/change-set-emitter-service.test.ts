@@ -77,6 +77,49 @@ describe('EngineChangeSetEmitterService', () => {
     expect(counters.changedCellPayloadsBuilt).toBe(2)
   })
 
+  it('captures typed patches for tracked runtime consumers', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-patches' })
+    const counters = createEngineCounters()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 2)
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+        counters,
+      },
+    })
+
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const b1 = engine.workbook.getCellIndex('Sheet1', 'B1')
+    expect(a1).toBeDefined()
+    expect(b1).toBeDefined()
+
+    const patches = emitter.captureChangedPatches([a1!, b1!])
+
+    expect(patches).toEqual([
+      {
+        kind: 'cell',
+        cellIndex: a1,
+        address: { sheet: 1, row: 0, col: 0 },
+        sheetName: 'Sheet1',
+        a1: 'A1',
+        newValue: { tag: ValueTag.Number, value: 1 },
+      },
+      {
+        kind: 'cell',
+        cellIndex: b1,
+        address: { sheet: 1, row: 0, col: 1 },
+        sheetName: 'Sheet1',
+        a1: 'B1',
+        newValue: { tag: ValueTag.Number, value: 2 },
+      },
+    ])
+    expect(counters.changedCellPayloadsBuilt).toBe(2)
+  })
+
   it('captures larger cross-sheet change sets while skipping unresolved entries', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-large' })
     engine.createSheet('Sheet1')

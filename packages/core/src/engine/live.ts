@@ -6,6 +6,7 @@ import type { EngineRuntimeState } from './runtime-state.js'
 import { createEngineCellStateService, type EngineCellStateService } from './services/cell-state-service.js'
 import { createEngineEventService, type EngineEventService } from './services/event-service.js'
 import { createEngineChangeSetEmitterService } from './services/change-set-emitter-service.js'
+import { createEnginePatchEmitterService } from '../patches/patch-emitter.js'
 import { createEngineFormulaEvaluationService, type EngineFormulaEvaluationService } from './services/formula-evaluation-service.js'
 import { createCriterionRangeCacheService } from './services/criterion-range-cache-service.js'
 import { createExactColumnIndexService } from './services/exact-column-index-service.js'
@@ -139,6 +140,7 @@ type EngineRecalcRuntimeConfig = Omit<
   | 'composeMutationRoots'
   | 'composeEventChanges'
   | 'captureChangedCells'
+  | 'captureChangedPatches'
   | 'unionChangedSets'
   | 'composeChangedRootsAndOrdered'
   | 'emptyChangedSet'
@@ -208,6 +210,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'composeMutationRoots'
   | 'composeEventChanges'
   | 'captureChangedCells'
+  | 'captureChangedPatches'
   | 'getChangedInputBuffer'
   | 'ensureRecalcScratchCapacity'
   | 'ensureCellTracked'
@@ -253,6 +256,7 @@ export function createEngineServiceRuntime(args: {
   const scratch = createEngineRuntimeScratchService()
   const traversal = createEngineTraversalService(args.traversal)
   const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state })
+  const patchEmitter = createEnginePatchEmitterService({ state: args.state })
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state })
   const columnIndexStore = createColumnIndexStore({ state: args.state, runtimeColumnStore })
   const compiledPlans = createEngineCompiledPlanService()
@@ -465,6 +469,7 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) => support.composeEventChangesNow(recalculated, explicitChangedCount),
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
+    captureChangedPatches: (changedCellIndices) => patchEmitter.captureChangedPatches(changedCellIndices),
     unionChangedSets: (...sets) => support.unionChangedSetsNow(...sets),
     composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
       support.composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount),
@@ -556,6 +561,7 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) => support.composeEventChangesNow(recalculated, explicitChangedCount),
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
+    captureChangedPatches: (changedCellIndices) => patchEmitter.captureChangedPatches(changedCellIndices),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
     ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ValueTag } from '@bilig/protocol'
 import { captureTrackedEngineEvent } from '../tracked-engine-event-refs.js'
 
 describe('captureTrackedEngineEvent', () => {
@@ -32,5 +33,64 @@ describe('captureTrackedEngineEvent', () => {
     expect(tracked.hasInvalidatedRanges).toBe(true)
     expect(tracked.hasInvalidatedRows).toBe(true)
     expect(tracked.hasInvalidatedColumns).toBe(true)
+  })
+
+  it('copies tracked patch arrays for later lazy consumption', () => {
+    const patches = [
+      {
+        kind: 'cell' as const,
+        cellIndex: 1,
+        address: { sheet: 7, row: 2, col: 3 },
+        sheetName: 'Bench',
+        a1: 'D3',
+        newValue: { tag: ValueTag.Number, value: 42 },
+      },
+    ]
+    const tracked = captureTrackedEngineEvent({
+      kind: 'batch',
+      invalidation: 'cells',
+      changedCellIndices: new Uint32Array([1]),
+      patches,
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [],
+      metrics: {
+        batchId: 2,
+        changedInputCount: 1,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+    })
+
+    expect(tracked.patches).toEqual([
+      {
+        kind: 'cell',
+        cellIndex: 1,
+        address: { sheet: 7, row: 2, col: 3 },
+        sheetName: 'Bench',
+        a1: 'D3',
+        newValue: { tag: ValueTag.Number, value: 42 },
+      },
+    ])
+
+    patches[0] = {
+      ...patches[0],
+      address: { ...patches[0].address, row: 99 },
+    }
+
+    expect(tracked.patches).toEqual([
+      {
+        kind: 'cell',
+        cellIndex: 1,
+        address: { sheet: 7, row: 2, col: 3 },
+        sheetName: 'Bench',
+        a1: 'D3',
+        newValue: { tag: ValueTag.Number, value: 42 },
+      },
+    ])
   })
 })

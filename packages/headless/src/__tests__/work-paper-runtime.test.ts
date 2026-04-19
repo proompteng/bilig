@@ -14,6 +14,19 @@ function hasCaptureVisibilitySnapshot(value: unknown): value is WorkPaper & { ca
   return typeof Reflect.get(value, 'captureVisibilitySnapshot') === 'function'
 }
 
+function hasReadTrackedCellChange(value: unknown): value is WorkPaper & { readTrackedCellChange: (cellIndex: number) => unknown } {
+  return typeof Reflect.get(value, 'readTrackedCellChange') === 'function'
+}
+
+function readUndoStack(value: unknown): unknown[] | null {
+  const engine = Reflect.get(value, 'engine')
+  if (!engine || typeof engine !== 'object') {
+    return null
+  }
+  const undoStack = Reflect.get(engine, 'undoStack')
+  return Array.isArray(undoStack) ? undoStack : null
+}
+
 afterEach(() => {
   WorkPaper.unregisterAllFunctions()
   if (WorkPaper.getRegisteredLanguagesCodes().includes(TEST_LANGUAGE_CODE)) {
@@ -132,6 +145,31 @@ describe('WorkPaper', () => {
     captureVisibilitySnapshot.mockRestore()
   })
 
+  it('uses tracked patch payloads without rereading changed cells from the engine', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[1, '=A1*2']],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    expect(hasReadTrackedCellChange(workbook)).toBe(true)
+    if (!hasReadTrackedCellChange(workbook)) {
+      throw new Error('Expected work paper runtime to expose readTrackedCellChange in tests')
+    }
+    const runtime = workbook
+    const readTrackedCellChange = vi.spyOn(runtime, 'readTrackedCellChange').mockImplementation(() => {
+      throw new Error('tracked patches should bypass readTrackedCellChange')
+    })
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
+
+    expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 18,
+    })
+    expect(readTrackedCellChange).not.toHaveBeenCalled()
+    readTrackedCellChange.mockRestore()
+  })
+
   it('supports sheet-scoped named expressions and restores public formulas', () => {
     const workbook = WorkPaper.buildFromSheets({
       Summary: [[]],
@@ -231,6 +269,26 @@ describe('WorkPaper', () => {
       value: 20,
     })
     captureVisibilitySnapshot.mockRestore()
+  })
+
+  it('keeps merged literal-only batch history on typed cell-mutation records', () => {
+    const workbook = WorkPaper.buildFromArray([[1], [2]])
+    const sheetId = workbook.getSheetId('Sheet1')!
+
+    workbook.batch(() => {
+      workbook.setCellContents(cell(sheetId, 0, 0), 10)
+      workbook.setCellContents(cell(sheetId, 1, 0), 20)
+    })
+
+    const undoStack = readUndoStack(workbook)
+    expect(undoStack).not.toBeNull()
+    expect(undoStack).toHaveLength(1)
+    expect(Reflect.get(undoStack?.[0], 'forward') ? Reflect.get(Reflect.get(undoStack?.[0], 'forward'), 'kind') : undefined).toBe(
+      'cell-mutations',
+    )
+    expect(Reflect.get(undoStack?.[0], 'inverse') ? Reflect.get(Reflect.get(undoStack?.[0], 'inverse'), 'kind') : undefined).toBe(
+      'cell-mutations',
+    )
   })
 
   it('flushes deferred literal edits before formula writes inside a batch', () => {
