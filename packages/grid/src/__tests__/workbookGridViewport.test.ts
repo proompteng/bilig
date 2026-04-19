@@ -39,8 +39,8 @@ describe('workbookGridViewport', () => {
       range: {
         x: 0,
         y: 1,
-        width: 6,
-        height: 6,
+        width: 9,
+        height: 16,
       },
       tx: 0,
       ty: 10,

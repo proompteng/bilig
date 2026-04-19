@@ -1,6 +1,6 @@
 import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type Viewport } from '@bilig/protocol'
 import type { getGridMetrics } from './gridMetrics.js'
-import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
+import { MAX_COLUMN_WIDTH, MAX_ROW_HEIGHT, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
 import type { Item } from './gridTypes.js'
 import type { VisibleRegionState } from './gridPointer.js'
 
@@ -75,14 +75,12 @@ export function resolveVisibleRegionFromScroll(options: {
       y: rangeY,
       width: resolveVisibleColumnCount({
         startCol: rangeX,
-        tx: horizontalAnchor.offset,
         bodyWidth,
         columnWidths,
         defaultWidth: gridMetrics.columnWidth,
       }),
       height: resolveVisibleRowCount({
         startRow: rangeY,
-        ty: verticalAnchor.offset,
         bodyHeight,
         rowHeights,
         defaultHeight: gridMetrics.rowHeight,
@@ -214,36 +212,36 @@ export function hasSelectionTargetChanged(
 
 function resolveVisibleColumnCount(options: {
   startCol: number
-  tx: number
   bodyWidth: number
   columnWidths: Readonly<Record<number, number>>
   defaultWidth: number
 }): number {
-  const { startCol, tx, bodyWidth, columnWidths, defaultWidth } = options
-  let coveredWidth = -tx
+  const { startCol, bodyWidth, columnWidths, defaultWidth } = options
+  const targetWidth = bodyWidth + MAX_COLUMN_WIDTH
+  let coveredWidth = 0
   let count = 0
-  for (let col = startCol; col < MAX_COLS && coveredWidth < bodyWidth; col += 1) {
+  for (let col = startCol; col < MAX_COLS && coveredWidth < targetWidth; col += 1) {
     coveredWidth += getResolvedColumnWidth(columnWidths, col, defaultWidth)
     count += 1
   }
-  return Math.max(1, count + 1)
+  return Math.max(1, count)
 }
 
 function resolveVisibleRowCount(options: {
   startRow: number
-  ty: number
   bodyHeight: number
   rowHeights: Readonly<Record<number, number>>
   defaultHeight: number
 }): number {
-  const { startRow, ty, bodyHeight, rowHeights, defaultHeight } = options
-  let coveredHeight = -ty
+  const { startRow, bodyHeight, rowHeights, defaultHeight } = options
+  const targetHeight = bodyHeight + MAX_ROW_HEIGHT
+  let coveredHeight = 0
   let count = 0
-  for (let row = startRow; row < MAX_ROWS && coveredHeight < bodyHeight; row += 1) {
+  for (let row = startRow; row < MAX_ROWS && coveredHeight < targetHeight; row += 1) {
     coveredHeight += getResolvedRowHeight(rowHeights, row, defaultHeight)
     count += 1
   }
-  return Math.max(1, count + 1)
+  return Math.max(1, count)
 }
 
 function resolveColumnAnchor(

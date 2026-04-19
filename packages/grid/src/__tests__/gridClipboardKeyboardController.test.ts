@@ -43,6 +43,7 @@ function KeyboardHandlerHarness(props: {
   onSelectionChange: ReturnType<typeof vi.fn>
 }) {
   const hostRef = { current: null as HTMLDivElement | null }
+  const internalClipboardRef = { current: null }
 
   useWorkbookGridKeyboardHandler({
     applyClipboardValues: vi.fn(),
@@ -54,12 +55,14 @@ function KeyboardHandlerHarness(props: {
     },
     gridSelection: createGridSelection(1, 1),
     hostRef,
+    internalClipboardRef,
     isEditingCell: false,
     onCancelEdit: vi.fn(),
     onClearCell: vi.fn(),
     onCommitEdit: vi.fn(),
     onEditorChange: vi.fn(),
     onSelectionChange: props.onSelectionChange,
+    pendingClipboardCopySequenceRef: { current: 0 },
     pendingKeyboardPasteSequenceRef: { current: 0 },
     pendingTypeSeedRef: { current: null },
     selectedCell: { col: 1, row: 1 },
@@ -158,6 +161,58 @@ describe('gridClipboardKeyboardController', () => {
     expect(internalClipboardRef.current).toEqual(clipboard)
   })
 
+  test('pastes the in-memory internal clipboard immediately while the system clipboard write is still pending', () => {
+    const applyClipboardValues = vi.fn()
+    const internalClipboardRef = {
+      current: {
+        sourceStartAddress: 'B2',
+        sourceEndAddress: 'C3',
+        signature: '3\u001f=B2*2\u001e4\u001f=B3*2',
+        plainText: '3\t=B2*2\n4\t=B3*2',
+        rowCount: 2,
+        colCount: 2,
+      },
+    }
+
+    handleGridKey({
+      applyClipboardValues,
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: '',
+      event: {
+        key: 'v',
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+      },
+      gridSelection: createGridSelection(3, 1),
+      internalClipboardRef,
+      isSelectedCellBoolean: () => false,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell: vi.fn(),
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onSelectionChange: vi.fn(),
+      pendingClipboardCopySequenceRef: { current: 1 },
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 3, row: 1 },
+      setGridSelection: vi.fn(),
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
+    })
+
+    expect(applyClipboardValues).toHaveBeenCalledWith(
+      [3, 1],
+      [
+        ['3', '=B2*2'],
+        ['4', '=B3*2'],
+      ],
+    )
+  })
+
   test('applies parsed paste payloads to the active selection and clears pending keyboard paste state', () => {
     const applyClipboardValues = vi.fn()
     const event = {
@@ -200,6 +255,7 @@ describe('gridClipboardKeyboardController', () => {
         preventDefault: vi.fn(),
       },
       gridSelection: createGridSelection(2, 4),
+      internalClipboardRef: { current: null },
       isSelectedCellBoolean: () => false,
       isEditingCell: false,
       onCancelEdit: vi.fn(),
@@ -207,6 +263,7 @@ describe('gridClipboardKeyboardController', () => {
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
       onSelectionChange,
+      pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 2, row: 4 },
@@ -236,6 +293,7 @@ describe('gridClipboardKeyboardController', () => {
         preventDefault,
       },
       gridSelection: createGridSelection(1, 1),
+      internalClipboardRef: { current: null },
       isSelectedCellBoolean: () => true,
       isEditingCell: false,
       onCancelEdit: vi.fn(),
@@ -243,6 +301,7 @@ describe('gridClipboardKeyboardController', () => {
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
       onSelectionChange: vi.fn(),
+      pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 1, row: 1 },
@@ -272,6 +331,7 @@ describe('gridClipboardKeyboardController', () => {
         preventDefault: vi.fn(),
       },
       gridSelection: createGridSelection(3, 7),
+      internalClipboardRef: { current: null },
       isSelectedCellBoolean: () => false,
       isEditingCell: false,
       onCancelEdit: vi.fn(),
@@ -279,6 +339,7 @@ describe('gridClipboardKeyboardController', () => {
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
       onSelectionChange,
+      pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
       pendingTypeSeedRef: { current: null },
       selectedCell: { col: 3, row: 7 },

@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import type { Rectangle } from './gridTypes.js'
 import type { GridTextScene } from './gridTextScene.js'
+import type { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 
 interface GridTextPaneSurfaceProps {
   readonly paneId: string
@@ -15,6 +16,11 @@ interface GridTextPaneSurfaceProps {
     readonly y: number
   }
   readonly scene: GridTextScene
+  readonly scrollAxes?: {
+    readonly x: boolean
+    readonly y: boolean
+  }
+  readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 
 const HORIZONTAL_PADDING = 8
@@ -48,6 +54,8 @@ export const GridTextPaneSurface = memo(function GridTextPaneSurface({
   surfaceSize,
   contentOffset,
   scene,
+  scrollAxes,
+  scrollTransformStore = null,
 }: GridTextPaneSurfaceProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -57,6 +65,29 @@ export const GridTextPaneSurface = memo(function GridTextPaneSurface({
     }
     noteCanvasSurfaceMount('canvas')
   }, [active])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      return
+    }
+
+    const applyContentOffset = () => {
+      const snapshot = scrollTransformStore?.getSnapshot() ?? { tx: 0, ty: 0 }
+      const nextX = contentOffset.x - (scrollAxes?.x ? snapshot.tx : 0)
+      const nextY = contentOffset.y - (scrollAxes?.y ? snapshot.ty : 0)
+      const nextTransform = `translate3d(${nextX}px, ${nextY}px, 0)`
+      if (canvas.style.transform !== nextTransform) {
+        canvas.style.transform = nextTransform
+      }
+    }
+
+    applyContentOffset()
+    if (!scrollTransformStore || (!scrollAxes?.x && !scrollAxes?.y)) {
+      return
+    }
+    return scrollTransformStore.subscribe(applyContentOffset)
+  }, [contentOffset.x, contentOffset.y, scrollAxes?.x, scrollAxes?.y, scrollTransformStore])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -93,8 +124,8 @@ export const GridTextPaneSurface = memo(function GridTextPaneSurface({
         data-testid={`grid-text-pane-${paneId}`}
         ref={canvasRef}
         style={{
-          left: contentOffset.x,
-          top: contentOffset.y,
+          left: 0,
+          top: 0,
         }}
       />
     </div>

@@ -11,6 +11,8 @@ interface WorkbookScrollPerfCounters {
   damageCells: number
   scenePacketRefreshes: number
   scenePacketPanes: number
+  visibleWindowChanges: number
+  headerPaneBuilds: number
   reactCommits: number
   canvasSurfaceMounts: number
   domSurfaceMounts: number
@@ -53,6 +55,8 @@ class WorkbookScrollPerfCollector {
     damageCells: 0,
     scenePacketRefreshes: 0,
     scenePacketPanes: 0,
+    visibleWindowChanges: 0,
+    headerPaneBuilds: 0,
     reactCommits: 0,
     canvasSurfaceMounts: 0,
     domSurfaceMounts: 0,
@@ -106,6 +110,14 @@ class WorkbookScrollPerfCollector {
   noteScenePacketRefresh(paneCount: number): void {
     this.totalCounters.scenePacketRefreshes += 1
     this.totalCounters.scenePacketPanes += paneCount
+  }
+
+  noteVisibleWindowChange(): void {
+    this.totalCounters.visibleWindowChanges += 1
+  }
+
+  noteHeaderPaneBuild(): void {
+    this.totalCounters.headerPaneBuilds += 1
   }
 
   noteSurfaceCommit(surface: string): void {
@@ -223,6 +235,8 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     damageCells: counters.damageCells - baseline.damageCells,
     scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,
     scenePacketPanes: counters.scenePacketPanes - baseline.scenePacketPanes,
+    visibleWindowChanges: counters.visibleWindowChanges - baseline.visibleWindowChanges,
+    headerPaneBuilds: counters.headerPaneBuilds - baseline.headerPaneBuilds,
     reactCommits: counters.reactCommits - baseline.reactCommits,
     canvasSurfaceMounts: counters.canvasSurfaceMounts - baseline.canvasSurfaceMounts,
     domSurfaceMounts: counters.domSurfaceMounts - baseline.domSurfaceMounts,

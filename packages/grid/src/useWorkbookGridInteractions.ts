@@ -169,6 +169,7 @@ export function useWorkbookGridInteractions(
   const columnResizeActiveRef = useRef(false)
   const lastBodyClickCellRef = useRef<Item | null>(null)
   const internalClipboardRef = useRef<InternalClipboardRange | null>(null)
+  const pendingClipboardCopySequenceRef = useRef(0)
   const pendingKeyboardPasteSequenceRef = useRef(0)
   const suppressNextNativePasteRef = useRef(false)
   const pendingTypeSeedRef = useRef<string | null>(null)
@@ -339,12 +340,14 @@ export function useWorkbookGridInteractions(
     engine,
     gridSelection,
     hostRef,
+    internalClipboardRef,
     isEditingCell,
     onCancelEdit,
     onClearCell,
     onCommitEdit,
     onEditorChange,
     onSelectionChange: emitSelectionChange,
+    pendingClipboardCopySequenceRef,
     pendingKeyboardPasteSequenceRef,
     pendingTypeSeedRef,
     selectedCell,

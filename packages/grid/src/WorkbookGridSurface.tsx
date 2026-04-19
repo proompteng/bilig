@@ -1,9 +1,8 @@
 import { Fragment, useMemo } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
-import { GridGpuSurface } from './GridGpuSurface.js'
+import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { GridGpuPaneSurface } from './GridGpuPaneSurface.js'
-import { GridTextOverlay } from './GridTextOverlay.js'
 import { GridTextPaneSurface } from './GridTextPaneSurface.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
@@ -145,7 +144,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        {renderState.residentDataPanes.map((pane) => (
+        {renderState.headerPanes.map((pane) => (
           <Fragment key={pane.paneId}>
             <GridGpuPaneSurface
               active={renderState.hostElement !== null}
@@ -153,6 +152,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
               frame={pane.frame}
               paneId={pane.paneId}
               scene={pane.gpuScene}
+              scrollAxes={pane.scrollAxes}
+              scrollTransformStore={renderState.scrollTransformStore}
               surfaceSize={pane.surfaceSize}
             />
             <GridTextPaneSurface
@@ -161,12 +162,42 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
               frame={pane.frame}
               paneId={pane.paneId}
               scene={pane.textScene}
+              scrollAxes={pane.scrollAxes}
+              scrollTransformStore={renderState.scrollTransformStore}
               surfaceSize={pane.surfaceSize}
             />
           </Fragment>
         ))}
-        <GridGpuSurface host={renderState.hostElement} scene={renderState.gpuScene} onActiveChange={renderState.setIsWebGpuActive} />
-        <GridTextOverlay active={renderState.hostElement !== null} host={renderState.hostElement} scene={renderState.textScene} />
+        {renderState.residentDataPanes.map((pane) => (
+          <Fragment key={pane.paneId}>
+            <GridGpuPaneSurface
+              active={renderState.hostElement !== null}
+              contentOffset={pane.contentOffset}
+              frame={pane.frame}
+              paneId={pane.paneId}
+              scene={pane.gpuScene}
+              scrollAxes={{
+                x: pane.paneId === 'body' || pane.paneId === 'top',
+                y: pane.paneId === 'body' || pane.paneId === 'left',
+              }}
+              scrollTransformStore={renderState.scrollTransformStore}
+              surfaceSize={pane.surfaceSize}
+            />
+            <GridTextPaneSurface
+              active={renderState.hostElement !== null}
+              contentOffset={pane.contentOffset}
+              frame={pane.frame}
+              paneId={pane.paneId}
+              scene={pane.textScene}
+              scrollAxes={{
+                x: pane.paneId === 'body' || pane.paneId === 'top',
+                y: pane.paneId === 'body' || pane.paneId === 'left',
+              }}
+              scrollTransformStore={renderState.scrollTransformStore}
+              surfaceSize={pane.surfaceSize}
+            />
+          </Fragment>
+        ))}
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"
@@ -189,26 +220,24 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
             }}
           />
         </button>
-        {renderState.fillHandleBounds ? (
-          <button
-            aria-label="Fill handle"
-            className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[var(--wb-accent)] shadow-[0_0_0_1px_rgba(33,86,58,0.32)] outline-none"
-            data-grid-fill-handle="true"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-            }}
-            onPointerDown={interactions.handleFillHandlePointerDown}
-            style={{
-              height: renderState.fillHandleBounds.height,
-              left: renderState.fillHandleBounds.x,
-              touchAction: 'none',
-              top: renderState.fillHandleBounds.y,
-              width: renderState.fillHandleBounds.width,
-            }}
-            type="button"
-          />
-        ) : null}
+        <GridFillHandleOverlay
+          getCellBounds={renderState.getCellLocalBounds}
+          hidden={
+            renderState.hostElement === null ||
+            !renderState.selectionRange ||
+            renderState.gridSelection.columns.length > 0 ||
+            renderState.gridSelection.rows.length > 0 ||
+            Boolean(renderState.fillPreviewRange) ||
+            renderState.isRangeMoveDragging
+          }
+          hostHeight={renderState.hostElement?.clientHeight ?? 0}
+          hostWidth={renderState.hostElement?.clientWidth ?? 0}
+          minX={renderState.gridMetrics.rowMarkerWidth}
+          minY={renderState.gridMetrics.headerHeight}
+          onPointerDown={interactions.handleFillHandlePointerDown}
+          scrollTransformStore={renderState.scrollTransformStore}
+          selectionRange={renderState.selectionRange}
+        />
         {renderState.fillPreviewBounds ? (
           <div
             aria-hidden="true"

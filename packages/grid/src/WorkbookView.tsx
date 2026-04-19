@@ -99,6 +99,57 @@ function clampSidePanelWidth(width: number): number {
   return Math.min(viewportAwareMax, Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(width)))
 }
 
+function sameFormulaBarProps(left: React.ComponentProps<typeof FormulaBar>, right: React.ComponentProps<typeof FormulaBar>): boolean {
+  return (
+    left.address === right.address &&
+    left.definedNames === right.definedNames &&
+    left.isEditing === right.isEditing &&
+    left.resolvedValue === right.resolvedValue &&
+    left.selectionLabel === right.selectionLabel &&
+    left.sheetName === right.sheetName &&
+    left.value === right.value
+  )
+}
+
+const MemoFormulaBar = React.memo(FormulaBar, sameFormulaBarProps)
+const MemoWorkbookSelectionStatus = React.memo(WorkbookSelectionStatus)
+function sameWorkbookSheetTabsProps(
+  left: React.ComponentProps<typeof WorkbookSheetTabs>,
+  right: React.ComponentProps<typeof WorkbookSheetTabs>,
+): boolean {
+  return left.sheetName === right.sheetName && left.sheetNames === right.sheetNames && left.trailingContent === right.trailingContent
+}
+
+const MemoWorkbookSheetTabs = React.memo(WorkbookSheetTabs, sameWorkbookSheetTabsProps)
+
+const MemoFormulaBarSurface = React.memo(function MemoFormulaBarSurface(props: React.ComponentProps<typeof FormulaBar>) {
+  return (
+    <Profiler id="workbook-formula-bar" onRender={() => noteSurfaceCommit('formulaBar')}>
+      <MemoFormulaBar {...props} />
+    </Profiler>
+  )
+}, sameFormulaBarProps)
+
+const MemoWorkbookSelectionStatusSurface = React.memo(function MemoWorkbookSelectionStatusSurface(
+  props: React.ComponentProps<typeof WorkbookSelectionStatus>,
+) {
+  return (
+    <Profiler id="workbook-status" onRender={() => noteSurfaceCommit('statusBar')}>
+      <MemoWorkbookSelectionStatus {...props} />
+    </Profiler>
+  )
+})
+
+const MemoWorkbookSheetTabsSurface = React.memo(function MemoWorkbookSheetTabsSurface(
+  props: React.ComponentProps<typeof WorkbookSheetTabs>,
+) {
+  return (
+    <Profiler id="workbook-sheet-tabs" onRender={() => noteSurfaceCommit('sheetTabs')}>
+      <MemoWorkbookSheetTabs {...props} />
+    </Profiler>
+  )
+}, sameWorkbookSheetTabsProps)
+
 export function WorkbookView({
   engine,
   sheetNames,
@@ -202,6 +253,11 @@ export function WorkbookView({
     }
   }, [])
 
+  const sheetTabsTrailingContent = React.useMemo(
+    () => <MemoWorkbookSelectionStatusSurface engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />,
+    [engine, selectionLabel, selectionSnapshot],
+  )
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans" data-testid="workbook-shell">
       {ribbon ? (
@@ -211,22 +267,20 @@ export function WorkbookView({
       ) : null}
       <div className="flex min-h-0 flex-1 bg-[var(--wb-surface)]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Profiler id="workbook-formula-bar" onRender={() => noteSurfaceCommit('formulaBar')}>
-            <FormulaBar
-              address={selectedAddr}
-              {...(definedNames ? { definedNames } : {})}
-              isEditing={isEditing}
-              onBeginEdit={onBeginFormulaEdit}
-              onAddressCommit={onAddressCommit}
-              onCancel={onCancelEdit}
-              onChange={onEditorChange}
-              onCommit={() => onCommitEdit()}
-              resolvedValue={resolvedValue}
-              selectionLabel={selectionLabel}
-              sheetName={sheetName}
-              value={editorValue}
-            />
-          </Profiler>
+          <MemoFormulaBarSurface
+            address={selectedAddr}
+            {...(definedNames ? { definedNames } : {})}
+            isEditing={isEditing}
+            onBeginEdit={onBeginFormulaEdit}
+            onAddressCommit={onAddressCommit}
+            onCancel={onCancelEdit}
+            onChange={onEditorChange}
+            onCommit={() => onCommitEdit()}
+            resolvedValue={resolvedValue}
+            selectionLabel={selectionLabel}
+            sheetName={sheetName}
+            value={editorValue}
+          />
           <Profiler id="workbook-grid" onRender={() => noteSurfaceCommit('grid')}>
             <WorkbookGridSurface
               editorValue={editorValue}
@@ -272,21 +326,15 @@ export function WorkbookView({
               sheetName={sheetName}
             />
           </Profiler>
-          <Profiler id="workbook-sheet-tabs" onRender={() => noteSurfaceCommit('sheetTabs')}>
-            <WorkbookSheetTabs
-              onCreateSheet={onCreateSheet}
-              onDeleteSheet={onDeleteSheet}
-              onRenameSheet={onRenameSheet}
-              onSelectSheet={onSelectSheet}
-              sheetName={sheetName}
-              sheetNames={sheetNames}
-              trailingContent={
-                <Profiler id="workbook-status" onRender={() => noteSurfaceCommit('statusBar')}>
-                  <WorkbookSelectionStatus engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />
-                </Profiler>
-              }
-            />
-          </Profiler>
+          <MemoWorkbookSheetTabsSurface
+            onCreateSheet={onCreateSheet}
+            onDeleteSheet={onDeleteSheet}
+            onRenameSheet={onRenameSheet}
+            onSelectSheet={onSelectSheet}
+            sheetName={sheetName}
+            sheetNames={sheetNames}
+            trailingContent={sheetTabsTrailingContent}
+          />
         </div>
         {sidePanel ? (
           <aside

@@ -5,6 +5,7 @@ import net from 'node:net'
 
 const textDecoder = new TextDecoder()
 const playwrightArgs = process.argv.slice(2)
+const CLIPBOARD_GLOBAL_GREP = '@clipboard-global'
 const requestedBrowserStack = process.env['BILIG_BROWSER_STACK'] ?? 'auto'
 const normalizedBrowserStack =
   requestedBrowserStack === 'compose' || requestedBrowserStack === 'local' || requestedBrowserStack === 'auto'
@@ -395,6 +396,16 @@ function runPlaywright(args: string[]): void {
   }
 }
 
+function runConfiguredPlaywrightSuites(): void {
+  if (playwrightArgs.length > 0) {
+    runPlaywright(playwrightArgs)
+    return
+  }
+
+  runPlaywright(['--grep-invert', CLIPBOARD_GLOBAL_GREP])
+  runPlaywright(['--workers=1', '--grep', CLIPBOARD_GLOBAL_GREP])
+}
+
 async function pollHttp(url: string, deadline: number, lastError = 'unknown error'): Promise<void> {
   if (Date.now() >= deadline) {
     throw new Error(`Timed out waiting for ${url}: ${lastError}`)
@@ -552,7 +563,7 @@ async function runComposePlaywright(): Promise<void> {
     await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs)
     await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs)
     await waitForHttp(getE2eZeroKeepaliveUrl(), composeStartupTimeoutMs)
-    runPlaywright(playwrightArgs)
+    runConfiguredPlaywrightSuites()
   } catch (error) {
     const logs = collectComposeLogs()
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
@@ -567,6 +578,6 @@ if (browserStack === 'compose') {
   await runComposePlaywright()
 } else {
   terminatePreviewServers()
-  runPlaywright(playwrightArgs)
+  runConfiguredPlaywrightSuites()
   terminatePreviewServers()
 }

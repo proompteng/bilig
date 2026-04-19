@@ -18,12 +18,14 @@ export function useWorkbookGridKeyboardHandler(input: {
   engine: { getCell(sheetName: string, address: string): { value: { tag: ValueTag } } }
   gridSelection: GridSelection
   hostRef: MutableRefObject<HTMLDivElement | null>
+  internalClipboardRef: MutableRefObject<InternalClipboardRange | null>
   isEditingCell: boolean
   onCancelEdit: () => void
   onClearCell: () => void
   onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1]) => void
   onEditorChange: (next: string) => void
   onSelectionChange: (selection: GridSelection) => void
+  pendingClipboardCopySequenceRef: MutableRefObject<number>
   pendingKeyboardPasteSequenceRef: MutableRefObject<number>
   pendingTypeSeedRef: MutableRefObject<string | null>
   selectedCell: { col: number; row: number }
@@ -41,6 +43,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         editorValue: input.editorValue,
         event,
         gridSelection: input.gridSelection,
+        internalClipboardRef: input.internalClipboardRef,
         isSelectedCellBoolean: () =>
           input.engine.getCell(input.sheetName, formatAddress(input.selectedCell.row, input.selectedCell.col)).value.tag ===
           ValueTag.Boolean,
@@ -50,6 +53,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         onCommitEdit: input.onCommitEdit,
         onEditorChange: input.onEditorChange,
         onSelectionChange: input.onSelectionChange,
+        pendingClipboardCopySequenceRef: input.pendingClipboardCopySequenceRef,
         pendingKeyboardPasteSequenceRef: input.pendingKeyboardPasteSequenceRef,
         pendingTypeSeedRef: input.pendingTypeSeedRef,
         selectedCell: input.selectedCell,

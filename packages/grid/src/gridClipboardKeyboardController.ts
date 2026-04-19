@@ -65,6 +65,7 @@ interface HandleGridKeyOptions {
   editorValue: string
   event: GridKeyboardEventLike
   gridSelection: GridSelection
+  internalClipboardRef: MutableRefObject<InternalClipboardRange | null>
   isSelectedCellBoolean(this: void): boolean
   isEditingCell: boolean
   onCancelEdit(this: void): void
@@ -72,6 +73,7 @@ interface HandleGridKeyOptions {
   onCommitEdit(this: void, movement?: EditMovement): void
   onEditorChange(this: void, next: string): void
   onSelectionChange(this: void, selection: GridSelection): void
+  pendingClipboardCopySequenceRef: MutableRefObject<number>
   pendingKeyboardPasteSequenceRef: MutableRefObject<number>
   pendingTypeSeedRef: MutableRefObject<string | null>
   selectedCell: SelectedCellLike
@@ -173,6 +175,7 @@ export function handleGridKey({
   editorValue,
   event,
   gridSelection,
+  internalClipboardRef,
   isSelectedCellBoolean,
   isEditingCell,
   onCancelEdit,
@@ -180,6 +183,7 @@ export function handleGridKey({
   onCommitEdit,
   onEditorChange,
   onSelectionChange,
+  pendingClipboardCopySequenceRef,
   pendingKeyboardPasteSequenceRef,
   pendingTypeSeedRef,
   selectedCell,
@@ -258,10 +262,20 @@ export function handleGridKey({
     case 'clipboard-copy': {
       const clipboard = captureInternalClipboardSelection()
       if (clipboard && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        pendingClipboardCopySequenceRef.current += 1
+        const sequence = pendingClipboardCopySequenceRef.current
         void (async () => {
           try {
             await navigator.clipboard.writeText(clipboard.plainText)
-          } catch {}
+          } catch {
+            if (pendingClipboardCopySequenceRef.current === sequence) {
+              pendingClipboardCopySequenceRef.current = 0
+            }
+            return
+          }
+          if (pendingClipboardCopySequenceRef.current === sequence) {
+            pendingClipboardCopySequenceRef.current = 0
+          }
         })()
       }
       return
@@ -272,6 +286,15 @@ export function handleGridKey({
     case 'clipboard-paste': {
       pendingKeyboardPasteSequenceRef.current += 1
       const sequence = pendingKeyboardPasteSequenceRef.current
+      if (pendingClipboardCopySequenceRef.current !== 0 && internalClipboardRef.current) {
+        if (pendingKeyboardPasteSequenceRef.current !== sequence) {
+          return
+        }
+        pendingKeyboardPasteSequenceRef.current = 0
+        applyClipboardValues(action.target, parseClipboardPlainText(internalClipboardRef.current.plainText))
+        suppressNextNativePasteRef.current = true
+        return
+      }
       if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
         void (async () => {
           try {

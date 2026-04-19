@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { Rectangle } from './gridTypes.js'
+import type { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 
 interface GridGpuPaneSurfaceProps {
   readonly paneId: string
@@ -15,6 +16,11 @@ interface GridGpuPaneSurfaceProps {
     readonly y: number
   }
   readonly scene: GridGpuScene
+  readonly scrollAxes?: {
+    readonly x: boolean
+    readonly y: boolean
+  }
+  readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 
 const GPU_BUFFER_USAGE_COPY_DST = 0x0008
@@ -110,6 +116,8 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
   surfaceSize,
   contentOffset,
   scene,
+  scrollAxes,
+  scrollTransformStore = null,
 }: GridGpuPaneSurfaceProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artifactsRef = useRef<WebGpuArtifacts | null>(null)
@@ -122,6 +130,29 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
     }
     noteCanvasSurfaceMount('canvas')
   }, [active])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      return
+    }
+
+    const applyContentOffset = () => {
+      const snapshot = scrollTransformStore?.getSnapshot() ?? { tx: 0, ty: 0 }
+      const nextX = contentOffset.x - (scrollAxes?.x ? snapshot.tx : 0)
+      const nextY = contentOffset.y - (scrollAxes?.y ? snapshot.ty : 0)
+      const nextTransform = `translate3d(${nextX}px, ${nextY}px, 0)`
+      if (canvas.style.transform !== nextTransform) {
+        canvas.style.transform = nextTransform
+      }
+    }
+
+    applyContentOffset()
+    if (!scrollTransformStore || (!scrollAxes?.x && !scrollAxes?.y)) {
+      return
+    }
+    return scrollTransformStore.subscribe(applyContentOffset)
+  }, [contentOffset.x, contentOffset.y, scrollAxes?.x, scrollAxes?.y, scrollTransformStore])
 
   useEffect(() => {
     let cancelled = false
@@ -235,8 +266,8 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
         data-testid={`grid-gpu-pane-${paneId}`}
         ref={canvasRef}
         style={{
-          left: contentOffset.x,
-          top: contentOffset.y,
+          left: 0,
+          top: 0,
           width: surfaceSize.width,
           height: surfaceSize.height,
         }}

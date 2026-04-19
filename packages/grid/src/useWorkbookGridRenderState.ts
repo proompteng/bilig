@@ -1,4 +1,4 @@
-import { useDeferredValue, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
@@ -17,7 +17,8 @@ import {
   resolveRowOffset,
 } from './gridMetrics.js'
 import { createGridSelection, isSheetSelection } from './gridSelection.js'
-import { resolveFillHandleOverlayBounds, resolveFillHandlePreviewBounds, type FillHandleOverlayBounds } from './gridFillHandle.js'
+import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
+import { buildHeaderPaneStates } from './gridHeaderPanes.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
@@ -38,12 +39,27 @@ import {
   resolveVisibleRegionFromScroll,
   scrollCellIntoView,
 } from './workbookGridViewport.js'
+import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 
 function noteViewportSubscription(): void {
   if (typeof window === 'undefined') {
     return
   }
   ;(window as Window & { __biligScrollPerf?: { noteViewportSubscription?: () => void } }).__biligScrollPerf?.noteViewportSubscription?.()
+}
+
+function noteVisibleWindowChange(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(window as Window & { __biligScrollPerf?: { noteVisibleWindowChange?: () => void } }).__biligScrollPerf?.noteVisibleWindowChange?.()
+}
+
+function noteHeaderPaneBuild(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
 }
 
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
@@ -56,12 +72,10 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
   return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height
 }
 
-function sameVisibleRegion(left: VisibleRegionState, right: VisibleRegionState): boolean {
+function sameVisibleRegionWindow(left: VisibleRegionState, right: VisibleRegionState): boolean {
   return (
     (left.freezeCols ?? 0) === (right.freezeCols ?? 0) &&
     (left.freezeRows ?? 0) === (right.freezeRows ?? 0) &&
-    left.tx === right.tx &&
-    left.ty === right.ty &&
     left.range.x === right.range.x &&
     left.range.y === right.range.y &&
     left.range.width === right.range.width &&
@@ -163,6 +177,8 @@ export function useWorkbookGridRenderState(input: {
   const restoredViewportTokenRef = useRef<number | null>(null)
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const scrollSyncFrameRef = useRef<number | null>(null)
+  const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
+  const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
   const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
@@ -175,7 +191,6 @@ export function useWorkbookGridRenderState(input: {
   const [activeResizeColumn, setActiveResizeColumn] = useState<number | null>(null)
   const [activeResizeRow, setActiveResizeRow] = useState<number | null>(null)
   const [activeHeaderDrag, setActiveHeaderDrag] = useState<HeaderSelection | null>(null)
-  const [isWebGpuActive, setIsWebGpuActive] = useState(false)
   const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
@@ -272,12 +287,14 @@ export function useWorkbookGridRenderState(input: {
     [freezeRows, gridMetrics, rowHeights],
   )
   const selectionRange = gridSelection.current?.range ?? null
+  const scrollTransformStore = scrollTransformStoreRef.current
 
   const getCellLocalBounds = useCallback(
     (col: number, row: number): Rectangle | undefined => {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return undefined
       }
+      const scrollTransform = scrollTransformRef.current
       return {
         x:
           col < freezeCols
@@ -286,7 +303,7 @@ export function useWorkbookGridRenderState(input: {
               frozenColumnWidth +
               resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
               resolveColumnOffset(visibleRegion.range.x, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
-              visibleRegion.tx,
+              scrollTransform.tx,
         y:
           row < freezeRows
             ? gridMetrics.headerHeight + resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight)
@@ -294,7 +311,7 @@ export function useWorkbookGridRenderState(input: {
               frozenRowHeight +
               resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
               resolveRowOffset(visibleRegion.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight) -
-              visibleRegion.ty,
+              scrollTransform.ty,
         width: getResolvedColumnWidth(columnWidths, col, gridMetrics.columnWidth),
         height: getResolvedRowHeight(rowHeights, row, gridMetrics.rowHeight),
       }
@@ -314,8 +331,6 @@ export function useWorkbookGridRenderState(input: {
       sortedRowHeightOverrides,
       visibleRegion.range.x,
       visibleRegion.range.y,
-      visibleRegion.tx,
-      visibleRegion.ty,
     ],
   )
 
@@ -334,6 +349,48 @@ export function useWorkbookGridRenderState(input: {
       }
     },
     [getCellLocalBounds],
+  )
+
+  const getCellLocalBoundsAtZeroOffset = useCallback(
+    (col: number, row: number): Rectangle | undefined => {
+      if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+        return undefined
+      }
+      return {
+        x:
+          col < freezeCols
+            ? gridMetrics.rowMarkerWidth + resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth)
+            : gridMetrics.rowMarkerWidth +
+              frozenColumnWidth +
+              resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
+              resolveColumnOffset(visibleRegion.range.x, sortedColumnWidthOverrides, gridMetrics.columnWidth),
+        y:
+          row < freezeRows
+            ? gridMetrics.headerHeight + resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight)
+            : gridMetrics.headerHeight +
+              frozenRowHeight +
+              resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
+              resolveRowOffset(visibleRegion.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight),
+        width: getResolvedColumnWidth(columnWidths, col, gridMetrics.columnWidth),
+        height: getResolvedRowHeight(rowHeights, row, gridMetrics.rowHeight),
+      }
+    },
+    [
+      columnWidths,
+      freezeCols,
+      freezeRows,
+      frozenColumnWidth,
+      frozenRowHeight,
+      gridMetrics.columnWidth,
+      gridMetrics.headerHeight,
+      gridMetrics.rowHeight,
+      gridMetrics.rowMarkerWidth,
+      rowHeights,
+      sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
+      visibleRegion.range.x,
+      visibleRegion.range.y,
+    ],
   )
 
   const viewport = useMemo<Viewport>(
@@ -359,8 +416,14 @@ export function useWorkbookGridRenderState(input: {
     return collectViewportItems(viewport, { freezeRows, freezeCols })
   }, [freezeCols, freezeRows, viewport])
   const visibleAddresses = useMemo(() => visibleItems.map(([col, row]) => formatAddress(row, col)), [visibleItems])
-  const deferredVisibleRegion = useDeferredValue(visibleRegion)
-  const deferredVisibleItems = useDeferredValue(visibleItems)
+  const visibleHeaderRegion = useMemo(
+    () => ({
+      ...visibleRegion,
+      tx: 0,
+      ty: 0,
+    }),
+    [visibleRegion],
+  )
 
   const invalidateScene = useCallback(() => {
     setSceneRevision((current) => current + 1)
@@ -382,8 +445,19 @@ export function useWorkbookGridRenderState(input: {
       rowHeights,
       gridMetrics,
     })
-    setVisibleRegion((current) => (sameVisibleRegion(current, next) ? current : next))
-  }, [columnWidths, freezeCols, freezeRows, gridMetrics, rowHeights])
+    scrollTransformRef.current = {
+      tx: next.tx,
+      ty: next.ty,
+    }
+    scrollTransformStore.setSnapshot(scrollTransformRef.current)
+    setVisibleRegion((current) => {
+      if (sameVisibleRegionWindow(current, next)) {
+        return current
+      }
+      noteVisibleWindowChange()
+      return next
+    })
+  }, [columnWidths, freezeCols, freezeRows, gridMetrics, rowHeights, scrollTransformStore])
 
   useEffect(() => {
     const preview = columnResizePreviewRef.current
@@ -591,8 +665,8 @@ export function useWorkbookGridRenderState(input: {
         residentViewport,
         visibleViewport: viewport,
         visibleRegion: {
-          tx: visibleRegion.tx,
-          ty: visibleRegion.ty,
+          tx: 0,
+          ty: 0,
         },
         gridMetrics,
         sortedColumnWidthOverrides,
@@ -615,12 +689,23 @@ export function useWorkbookGridRenderState(input: {
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
       viewport,
-      visibleRegion.tx,
-      visibleRegion.ty,
     ],
   )
 
-  const gpuScene = useMemo<GridGpuScene>(() => {
+  const visibleBodyWidth = useMemo(
+    () =>
+      resolveColumnOffset(viewport.colEnd + 1, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
+      resolveColumnOffset(viewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth),
+    [gridMetrics.columnWidth, sortedColumnWidthOverrides, viewport.colEnd, viewport.colStart],
+  )
+  const visibleBodyHeight = useMemo(
+    () =>
+      resolveRowOffset(viewport.rowEnd + 1, sortedRowHeightOverrides, gridMetrics.rowHeight) -
+      resolveRowOffset(viewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight),
+    [gridMetrics.rowHeight, sortedRowHeightOverrides, viewport.rowEnd, viewport.rowStart],
+  )
+
+  const headerGpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
       return emptyGpuScene
     }
@@ -640,22 +725,20 @@ export function useWorkbookGridRenderState(input: {
       selectedCell: [selectedCell.col, selectedCell.row],
       selectionRange,
       sheetName,
-      visibleItems: deferredVisibleItems,
-      visibleRegion: deferredVisibleRegion,
+      visibleItems,
+      visibleRegion: visibleHeaderRegion,
       hostBounds: {
         left: 0,
         top: 0,
       },
-      getCellBounds: getCellLocalBounds,
+      getCellBounds: getCellLocalBoundsAtZeroOffset,
     })
   }, [
     activeHeaderDrag,
     columnWidths,
-    deferredVisibleItems,
-    deferredVisibleRegion,
     emptyGpuScene,
     engine,
-    getCellLocalBounds,
+    getCellLocalBoundsAtZeroOffset,
     gridMetrics,
     gridSelection,
     hostElement,
@@ -669,9 +752,11 @@ export function useWorkbookGridRenderState(input: {
     selectedCell.row,
     selectionRange,
     sheetName,
+    visibleHeaderRegion,
+    visibleItems,
   ])
 
-  const textScene = useMemo<GridTextScene>(() => {
+  const headerTextScene = useMemo<GridTextScene>(() => {
     if (!hostElement) {
       return emptyTextScene
     }
@@ -690,24 +775,22 @@ export function useWorkbookGridRenderState(input: {
       selectedCellSnapshot,
       selectionRange,
       sheetName,
-      visibleItems: deferredVisibleItems,
-      visibleRegion: deferredVisibleRegion,
+      visibleItems,
+      visibleRegion: visibleHeaderRegion,
       hostBounds: {
         left: 0,
         top: 0,
         width: hostClientWidth,
         height: hostClientHeight,
       },
-      getCellBounds: getCellLocalBounds,
+      getCellBounds: getCellLocalBoundsAtZeroOffset,
     })
   }, [
     activeHeaderDrag,
     columnWidths,
-    deferredVisibleItems,
-    deferredVisibleRegion,
     emptyTextScene,
     engine,
-    getCellLocalBounds,
+    getCellLocalBoundsAtZeroOffset,
     gridMetrics,
     hostElement,
     hostClientHeight,
@@ -722,41 +805,33 @@ export function useWorkbookGridRenderState(input: {
     selectedCell.row,
     selectionRange,
     sheetName,
+    visibleHeaderRegion,
+    visibleItems,
   ])
 
-  const fillHandleBounds = useMemo<FillHandleOverlayBounds | undefined>(() => {
-    if (
-      !hostElement ||
-      !selectionRange ||
-      gridSelection.columns.length > 0 ||
-      gridSelection.rows.length > 0 ||
-      fillPreviewRange ||
-      isRangeMoveDragging
-    ) {
-      return undefined
-    }
-    return resolveFillHandleOverlayBounds({
-      sourceRange: selectionRange,
-      hostBounds: {
-        left: 0,
-        top: 0,
-        width: hostElement.clientWidth,
-        height: hostElement.clientHeight,
-      },
-      getCellBounds: getCellLocalBounds,
-      minX: gridMetrics.rowMarkerWidth,
-      minY: gridMetrics.headerHeight,
+  const headerPanes = useMemo(() => {
+    noteHeaderPaneBuild()
+    return buildHeaderPaneStates({
+      gpuScene: headerGpuScene,
+      textScene: headerTextScene,
+      hostWidth: hostClientWidth,
+      hostHeight: hostClientHeight,
+      gridMetrics,
+      frozenColumnWidth,
+      frozenRowHeight,
+      visibleBodyWidth,
+      visibleBodyHeight,
     })
   }, [
-    fillPreviewRange,
-    getCellLocalBounds,
-    gridMetrics.headerHeight,
-    gridMetrics.rowMarkerWidth,
-    gridSelection.columns.length,
-    gridSelection.rows.length,
-    hostElement,
-    isRangeMoveDragging,
-    selectionRange,
+    frozenColumnWidth,
+    frozenRowHeight,
+    gridMetrics,
+    headerGpuScene,
+    headerTextScene,
+    hostClientHeight,
+    hostClientWidth,
+    visibleBodyHeight,
+    visibleBodyWidth,
   ])
 
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
@@ -848,10 +923,12 @@ export function useWorkbookGridRenderState(input: {
     }
 
     const frame = window.requestAnimationFrame(refreshOverlayBounds)
+    const unsubscribeScrollTransform = scrollTransformStore.subscribe(refreshOverlayBounds)
     return () => {
       window.cancelAnimationFrame(frame)
+      unsubscribeScrollTransform()
     }
-  }, [isEditingCell, refreshOverlayBounds, visibleRegion.tx, visibleRegion.ty])
+  }, [isEditingCell, refreshOverlayBounds, scrollTransformStore])
 
   useEffect(() => {
     if (!isEditingCell) {
@@ -1065,7 +1142,6 @@ export function useWorkbookGridRenderState(input: {
     commitColumnWidth,
     commitRowHeight,
     computeAutofitColumnWidth,
-    fillHandleBounds,
     fillPreviewBounds,
     fillPreviewRange,
     focusGrid,
@@ -1077,20 +1153,20 @@ export function useWorkbookGridRenderState(input: {
     gridMetrics,
     gridSelection,
     gridTheme,
-    gpuScene,
     handleHostRef,
+    headerPanes,
     hostElement,
     hostRef,
     hoverState,
     isEntireSheetSelected: isSheetSelection(gridSelection),
     isFillHandleDragging,
     isRangeMoveDragging,
-    isWebGpuActive,
     overlayStyle,
     previewColumnWidth,
     previewRowHeight,
     residentDataPanes,
     rowHeights,
+    scrollTransformStore,
     scrollViewportRef,
     selectedCell,
     selectionRange,
@@ -1102,8 +1178,6 @@ export function useWorkbookGridRenderState(input: {
     setHoverState,
     setIsFillHandleDragging,
     setIsRangeMoveDragging,
-    setIsWebGpuActive,
-    textScene,
     totalGridHeight,
     totalGridWidth,
     visibleRegion,

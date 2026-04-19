@@ -68,8 +68,10 @@ test.describe('web app scroll performance', () => {
     expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(1)
     expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBeLessThanOrEqual(1)
 
-    await expect(page.getByTestId('grid-text-overlay')).toHaveJSProperty('tagName', 'CANVAS')
-    await expect(page.locator('[data-testid="grid-text-overlay"] span')).toHaveCount(0)
+    await expect(page.getByTestId('grid-text-pane-body')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-overlay')).toHaveCount(0)
   })
 
   test('keeps frozen-pane browse smooth without repainting resident body or frozen data panes inside a tile window', async ({
