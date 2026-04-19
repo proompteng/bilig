@@ -129,18 +129,6 @@ function arrayValuesEqual(left: ArrayLike<number>, right: ArrayLike<number>): bo
   return true
 }
 
-function stringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false
-    }
-  }
-  return true
-}
-
 function hasStableStructuralSymbolicRangeLayout(
   current: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
   next: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
@@ -205,7 +193,6 @@ function structuralRewritePreservesBinding(
     rewritten.compiled.symbolicSpills.length === 0 &&
     formula.directLookup === undefined &&
     formula.directCriteria === undefined &&
-    stringArraysEqual(formula.compiled.deps, rewritten.compiled.deps) &&
     arrayValuesEqual(formula.compiled.program, rewritten.compiled.program) &&
     arrayValuesEqual(formula.compiled.constants, rewritten.compiled.constants) &&
     formula.compiled.mode === rewritten.compiled.mode &&
@@ -541,12 +528,20 @@ export function createEngineStructureService(args: {
         rewritten,
         formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
       )
+      const hasOnlyPlaceholderDirectDependencies =
+        formula.dependencyIndices.length > 0 &&
+        !formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex))
+      const rewrittenDirectDependenciesChanged =
+        formula.compiled.deps.length !== rewritten.compiled.deps.length ||
+        formula.compiled.deps.some((dependency, index) => dependency !== rewritten.compiled.deps[index])
+      const rewrittenPlaceholderDependencyNeedsRebind =
+        preservesBinding && rewrittenDirectDependenciesChanged && hasOnlyPlaceholderDirectDependencies
       inputs.push({
         cellIndex,
         ownerSheetName,
         source: rewritten.source,
         compiled: rewritten.compiled,
-        preservesBinding,
+        preservesBinding: preservesBinding && !rewrittenPlaceholderDependencyNeedsRebind,
         preservesValue:
           structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
           structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform),
