@@ -96,6 +96,9 @@ export function useWorkbookGridKeyboardHandler(input: {
         shiftKey: event.shiftKey,
         preventDefault: () => event.preventDefault(),
       })
+      if (event.defaultPrevented) {
+        ;(event as KeyboardEvent & { __biligGridHandled?: boolean }).__biligGridHandled = true
+      }
     }
 
     window.addEventListener('keydown', handleWindowKeyDown, true)

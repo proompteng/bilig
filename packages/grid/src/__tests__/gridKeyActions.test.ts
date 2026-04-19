@@ -17,6 +17,21 @@ describe('gridKeyActions', () => {
     ).toEqual({ kind: 'edit-append', value: 'abcx' })
   })
 
+  test('ignores printable characters during edit mode when the editor input is focused', () => {
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'x', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: true,
+        editorValue: 'abc',
+        editorInputFocused: true,
+        pendingTypeSeed: null,
+        selectedCell: [0, 0],
+        currentSelectionCell: [0, 0],
+        currentRangeAnchor: [0, 0],
+      }),
+    ).toEqual({ kind: 'none' })
+  })
+
   test('commits and cancels edit mode keys before the overlay input takes focus', () => {
     expect(
       resolveGridKeyAction({

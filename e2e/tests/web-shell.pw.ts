@@ -335,7 +335,7 @@ test('web app accepts numpad digits for in-cell numeric entry', async ({ page })
   await expect(formulaInput).toHaveValue('123')
 })
 
-test('web app supports F2 edit in the product shell', async ({ page }) => {
+test('@browser-serial web app supports F2 edit in the product shell', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)
   await waitForWorkbookReady(page)
@@ -484,10 +484,15 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
   await clickProductCell(page, 2, 4)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
   await expect(formulaInput).toHaveValue(sampleText)
-  await expect(page.getByTestId('grid-text-pane-body')).toHaveJSProperty('tagName', 'CANVAS')
-  await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
-  await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
-  await expect(page.getByTestId('grid-text-overlay')).toHaveCount(0)
+  const supportsWebGpu = await page.evaluate(() => 'gpu' in navigator)
+  if (supportsWebGpu) {
+    await expect(page.getByTestId('grid-pane-renderer')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-pane-body')).toHaveCount(0)
+  } else {
+    await expect(page.getByTestId('grid-text-pane-body')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
+    await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
+  }
 })
 
 test('web app supports fill-handle propagation', async ({ page }) => {

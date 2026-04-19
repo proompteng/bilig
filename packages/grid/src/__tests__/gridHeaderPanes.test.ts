@@ -60,8 +60,8 @@ describe('buildHeaderPaneStates', () => {
       gridMetrics,
       frozenColumnWidth: 80,
       frozenRowHeight: 44,
-      visibleBodyWidth: 200,
-      visibleBodyHeight: 120,
+      residentBodyWidth: 200,
+      residentBodyHeight: 120,
     })
 
     expect(panes.map((pane) => pane.paneId)).toEqual(['top-frozen', 'top-body', 'left-frozen', 'left-body'])
@@ -75,5 +75,7 @@ describe('buildHeaderPaneStates', () => {
     expect(panes.find((pane) => pane.paneId === 'top-body')?.surfaceSize.width).toBe(200)
     expect(panes.find((pane) => pane.paneId === 'left-frozen')?.surfaceSize.height).toBe(44)
     expect(panes.find((pane) => pane.paneId === 'left-body')?.surfaceSize.height).toBe(120)
+    expect(panes.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(panes.find((pane) => pane.paneId === 'left-body')?.contentOffset).toEqual({ x: 0, y: 0 })
   })
 })

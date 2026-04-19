@@ -475,6 +475,14 @@ export class WorkbookWorkerRuntime {
     })
   }
 
+  async materializeProjectionEngine(): Promise<void> {
+    const hadInstalledEngine = this.engine !== null
+    await this.getProjectionEngine()
+    if (!hadInstalledEngine && this.engine) {
+      this.broadcastViewportPatches(null, this.getCurrentMetrics())
+    }
+  }
+
   listPendingMutations(): PendingWorkbookMutation[] {
     return this.mutationJournal.listPendingMutations()
   }
@@ -804,9 +812,11 @@ export class WorkbookWorkerRuntime {
         }
       },
       schedule: (callback) => {
-        setTimeout(() => {
-          callback()
-        }, 0)
+        if (typeof queueMicrotask === 'function') {
+          queueMicrotask(callback)
+          return
+        }
+        setTimeout(callback, 0)
       },
     })
   }

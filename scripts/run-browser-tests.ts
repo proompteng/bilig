@@ -6,6 +6,8 @@ import net from 'node:net'
 const textDecoder = new TextDecoder()
 const playwrightArgs = process.argv.slice(2)
 const CLIPBOARD_GLOBAL_GREP = '@clipboard-global'
+const BROWSER_PERF_GREP = '@browser-perf'
+const BROWSER_SERIAL_GREP = '@browser-serial'
 const requestedBrowserStack = process.env['BILIG_BROWSER_STACK'] ?? 'auto'
 const normalizedBrowserStack =
   requestedBrowserStack === 'compose' || requestedBrowserStack === 'local' || requestedBrowserStack === 'auto'
@@ -402,7 +404,9 @@ function runConfiguredPlaywrightSuites(): void {
     return
   }
 
-  runPlaywright(['--grep-invert', CLIPBOARD_GLOBAL_GREP])
+  runPlaywright(['--grep-invert', `${CLIPBOARD_GLOBAL_GREP}|${BROWSER_PERF_GREP}|${BROWSER_SERIAL_GREP}`])
+  runPlaywright(['--workers=1', '--grep', BROWSER_PERF_GREP])
+  runPlaywright(['--workers=1', '--grep', BROWSER_SERIAL_GREP])
   runPlaywright(['--workers=1', '--grep', CLIPBOARD_GLOBAL_GREP])
 }
 

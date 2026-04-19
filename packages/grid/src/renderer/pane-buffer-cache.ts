@@ -1,10 +1,17 @@
+import type { GridGpuScene } from '../gridGpuScene.js'
+import type { GridTextScene } from '../gridTextScene.js'
+import type { TextDecorationRect } from './text-quad-buffer.js'
+
 export interface WorkbookPaneBufferEntry {
   rectBuffer: GPUBuffer | null
   rectCapacity: number
   rectCount: number
+  rectScene: GridGpuScene | null
   textBuffer: GPUBuffer | null
   textCapacity: number
   textCount: number
+  textScene: GridTextScene | null
+  decorationRects: readonly TextDecorationRect[] | null
 }
 
 function createEmptyEntry(): WorkbookPaneBufferEntry {
@@ -12,9 +19,12 @@ function createEmptyEntry(): WorkbookPaneBufferEntry {
     rectBuffer: null,
     rectCapacity: 0,
     rectCount: 0,
+    rectScene: null,
     textBuffer: null,
     textCapacity: 0,
     textCount: 0,
+    textScene: null,
+    decorationRects: null,
   }
 }
 

@@ -237,6 +237,7 @@ function WorkerWorkbookAppInner({
                 definedNames={app.definedNames}
                 isEditing={Boolean(app.writesAllowed && app.isEditing)}
                 isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
+                getCellEditorSeed={app.getCellEditorSeed}
                 onAddressCommit={(input) => {
                   const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
                   if (!nextTarget) {
@@ -248,9 +249,7 @@ function WorkerWorkbookAppInner({
                 onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
                   return (async () => {
                     try {
-                      await app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, fallbackWidth, {
-                        flush: true,
-                      })
+                      await app.autofitColumn(app.selection.sheetName, columnIndex, fallbackWidth)
                     } catch (error) {
                       app.reportRuntimeError(error)
                     }

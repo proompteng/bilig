@@ -42,3 +42,22 @@ export interface WorkbookPaneRenderState extends WorkbookPaneScenePacket {
     readonly y: number
   }
 }
+
+export interface WorkbookPaneScrollAxes {
+  readonly x: boolean
+  readonly y: boolean
+}
+
+export interface WorkbookRenderPaneState {
+  readonly paneId: string
+  readonly generation: number
+  readonly frame: Rectangle
+  readonly surfaceSize: WorkbookPaneSurfaceSize
+  readonly contentOffset: {
+    readonly x: number
+    readonly y: number
+  }
+  readonly scrollAxes: WorkbookPaneScrollAxes
+  readonly gpuScene: GridGpuScene
+  readonly textScene: GridTextScene
+}

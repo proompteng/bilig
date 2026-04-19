@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import type { EditMovement } from './SheetGridView.js'
 
 function normalizeNumpadKey(key: string, code: string): string | null {
@@ -65,7 +65,7 @@ export function CellEditorOverlay({
   const blurArmedRef = useRef(false)
   const MAX_EDITOR_HEIGHT = 220
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     blurArmedRef.current = false
     inputRef.current?.focus()
     if (selectionBehavior === 'select-all') {
@@ -149,6 +149,19 @@ export function CellEditorOverlay({
             onChange(nextValue)
             window.requestAnimationFrame(() => {
               const caretPosition = selectionStart + normalizedNumpadKey.length
+              inputRef.current?.setSelectionRange(caretPosition, caretPosition)
+            })
+            return
+          }
+          if (!event.nativeEvent.isComposing && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault()
+            const input = event.currentTarget
+            const selectionStart = input.selectionStart ?? value.length
+            const selectionEnd = input.selectionEnd ?? value.length
+            const nextValue = `${value.slice(0, selectionStart)}${event.key}${value.slice(selectionEnd)}`
+            onChange(nextValue)
+            window.requestAnimationFrame(() => {
+              const caretPosition = selectionStart + event.key.length
               inputRef.current?.setSelectionRange(caretPosition, caretPosition)
             })
             return

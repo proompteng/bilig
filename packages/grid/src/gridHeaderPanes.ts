@@ -1,25 +1,10 @@
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { GridTextItem, GridTextScene } from './gridTextScene.js'
 import type { GridMetrics } from './gridMetrics.js'
-import type { Rectangle } from './gridTypes.js'
+import type { WorkbookRenderPaneState } from './renderer/pane-scene-types.js'
 
-export interface GridHeaderPaneState {
+export interface GridHeaderPaneState extends WorkbookRenderPaneState {
   readonly paneId: 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body'
-  readonly frame: Rectangle
-  readonly surfaceSize: {
-    readonly width: number
-    readonly height: number
-  }
-  readonly contentOffset: {
-    readonly x: number
-    readonly y: number
-  }
-  readonly scrollAxes: {
-    readonly x: boolean
-    readonly y: boolean
-  }
-  readonly gpuScene: GridGpuScene
-  readonly textScene: GridTextScene
 }
 
 interface ClipRect {
@@ -95,8 +80,8 @@ export function buildHeaderPaneStates(input: {
   readonly gridMetrics: GridMetrics
   readonly frozenColumnWidth: number
   readonly frozenRowHeight: number
-  readonly visibleBodyWidth: number
-  readonly visibleBodyHeight: number
+  readonly residentBodyWidth: number
+  readonly residentBodyHeight: number
 }): readonly GridHeaderPaneState[] {
   const {
     gpuScene,
@@ -106,8 +91,8 @@ export function buildHeaderPaneStates(input: {
     gridMetrics,
     frozenColumnWidth,
     frozenRowHeight,
-    visibleBodyWidth,
-    visibleBodyHeight,
+    residentBodyWidth,
+    residentBodyHeight,
   } = input
   const bodyFrameWidth = Math.max(0, hostWidth - gridMetrics.rowMarkerWidth - frozenColumnWidth)
   const bodyFrameHeight = Math.max(0, hostHeight - gridMetrics.headerHeight - frozenRowHeight)
@@ -121,6 +106,7 @@ export function buildHeaderPaneStates(input: {
       height: gridMetrics.headerHeight,
     }
     panes.push({
+      generation: 0,
       paneId: 'top-frozen',
       frame: {
         x: clip.x,
@@ -139,14 +125,15 @@ export function buildHeaderPaneStates(input: {
     })
   }
 
-  if (bodyFrameWidth > 0 && visibleBodyWidth > 0) {
+  if (bodyFrameWidth > 0 && residentBodyWidth > 0) {
     const clip: ClipRect = {
       x: gridMetrics.rowMarkerWidth + frozenColumnWidth,
       y: 0,
-      width: visibleBodyWidth,
+      width: residentBodyWidth,
       height: gridMetrics.headerHeight,
     }
     panes.push({
+      generation: 0,
       paneId: 'top-body',
       frame: {
         x: clip.x,
@@ -155,7 +142,7 @@ export function buildHeaderPaneStates(input: {
         height: clip.height,
       },
       surfaceSize: {
-        width: visibleBodyWidth,
+        width: residentBodyWidth,
         height: clip.height,
       },
       contentOffset: { x: 0, y: 0 },
@@ -173,6 +160,7 @@ export function buildHeaderPaneStates(input: {
       height: frozenRowHeight,
     }
     panes.push({
+      generation: 0,
       paneId: 'left-frozen',
       frame: {
         x: clip.x,
@@ -191,14 +179,15 @@ export function buildHeaderPaneStates(input: {
     })
   }
 
-  if (bodyFrameHeight > 0 && visibleBodyHeight > 0) {
+  if (bodyFrameHeight > 0 && residentBodyHeight > 0) {
     const clip: ClipRect = {
       x: 0,
       y: gridMetrics.headerHeight + frozenRowHeight,
       width: gridMetrics.rowMarkerWidth,
-      height: visibleBodyHeight,
+      height: residentBodyHeight,
     }
     panes.push({
+      generation: 0,
       paneId: 'left-body',
       frame: {
         x: clip.x,
@@ -208,7 +197,7 @@ export function buildHeaderPaneStates(input: {
       },
       surfaceSize: {
         width: clip.width,
-        height: visibleBodyHeight,
+        height: residentBodyHeight,
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: true },

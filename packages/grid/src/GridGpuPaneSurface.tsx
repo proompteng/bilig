@@ -254,6 +254,7 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
       aria-hidden="true"
       className="pointer-events-none absolute z-10 overflow-hidden"
       style={{
+        contain: 'layout paint size',
         height: frame.height,
         left: frame.x,
         top: frame.y,
@@ -268,8 +269,10 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
         style={{
           left: 0,
           top: 0,
+          contain: 'strict',
           width: surfaceSize.width,
           height: surfaceSize.height,
+          willChange: scrollAxes?.x || scrollAxes?.y ? 'transform' : 'auto',
         }}
       />
     </div>

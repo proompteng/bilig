@@ -5,6 +5,7 @@ import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { GridGpuPaneSurface } from './GridGpuPaneSurface.js'
 import { GridTextPaneSurface } from './GridTextPaneSurface.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
+import { WorkbookPaneRenderer } from './renderer/WorkbookPaneRenderer.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -19,6 +20,7 @@ export type {
 } from './workbookGridSurfaceTypes.js'
 
 export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
+  const supportsUnifiedPaneRenderer = typeof navigator !== 'undefined' && 'gpu' in navigator
   const renderState = useWorkbookGridRenderState({
     engine: props.engine,
     sheetName: props.sheetName,
@@ -29,6 +31,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,
+    getCellEditorSeed: props.getCellEditorSeed,
     freezeRows: props.freezeRows,
     freezeCols: props.freezeCols,
     onVisibleViewportChange: props.onVisibleViewportChange,
@@ -55,6 +58,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onPaste: props.onPaste,
     hiddenColumns: props.hiddenColumns,
     hiddenRows: props.hiddenRows,
+    getCellEditorSeed: props.getCellEditorSeed,
     onSetColumnHidden: props.onSetColumnHidden,
     onSetRowHidden: props.onSetRowHidden,
     onInsertRows: props.onInsertRows,
@@ -116,6 +120,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         style={{ cursor: renderState.hoverState.cursor }}
         onFocus={interactions.handleHostFocus}
         onKeyDownCapture={interactions.handleHostKeyDownCapture}
+        onClickCapture={interactions.handleHostClickCapture}
         onCopyCapture={interactions.handleHostCopyCapture}
         onContextMenuCapture={interactions.handleHostContextMenuCapture}
         onPasteCapture={interactions.handleHostPasteCapture}
@@ -144,60 +149,71 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        {renderState.headerPanes.map((pane) => (
-          <Fragment key={pane.paneId}>
-            <GridGpuPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.paneId}
-              scene={pane.gpuScene}
-              scrollAxes={pane.scrollAxes}
-              scrollTransformStore={renderState.scrollTransformStore}
-              surfaceSize={pane.surfaceSize}
-            />
-            <GridTextPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.paneId}
-              scene={pane.textScene}
-              scrollAxes={pane.scrollAxes}
-              scrollTransformStore={renderState.scrollTransformStore}
-              surfaceSize={pane.surfaceSize}
-            />
-          </Fragment>
-        ))}
-        {renderState.residentDataPanes.map((pane) => (
-          <Fragment key={pane.paneId}>
-            <GridGpuPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.paneId}
-              scene={pane.gpuScene}
-              scrollAxes={{
-                x: pane.paneId === 'body' || pane.paneId === 'top',
-                y: pane.paneId === 'body' || pane.paneId === 'left',
-              }}
-              scrollTransformStore={renderState.scrollTransformStore}
-              surfaceSize={pane.surfaceSize}
-            />
-            <GridTextPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.paneId}
-              scene={pane.textScene}
-              scrollAxes={{
-                x: pane.paneId === 'body' || pane.paneId === 'top',
-                y: pane.paneId === 'body' || pane.paneId === 'left',
-              }}
-              scrollTransformStore={renderState.scrollTransformStore}
-              surfaceSize={pane.surfaceSize}
-            />
-          </Fragment>
-        ))}
+        {supportsUnifiedPaneRenderer ? (
+          <WorkbookPaneRenderer
+            active={renderState.hostElement !== null}
+            host={renderState.hostElement}
+            panes={renderState.renderPanes}
+            scrollTransformStore={renderState.scrollTransformStore}
+          />
+        ) : (
+          <>
+            {renderState.headerPanes.map((pane) => (
+              <Fragment key={pane.paneId}>
+                <GridGpuPaneSurface
+                  active={renderState.hostElement !== null}
+                  contentOffset={pane.contentOffset}
+                  frame={pane.frame}
+                  paneId={pane.paneId}
+                  scene={pane.gpuScene}
+                  scrollAxes={pane.scrollAxes}
+                  scrollTransformStore={renderState.scrollTransformStore}
+                  surfaceSize={pane.surfaceSize}
+                />
+                <GridTextPaneSurface
+                  active={renderState.hostElement !== null}
+                  contentOffset={pane.contentOffset}
+                  frame={pane.frame}
+                  paneId={pane.paneId}
+                  scene={pane.textScene}
+                  scrollAxes={pane.scrollAxes}
+                  scrollTransformStore={renderState.scrollTransformStore}
+                  surfaceSize={pane.surfaceSize}
+                />
+              </Fragment>
+            ))}
+            {renderState.residentDataPanes.map((pane) => (
+              <Fragment key={pane.paneId}>
+                <GridGpuPaneSurface
+                  active={renderState.hostElement !== null}
+                  contentOffset={pane.contentOffset}
+                  frame={pane.frame}
+                  paneId={pane.paneId}
+                  scene={pane.gpuScene}
+                  scrollAxes={{
+                    x: pane.paneId === 'body' || pane.paneId === 'top',
+                    y: pane.paneId === 'body' || pane.paneId === 'left',
+                  }}
+                  scrollTransformStore={renderState.scrollTransformStore}
+                  surfaceSize={pane.surfaceSize}
+                />
+                <GridTextPaneSurface
+                  active={renderState.hostElement !== null}
+                  contentOffset={pane.contentOffset}
+                  frame={pane.frame}
+                  paneId={pane.paneId}
+                  scene={pane.textScene}
+                  scrollAxes={{
+                    x: pane.paneId === 'body' || pane.paneId === 'top',
+                    y: pane.paneId === 'body' || pane.paneId === 'left',
+                  }}
+                  scrollTransformStore={renderState.scrollTransformStore}
+                  surfaceSize={pane.surfaceSize}
+                />
+              </Fragment>
+            ))}
+          </>
+        )}
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"

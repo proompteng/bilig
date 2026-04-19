@@ -85,6 +85,18 @@ function selectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelecti
   )
 }
 
+function optimisticCellKey(sheetName: string, address: string): string {
+  return `${sheetName}:${address}`
+}
+
+function readMountedCellEditorValue(): string | null {
+  if (typeof document === 'undefined') {
+    return null
+  }
+  const editor = document.querySelector<HTMLTextAreaElement>('[data-testid="cell-editor-input"]')
+  return editor?.value ?? null
+}
+
 export function useWorkerWorkbookAppState(input: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>
   connectionState: ZeroConnectionState
@@ -162,6 +174,9 @@ export function useWorkerWorkbookAppState(input: {
   const selectionSnapshotRef = useRef<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
   const selectionRangeRef = useRef<CellRangeRef>(selectionSnapshotToRangeRef(selectionSnapshotRef.current))
   const pendingExternalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
+  const optimisticCellSeedsRef = useRef<Map<string, string>>(new Map())
+  const editSessionRef = useRef(0)
+  const pendingEditCommitSessionRef = useRef<number | null>(null)
 
   useEffect(() => {
     const previousSelection = selectionRef.current
@@ -346,6 +361,15 @@ export function useWorkerWorkbookAppState(input: {
     },
     [selectedCell],
   )
+  const getCellEditorSeed = useCallback((sheetName: string, address: string) => {
+    return optimisticCellSeedsRef.current.get(optimisticCellKey(sheetName, address))
+  }, [])
+  const clearOptimisticCellSeed = useCallback((sheetName: string, address: string, seed: string) => {
+    const key = optimisticCellKey(sheetName, address)
+    if (optimisticCellSeedsRef.current.get(key) === seed) {
+      optimisticCellSeedsRef.current.delete(key)
+    }
+  }, [])
 
   const cloneLiveSelectedCell = useCallback(
     (nextSelection = selectionRef.current) => structuredClone(getLiveSelectedCell(nextSelection)),
@@ -404,6 +428,8 @@ export function useWorkerWorkbookAppState(input: {
       if (!writesAllowed) {
         return
       }
+      editSessionRef.current += 1
+      pendingEditCommitSessionRef.current = null
       const nextEditorValue = seed ?? toEditorValue(getLiveSelectedCell())
       const nextTarget = selectionRef.current
       editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextTarget)
@@ -416,6 +442,19 @@ export function useWorkerWorkbookAppState(input: {
       setEditingMode(mode)
     },
     [cloneLiveSelectedCell, getLiveSelectedCell, writesAllowed],
+  )
+  const autofitColumn = useCallback(
+    async (sheetName: string, columnIndex: number, fallbackWidth: number) => {
+      const nextWidth =
+        runtimeController && typeof runtimeController.invoke === 'function'
+          ? await runtimeController.invoke('autofitColumn', sheetName, columnIndex)
+          : fallbackWidth
+      const normalizedWidth = typeof nextWidth === 'number' && Number.isFinite(nextWidth) ? nextWidth : fallbackWidth
+      await invokeColumnWidthMutation(sheetName, columnIndex, normalizedWidth, {
+        flush: true,
+      })
+    },
+    [invokeColumnWidthMutation, runtimeController],
   )
 
   const applyParsedInput = useCallback(
@@ -442,7 +481,10 @@ export function useWorkerWorkbookAppState(input: {
         return
       }
       const targetSelection = editingModeRef.current === 'idle' ? selectionRef.current : editorTargetRef.current
-      const nextValue = editingModeRef.current === 'idle' ? toEditorValue(getLiveSelectedCell(targetSelection)) : editorValueRef.current
+      const nextValue =
+        editingModeRef.current === 'idle'
+          ? toEditorValue(getLiveSelectedCell(targetSelection))
+          : (readMountedCellEditorValue() ?? editorValueRef.current)
       const parsed = parseEditorInput(nextValue)
       const baseSnapshot = editorBaseSnapshotRef.current
       const authoritativeSnapshot = cloneLiveSelectedCell(targetSelection)
@@ -470,14 +512,30 @@ export function useWorkerWorkbookAppState(input: {
       }
 
       const nextSelection = completeEditNavigation(targetSelection, movement)
+      const commitSessionId = editSessionRef.current
+      if (editingModeRef.current !== 'idle') {
+        if (pendingEditCommitSessionRef.current === commitSessionId) {
+          return
+        }
+        pendingEditCommitSessionRef.current = commitSessionId
+      }
       void (async () => {
         try {
+          optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), nextValue)
           await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
+          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
+          if (editSessionRef.current !== commitSessionId) {
+            return
+          }
           setEditorSelectionBehavior('select-all')
           editingModeRef.current = 'idle'
           setEditingMode('idle')
           resetEditorConflictTracking(nextSelection)
         } catch (error) {
+          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
+          if (editSessionRef.current !== commitSessionId) {
+            return
+          }
           editingModeRef.current = 'idle'
           setEditingMode('idle')
           reportRuntimeError(error)
@@ -490,6 +548,7 @@ export function useWorkerWorkbookAppState(input: {
       completeEditNavigation,
       finishEditingWithAuthoritative,
       getLiveSelectedCell,
+      clearOptimisticCellSeed,
       reportRuntimeError,
       resetEditorConflictTracking,
       writesAllowed,
@@ -602,8 +661,20 @@ export function useWorkerWorkbookAppState(input: {
 
   const isEditing = editingMode !== 'idle'
   const isEditingCell = editingMode === 'cell'
-  const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell)
+  const visibleEditorValue = isEditing
+    ? editorValue
+    : (getCellEditorSeed(selection.sheetName, selection.address) ?? toEditorValue(selectedCell))
   const resolvedValue = toResolvedValue(selectedCell)
+  useEffect(() => {
+    const key = optimisticCellKey(selection.sheetName, selection.address)
+    const optimisticSeed = optimisticCellSeedsRef.current.get(key)
+    if (optimisticSeed === undefined) {
+      return
+    }
+    if (optimisticSeed === toEditorValue(selectedCell)) {
+      optimisticCellSeedsRef.current.delete(key)
+    }
+  }, [selectedCell, selection.address, selection.sheetName])
   const editorConflictBanner = useWorkbookEditorConflict({
     editingMode,
     editorValue,
@@ -859,6 +930,7 @@ export function useWorkerWorkbookAppState(input: {
         authoritativeRevision: 0,
         mode: 'bootstrap',
       })
+      await runtimeController.invoke('materializeProjectionEngine')
       if (corpus.presentation?.freezeRows || corpus.presentation?.freezeCols) {
         await invokeSetFreezePaneMutation(
           corpus.primaryViewport.sheetName,
@@ -897,6 +969,7 @@ export function useWorkerWorkbookAppState(input: {
     clearRuntimeError,
     agentPanel,
     beginEditing,
+    autofitColumn,
     cancelEditor,
     clearSelectedCell,
     columnWidths,
@@ -940,6 +1013,7 @@ export function useWorkerWorkbookAppState(input: {
     runtimeError,
     runtimeReady,
     retryFailedPendingMutation,
+    getCellEditorSeed,
     approvePersistenceTransfer,
     selectAddress,
     selectSelectionSnapshot,

@@ -7,6 +7,7 @@ import type { WorkbookGridContextMenuTarget } from './workbookGridContextMenuTar
 
 export function useWorkbookGridContextMenu(input: {
   focusGrid(this: void): void
+  getVisibleRegion(this: void): VisibleRegionState
   hiddenColumnsByIndex?: Readonly<Record<number, true>> | undefined
   hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined
   isEditingCell: boolean
@@ -22,10 +23,10 @@ export function useWorkbookGridContextMenu(input: {
   resolveHeaderSelectionAtPointer(this: void, clientX: number, clientY: number, region?: VisibleRegionState): HeaderSelection | null
   selectedCell: Item
   setGridSelection(this: void, selection: GridSelection): void
-  visibleRegion: VisibleRegionState
 }) {
   const {
     focusGrid,
+    getVisibleRegion,
     hiddenColumnsByIndex,
     hiddenRowsByIndex,
     isEditingCell,
@@ -41,7 +42,6 @@ export function useWorkbookGridContextMenu(input: {
     resolveHeaderSelectionAtPointer,
     selectedCell,
     setGridSelection,
-    visibleRegion,
   } = input
   const [contextMenuState, setContextMenuState] = useState<WorkbookGridContextMenuState | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -144,13 +144,14 @@ export function useWorkbookGridContextMenu(input: {
     if (!contextMenuState || !onSetFreezePane) {
       return
     }
+    const visibleRegion = getVisibleRegion()
     if (contextMenuState.target.kind === 'row') {
       onSetFreezePane(contextMenuState.target.index + 1, visibleRegion.freezeCols ?? 0)
     } else {
       onSetFreezePane(visibleRegion.freezeRows ?? 0, contextMenuState.target.index + 1)
     }
     closeContextMenu()
-  }, [closeContextMenu, contextMenuState, onSetFreezePane, visibleRegion.freezeCols, visibleRegion.freezeRows])
+  }, [closeContextMenu, contextMenuState, getVisibleRegion, onSetFreezePane])
 
   const unfreezePanes = useCallback(() => {
     if (!onSetFreezePane) {
@@ -212,7 +213,7 @@ export function useWorkbookGridContextMenu(input: {
 
   const handleHostContextMenuCapture = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      const headerSelection = resolveHeaderSelectionAtPointer(event.clientX, event.clientY, visibleRegion)
+      const headerSelection = resolveHeaderSelectionAtPointer(event.clientX, event.clientY, getVisibleRegion())
       if (!headerSelection) {
         closeContextMenu()
         return
@@ -230,13 +231,13 @@ export function useWorkbookGridContextMenu(input: {
       event.preventDefault()
       event.stopPropagation()
     },
-    [closeContextMenu, openContextMenuForTarget, resolveHeaderSelectionAtPointer, visibleRegion],
+    [closeContextMenu, getVisibleRegion, openContextMenuForTarget, resolveHeaderSelectionAtPointer],
   )
 
   return useMemo(
     () => ({
       closeContextMenu,
-      canUnfreezePanes: (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0,
+      canUnfreezePanes: (getVisibleRegion().freezeRows ?? 0) > 0 || (getVisibleRegion().freezeCols ?? 0) > 0,
       contextMenuState,
       deleteTarget,
       freezeTarget,
@@ -259,8 +260,7 @@ export function useWorkbookGridContextMenu(input: {
       toggleTargetHidden,
       unfreezePanes,
       openContextMenuForTarget,
-      visibleRegion.freezeCols,
-      visibleRegion.freezeRows,
+      getVisibleRegion,
     ],
   )
 }

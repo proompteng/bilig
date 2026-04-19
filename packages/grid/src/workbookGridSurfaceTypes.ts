@@ -31,6 +31,7 @@ export interface WorkbookGridSurfaceProps {
   isEditingCell: boolean
   onSelectionChange(this: void, selection: GridSelectionSnapshot): void
   onSelectionLabelChange?: ((label: string) => void) | undefined
+  getCellEditorSeed?: ((sheetName: string, address: string) => string | undefined) | undefined
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onEditorChange(this: void, next: string): void
   onCommitEdit(this: void, movement?: EditMovement): void

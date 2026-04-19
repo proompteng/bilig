@@ -8,6 +8,7 @@ import {
   captureGridClipboardSelection,
   handleGridKey,
   handleGridPasteCapture,
+  isGridKeyboardEditableTarget,
   shouldHandleGridSurfaceKey,
   shouldHandleGridWindowKey,
 } from '../gridClipboardKeyboardController.js'
@@ -364,6 +365,15 @@ describe('gridClipboardKeyboardController', () => {
     document.body.append(input)
     input.focus()
     expect(shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: false, shiftKey: false }, input, host)).toBe(
+      false,
+    )
+
+    const textarea = document.createElement('textarea')
+    textarea.dataset['testid'] = 'cell-editor-input'
+    document.body.append(textarea)
+    textarea.focus()
+    expect(isGridKeyboardEditableTarget(textarea)).toBe(true)
+    expect(shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'r', metaKey: false, shiftKey: false }, textarea, host)).toBe(
       false,
     )
   })

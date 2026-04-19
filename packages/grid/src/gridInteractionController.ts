@@ -46,11 +46,12 @@ interface HandleGridBodyDoubleClickOptions extends GridInteractionCommonOptions 
   event: PointerEventLike
   columnWidths: Readonly<Record<number, number>>
   defaultColumnWidth: number
+  editorValue: string
   lastBodyClickCell: Item | null
   onAutofitColumn?: ((this: void, columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined
   applyColumnWidth(this: void, columnIndex: number, width: number): void
   computeAutofitColumnWidth(this: void, columnIndex: number): number
-  beginEditAt(this: void, address: string): void
+  beginEditAt(this: void, address: string, seed?: string): void
   resolvePointerGeometry(this: void, region?: VisibleRegionState): PointerGeometry | null
   resolvePointerCell(
     this: void,
@@ -147,6 +148,7 @@ export function handleGridBodyDoubleClick({
   event,
   columnWidths,
   defaultColumnWidth,
+  editorValue,
   interactionState,
   lastBodyClickCell,
   onAutofitColumn,
@@ -156,6 +158,7 @@ export function handleGridBodyDoubleClick({
   onSelectionChange,
   resolvePointerGeometry,
   resolvePointerCell,
+  selectedCell,
   setGridSelection,
   visibleRegion,
 }: HandleGridBodyDoubleClickOptions): void {
@@ -175,10 +178,12 @@ export function handleGridBodyDoubleClick({
   event.stopPropagation()
   if (doubleClickIntent.kind === 'edit-cell') {
     const editAddress = formatAddress(doubleClickIntent.cell[1], doubleClickIntent.cell[0])
-    const nextSelection = createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1])
-    setGridSelection(nextSelection)
-    onSelectionChange(nextSelection)
-    beginEditAt(editAddress)
+    if (doubleClickIntent.cell[0] !== selectedCell[0] || doubleClickIntent.cell[1] !== selectedCell[1]) {
+      const nextSelection = createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1])
+      setGridSelection(nextSelection)
+      onSelectionChange(nextSelection)
+    }
+    beginEditAt(editAddress, editorValue)
     return
   }
   interactionState.columnResizeActiveRef.current = false

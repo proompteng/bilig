@@ -15,7 +15,7 @@ import type { getGridMetrics } from './gridMetrics.js'
 
 export function useWorkbookGridPointerResolvers(input: {
   hostRef: MutableRefObject<HTMLDivElement | null>
-  visibleRegion: VisibleRegionState
+  getVisibleRegion: () => VisibleRegionState
   columnWidths: Readonly<Record<number, number>>
   rowHeights: Readonly<Record<number, number>>
   gridMetrics: ReturnType<typeof getGridMetrics>
@@ -23,10 +23,10 @@ export function useWorkbookGridPointerResolvers(input: {
   gridSelection: GridSelection
   getCellScreenBounds: (col: number, row: number) => Rectangle | undefined
 }) {
-  const { hostRef, visibleRegion, columnWidths, rowHeights, gridMetrics, selectedCell, gridSelection, getCellScreenBounds } = input
+  const { hostRef, getVisibleRegion, columnWidths, rowHeights, gridMetrics, selectedCell, gridSelection, getCellScreenBounds } = input
 
   const resolvePointerGeometry = useCallback(
-    (region: VisibleRegionState = visibleRegion): PointerGeometry | null => {
+    (region: VisibleRegionState = getVisibleRegion()): PointerGeometry | null => {
       const hostBounds = hostRef.current?.getBoundingClientRect()
       if (!hostBounds) {
         return null
@@ -44,11 +44,11 @@ export function useWorkbookGridPointerResolvers(input: {
         gridMetrics,
       )
     },
-    [columnWidths, gridMetrics, hostRef, rowHeights, visibleRegion],
+    [columnWidths, getVisibleRegion, gridMetrics, hostRef, rowHeights],
   )
 
   const resolvePointerCell = useCallback(
-    (clientX: number, clientY: number, region: VisibleRegionState = visibleRegion, geometry?: PointerGeometry | null): Item | null => {
+    (clientX: number, clientY: number, region: VisibleRegionState = getVisibleRegion(), geometry?: PointerGeometry | null): Item | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region)
       if (!activeGeometry) {
         return null
@@ -77,7 +77,7 @@ export function useWorkbookGridPointerResolvers(input: {
       resolvePointerGeometry,
       selectedCell.col,
       selectedCell.row,
-      visibleRegion,
+      getVisibleRegion,
     ],
   )
 
@@ -85,7 +85,7 @@ export function useWorkbookGridPointerResolvers(input: {
     (
       clientX: number,
       clientY: number,
-      region: VisibleRegionState = visibleRegion,
+      region: VisibleRegionState = getVisibleRegion(),
       geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region)
@@ -94,7 +94,7 @@ export function useWorkbookGridPointerResolvers(input: {
       }
       return resolveHeaderSelectionFromGeometry(clientX, clientY, region, activeGeometry, columnWidths, rowHeights, gridMetrics)
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, rowHeights, visibleRegion],
+    [columnWidths, getVisibleRegion, gridMetrics, resolvePointerGeometry, rowHeights],
   )
 
   const resolveHeaderSelectionForPointerDrag = useCallback(
@@ -102,7 +102,7 @@ export function useWorkbookGridPointerResolvers(input: {
       kind: HeaderSelection['kind'],
       clientX: number,
       clientY: number,
-      region: VisibleRegionState = visibleRegion,
+      region: VisibleRegionState = getVisibleRegion(),
       geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region)
@@ -120,7 +120,7 @@ export function useWorkbookGridPointerResolvers(input: {
         gridMetrics,
       )
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, rowHeights, visibleRegion],
+    [columnWidths, getVisibleRegion, gridMetrics, resolvePointerGeometry, rowHeights],
   )
 
   return {

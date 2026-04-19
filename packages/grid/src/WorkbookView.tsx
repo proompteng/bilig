@@ -33,6 +33,7 @@ interface WorkbookViewProps {
   onDeleteSheet?: ((sheetName: string) => void) | undefined
   onSelectionChange(this: void, selection: GridSelectionSnapshot): void
   onAddressCommit(this: void, addr: string): boolean
+  getCellEditorSeed?: ((sheetName: string, address: string) => string | undefined) | undefined
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onBeginFormulaEdit(this: void, seed?: string): void
   onEditorChange(this: void, next: string): void
@@ -169,6 +170,7 @@ export function WorkbookView({
   onDeleteSheet,
   onSelectionChange,
   onAddressCommit,
+  getCellEditorSeed,
   onBeginEdit,
   onBeginFormulaEdit,
   onEditorChange,
@@ -287,6 +289,7 @@ export function WorkbookView({
               editorSelectionBehavior={editorSelectionBehavior}
               engine={engine}
               isEditingCell={isEditingCell}
+              getCellEditorSeed={getCellEditorSeed}
               onBeginEdit={onBeginEdit}
               onCancelEdit={onCancelEdit}
               onClearCell={onClearCell}

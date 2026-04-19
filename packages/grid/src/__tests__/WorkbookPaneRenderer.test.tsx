@@ -56,10 +56,10 @@ describe('WorkbookPaneRenderer', () => {
             {
               generation: 1,
               paneId: 'body',
-              viewport: { rowStart: 0, rowEnd: 20, colStart: 0, colEnd: 10 },
               surfaceSize: { width: 640, height: 360 },
               frame: { x: 46, y: 24, width: 594, height: 336 },
               contentOffset: { x: 0, y: 0 },
+              scrollAxes: { x: true, y: true },
               gpuScene: { fillRects: [], borderRects: [] },
               textScene: { items: [] },
             },
@@ -69,6 +69,7 @@ describe('WorkbookPaneRenderer', () => {
     })
 
     expect(host.querySelector('[data-pane-renderer="workbook-pane-renderer"]')).toBeInstanceOf(HTMLCanvasElement)
+    expect(host.querySelector('[data-testid="grid-pane-renderer"]')?.tagName).toBe('CANVAS')
 
     await act(async () => {
       root.unmount()

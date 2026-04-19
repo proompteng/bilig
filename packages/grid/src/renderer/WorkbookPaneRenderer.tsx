@@ -2,11 +2,12 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
-import type { WorkbookPaneRenderState } from './pane-scene-types.js'
+import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import { createGlyphAtlas } from './glyph-atlas.js'
 import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene } from './text-quad-buffer.js'
 import { WORKBOOK_RECT_SHADER, WORKBOOK_TEXT_SHADER } from './workbook-pane-shaders.js'
+import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 
 const GPU_BUFFER_USAGE_COPY_DST = 0x0008
 const GPU_BUFFER_USAGE_UNIFORM = 0x0040
@@ -22,11 +23,12 @@ const UNIT_QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1])
 interface WorkbookPaneRendererProps {
   readonly active: boolean
   readonly host: HTMLDivElement | null
-  readonly panes: readonly WorkbookPaneRenderState[]
+  readonly panes: readonly WorkbookRenderPaneState[]
   readonly overlay?: {
     readonly gpuScene: GridGpuScene
     readonly textScene: GridTextScene
   }
+  readonly scrollTransformStore?: WorkbookGridScrollStore | null
   readonly onActiveChange?: ((active: boolean) => void) | undefined
 }
 
@@ -53,14 +55,19 @@ interface RendererArtifacts {
   atlasVersion: number
 }
 
-type WorkbookRenderPaneId = WorkbookPaneRenderState['paneId'] | 'overlay'
+type WorkbookRenderPaneId = string
 
 interface PanePayload {
   readonly paneId: WorkbookRenderPaneId
+  readonly generation: number
   readonly frame: Rectangle
   readonly contentOffset: {
     readonly x: number
     readonly y: number
+  }
+  readonly scrollAxes: {
+    readonly x: boolean
+    readonly y: boolean
   }
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
@@ -153,8 +160,6 @@ function parseCssColor(color: string): readonly [number, number, number, number]
 }
 
 function buildRectInstanceData(input: {
-  frame: Rectangle
-  contentOffset: { readonly x: number; readonly y: number }
   scene: GridGpuScene
   decorationRects?: readonly { x: number; y: number; width: number; height: number; color: string }[]
 }): Float32Array {
@@ -164,8 +169,8 @@ function buildRectInstanceData(input: {
   const floats = new Float32Array(Math.max(1, totalRectCount) * RECT_INSTANCE_FLOAT_COUNT)
   rects.forEach((rect, index) => {
     const base = index * RECT_INSTANCE_FLOAT_COUNT
-    floats[base + 0] = input.frame.x + input.contentOffset.x + rect.x
-    floats[base + 1] = input.frame.y + input.contentOffset.y + rect.y
+    floats[base + 0] = rect.x
+    floats[base + 1] = rect.y
     floats[base + 2] = rect.width
     floats[base + 3] = rect.height
     floats[base + 4] = rect.color.r
@@ -176,8 +181,8 @@ function buildRectInstanceData(input: {
   decorationRects.forEach((rect, index) => {
     const base = (rects.length + index) * RECT_INSTANCE_FLOAT_COUNT
     const [r, g, b, a] = parseCssColor(rect.color)
-    floats[base + 0] = input.frame.x + input.contentOffset.x + rect.x
-    floats[base + 1] = input.frame.y + input.contentOffset.y + rect.y
+    floats[base + 0] = rect.x
+    floats[base + 1] = rect.y
     floats[base + 2] = rect.width
     floats[base + 3] = rect.height
     floats[base + 4] = r
@@ -190,8 +195,6 @@ function buildRectInstanceData(input: {
 
 function buildTextInstanceData(input: {
   paneId: WorkbookRenderPaneId
-  frame: Rectangle
-  contentOffset: { readonly x: number; readonly y: number }
   textScene: GridTextScene
   atlas: ReturnType<typeof createGlyphAtlas>
 }): { floats: Float32Array; quadCount: number } {
@@ -200,12 +203,8 @@ function buildTextInstanceData(input: {
   quads.forEach((quad, index) => {
     const base = index * TEXT_INSTANCE_FLOAT_COUNT
     const [r, g, b, a] = parseCssColor(quad.color)
-    const quadX = quad.x + input.frame.x + input.contentOffset.x
-    const quadY = quad.y + input.frame.y + input.contentOffset.y
-    const clipLeft = quad.clipX + input.frame.x + input.contentOffset.x
-    const clipTop = quad.clipY + input.frame.y + input.contentOffset.y
-    floats[base + 0] = quadX
-    floats[base + 1] = quadY
+    floats[base + 0] = quad.x
+    floats[base + 1] = quad.y
     floats[base + 2] = quad.width
     floats[base + 3] = quad.height
     floats[base + 4] = quad.u0
@@ -216,10 +215,10 @@ function buildTextInstanceData(input: {
     floats[base + 9] = g
     floats[base + 10] = b
     floats[base + 11] = a
-    floats[base + 12] = clipLeft
-    floats[base + 13] = clipTop
-    floats[base + 14] = clipLeft + quad.clipWidth
-    floats[base + 15] = clipTop + quad.clipHeight
+    floats[base + 12] = quad.clipX
+    floats[base + 13] = quad.clipY
+    floats[base + 14] = quad.clipX + quad.clipWidth
+    floats[base + 15] = quad.clipY + quad.clipHeight
   })
   if (quads.length > 0) {
     noteCanvasPaint(`text:${input.paneId}`)
@@ -243,6 +242,16 @@ function ensureBuffer(
       usage: GPU_BUFFER_USAGE_VERTEX | GPU_BUFFER_USAGE_COPY_DST,
     }),
     capacity: nextCapacity,
+  }
+}
+
+function resolvePaneOrigin(
+  pane: Pick<PanePayload, 'frame' | 'contentOffset' | 'scrollAxes'>,
+  scrollTransform: { readonly tx: number; readonly ty: number },
+): { readonly x: number; readonly y: number } {
+  return {
+    x: pane.frame.x + pane.contentOffset.x - (pane.scrollAxes.x ? scrollTransform.tx : 0),
+    y: pane.frame.y + pane.contentOffset.y - (pane.scrollAxes.y ? scrollTransform.ty : 0),
   }
 }
 
@@ -338,12 +347,26 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   host,
   panes,
   overlay,
+  scrollTransformStore = null,
   onActiveChange,
 }: WorkbookPaneRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artifactsRef = useRef<RendererArtifacts | null>(null)
   const paneBuffersRef = useRef(new WorkbookPaneBufferCache())
   const atlasRef = useRef(createGlyphAtlas())
+  const activeRef = useRef(active)
+  const panePayloadsRef = useRef<readonly PanePayload[]>([])
+  const surfaceSizeRef = useRef<SurfaceSize>({
+    width: 0,
+    height: 0,
+    pixelWidth: 0,
+    pixelHeight: 0,
+    dpr: 1,
+  })
+  const webGpuReadyRef = useRef(false)
+  const scrollTransformStoreRef = useRef(scrollTransformStore)
+  const drawFrameRef = useRef<() => void>(() => {})
+  const scheduledDrawFrameRef = useRef<number | null>(null)
   const [webGpuReady, setWebGpuReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState<SurfaceSize>({
     width: 0,
@@ -464,14 +487,17 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   const panePayloads = useMemo<readonly PanePayload[]>(() => {
     const next: PanePayload[] = panes.map((pane) => ({
       paneId: pane.paneId,
+      generation: pane.generation,
       frame: pane.frame,
       contentOffset: pane.contentOffset,
+      scrollAxes: pane.scrollAxes,
       gpuScene: pane.gpuScene,
       textScene: pane.textScene,
     }))
     if (overlay) {
       next.push({
         paneId: 'overlay',
+        generation: -1,
         frame: {
           x: 0,
           y: 0,
@@ -479,164 +505,217 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
           height: surfaceSize.height,
         },
         contentOffset: { x: 0, y: 0 },
+        scrollAxes: { x: false, y: false },
         gpuScene: overlay.gpuScene,
         textScene: overlay.textScene,
       })
     }
     return next
   }, [overlay, panes, surfaceSize.height, surfaceSize.width])
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   useEffect(() => {
-    if (!active || !webGpuReady) {
-      return
-    }
-    const artifacts = artifactsRef.current
-    const canvas = canvasRef.current
-    if (!artifacts || !canvas || surfaceSize.width <= 0 || surfaceSize.height <= 0) {
-      return
-    }
-    if (canvas.width !== surfaceSize.pixelWidth) {
-      canvas.width = surfaceSize.pixelWidth
-    }
-    if (canvas.height !== surfaceSize.pixelHeight) {
-      canvas.height = surfaceSize.pixelHeight
-    }
-    canvas.style.width = `${surfaceSize.width}px`
-    canvas.style.height = `${surfaceSize.height}px`
-    artifacts.context.configure({
-      device: artifacts.device,
-      format: artifacts.format,
-      alphaMode: 'premultiplied',
-    })
-    artifacts.device.queue.writeBuffer(artifacts.uniformBuffer, 0, new Float32Array([surfaceSize.width, surfaceSize.height, 0, 0]))
+    webGpuReadyRef.current = webGpuReady
+  }, [webGpuReady])
 
-    const atlas = atlasRef.current
-    const textPayloads = panePayloads.map((pane) => ({
-      paneId: pane.paneId,
-      frame: pane.frame,
-      contentOffset: pane.contentOffset,
-      textScene: pane.textScene,
-    }))
-    const textBuffers = textPayloads.map((pane) => ({
-      paneId: pane.paneId,
-      payload: buildTextInstanceData({
-        paneId: pane.paneId,
-        frame: pane.frame,
-        contentOffset: pane.contentOffset,
-        textScene: pane.textScene,
-        atlas,
-      }),
-    }))
-    const decorationRectsByPane = new Map<WorkbookRenderPaneId, ReturnType<typeof buildTextDecorationRectsFromScene>>(
-      panePayloads.map((pane) => [pane.paneId, buildTextDecorationRectsFromScene(pane.textScene.items, atlas)]),
-    )
+  useEffect(() => {
+    panePayloadsRef.current = panePayloads
+  }, [panePayloads])
 
-    const atlasCanvas = atlas.getCanvas()
-    const atlasVersion = atlas.getVersion()
-    if (atlasCanvas && artifacts.atlasVersion !== atlasVersion) {
-      const atlasSize = atlas.getSize()
-      artifacts.atlasTexture?.destroy()
-      artifacts.atlasTexture = artifacts.device.createTexture({
-        size: {
-          width: atlasSize.width,
-          height: atlasSize.height,
-          depthOrArrayLayers: 1,
-        },
-        format: 'rgba8unorm',
-        usage: GPU_TEXTURE_USAGE_TEXTURE_BINDING | GPU_TEXTURE_USAGE_COPY_DST | GPU_TEXTURE_USAGE_RENDER_ATTACHMENT,
+  useEffect(() => {
+    surfaceSizeRef.current = surfaceSize
+  }, [surfaceSize])
+
+  useEffect(() => {
+    scrollTransformStoreRef.current = scrollTransformStore
+  }, [scrollTransformStore])
+
+  useEffect(() => {
+    drawFrameRef.current = () => {
+      if (!activeRef.current || !webGpuReadyRef.current) {
+        return
+      }
+      const artifacts = artifactsRef.current
+      const canvas = canvasRef.current
+      const resolvedSurfaceSize = surfaceSizeRef.current
+      const resolvedPanePayloads = panePayloadsRef.current
+      if (!artifacts || !canvas || resolvedSurfaceSize.width <= 0 || resolvedSurfaceSize.height <= 0) {
+        return
+      }
+
+      if (canvas.width !== resolvedSurfaceSize.pixelWidth) {
+        canvas.width = resolvedSurfaceSize.pixelWidth
+      }
+      if (canvas.height !== resolvedSurfaceSize.pixelHeight) {
+        canvas.height = resolvedSurfaceSize.pixelHeight
+      }
+      canvas.style.width = `${resolvedSurfaceSize.width}px`
+      canvas.style.height = `${resolvedSurfaceSize.height}px`
+      artifacts.context.configure({
+        device: artifacts.device,
+        format: artifacts.format,
+        alphaMode: 'premultiplied',
       })
-      artifacts.device.queue.copyExternalImageToTexture(
-        { source: atlasCanvas },
-        { texture: artifacts.atlasTexture },
-        { width: atlasSize.width, height: atlasSize.height },
-      )
-      artifacts.textBindGroup = artifacts.device.createBindGroup({
-        layout: artifacts.textPipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: artifacts.uniformBuffer } },
-          { binding: 1, resource: artifacts.sampler },
-          { binding: 2, resource: artifacts.atlasTexture.createView() },
+
+      const atlas = atlasRef.current
+      const atlasCanvas = atlas.getCanvas()
+      const atlasVersion = atlas.getVersion()
+      if (atlasCanvas && artifacts.atlasVersion !== atlasVersion) {
+        const atlasSize = atlas.getSize()
+        artifacts.atlasTexture?.destroy()
+        artifacts.atlasTexture = artifacts.device.createTexture({
+          size: {
+            width: atlasSize.width,
+            height: atlasSize.height,
+            depthOrArrayLayers: 1,
+          },
+          format: 'rgba8unorm',
+          usage: GPU_TEXTURE_USAGE_TEXTURE_BINDING | GPU_TEXTURE_USAGE_COPY_DST | GPU_TEXTURE_USAGE_RENDER_ATTACHMENT,
+        })
+        artifacts.device.queue.copyExternalImageToTexture(
+          { source: atlasCanvas },
+          { texture: artifacts.atlasTexture },
+          { width: atlasSize.width, height: atlasSize.height },
+        )
+        artifacts.textBindGroup = artifacts.device.createBindGroup({
+          layout: artifacts.textPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: artifacts.uniformBuffer } },
+            { binding: 1, resource: artifacts.sampler },
+            { binding: 2, resource: artifacts.atlasTexture.createView() },
+          ],
+        })
+        artifacts.atlasVersion = atlasVersion
+      }
+
+      const activePaneIds = new Set(resolvedPanePayloads.map((pane) => pane.paneId))
+      paneBuffersRef.current.pruneExcept(activePaneIds)
+      const scrollTransform = scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 }
+
+      const encoder = artifacts.device.createCommandEncoder()
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: artifacts.context.getCurrentTexture().createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
         ],
       })
-      artifacts.atlasVersion = atlasVersion
-    }
+      pass.setVertexBuffer(0, artifacts.quadBuffer)
+      const pixelScale = resolvedSurfaceSize.dpr
 
-    const activePaneIds = new Set(panePayloads.map((pane) => pane.paneId))
-    paneBuffersRef.current.pruneExcept(activePaneIds)
+      resolvedPanePayloads.forEach((pane) => {
+        const paneCache = paneBuffersRef.current.get(pane.paneId)
+        const rectSceneChanged = paneCache.rectScene !== pane.gpuScene || paneCache.textScene !== pane.textScene
+        if (rectSceneChanged) {
+          const decorationRects = buildTextDecorationRectsFromScene(pane.textScene.items, atlas)
+          paneCache.decorationRects = decorationRects
+          const rectFloats = buildRectInstanceData({
+            scene: pane.gpuScene,
+            ...(decorationRects.length > 0 ? { decorationRects } : {}),
+          })
+          const rectBuffer = ensureBuffer(
+            artifacts.device,
+            paneCache.rectBuffer,
+            paneCache.rectCapacity,
+            rectFloats.byteLength || RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT,
+          )
+          paneCache.rectBuffer = rectBuffer.buffer
+          paneCache.rectCapacity = rectBuffer.capacity
+          paneCache.rectCount = pane.gpuScene.fillRects.length + pane.gpuScene.borderRects.length + decorationRects.length
+          artifacts.device.queue.writeBuffer(paneCache.rectBuffer, 0, rectFloats)
+          paneCache.rectScene = pane.gpuScene
+          noteCanvasPaint(`gpu:${pane.paneId}`)
+        }
 
-    const encoder = artifacts.device.createCommandEncoder()
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: artifacts.context.getCurrentTexture().createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-    })
-    pass.setVertexBuffer(0, artifacts.quadBuffer)
-    const pixelScale = surfaceSize.dpr
+        const textSceneChanged = paneCache.textScene !== pane.textScene
+        if (textSceneChanged) {
+          const textPayload = buildTextInstanceData({
+            paneId: pane.paneId,
+            textScene: pane.textScene,
+            atlas,
+          })
+          const textBuffer = ensureBuffer(
+            artifacts.device,
+            paneCache.textBuffer,
+            paneCache.textCapacity,
+            textPayload.floats.byteLength || TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT,
+          )
+          paneCache.textBuffer = textBuffer.buffer
+          paneCache.textCapacity = textBuffer.capacity
+          paneCache.textCount = textPayload.quadCount
+          artifacts.device.queue.writeBuffer(paneCache.textBuffer, 0, textPayload.floats)
+          paneCache.textScene = pane.textScene
+        }
 
-    panePayloads.forEach((pane, paneIndex) => {
-      const paneCache = paneBuffersRef.current.get(pane.paneId)
-      const decorationRects = decorationRectsByPane.get(pane.paneId)
-      const rectFloats = buildRectInstanceData({
-        frame: pane.frame,
-        contentOffset: pane.contentOffset,
-        scene: pane.gpuScene,
-        ...(decorationRects ? { decorationRects } : {}),
+        pass.setScissorRect(
+          Math.max(0, Math.floor(pane.frame.x * pixelScale)),
+          Math.max(0, Math.floor(pane.frame.y * pixelScale)),
+          Math.max(1, Math.floor(pane.frame.width * pixelScale)),
+          Math.max(1, Math.floor(pane.frame.height * pixelScale)),
+        )
+
+        const paneOrigin = resolvePaneOrigin(pane, scrollTransform)
+
+        if (paneCache.rectCount > 0) {
+          artifacts.device.queue.writeBuffer(
+            artifacts.uniformBuffer,
+            0,
+            new Float32Array([resolvedSurfaceSize.width, resolvedSurfaceSize.height, paneOrigin.x, paneOrigin.y]),
+          )
+          pass.setPipeline(artifacts.rectPipeline)
+          pass.setBindGroup(0, artifacts.rectBindGroup)
+          pass.setVertexBuffer(1, paneCache.rectBuffer)
+          pass.draw(6, paneCache.rectCount)
+        }
+
+        if (paneCache.textCount > 0 && artifacts.textBindGroup) {
+          artifacts.device.queue.writeBuffer(
+            artifacts.uniformBuffer,
+            0,
+            new Float32Array([resolvedSurfaceSize.width, resolvedSurfaceSize.height, paneOrigin.x, paneOrigin.y]),
+          )
+          pass.setPipeline(artifacts.textPipeline)
+          pass.setBindGroup(0, artifacts.textBindGroup)
+          pass.setVertexBuffer(1, paneCache.textBuffer)
+          pass.draw(6, paneCache.textCount)
+        }
       })
-      const rectBuffer = ensureBuffer(
-        artifacts.device,
-        paneCache.rectBuffer,
-        paneCache.rectCapacity,
-        rectFloats.byteLength || RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT,
-      )
-      paneCache.rectBuffer = rectBuffer.buffer
-      paneCache.rectCapacity = rectBuffer.capacity
-      paneCache.rectCount =
-        pane.gpuScene.fillRects.length + pane.gpuScene.borderRects.length + (decorationRectsByPane.get(pane.paneId)?.length ?? 0)
-      artifacts.device.queue.writeBuffer(paneCache.rectBuffer, 0, rectFloats)
 
-      const textPayload = textBuffers[paneIndex]!.payload
-      const textBuffer = ensureBuffer(
-        artifacts.device,
-        paneCache.textBuffer,
-        paneCache.textCapacity,
-        textPayload.floats.byteLength || TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT,
-      )
-      paneCache.textBuffer = textBuffer.buffer
-      paneCache.textCapacity = textBuffer.capacity
-      paneCache.textCount = textPayload.quadCount
-      artifacts.device.queue.writeBuffer(paneCache.textBuffer, 0, textPayload.floats)
+      pass.end()
+      artifacts.device.queue.submit([encoder.finish()])
+    }
+    drawFrameRef.current()
+  }, [active, panePayloads, scrollTransformStore, surfaceSize, webGpuReady])
 
-      pass.setScissorRect(
-        Math.max(0, Math.floor(pane.frame.x * pixelScale)),
-        Math.max(0, Math.floor(pane.frame.y * pixelScale)),
-        Math.max(1, Math.floor(pane.frame.width * pixelScale)),
-        Math.max(1, Math.floor(pane.frame.height * pixelScale)),
-      )
-
-      if (paneCache.rectCount > 0) {
-        noteCanvasPaint(`gpu:${pane.paneId}`)
-        pass.setPipeline(artifacts.rectPipeline)
-        pass.setBindGroup(0, artifacts.rectBindGroup)
-        pass.setVertexBuffer(1, paneCache.rectBuffer)
-        pass.draw(6, paneCache.rectCount)
+  useEffect(() => {
+    if (!active || !scrollTransformStore) {
+      return
+    }
+    const scheduleDraw = () => {
+      if (scheduledDrawFrameRef.current !== null) {
+        return
       }
+      scheduledDrawFrameRef.current = window.requestAnimationFrame(() => {
+        scheduledDrawFrameRef.current = null
+        drawFrameRef.current()
+      })
+    }
+    return scrollTransformStore.subscribe(scheduleDraw)
+  }, [active, scrollTransformStore])
 
-      if (paneCache.textCount > 0 && artifacts.textBindGroup) {
-        pass.setPipeline(artifacts.textPipeline)
-        pass.setBindGroup(0, artifacts.textBindGroup)
-        pass.setVertexBuffer(1, paneCache.textBuffer)
-        pass.draw(6, paneCache.textCount)
+  useEffect(() => {
+    return () => {
+      if (scheduledDrawFrameRef.current !== null) {
+        window.cancelAnimationFrame(scheduledDrawFrameRef.current)
+        scheduledDrawFrameRef.current = null
       }
-    })
-
-    pass.end()
-    artifacts.device.queue.submit([encoder.finish()])
-  }, [active, panePayloads, surfaceSize, webGpuReady])
+    }
+  }, [])
 
   if (!host || !active) {
     return null
@@ -647,8 +726,11 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-10"
       data-pane-renderer="workbook-pane-renderer"
-      data-testid="grid-text-overlay"
+      data-testid="grid-pane-renderer"
       ref={canvasRef}
+      style={{
+        contain: 'strict',
+      }}
     />
   )
 })

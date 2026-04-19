@@ -39,7 +39,7 @@ function expectSmoothBrowse(
   expect(report.counters.domSurfaceMounts).toBe(0)
 }
 
-test.describe('web app scroll performance', () => {
+test.describe('@browser-perf web app scroll performance', () => {
   test.setTimeout(120_000)
 
   test('keeps horizontal browse inside one resident window smooth and free of data-canvas redraw churn', async ({ page }, testInfo) => {
@@ -67,11 +67,15 @@ test.describe('web app scroll performance', () => {
     expect(report.counters.scenePacketRefreshes).toBe(0)
     expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(1)
     expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBeLessThanOrEqual(1)
-
-    await expect(page.getByTestId('grid-text-pane-body')).toHaveJSProperty('tagName', 'CANVAS')
-    await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
-    await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
-    await expect(page.getByTestId('grid-text-overlay')).toHaveCount(0)
+    const supportsWebGpu = await page.evaluate(() => 'gpu' in navigator)
+    if (supportsWebGpu) {
+      await expect(page.getByTestId('grid-pane-renderer')).toHaveJSProperty('tagName', 'CANVAS')
+      await expect(page.getByTestId('grid-text-pane-body')).toHaveCount(0)
+    } else {
+      await expect(page.getByTestId('grid-text-pane-body')).toHaveJSProperty('tagName', 'CANVAS')
+      await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
+      await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
+    }
   })
 
   test('keeps frozen-pane browse smooth without repainting resident body or frozen data panes inside a tile window', async ({

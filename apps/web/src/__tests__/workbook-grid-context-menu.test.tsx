@@ -32,8 +32,18 @@ function ContextMenuHarness(props: {
   freezeRows?: number | undefined
   freezeCols?: number | undefined
 }) {
+  const visibleRegion: VisibleRegionState = {
+    range: { x: 0, y: 0, width: 20, height: 20 },
+    tx: 0,
+    ty: 0,
+    freezeRows: props.freezeRows ?? 0,
+    freezeCols: props.freezeCols ?? 0,
+  }
   const menu = useWorkbookGridContextMenu({
     focusGrid: props.focusGrid ?? (() => {}),
+    getVisibleRegion() {
+      return visibleRegion
+    },
     isEditingCell: props.isEditingCell ?? false,
     onCommitEdit: props.onCommitEdit ?? (() => {}),
     onDeleteColumns: props.onDeleteColumn,
@@ -51,13 +61,6 @@ function ContextMenuHarness(props: {
     },
     selectedCell: [4, 2],
     setGridSelection: props.setGridSelection ?? (() => {}),
-    visibleRegion: {
-      range: { x: 0, y: 0, width: 20, height: 20 },
-      tx: 0,
-      ty: 0,
-      freezeRows: props.freezeRows ?? 0,
-      freezeCols: props.freezeCols ?? 0,
-    } satisfies VisibleRegionState,
   })
 
   return (

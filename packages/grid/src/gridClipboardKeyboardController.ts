@@ -97,16 +97,28 @@ interface HandleGridCopyCaptureOptions {
   internalClipboardRef: MutableRefObject<InternalClipboardRange | null>
 }
 
+function isEditableElement(element: EventTarget | null): element is HTMLElement {
+  return element instanceof HTMLElement && element.isContentEditable
+}
+
+export function isGridKeyboardEditableTarget(target: EventTarget | null): target is HTMLElement {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    isEditableElement(target)
+  )
+}
+
 function isCellEditorInputFocused(): boolean {
   if (typeof document === 'undefined') {
     return false
   }
   const activeElement = document.activeElement
-  return activeElement instanceof HTMLInputElement && activeElement.dataset['testid'] === 'cell-editor-input'
-}
-
-function isEditableElement(element: Element | null): element is HTMLElement {
-  return element instanceof HTMLElement && element.isContentEditable
+  return (
+    (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) &&
+    activeElement.dataset['testid'] === 'cell-editor-input'
+  )
 }
 
 function hasOpenModalDialog(): boolean {
@@ -395,18 +407,16 @@ export function shouldHandleGridWindowKey(
     return false
   }
 
-  if (
-    activeElement instanceof HTMLInputElement ||
-    activeElement instanceof HTMLTextAreaElement ||
-    activeElement instanceof HTMLSelectElement ||
-    isEditableElement(activeElement)
-  ) {
+  if (isGridKeyboardEditableTarget(activeElement)) {
     return false
   }
 
   const withinGridHost = Boolean(activeElement && host?.contains(activeElement))
   const onDocumentBody = activeElement === document.body || activeElement === document.documentElement || activeElement === null
-  if (withinGridHost || !onDocumentBody) {
+  if (withinGridHost) {
+    return isHandledGridKey(event)
+  }
+  if (!onDocumentBody) {
     return false
   }
 

@@ -1,7 +1,7 @@
 export const WORKBOOK_RECT_SHADER = /* wgsl */ `
 struct SurfaceUniforms {
   size: vec2f,
-  _padding: vec2f,
+  origin: vec2f,
 };
 
 @group(0) @binding(0) var<uniform> surface: SurfaceUniforms;
@@ -18,7 +18,7 @@ fn vs_main(
   @location(2) rect_size: vec2f,
   @location(3) rect_color: vec4f,
 ) -> VertexOut {
-  let pixel = rect_origin + quad * rect_size;
+  let pixel = surface.origin + rect_origin + quad * rect_size;
   let clip = vec2f(
     (pixel.x / surface.size.x) * 2.0 - 1.0,
     1.0 - (pixel.y / surface.size.y) * 2.0,
@@ -39,7 +39,7 @@ fn fs_main(@location(0) color: vec4f) -> @location(0) vec4f {
 export const WORKBOOK_TEXT_SHADER = /* wgsl */ `
 struct SurfaceUniforms {
   size: vec2f,
-  _padding: vec2f,
+  origin: vec2f,
 };
 
 @group(0) @binding(0) var<uniform> surface: SurfaceUniforms;
@@ -64,10 +64,17 @@ fn vs_main(
   @location(5) tint: vec4f,
   @location(6) clip_rect: vec4f,
 ) -> VertexOut {
-  let pixel = rect_origin + quad * rect_size;
+  let local_pixel = rect_origin + quad * rect_size;
+  let pixel = surface.origin + local_pixel;
   let clip = vec2f(
     (pixel.x / surface.size.x) * 2.0 - 1.0,
     1.0 - (pixel.y / surface.size.y) * 2.0,
+  );
+  let translated_clip = vec4f(
+    clip_rect.x + surface.origin.x,
+    clip_rect.y + surface.origin.y,
+    clip_rect.z + surface.origin.x,
+    clip_rect.w + surface.origin.y,
   );
 
   var out: VertexOut;
@@ -78,7 +85,7 @@ fn vs_main(
   );
   out.color = tint;
   out.pixel = pixel;
-  out.clip = clip_rect;
+  out.clip = translated_clip;
   return out;
 }
 
