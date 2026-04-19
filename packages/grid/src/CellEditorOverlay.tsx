@@ -65,6 +65,7 @@ export function CellEditorOverlay({
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
+  const targetSelectionRef = useRef(targetSelection)
   const MAX_EDITOR_HEIGHT = 220
 
   useLayoutEffect(() => {
@@ -101,7 +102,7 @@ export function CellEditorOverlay({
       return
     }
     completionRef.current = 'commit'
-    onCommit(movement, inputRef.current?.value ?? value, targetSelection)
+    onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
   }
 
   const cancel = () => {
