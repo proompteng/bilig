@@ -635,6 +635,8 @@ export async function waitForBenchmarkCorpus(page: Page, timeoutMs = 60_000) {
 }
 
 export async function startWorkbookScrollPerf(page: Page, workload: string) {
+  await page.bringToFront()
+  await settleWorkbookScrollPerf(page, 2)
   await page.evaluate((nextWorkload) => {
     ;(window as Window & { __biligScrollPerf?: { startSampling?: (workload: string) => void } }).__biligScrollPerf?.startSampling?.(
       nextWorkload,
