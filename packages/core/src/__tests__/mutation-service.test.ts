@@ -850,6 +850,27 @@ describe('EngineMutationService', () => {
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 18 })
   })
 
+  it('does not record undo history for copying an authored blank onto an already empty cell', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'copy-authored-blank-noop' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'B2', 10)
+    engine.setCellValue('Sheet1', 'B2', null)
+
+    Effect.runSync(
+      getMutationService(engine).copyRange(
+        { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'B2' },
+        { sheetName: 'Sheet1', startAddress: 'C2', endAddress: 'C2' },
+      ),
+    )
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Empty })
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Empty })
+  })
+
   it('imports csv through the service and replaces prior sheet contents', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'csv-import-service' })
     await engine.ready()

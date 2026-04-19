@@ -543,6 +543,19 @@ export function createEngineMutationService(args: {
   ): boolean => {
     const current = readStoredCellState(targetSheetName, targetAddress)
     const desired = readDesiredCellState(targetSheetName, targetAddress, snapshot, sourceSheetName, sourceAddress)
+    if (
+      desired.formula === undefined &&
+      desired.value === null &&
+      desired.format === null &&
+      desired.authoredBlank === true &&
+      current.formula === undefined &&
+      current.value === null &&
+      current.format === null &&
+      !
+      (current.authoredBlank ?? false)
+    ) {
+      return false
+    }
     return (
       current.formula !== desired.formula ||
       current.value !== desired.value ||
