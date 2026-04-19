@@ -137,4 +137,56 @@ describe('engine range format ops', () => {
       },
     ])
   })
+
+  it('restores overlapping style ranges with their original extents while clearing untouched cells to default', () => {
+    const workbook = new WorkbookStore('restore-overlapping-style-extents')
+    workbook.createSheet('Sheet1')
+    workbook.upsertCellStyle({ id: 'style-fill', fill: { backgroundColor: '#dbeafe' } })
+
+    workbook.setStyleRange({ sheetName: 'Sheet1', startAddress: 'C3', endAddress: 'C3' }, 'style-fill')
+    workbook.setStyleRange({ sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' }, 'style-fill')
+
+    expect(restoreStyleRangeOps(workbook, { sheetName: 'Sheet1', startAddress: 'D3', endAddress: 'D4' })).toMatchObject([
+      {
+        kind: 'upsertCellStyle',
+        style: { id: 'style-fill', fill: { backgroundColor: '#dbeafe' } },
+      },
+      {
+        kind: 'setStyleRange',
+        range: { sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' },
+        styleId: 'style-fill',
+      },
+      {
+        kind: 'setStyleRange',
+        range: { sheetName: 'Sheet1', startAddress: 'D3', endAddress: 'D3' },
+        styleId: 'style-0',
+      },
+    ])
+  })
+
+  it('restores overlapping format ranges with their original extents while clearing untouched cells to default', () => {
+    const workbook = new WorkbookStore('restore-overlapping-format-extents')
+    workbook.createSheet('Sheet1')
+    workbook.upsertCellNumberFormat(createCellNumberFormatRecord('format-decimal', '0.00'))
+
+    workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'C3', endAddress: 'C3' }, 'format-decimal')
+    workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' }, 'format-decimal')
+
+    expect(restoreFormatRangeOps(workbook, { sheetName: 'Sheet1', startAddress: 'D3', endAddress: 'D4' })).toMatchObject([
+      {
+        kind: 'upsertCellNumberFormat',
+        format: { id: 'format-decimal', code: '0.00' },
+      },
+      {
+        kind: 'setFormatRange',
+        range: { sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' },
+        formatId: 'format-decimal',
+      },
+      {
+        kind: 'setFormatRange',
+        range: { sheetName: 'Sheet1', startAddress: 'D3', endAddress: 'D3' },
+        formatId: 'format-0',
+      },
+    ])
+  })
 })

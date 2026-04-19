@@ -36,10 +36,11 @@ export function buildStyleClearOps(workbook: WorkbookStore, range: CellRangeRef,
 }
 
 export function restoreStyleRangeOps(workbook: WorkbookStore, range: CellRangeRef): EngineOp[] {
-  const tiles = coalesceStyleTiles(resolveStyleTiles(workbook, range))
+  const restoredTiles = coalesceStyleTiles(resolveOverlappingStyleTiles(workbook, range))
+  const defaultTiles = resolveStyleTiles(workbook, range).filter((tile) => tile.styleId === WorkbookStore.defaultStyleId)
   const seenStyleIds = new Set<string>()
   const ops: EngineOp[] = []
-  tiles.forEach((tile) => {
+  restoredTiles.forEach((tile) => {
     if (tile.styleId !== WorkbookStore.defaultStyleId && !seenStyleIds.has(tile.styleId)) {
       const style = workbook.getCellStyle(tile.styleId)
       if (style) {
@@ -50,6 +51,13 @@ export function restoreStyleRangeOps(workbook: WorkbookStore, range: CellRangeRe
       }
       seenStyleIds.add(tile.styleId)
     }
+    ops.push({
+      kind: 'setStyleRange',
+      range: tile.range,
+      styleId: tile.styleId,
+    })
+  })
+  defaultTiles.forEach((tile) => {
     ops.push({
       kind: 'setStyleRange',
       range: tile.range,
@@ -71,10 +79,11 @@ export function buildFormatClearOps(workbook: WorkbookStore, range: CellRangeRef
 }
 
 export function restoreFormatRangeOps(workbook: WorkbookStore, range: CellRangeRef): EngineOp[] {
-  const tiles = resolveFormatTiles(workbook, range)
+  const restoredTiles = resolveOverlappingFormatTiles(workbook, range)
+  const defaultTiles = resolveFormatTiles(workbook, range).filter((tile) => tile.formatId === WorkbookStore.defaultFormatId)
   const seenFormatIds = new Set<string>()
   const ops: EngineOp[] = []
-  tiles.forEach((tile) => {
+  restoredTiles.forEach((tile) => {
     if (tile.formatId !== WorkbookStore.defaultFormatId && !seenFormatIds.has(tile.formatId)) {
       const format = workbook.getCellNumberFormat(tile.formatId)
       if (format) {
@@ -85,6 +94,13 @@ export function restoreFormatRangeOps(workbook: WorkbookStore, range: CellRangeR
       }
       seenFormatIds.add(tile.formatId)
     }
+    ops.push({
+      kind: 'setFormatRange',
+      range: tile.range,
+      formatId: tile.formatId,
+    })
+  })
+  defaultTiles.forEach((tile) => {
     ops.push({
       kind: 'setFormatRange',
       range: tile.range,
@@ -191,6 +207,17 @@ function resolveStyleTiles(workbook: WorkbookStore, range: CellRangeRef): StyleT
   }
 
   return tiles
+}
+
+function resolveOverlappingStyleTiles(workbook: WorkbookStore, range: CellRangeRef): StyleTile[] {
+  const bounds = normalizeRange(range)
+  return workbook
+    .listStyleRanges(range.sheetName)
+    .filter((record) => intersectRangeBounds(record.range, bounds) !== undefined)
+    .map((record) => ({
+      range: { ...record.range },
+      styleId: record.styleId,
+    }))
 }
 
 function coalesceStyleTiles(tiles: readonly StyleTile[]): StyleTile[] {
@@ -304,4 +331,15 @@ function resolveFormatTiles(workbook: WorkbookStore, range: CellRangeRef): Forma
   }
 
   return tiles
+}
+
+function resolveOverlappingFormatTiles(workbook: WorkbookStore, range: CellRangeRef): FormatTile[] {
+  const bounds = normalizeRange(range)
+  return workbook
+    .listFormatRanges(range.sheetName)
+    .filter((record) => intersectRangeBounds(record.range, bounds) !== undefined)
+    .map((record) => ({
+      range: { ...record.range },
+      formatId: record.formatId,
+    }))
 }

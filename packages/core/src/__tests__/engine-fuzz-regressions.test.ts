@@ -98,6 +98,24 @@ describe('engine fuzz regressions', () => {
     expect(engine.exportSnapshot()).toEqual(seedSnapshot)
   })
 
+  it('restores sparse style range shapes after undoing a partial clear', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('sparse-format', 'sparse-style-clear-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'sparse-style-clear-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' }, { fill: { backgroundColor: '#dbeafe' } })
+    const styledSnapshot = engine.exportSnapshot()
+
+    engine.clearRangeStyle({ sheetName: 'Sheet1', startAddress: 'D3', endAddress: 'D4' })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(styledSnapshot)
+  })
+
   it('rebinds structurally rewritten formulas when dependency addresses shift after prior ref errors', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structural-ref-error-rebind-regression' })
     await engine.ready()
