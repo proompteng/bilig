@@ -1,0 +1,2 @@
+export const VIEWPORT_TILE_COLUMN_COUNT = 128
+export const VIEWPORT_TILE_ROW_COUNT = 32

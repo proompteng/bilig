@@ -134,11 +134,16 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           ref={renderState.focusTargetRef}
           tabIndex={-1}
         />
-        <div ref={renderState.scrollViewportRef} aria-hidden="true" className="absolute inset-0 overflow-auto">
+        <div
+          ref={renderState.scrollViewportRef}
+          aria-hidden="true"
+          className="absolute inset-0 overflow-auto"
+          data-testid="grid-scroll-viewport"
+        >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
         <GridGpuSurface host={renderState.hostElement} scene={renderState.gpuScene} onActiveChange={renderState.setIsWebGpuActive} />
-        <GridTextOverlay active={renderState.hostElement !== null} scene={renderState.textScene} />
+        <GridTextOverlay active={renderState.hostElement !== null} host={renderState.hostElement} scene={renderState.textScene} />
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"

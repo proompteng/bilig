@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { getGridMetrics } from '../gridMetrics.js'
-import { resolveViewportScrollPosition, resolveVisibleRegionFromScroll } from '../workbookGridViewport.js'
+import { resolveResidentViewport, resolveViewportScrollPosition, resolveVisibleRegionFromScroll } from '../workbookGridViewport.js'
 
 describe('workbookGridViewport', () => {
   test('restores a saved viewport with row height overrides', () => {
@@ -122,6 +122,66 @@ describe('workbookGridViewport', () => {
       ty: 0,
       freezeRows: 1,
       freezeCols: 2,
+    })
+  })
+
+  test('keeps the resident viewport stable while horizontal scroll stays inside one tile window', () => {
+    expect(
+      resolveResidentViewport({
+        rowStart: 10,
+        rowEnd: 25,
+        colStart: 7,
+        colEnd: 18,
+      }),
+    ).toEqual({
+      rowStart: 0,
+      rowEnd: 31,
+      colStart: 0,
+      colEnd: 127,
+    })
+
+    expect(
+      resolveResidentViewport({
+        rowStart: 10,
+        rowEnd: 25,
+        colStart: 44,
+        colEnd: 55,
+      }),
+    ).toEqual({
+      rowStart: 0,
+      rowEnd: 31,
+      colStart: 0,
+      colEnd: 127,
+    })
+  })
+
+  test('advances the resident viewport only when the visible viewport crosses a tile boundary', () => {
+    expect(
+      resolveResidentViewport({
+        rowStart: 10,
+        rowEnd: 25,
+        colStart: 127,
+        colEnd: 138,
+      }),
+    ).toEqual({
+      rowStart: 0,
+      rowEnd: 31,
+      colStart: 0,
+      colEnd: 255,
+    })
+
+    expect(
+      resolveResidentViewport({
+        rowStart: 32,
+        rowEnd: 40,
+        colStart: 128,
+        colEnd: 138,
+      }),
+    ).toEqual({
+      rowStart: 32,
+      rowEnd: 63,
+      colStart: 128,
+      colEnd: 255,
     })
   })
 })

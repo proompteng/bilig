@@ -1,8 +1,13 @@
 import type { WorkbookSnapshot } from '@bilig/protocol'
 
-export type WorkbookBenchmarkCorpusId = 'dense-mixed-100k' | 'dense-mixed-250k' | 'analysis-multisheet-100k' | 'analysis-multisheet-250k'
+export type WorkbookBenchmarkCorpusId =
+  | 'dense-mixed-100k'
+  | 'dense-mixed-250k'
+  | 'wide-mixed-250k'
+  | 'analysis-multisheet-100k'
+  | 'analysis-multisheet-250k'
 
-export type WorkbookBenchmarkCorpusFamily = 'dense-mixed' | 'analysis-multisheet'
+export type WorkbookBenchmarkCorpusFamily = 'dense-mixed' | 'wide-mixed' | 'analysis-multisheet'
 
 export interface WorkbookBenchmarkCorpusViewport {
   readonly sheetName: string
@@ -102,6 +107,93 @@ export function buildDenseMixedWorkbookSnapshot(
       address: formatCellAddress(rowIndex, 3),
       value: `segment-${String((rowIndex % 24) + 1)}`,
     })
+  }
+
+  return {
+    version: 1,
+    workbook: { name: workbookName },
+    sheets: [sheet],
+  }
+}
+
+export function buildWideMixedWorkbookSnapshot(
+  materializedCellCount = 250_000,
+  workbookName = 'benchmark-wide-mixed',
+  sheetName = 'WideGrid',
+  columnCount = 128,
+): WorkbookSnapshot {
+  const sheet = createSheet(1, sheetName, 0)
+  let remaining = Math.max(1, Math.trunc(materializedCellCount))
+  const normalizedColumnCount = Math.max(16, Math.trunc(columnCount))
+
+  const appendCell = (cell: WorkbookBenchmarkCell): boolean => {
+    if (remaining === 0) {
+      return false
+    }
+    sheet.cells.push(cell)
+    remaining -= 1
+    return true
+  }
+
+  for (let columnIndex = 0; columnIndex < normalizedColumnCount; columnIndex += 1) {
+    if (remaining === 0) {
+      break
+    }
+    appendCell({
+      address: formatCellAddress(0, columnIndex),
+      value: `metric-${String(columnIndex + 1)}`,
+    })
+  }
+
+  for (let rowIndex = 1; ; rowIndex += 1) {
+    if (remaining === 0) {
+      break
+    }
+    const rowNumber = rowIndex + 1
+    for (let columnIndex = 0; columnIndex < normalizedColumnCount; columnIndex += 1) {
+      if (remaining === 0) {
+        break
+      }
+      const address = formatCellAddress(rowIndex, columnIndex)
+      switch (columnIndex % 6) {
+        case 0:
+          appendCell({
+            address,
+            value: rowNumber * (columnIndex + 1),
+          })
+          break
+        case 1:
+          appendCell({
+            address,
+            value: `segment-${String((rowIndex + columnIndex) % 32)}`,
+          })
+          break
+        case 2:
+          appendCell({
+            address,
+            formula: `${formatCellAddress(rowIndex, Math.max(0, columnIndex - 2))}+${formatCellAddress(rowIndex, columnIndex - 1)}`,
+          })
+          break
+        case 3:
+          appendCell({
+            address,
+            value: (rowIndex % 17) + columnIndex,
+          })
+          break
+        case 4:
+          appendCell({
+            address,
+            formula: `${formatCellAddress(rowIndex, Math.max(0, columnIndex - 1))}*2`,
+          })
+          break
+        default:
+          appendCell({
+            address,
+            value: `note-${String(rowIndex % 11)}-${String(columnIndex % 13)}`,
+          })
+          break
+      }
+    }
   }
 
   return {
@@ -217,6 +309,7 @@ export function buildAnalysisMultisheetWorkbookSnapshot(
 const workbookBenchmarkCorpusIds = [
   'dense-mixed-100k',
   'dense-mixed-250k',
+  'wide-mixed-250k',
   'analysis-multisheet-100k',
   'analysis-multisheet-250k',
 ] as const satisfies readonly WorkbookBenchmarkCorpusId[]
@@ -256,6 +349,23 @@ const workbookBenchmarkCorpusDescriptors = {
     },
     buildSnapshot: (materializedCellCount: number, workbookName: string) =>
       buildDenseMixedWorkbookSnapshot(materializedCellCount, workbookName),
+  },
+  'wide-mixed-250k': {
+    id: 'wide-mixed-250k',
+    family: 'wide-mixed',
+    label: 'Wide mixed 250k',
+    description: 'Single-sheet 250k-cell workbook spread across many columns for browser horizontal scroll performance workloads.',
+    materializedCellCount: 250_000,
+    sheetCount: 1,
+    primaryViewport: {
+      sheetName: 'WideGrid',
+      rowStart: 0,
+      rowEnd: 39,
+      colStart: 0,
+      colEnd: 9,
+    },
+    buildSnapshot: (materializedCellCount: number, workbookName: string) =>
+      buildWideMixedWorkbookSnapshot(materializedCellCount, workbookName),
   },
   'analysis-multisheet-100k': {
     id: 'analysis-multisheet-100k',

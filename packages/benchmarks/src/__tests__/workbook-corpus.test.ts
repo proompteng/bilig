@@ -53,12 +53,42 @@ describe('workbook benchmark corpus', () => {
     })
   })
 
+  it('builds the wide 250k corpus as a horizontally dense workbook', () => {
+    const corpus = buildWorkbookBenchmarkCorpus('wide-mixed-250k')
+
+    expect(corpus.family).toBe('wide-mixed')
+    expect(corpus.primaryViewport).toEqual({
+      sheetName: 'WideGrid',
+      rowStart: 0,
+      rowEnd: 39,
+      colStart: 0,
+      colEnd: 9,
+    })
+    expect(countWorkbookSnapshotCells(corpus.snapshot)).toBe(250_000)
+    expect(corpus.snapshot.sheets[0]?.name).toBe('WideGrid')
+    expect(corpus.snapshot.sheets[0]?.cells.slice(0, 12)).toEqual([
+      { address: 'A1', value: 'metric-1' },
+      { address: 'B1', value: 'metric-2' },
+      { address: 'C1', value: 'metric-3' },
+      { address: 'D1', value: 'metric-4' },
+      { address: 'E1', value: 'metric-5' },
+      { address: 'F1', value: 'metric-6' },
+      { address: 'G1', value: 'metric-7' },
+      { address: 'H1', value: 'metric-8' },
+      { address: 'I1', value: 'metric-9' },
+      { address: 'J1', value: 'metric-10' },
+      { address: 'K1', value: 'metric-11' },
+      { address: 'L1', value: 'metric-12' },
+    ])
+  })
+
   it('lists stable corpus definitions and resolves them by id', () => {
     const definitions = listWorkbookBenchmarkCorpusDefinitions()
 
     expect(definitions.map((definition) => definition.id)).toEqual([
       'dense-mixed-100k',
       'dense-mixed-250k',
+      'wide-mixed-250k',
       'analysis-multisheet-100k',
       'analysis-multisheet-250k',
     ])

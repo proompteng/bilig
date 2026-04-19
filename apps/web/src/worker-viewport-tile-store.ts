@@ -1,9 +1,6 @@
 import type { WorkbookLocalStore, WorkbookLocalViewportBase } from '@bilig/storage-browser'
-import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT } from '@bilig/protocol'
 import type { ViewportPatchSubscription } from '@bilig/worker-transport'
-
-const VIEWPORT_TILE_COLUMN_COUNT = 128
-const VIEWPORT_TILE_ROW_COUNT = 32
 const DEFAULT_MAX_CACHED_TILES = 96
 
 type ViewportBounds = Pick<ViewportPatchSubscription, 'rowStart' | 'rowEnd' | 'colStart' | 'colEnd'>

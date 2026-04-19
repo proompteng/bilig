@@ -28,12 +28,20 @@ import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.j
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
+  resolveResidentViewport,
   resolveFrozenColumnWidth,
   resolveFrozenRowHeight,
   resolveViewportScrollPosition,
   resolveVisibleRegionFromScroll,
   scrollCellIntoView,
 } from './workbookGridViewport.js'
+
+function noteViewportSubscription(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(window as Window & { __biligScrollPerf?: { noteViewportSubscription?: () => void } }).__biligScrollPerf?.noteViewportSubscription?.()
+}
 
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
   if (left === right) {
@@ -55,6 +63,12 @@ function sameVisibleRegion(left: VisibleRegionState, right: VisibleRegionState):
     left.range.y === right.range.y &&
     left.range.width === right.range.width &&
     left.range.height === right.range.height
+  )
+}
+
+function sameViewportBounds(left: Viewport, right: Viewport): boolean {
+  return (
+    left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
   )
 }
 
@@ -365,6 +379,16 @@ export function useWorkbookGridRenderState(input: {
     }),
     [visibleRegion.range.height, visibleRegion.range.width, visibleRegion.range.x, visibleRegion.range.y],
   )
+  const residentViewportRef = useRef<Viewport>(resolveResidentViewport(viewport))
+  const nextResidentViewport = resolveResidentViewport(viewport)
+  if (!sameViewportBounds(residentViewportRef.current, nextResidentViewport)) {
+    residentViewportRef.current = nextResidentViewport
+  }
+  const residentViewport = residentViewportRef.current
+  const residentViewports = useMemo(
+    () => collectViewportSubscriptions(residentViewport, freezeRows, freezeCols),
+    [freezeCols, freezeRows, residentViewport],
+  )
 
   const invalidateScene = useCallback(() => {
     setSceneRevision((current) => current + 1)
@@ -460,15 +484,22 @@ export function useWorkbookGridRenderState(input: {
   }, [hostElement, syncVisibleRegion])
 
   useEffect(() => {
+    if (!subscribeViewport) {
+      return
+    }
+    noteViewportSubscription()
+    const cleanups = residentViewports.map((nextViewport) => subscribeViewport(sheetName, nextViewport, invalidateScene))
+    return () => {
+      cleanups.forEach((cleanup) => cleanup())
+    }
+  }, [invalidateScene, residentViewports, sheetName, subscribeViewport])
+
+  useEffect(() => {
     if (subscribeViewport) {
-      const viewports = collectViewportSubscriptions(viewport, freezeRows, freezeCols)
-      const cleanups = viewports.map((nextViewport) => subscribeViewport(sheetName, nextViewport, invalidateScene))
-      return () => {
-        cleanups.forEach((cleanup) => cleanup())
-      }
+      return
     }
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
-  }, [engine, freezeCols, freezeRows, invalidateScene, sheetName, subscribeViewport, viewport, visibleAddresses])
+  }, [engine, invalidateScene, sheetName, subscribeViewport, visibleAddresses])
 
   const resizeGuideColumn = useMemo(
     () =>

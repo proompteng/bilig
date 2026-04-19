@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import { Profiler, useCallback, useEffect, useMemo, useRef } from 'react'
 import { WorkbookView } from '@bilig/grid'
 import type { BiligRuntimeConfig } from '@bilig/zero-sync'
 import { resolveRuntimeConfig } from './runtime-config.js'
 import type { ZeroClient } from './runtime-session.js'
 import { parseSelectionTarget, type ZeroConnectionState } from './worker-workbook-app-model.js'
+import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { WorkbookToastRegion } from './WorkbookToastRegion.js'
 import { useWorkbookImportPane } from './use-workbook-import-pane.js'
 import { useWorkbookShortcutDialog } from './use-workbook-shortcut-dialog.js'
@@ -64,6 +65,32 @@ function WorkerWorkbookAppInner({
     retryFailedPendingMutation,
     runtimeError,
   } = app
+  const benchmarkCorpus = useMemo(() => new URLSearchParams(window.location.search).get('benchmarkCorpus'), [])
+  const installedBenchmarkCorpusRef = useRef<string | null>(null)
+  const { installBenchmarkCorpus, runtimeReady } = app
+
+  useEffect(() => {
+    if (!benchmarkCorpus || !runtimeReady) {
+      return
+    }
+    if (installedBenchmarkCorpusRef.current === benchmarkCorpus) {
+      return
+    }
+    const collector = getWorkbookScrollPerfCollector()
+    if (collector?.getBenchmarkState().state === 'ready' && collector.getBenchmarkState().fixture?.id === benchmarkCorpus) {
+      installedBenchmarkCorpusRef.current = benchmarkCorpus
+      return
+    }
+    void (async () => {
+      try {
+        await installBenchmarkCorpus(benchmarkCorpus)
+        installedBenchmarkCorpusRef.current = benchmarkCorpus
+      } catch (error) {
+        getWorkbookScrollPerfCollector()?.setBenchmarkState('error', error instanceof Error ? error.message : String(error))
+        reportRuntimeError(error)
+      }
+    })()
+  }, [benchmarkCorpus, installBenchmarkCorpus, reportRuntimeError, runtimeReady])
   const showFollowerPersistenceBanner = app.localPersistenceMode === 'follower' && (app.transferRequested || !app.remoteSyncAvailable)
   const reportAsyncError = useCallback(
     (task: Promise<unknown>): void => {
@@ -196,96 +223,103 @@ function WorkerWorkbookAppInner({
         <WorkbookToastRegion toasts={toasts} />
         <div className="min-h-0 min-w-0 flex-1">
           {app.workbookReady && app.workerHandle ? (
-            <WorkbookView
-              ribbon={app.ribbon}
-              editorValue={app.visibleEditorValue}
-              editorSelectionBehavior={app.editorSelectionBehavior}
-              engine={app.workerHandle.viewportStore}
-              definedNames={app.definedNames}
-              isEditing={Boolean(app.writesAllowed && app.isEditing)}
-              isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
-              onAddressCommit={(input) => {
-                const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
-                if (!nextTarget) {
-                  return false
-                }
-                app.selectSelectionSnapshot(nextTarget)
-                return true
+            <Profiler
+              id="workbook-shell"
+              onRender={() => {
+                getWorkbookScrollPerfCollector()?.noteReactCommit()
               }}
-              onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
-                return (async () => {
-                  try {
-                    await app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, fallbackWidth, {
-                      flush: true,
-                    })
-                  } catch (error) {
-                    app.reportRuntimeError(error)
+            >
+              <WorkbookView
+                ribbon={app.ribbon}
+                editorValue={app.visibleEditorValue}
+                editorSelectionBehavior={app.editorSelectionBehavior}
+                engine={app.workerHandle.viewportStore}
+                definedNames={app.definedNames}
+                isEditing={Boolean(app.writesAllowed && app.isEditing)}
+                isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
+                onAddressCommit={(input) => {
+                  const nextTarget = parseSelectionTarget(input, app.selection.sheetName, app.definedNames)
+                  if (!nextTarget) {
+                    return false
                   }
-                })()
-              }}
-              onBeginEdit={app.beginEditing}
-              onBeginFormulaEdit={(seed?: string) => app.beginEditing(seed, 'select-all', 'formula')}
-              onCancelEdit={app.cancelEditor}
-              onClearCell={app.clearSelectedCell}
-              onColumnWidthChange={(columnIndex: number, newSize: number) => {
-                reportAsyncError(app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize))
-              }}
-              onRowHeightChange={(rowIndex: number, newSize: number) => {
-                reportAsyncError(app.invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize))
-              }}
-              onSetColumnHidden={(columnIndex: number, hidden: boolean) => {
-                reportAsyncError(app.invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden))
-              }}
-              onInsertColumns={(startCol: number, count: number) => {
-                reportAsyncError(app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count))
-              }}
-              onDeleteColumns={(startCol: number, count: number) => {
-                reportAsyncError(app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count))
-              }}
-              onSetRowHidden={(rowIndex: number, hidden: boolean) => {
-                reportAsyncError(app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden))
-              }}
-              onInsertRows={(startRow: number, count: number) => {
-                reportAsyncError(app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count))
-              }}
-              onDeleteRows={(startRow: number, count: number) => {
-                reportAsyncError(app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count))
-              }}
-              onSetFreezePane={(rows: number, cols: number) => {
-                reportAsyncError(app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols))
-              }}
-              onVisibleViewportChange={app.handleVisibleViewportChange}
-              onCommitEdit={app.commitEditor}
-              onCopyRange={app.copySelectionRange}
-              onCreateSheet={app.writesAllowed ? app.createSheet : undefined}
-              onDeleteSheet={app.writesAllowed ? app.deleteSheet : undefined}
-              onEditorChange={app.handleEditorChange}
-              onFillRange={app.fillSelectionRange}
-              onMoveRange={app.moveSelectionRange}
-              onPaste={app.pasteIntoSelection}
-              previewRanges={app.previewRanges}
-              onToggleBooleanCell={app.toggleBooleanCell}
-              onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
-              onSelectionChange={app.handleSelectionChange}
-              onSelectSheet={(sheetName) => app.selectAddress(sheetName, 'A1')}
-              resolvedValue={app.resolvedValue}
-              selectedAddr={app.selection.address}
-              selectedCellSnapshot={app.selectedCell}
-              selectionSnapshot={app.selectionSnapshot}
-              sheetName={app.selection.sheetName}
-              sheetNames={app.sheetNames}
-              subscribeViewport={app.subscribeViewport}
-              columnWidths={app.columnWidths}
-              hiddenColumns={app.hiddenColumns}
-              hiddenRows={app.hiddenRows}
-              rowHeights={app.rowHeights}
-              freezeRows={app.freezeRows}
-              freezeCols={app.freezeCols}
-              onSidePanelWidthChange={app.setSidePanelWidth}
-              sidePanelId={app.sidePanelId}
-              sidePanel={app.sidePanel}
-              sidePanelWidth={app.sidePanelWidth}
-            />
+                  app.selectSelectionSnapshot(nextTarget)
+                  return true
+                }}
+                onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
+                  return (async () => {
+                    try {
+                      await app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, fallbackWidth, {
+                        flush: true,
+                      })
+                    } catch (error) {
+                      app.reportRuntimeError(error)
+                    }
+                  })()
+                }}
+                onBeginEdit={app.beginEditing}
+                onBeginFormulaEdit={(seed?: string) => app.beginEditing(seed, 'select-all', 'formula')}
+                onCancelEdit={app.cancelEditor}
+                onClearCell={app.clearSelectedCell}
+                onColumnWidthChange={(columnIndex: number, newSize: number) => {
+                  reportAsyncError(app.invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize))
+                }}
+                onRowHeightChange={(rowIndex: number, newSize: number) => {
+                  reportAsyncError(app.invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize))
+                }}
+                onSetColumnHidden={(columnIndex: number, hidden: boolean) => {
+                  reportAsyncError(app.invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden))
+                }}
+                onInsertColumns={(startCol: number, count: number) => {
+                  reportAsyncError(app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count))
+                }}
+                onDeleteColumns={(startCol: number, count: number) => {
+                  reportAsyncError(app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count))
+                }}
+                onSetRowHidden={(rowIndex: number, hidden: boolean) => {
+                  reportAsyncError(app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden))
+                }}
+                onInsertRows={(startRow: number, count: number) => {
+                  reportAsyncError(app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count))
+                }}
+                onDeleteRows={(startRow: number, count: number) => {
+                  reportAsyncError(app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count))
+                }}
+                onSetFreezePane={(rows: number, cols: number) => {
+                  reportAsyncError(app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols))
+                }}
+                onVisibleViewportChange={app.handleVisibleViewportChange}
+                onCommitEdit={app.commitEditor}
+                onCopyRange={app.copySelectionRange}
+                onCreateSheet={app.writesAllowed ? app.createSheet : undefined}
+                onDeleteSheet={app.writesAllowed ? app.deleteSheet : undefined}
+                onEditorChange={app.handleEditorChange}
+                onFillRange={app.fillSelectionRange}
+                onMoveRange={app.moveSelectionRange}
+                onPaste={app.pasteIntoSelection}
+                previewRanges={app.previewRanges}
+                onToggleBooleanCell={app.toggleBooleanCell}
+                onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
+                onSelectionChange={app.handleSelectionChange}
+                onSelectSheet={(sheetName) => app.selectAddress(sheetName, 'A1')}
+                resolvedValue={app.resolvedValue}
+                selectedAddr={app.selection.address}
+                selectedCellSnapshot={app.selectedCell}
+                selectionSnapshot={app.selectionSnapshot}
+                sheetName={app.selection.sheetName}
+                sheetNames={app.sheetNames}
+                subscribeViewport={app.subscribeViewport}
+                columnWidths={app.columnWidths}
+                hiddenColumns={app.hiddenColumns}
+                hiddenRows={app.hiddenRows}
+                rowHeights={app.rowHeights}
+                freezeRows={app.freezeRows}
+                freezeCols={app.freezeCols}
+                onSidePanelWidthChange={app.setSidePanelWidth}
+                sidePanelId={app.sidePanelId}
+                sidePanel={app.sidePanel}
+                sidePanelWidth={app.sidePanelWidth}
+              />
+            </Profiler>
           ) : null}
         </div>
         {importPanel}

@@ -10,6 +10,7 @@
     { "path": "../../packages/agent-api" },
     { "path": "../../packages/actors" },
     { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/benchmarks" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/core" },
     { "path": "../../packages/excel-import" },

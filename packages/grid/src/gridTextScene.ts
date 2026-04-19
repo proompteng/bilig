@@ -95,6 +95,7 @@ export function buildGridTextScene({
     ? (engine.getCellStyle(selectedCellSnapshot?.styleId)?.font?.size ?? DEFAULT_HEADER_FONT_SIZE)
     : DEFAULT_HEADER_FONT_SIZE
   const items: GridTextItem[] = []
+  const visibleColumnEnd = visibleItems.reduce((max, [visibleCol]) => Math.max(max, visibleCol), -1)
 
   pushHeaderTextItems({
     columnWidths,
@@ -124,7 +125,7 @@ export function buildGridTextScene({
       row,
       hostBounds,
       getCellBounds,
-      visibleColumnEnd: Math.max(...visibleItems.map(([visibleCol]) => visibleCol)),
+      visibleColumnEnd,
       selectedAddress: col === selectedCell[0] && row === selectedCell[1] ? `${indexToColumn(col)}${row + 1}` : null,
       snapshotOverride: selectedCellSnapshot,
       gridMetrics,

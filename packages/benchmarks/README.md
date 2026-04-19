@@ -59,6 +59,7 @@ contracts:
 
 - `dense-mixed-100k`
 - `dense-mixed-250k`
+- `wide-mixed-250k`
 - `analysis-multisheet-100k`
 - `analysis-multisheet-250k`
 

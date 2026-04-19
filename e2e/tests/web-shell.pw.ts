@@ -3,7 +3,6 @@ import * as fc from 'fast-check'
 import { runProperty, shouldRunFuzzSuite } from '../../packages/test-fuzz/src/index.ts'
 import {
   PRIMARY_MODIFIER,
-  PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
   clickProductCell,
@@ -472,7 +471,6 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
 
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
-  const textOverlay = page.getByTestId('grid-text-overlay')
   const sampleText = 'visible text sample'
 
   await nameBox.fill('C5')
@@ -485,19 +483,9 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
 
   await clickProductCell(page, 2, 4)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
-  const spilledText = textOverlay.getByText(sampleText, { exact: true })
-  await expect(spilledText).toBeVisible()
   await expect(formulaInput).toHaveValue(sampleText)
-  await expect
-    .poll(() =>
-      spilledText.evaluate((element) => {
-        if (!(element instanceof HTMLElement)) {
-          return 0
-        }
-        return Math.round(element.getBoundingClientRect().width)
-      }),
-    )
-    .toBeGreaterThan(PRODUCT_COLUMN_WIDTH)
+  await expect(page.getByTestId('grid-text-overlay')).toHaveJSProperty('tagName', 'CANVAS')
+  await expect(page.locator('[data-testid="grid-text-overlay"] span')).toHaveCount(0)
 })
 
 test('web app supports fill-handle propagation', async ({ page }) => {

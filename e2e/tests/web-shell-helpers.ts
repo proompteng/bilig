@@ -598,6 +598,106 @@ export async function openZeroWorkbookPage(page: Page, documentId: string) {
   await selectToolbarActionRange(page)
 }
 
+export async function waitForBenchmarkCorpus(page: Page, timeoutMs = 60_000) {
+  await page.waitForFunction(
+    () => {
+      const collector = (window as Window & { __biligScrollPerf?: { getBenchmarkState?: () => { state: string; error: string | null } } })
+        .__biligScrollPerf
+      const state = collector?.getBenchmarkState?.()
+      return state?.state === 'ready' || state?.state === 'error'
+    },
+    undefined,
+    { timeout: timeoutMs },
+  )
+
+  const benchmarkState = await page.evaluate(() => {
+    const collector = (
+      window as Window & {
+        __biligScrollPerf?: {
+          getBenchmarkState?: () => {
+            state: string
+            error: string | null
+            fixture: { id: string; materializedCellCount: number; sheetName: string } | null
+          }
+        }
+      }
+    ).__biligScrollPerf
+    return collector?.getBenchmarkState?.() ?? null
+  })
+
+  if (!benchmarkState) {
+    throw new Error('benchmark corpus state was not available')
+  }
+  if (benchmarkState.state === 'error') {
+    throw new Error(benchmarkState.error ?? 'benchmark corpus installation failed')
+  }
+  return benchmarkState
+}
+
+export async function startWorkbookScrollPerf(page: Page, workload: string) {
+  await page.evaluate((nextWorkload) => {
+    ;(window as Window & { __biligScrollPerf?: { startSampling?: (workload: string) => void } }).__biligScrollPerf?.startSampling?.(
+      nextWorkload,
+    )
+  }, workload)
+}
+
+export async function stopWorkbookScrollPerf(page: Page) {
+  return await page.evaluate(() => {
+    return (
+      (
+        window as Window & {
+          __biligScrollPerf?: {
+            stopSampling?: () => {
+              workload: string
+              fixture: { id: string; materializedCellCount: number; sheetName: string } | null
+              samples: { frameMs: number[]; longTasksMs: number[] }
+              summary: {
+                frameMs: { min: number; median: number; p95: number; p99: number; max: number }
+                longTasksMs: { min: number; median: number; p95: number; p99: number; max: number }
+              }
+              counters: {
+                viewportSubscriptions: number
+                fullPatches: number
+                damagePatches: number
+                damageCells: number
+                reactCommits: number
+                canvasSurfaceMounts: number
+                domSurfaceMounts: number
+              }
+            } | null
+          }
+        }
+      ).__biligScrollPerf?.stopSampling?.() ?? null
+    )
+  })
+}
+
+export async function performHorizontalGridBrowse(page: Page, input: { distancePx: number; steps?: number }) {
+  await page.getByTestId('grid-scroll-viewport').evaluate(
+    async (element, options) => {
+      if (!(element instanceof HTMLDivElement)) {
+        throw new Error('grid scroll viewport is not an HTMLDivElement')
+      }
+      const viewport = element
+      const steps = Math.max(1, options.steps ?? 120)
+      const start = viewport.scrollLeft
+      const distance = options.distancePx
+      const advance = async (step: number): Promise<void> => {
+        if (step > steps) {
+          return
+        }
+        viewport.scrollLeft = start + (distance * step) / steps
+        viewport.dispatchEvent(new Event('scroll'))
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+        await advance(step + 1)
+      }
+      await advance(1)
+    },
+    { distancePx: input.distancePx, ...(input.steps ? { steps: input.steps } : {}) },
+  )
+}
+
 export async function runToolbarSyncActions(
   page: Page,
   mirrorPage: Page,

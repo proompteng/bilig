@@ -1,4 +1,4 @@
-import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type Viewport } from '@bilig/protocol'
 import type { getGridMetrics } from './gridMetrics.js'
 import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
 import type { Item } from './gridTypes.js'
@@ -92,6 +92,19 @@ export function resolveVisibleRegionFromScroll(options: {
     ty: verticalAnchor.offset,
     freezeRows,
     freezeCols,
+  }
+}
+
+export function resolveResidentViewport(viewport: Viewport): Viewport {
+  const rowStart = clampAxisStart(viewport.rowStart, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
+  const rowEnd = clampAxisEnd(viewport.rowEnd, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
+  const colStart = clampAxisStart(viewport.colStart, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
+  const colEnd = clampAxisEnd(viewport.colEnd, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
+  return {
+    rowStart,
+    rowEnd,
+    colStart,
+    colEnd,
   }
 }
 
@@ -247,6 +260,16 @@ function resolveColumnAnchor(
     consumed += width
   }
   return { index: MAX_COLS - 1, offset: 0 }
+}
+
+function clampAxisStart(value: number, tileSize: number, axisMax: number): number {
+  const clamped = Math.max(0, Math.min(axisMax - 1, value))
+  return Math.floor(clamped / tileSize) * tileSize
+}
+
+function clampAxisEnd(value: number, tileSize: number, axisMax: number): number {
+  const clamped = Math.max(0, Math.min(axisMax - 1, value))
+  return Math.min(axisMax - 1, Math.ceil((clamped + 1) / tileSize) * tileSize - 1)
 }
 
 function resolveRowAnchor(

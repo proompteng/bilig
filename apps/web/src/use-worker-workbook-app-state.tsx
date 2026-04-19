@@ -41,6 +41,7 @@ import { useWorkbookSheetActions } from './use-workbook-sheet-actions.js'
 import { useWorkbookSelectionActions } from './use-workbook-selection-actions.js'
 import { useWorkbookEditorConflict } from './use-workbook-editor-conflict.js'
 import { createWorkbookPerfSession } from './perf/workbook-perf.js'
+import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { registerRuntimeDisposalHandlers } from './runtime-disposal-handlers.js'
 import { useWorkbookLocalPersistenceHandoff } from './use-workbook-local-persistence-handoff.js'
 import { loadOrCreateWorkbookPresenceClientId } from './workbook-presence-client.js'
@@ -814,6 +815,33 @@ export function useWorkerWorkbookAppState(input: {
     [invokeMutation],
   )
 
+  const installBenchmarkCorpus = useCallback(
+    async (corpusId: string): Promise<void> => {
+      if (!runtimeController) {
+        throw new Error('Workbook runtime is not ready for benchmark install')
+      }
+      getWorkbookScrollPerfCollector()?.setBenchmarkState('loading')
+      const benchmarks = await import('../../../packages/benchmarks/src/workbook-corpus.js')
+      if (!benchmarks.isWorkbookBenchmarkCorpusId(corpusId)) {
+        throw new Error(`Unknown benchmark corpus ${corpusId}`)
+      }
+      const corpus = benchmarks.buildWorkbookBenchmarkCorpus(corpusId)
+      await runtimeController.invoke('installAuthoritativeSnapshot', {
+        snapshot: corpus.snapshot,
+        authoritativeRevision: 0,
+        mode: 'bootstrap',
+      })
+      const selectionAddress = `${String.fromCharCode(65 + corpus.primaryViewport.colStart)}${String(corpus.primaryViewport.rowStart + 1)}`
+      selectAddress(corpus.primaryViewport.sheetName, selectionAddress)
+      getWorkbookScrollPerfCollector()?.setFixture({
+        id: corpus.id,
+        materializedCellCount: corpus.materializedCellCount,
+        sheetName: corpus.primaryViewport.sheetName,
+      })
+    },
+    [runtimeController, selectAddress],
+  )
+
   const retryFailedPendingMutation = useCallback(async (): Promise<void> => {
     if (!failedPendingMutation) {
       return
@@ -852,6 +880,7 @@ export function useWorkerWorkbookAppState(input: {
     invokeInsertColumnsMutation,
     invokeInsertRowsMutation,
     invokeSetFreezePaneMutation,
+    installBenchmarkCorpus,
     invokeColumnVisibilityMutation,
     invokeColumnWidthMutation,
     invokeRowHeightMutation,
