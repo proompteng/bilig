@@ -98,4 +98,28 @@ describe('SpreadsheetEngine formula initialization', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 8 })
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 10 })
   })
+
+  it('skips the full topo rebuild for topologically ordered initial formula batches', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-topo-fast-path' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 4)
+    engine.setCellValue('Sheet1', 'A2', 5)
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+
+    engine.resetPerformanceCounters()
+    engine.initializeCellFormulasAt(
+      [
+        { sheetId, mutation: { kind: 'setCellFormula', row: 0, col: 1, formula: 'A1*2' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 0, col: 2, formula: 'B1+1' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 1, col: 1, formula: 'A2*2' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 1, col: 2, formula: 'B2+1' } },
+      ],
+      4,
+    )
+
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 9 })
+    expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(engine.getPerformanceCounters().topoRebuilds).toBe(0)
+  })
 })

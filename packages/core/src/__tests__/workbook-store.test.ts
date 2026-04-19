@@ -23,6 +23,25 @@ function hasStructuralAxisTransform(value: unknown): value is {
   )
 }
 
+function hasPlannedStructuralAxisTransform(value: unknown): value is {
+  planStructuralAxisTransform: (
+    sheetName: string,
+    transform: StructuralAxisTransform,
+  ) => {
+    remappedCells: Array<{ fromRowId?: string; fromColId?: string }>
+  }
+  applyPlannedStructuralTransaction: (transaction: { remappedCells: Array<{ cellIndex: number }> }) => unknown
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'planStructuralAxisTransform' in value &&
+    typeof value.planStructuralAxisTransform === 'function' &&
+    'applyPlannedStructuralTransaction' in value &&
+    typeof value.applyPlannedStructuralTransaction === 'function'
+  )
+}
+
 function projectAxisEntryIds(entries: Array<{ id: string; index: number }>): Array<{ id: string; index: number }> {
   return entries.map(({ id, index }) => ({ id, index }))
 }
@@ -621,5 +640,46 @@ describe('WorkbookStore', () => {
     expect(transaction?.remappedCells.some((entry) => entry.toRow === 10)).toBe(true)
     expect(workbook.getCellIndex('Sheet1', 'C11')).toBe(movedCellIndex)
     expect(counters.cellsRemapped).toBeGreaterThan(0)
+  })
+
+  it('plans structural transactions from scoped remap entries while preserving logical ids', () => {
+    const workbook = new WorkbookStore('planned-structural-transaction')
+    workbook.createSheet('Sheet1')
+
+    const movedCellIndex = workbook.ensureCell('Sheet1', 'B2')
+    const unaffectedCellIndex = workbook.ensureCell('Sheet1', 'A2')
+
+    expect(hasPlannedStructuralAxisTransform(workbook)).toBe(true)
+
+    const transaction = hasPlannedStructuralAxisTransform(workbook)
+      ? workbook.planStructuralAxisTransform('Sheet1', {
+          axis: 'column',
+          kind: 'insert',
+          start: 1,
+          count: 1,
+        })
+      : undefined
+
+    expect(transaction).toBeDefined()
+    expect(transaction?.remappedCells).toEqual([
+      expect.objectContaining({
+        cellIndex: movedCellIndex,
+        fromRow: 1,
+        fromCol: 1,
+        toRow: 1,
+        toCol: 2,
+        fromRowId: 'logical-row-1',
+        fromColId: 'logical-column-1',
+      }),
+    ])
+
+    if (transaction && hasPlannedStructuralAxisTransform(workbook)) {
+      workbook.insertColumns('Sheet1', 1, 1)
+      workbook.applyPlannedStructuralTransaction(transaction)
+    }
+
+    expect(workbook.getCellIndex('Sheet1', 'A2')).toBe(unaffectedCellIndex)
+    expect(workbook.getCellIndex('Sheet1', 'C2')).toBe(movedCellIndex)
+    expect(workbook.getCellIndex('Sheet1', 'B2')).toBeUndefined()
   })
 })

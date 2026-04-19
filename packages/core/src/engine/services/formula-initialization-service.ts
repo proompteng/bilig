@@ -114,15 +114,20 @@ export function createEngineFormulaInitializationService(args: {
     let topologyChanged = false
     let compileMs = 0
     const reservedNewCells = Math.max(potentialNewCells ?? refs.length, refs.length)
+    const hadExistingFormulas = args.state.formulas.size > 0
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
+    const targetCellIndices = hadExistingFormulas ? [] : refs.map((ref) => resolveCellIndex(ref))
+    const pendingFormulaCellIndices = hadExistingFormulas ? undefined : new Set<number>(targetCellIndices)
+    let canAssignTopoInBatch = !hadExistingFormulas
+    let nextTopoRank = 0
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
-        refs.forEach((ref) => {
+        refs.forEach((ref, refIndex) => {
           const compileStarted = performance.now()
           try {
             const prepared = resolveEntry(ref)
@@ -130,13 +135,26 @@ export function createEngineFormulaInitializationService(args: {
             compileMs += performance.now() - compileStarted
             formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
             topologyChanged = true
+            if (canAssignTopoInBatch && pendingFormulaCellIndices) {
+              const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
+              if (
+                !runtimeFormula ||
+                runtimeFormula.dependencyIndices.some((dependencyCellIndex) => pendingFormulaCellIndices.has(dependencyCellIndex))
+              ) {
+                canAssignTopoInBatch = false
+              } else {
+                args.state.workbook.cellStore.topoRanks[prepared.cellIndex] = nextTopoRank
+                nextTopoRank += 1
+              }
+            }
           } catch {
             compileMs += performance.now() - compileStarted
-            const cellIndex = resolveCellIndex(ref)
+            const cellIndex = hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!
             topologyChanged = args.removeFormula(cellIndex) || topologyChanged
             args.setInvalidFormulaValue(cellIndex)
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
           }
+          pendingFormulaCellIndices?.delete(hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!)
         })
         const reboundCount = formulaChangedCount
         formulaChangedCount = args.syncDynamicRanges(formulaChangedCount)
@@ -147,7 +165,7 @@ export function createEngineFormulaInitializationService(args: {
       args.flushWasmProgramSync()
     }
 
-    if (topologyChanged) {
+    if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
       args.rebuildTopoRanks()
       args.detectCycles()
       args.state.formulas.forEach((_formula, cellIndex) => {
@@ -225,29 +243,48 @@ export function createEngineFormulaInitializationService(args: {
     let topologyChanged = false
     let compileMs = 0
     const reservedNewCells = Math.max(potentialNewCells ?? refs.length, refs.length)
+    const hadExistingFormulas = args.state.formulas.size > 0
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
+    const targetCellIndices = hadExistingFormulas ? [] : refs.map((ref) => args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col))
+    const pendingFormulaCellIndices = hadExistingFormulas ? undefined : new Set<number>(targetCellIndices)
+    let canAssignTopoInBatch = !hadExistingFormulas
+    let nextTopoRank = 0
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
-        refs.forEach((ref) => {
+        refs.forEach((ref, refIndex) => {
           const compileStarted = performance.now()
-          const cellIndex = args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col)
+          const cellIndex = hadExistingFormulas
+            ? args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col)
+            : targetCellIndices[refIndex]!
           const ownerSheetName = resolveSheetName(ref.sheetId)
           topologyChanged = args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId) || topologyChanged
           args.writeHydratedFormulaValue(cellIndex, ref.value)
           compileMs += performance.now() - compileStarted
+          if (canAssignTopoInBatch && pendingFormulaCellIndices) {
+            const runtimeFormula = args.state.formulas.get(cellIndex)
+            if (
+              !runtimeFormula ||
+              runtimeFormula.dependencyIndices.some((dependencyCellIndex) => pendingFormulaCellIndices.has(dependencyCellIndex))
+            ) {
+              canAssignTopoInBatch = false
+            } else {
+              args.state.workbook.cellStore.topoRanks[cellIndex] = nextTopoRank
+              nextTopoRank += 1
+            }
+          }
+          pendingFormulaCellIndices?.delete(cellIndex)
         })
       })
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
-      args.flushWasmProgramSync()
     }
 
-    if (topologyChanged) {
+    if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
       args.rebuildTopoRanks()
       args.detectCycles()
     }

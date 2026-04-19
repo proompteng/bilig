@@ -81,5 +81,17 @@ describe('initial mixed sheet load', () => {
       value: 12,
     })
     expect(rebuilt.getPerformanceCounters().snapshotOpsReplayed).toBe(0)
+    expect(rebuilt.getPerformanceCounters().topoRebuilds).toBe(0)
+
+    rebuilt.setCellContents({ sheet: sheetId, row: 0, col: 0 }, 3)
+
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 0, col: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    })
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 0, col: 3 })).toEqual({
+      tag: ValueTag.Number,
+      value: 10,
+    })
   })
 })

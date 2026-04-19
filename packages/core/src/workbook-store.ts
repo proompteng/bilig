@@ -971,24 +971,18 @@ export class WorkbookStore {
     }
     const scope = structuralScopeForTransform(transform)
     const remappedCells: Array<StructuralTransaction['remappedCells'][number]> = []
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-      const axisIndex = transform.axis === 'row' ? row : col
-      if (axisIndex < scope.start || (scope.end !== undefined && axisIndex >= scope.end)) {
-        return
-      }
-      const nextAxisIndex = mapStructuralAxisIndex(axisIndex, transform)
-      if (nextAxisIndex === axisIndex) {
-        return
-      }
-      const logicalRef = sheet.logical.resolveVisibleCell(row, col)
+    const remappedEntries = sheet.grid.collectAxisRemapEntries(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
+    remappedEntries.forEach(({ cellIndex, row, col, nextRow, nextCol }) => {
+      const fromRowId = sheet.logicalAxisMap.getId('row', row)
+      const fromColId = sheet.logicalAxisMap.getId('column', col)
       remappedCells.push({
         cellIndex,
         fromRow: row,
         fromCol: col,
-        ...(logicalRef.rowRef.id === undefined ? {} : { fromRowId: logicalRef.rowRef.id }),
-        ...(logicalRef.colRef.id === undefined ? {} : { fromColId: logicalRef.colRef.id }),
-        toRow: transform.axis === 'row' ? nextAxisIndex : row,
-        toCol: transform.axis === 'column' ? nextAxisIndex : col,
+        ...(fromRowId === undefined ? {} : { fromRowId }),
+        ...(fromColId === undefined ? {} : { fromColId }),
+        toRow: nextRow,
+        toCol: nextCol,
       })
     })
     return buildStructuralTransaction({
