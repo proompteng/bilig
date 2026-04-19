@@ -105,7 +105,7 @@ export function buildGridGpuScene({
   const explicitBorderRects: GridGpuRect[] = []
   const renderHeaders = contentMode !== 'data'
   const renderData = contentMode !== 'headers'
-  const hasFrozenAxes = renderData || (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
+  const hasFrozenAxes = contentMode === 'data' || (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
   const visibleColumnBounds = hasFrozenAxes
     ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
     : getVisibleColumnBounds(
