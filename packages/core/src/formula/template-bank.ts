@@ -3,6 +3,7 @@ import {
   canTranslateCompiledFormulaWithoutAst,
   compileFormulaAst,
   parseFormula,
+  type ParsedRangeReferenceInfo,
   translateCompiledFormula,
   translateCompiledFormulaWithoutAst,
   type CompiledFormula,
@@ -41,6 +42,11 @@ export interface TemplateBank {
 
 interface MutableTemplateRecord extends FormulaTemplateSnapshot {}
 
+interface AnchoredPrefixAggregateTemplateMatch {
+  readonly compiled: CompiledFormula
+  readonly templateKey: string
+}
+
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {
   return (
     canTranslateCompiledFormulaWithoutAst(compiled)
@@ -49,14 +55,43 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
   ).compiled
 }
 
+function tryMatchAnchoredPrefixAggregateTemplate(
+  source: string,
+  ownerRow: number,
+  ownerCol: number,
+): AnchoredPrefixAggregateTemplateMatch | undefined {
+  const compiled = tryCompileSimpleDirectAggregateFormula(source)
+  if (!compiled) {
+    return undefined
+  }
+  const aggregateKind = compiled.directAggregateCandidate?.aggregateKind
+  const range: ParsedRangeReferenceInfo | undefined = compiled.parsedSymbolicRanges?.[0]
+  if (!aggregateKind || !range) {
+    return undefined
+  }
+  if (range.startCol !== range.endCol || range.startRow !== 0 || range.endRow !== ownerRow) {
+    return undefined
+  }
+  return {
+    compiled,
+    templateKey: `anchored-prefix-aggregate:${aggregateKind}:c${range.startCol - ownerCol}`,
+  }
+}
+
 export function createTemplateBank(args?: { readonly counters?: EngineCounters }): TemplateBank {
   const templatesByKey = new Map<string, MutableTemplateRecord>()
   const templatesById = new Map<number, MutableTemplateRecord>()
   const recentByColumn = new Map<number, MutableTemplateRecord>()
   let nextTemplateId = 1
 
-  const internTemplate = (source: string, ownerRow: number, ownerCol: number): MutableTemplateRecord => {
-    const templateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
+  const internTemplate = (
+    source: string,
+    ownerRow: number,
+    ownerCol: number,
+    templateKeyOverride?: string,
+    compiledOverride?: CompiledFormula,
+  ): MutableTemplateRecord => {
+    const templateKey = templateKeyOverride ?? buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
     const existing = templatesByKey.get(templateKey)
     if (existing) {
       return existing
@@ -64,7 +99,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
     if (args?.counters) {
       addEngineCounter(args.counters, 'formulasParsed')
     }
-    const compiled = tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+    const compiled = compiledOverride ?? tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
     const record: MutableTemplateRecord = {
       id: nextTemplateId,
       templateKey,
@@ -90,16 +125,22 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       nextTemplateId = 1
     },
     resolve(source, ownerRow, ownerCol) {
-      const templateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
+      const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+      const templateKey = anchoredPrefixAggregate?.templateKey ?? buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
       const recent = recentByColumn.get(ownerCol)
       const template =
         recent && recent.templateKey === templateKey
           ? recent
-          : (templatesByKey.get(templateKey) ?? internTemplate(source, ownerRow, ownerCol))
+          : (templatesByKey.get(templateKey) ?? internTemplate(source, ownerRow, ownerCol, templateKey, anchoredPrefixAggregate?.compiled))
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = translated ? translateTemplate(template.compiled, rowDelta, colDelta, source) : template.compiled
+      const compiled =
+        anchoredPrefixAggregate && template.templateKey === anchoredPrefixAggregate.templateKey
+          ? anchoredPrefixAggregate.compiled
+          : translated
+            ? translateTemplate(template.compiled, rowDelta, colDelta, source)
+            : template.compiled
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,
@@ -116,10 +157,16 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       if (!template) {
         return undefined
       }
+      const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = translated ? translateTemplate(template.compiled, rowDelta, colDelta, source) : template.compiled
+      const compiled =
+        anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey
+          ? anchoredPrefixAggregate.compiled
+          : translated
+            ? translateTemplate(template.compiled, rowDelta, colDelta, source)
+            : template.compiled
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,

@@ -101,4 +101,23 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     expect(second.compiled.symbolicRanges).toEqual(['A2:A4'])
     expect(second.compiled.astMatchesSource).toBe(false)
   })
+
+  it('collapses anchored prefix aggregate families into one template owner', () => {
+    const counters = createEngineCounters()
+    const service = createEngineFormulaTemplateNormalizationService({ counters })
+
+    const first = service.resolveForCell('SUM(A1:A1)', 0, 5)
+    const second = service.resolveForCell('SUM(A1:A2)', 1, 5)
+    const third = service.resolveForCell('SUM(A1:A3)', 2, 5)
+
+    expect(second.templateId).toBe(first.templateId)
+    expect(third.templateId).toBe(first.templateId)
+    expect(service.listTemplates()).toHaveLength(1)
+    expect(counters.formulasParsed).toBe(1)
+    expect(second.compiled.directAggregateCandidate?.aggregateKind).toBe('sum')
+    expect(second.compiled.deps).toEqual(['A1:A2'])
+    expect(third.compiled.deps).toEqual(['A1:A3'])
+    expect(second.compiled.astMatchesSource).toBe(true)
+    expect(third.compiled.astMatchesSource).toBe(true)
+  })
 })
