@@ -185,6 +185,17 @@ type QueuedEvent = Extract<
 type HistoryTransactionRecord =
   | { kind: 'ops'; ops: unknown[]; potentialNewCells?: number }
   | { kind: 'single-op'; op: unknown; potentialNewCells?: number }
+  | {
+      kind: 'cell-mutations'
+      refs: Array<{
+        sheetId: number
+        mutation:
+          | { kind: 'setCellValue'; row: number; col: number; value: RawCellContent }
+          | { kind: 'setCellFormula'; row: number; col: number; formula: string }
+          | { kind: 'clearCell'; row: number; col: number }
+      }>
+      potentialNewCells?: number
+    }
 
 interface HistoryRecord {
   forward: HistoryTransactionRecord
@@ -3426,6 +3437,42 @@ export class WorkPaper {
         return record.ops
       case 'single-op':
         return [record.op]
+      case 'cell-mutations':
+        return record.refs.flatMap((ref) => {
+          const sheetName = this.getSheetName(ref.sheetId)
+          if (!sheetName) {
+            return []
+          }
+          const address = formatAddress(ref.mutation.row, ref.mutation.col)
+          switch (ref.mutation.kind) {
+            case 'setCellValue':
+              return [
+                {
+                  kind: 'setCellValue',
+                  sheetName,
+                  address,
+                  value: ref.mutation.value,
+                },
+              ]
+            case 'setCellFormula':
+              return [
+                {
+                  kind: 'setCellFormula',
+                  sheetName,
+                  address,
+                  formula: ref.mutation.formula,
+                },
+              ]
+            case 'clearCell':
+              return [
+                {
+                  kind: 'clearCell',
+                  sheetName,
+                  address,
+                },
+              ]
+          }
+        })
     }
   }
 

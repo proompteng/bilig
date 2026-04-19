@@ -13,6 +13,7 @@ import type { OpOrder, ReplicaSnapshot, ReplicaState, ReplicaVersionSnapshot } f
 import type { EdgeSlice } from '../edge-arena.js'
 import type { EngineEventBus } from '../events.js'
 import type { FormulaTable } from '../formula-table.js'
+import type { CellMutationTransactionRecord } from '../history/typed-history.js'
 import type { RangeRegistry } from '../range-registry.js'
 import type { RecalcScheduler } from '../scheduler.js'
 import type { StringPool } from '../string-pool.js'
@@ -72,6 +73,7 @@ export type TransactionRecord =
       potentialNewCells?: number
       preparedCellAddress?: PreparedCellAddress | null
     }
+  | CellMutationTransactionRecord
 
 export interface TransactionLogEntry {
   forward: TransactionRecord

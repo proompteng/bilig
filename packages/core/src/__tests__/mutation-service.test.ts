@@ -710,11 +710,18 @@ describe('EngineMutationService', () => {
 
     expect(inverseOps).toBeNull()
     expect(state.undoStack).toHaveLength(1)
-    expect(state.undoStack[0]?.forward.kind).toBe('ops')
-    expect(state.undoStack[0]?.forward.ops).toEqual([
-      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 1 },
-      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A2', value: 2 },
+    expect(state.undoStack[0]?.forward.kind).toBe('cell-mutations')
+    expect(state.undoStack[0]?.forward.kind === 'cell-mutations' ? state.undoStack[0]?.forward.refs : []).toEqual([
+      { sheetId: sheet.id, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 1 } },
+      { sheetId: sheet.id, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 2 } },
     ])
+    expect(state.undoStack[0]?.inverse.kind).toBe('cell-mutations')
+    expect(state.undoStack[0]?.inverse.kind === 'cell-mutations' ? state.undoStack[0]?.inverse.refs : []).toEqual([
+      { sheetId: sheet.id, mutation: { kind: 'clearCell', row: 1, col: 0 } },
+      { sheetId: sheet.id, mutation: { kind: 'clearCell', row: 0, col: 0 } },
+    ])
+    expect(state.undoStack[0]?.forward.kind === 'cell-mutations' ? state.undoStack[0]?.forward.potentialNewCells : undefined).toBe(2)
+    expect(state.undoStack[0]?.inverse.kind === 'cell-mutations' ? state.undoStack[0]?.inverse.potentialNewCells : undefined).toBe(0)
   })
 
   it('does not synthesize blank column identities in delete undo ops', async () => {
