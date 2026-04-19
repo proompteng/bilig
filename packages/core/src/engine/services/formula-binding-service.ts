@@ -1058,6 +1058,7 @@ function hasLookupPlanInstruction(plan: readonly { opcode: string }[]): boolean 
 const PUSH_CELL_OPCODE = Number(Opcode.PushCell)
 const PUSH_RANGE_OPCODE = Number(Opcode.PushRange)
 const PUSH_STRING_OPCODE = Number(Opcode.PushString)
+const EMPTY_RUNTIME_PROGRAM = new Uint32Array(0)
 
 export function createEngineFormulaBindingService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges' | 'getUseColumnIndex'> & {
@@ -2149,26 +2150,29 @@ export function createEngineFormulaBindingService(args: {
     }
 
     const literalStringIds = compiled.symbolicStrings.map((value) => args.state.strings.intern(value))
-    const runtimeProgram = new Uint32Array(compiled.program.length)
-    runtimeProgram.set(compiled.program)
-    compiled.program.forEach((instruction, index) => {
-      const opcode = instruction >>> 24
-      const operand = instruction & 0x00ff_ffff
-      if (opcode === PUSH_CELL_OPCODE) {
-        const targetIndex = operand < compiled.symbolicRefs.length ? (args.getSymbolicRefBindings()[operand] ?? 0) : 0
-        runtimeProgram[index] = (PUSH_CELL_OPCODE << 24) | (targetIndex & 0x00ff_ffff)
-        return
+    const runtimeProgram = compiled.program.length === 0 ? EMPTY_RUNTIME_PROGRAM : new Uint32Array(compiled.program.length)
+    if (runtimeProgram.length > 0) {
+      runtimeProgram.set(compiled.program)
+      for (let index = 0; index < compiled.program.length; index += 1) {
+        const instruction = compiled.program[index]!
+        const opcode = instruction >>> 24
+        const operand = instruction & 0x00ff_ffff
+        if (opcode === PUSH_CELL_OPCODE) {
+          const targetIndex = operand < compiled.symbolicRefs.length ? (args.getSymbolicRefBindings()[operand] ?? 0) : 0
+          runtimeProgram[index] = (PUSH_CELL_OPCODE << 24) | (targetIndex & 0x00ff_ffff)
+          continue
+        }
+        if (opcode === PUSH_RANGE_OPCODE) {
+          const targetIndex = operand < dependencies.symbolicRangeCount ? (dependencies.symbolicRangeIndices[operand] ?? 0) : 0
+          runtimeProgram[index] = (PUSH_RANGE_OPCODE << 24) | (targetIndex & 0x00ff_ffff)
+          continue
+        }
+        if (opcode === PUSH_STRING_OPCODE) {
+          const stringId = operand < literalStringIds.length ? (literalStringIds[operand] ?? 0) : 0
+          runtimeProgram[index] = (PUSH_STRING_OPCODE << 24) | (stringId & 0x00ff_ffff)
+        }
       }
-      if (opcode === PUSH_RANGE_OPCODE) {
-        const targetIndex = operand < dependencies.symbolicRangeCount ? (dependencies.symbolicRangeIndices[operand] ?? 0) : 0
-        runtimeProgram[index] = (PUSH_RANGE_OPCODE << 24) | (targetIndex & 0x00ff_ffff)
-        return
-      }
-      if (opcode === PUSH_STRING_OPCODE) {
-        const stringId = operand < literalStringIds.length ? (literalStringIds[operand] ?? 0) : 0
-        runtimeProgram[index] = (PUSH_STRING_OPCODE << 24) | (stringId & 0x00ff_ffff)
-      }
-    })
+    }
 
     return {
       compiled,
