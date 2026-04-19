@@ -40,6 +40,8 @@ describe('worker runtime state helpers', () => {
     expect(publicState.syncState).toBe('syncing')
     expect(cachedState.syncState).toBe('local')
     expect(publicState.localPersistenceMode).toBe('persistent')
+    expect(publicState.sheets).toEqual([{ id: null, name: 'Sheet1' }])
+    expect(publicState.sheets).not.toBe(cachedState.sheets)
     expect(publicState.metrics).not.toBe(cachedState.metrics)
     expect(publicState.definedNames).not.toBe(cachedState.definedNames)
     expect(publicState.definedNames).toEqual(cachedState.definedNames)
@@ -54,6 +56,7 @@ describe('worker runtime state helpers', () => {
       }),
     ).toEqual({
       workbookName: 'Book',
+      sheets: [{ id: null, name: 'Sheet1' }],
       sheetNames: ['Sheet1'],
       definedNames: [],
       metrics: EMPTY_RUNTIME_METRICS,
