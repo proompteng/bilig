@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import { flushSync } from 'react-dom'
 import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from '@bilig/grid'
-import { ValueTag, isCellSnapshot, type CellSnapshot, type CellValue, type LiteralInput } from '@bilig/protocol'
+import { isCellSnapshot } from '@bilig/protocol'
 import type { WorkerHandle, WorkerRuntimeSessionController } from './runtime-session.js'
 import {
   buildZeroWorkbookMutation,
@@ -42,40 +42,6 @@ function observeZeroMutationResult(result: unknown): Promise<unknown> | null {
   }
   const observer = result['server'] ?? result['client']
   return observer instanceof Promise ? observer : null
-}
-
-function toOptimisticCellValue(base: CellSnapshot, value: LiteralInput | undefined): CellValue {
-  if (value === undefined || value === null) {
-    return { tag: ValueTag.Empty }
-  }
-  if (typeof value === 'number') {
-    return { tag: ValueTag.Number, value }
-  }
-  if (typeof value === 'string') {
-    return {
-      tag: ValueTag.String,
-      value,
-      stringId: base.value.tag === ValueTag.String ? base.value.stringId : 0,
-    }
-  }
-  return { tag: ValueTag.Boolean, value }
-}
-
-function buildOptimisticCellSnapshot(
-  base: CellSnapshot,
-  sheetName: string,
-  address: string,
-  value: LiteralInput | undefined,
-): CellSnapshot {
-  const { input: _input, formula: _formula, ...rest } = base
-  return {
-    ...rest,
-    sheetName,
-    address,
-    value: toOptimisticCellValue(base, value),
-    version: base.version + 1,
-    ...(value !== undefined ? { input: value } : {}),
-  }
 }
 
 export function useWorkbookSync(input: {
@@ -154,6 +120,18 @@ export function useWorkbookSync(input: {
       }
     },
     [getViewportStore, runtimeController],
+  )
+
+  const refreshViewportCellSnapshotDeferred = useCallback(
+    (sheetName: string, address: string, delaysMs: readonly number[] = [0]): void => {
+      const schedule = typeof window === 'undefined' ? setTimeout : window.setTimeout
+      delaysMs.forEach((delayMs) => {
+        schedule(() => {
+          void refreshViewportCellSnapshot(sheetName, address)
+        }, delayMs)
+      })
+    },
+    [refreshViewportCellSnapshot],
   )
 
   const runZeroMutation = useCallback(
@@ -345,44 +323,36 @@ export function useWorkbookSync(input: {
       }
 
       await runSerializedLocalMutationTask(async () => {
-        const viewportStore = getViewportStore()
-        if (viewportStore) {
-          if (method === 'setCellValue') {
-            const [sheetName, address, value] = mutation.args
-            if (typeof sheetName === 'string' && typeof address === 'string' && isLiteralInput(value)) {
-              viewportStore.setCellSnapshot(
-                buildOptimisticCellSnapshot(viewportStore.getCell(sheetName, address), sheetName, address, value),
-              )
-            }
-          } else if (method === 'clearCell') {
-            const [sheetName, address] = mutation.args
-            if (typeof sheetName === 'string' && typeof address === 'string') {
-              viewportStore.setCellSnapshot(
-                buildOptimisticCellSnapshot(viewportStore.getCell(sheetName, address), sheetName, address, undefined),
-              )
-            }
-          }
-        }
         await enqueuePendingMutation(mutation)
         if (method === 'setCellValue' || method === 'setCellFormula' || method === 'clearCell') {
           const [sheetName, address] = mutation.args
           if (typeof sheetName === 'string' && typeof address === 'string') {
             await refreshViewportCellSnapshot(sheetName, address)
+            if (method === 'setCellFormula') {
+              refreshViewportCellSnapshotDeferred(sheetName, address, [16, 64, 160])
+            }
           }
         }
       })
-      await runSerializedSyncTask(async () => {
-        if (canAttemptRemoteSync(connectionStateRef.current)) {
-          await drainPendingMutationsLocked()
+      void (async () => {
+        try {
+          await runSerializedSyncTask(async () => {
+            if (canAttemptRemoteSync(connectionStateRef.current)) {
+              await drainPendingMutationsLocked()
+            }
+          })
+        } catch (error) {
+          reportRuntimeError(error)
         }
-      })
+      })()
     },
     [
       connectionStateRef,
       drainPendingMutationsLocked,
       enqueuePendingMutation,
-      getViewportStore,
       refreshViewportCellSnapshot,
+      refreshViewportCellSnapshotDeferred,
+      reportRuntimeError,
       runSerializedLocalMutationTask,
       runSerializedSyncTask,
       runtimeController,

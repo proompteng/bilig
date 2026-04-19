@@ -106,7 +106,9 @@ describe('useWorkbookSync', () => {
       await sync!.invokeMutation('setCellValue', 'Sheet1', 'A1', 17)
     })
 
-    expect(runtimeController.invoke).toHaveBeenCalledWith('markPendingMutationFailed', 'pending-1', 'mutation rejected by server')
+    await vi.waitFor(() => {
+      expect(runtimeController.invoke).toHaveBeenCalledWith('markPendingMutationFailed', 'pending-1', 'mutation rejected by server')
+    })
     expect(reportRuntimeError).not.toHaveBeenCalled()
 
     await act(async () => {

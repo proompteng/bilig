@@ -68,6 +68,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     selectionSnapshot: props.selectionSnapshot,
     onToggleBooleanCell: props.onToggleBooleanCell,
     onRowHeightChange: props.onRowHeightChange,
+    selectedCellSnapshot: props.selectedCellSnapshot,
     renderState,
   })
   const visibleRange = renderState.visibleRegion.range

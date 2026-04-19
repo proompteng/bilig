@@ -82,6 +82,7 @@ export function useWorkbookGridInteractions(
     engine: WorkbookGridSurfaceProps['engine']
     sheetName: string
     selectedAddr: string
+    selectedCellSnapshot: WorkbookGridSurfaceProps['selectedCellSnapshot']
     renderState: ReturnType<typeof useWorkbookGridRenderState>
   },
 ) {
@@ -114,6 +115,7 @@ export function useWorkbookGridInteractions(
     selectionSnapshot,
     sheetName,
     selectedAddr,
+    selectedCellSnapshot,
     renderState,
   } = input
   const {
@@ -258,11 +260,12 @@ export function useWorkbookGridInteractions(
         onBeginEdit,
         sheetName,
         address: selectedAddr,
+        selectedCellSnapshot,
         seed,
         selectionBehavior,
       })
     },
-    [engine, onBeginEdit, selectedAddr, sheetName],
+    [engine, onBeginEdit, selectedAddr, selectedCellSnapshot, sheetName],
   )
   const beginEditAt = useCallback(
     (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = 'caret-end') => {
@@ -271,11 +274,12 @@ export function useWorkbookGridInteractions(
         onBeginEdit,
         sheetName,
         address: addr,
+        selectedCellSnapshot: addr === selectedAddr ? selectedCellSnapshot : null,
         seed,
         selectionBehavior,
       })
     },
-    [engine, onBeginEdit, sheetName],
+    [engine, onBeginEdit, selectedAddr, selectedCellSnapshot, sheetName],
   )
   const toggleBooleanCellAt = useCallback(
     (col: number, row: number): boolean => {

@@ -470,14 +470,16 @@ export function useWorkerWorkbookAppState(input: {
       }
 
       const nextSelection = completeEditNavigation(targetSelection, movement)
-      setEditorSelectionBehavior('select-all')
-      editingModeRef.current = 'idle'
-      setEditingMode('idle')
-      resetEditorConflictTracking(nextSelection)
       void (async () => {
         try {
           await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
+          setEditorSelectionBehavior('select-all')
+          editingModeRef.current = 'idle'
+          setEditingMode('idle')
+          resetEditorConflictTracking(nextSelection)
         } catch (error) {
+          editingModeRef.current = 'idle'
+          setEditingMode('idle')
           reportRuntimeError(error)
         }
       })()
@@ -538,6 +540,7 @@ export function useWorkerWorkbookAppState(input: {
         previousRange.startAddress === nextSelectionSnapshot.range.startAddress &&
         previousRange.endAddress === nextSelectionSnapshot.range.endAddress
       ) {
+        runtimeActorRef.send({ type: 'selection.changed', selection: { sheetName, address } })
         return
       }
       if (editingModeRef.current !== 'idle') {

@@ -1,4 +1,5 @@
 import { formatAddress } from '@bilig/formula'
+import type { CellSnapshot } from '@bilig/protocol'
 import { ValueTag } from '@bilig/protocol'
 import { cellToEditorSeed } from './gridCells.js'
 import type { GridEngineLike } from './grid-engine.js'
@@ -12,11 +13,16 @@ export function beginWorkbookGridEdit(input: {
   onBeginEdit: WorkbookGridSurfaceProps['onBeginEdit']
   sheetName: string
   address: string
+  selectedCellSnapshot?: CellSnapshot | null
   seed?: string | undefined
   selectionBehavior?: EditSelectionBehavior | undefined
 }): void {
-  const { address, engine, onBeginEdit, seed, selectionBehavior = 'caret-end', sheetName } = input
-  onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, address)), selectionBehavior)
+  const { address, engine, onBeginEdit, seed, selectedCellSnapshot = null, selectionBehavior = 'caret-end', sheetName } = input
+  const snapshot =
+    selectedCellSnapshot && selectedCellSnapshot.sheetName === sheetName && selectedCellSnapshot.address === address
+      ? selectedCellSnapshot
+      : engine.getCell(sheetName, address)
+  onBeginEdit(seed ?? cellToEditorSeed(snapshot), selectionBehavior)
 }
 
 export function toggleWorkbookGridBooleanCell(input: {

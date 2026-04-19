@@ -1015,7 +1015,14 @@ export function useWorkbookGridRenderState(input: {
         if (col !== columnIndex) {
           return
         }
-        const snapshot = engine.getCell(sheetName, formatAddress(row, col))
+        const address = formatAddress(row, col)
+        const snapshot =
+          col === selectedCell.col &&
+          row === selectedCell.row &&
+          selectedCellSnapshot.sheetName === sheetName &&
+          selectedCellSnapshot.address === address
+            ? selectedCellSnapshot
+            : engine.getCell(sheetName, address)
         const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId))
         const displayText = renderCell.displayText || renderCell.copyText
         context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily()}`
@@ -1024,7 +1031,16 @@ export function useWorkbookGridRenderState(input: {
 
       return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + 28)))
     },
-    [engine, gridMetrics.columnWidth, gridTheme.editorFontSize, gridTheme.headerFontStyle, sheetName],
+    [
+      engine,
+      gridMetrics.columnWidth,
+      gridTheme.editorFontSize,
+      gridTheme.headerFontStyle,
+      selectedCell.col,
+      selectedCell.row,
+      selectedCellSnapshot,
+      sheetName,
+    ],
   )
 
   const overlayStyle = useMemo(() => getOverlayStyle(isEditingCell, overlayBounds), [isEditingCell, overlayBounds])

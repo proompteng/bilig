@@ -498,6 +498,7 @@ export async function createWorkerRuntimeSessionController(
     async setSelection(selection) {
       try {
         if (sameSelection(selection, currentSelection)) {
+          await refreshSelectedCellSnapshot(selection)
           return
         }
         await applySelection(selection)
