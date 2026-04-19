@@ -1,4 +1,4 @@
-import { useDeferredValue, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
@@ -27,6 +27,7 @@ import type { GridSelection, Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './renderer/pane-scene-types.js'
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
@@ -102,6 +103,17 @@ function collectViewportSubscriptions(viewport: Viewport, freezeRows: number, fr
   }
   return [...new Map(viewports.map((entry) => [`${entry.rowStart}:${entry.rowEnd}:${entry.colStart}:${entry.colEnd}`, entry])).values()]
 }
+
+interface ResidentPaneSceneEngine extends GridEngineLike {
+  subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void
+  peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null
+}
+
+function supportsResidentPaneScenes(engine: GridEngineLike): engine is ResidentPaneSceneEngine {
+  return 'subscribeResidentPaneScenes' in engine && 'peekResidentPaneScenes' in engine
+}
+
+const EMPTY_PANE_SCENES: readonly WorkbookPaneScenePacket[] = Object.freeze([])
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -472,15 +484,54 @@ export function useWorkbookGridRenderState(input: {
   )
   const hostClientWidth = hostElement?.clientWidth ?? 0
   const hostClientHeight = hostElement?.clientHeight ?? 0
+  const residentPaneSceneRequest = useMemo<WorkbookPaneSceneRequest | null>(
+    () =>
+      hostElement
+        ? {
+            sheetName,
+            residentViewport,
+            freezeRows,
+            freezeCols,
+            selectedCell: {
+              col: selectedCell.col,
+              row: selectedCell.row,
+            },
+            selectionRange,
+            editingCell: isEditingCell
+              ? {
+                  col: selectedCell.col,
+                  row: selectedCell.row,
+                }
+              : null,
+          }
+        : null,
+    [freezeCols, freezeRows, hostElement, isEditingCell, residentViewport, selectedCell.col, selectedCell.row, selectionRange, sheetName],
+  )
+  const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
+  const workerResidentPaneScenes = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) =>
+        residentSceneEngine && residentPaneSceneRequest
+          ? residentSceneEngine.subscribeResidentPaneScenes(residentPaneSceneRequest, listener)
+          : () => undefined,
+      [residentPaneSceneRequest, residentSceneEngine],
+    ),
+    () =>
+      residentSceneEngine && residentPaneSceneRequest
+        ? (residentSceneEngine.peekResidentPaneScenes(residentPaneSceneRequest) ?? EMPTY_PANE_SCENES)
+        : EMPTY_PANE_SCENES,
+    () => EMPTY_PANE_SCENES,
+  )
   const residentDataPaneScenes = useMemo(() => {
+    if (residentSceneEngine && residentPaneSceneRequest) {
+      return workerResidentPaneScenes
+    }
     if (!hostElement) {
       return []
     }
     void sceneRevision
     return buildResidentDataPaneScenes({
       residentViewport,
-      hostWidth: hostClientWidth,
-      hostHeight: hostClientHeight,
       engine,
       sheetName,
       columnWidths,
@@ -513,13 +564,13 @@ export function useWorkbookGridRenderState(input: {
     frozenRowHeight,
     gridMetrics,
     gridSelection,
-    hostClientHeight,
-    hostClientWidth,
     hostElement,
     hoverState.cell,
     hoverState.header,
     isEditingCell,
     residentViewport,
+    residentPaneSceneRequest,
+    residentSceneEngine,
     resizeGuideColumn,
     resizeGuideRow,
     rowHeights,
@@ -531,6 +582,7 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    workerResidentPaneScenes,
   ])
   const residentDataPanes = useMemo(
     () =>
@@ -545,9 +597,19 @@ export function useWorkbookGridRenderState(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
+        hostWidth: hostClientWidth,
+        hostHeight: hostClientHeight,
+        rowMarkerWidth: gridMetrics.rowMarkerWidth,
+        headerHeight: gridMetrics.headerHeight,
+        frozenColumnWidth,
+        frozenRowHeight,
       }),
     [
       gridMetrics,
+      frozenColumnWidth,
+      frozenRowHeight,
+      hostClientHeight,
+      hostClientWidth,
       residentDataPaneScenes,
       residentViewport,
       sortedColumnWidthOverrides,

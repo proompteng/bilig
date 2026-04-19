@@ -1,9 +1,10 @@
-import type { GridEngineLike } from '@bilig/grid'
+import type { GridEngineLike, WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from '@bilig/grid'
 import type { CellSnapshot, CellStyleRecord, Viewport } from '@bilig/protocol'
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator } from './projected-viewport-patch-coordinator.js'
+import { ProjectedSceneStore } from './projected-scene-store.js'
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
@@ -15,6 +16,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   })
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
+  private readonly sceneStore: ProjectedSceneStore
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
 
   readonly workbook = {
@@ -26,6 +28,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),
     })
+    this.sceneStore = new ProjectedSceneStore(client)
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
@@ -159,6 +162,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   setKnownSheets(sheetNames: readonly string[]): void {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
+    this.sceneStore.dropSheets(removedSheets)
     removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
   }
 
@@ -174,8 +178,17 @@ export class ProjectedViewportStore implements GridEngineLike {
     return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener)
   }
 
+  subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
+    return this.sceneStore.subscribeResidentPaneScenes(request, listener)
+  }
+
+  peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
+    return this.sceneStore.peekResidentPaneScenes(request)
+  }
+
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
     const result = this.patchCoordinator.applyViewportPatchDetailed(patch)
+    this.sceneStore.noteViewportPatch(patch)
     const channels: SheetViewportChannel[] = []
     if (result.columnsChanged) {
       channels.push('columnWidths', 'hiddenColumns')

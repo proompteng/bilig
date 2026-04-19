@@ -169,4 +169,70 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       root.unmount()
     })
   })
+
+  it('subscribes to worker resident pane scenes when the engine exposes them', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const subscribeResidentPaneScenes = vi.fn(() => () => undefined)
+    const residentPaneScenes: readonly [] = []
+    const peekResidentPaneScenes = vi.fn(() => residentPaneScenes)
+    let hostElement: HTMLDivElement | null = null
+
+    function Harness() {
+      const renderState = useWorkbookGridRenderState({
+        engine: {
+          ...engine,
+          subscribeResidentPaneScenes,
+          peekResidentPaneScenes,
+        },
+        sheetName: 'Sheet1',
+        selectedAddr: 'A1',
+        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
+        editorValue: '',
+        isEditingCell: false,
+      })
+
+      return (
+        <div
+          ref={(node) => {
+            renderState.handleHostRef(node)
+            hostElement = node
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
+    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeResidentPaneScenes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetName: 'Sheet1',
+        residentViewport: expect.objectContaining({
+          rowStart: 0,
+          colStart: 0,
+        }),
+        selectedCell: { col: 0, row: 0 },
+      }),
+      expect.any(Function),
+    )
+    expect(peekResidentPaneScenes).toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

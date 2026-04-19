@@ -1,11 +1,8 @@
-import { Fragment, useMemo } from 'react'
+import { useMemo } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
-import { GridGpuSurface } from './GridGpuSurface.js'
-import { GridGpuPaneSurface } from './GridGpuPaneSurface.js'
-import { GridTextOverlay } from './GridTextOverlay.js'
-import { GridTextPaneSurface } from './GridTextPaneSurface.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
+import { WorkbookPaneRenderer } from './renderer/WorkbookPaneRenderer.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -144,28 +141,16 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        {renderState.residentDataPanes.map((pane) => (
-          <Fragment key={pane.id}>
-            <GridGpuPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.id}
-              scene={pane.gpuScene}
-              surfaceSize={pane.surfaceSize}
-            />
-            <GridTextPaneSurface
-              active={renderState.hostElement !== null}
-              contentOffset={pane.contentOffset}
-              frame={pane.frame}
-              paneId={pane.id}
-              scene={pane.textScene}
-              surfaceSize={pane.surfaceSize}
-            />
-          </Fragment>
-        ))}
-        <GridGpuSurface host={renderState.hostElement} scene={renderState.gpuScene} onActiveChange={renderState.setIsWebGpuActive} />
-        <GridTextOverlay active={renderState.hostElement !== null} host={renderState.hostElement} scene={renderState.textScene} />
+        <WorkbookPaneRenderer
+          active={renderState.hostElement !== null}
+          host={renderState.hostElement}
+          overlay={{
+            gpuScene: renderState.gpuScene,
+            textScene: renderState.textScene,
+          }}
+          onActiveChange={renderState.setIsWebGpuActive}
+          panes={renderState.residentDataPanes}
+        />
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"

@@ -9,6 +9,8 @@ interface WorkbookScrollPerfCounters {
   fullPatches: number
   damagePatches: number
   damageCells: number
+  scenePacketRefreshes: number
+  scenePacketPanes: number
   reactCommits: number
   canvasSurfaceMounts: number
   domSurfaceMounts: number
@@ -49,6 +51,8 @@ class WorkbookScrollPerfCollector {
     fullPatches: 0,
     damagePatches: 0,
     damageCells: 0,
+    scenePacketRefreshes: 0,
+    scenePacketPanes: 0,
     reactCommits: 0,
     canvasSurfaceMounts: 0,
     domSurfaceMounts: 0,
@@ -97,6 +101,11 @@ class WorkbookScrollPerfCollector {
     }
     this.totalCounters.damagePatches += 1
     this.totalCounters.damageCells += input.damageCount
+  }
+
+  noteScenePacketRefresh(paneCount: number): void {
+    this.totalCounters.scenePacketRefreshes += 1
+    this.totalCounters.scenePacketPanes += paneCount
   }
 
   noteSurfaceCommit(surface: string): void {
@@ -212,6 +221,8 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     fullPatches: counters.fullPatches - baseline.fullPatches,
     damagePatches: counters.damagePatches - baseline.damagePatches,
     damageCells: counters.damageCells - baseline.damageCells,
+    scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,
+    scenePacketPanes: counters.scenePacketPanes - baseline.scenePacketPanes,
     reactCommits: counters.reactCommits - baseline.reactCommits,
     canvasSurfaceMounts: counters.canvasSurfaceMounts - baseline.canvasSurfaceMounts,
     domSurfaceMounts: counters.domSurfaceMounts - baseline.domSurfaceMounts,

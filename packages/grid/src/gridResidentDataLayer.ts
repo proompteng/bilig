@@ -1,32 +1,14 @@
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
-import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
+import { buildGridGpuScene } from './gridGpuScene.js'
 import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset, type GridMetrics } from './gridMetrics.js'
 import { collectViewportItems } from './gridViewportItems.js'
-import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
+import { buildGridTextScene } from './gridTextScene.js'
 import type { HeaderSelection } from './gridPointer.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
-
-export type ResidentDataPaneId = 'corner' | 'top' | 'left' | 'body'
-
-export interface ResidentDataPaneScene {
-  readonly id: ResidentDataPaneId
-  readonly frame: Rectangle
-  readonly surfaceSize: {
-    readonly width: number
-    readonly height: number
-  }
-  readonly gpuScene: GridGpuScene
-  readonly textScene: GridTextScene
-}
-
-export interface ResidentDataPaneRenderState extends ResidentDataPaneScene {
-  readonly contentOffset: {
-    readonly x: number
-    readonly y: number
-  }
-}
+import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
+import { getPaneFrame, resolvePaneLayout } from './renderer/pane-layout.js'
 
 function resolveViewportWidth(
   viewport: Viewport,
@@ -75,9 +57,8 @@ function createPaneCellBoundsResolver(input: {
 }
 
 function buildPaneScene(input: {
-  id: ResidentDataPaneId
+  id: WorkbookPaneId
   viewport: Viewport
-  frame: Rectangle
   engine: GridEngineLike
   sheetName: string
   columnWidths: Readonly<Record<number, number>>
@@ -95,11 +76,10 @@ function buildPaneScene(input: {
   resizeGuideColumn?: number | null
   resizeGuideRow?: number | null
   activeHeaderDrag?: HeaderSelection | null
-}): ResidentDataPaneScene {
+}): WorkbookPaneScenePacket {
   const {
     id,
     viewport,
-    frame,
     engine,
     sheetName,
     columnWidths,
@@ -132,8 +112,9 @@ function buildPaneScene(input: {
     height: resolveViewportHeight(viewport, gridMetrics, sortedRowHeightOverrides),
   }
   return {
-    id,
-    frame,
+    generation: 0,
+    paneId: id,
+    viewport,
     surfaceSize,
     gpuScene: buildGridGpuScene({
       contentMode: 'data',
@@ -206,8 +187,6 @@ function buildPaneScene(input: {
 
 export function buildResidentDataPaneScenes(input: {
   residentViewport: Viewport
-  hostWidth: number
-  hostHeight: number
   engine: GridEngineLike
   sheetName: string
   columnWidths: Readonly<Record<number, number>>
@@ -229,11 +208,9 @@ export function buildResidentDataPaneScenes(input: {
   resizeGuideColumn?: number | null
   resizeGuideRow?: number | null
   activeHeaderDrag?: HeaderSelection | null
-}): ResidentDataPaneScene[] {
+}): WorkbookPaneScenePacket[] {
   const {
     residentViewport,
-    hostWidth,
-    hostHeight,
     engine,
     sheetName,
     columnWidths,
@@ -257,24 +234,15 @@ export function buildResidentDataPaneScenes(input: {
     activeHeaderDrag = null,
   } = input
 
-  const bodyFrameWidth = Math.max(0, hostWidth - gridMetrics.rowMarkerWidth - frozenColumnWidth)
-  const bodyFrameHeight = Math.max(0, hostHeight - gridMetrics.headerHeight - frozenRowHeight)
   const bodyViewportWidth = resolveViewportWidth(residentViewport, gridMetrics, sortedColumnWidthOverrides)
   const bodyViewportHeight = resolveViewportHeight(residentViewport, gridMetrics, sortedRowHeightOverrides)
 
-  const panes: ResidentDataPaneScene[] = []
-
-  if (bodyFrameWidth > 0 && bodyFrameHeight > 0 && bodyViewportWidth > 0 && bodyViewportHeight > 0) {
+  const panes: WorkbookPaneScenePacket[] = []
+  if (bodyViewportWidth > 0 && bodyViewportHeight > 0) {
     panes.push(
       buildPaneScene({
         id: 'body',
         viewport: residentViewport,
-        frame: {
-          x: gridMetrics.rowMarkerWidth + frozenColumnWidth,
-          y: gridMetrics.headerHeight + frozenRowHeight,
-          width: bodyFrameWidth,
-          height: bodyFrameHeight,
-        },
         engine,
         sheetName,
         columnWidths,
@@ -296,7 +264,7 @@ export function buildResidentDataPaneScenes(input: {
     )
   }
 
-  if (freezeRows > 0 && frozenRowHeight > 0 && bodyFrameWidth > 0 && bodyViewportWidth > 0) {
+  if (freezeRows > 0 && frozenRowHeight > 0 && bodyViewportWidth > 0) {
     panes.push(
       buildPaneScene({
         id: 'top',
@@ -306,12 +274,6 @@ export function buildResidentDataPaneScenes(input: {
           colStart: residentViewport.colStart,
           colEnd: residentViewport.colEnd,
         },
-        frame: {
-          x: gridMetrics.rowMarkerWidth + frozenColumnWidth,
-          y: gridMetrics.headerHeight,
-          width: bodyFrameWidth,
-          height: frozenRowHeight,
-        },
         engine,
         sheetName,
         columnWidths,
@@ -333,7 +295,7 @@ export function buildResidentDataPaneScenes(input: {
     )
   }
 
-  if (freezeCols > 0 && frozenColumnWidth > 0 && bodyFrameHeight > 0 && bodyViewportHeight > 0) {
+  if (freezeCols > 0 && frozenColumnWidth > 0 && bodyViewportHeight > 0) {
     panes.push(
       buildPaneScene({
         id: 'left',
@@ -342,12 +304,6 @@ export function buildResidentDataPaneScenes(input: {
           rowEnd: residentViewport.rowEnd,
           colStart: 0,
           colEnd: Math.max(0, freezeCols - 1),
-        },
-        frame: {
-          x: gridMetrics.rowMarkerWidth,
-          y: gridMetrics.headerHeight + frozenRowHeight,
-          width: frozenColumnWidth,
-          height: bodyFrameHeight,
         },
         engine,
         sheetName,
@@ -380,12 +336,6 @@ export function buildResidentDataPaneScenes(input: {
           colStart: 0,
           colEnd: Math.max(0, freezeCols - 1),
         },
-        frame: {
-          x: gridMetrics.rowMarkerWidth,
-          y: gridMetrics.headerHeight,
-          width: frozenColumnWidth,
-          height: frozenRowHeight,
-        },
         engine,
         sheetName,
         columnWidths,
@@ -411,7 +361,7 @@ export function buildResidentDataPaneScenes(input: {
 }
 
 export function resolveResidentDataPaneRenderState(input: {
-  panes: readonly ResidentDataPaneScene[]
+  panes: readonly WorkbookPaneScenePacket[]
   residentViewport: Viewport
   visibleViewport: Viewport
   visibleRegion: {
@@ -421,9 +371,23 @@ export function resolveResidentDataPaneRenderState(input: {
   gridMetrics: GridMetrics
   sortedColumnWidthOverrides: readonly (readonly [number, number])[]
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
-}): ResidentDataPaneRenderState[] {
+  hostWidth: number
+  hostHeight: number
+  rowMarkerWidth: number
+  headerHeight: number
+  frozenColumnWidth: number
+  frozenRowHeight: number
+}): WorkbookPaneRenderState[] {
   const { panes, residentViewport, visibleViewport, visibleRegion, gridMetrics, sortedColumnWidthOverrides, sortedRowHeightOverrides } =
     input
+  const layout = resolvePaneLayout({
+    hostWidth: input.hostWidth,
+    hostHeight: input.hostHeight,
+    rowMarkerWidth: input.rowMarkerWidth,
+    headerHeight: input.headerHeight,
+    frozenColumnWidth: input.frozenColumnWidth,
+    frozenRowHeight: input.frozenRowHeight,
+  })
   const bodyOffsetX = -(
     resolveColumnOffset(visibleViewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
     resolveColumnOffset(residentViewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) +
@@ -435,17 +399,19 @@ export function resolveResidentDataPaneRenderState(input: {
     visibleRegion.ty
   )
   return panes.map((pane) => ({
-    id: pane.id,
-    frame: pane.frame,
+    generation: pane.generation,
+    paneId: pane.paneId,
+    viewport: pane.viewport,
+    frame: getPaneFrame(layout, pane.paneId),
     surfaceSize: pane.surfaceSize,
     gpuScene: pane.gpuScene,
     textScene: pane.textScene,
     contentOffset:
-      pane.id === 'body'
+      pane.paneId === 'body'
         ? { x: bodyOffsetX, y: bodyOffsetY }
-        : pane.id === 'top'
+        : pane.paneId === 'top'
           ? { x: bodyOffsetX, y: 0 }
-          : pane.id === 'left'
+          : pane.paneId === 'left'
             ? { x: 0, y: bodyOffsetY }
             : { x: 0, y: 0 },
   }))

@@ -26,8 +26,6 @@ describe('gridResidentDataLayer', () => {
     const gridMetrics = getGridMetrics()
     const panes = buildResidentDataPaneScenes({
       residentViewport: { rowStart: 10, rowEnd: 25, colStart: 8, colEnd: 23 },
-      hostWidth: 960,
-      hostHeight: 640,
       engine,
       sheetName: 'Sheet1',
       columnWidths: {},
@@ -51,8 +49,14 @@ describe('gridResidentDataLayer', () => {
       activeHeaderDrag: null,
     })
 
-    expect(panes.map((pane) => pane.id)).toEqual(['body', 'top', 'left', 'corner'])
-    expect(panes[0]?.frame).toMatchObject({
+    expect(panes.map((pane) => pane.paneId)).toEqual(['body', 'top', 'left', 'corner'])
+    expect(panes[0]?.viewport).toMatchObject({
+      rowStart: 10,
+      rowEnd: 25,
+      colStart: 8,
+      colEnd: 23,
+    })
+    expect(renderedFrame(panes[0])).toMatchObject({
       x: gridMetrics.rowMarkerWidth + 144,
       y: gridMetrics.headerHeight + 44,
       width: 960 - gridMetrics.rowMarkerWidth - 144,
@@ -67,8 +71,6 @@ describe('gridResidentDataLayer', () => {
     const gridMetrics = getGridMetrics()
     const panes = buildResidentDataPaneScenes({
       residentViewport: { rowStart: 10, rowEnd: 25, colStart: 8, colEnd: 23 },
-      hostWidth: 960,
-      hostHeight: 640,
       engine,
       sheetName: 'Sheet1',
       columnWidths: {},
@@ -100,11 +102,34 @@ describe('gridResidentDataLayer', () => {
       gridMetrics,
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
+      hostWidth: 960,
+      hostHeight: 640,
+      rowMarkerWidth: gridMetrics.rowMarkerWidth,
+      headerHeight: gridMetrics.headerHeight,
+      frozenColumnWidth: 144,
+      frozenRowHeight: 44,
     })
 
-    expect(rendered.find((pane) => pane.id === 'body')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: -(2 * 22 + 9) })
-    expect(rendered.find((pane) => pane.id === 'top')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: 0 })
-    expect(rendered.find((pane) => pane.id === 'left')?.contentOffset).toEqual({ x: 0, y: -(2 * 22 + 9) })
-    expect(rendered.find((pane) => pane.id === 'corner')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'body')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: -(2 * 22 + 9) })
+    expect(rendered.find((pane) => pane.paneId === 'top')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: -(2 * 22 + 9) })
+    expect(rendered.find((pane) => pane.paneId === 'corner')?.contentOffset).toEqual({ x: 0, y: 0 })
   })
 })
+
+function renderedFrame(pane: { paneId: string } | undefined) {
+  if (!pane) {
+    throw new Error('unexpected missing pane')
+  }
+  switch (pane.paneId) {
+    case 'body':
+      return { x: 190, y: 68, width: 770, height: 572 }
+    case 'top':
+      return { x: 190, y: 24, width: 770, height: 44 }
+    case 'left':
+      return { x: 46, y: 68, width: 144, height: 572 }
+    case 'corner':
+      return { x: 46, y: 24, width: 144, height: 44 }
+  }
+  throw new Error('unexpected pane')
+}
