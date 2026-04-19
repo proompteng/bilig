@@ -144,12 +144,13 @@ export function useWorkbookSync(input: {
 
   const refreshViewportCellSnapshot = useCallback(
     async (sheetName: string, address: string): Promise<void> => {
-      if (!runtimeController) {
+      const viewportStore = getViewportStore()
+      if (!runtimeController || !viewportStore) {
         return
       }
       const snapshot = await runtimeController.invoke('getCell', sheetName, address)
       if (isCellSnapshot(snapshot)) {
-        getViewportStore()?.setCellSnapshot(snapshot)
+        viewportStore.setCellSnapshot(snapshot)
       }
     },
     [getViewportStore, runtimeController],
