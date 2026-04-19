@@ -254,6 +254,10 @@ export function createEngineStructureService(args: {
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
   readonly retargetRangeDependencies: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
   readonly rebindFormulaCells: (inputs: readonly StructuralFormulaRebindInput[]) => void
+  readonly collectFormulaCellsOwnedBySheet: (sheetName: string) => readonly number[]
+  readonly collectFormulaCellsReferencingSheet: (sheetName: string) => readonly number[]
+  readonly collectFormulaCellsForDefinedNames: (names: readonly string[]) => readonly number[]
+  readonly collectFormulaCellsForTables: (tableNames: readonly string[]) => readonly number[]
 }): EngineStructureService {
   const shouldCaptureStoredCell = (cellIndex: number): boolean => {
     const value = args.state.workbook.cellStore.getValue(cellIndex, () => '')
@@ -970,7 +974,28 @@ export function createEngineStructureService(args: {
   } => {
     const formulaCellIndices = new Set<number>()
     const rebindCellIndices = new Set<number>()
-    args.state.formulas.forEach((formula, cellIndex) => {
+    const candidateCellIndices = new Set<number>()
+    args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
+      candidateCellIndices.add(cellIndex)
+    })
+    args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
+      candidateCellIndices.add(cellIndex)
+    })
+    if (argsForImpact.changedDefinedNames.size > 0) {
+      args.collectFormulaCellsForDefinedNames([...argsForImpact.changedDefinedNames]).forEach((cellIndex) => {
+        candidateCellIndices.add(cellIndex)
+      })
+    }
+    if (argsForImpact.changedTableNames.size > 0) {
+      args.collectFormulaCellsForTables([...argsForImpact.changedTableNames]).forEach((cellIndex) => {
+        candidateCellIndices.add(cellIndex)
+      })
+    }
+    candidateCellIndices.forEach((cellIndex) => {
+      const formula = args.state.formulas.get(cellIndex)
+      if (!formula) {
+        return
+      }
       if (!isCellIndexMapped(cellIndex)) {
         return
       }

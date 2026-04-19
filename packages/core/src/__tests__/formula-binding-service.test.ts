@@ -68,6 +68,25 @@ function isRuntimeFormulaWithDirectCriteria(value: unknown): value is {
 }
 
 describe('EngineFormulaBindingService', () => {
+  it('indexes formula owners and qualified sheet references for structural candidate collection', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-sheet-indexes' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.createSheet('Sheet2')
+    engine.setCellValue('Sheet1', 'A1', 7)
+    engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+    engine.setCellFormula('Sheet2', 'C1', 'Sheet1!A1+1')
+
+    const binding = getBindingService(engine)
+    const sheet1Owned = binding.collectFormulaCellsOwnedBySheetNow('Sheet1')
+    const sheet2Owned = binding.collectFormulaCellsOwnedBySheetNow('Sheet2')
+    const sheet1Referenced = binding.collectFormulaCellsReferencingSheetNow('Sheet1')
+
+    expect(sheet1Owned).toEqual([engine.workbook.getCellIndex('Sheet1', 'B1')!])
+    expect(sheet2Owned).toEqual([engine.workbook.getCellIndex('Sheet2', 'C1')!])
+    expect(sheet1Referenced).toEqual([engine.workbook.getCellIndex('Sheet2', 'C1')!])
+  })
+
   it('clears reverse dependency edges when a formula is removed through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'binding-clear' })
     await engine.ready()

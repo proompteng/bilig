@@ -104,6 +104,10 @@ export interface EngineFormulaBindingService {
   readonly rebindDefinedNameDependentsNow: (names: readonly string[], formulaChangedCount: number) => number
   readonly rebindTableDependentsNow: (tableNames: readonly string[], formulaChangedCount: number) => number
   readonly rebindFormulasForSheetNow: (sheetName: string, formulaChangedCount: number, candidates?: readonly number[] | U32) => number
+  readonly collectFormulaCellsOwnedBySheetNow: (sheetName: string) => readonly number[]
+  readonly collectFormulaCellsReferencingSheetNow: (sheetName: string) => readonly number[]
+  readonly collectFormulaCellsForDefinedNamesNow: (names: readonly string[]) => readonly number[]
+  readonly collectFormulaCellsForTablesNow: (tableNames: readonly string[]) => readonly number[]
 }
 
 function formulaBindingErrorMessage(message: string, cause: unknown): string {
@@ -146,6 +150,15 @@ function collectTrackedDependents<Key extends string | number>(registry: Map<Key
     })
   })
   return [...candidates]
+}
+
+function parseQualifiedDependencySheetName(dependency: string): string | undefined {
+  const delimiter = dependency.lastIndexOf('!')
+  if (delimiter <= 0) {
+    return undefined
+  }
+  const qualifier = dependency.slice(0, delimiter)
+  return qualifier.startsWith("'") && qualifier.endsWith("'") ? qualifier.slice(1, -1).replace(/''/g, "'") : qualifier
 }
 
 function aggregateColumnDependencyKey(sheetId: number, col: number): number {
@@ -1121,6 +1134,42 @@ export function createEngineFormulaBindingService(args: {
 }): EngineFormulaBindingService {
   const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>()
   const formulaColumnCounts = new Map<number, number>()
+  const formulaOwnerSheetCells = new Map<string, Set<number>>()
+  const formulaReferencedSheetCells = new Map<string, Set<number>>()
+
+  const referencedSheetsForCompiled = (compiled: Pick<CompiledFormula, 'deps'>): string[] => {
+    const sheets = new Set<string>()
+    compiled.deps.forEach((dependency) => {
+      const sheetName = parseQualifiedDependencySheetName(dependency)
+      if (sheetName) {
+        sheets.add(sheetName)
+      }
+    })
+    return [...sheets]
+  }
+
+  const trackFormulaSheetIndexes = (cellIndex: number, ownerSheetName: string, compiled: Pick<CompiledFormula, 'deps'>): void => {
+    appendTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+    referencedSheetsForCompiled(compiled).forEach((sheetName) => {
+      appendTrackedReverseEdge(formulaReferencedSheetCells, sheetName, cellIndex)
+    })
+  }
+
+  const untrackFormulaSheetIndexes = (
+    cellIndex: number,
+    ownerSheetName: string | undefined,
+    compiled: Pick<CompiledFormula, 'deps'> | undefined,
+  ): void => {
+    if (ownerSheetName) {
+      removeTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+    }
+    if (!compiled) {
+      return
+    }
+    referencedSheetsForCompiled(compiled).forEach((sheetName) => {
+      removeTrackedReverseEdge(formulaReferencedSheetCells, sheetName, cellIndex)
+    })
+  }
 
   const normalizeLookupCompileMode = (compiled: ParsedCompiledFormula): ParsedCompiledFormula => {
     if (compiled.mode !== FormulaMode.WasmFastPath) {
@@ -1329,6 +1378,7 @@ export function createEngineFormulaBindingService(args: {
 
     const plan = args.compiledPlans.replace(existing.planId, source, prepared.plan.compiled, prepared.templateId)
     args.compiledPlans.release(prepared.plan.id)
+    untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     existing.source = source
     existing.planId = plan.id
     existing.templateId = prepared.templateId
@@ -1353,6 +1403,7 @@ export function createEngineFormulaBindingService(args: {
     }
     args.scheduleWasmProgramSync()
     recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+    trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
 
     primeLookupCandidatesNow(ownerSheetName, undefined, prepared.indexedExactLookupCandidates, prepared.directApproximateLookupCandidates)
   }
@@ -1410,6 +1461,7 @@ export function createEngineFormulaBindingService(args: {
     const nextTemplateId = templateId ?? existing.templateId
     const plan = args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
     const previousDirectAggregate = existing.directAggregate
+    untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     existing.source = source
     existing.planId = plan.id
     existing.templateId = nextTemplateId
@@ -1446,6 +1498,7 @@ export function createEngineFormulaBindingService(args: {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
     recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
+    trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     return true
   }
 
@@ -1774,6 +1827,8 @@ export function createEngineFormulaBindingService(args: {
   const clearFormulaNow = (cellIndex: number): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (existing) {
+      const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+      untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
       const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
       const col = args.state.workbook.cellStore.cols[cellIndex]
       if (sheetId !== undefined && col !== undefined) {
@@ -1800,7 +1855,6 @@ export function createEngineFormulaBindingService(args: {
       existing.compiled.symbolicTables.forEach((name) => {
         removeTrackedReverseEdge(args.reverseState.reverseTableEdges, tableDependencyKey(name), cellIndex)
       })
-      const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       existing.compiled.symbolicSpills.forEach((key) => {
         removeTrackedReverseEdge(args.reverseState.reverseSpillEdges, spillDependencyKeyFromRef(key, ownerSheetName), cellIndex)
       })
@@ -2048,6 +2102,7 @@ export function createEngineFormulaBindingService(args: {
         )
       }
     }
+    trackFormulaSheetIndexes(cellIndex, ownerSheetName, runtimeFormula.compiled)
     args.scheduleWasmProgramSync()
 
     primeLookupCandidatesNow(
@@ -2374,6 +2429,8 @@ export function createEngineFormulaBindingService(args: {
           args.reverseState.reverseExactLookupColumnEdges.clear()
           args.reverseState.reverseSortedLookupColumnEdges.clear()
           formulaColumnCounts.clear()
+          formulaOwnerSheetCells.clear()
+          formulaReferencedSheetCells.clear()
 
           const activeCellIndices: number[] = []
           pending.forEach(({ cellIndex, source }) => {
@@ -2464,5 +2521,23 @@ export function createEngineFormulaBindingService(args: {
       return rebindFormulaCellsNow(collectTrackedDependents(args.reverseState.reverseTableEdges, normalized), formulaChangedCount)
     },
     rebindFormulasForSheetNow,
+    collectFormulaCellsOwnedBySheetNow(sheetName) {
+      return [...(formulaOwnerSheetCells.get(sheetName) ?? [])]
+    },
+    collectFormulaCellsReferencingSheetNow(sheetName) {
+      return [...(formulaReferencedSheetCells.get(sheetName) ?? [])]
+    },
+    collectFormulaCellsForDefinedNamesNow(names) {
+      return collectTrackedDependents(
+        args.reverseState.reverseDefinedNameEdges,
+        names.map((name) => normalizeDefinedName(name)),
+      )
+    },
+    collectFormulaCellsForTablesNow(tableNames) {
+      return collectTrackedDependents(
+        args.reverseState.reverseTableEdges,
+        tableNames.map((name) => tableDependencyKey(name)),
+      )
+    },
   }
 }

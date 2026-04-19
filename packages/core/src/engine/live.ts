@@ -418,6 +418,10 @@ export function createEngineServiceRuntime(args: {
     clearOwnedPivot: (pivotRecord) => requireService(pivot, 'pivot').clearOwnedPivotNow(pivotRecord),
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
+    collectFormulaCellsOwnedBySheet: (sheetName) => binding.collectFormulaCellsOwnedBySheetNow(sheetName),
+    collectFormulaCellsReferencingSheet: (sheetName) => binding.collectFormulaCellsReferencingSheetNow(sheetName),
+    collectFormulaCellsForDefinedNames: (names) => binding.collectFormulaCellsForDefinedNamesNow(names),
+    collectFormulaCellsForTables: (tableNames) => binding.collectFormulaCellsForTablesNow(tableNames),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
       pending.forEach(({ cellIndex, ownerSheetName, source, compiled, templateId, preservesBinding }) => {
