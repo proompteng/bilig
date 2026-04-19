@@ -86,9 +86,6 @@ export class ProjectedSceneStore {
     }
     return () => {
       entry.listeners.delete(listener)
-      if (entry.listeners.size === 0 && entry.inFlight === null) {
-        this.entries.delete(key)
-      }
     }
   }
 
@@ -149,12 +146,15 @@ export class ProjectedSceneStore {
     }
     entry.inFlight = (async (): Promise<void> => {
       try {
+        const isIncrementalRefresh = entry.scenes !== null
         const next = await client.invoke('getResidentPaneScenes', entry.request)
         if (!isResidentPaneScenePacketArray(next)) {
           throw new Error('Worker returned an unexpected resident pane scene payload')
         }
         entry.scenes = next
-        getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+        if (isIncrementalRefresh) {
+          getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+        }
         entry.listeners.forEach((listener) => listener())
       } catch (error) {
         if (entry.listeners.size === 0 || isDisposedWorkerClientError(error)) {
@@ -168,9 +168,6 @@ export class ProjectedSceneStore {
       entry.inFlight = null
       if (entry.refreshQueued && entry.listeners.size > 0) {
         this.scheduleRefresh(entry)
-      }
-      if (entry.listeners.size === 0) {
-        this.entries.delete(entry.key)
       }
     }
   }

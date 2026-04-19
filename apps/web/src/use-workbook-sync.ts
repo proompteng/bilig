@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import { flushSync } from 'react-dom'
 import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from '@bilig/grid'
+import { ValueTag, isCellSnapshot, type CellSnapshot, type LiteralInput } from '@bilig/protocol'
 import type { WorkerHandle, WorkerRuntimeSessionController } from './runtime-session.js'
 import {
   buildZeroWorkbookMutation,
@@ -41,6 +42,36 @@ function observeZeroMutationResult(result: unknown): Promise<unknown> | null {
   }
   const observer = result['server'] ?? result['client']
   return observer instanceof Promise ? observer : null
+}
+
+function toOptimisticCellValue(value: LiteralInput | undefined) {
+  if (value === undefined || value === null) {
+    return { tag: ValueTag.Empty } as const
+  }
+  if (typeof value === 'number') {
+    return { tag: ValueTag.Number, value } as const
+  }
+  if (typeof value === 'string') {
+    return { tag: ValueTag.String, value } as const
+  }
+  return { tag: ValueTag.Boolean, value } as const
+}
+
+function buildOptimisticCellSnapshot(
+  base: CellSnapshot,
+  sheetName: string,
+  address: string,
+  value: LiteralInput | undefined,
+): CellSnapshot {
+  return {
+    ...base,
+    sheetName,
+    address,
+    input: value,
+    formula: undefined,
+    value: toOptimisticCellValue(value),
+    version: base.version + 1,
+  }
 }
 
 export function useWorkbookSync(input: {
@@ -103,6 +134,21 @@ export function useWorkbookSync(input: {
       return value
     },
     [runtimeController],
+  )
+
+  const getViewportStore = useCallback(() => workerHandleRef.current?.viewportStore, [workerHandleRef])
+
+  const refreshViewportCellSnapshot = useCallback(
+    async (sheetName: string, address: string): Promise<void> => {
+      if (!runtimeController) {
+        return
+      }
+      const snapshot = await runtimeController.invoke('getCell', sheetName, address)
+      if (isCellSnapshot(snapshot)) {
+        getViewportStore()?.setCellSnapshot(snapshot)
+      }
+    },
+    [getViewportStore, runtimeController],
   )
 
   const runZeroMutation = useCallback(
@@ -293,7 +339,33 @@ export function useWorkbookSync(input: {
           throw new Error('Unsupported workbook mutation')
       }
 
-      await runSerializedLocalMutationTask(() => enqueuePendingMutation(mutation))
+      await runSerializedLocalMutationTask(async () => {
+        const viewportStore = getViewportStore()
+        if (viewportStore) {
+          if (method === 'setCellValue') {
+            const [sheetName, address, value] = mutation.args
+            if (typeof sheetName === 'string' && typeof address === 'string' && isLiteralInput(value)) {
+              viewportStore.setCellSnapshot(
+                buildOptimisticCellSnapshot(viewportStore.getCell(sheetName, address), sheetName, address, value),
+              )
+            }
+          } else if (method === 'clearCell') {
+            const [sheetName, address] = mutation.args
+            if (typeof sheetName === 'string' && typeof address === 'string') {
+              viewportStore.setCellSnapshot(
+                buildOptimisticCellSnapshot(viewportStore.getCell(sheetName, address), sheetName, address, undefined),
+              )
+            }
+          }
+        }
+        await enqueuePendingMutation(mutation)
+        if (method === 'setCellValue' || method === 'setCellFormula' || method === 'clearCell') {
+          const [sheetName, address] = mutation.args
+          if (typeof sheetName === 'string' && typeof address === 'string') {
+            await refreshViewportCellSnapshot(sheetName, address)
+          }
+        }
+      })
       await runSerializedSyncTask(async () => {
         if (canAttemptRemoteSync(connectionStateRef.current)) {
           await drainPendingMutationsLocked()
@@ -304,6 +376,8 @@ export function useWorkbookSync(input: {
       connectionStateRef,
       drainPendingMutationsLocked,
       enqueuePendingMutation,
+      getViewportStore,
+      refreshViewportCellSnapshot,
       runSerializedLocalMutationTask,
       runSerializedSyncTask,
       runtimeController,
