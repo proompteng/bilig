@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import { flushSync } from 'react-dom'
 import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from '@bilig/grid'
-import { ValueTag, isCellSnapshot, type CellSnapshot, type LiteralInput } from '@bilig/protocol'
+import { ValueTag, isCellSnapshot, type CellSnapshot, type CellValue, type LiteralInput } from '@bilig/protocol'
 import type { WorkerHandle, WorkerRuntimeSessionController } from './runtime-session.js'
 import {
   buildZeroWorkbookMutation,
@@ -44,17 +44,21 @@ function observeZeroMutationResult(result: unknown): Promise<unknown> | null {
   return observer instanceof Promise ? observer : null
 }
 
-function toOptimisticCellValue(value: LiteralInput | undefined) {
+function toOptimisticCellValue(base: CellSnapshot, value: LiteralInput | undefined): CellValue {
   if (value === undefined || value === null) {
-    return { tag: ValueTag.Empty } as const
+    return { tag: ValueTag.Empty }
   }
   if (typeof value === 'number') {
-    return { tag: ValueTag.Number, value } as const
+    return { tag: ValueTag.Number, value }
   }
   if (typeof value === 'string') {
-    return { tag: ValueTag.String, value } as const
+    return {
+      tag: ValueTag.String,
+      value,
+      stringId: base.value.tag === ValueTag.String ? base.value.stringId : 0,
+    }
   }
-  return { tag: ValueTag.Boolean, value } as const
+  return { tag: ValueTag.Boolean, value }
 }
 
 function buildOptimisticCellSnapshot(
@@ -63,14 +67,14 @@ function buildOptimisticCellSnapshot(
   address: string,
   value: LiteralInput | undefined,
 ): CellSnapshot {
+  const { input: _input, formula: _formula, ...rest } = base
   return {
-    ...base,
+    ...rest,
     sheetName,
     address,
-    input: value,
-    formula: undefined,
-    value: toOptimisticCellValue(value),
+    value: toOptimisticCellValue(base, value),
     version: base.version + 1,
+    ...(value !== undefined ? { input: value } : {}),
   }
 }
 

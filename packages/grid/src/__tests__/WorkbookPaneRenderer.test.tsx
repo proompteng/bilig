@@ -68,7 +68,7 @@ describe('WorkbookPaneRenderer', () => {
       )
     })
 
-    expect(host.querySelector('[data-testid="workbook-pane-renderer"]')).toBeInstanceOf(HTMLCanvasElement)
+    expect(host.querySelector('[data-pane-renderer="workbook-pane-renderer"]')).toBeInstanceOf(HTMLCanvasElement)
 
     await act(async () => {
       root.unmount()

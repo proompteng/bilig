@@ -643,6 +643,12 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   }
 
   return (
-    <canvas aria-hidden="true" className="pointer-events-none absolute inset-0 z-10" data-testid="workbook-pane-renderer" ref={canvasRef} />
+    <canvas
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-10"
+      data-pane-renderer="workbook-pane-renderer"
+      data-testid="grid-text-overlay"
+      ref={canvasRef}
+    />
   )
 })
