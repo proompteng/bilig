@@ -5,6 +5,29 @@ import tailwindcss from '@tailwindcss/vite'
 import { createViteAliasRecord } from '../../scripts/workspace-resolution.js'
 
 const syncServerTarget = process.env['BILIG_SYNC_SERVER_TARGET'] ?? `http://127.0.0.1:${process.env['BILIG_SYNC_SERVER_PORT'] ?? '4321'}`
+const syncProxy = {
+  '/runtime-config.json': {
+    target: syncServerTarget,
+    changeOrigin: true,
+  },
+  '/v2': {
+    target: syncServerTarget,
+    changeOrigin: true,
+  },
+  '/api/zero': {
+    target: syncServerTarget,
+    changeOrigin: true,
+  },
+  '/zero': {
+    target: syncServerTarget,
+    changeOrigin: true,
+    ws: true,
+  },
+  '/healthz': {
+    target: syncServerTarget,
+    changeOrigin: true,
+  },
+} as const
 
 export const crossOriginIsolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -109,31 +132,10 @@ export default defineConfig({
   },
   server: {
     headers: crossOriginIsolationHeaders,
-    proxy: {
-      '/runtime-config.json': {
-        target: syncServerTarget,
-        changeOrigin: true,
-      },
-      '/v2': {
-        target: syncServerTarget,
-        changeOrigin: true,
-      },
-      '/api/zero': {
-        target: syncServerTarget,
-        changeOrigin: true,
-      },
-      '/zero': {
-        target: syncServerTarget,
-        changeOrigin: true,
-        ws: true,
-      },
-      '/healthz': {
-        target: syncServerTarget,
-        changeOrigin: true,
-      },
-    },
+    proxy: syncProxy,
   },
   preview: {
     headers: crossOriginIsolationHeaders,
+    proxy: syncProxy,
   },
 })

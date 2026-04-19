@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { buildBrowserLocalStackCommand, resolveBrowserLocalWebMode } from './scripts/browser-stack-config.js'
 
 const browserStack = process.env['BILIG_BROWSER_STACK']
 const useComposeBrowserStack = browserStack === 'compose'
@@ -14,19 +15,15 @@ const browserPostgresPort = process.env['BILIG_E2E_POSTGRES_PORT'] ?? '55433'
 const browserBaseUrl = process.env['BILIG_E2E_BASE_URL'] ?? `http://${browserHost}:${browserWebPort}`
 const browserReadyUrl =
   process.env['BILIG_E2E_READY_URL'] ?? (remoteSyncEnabled ? `${browserBaseUrl}/zero/keepalive` : `${browserBaseUrl}/runtime-config.json`)
-const browserLocalStackCommand = [
-  `BILIG_WEB_DEV_PORT=${browserWebPort}`,
-  `PORT=${browserAppPort}`,
-  `BILIG_DEV_POSTGRES_PORT=${browserPostgresPort}`,
-  `BILIG_DEV_ZERO_PORT=${browserZeroPort}`,
-  'BILIG_DEV_COMPOSE_PROJECT=bilig-playwright-local',
-  'BILIG_DEV_CLEANUP_COMPOSE=true',
-  localNoCompose ? 'BILIG_DEV_DISABLE_COMPOSE=1' : null,
-  remoteSyncEnabled ? null : 'BILIG_E2E_REMOTE_SYNC=0',
-  'bun scripts/run-dev-web-local.ts',
-]
-  .filter((segment): segment is string => segment !== null)
-  .join(' ')
+const browserLocalStackCommand = buildBrowserLocalStackCommand({
+  browserWebPort,
+  browserAppPort,
+  browserPostgresPort,
+  browserZeroPort,
+  disableCompose: localNoCompose,
+  remoteSyncEnabled,
+  webMode: resolveBrowserLocalWebMode(process.env),
+})
 const chromiumLaunchArgs = ciContainerMode
   ? ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   : ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist']

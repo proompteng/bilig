@@ -23,6 +23,7 @@ const preferredPostgresPort = resolvePreferredPort(process.env['BILIG_DEV_POSTGR
 const preferredWebPort = Number.parseInt(process.env['BILIG_WEB_DEV_PORT'] ?? '5173', 10)
 const configuredZeroProxyUpstream = process.env['BILIG_ZERO_PROXY_UPSTREAM']
 const disableCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
+const webServerMode = process.env['BILIG_DEV_WEB_SERVER_MODE'] === 'preview' ? 'preview' : 'dev'
 const preferredZeroPort = resolvePreferredZeroPort(process.env['BILIG_DEV_ZERO_PORT'], configuredZeroProxyUpstream, 4848)
 const composePublishedHost = resolveComposePublishedHost()
 const cleanupCompose = process.env['BILIG_DEV_CLEANUP_COMPOSE'] === 'true'
@@ -496,6 +497,43 @@ function spawnWebDev(webPort: number, publicServerUrl: string): DevChildProcess 
   })
 }
 
+function buildWebPreview(publicServerUrl: string): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    BILIG_SYNC_SERVER_PORT: new URL(publicServerUrl).port,
+    BILIG_SYNC_SERVER_TARGET: publicServerUrl,
+    VITE_BILIG_REMOTE_SYNC: process.env['BILIG_E2E_REMOTE_SYNC'] ?? '1',
+  }
+  const result = Bun.spawnSync(['pnpm', '--filter', '@bilig/web', 'build'], {
+    cwd: repoRoot,
+    stdin: childStdinMode(),
+    stdout: 'inherit',
+    stderr: 'inherit',
+    env,
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(`@bilig/web build failed with exit code ${result.exitCode ?? 1}`)
+  }
+}
+
+function spawnWebPreview(webPort: number, publicServerUrl: string): DevChildProcess {
+  return Bun.spawn(
+    ['node', '../../node_modules/vite/bin/vite.js', 'preview', '--host', '0.0.0.0', '--port', String(webPort), '--strictPort'],
+    {
+      cwd: webAppDir,
+      stdin: childStdinMode(),
+      stdout: 'inherit',
+      stderr: 'inherit',
+      env: {
+        ...process.env,
+        BILIG_SYNC_SERVER_PORT: new URL(publicServerUrl).port,
+        BILIG_SYNC_SERVER_TARGET: publicServerUrl,
+        VITE_BILIG_REMOTE_SYNC: process.env['BILIG_E2E_REMOTE_SYNC'] ?? '1',
+      },
+    },
+  )
+}
+
 function killIfRunning(process: DevChildProcess | null | undefined, signal: NodeJS.Signals): void {
   if (!process) {
     return
@@ -572,8 +610,15 @@ try {
     runComposeSync(['up', '-d', zeroCacheService])
     await waitForHttp(zeroHealthUrl)
   }
-  console.log(`Starting local web dev server (web=${webAppBaseUrl})...`)
-  webChild = spawnWebDev(webPort, publicServerUrl)
+  if (webServerMode === 'preview') {
+    console.log(`Building preview web bundle for browser stack (web=${webAppBaseUrl})...`)
+    buildWebPreview(publicServerUrl)
+    console.log(`Starting local web preview server (web=${webAppBaseUrl})...`)
+    webChild = spawnWebPreview(webPort, publicServerUrl)
+  } else {
+    console.log(`Starting local web dev server (web=${webAppBaseUrl})...`)
+    webChild = spawnWebDev(webPort, publicServerUrl)
+  }
   console.log('App is healthy.')
   await waitForHttp(webAppBaseUrl)
   console.log(
