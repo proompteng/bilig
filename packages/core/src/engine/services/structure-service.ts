@@ -569,25 +569,25 @@ export function createEngineStructureService(args: {
       )
       const shouldBypassTemplateStructuralRewrite = ownerSheetName !== argsForResolve.sheetName && touchesTargetSheetDependency
       const representative = remappedCellsByIndex.get(cellIndex)
-      const rewritten =
-        !touchesChangedName && !touchesChangedTable
-          ? ((!shouldBypassTemplateStructuralRewrite && formula.templateId !== undefined
-              ? rewriteFormulaFromTemplate(
-                  formula,
-                  {
-                    templateId: formula.templateId,
-                    ownerSheetName,
-                    targetSheetName: argsForResolve.sheetName,
-                    representativeRow: representative?.fromRow ?? ownerRow,
-                    representativeCol: representative?.fromCol ?? ownerCol,
-                    ownerRow,
-                    ownerCol,
-                  },
-                  argsForResolve.sheetName,
-                  argsForResolve.transform,
-                )
-              : undefined) ?? rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform))
-          : rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform)
+      const compiledRewrite = rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform)
+      const templateRewrite =
+        !touchesChangedName && !touchesChangedTable && !shouldBypassTemplateStructuralRewrite && formula.templateId !== undefined
+          ? rewriteFormulaFromTemplate(
+              formula,
+              {
+                templateId: formula.templateId,
+                ownerSheetName,
+                targetSheetName: argsForResolve.sheetName,
+                representativeRow: representative?.fromRow ?? ownerRow,
+                representativeCol: representative?.fromCol ?? ownerCol,
+                ownerRow,
+                ownerCol,
+              },
+              argsForResolve.sheetName,
+              argsForResolve.transform,
+            )
+          : undefined
+      const rewritten = !touchesChangedName && !touchesChangedTable ? (compiledRewrite ?? templateRewrite) : compiledRewrite
       if (!rewritten) {
         if (!touchesChangedName && !touchesChangedTable && formula.directAggregate !== undefined) {
           return

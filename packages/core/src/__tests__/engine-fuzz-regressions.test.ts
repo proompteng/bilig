@@ -134,6 +134,25 @@ describe('engine fuzz regressions', () => {
     expect(engine.getCell('Sheet1', 'B1').formula).toBe('#REF!+E3')
   })
 
+  it('restores formula graphs after undoing mixed row inserts and column deletes', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'structural-formula-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'structural-formula-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.insertRows('Sheet1', 0, 1)
+    engine.deleteColumns('Sheet1', 0, 1)
+    engine.insertRows('Sheet1', 0, 1)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(seedSnapshot)
+  })
+
   it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'move-empty-format-regression' })
     await engine.ready()

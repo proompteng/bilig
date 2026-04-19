@@ -214,4 +214,40 @@ describe('projection helpers', () => {
       buildWorkbookSourceProjection('doc-a', engine.exportSnapshot(), options),
     )
   })
+
+  it('roundtrips projection parity through runtime-image snapshot restore after structural moves', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'projection-runtime-image-restore',
+      replicaId: 'projection-runtime-image-restore',
+    })
+    await engine.ready()
+
+    engine.setCellFormula('Sheet1', 'C3', 'SUM(A1:B2)')
+    engine.setCellFormula('Sheet1', 'A1', '1')
+    engine.insertRows('Sheet1', 2, 1)
+    engine.setCellValue('Sheet1', 'C3', 'draft')
+    engine.deleteColumns('Sheet1', 0, 1)
+    engine.insertRows('Sheet1', 2, 1)
+    engine.setCellFormula('Sheet1', 'C3', '1')
+
+    const snapshot = engine.exportSnapshot()
+    const restored = new SpreadsheetEngine({
+      workbookName: 'projection-runtime-image-restore-restored',
+      replicaId: 'projection-runtime-image-restore-restored',
+    })
+    await restored.ready()
+    restored.importSnapshot(snapshot)
+
+    const options = {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: 'owner-a',
+      updatedBy: 'user-a',
+      updatedAt: '2026-03-29T10:00:00.000Z',
+    } as const
+
+    expect(buildWorkbookSourceProjectionFromEngine('doc-a', restored, options)).toEqual(
+      buildWorkbookSourceProjection('doc-a', snapshot, options),
+    )
+  })
 })

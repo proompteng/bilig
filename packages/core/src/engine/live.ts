@@ -683,7 +683,27 @@ export function createEngineServiceRuntime(args: {
     resetWorkbook: (workbookName) => runEngineEffect(maintenance.resetWorkbook(workbookName)),
     executeRestoreTransaction: (transaction) => runEngineEffect(mutation.executeTransaction(transaction, 'restore')),
     exportTemplateBank: () => formulaTemplates.listTemplates(),
-    exportFormulaInstances: () => formulaInstances.list(),
+    exportFormulaInstances: () =>
+      formulaInstances.list().flatMap((record) => {
+        const sheetId = args.state.workbook.cellStore.sheetIds[record.cellIndex]
+        const row = args.state.workbook.cellStore.rows[record.cellIndex]
+        const col = args.state.workbook.cellStore.cols[record.cellIndex]
+        if (sheetId === undefined || row === undefined || col === undefined) {
+          return []
+        }
+        const sheetName = args.state.workbook.getSheetNameById(sheetId)
+        if (!sheetName) {
+          return []
+        }
+        return [
+          {
+            ...record,
+            sheetName,
+            row,
+            col,
+          },
+        ]
+      }),
     hydrateTemplateBank: (templates) => formulaTemplates.hydrateTemplates(templates),
     resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveByTemplateId(templateId, source, row, col),
     initializeCellFormulasAt: (refs, potentialNewCells) =>
