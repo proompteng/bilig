@@ -1,10 +1,11 @@
-import type { GridEngineLike, WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from '@bilig/grid'
+import type { GridEngineLike } from '@bilig/grid'
 import type { CellSnapshot, CellStyleRecord, Viewport } from '@bilig/protocol'
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator } from './projected-viewport-patch-coordinator.js'
 import { ProjectedSceneStore } from './projected-scene-store.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]

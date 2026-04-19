@@ -1,7 +1,7 @@
-import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from '@bilig/grid'
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { residentPaneSceneRequestNeedsRefresh } from './projected-scene-damage.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 
 interface SceneEntry {
   readonly key: string

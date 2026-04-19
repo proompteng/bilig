@@ -1,14 +1,10 @@
-import {
-  buildResidentDataPaneScenes,
-  createGridSelection,
-  getGridMetrics,
-  resolveFrozenColumnWidth,
-  resolveFrozenRowHeight,
-  type WorkbookPaneScenePacket,
-  type WorkbookPaneSceneRequest,
-} from '@bilig/grid'
 import { formatAddress } from '@bilig/formula'
 import type { WorkbookAxisEntrySnapshot } from '@bilig/protocol'
+import { buildResidentDataPaneScenes } from '../../../packages/grid/src/gridResidentDataLayer.js'
+import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
+import { createGridSelection } from '../../../packages/grid/src/gridSelection.js'
+import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packages/grid/src/workbookGridViewport.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
 
 interface ResidentPaneSceneEngineLike {

@@ -1,6 +1,5 @@
 import type { CommitOp, EngineReplicaSnapshot, SpreadsheetEngine } from '@bilig/core'
 import { isEngineReplicaSnapshot } from '@bilig/core'
-import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from '@bilig/grid'
 import {
   buildWorkbookAgentPreview,
   isWorkbookAgentCommandBundle,
@@ -56,6 +55,7 @@ import {
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { buildResidentPaneSceneCacheKey, buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 import { WorkerRuntimeSceneCache } from './worker-runtime-scene-cache.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import {
   collectSheetViewportImpacts,
   type SheetViewportImpact,

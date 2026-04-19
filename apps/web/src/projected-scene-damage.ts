@@ -1,4 +1,4 @@
-import type { WorkbookPaneSceneRequest } from '@bilig/grid'
+import type { WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import type { ViewportPatch } from '@bilig/worker-transport'
 
 function intersects(

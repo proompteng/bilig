@@ -1,4 +1,4 @@
-import type { WorkbookPaneScenePacket } from '@bilig/grid'
+import type { WorkbookPaneScenePacket } from './resident-pane-scene-types.js'
 
 interface CachedSceneEntry {
   readonly batchId: number
