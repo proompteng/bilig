@@ -98,6 +98,24 @@ describe('engine fuzz regressions', () => {
     expect(engine.exportSnapshot()).toEqual(seedSnapshot)
   })
 
+  it('rebinds structurally rewritten formulas when dependency addresses shift after prior ref errors', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structural-ref-error-rebind-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellFormula('Sheet1', 'A1', 'C3+D4')
+    engine.deleteRows('Sheet1', 2, 1)
+    engine.insertColumns('Sheet1', 0, 1)
+
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('#REF!+E3')
+
+    engine.deleteColumns('Sheet1', 4, 1)
+
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('#REF!+#REF!')
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('#REF!+E3')
+  })
+
   it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'move-empty-format-regression' })
     await engine.ready()

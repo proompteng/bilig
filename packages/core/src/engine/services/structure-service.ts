@@ -129,6 +129,18 @@ function arrayValuesEqual(left: ArrayLike<number>, right: ArrayLike<number>): bo
   return true
 }
 
+function stringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
+}
+
 function hasStableStructuralSymbolicRangeLayout(
   current: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
   next: Pick<CompiledFormula, 'symbolicRanges' | 'parsedSymbolicRanges'>,
@@ -193,6 +205,7 @@ function structuralRewritePreservesBinding(
     rewritten.compiled.symbolicSpills.length === 0 &&
     formula.directLookup === undefined &&
     formula.directCriteria === undefined &&
+    stringArraysEqual(formula.compiled.deps, rewritten.compiled.deps) &&
     arrayValuesEqual(formula.compiled.program, rewritten.compiled.program) &&
     arrayValuesEqual(formula.compiled.constants, rewritten.compiled.constants) &&
     formula.compiled.mode === rewritten.compiled.mode &&
