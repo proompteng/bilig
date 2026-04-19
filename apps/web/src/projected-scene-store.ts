@@ -16,6 +16,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isDisposedWorkerClientError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Worker engine client disposed'
+}
+
 function isResidentPaneScenePacketArray(value: unknown): value is readonly WorkbookPaneScenePacket[] {
   return (
     Array.isArray(value) &&
@@ -143,14 +147,20 @@ export class ProjectedSceneStore {
     if (entry.inFlight) {
       return
     }
-    entry.inFlight = (async () => {
-      const next = await client.invoke('getResidentPaneScenes', entry.request)
-      if (!isResidentPaneScenePacketArray(next)) {
-        throw new Error('Worker returned an unexpected resident pane scene payload')
+    entry.inFlight = (async (): Promise<void> => {
+      try {
+        const next = await client.invoke('getResidentPaneScenes', entry.request)
+        if (!isResidentPaneScenePacketArray(next)) {
+          throw new Error('Worker returned an unexpected resident pane scene payload')
+        }
+        entry.scenes = next
+        getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+        entry.listeners.forEach((listener) => listener())
+      } catch (error) {
+        if (entry.listeners.size === 0 || isDisposedWorkerClientError(error)) {
+          return
+        }
       }
-      entry.scenes = next
-      getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
-      entry.listeners.forEach((listener) => listener())
     })()
     try {
       await entry.inFlight
