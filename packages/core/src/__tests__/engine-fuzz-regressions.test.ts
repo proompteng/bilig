@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
+import { createEngineSeedSnapshot } from './engine-fuzz-helpers.js'
 
 describe('engine fuzz regressions', () => {
   it('does not mutate source cells when moveRange is blocked by protection', async () => {
@@ -79,6 +80,22 @@ describe('engine fuzz regressions', () => {
     engine.deleteColumns('Sheet1', 0, 1)
     expect(engine.exportSnapshot()).toEqual(before)
     expect(engine.undo()).toBe(false)
+  })
+
+  it('restores sparse style metadata after undoing coalesced structural deletes', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('sparse-format', 'structural-style-undo-regression')
+    const engine = new SpreadsheetEngine({ workbookName: seedSnapshot.workbook.name, replicaId: 'structural-style-undo-regression' })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'C5' }, { fill: { backgroundColor: '#dbeafe' } })
+    engine.deleteRows('Sheet1', 3, 1)
+    engine.deleteColumns('Sheet1', 0, 1)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(seedSnapshot)
   })
 
   it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {

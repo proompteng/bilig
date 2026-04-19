@@ -1931,6 +1931,11 @@ export function createEngineOperationService(args: {
     let topologyChanged = false
     let compileMs = 0
     const postRecalcDirectFormulaIndices = new Set<number>()
+    const hasGeneralEventListeners = args.state.events.hasListeners()
+    const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
+    const hasWatchedCellListeners = args.state.events.hasCellListeners()
+    const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
+    const trackExplicitChanges = !isRestore && requiresChangedSet
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
@@ -1949,6 +1954,51 @@ export function createEngineOperationService(args: {
       sheetNameById.set(sheetId, sheet.name)
       return sheet.name
     }
+    const trackedColumnDependencyFlagsBySheet = new Map<
+      number,
+      Map<
+        number,
+        {
+          hasExactLookupDependents: boolean
+          hasSortedLookupDependents: boolean
+          hasAggregateDependents: boolean
+          needsLookupValueRead: boolean
+        }
+      >
+    >()
+    const clearTrackedColumnDependencyFlagCache = (): void => {
+      trackedColumnDependencyFlagsBySheet.clear()
+    }
+    const resolveTrackedColumnDependencyFlags = (
+      sheetId: number,
+      col: number,
+    ): {
+      hasExactLookupDependents: boolean
+      hasSortedLookupDependents: boolean
+      hasAggregateDependents: boolean
+      needsLookupValueRead: boolean
+    } => {
+      let flagsByColumn = trackedColumnDependencyFlagsBySheet.get(sheetId)
+      if (flagsByColumn === undefined) {
+        flagsByColumn = new Map()
+        trackedColumnDependencyFlagsBySheet.set(sheetId, flagsByColumn)
+      }
+      const cached = flagsByColumn.get(col)
+      if (cached !== undefined) {
+        return cached
+      }
+      const hasExactLookupDependents = hasTrackedExactLookupDependents(sheetId, col)
+      const hasSortedLookupDependents = hasTrackedSortedLookupDependents(sheetId, col)
+      const hasAggregateDependents = hasTrackedDirectAggregateDependents(sheetId, col)
+      const next = {
+        hasExactLookupDependents,
+        hasSortedLookupDependents,
+        hasAggregateDependents,
+        needsLookupValueRead: hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents,
+      }
+      flagsByColumn.set(col, next)
+      return next
+    }
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -1961,10 +2011,8 @@ export function createEngineOperationService(args: {
           switch (mutation.kind) {
             case 'setCellValue': {
               const sheetName = resolveSheetName(sheetId)
-              const hasExactLookupDependents = hasTrackedExactLookupDependents(sheetId, mutation.col)
-              const hasSortedLookupDependents = hasTrackedSortedLookupDependents(sheetId, mutation.col)
-              const hasAggregateDependents = hasTrackedDirectAggregateDependents(sheetId, mutation.col)
-              const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
+              const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents, needsLookupValueRead } =
+                resolveTrackedColumnDependencyFlags(sheetId, mutation.col)
               const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
               if (mutation.value === null && !isRestore && (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))) {
                 break
@@ -2013,7 +2061,7 @@ export function createEngineOperationService(args: {
                   }
                 }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-                if (!isRestore) {
+                if (trackExplicitChanges) {
                   explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
                 }
                 if (!isRestore && args.state.trackReplicaVersions) {
@@ -2027,7 +2075,11 @@ export function createEngineOperationService(args: {
               const cellIndex = args.state.workbook.ensureCellAt(sheetId, mutation.row, mutation.col).cellIndex
               if (!isRestore) {
                 changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
-                topologyChanged = args.removeFormula(cellIndex) || topologyChanged
+                const removedFormula = args.removeFormula(cellIndex)
+                topologyChanged = removedFormula || topologyChanged
+                if (removedFormula) {
+                  clearTrackedColumnDependencyFlagCache()
+                }
               }
               writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, mutation.value, args.state.strings)
               args.state.workbook.notifyCellValueWritten(cellIndex)
@@ -2077,7 +2129,7 @@ export function createEngineOperationService(args: {
                 pruneCellIfOrphaned(cellIndex)
               }
               changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-              if (!isRestore) {
+              if (trackExplicitChanges) {
                 explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
               }
               if (!isRestore && args.state.trackReplicaVersions) {
@@ -2087,10 +2139,11 @@ export function createEngineOperationService(args: {
             }
             case 'setCellFormula': {
               const sheetName = resolveSheetName(sheetId)
-              if (hasTrackedExactLookupDependents(sheetId, mutation.col)) {
+              const { hasExactLookupDependents, hasSortedLookupDependents } = resolveTrackedColumnDependencyFlags(sheetId, mutation.col)
+              if (hasExactLookupDependents) {
                 args.invalidateExactLookupColumn({ sheetName, col: mutation.col })
               }
-              if (hasTrackedSortedLookupDependents(sheetId, mutation.col)) {
+              if (hasSortedLookupDependents) {
                 args.invalidateSortedLookupColumn({ sheetName, col: mutation.col })
               }
               if (!isRestore && existingIndex !== undefined) {
@@ -2106,6 +2159,7 @@ export function createEngineOperationService(args: {
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted
                 }
+                clearTrackedColumnDependencyFlagCache()
                 changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
                 formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
                 topologyChanged = topologyChanged || changedTopology
@@ -2127,11 +2181,13 @@ export function createEngineOperationService(args: {
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted
                 }
-                topologyChanged = args.removeFormula(cellIndex) || topologyChanged
+                const removedFormula = args.removeFormula(cellIndex)
+                topologyChanged = removedFormula || topologyChanged
+                clearTrackedColumnDependencyFlagCache()
                 args.setInvalidFormulaValue(cellIndex)
                 changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
               }
-              if (!isRestore) {
+              if (trackExplicitChanges) {
                 explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
               }
               if (!isRestore && args.state.trackReplicaVersions) {
@@ -2140,10 +2196,8 @@ export function createEngineOperationService(args: {
               break
             }
             case 'clearCell': {
-              const hasExactLookupDependents = hasTrackedExactLookupDependents(sheetId, mutation.col)
-              const hasSortedLookupDependents = hasTrackedSortedLookupDependents(sheetId, mutation.col)
-              const hasAggregateDependents = hasTrackedDirectAggregateDependents(sheetId, mutation.col)
-              const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
+              const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents, needsLookupValueRead } =
+                resolveTrackedColumnDependencyFlags(sheetId, mutation.col)
               const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
               if (existingIndex !== undefined && isClearCellNoOp(existingIndex)) {
                 break
@@ -2190,7 +2244,7 @@ export function createEngineOperationService(args: {
                   }
                 }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-                if (!isRestore) {
+                if (trackExplicitChanges) {
                   explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
                 }
                 if (!isRestore && args.state.trackReplicaVersions) {
@@ -2206,7 +2260,11 @@ export function createEngineOperationService(args: {
               }
               changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
               changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(existingIndex), changedInputCount)
-              topologyChanged = args.removeFormula(existingIndex) || topologyChanged
+              const removedFormula = args.removeFormula(existingIndex)
+              topologyChanged = removedFormula || topologyChanged
+              if (removedFormula) {
+                clearTrackedColumnDependencyFlagCache()
+              }
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
               args.state.workbook.notifyCellValueWritten(existingIndex)
               if (needsLookupValueRead) {
@@ -2262,7 +2320,7 @@ export function createEngineOperationService(args: {
                 pruneCellIfOrphaned(existingIndex)
               }
               changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-              if (!isRestore) {
+              if (trackExplicitChanges) {
                 explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
               }
               if (!isRestore && args.state.trackReplicaVersions) {
@@ -2324,10 +2382,6 @@ export function createEngineOperationService(args: {
       }
       recalculated = args.reconcilePivotOutputs(recalculated, false)
     }
-    const hasGeneralEventListeners = args.state.events.hasListeners()
-    const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
-    const hasWatchedCellListeners = args.state.events.hasCellListeners()
-    const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
     const changed: U32 = isRestore || !requiresChangedSet ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
     const lastMetrics = {
       ...args.state.getLastMetrics(),

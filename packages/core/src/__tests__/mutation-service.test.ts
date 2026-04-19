@@ -284,6 +284,63 @@ describe('EngineMutationService', () => {
     ])
   })
 
+  it('resolves each fast-path render-commit sheet only once before applying cell refs', () => {
+    const workbook = new WorkbookStore('render-commit-sheet-cache')
+    const originalGetSheet = workbook.getSheet.bind(workbook)
+    let getSheetCalls = 0
+    workbook.getSheet = ((name: string) => {
+      getSheetCalls += 1
+      return originalGetSheet(name)
+    }) as typeof workbook.getSheet
+    let replayDepth = 0
+    const service = createEngineMutationService({
+      state: {
+        workbook,
+        replicaState: createReplicaState('local'),
+        undoStack: [],
+        redoStack: [],
+        trackReplicaVersions: false,
+        getSyncClientConnection: () => null,
+        batchListeners: new Set(),
+        formulas: new Map(),
+        getTransactionReplayDepth: () => replayDepth,
+        setTransactionReplayDepth: (next) => {
+          replayDepth = next
+        },
+      },
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      captureStoredCellOps: () => [],
+      restoreCellOps: () => [],
+      readRangeCells: () => [],
+      toCellStateOps: () => [],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
+      applyBatchNow: (batch) => {
+        for (const op of batch.ops) {
+          if (op.kind === 'upsertSheet') {
+            workbook.getOrCreateSheet(op.name, op.order)
+          }
+        }
+      },
+      applyCellMutationsAtBatchNow: () => {},
+    })
+
+    Effect.runSync(
+      service.renderCommit([
+        { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+        ...Array.from({ length: 20 }, (_value, index) => ({
+          kind: 'upsertCell' as const,
+          sheetName: 'Sheet1',
+          addr: `A${index + 1}`,
+          value: index + 1,
+        })),
+      ]),
+    )
+
+    expect(getSheetCalls).toBe(3)
+  })
+
   it('does not record redundant per-cell undo ops for render commits that populate a newly created sheet', () => {
     const workbook = new WorkbookStore('before-render-commit')
     let replayDepth = 0

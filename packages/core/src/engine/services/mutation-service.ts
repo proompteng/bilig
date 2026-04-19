@@ -17,7 +17,7 @@ import { restoreFormatRangeOps, restoreStyleRangeOps } from '../../engine-range-
 import { sheetMetadataToOps } from '../../engine-snapshot-utils.js'
 import { parseCsv, parseCsvCellInput } from '../../csv.js'
 import { createBatch } from '../../replica-state.js'
-import type { WorkbookStore } from '../../workbook-store.js'
+import { WorkbookStore } from '../../workbook-store.js'
 import {
   cellMutationRefToEngineOp,
   cloneCellMutationRef,
@@ -621,6 +621,36 @@ export function createEngineMutationService(args: {
 
     const clearStructuralSheetMetadataOps = (sheetName: string, transform: ReturnType<typeof structuralTransformForOp>): EngineOp[] => {
       const clearedOps: EngineOp[] = []
+      args.state.workbook.listStyleRanges(sheetName).forEach((record) => {
+        const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
+        if (!range) {
+          return
+        }
+        clearedOps.push({
+          kind: 'setStyleRange',
+          range: {
+            ...record.range,
+            startAddress: range.startAddress,
+            endAddress: range.endAddress,
+          },
+          styleId: WorkbookStore.defaultStyleId,
+        })
+      })
+      args.state.workbook.listFormatRanges(sheetName).forEach((record) => {
+        const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
+        if (!range) {
+          return
+        }
+        clearedOps.push({
+          kind: 'setFormatRange',
+          range: {
+            ...record.range,
+            startAddress: range.startAddress,
+            endAddress: range.endAddress,
+          },
+          formatId: WorkbookStore.defaultFormatId,
+        })
+      })
       args.state.workbook.listFilters(sheetName).forEach((filter) => {
         const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform)
         if (!range) {
@@ -1618,26 +1648,37 @@ export function createEngineMutationService(args: {
       }
 
       const refs: EngineCellMutationRef[] = Array.from({ length: cellMutations.length })
+      const sheetIdByName = new Map<string, number>()
+      const createdSheetMutationFlags = new Uint8Array(cellMutations.length)
+      let sawExistingSheetMutation = false
       for (let index = 0; index < cellMutations.length; index += 1) {
         const mutation = cellMutations[index]!
-        const sheet = args.state.workbook.getSheet(mutation.sheetName)
-        if (!sheet) {
-          throw new Error(`Unknown sheet: ${mutation.sheetName}`)
+        let sheetId = sheetIdByName.get(mutation.sheetName)
+        if (sheetId === undefined) {
+          const sheet = args.state.workbook.getSheet(mutation.sheetName)
+          if (!sheet) {
+            throw new Error(`Unknown sheet: ${mutation.sheetName}`)
+          }
+          sheetId = sheet.id
+          sheetIdByName.set(mutation.sheetName, sheetId)
         }
+        const targetsCreatedSheet = createdSheetNames.has(mutation.sheetName)
+        createdSheetMutationFlags[index] = targetsCreatedSheet ? 1 : 0
+        sawExistingSheetMutation ||= !targetsCreatedSheet
         refs[index] = {
-          sheetId: sheet.id,
+          sheetId,
           mutation: mutation.mutation,
         }
       }
 
       const inverseOps: EngineOp[] = []
-      for (let index = refs.length - 1; index >= 0; index -= 1) {
-        const ref = refs[index]!
-        const sheetName = cellMutations[index]!.sheetName
-        if (createdSheetNames.has(sheetName)) {
-          continue
+      if (sawExistingSheetMutation) {
+        for (let index = refs.length - 1; index >= 0; index -= 1) {
+          if (createdSheetMutationFlags[index] === 1) {
+            continue
+          }
+          inverseOps.push(restoreCellOpFromRef(refs[index]!))
         }
-        inverseOps.push(restoreCellOpFromRef(ref))
       }
       cellUndoOps = inverseOps
 
