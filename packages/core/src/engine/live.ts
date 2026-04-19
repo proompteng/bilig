@@ -492,7 +492,7 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) => support.composeEventChangesNow(recalculated, explicitChangedCount),
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
-    captureChangedPatches: (changedCellIndices) => patchEmitter.captureChangedPatches(changedCellIndices),
+    captureChangedPatches: (changedCellIndices, request) => patchEmitter.captureChangedPatches(changedCellIndices, request),
     unionChangedSets: (...sets) => support.unionChangedSetsNow(...sets),
     composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
       support.composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount),
@@ -602,7 +602,7 @@ export function createEngineServiceRuntime(args: {
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) => support.composeEventChangesNow(recalculated, explicitChangedCount),
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
-    captureChangedPatches: (changedCellIndices) => patchEmitter.captureChangedPatches(changedCellIndices),
+    captureChangedPatches: (changedCellIndices, request) => patchEmitter.captureChangedPatches(changedCellIndices, request),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
     getChangedFormulaBuffer: () => scratch.getChangedFormulaBufferNow(),
     ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),

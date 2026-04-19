@@ -25,7 +25,7 @@ import type {
   U32,
 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
-import type { EngineCellPatch } from '../../patches/patch-types.js'
+import type { EnginePatch } from '../../patches/patch-types.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 
@@ -298,7 +298,15 @@ export function createEngineOperationService(args: {
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
   readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
-  readonly captureChangedPatches: (changedCellIndices: readonly number[] | U32) => readonly EngineCellPatch[]
+  readonly captureChangedPatches: (
+    changedCellIndices: readonly number[] | U32,
+    request?: {
+      invalidation?: 'cells' | 'full'
+      invalidatedRanges?: readonly CellRangeRef[]
+      invalidatedRows?: readonly { sheetName: string; startIndex: number; endIndex: number }[]
+      invalidatedColumns?: readonly { sheetName: string; startIndex: number; endIndex: number }[]
+    },
+  ) => readonly EnginePatch[]
   readonly getChangedInputBuffer: () => U32
   readonly getChangedFormulaBuffer: () => U32
   readonly ensureRecalcScratchCapacity: (size: number) => void
@@ -1977,7 +1985,12 @@ export function createEngineOperationService(args: {
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
-        patches: args.captureChangedPatches(changed),
+        patches: args.captureChangedPatches(changed, {
+          invalidation,
+          invalidatedRanges,
+          invalidatedRows,
+          invalidatedColumns,
+        }),
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,
@@ -2538,7 +2551,12 @@ export function createEngineOperationService(args: {
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
-        patches: args.captureChangedPatches(changed),
+        patches: args.captureChangedPatches(changed, {
+          invalidation,
+          invalidatedRanges: [],
+          invalidatedRows: [],
+          invalidatedColumns: [],
+        }),
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],

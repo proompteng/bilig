@@ -93,4 +93,47 @@ describe('captureTrackedEngineEvent', () => {
       },
     ])
   })
+
+  it('derives invalidation flags from typed invalidation patches', () => {
+    const tracked = captureTrackedEngineEvent({
+      kind: 'batch',
+      invalidation: 'cells',
+      changedCellIndices: new Uint32Array(),
+      patches: [
+        {
+          kind: 'row-invalidation',
+          sheetName: 'Bench',
+          startIndex: 3,
+          endIndex: 4,
+        },
+        {
+          kind: 'column-invalidation',
+          sheetName: 'Bench',
+          startIndex: 1,
+          endIndex: 2,
+        },
+        {
+          kind: 'range-invalidation',
+          range: { sheetName: 'Bench', startAddress: 'A1', endAddress: 'C3' },
+        },
+      ],
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [],
+      metrics: {
+        batchId: 3,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+    })
+
+    expect(tracked.hasInvalidatedRows).toBe(true)
+    expect(tracked.hasInvalidatedColumns).toBe(true)
+    expect(tracked.hasInvalidatedRanges).toBe(true)
+  })
 })

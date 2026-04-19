@@ -17,7 +17,7 @@ import { EngineRecalcError } from '../errors.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
 import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
 import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-scheduler-service.js'
-import type { EngineCellPatch } from '../../patches/patch-types.js'
+import type { EnginePatch } from '../../patches/patch-types.js'
 
 export interface DirtyRegion {
   readonly sheetName: string
@@ -103,7 +103,19 @@ export function createEngineRecalcService(args: {
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
   readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
-  readonly captureChangedPatches: (changedCellIndices: readonly number[] | U32) => readonly EngineCellPatch[]
+  readonly captureChangedPatches: (
+    changedCellIndices: readonly number[] | U32,
+    request?: {
+      invalidation?: 'cells' | 'full'
+      invalidatedRanges?: readonly {
+        sheetName: string
+        startAddress: string
+        endAddress: string
+      }[]
+      invalidatedRows?: readonly { sheetName: string; startIndex: number; endIndex: number }[]
+      invalidatedColumns?: readonly { sheetName: string; startIndex: number; endIndex: number }[]
+    },
+  ) => readonly EnginePatch[]
   readonly unionChangedSets: (...sets: Array<readonly number[] | U32>) => U32
   readonly composeChangedRootsAndOrdered: (changedRoots: readonly number[] | U32, ordered: U32, orderedCount: number) => U32
   readonly emptyChangedSet: () => U32
@@ -595,7 +607,12 @@ export function createEngineRecalcService(args: {
               kind: 'batch',
               invalidation: 'cells',
               changedCellIndices: changed,
-              patches: args.captureChangedPatches(changed),
+              patches: args.captureChangedPatches(changed, {
+                invalidation: 'cells',
+                invalidatedRanges: [],
+                invalidatedRows: [],
+                invalidatedColumns: [],
+              }),
               invalidatedRanges: [],
               invalidatedRows: [],
               invalidatedColumns: [],
@@ -662,7 +679,12 @@ export function createEngineRecalcService(args: {
               kind: 'batch',
               invalidation: 'cells',
               changedCellIndices: changed,
-              patches: args.captureChangedPatches(changed),
+              patches: args.captureChangedPatches(changed, {
+                invalidation: 'cells',
+                invalidatedRanges: [],
+                invalidatedRows: [],
+                invalidatedColumns: [],
+              }),
               invalidatedRanges: [],
               invalidatedRows: [],
               invalidatedColumns: [],

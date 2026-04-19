@@ -107,7 +107,7 @@ import type {
   RawCellContent,
   SerializedWorkPaperNamedExpression,
 } from './work-paper-types.js'
-import { captureTrackedEngineEvent, type TrackedCellPatch, type TrackedEngineEvent } from './tracked-engine-event-refs.js'
+import { captureTrackedEngineEvent, type TrackedEngineEvent, type TrackedPatch } from './tracked-engine-event-refs.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
 
@@ -132,7 +132,7 @@ interface EngineTrackedEventSubscription {
       kind: 'batch'
       invalidation: 'cells' | 'full'
       changedCellIndices: number[] | Uint32Array
-      patches?: readonly TrackedCellPatch[]
+      patches?: readonly TrackedPatch[]
       invalidatedRanges: CellRangeRef[]
       invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[]
       invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[]
@@ -3107,7 +3107,8 @@ export class WorkPaper {
 
   private materializeTrackedEventChanges(event: TrackedEngineEvent): readonly TrackedCellLike[] {
     if (event.patches && event.patches.length > 0) {
-      return event.patches
+      const cellPatches = event.patches.filter((patch): patch is Extract<TrackedPatch, { kind: 'cell' }> => patch.kind === 'cell')
+      return cellPatches
     }
     const changes: TrackedCellLike[] = []
     for (let index = 0; index < event.changedCellIndices.length; index += 1) {

@@ -1,6 +1,6 @@
 import type { CellRangeRef, EngineEvent } from '@bilig/protocol'
 import { parseCellAddress } from '@bilig/formula'
-import type { EngineCellPatch } from './patches/patch-types.js'
+import type { EnginePatch } from './patches/patch-types.js'
 
 interface NormalizedRange {
   sheetName: string
@@ -14,7 +14,7 @@ export interface EngineTrackedEvent {
   kind: EngineEvent['kind']
   invalidation: EngineEvent['invalidation']
   changedCellIndices: EngineEvent['changedCellIndices']
-  patches?: readonly EngineCellPatch[]
+  patches?: readonly EnginePatch[]
   invalidatedRanges: EngineEvent['invalidatedRanges']
   invalidatedRows: EngineEvent['invalidatedRows']
   invalidatedColumns: EngineEvent['invalidatedColumns']

@@ -1,17 +1,23 @@
 import type { EngineRuntimeState } from '../engine/runtime-state.js'
-import { materializeChangedCellPatches } from './materialize-changed-cells.js'
-import type { EngineCellPatch } from './patch-types.js'
+import { materializeEnginePatches, type EnginePatchCaptureRequest } from './materialize-changed-cells.js'
+import type { EnginePatch } from './patch-types.js'
 
 export interface EnginePatchEmitterService {
-  readonly captureChangedPatches: (changedCellIndices: readonly number[] | Uint32Array) => readonly EngineCellPatch[]
+  readonly captureChangedPatches: (
+    changedCellIndices: readonly number[] | Uint32Array,
+    request?: Omit<EnginePatchCaptureRequest, 'changedCellIndices'>,
+  ) => readonly EnginePatch[]
 }
 
 export function createEnginePatchEmitterService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineRuntimeState['counters'] }
 }): EnginePatchEmitterService {
   return {
-    captureChangedPatches(changedCellIndices) {
-      return materializeChangedCellPatches(args.state, changedCellIndices)
+    captureChangedPatches(changedCellIndices, request = {}) {
+      return materializeEnginePatches(args.state, {
+        changedCellIndices,
+        ...request,
+      })
     },
   }
 }

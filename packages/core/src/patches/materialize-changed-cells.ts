@@ -3,12 +3,34 @@ import type { EngineChangedCell } from '@bilig/protocol'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import type { StringPool } from '../string-pool.js'
 import type { WorkbookStore } from '../workbook-store.js'
-import type { EngineCellPatch } from './patch-types.js'
+import type {
+  EngineCellPatch,
+  EngineColumnInvalidationPatch,
+  EnginePatch,
+  EngineRangeInvalidationPatch,
+  EngineRowInvalidationPatch,
+} from './patch-types.js'
 
 export interface MaterializeChangedCellsArgs {
   readonly workbook: WorkbookStore
   readonly strings: StringPool
   readonly counters?: EngineCounters
+}
+
+export interface EnginePatchCaptureRequest {
+  readonly changedCellIndices: readonly number[] | Uint32Array
+  readonly invalidation?: 'cells' | 'full'
+  readonly invalidatedRanges?: readonly EngineRangeInvalidationPatch['range'][]
+  readonly invalidatedRows?: ReadonlyArray<{
+    readonly sheetName: string
+    readonly startIndex: number
+    readonly endIndex: number
+  }>
+  readonly invalidatedColumns?: ReadonlyArray<{
+    readonly sheetName: string
+    readonly startIndex: number
+    readonly endIndex: number
+  }>
 }
 
 function readChangedCell(args: MaterializeChangedCellsArgs, cellIndex: number, fallbackSheetName?: string): EngineCellPatch | null {
@@ -80,6 +102,48 @@ export function materializeChangedCellPatches(
     addEngineCounter(args.counters, 'changedCellPayloadsBuilt', patches.length)
   }
   return patches
+}
+
+function materializeRangeInvalidationPatches(
+  invalidatedRanges: readonly EngineRangeInvalidationPatch['range'][],
+): readonly EngineRangeInvalidationPatch[] {
+  return invalidatedRanges.map((range) => ({
+    kind: 'range-invalidation',
+    range,
+  }))
+}
+
+function materializeRowInvalidationPatches(
+  invalidatedRows: EnginePatchCaptureRequest['invalidatedRows'],
+): readonly EngineRowInvalidationPatch[] {
+  return (invalidatedRows ?? []).map((row) => ({
+    kind: 'row-invalidation',
+    sheetName: row.sheetName,
+    startIndex: row.startIndex,
+    endIndex: row.endIndex,
+  }))
+}
+
+function materializeColumnInvalidationPatches(
+  invalidatedColumns: EnginePatchCaptureRequest['invalidatedColumns'],
+): readonly EngineColumnInvalidationPatch[] {
+  return (invalidatedColumns ?? []).map((column) => ({
+    kind: 'column-invalidation',
+    sheetName: column.sheetName,
+    startIndex: column.startIndex,
+    endIndex: column.endIndex,
+  }))
+}
+
+export function materializeEnginePatches(args: MaterializeChangedCellsArgs, request: EnginePatchCaptureRequest): readonly EnginePatch[] {
+  const cellPatches = materializeChangedCellPatches(args, request.changedCellIndices)
+  const rangePatches = materializeRangeInvalidationPatches(request.invalidatedRanges ?? [])
+  const rowPatches = materializeRowInvalidationPatches(request.invalidatedRows)
+  const columnPatches = materializeColumnInvalidationPatches(request.invalidatedColumns)
+  if (rangePatches.length === 0 && rowPatches.length === 0 && columnPatches.length === 0) {
+    return cellPatches
+  }
+  return [...cellPatches, ...rangePatches, ...rowPatches, ...columnPatches]
 }
 
 export function materializeChangedCells(
