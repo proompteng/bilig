@@ -92,6 +92,7 @@ export function createRangeAggregateCacheService(args: {
 }): RangeAggregateCacheService {
   const emptyColumnVersions = new Uint32Array(0)
   const cache = new Map<string, AggregatePrefixEntry[]>()
+  const recentReusable = new Map<string, AggregatePrefixEntry>()
 
   const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
     const direct = Reflect.get(args.runtimeColumnStore, 'getColumnView')
@@ -176,14 +177,16 @@ export function createRangeAggregateCacheService(args: {
     for (let offset = 0; offset < view.length; offset += 1) {
       const tag = decodeValueTag(rawTagAt(view, offset))
       switch (tag) {
-        case ValueTag.Number:
-          runningSum += numericAt(view, offset)
+        case ValueTag.Number: {
+          const numeric = numericAt(view, offset)
+          runningSum += numeric
           runningCount += 1
           runningAverageCount += 1
-          runningMinimum = Math.min(runningMinimum, numericAt(view, offset))
-          runningMaximum = Math.max(runningMaximum, numericAt(view, offset))
+          runningMinimum = Math.min(runningMinimum, numeric)
+          runningMaximum = Math.max(runningMaximum, numeric)
           break
-        case ValueTag.Boolean:
+        }
+        case ValueTag.Boolean: {
           const booleanNumber = numericAt(view, offset) !== 0 ? 1 : 0
           runningSum += booleanNumber
           runningCount += 1
@@ -191,6 +194,7 @@ export function createRangeAggregateCacheService(args: {
           runningMinimum = Math.min(runningMinimum, booleanNumber)
           runningMaximum = Math.max(runningMaximum, booleanNumber)
           break
+        }
         case ValueTag.Empty:
           runningAverageCount += 1
           runningMinimum = Math.min(runningMinimum, 0)
@@ -257,14 +261,16 @@ export function createRangeAggregateCacheService(args: {
     for (let offset = 0; offset < deltaView.length; offset += 1) {
       const tag = decodeValueTag(rawTagAt(deltaView, offset))
       switch (tag) {
-        case ValueTag.Number:
-          runningSum += numericAt(deltaView, offset)
+        case ValueTag.Number: {
+          const numeric = numericAt(deltaView, offset)
+          runningSum += numeric
           runningCount += 1
           runningAverageCount += 1
-          runningMinimum = Math.min(runningMinimum, numericAt(deltaView, offset))
-          runningMaximum = Math.max(runningMaximum, numericAt(deltaView, offset))
+          runningMinimum = Math.min(runningMinimum, numeric)
+          runningMaximum = Math.max(runningMaximum, numeric)
           break
-        case ValueTag.Boolean:
+        }
+        case ValueTag.Boolean: {
           const booleanNumber = numericAt(deltaView, offset) !== 0 ? 1 : 0
           runningSum += booleanNumber
           runningCount += 1
@@ -272,6 +278,7 @@ export function createRangeAggregateCacheService(args: {
           runningMinimum = Math.min(runningMinimum, booleanNumber)
           runningMaximum = Math.max(runningMaximum, booleanNumber)
           break
+        }
         case ValueTag.Empty:
           runningAverageCount += 1
           runningMinimum = Math.min(runningMinimum, 0)
@@ -304,32 +311,58 @@ export function createRangeAggregateCacheService(args: {
     getOrBuildPrefix(request) {
       const key = cacheKey(request.sheetName, request.col)
       const currentVersions = getCurrentVersions(request.sheetName, request.col)
-      const compatibleEntries =
-        cache
-          .get(key)
-          ?.filter(
-            (entry) => entry.columnVersion === currentVersions.columnVersion && entry.structureVersion === currentVersions.structureVersion,
-          ) ?? []
+      const recent = recentReusable.get(key)
+      if (
+        recent &&
+        recent.columnVersion === currentVersions.columnVersion &&
+        recent.structureVersion === currentVersions.structureVersion &&
+        recent.rowStart <= request.rowStart
+      ) {
+        if (recent.rowEnd >= request.rowEnd) {
+          return recent
+        }
+        const extended = extendPrefix(recent, {
+          sheetName: request.sheetName,
+          rowStart: recent.rowStart,
+          rowEnd: request.rowEnd,
+          col: request.col,
+        })
+        recentReusable.set(key, extended)
+        return extended
+      }
+      const existingEntries = cache.get(key) ?? []
+      const compatibleEntries: AggregatePrefixEntry[] = []
+      let reusable: AggregatePrefixEntry | undefined
+      for (const entry of existingEntries) {
+        if (entry.columnVersion !== currentVersions.columnVersion || entry.structureVersion !== currentVersions.structureVersion) {
+          continue
+        }
+        compatibleEntries.push(entry)
+        if (entry.rowStart <= request.rowStart && (reusable === undefined || entry.rowStart < reusable.rowStart)) {
+          reusable = entry
+        }
+      }
       if (compatibleEntries.length > 0) {
         cache.set(key, compatibleEntries)
-        const reusable = compatibleEntries
-          .filter((entry) => entry.rowStart <= request.rowStart)
-          .toSorted((left, right) => left.rowStart - right.rowStart)[0]
-        if (reusable) {
-          if (reusable.rowEnd >= request.rowEnd) {
-            return reusable
-          }
-          return extendPrefix(reusable, {
-            sheetName: request.sheetName,
-            rowStart: reusable.rowStart,
-            rowEnd: request.rowEnd,
-            col: request.col,
-          })
+      }
+      if (reusable) {
+        if (reusable.rowEnd >= request.rowEnd) {
+          recentReusable.set(key, reusable)
+          return reusable
         }
+        const extended = extendPrefix(reusable, {
+          sheetName: request.sheetName,
+          rowStart: reusable.rowStart,
+          rowEnd: request.rowEnd,
+          col: request.col,
+        })
+        recentReusable.set(key, extended)
+        return extended
       }
       const built = buildPrefix(request)
       compatibleEntries.push(built)
       cache.set(key, compatibleEntries)
+      recentReusable.set(key, built)
       return built
     },
   }
