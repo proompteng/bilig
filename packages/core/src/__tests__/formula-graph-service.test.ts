@@ -5,6 +5,11 @@ import { CellFlags } from '../cell-store.js'
 import { SpreadsheetEngine } from '../engine.js'
 import type { EngineFormulaGraphService } from '../engine/services/formula-graph-service.js'
 
+interface FormulaIndexView {
+  readonly size: number
+  readonly keys: () => IterableIterator<number>
+}
+
 function isEngineFormulaGraphService(value: unknown): value is EngineFormulaGraphService {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -28,6 +33,23 @@ function getGraphService(engine: SpreadsheetEngine): EngineFormulaGraphService {
   return graph
 }
 
+function isFormulaIndexView(value: unknown): value is FormulaIndexView {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'keys') === 'function' &&
+    typeof Reflect.get(value, 'size') === 'number'
+  )
+}
+
+function getFormulaTable(engine: SpreadsheetEngine): FormulaIndexView {
+  const formulas = Reflect.get(engine, 'formulas')
+  if (!isFormulaIndexView(formulas)) {
+    throw new TypeError('Expected engine formula table')
+  }
+  return formulas
+}
+
 describe('EngineFormulaGraphService', () => {
   it('rebuilds topo ranks for range-node dependents through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'graph-topo' })
@@ -46,9 +68,21 @@ describe('EngineFormulaGraphService', () => {
     engine.workbook.cellStore.topoRanks[b1Index!] = 99
     engine.workbook.cellStore.topoRanks[d1Index!] = 1
 
+    engine.scheduler.rebuildChain(Uint32Array.of(b1Index!, d1Index!), engine.workbook.cellStore)
+
     Effect.runSync(getGraphService(engine).rebuildTopoRanks())
 
     expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!])
+    const rebuilt = engine.scheduler.collectDirty(
+      Uint32Array.of(d1Index!, b1Index!),
+      { getDependents: () => new Uint32Array() },
+      engine.workbook.cellStore,
+      getFormulaTable(engine).keys(),
+      getFormulaTable(engine).size,
+      () => true,
+      0,
+    )
+    expect(Array.from(rebuilt.orderedFormulaCellIndices.subarray(0, rebuilt.orderedFormulaCount))).toEqual([b1Index!, d1Index!])
   })
 
   it('repairs topo ranks for local acyclic formula slices without a full rebuild', async () => {
@@ -72,11 +106,27 @@ describe('EngineFormulaGraphService', () => {
     engine.workbook.cellStore.topoRanks[c1Index!] = 1
     engine.workbook.cellStore.topoRanks[d1Index!] = 0
 
+    engine.scheduler.rebuildChain(Uint32Array.of(b1Index!, c1Index!, d1Index!), engine.workbook.cellStore)
+
     const repaired = Effect.runSync(getGraphService(engine).repairTopoRanks(Uint32Array.of(c1Index!)))
 
     expect(repaired).toBe(true)
     expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[c1Index!])
     expect(engine.workbook.cellStore.topoRanks[c1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!])
+    const reordered = engine.scheduler.collectDirty(
+      Uint32Array.of(d1Index!, c1Index!, b1Index!),
+      { getDependents: () => new Uint32Array() },
+      engine.workbook.cellStore,
+      getFormulaTable(engine).keys(),
+      getFormulaTable(engine).size,
+      () => true,
+      0,
+    )
+    expect(Array.from(reordered.orderedFormulaCellIndices.subarray(0, reordered.orderedFormulaCount))).toEqual([
+      b1Index!,
+      c1Index!,
+      d1Index!,
+    ])
   })
 
   it('restores cycle flags and error values when cycle detection reruns through the service', async () => {

@@ -15,6 +15,8 @@ export function createEngineDirtyFrontierSchedulerService(args: {
         changedRoots,
         { getDependents: (entityId) => args.getEntityDependents(entityId) },
         args.state.workbook.cellStore,
+        args.state.formulas.keys(),
+        args.state.formulas.size,
         (cellIndex) => args.state.formulas.has(cellIndex),
         args.state.ranges.size,
       )

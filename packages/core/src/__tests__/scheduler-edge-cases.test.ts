@@ -22,7 +22,15 @@ describe('RecalcScheduler edge cases', () => {
     }
 
     const scheduler = new RecalcScheduler()
-    const result = scheduler.collectDirty(Uint32Array.of(0, 1, 2), { getDependents: () => new Uint32Array() }, store, () => true, 0)
+    const result = scheduler.collectDirty(
+      Uint32Array.of(0, 1, 2),
+      { getDependents: () => new Uint32Array() },
+      store,
+      [0, 1, 2],
+      3,
+      () => true,
+      0,
+    )
 
     expect(result.orderedFormulaCount).toBe(3)
     expect(result.orderedFormulaCellIndices).toBeDefined()
@@ -47,8 +55,8 @@ describe('RecalcScheduler edge cases', () => {
     const getDependents = (entityId: number): Uint32Array => graph.get(entityId) ?? new Uint32Array()
     const scheduler = new RecalcScheduler()
 
-    const first = scheduler.collectDirty(Uint32Array.of(0), { getDependents }, store, (cellIndex) => cellIndex > 0, 0)
-    const second = scheduler.collectDirty(Uint32Array.of(0), { getDependents }, store, (cellIndex) => cellIndex > 0, 0)
+    const first = scheduler.collectDirty(Uint32Array.of(0), { getDependents }, store, [1, 2], 2, (cellIndex) => cellIndex > 0, 0)
+    const second = scheduler.collectDirty(Uint32Array.of(0), { getDependents }, store, [1, 2], 2, (cellIndex) => cellIndex > 0, 0)
 
     expect(Array.from(first.orderedFormulaCellIndices.subarray(0, first.orderedFormulaCount))).toEqual([1, 2])
     expect(Array.from(second.orderedFormulaCellIndices.subarray(0, second.orderedFormulaCount))).toEqual([1, 2])
@@ -97,6 +105,8 @@ describe('RecalcScheduler edge cases', () => {
       Uint32Array.of(0),
       { getDependents: (entityId: number) => graph.get(entityId) ?? new Uint32Array() },
       store,
+      [2],
+      1,
       (cellIndex: number) => cellIndex === 2,
       0,
     )
@@ -121,6 +131,8 @@ describe('RecalcScheduler edge cases', () => {
       Uint32Array.of(0),
       { getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array() },
       store,
+      [],
+      0,
       () => false,
       256,
     )
@@ -138,7 +150,15 @@ describe('RecalcScheduler edge cases', () => {
 
     const scheduler = new RecalcScheduler()
     const changedRoots = Uint32Array.from(Array.from({ length: 130 }, (_, index) => 129 - index))
-    const result = scheduler.collectDirty(changedRoots, { getDependents: () => new Uint32Array() }, store, () => true, 0)
+    const result = scheduler.collectDirty(
+      changedRoots,
+      { getDependents: () => new Uint32Array() },
+      store,
+      Array.from({ length: 130 }, (_, index) => index),
+      130,
+      () => true,
+      0,
+    )
 
     expect(result.orderedFormulaCount).toBe(130)
     expect(Array.from(result.orderedFormulaCellIndices.subarray(0, 5))).toEqual([0, 1, 2, 3, 4])

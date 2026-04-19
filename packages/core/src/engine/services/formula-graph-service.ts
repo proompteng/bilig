@@ -65,6 +65,7 @@ export function createEngineFormulaGraphService(args: {
   readonly getBatchMutationDepth: () => number
   readonly getWasmProgramSyncPending: () => boolean
   readonly setWasmProgramSyncPending: (next: boolean) => void
+  readonly rebuildCalcChain: () => void
   readonly notifyCellValueWritten: (cellIndex: number) => void
   readonly forEachFormulaDependencyCell: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void
   readonly collectFormulaDependents: (entityId: number) => Uint32Array
@@ -155,10 +156,11 @@ export function createEngineFormulaGraphService(args: {
         }
       }
     }
+    args.rebuildCalcChain()
   }
 
-  const repairTopoRanksNow = (changedFormulaCells: readonly number[] | U32): boolean =>
-    dynamicTopo.repair(
+  const repairTopoRanksNow = (changedFormulaCells: readonly number[] | U32): boolean => {
+    const result = dynamicTopo.repair(
       changedFormulaCells,
       {
         forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
@@ -166,7 +168,12 @@ export function createEngineFormulaGraphService(args: {
       },
       args.state.workbook.cellStore,
       (cellIndex) => args.state.formulas.has(cellIndex),
-    ).repaired
+    )
+    if (result.repaired) {
+      args.rebuildCalcChain()
+    }
+    return result.repaired
+  }
 
   const detectCyclesNow = (): void => {
     const result = args.cycleDetector.detect(

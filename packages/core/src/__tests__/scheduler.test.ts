@@ -25,6 +25,8 @@ describe('RecalcScheduler', () => {
         getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array(),
       },
       store,
+      [1, 3],
+      2,
       (cellIndex) => cellIndex === 1 || cellIndex === 3,
       1,
     )
@@ -39,8 +41,8 @@ describe('RecalcScheduler', () => {
     store.allocate(1, 0, 0)
 
     const scheduler = new RecalcScheduler()
-    const first = scheduler.collectDirty([0], { getDependents: () => new Uint32Array() }, store, () => false, 0)
-    const second = scheduler.collectDirty([0], { getDependents: () => new Uint32Array() }, store, () => false, 0)
+    const first = scheduler.collectDirty([0], { getDependents: () => new Uint32Array() }, store, [], 0, () => false, 0)
+    const second = scheduler.collectDirty([0], { getDependents: () => new Uint32Array() }, store, [], 0, () => false, 0)
 
     expect(first.orderedFormulaCount).toBe(0)
     expect(second.orderedFormulaCount).toBe(0)
@@ -69,6 +71,8 @@ describe('RecalcScheduler', () => {
         getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array(),
       },
       store,
+      [10, 130, 131],
+      3,
       (cellIndex) => cellIndex === 10 || cellIndex === 130 || cellIndex === 131,
       128,
     )
