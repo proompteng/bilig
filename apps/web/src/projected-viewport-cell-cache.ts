@@ -9,8 +9,6 @@ import {
 
 const DEFAULT_STYLE_ID = 'style-0'
 
-type CellItem = readonly [number, number]
-
 interface CellSubscription {
   sheetName: string
   addresses: Set<string>
@@ -176,14 +174,23 @@ export class ProjectedViewportCellCache {
 
   applyPatchResult(
     sheetName: string,
-    result: Pick<ProjectedViewportPatchApplicationResult, 'changedKeys' | 'damage' | 'axisChanged' | 'freezeChanged'>,
-  ): readonly { cell: CellItem }[] {
+    result: Pick<
+      ProjectedViewportPatchApplicationResult,
+      'changedKeys' | 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
+    >,
+  ): Pick<ProjectedViewportPatchApplicationResult, 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'> {
     this.pruneSheetCache(sheetName)
     this.notifyCellSubscriptions(result.changedKeys)
     if (result.damage.length > 0 || result.axisChanged || result.freezeChanged) {
       this.emitChange()
     }
-    return result.damage
+    return {
+      damage: result.damage,
+      axisChanged: result.axisChanged,
+      columnsChanged: result.columnsChanged,
+      rowsChanged: result.rowsChanged,
+      freezeChanged: result.freezeChanged,
+    }
   }
 
   touchCellKey(key: string): void {

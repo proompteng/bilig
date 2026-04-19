@@ -79,6 +79,26 @@ interface MutableRenderState {
 
 type SurfaceMode = 'inactive' | 'webgpu'
 
+function noteCanvasSurfaceMount(kind: 'canvas' | 'dom'): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(
+    window as Window & {
+      __biligScrollPerf?: {
+        noteCanvasSurfaceMount?: (kind: 'canvas' | 'dom') => void
+      }
+    }
+  ).__biligScrollPerf?.noteCanvasSurfaceMount?.(kind)
+}
+
+function noteCanvasPaint(layer: string): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(window as Window & { __biligScrollPerf?: { noteCanvasPaint?: (layer: string) => void } }).__biligScrollPerf?.noteCanvasPaint?.(layer)
+}
+
 export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfaceProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artifactsRef = useRef<WebGpuArtifacts | null>(null)
@@ -194,6 +214,9 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
     }
 
     void initialize()
+    if (host) {
+      noteCanvasSurfaceMount('canvas')
+    }
 
     return () => {
       cancelled = true
@@ -221,6 +244,7 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
 
     configureCanvasElement(canvas, surfaceSize)
     configureCanvasContext(artifacts.context, artifacts.device, artifacts.format)
+    noteCanvasPaint('gpu:overlay')
     renderRects({
       artifacts,
       rects: [...activeScene.fillRects, ...activeScene.borderRects],

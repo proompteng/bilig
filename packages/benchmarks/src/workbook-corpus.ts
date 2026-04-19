@@ -4,6 +4,8 @@ export type WorkbookBenchmarkCorpusId =
   | 'dense-mixed-100k'
   | 'dense-mixed-250k'
   | 'wide-mixed-250k'
+  | 'wide-mixed-frozen-250k'
+  | 'wide-mixed-variable-250k'
   | 'analysis-multisheet-100k'
   | 'analysis-multisheet-250k'
 
@@ -25,6 +27,16 @@ export interface WorkbookBenchmarkCorpusDefinition {
   readonly materializedCellCount: number
   readonly sheetCount: number
   readonly primaryViewport: WorkbookBenchmarkCorpusViewport
+  readonly presentation?:
+    | {
+        readonly freezeRows?: number
+        readonly freezeCols?: number
+        readonly columnWidths?: readonly {
+          readonly index: number
+          readonly size: number
+        }[]
+      }
+    | undefined
 }
 
 export interface WorkbookBenchmarkCorpusCase extends WorkbookBenchmarkCorpusDefinition {
@@ -310,6 +322,8 @@ const workbookBenchmarkCorpusIds = [
   'dense-mixed-100k',
   'dense-mixed-250k',
   'wide-mixed-250k',
+  'wide-mixed-frozen-250k',
+  'wide-mixed-variable-250k',
   'analysis-multisheet-100k',
   'analysis-multisheet-250k',
 ] as const satisfies readonly WorkbookBenchmarkCorpusId[]
@@ -367,6 +381,60 @@ const workbookBenchmarkCorpusDescriptors = {
     buildSnapshot: (materializedCellCount: number, workbookName: string) =>
       buildWideMixedWorkbookSnapshot(materializedCellCount, workbookName),
   },
+  'wide-mixed-frozen-250k': {
+    id: 'wide-mixed-frozen-250k',
+    family: 'wide-mixed',
+    label: 'Wide mixed frozen 250k',
+    description: 'Wide 250k workbook with deterministic frozen rows and columns for browser pane-scroll workloads.',
+    materializedCellCount: 250_000,
+    sheetCount: 1,
+    primaryViewport: {
+      sheetName: 'WideGrid',
+      rowStart: 4,
+      rowEnd: 43,
+      colStart: 2,
+      colEnd: 11,
+    },
+    presentation: {
+      freezeRows: 2,
+      freezeCols: 2,
+    },
+    buildSnapshot: (materializedCellCount: number, workbookName: string) =>
+      buildWideMixedWorkbookSnapshot(materializedCellCount, workbookName),
+  },
+  'wide-mixed-variable-250k': {
+    id: 'wide-mixed-variable-250k',
+    family: 'wide-mixed',
+    label: 'Wide mixed variable-width 250k',
+    description: 'Wide 250k workbook with deterministic variable column widths for browser horizontal browse workloads.',
+    materializedCellCount: 250_000,
+    sheetCount: 1,
+    primaryViewport: {
+      sheetName: 'WideGrid',
+      rowStart: 0,
+      rowEnd: 39,
+      colStart: 0,
+      colEnd: 9,
+    },
+    presentation: {
+      columnWidths: [
+        { index: 0, size: 120 },
+        { index: 1, size: 224 },
+        { index: 2, size: 96 },
+        { index: 3, size: 168 },
+        { index: 4, size: 132 },
+        { index: 5, size: 240 },
+        { index: 6, size: 110 },
+        { index: 7, size: 184 },
+        { index: 8, size: 150 },
+        { index: 9, size: 260 },
+        { index: 10, size: 118 },
+        { index: 11, size: 196 },
+      ],
+    },
+    buildSnapshot: (materializedCellCount: number, workbookName: string) =>
+      buildWideMixedWorkbookSnapshot(materializedCellCount, workbookName),
+  },
   'analysis-multisheet-100k': {
     id: 'analysis-multisheet-100k',
     family: 'analysis-multisheet',
@@ -413,6 +481,7 @@ function toCorpusDefinition(descriptor: WorkbookBenchmarkCorpusDescriptor): Work
     materializedCellCount: descriptor.materializedCellCount,
     sheetCount: descriptor.sheetCount,
     primaryViewport: descriptor.primaryViewport,
+    ...(descriptor.presentation ? { presentation: descriptor.presentation } : {}),
   }
 }
 

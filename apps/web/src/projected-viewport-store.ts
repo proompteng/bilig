@@ -7,6 +7,7 @@ import { ProjectedViewportPatchCoordinator } from './projected-viewport-patch-co
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
+type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze'
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly cellCache = new ProjectedViewportCellCache({
@@ -14,6 +15,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   })
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
+  private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
 
   readonly workbook = {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
@@ -33,6 +35,27 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   subscribe(listener: () => void): () => void {
     return this.cellCache.subscribe(listener)
+  }
+
+  subscribeSheetChannel(sheetName: string, channel: SheetViewportChannel, listener: () => void): () => void {
+    const channels = this.sheetChannelListeners.get(sheetName) ?? new Map<SheetViewportChannel, Set<() => void>>()
+    const listeners = channels.get(channel) ?? new Set<() => void>()
+    listeners.add(listener)
+    channels.set(channel, listeners)
+    this.sheetChannelListeners.set(sheetName, channels)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        channels.delete(channel)
+      }
+      if (channels.size === 0) {
+        this.sheetChannelListeners.delete(sheetName)
+      }
+    }
+  }
+
+  subscribeCell(sheetName: string, address: string, listener: () => void): () => void {
+    return this.cellCache.subscribeCells(sheetName, [address], listener)
   }
 
   peekCell(sheetName: string, address: string): CellSnapshot | undefined {
@@ -85,47 +108,58 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
     this.axisStore.setColumnWidth(sheetName, columnIndex, width)
+    this.notifySheetChannels(sheetName, ['columnWidths'])
   }
 
   ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
     this.axisStore.ackColumnWidth(sheetName, columnIndex, width)
+    this.notifySheetChannels(sheetName, ['columnWidths'])
   }
 
   rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
     this.axisStore.rollbackColumnWidth(sheetName, columnIndex, width)
+    this.notifySheetChannels(sheetName, ['columnWidths'])
   }
 
   setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
     this.axisStore.setColumnHidden(sheetName, columnIndex, hidden, size)
+    this.notifySheetChannels(sheetName, ['columnWidths', 'hiddenColumns'])
   }
 
   rollbackColumnHidden(sheetName: string, columnIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
     this.axisStore.rollbackColumnHidden(sheetName, columnIndex, previous)
+    this.notifySheetChannels(sheetName, ['columnWidths', 'hiddenColumns'])
   }
 
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
     this.axisStore.setRowHeight(sheetName, rowIndex, height)
+    this.notifySheetChannels(sheetName, ['rowHeights'])
   }
 
   ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
     this.axisStore.ackRowHeight(sheetName, rowIndex, height)
+    this.notifySheetChannels(sheetName, ['rowHeights'])
   }
 
   rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
     this.axisStore.rollbackRowHeight(sheetName, rowIndex, height)
+    this.notifySheetChannels(sheetName, ['rowHeights'])
   }
 
   setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
     this.axisStore.setRowHidden(sheetName, rowIndex, hidden, size)
+    this.notifySheetChannels(sheetName, ['rowHeights', 'hiddenRows'])
   }
 
   rollbackRowHidden(sheetName: string, rowIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
     this.axisStore.rollbackRowHidden(sheetName, rowIndex, previous)
+    this.notifySheetChannels(sheetName, ['rowHeights', 'hiddenRows'])
   }
 
   setKnownSheets(sheetNames: readonly string[]): void {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
+    removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
   }
 
   subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
@@ -141,6 +175,41 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
-    return this.patchCoordinator.applyViewportPatch(patch)
+    const result = this.patchCoordinator.applyViewportPatchDetailed(patch)
+    const channels: SheetViewportChannel[] = []
+    if (result.columnsChanged) {
+      channels.push('columnWidths', 'hiddenColumns')
+    }
+    if (result.rowsChanged) {
+      channels.push('rowHeights', 'hiddenRows')
+    }
+    if (result.freezeChanged) {
+      channels.push('freeze')
+    }
+    if (channels.length > 0) {
+      this.notifySheetChannels(patch.viewport.sheetName, channels)
+    }
+    return result.damage
+  }
+
+  private notifySheetChannels(sheetName: string, channels: readonly SheetViewportChannel[]): void {
+    const sheetChannels = this.sheetChannelListeners.get(sheetName)
+    if (!sheetChannels) {
+      return
+    }
+    const visited = new Set<() => void>()
+    for (const channel of channels) {
+      const listeners = sheetChannels.get(channel)
+      if (!listeners) {
+        continue
+      }
+      for (const listener of listeners) {
+        if (visited.has(listener)) {
+          continue
+        }
+        visited.add(listener)
+        listener()
+      }
+    }
   }
 }

@@ -235,43 +235,68 @@ export function useWorkerWorkbookAppState(input: {
   })
 
   const columnWidths = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) =>
+        workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'columnWidths', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => readViewportColumnWidths(workerHandle, selection.sheetName),
     () => readViewportColumnWidths(workerHandle, selection.sheetName),
   )
 
   const rowHeights = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) =>
+        workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'rowHeights', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => readViewportRowHeights(workerHandle, selection.sheetName),
     () => readViewportRowHeights(workerHandle, selection.sheetName),
   )
 
   const hiddenColumns = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) =>
+        workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'hiddenColumns', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => readViewportHiddenColumns(workerHandle, selection.sheetName),
     () => readViewportHiddenColumns(workerHandle, selection.sheetName),
   )
 
   const hiddenRows = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) =>
+        workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'hiddenRows', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => readViewportHiddenRows(workerHandle, selection.sheetName),
     () => readViewportHiddenRows(workerHandle, selection.sheetName),
   )
 
   const freezeRows = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'freeze', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => workerHandle?.viewportStore.getFreezeRows(selection.sheetName) ?? 0,
     () => workerHandle?.viewportStore.getFreezeRows(selection.sheetName) ?? 0,
   )
 
   const freezeCols = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'freeze', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
     () => workerHandle?.viewportStore.getFreezeCols(selection.sheetName) ?? 0,
     () => workerHandle?.viewportStore.getFreezeCols(selection.sheetName) ?? 0,
   )
 
   const selectedCell = useSyncExternalStore(
-    useCallback((listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}), [workerHandle]),
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribeCell(selection.sheetName, selection.address, listener) ?? (() => {}),
+      [selection.address, selection.sheetName, workerHandle],
+    ),
     () => workerHandle?.viewportStore.peekCell(selection.sheetName, selection.address) ?? emptySelectedCell,
     () => emptySelectedCell,
   )
@@ -831,6 +856,20 @@ export function useWorkerWorkbookAppState(input: {
         authoritativeRevision: 0,
         mode: 'bootstrap',
       })
+      if (corpus.presentation?.freezeRows || corpus.presentation?.freezeCols) {
+        await invokeSetFreezePaneMutation(
+          corpus.primaryViewport.sheetName,
+          corpus.presentation.freezeRows ?? 0,
+          corpus.presentation.freezeCols ?? 0,
+        )
+      }
+      if (corpus.presentation?.columnWidths) {
+        await Promise.all(
+          corpus.presentation.columnWidths.map((column) =>
+            invokeColumnWidthMutation(corpus.primaryViewport.sheetName, column.index, column.size),
+          ),
+        )
+      }
       const selectionAddress = `${String.fromCharCode(65 + corpus.primaryViewport.colStart)}${String(corpus.primaryViewport.rowStart + 1)}`
       selectAddress(corpus.primaryViewport.sheetName, selectionAddress)
       getWorkbookScrollPerfCollector()?.setFixture({
@@ -839,7 +878,7 @@ export function useWorkerWorkbookAppState(input: {
         sheetName: corpus.primaryViewport.sheetName,
       })
     },
-    [runtimeController, selectAddress],
+    [invokeColumnWidthMutation, invokeSetFreezePaneMutation, runtimeController, selectAddress],
   )
 
   const retryFailedPendingMutation = useCallback(async (): Promise<void> => {

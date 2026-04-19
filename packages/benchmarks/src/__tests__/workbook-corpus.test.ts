@@ -89,9 +89,24 @@ describe('workbook benchmark corpus', () => {
       'dense-mixed-100k',
       'dense-mixed-250k',
       'wide-mixed-250k',
+      'wide-mixed-frozen-250k',
+      'wide-mixed-variable-250k',
       'analysis-multisheet-100k',
       'analysis-multisheet-250k',
     ])
     expect(getWorkbookBenchmarkCorpusDefinition('dense-mixed-250k')).toEqual(definitions[1])
+  })
+
+  it('describes deterministic presentation metadata for frozen and variable-width browse corpora', () => {
+    expect(getWorkbookBenchmarkCorpusDefinition('wide-mixed-frozen-250k').presentation).toEqual({
+      freezeRows: 2,
+      freezeCols: 2,
+    })
+    expect(getWorkbookBenchmarkCorpusDefinition('wide-mixed-variable-250k').presentation?.columnWidths?.slice(0, 4)).toEqual([
+      { index: 0, size: 120 },
+      { index: 1, size: 224 },
+      { index: 2, size: 96 },
+      { index: 3, size: 168 },
+    ])
   })
 })

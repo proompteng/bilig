@@ -35,6 +35,7 @@ function appendRects(target: GridGpuRect[], rects: readonly GridGpuRect[]): void
 }
 
 interface BuildGridGpuSceneOptions {
+  readonly contentMode?: 'combined' | 'headers' | 'data'
   readonly engine: GridEngineLike
   readonly sheetName: string
   readonly visibleItems: readonly Item[]
@@ -80,6 +81,7 @@ const CHECKBOX_SELECTED_COLOR = parseGpuColor(workbookThemeColors.accent)
 const CHECKBOX_CHECK_COLOR = parseGpuColor(workbookThemeColors.surface)
 
 export function buildGridGpuScene({
+  contentMode = 'combined',
   engine,
   sheetName,
   visibleItems,
@@ -101,7 +103,9 @@ export function buildGridGpuScene({
   const fillRects: GridGpuRect[] = []
   const borderRects: GridGpuRect[] = []
   const explicitBorderRects: GridGpuRect[] = []
-  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
+  const renderHeaders = contentMode !== 'data'
+  const renderData = contentMode !== 'headers'
+  const hasFrozenAxes = renderData || (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0
   const visibleColumnBounds = hasFrozenAxes
     ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
     : getVisibleColumnBounds(
@@ -120,34 +124,36 @@ export function buildGridGpuScene({
         rowHeights,
         gridMetrics.rowHeight,
       )
-  const headerScene = buildGridGpuHeaderScene({
-    palette: {
-      gridLineColor: GRID_LINE_COLOR,
-      headerFillColor: HEADER_FILL_COLOR,
-      headerSelectedFillColor: HEADER_SELECTED_FILL_COLOR,
-      headerHoverFillColor: HEADER_HOVER_FILL_COLOR,
-      headerDragAnchorFillColor: HEADER_DRAG_ANCHOR_FILL_COLOR,
-      selectionFillColor: SELECTION_FILL_COLOR,
-      resizeGuideColor: RESIZE_GUIDE_COLOR,
-      resizeGuideGlowColor: RESIZE_GUIDE_GLOW_COLOR,
-    },
-    columnWidths,
-    gridMetrics,
-    gridSelection,
-    rowHeights,
-    activeHeaderDrag,
-    hoveredHeader,
-    resizeGuideColumn: null,
-    resizeGuideRow: null,
-    selectedCell,
-    selectionRange,
-    visibleRegion,
-    visibleItems,
-    getCellBounds,
-  })
-  appendRects(fillRects, headerScene.fillRects)
-  appendRects(borderRects, headerScene.borderRects)
-  if (visibleItems.length === 0) {
+  if (renderHeaders) {
+    const headerScene = buildGridGpuHeaderScene({
+      palette: {
+        gridLineColor: GRID_LINE_COLOR,
+        headerFillColor: HEADER_FILL_COLOR,
+        headerSelectedFillColor: HEADER_SELECTED_FILL_COLOR,
+        headerHoverFillColor: HEADER_HOVER_FILL_COLOR,
+        headerDragAnchorFillColor: HEADER_DRAG_ANCHOR_FILL_COLOR,
+        selectionFillColor: SELECTION_FILL_COLOR,
+        resizeGuideColor: RESIZE_GUIDE_COLOR,
+        resizeGuideGlowColor: RESIZE_GUIDE_GLOW_COLOR,
+      },
+      columnWidths,
+      gridMetrics,
+      gridSelection,
+      rowHeights,
+      activeHeaderDrag,
+      hoveredHeader,
+      resizeGuideColumn: null,
+      resizeGuideRow: null,
+      selectedCell,
+      selectionRange,
+      visibleRegion,
+      visibleItems,
+      getCellBounds,
+    })
+    appendRects(fillRects, headerScene.fillRects)
+    appendRects(borderRects, headerScene.borderRects)
+  }
+  if (visibleItems.length === 0 || !renderData) {
     return {
       fillRects,
       borderRects,

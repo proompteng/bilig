@@ -642,6 +642,35 @@ export async function startWorkbookScrollPerf(page: Page, workload: string) {
   }, workload)
 }
 
+export async function warmStartWorkbookScrollPerf(page: Page, workload: string, warmupFrames = 12, maxAttempts = 4) {
+  const runWarmup = async (attempt: number): Promise<void> => {
+    await startWorkbookScrollPerf(page, `${workload}:warmup:${String(attempt)}`)
+    await settleWorkbookScrollPerf(page, warmupFrames + 2)
+    const warmupReport = await stopWorkbookScrollPerf(page)
+    if (!warmupReport) {
+      throw new Error('warmup performance report was not available')
+    }
+    if (warmupReport.counters.fullPatches === 0) {
+      return
+    }
+    if (attempt >= maxAttempts) {
+      throw new Error(`scroll performance never reached a steady state for ${workload}`)
+    }
+    await runWarmup(attempt + 1)
+  }
+  await runWarmup(1)
+  await startWorkbookScrollPerf(page, workload)
+}
+
+export async function settleWorkbookScrollPerf(page: Page, frames = 4) {
+  await page.evaluate(async (frameCount) => {
+    await Array.from({ length: frameCount }).reduce<Promise<void>>(async (previous) => {
+      await previous
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+    }, Promise.resolve())
+  }, frames)
+}
+
 export async function stopWorkbookScrollPerf(page: Page) {
   return await page.evaluate(() => {
     return (
@@ -664,6 +693,8 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 reactCommits: number
                 canvasSurfaceMounts: number
                 domSurfaceMounts: number
+                canvasPaints: Record<string, number>
+                surfaceCommits: Record<string, number>
               }
             } | null
           }

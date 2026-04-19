@@ -26,6 +26,8 @@ export interface ProjectedViewportPatchApplicationResult {
   readonly damage: readonly { cell: ProjectedViewportCellItem }[]
   readonly changedKeys: ReadonlySet<string>
   readonly axisChanged: boolean
+  readonly columnsChanged: boolean
+  readonly rowsChanged: boolean
   readonly freezeChanged: boolean
 }
 
@@ -207,6 +209,7 @@ export function applyProjectedViewportPatch(input: {
   }
 
   let axisChanged = false
+  let columnsChanged = false
   if (patch.columns.length > 0) {
     const nextColumns = applyProjectedViewportAxisPatches({
       patches: patch.columns,
@@ -223,9 +226,11 @@ export function applyProjectedViewportPatch(input: {
     } else {
       state.hiddenColumnsBySheet.set(patch.viewport.sheetName, nextColumns.hiddenAxes)
     }
+    columnsChanged = nextColumns.axisChanged
     axisChanged = axisChanged || nextColumns.axisChanged
   }
 
+  let rowsChanged = false
   if (patch.rows.length > 0) {
     const nextRows = applyProjectedViewportAxisPatches({
       patches: patch.rows,
@@ -242,6 +247,7 @@ export function applyProjectedViewportPatch(input: {
     } else {
       state.hiddenRowsBySheet.set(patch.viewport.sheetName, nextRows.hiddenAxes)
     }
+    rowsChanged = nextRows.axisChanged
     axisChanged = axisChanged || nextRows.axisChanged
   }
 
@@ -249,6 +255,8 @@ export function applyProjectedViewportPatch(input: {
     damage,
     changedKeys,
     axisChanged,
+    columnsChanged,
+    rowsChanged,
     freezeChanged,
   }
 }

@@ -25,6 +25,8 @@ import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyl
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridSelection, Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
+import { collectViewportItems } from './gridViewportItems.js'
+import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
@@ -70,48 +72,6 @@ function sameViewportBounds(left: Viewport, right: Viewport): boolean {
   return (
     left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
   )
-}
-
-function collectVisibleItems(options: { visibleRegion: VisibleRegionState }): [number, number][] {
-  const { visibleRegion } = options
-  const freezeCols = Math.max(0, Math.min(MAX_COLS, visibleRegion.freezeCols ?? 0))
-  const freezeRows = Math.max(0, Math.min(MAX_ROWS, visibleRegion.freezeRows ?? 0))
-  const rowEnd = Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1)
-  const colEnd = Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1)
-  const items: [number, number][] = []
-  const seen = new Set<string>()
-
-  const pushItem = (col: number, row: number) => {
-    if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
-      return
-    }
-    const key = `${col}:${row}`
-    if (seen.has(key)) {
-      return
-    }
-    seen.add(key)
-    items.push([col, row])
-  }
-
-  for (let row = 0; row < freezeRows; row += 1) {
-    for (let col = 0; col < freezeCols; col += 1) {
-      pushItem(col, row)
-    }
-    for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
-      pushItem(col, row)
-    }
-  }
-
-  for (let row = visibleRegion.range.y; row <= rowEnd; row += 1) {
-    for (let col = 0; col < freezeCols; col += 1) {
-      pushItem(col, row)
-    }
-    for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
-      pushItem(col, row)
-    }
-  }
-
-  return items
 }
 
 function collectViewportSubscriptions(viewport: Viewport, freezeRows: number, freezeCols: number): Viewport[] {
@@ -364,12 +324,6 @@ export function useWorkbookGridRenderState(input: {
     [getCellLocalBounds],
   )
 
-  const visibleItems = useMemo(() => {
-    return collectVisibleItems({ visibleRegion })
-  }, [visibleRegion])
-  const visibleAddresses = useMemo(() => visibleItems.map(([col, row]) => formatAddress(row, col)), [visibleItems])
-  const deferredVisibleRegion = useDeferredValue(visibleRegion)
-  const deferredVisibleItems = useDeferredValue(visibleItems)
   const viewport = useMemo<Viewport>(
     () => ({
       rowStart: visibleRegion.range.y,
@@ -389,6 +343,12 @@ export function useWorkbookGridRenderState(input: {
     () => collectViewportSubscriptions(residentViewport, freezeRows, freezeCols),
     [freezeCols, freezeRows, residentViewport],
   )
+  const visibleItems = useMemo(() => {
+    return collectViewportItems(viewport, { freezeRows, freezeCols })
+  }, [freezeCols, freezeRows, viewport])
+  const visibleAddresses = useMemo(() => visibleItems.map(([col, row]) => formatAddress(row, col)), [visibleItems])
+  const deferredVisibleRegion = useDeferredValue(visibleRegion)
+  const deferredVisibleItems = useDeferredValue(visibleItems)
 
   const invalidateScene = useCallback(() => {
     setSceneRevision((current) => current + 1)
@@ -510,6 +470,93 @@ export function useWorkbookGridRenderState(input: {
     () => activeResizeRow ?? (hoverState.cursor === 'row-resize' && hoverState.header?.kind === 'row' ? hoverState.header.index : null),
     [activeResizeRow, hoverState.cursor, hoverState.header],
   )
+  const hostClientWidth = hostElement?.clientWidth ?? 0
+  const hostClientHeight = hostElement?.clientHeight ?? 0
+  const residentDataPaneScenes = useMemo(() => {
+    if (!hostElement) {
+      return []
+    }
+    void sceneRevision
+    return buildResidentDataPaneScenes({
+      residentViewport,
+      hostWidth: hostClientWidth,
+      hostHeight: hostClientHeight,
+      engine,
+      sheetName,
+      columnWidths,
+      rowHeights,
+      freezeRows,
+      freezeCols,
+      frozenColumnWidth,
+      frozenRowHeight,
+      gridMetrics,
+      sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
+      gridSelection,
+      selectedCell: [selectedCell.col, selectedCell.row],
+      selectedCellSnapshot,
+      selectionRange,
+      editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
+      hoveredCell: hoverState.cell,
+      hoveredHeader: hoverState.header,
+      resizeGuideColumn,
+      resizeGuideRow,
+      activeHeaderDrag,
+    })
+  }, [
+    activeHeaderDrag,
+    columnWidths,
+    engine,
+    freezeCols,
+    freezeRows,
+    frozenColumnWidth,
+    frozenRowHeight,
+    gridMetrics,
+    gridSelection,
+    hostClientHeight,
+    hostClientWidth,
+    hostElement,
+    hoverState.cell,
+    hoverState.header,
+    isEditingCell,
+    residentViewport,
+    resizeGuideColumn,
+    resizeGuideRow,
+    rowHeights,
+    sceneRevision,
+    selectedCell.col,
+    selectedCell.row,
+    selectedCellSnapshot,
+    selectionRange,
+    sheetName,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  ])
+  const residentDataPanes = useMemo(
+    () =>
+      resolveResidentDataPaneRenderState({
+        panes: residentDataPaneScenes,
+        residentViewport,
+        visibleViewport: viewport,
+        visibleRegion: {
+          tx: visibleRegion.tx,
+          ty: visibleRegion.ty,
+        },
+        gridMetrics,
+        sortedColumnWidthOverrides,
+        sortedRowHeightOverrides,
+      }),
+    [
+      gridMetrics,
+      residentDataPaneScenes,
+      residentViewport,
+      sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
+      viewport,
+      visibleRegion.tx,
+      visibleRegion.ty,
+    ],
+  )
 
   const gpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
@@ -517,6 +564,7 @@ export function useWorkbookGridRenderState(input: {
     }
     void sceneRevision
     return buildGridGpuScene({
+      contentMode: 'headers',
       engine,
       columnWidths,
       rowHeights,
@@ -567,6 +615,7 @@ export function useWorkbookGridRenderState(input: {
     }
     void sceneRevision
     return buildGridTextScene({
+      contentMode: 'headers',
       engine,
       columnWidths,
       rowHeights,
@@ -584,8 +633,8 @@ export function useWorkbookGridRenderState(input: {
       hostBounds: {
         left: 0,
         top: 0,
-        width: hostElement.clientWidth,
-        height: hostElement.clientHeight,
+        width: hostClientWidth,
+        height: hostClientHeight,
       },
       getCellBounds: getCellLocalBounds,
     })
@@ -599,6 +648,8 @@ export function useWorkbookGridRenderState(input: {
     getCellLocalBounds,
     gridMetrics,
     hostElement,
+    hostClientHeight,
+    hostClientWidth,
     hoverState.header,
     isEditingCell,
     resizeGuideColumn,
@@ -960,6 +1011,7 @@ export function useWorkbookGridRenderState(input: {
     overlayStyle,
     previewColumnWidth,
     previewRowHeight,
+    residentDataPanes,
     rowHeights,
     scrollViewportRef,
     selectedCell,

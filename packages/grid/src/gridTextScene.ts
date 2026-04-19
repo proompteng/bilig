@@ -32,6 +32,7 @@ export interface GridTextScene {
 }
 
 interface BuildGridTextSceneOptions {
+  readonly contentMode?: 'combined' | 'headers' | 'data'
   readonly engine: GridEngineLike
   readonly sheetName: string
   readonly visibleItems: readonly Item[]
@@ -68,6 +69,7 @@ function buildHeaderFont(fontSize: number): string {
 }
 
 export function buildGridTextScene({
+  contentMode = 'combined',
   engine,
   sheetName,
   visibleItems,
@@ -97,21 +99,27 @@ export function buildGridTextScene({
   const items: GridTextItem[] = []
   const visibleColumnEnd = visibleItems.reduce((max, [visibleCol]) => Math.max(max, visibleCol), -1)
 
-  pushHeaderTextItems({
-    columnWidths,
-    gridMetrics,
-    headerFontSize,
-    items,
-    rowHeights,
-    selectedCell,
-    selectionRange,
-    hoveredHeader,
-    activeHeaderDrag,
-    resizeGuideColumn,
-    visibleRegion,
-    visibleItems,
-    getCellBounds,
-  })
+  if (contentMode !== 'data') {
+    pushHeaderTextItems({
+      columnWidths,
+      gridMetrics,
+      headerFontSize,
+      items,
+      rowHeights,
+      selectedCell,
+      selectionRange,
+      hoveredHeader,
+      activeHeaderDrag,
+      resizeGuideColumn,
+      visibleRegion,
+      visibleItems,
+      getCellBounds,
+    })
+  }
+
+  if (contentMode === 'headers') {
+    return { items }
+  }
 
   for (const [col, row] of visibleItems) {
     if (editingCell && editingCell[0] === col && editingCell[1] === row) {

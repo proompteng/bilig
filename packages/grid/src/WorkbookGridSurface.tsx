@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridGpuSurface } from './GridGpuSurface.js'
+import { GridGpuPaneSurface } from './GridGpuPaneSurface.js'
 import { GridTextOverlay } from './GridTextOverlay.js'
+import { GridTextPaneSurface } from './GridTextPaneSurface.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
@@ -142,6 +144,26 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
+        {renderState.residentDataPanes.map((pane) => (
+          <Fragment key={pane.id}>
+            <GridGpuPaneSurface
+              active={renderState.hostElement !== null}
+              contentOffset={pane.contentOffset}
+              frame={pane.frame}
+              paneId={pane.id}
+              scene={pane.gpuScene}
+              surfaceSize={pane.surfaceSize}
+            />
+            <GridTextPaneSurface
+              active={renderState.hostElement !== null}
+              contentOffset={pane.contentOffset}
+              frame={pane.frame}
+              paneId={pane.id}
+              scene={pane.textScene}
+              surfaceSize={pane.surfaceSize}
+            />
+          </Fragment>
+        ))}
         <GridGpuSurface host={renderState.hostElement} scene={renderState.gpuScene} onActiveChange={renderState.setIsWebGpuActive} />
         <GridTextOverlay active={renderState.hostElement !== null} host={renderState.hostElement} scene={renderState.textScene} />
         <button

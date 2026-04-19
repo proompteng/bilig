@@ -12,6 +12,8 @@ interface WorkbookScrollPerfCounters {
   reactCommits: number
   canvasSurfaceMounts: number
   domSurfaceMounts: number
+  canvasPaints: Record<string, number>
+  surfaceCommits: Record<string, number>
 }
 
 interface WorkbookScrollPerfSamples {
@@ -50,6 +52,8 @@ class WorkbookScrollPerfCollector {
     reactCommits: 0,
     canvasSurfaceMounts: 0,
     domSurfaceMounts: 0,
+    canvasPaints: {},
+    surfaceCommits: {},
   }
   private baselineCounters: WorkbookScrollPerfCounters | null = null
   private frameSamples: number[] = []
@@ -95,11 +99,12 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.damageCells += input.damageCount
   }
 
-  noteReactCommit(): void {
+  noteSurfaceCommit(surface: string): void {
     this.totalCounters.reactCommits += 1
+    this.totalCounters.surfaceCommits[surface] = (this.totalCounters.surfaceCommits[surface] ?? 0) + 1
   }
 
-  noteTextSurface(kind: 'canvas' | 'dom'): void {
+  noteCanvasSurfaceMount(kind: 'canvas' | 'dom'): void {
     if (kind === 'canvas') {
       this.totalCounters.canvasSurfaceMounts += 1
       return
@@ -107,12 +112,16 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.domSurfaceMounts += 1
   }
 
+  noteCanvasPaint(layer: string): void {
+    this.totalCounters.canvasPaints[layer] = (this.totalCounters.canvasPaints[layer] ?? 0) + 1
+  }
+
   startSampling(workload: string): void {
     this.stopSampling()
     this.workload = workload
     this.frameSamples = []
     this.longTaskSamples = []
-    this.baselineCounters = cloneCounters(this.totalCounters)
+    this.baselineCounters = null
     this.lastFrameAt = null
     this.warmupFramesRemaining = WARMUP_FRAME_COUNT
     this.installLongTaskObserver()
@@ -155,6 +164,11 @@ class WorkbookScrollPerfCollector {
       if (this.lastFrameAt !== null) {
         if (this.warmupFramesRemaining > 0) {
           this.warmupFramesRemaining -= 1
+          if (this.warmupFramesRemaining === 0) {
+            this.baselineCounters = cloneCounters(this.totalCounters)
+            this.frameSamples = []
+            this.longTaskSamples = []
+          }
         } else {
           this.frameSamples.push(timestamp - this.lastFrameAt)
         }
@@ -170,6 +184,9 @@ class WorkbookScrollPerfCollector {
     }
     try {
       this.observer = new PerformanceObserver((list) => {
+        if (this.warmupFramesRemaining > 0) {
+          return
+        }
         for (const entry of list.getEntries()) {
           this.longTaskSamples.push(entry.duration)
         }
@@ -182,7 +199,11 @@ class WorkbookScrollPerfCollector {
 }
 
 function cloneCounters(counters: WorkbookScrollPerfCounters): WorkbookScrollPerfCounters {
-  return { ...counters }
+  return {
+    ...counters,
+    canvasPaints: { ...counters.canvasPaints },
+    surfaceCommits: { ...counters.surfaceCommits },
+  }
 }
 
 function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: WorkbookScrollPerfCounters): WorkbookScrollPerfCounters {
@@ -194,7 +215,21 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     reactCommits: counters.reactCommits - baseline.reactCommits,
     canvasSurfaceMounts: counters.canvasSurfaceMounts - baseline.canvasSurfaceMounts,
     domSurfaceMounts: counters.domSurfaceMounts - baseline.domSurfaceMounts,
+    canvasPaints: subtractRecordCounters(counters.canvasPaints, baseline.canvasPaints),
+    surfaceCommits: subtractRecordCounters(counters.surfaceCommits, baseline.surfaceCommits),
   }
+}
+
+function subtractRecordCounters(
+  counters: Readonly<Record<string, number>>,
+  baseline: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const keys = new Set([...Object.keys(counters), ...Object.keys(baseline)])
+  const next: Record<string, number> = {}
+  for (const key of keys) {
+    next[key] = (counters[key] ?? 0) - (baseline[key] ?? 0)
+  }
+  return next
 }
 
 function summarizeNumbers(values: readonly number[]): WorkbookScrollPerfSummary {

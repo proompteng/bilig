@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef } from 'react'
+import type { Rectangle } from './gridTypes.js'
 import type { GridTextScene } from './gridTextScene.js'
 
-interface GridTextOverlayProps {
+interface GridTextPaneSurfaceProps {
+  readonly paneId: string
   readonly active: boolean
-  readonly host: HTMLDivElement | null
+  readonly frame: Rectangle
+  readonly surfaceSize: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly contentOffset: {
+    readonly x: number
+    readonly y: number
+  }
   readonly scene: GridTextScene
-}
-
-interface SurfaceSize {
-  readonly width: number
-  readonly height: number
-  readonly pixelWidth: number
-  readonly pixelHeight: number
 }
 
 const HORIZONTAL_PADDING = 8
@@ -38,49 +41,15 @@ function noteCanvasPaint(layer: string): void {
   ;(window as Window & { __biligScrollPerf?: { noteCanvasPaint?: (layer: string) => void } }).__biligScrollPerf?.noteCanvasPaint?.(layer)
 }
 
-export function GridTextOverlay({ active, host, scene }: GridTextOverlayProps) {
+export const GridTextPaneSurface = memo(function GridTextPaneSurface({
+  paneId,
+  active,
+  frame,
+  surfaceSize,
+  contentOffset,
+  scene,
+}: GridTextPaneSurfaceProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [surfaceSize, setSurfaceSize] = useState<SurfaceSize>({
-    width: 0,
-    height: 0,
-    pixelWidth: 0,
-    pixelHeight: 0,
-  })
-
-  useEffect(() => {
-    if (!host) {
-      setSurfaceSize({ width: 0, height: 0, pixelWidth: 0, pixelHeight: 0 })
-      return
-    }
-
-    const updateSurfaceSize = () => {
-      const next = resolveSurfaceSize(host)
-      setSurfaceSize((current) =>
-        current.width === next.width &&
-        current.height === next.height &&
-        current.pixelWidth === next.pixelWidth &&
-        current.pixelHeight === next.pixelHeight
-          ? current
-          : next,
-      )
-    }
-
-    updateSurfaceSize()
-    if (typeof ResizeObserver === 'undefined') {
-      const frame = window.requestAnimationFrame(updateSurfaceSize)
-      return () => {
-        window.cancelAnimationFrame(frame)
-      }
-    }
-
-    const observer = new ResizeObserver(() => {
-      updateSurfaceSize()
-    })
-    observer.observe(host)
-    return () => {
-      observer.disconnect()
-    }
-  }, [host])
 
   useEffect(() => {
     if (!active) {
@@ -94,40 +63,59 @@ export function GridTextOverlay({ active, host, scene }: GridTextOverlayProps) {
     if (!active || !canvas) {
       return
     }
-    noteCanvasPaint('text:overlay')
     configureCanvas(canvas, surfaceSize)
     const context = canvas.getContext('2d')
     if (!context) {
       return
     }
+    noteCanvasPaint(`text:${paneId}`)
     drawScene(context, surfaceSize, scene)
-  }, [active, scene, surfaceSize])
+  }, [active, paneId, scene, surfaceSize])
 
-  if (!active || !host) {
+  if (!active || frame.width <= 0 || frame.height <= 0 || surfaceSize.width <= 0 || surfaceSize.height <= 0) {
     return null
   }
 
-  return <canvas aria-hidden="true" className="pointer-events-none absolute inset-0 z-20" data-testid="grid-text-overlay" ref={canvasRef} />
-}
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute z-20 overflow-hidden"
+      style={{
+        height: frame.height,
+        left: frame.x,
+        top: frame.y,
+        width: frame.width,
+      }}
+    >
+      <canvas
+        className="absolute"
+        data-pane-id={paneId}
+        data-testid={`grid-text-pane-${paneId}`}
+        ref={canvasRef}
+        style={{
+          left: contentOffset.x,
+          top: contentOffset.y,
+        }}
+      />
+    </div>
+  )
+})
 
-function resolveSurfaceSize(host: HTMLElement): SurfaceSize {
-  const width = Math.max(0, Math.floor(host.clientWidth))
-  const height = Math.max(0, Math.floor(host.clientHeight))
+function configureCanvas(
+  canvas: HTMLCanvasElement,
+  surfaceSize: {
+    readonly width: number
+    readonly height: number
+  },
+): void {
   const dpr = Math.max(1, window.devicePixelRatio || 1)
-  return {
-    width,
-    height,
-    pixelWidth: Math.max(1, Math.floor(width * dpr)),
-    pixelHeight: Math.max(1, Math.floor(height * dpr)),
+  const pixelWidth = Math.max(1, Math.floor(surfaceSize.width * dpr))
+  const pixelHeight = Math.max(1, Math.floor(surfaceSize.height * dpr))
+  if (canvas.width !== pixelWidth) {
+    canvas.width = pixelWidth
   }
-}
-
-function configureCanvas(canvas: HTMLCanvasElement, surfaceSize: SurfaceSize): void {
-  if (canvas.width !== surfaceSize.pixelWidth) {
-    canvas.width = surfaceSize.pixelWidth
-  }
-  if (canvas.height !== surfaceSize.pixelHeight) {
-    canvas.height = surfaceSize.pixelHeight
+  if (canvas.height !== pixelHeight) {
+    canvas.height = pixelHeight
   }
   const cssWidth = `${surfaceSize.width}px`
   const cssHeight = `${surfaceSize.height}px`
@@ -139,16 +127,21 @@ function configureCanvas(canvas: HTMLCanvasElement, surfaceSize: SurfaceSize): v
   }
 }
 
-function drawScene(context: CanvasRenderingContext2D, surfaceSize: SurfaceSize, scene: GridTextScene): void {
+function drawScene(
+  context: CanvasRenderingContext2D,
+  surfaceSize: {
+    readonly width: number
+    readonly height: number
+  },
+  scene: GridTextScene,
+): void {
   context.save()
   context.setTransform(1, 0, 0, 1, 0, 0)
-  context.clearRect(0, 0, surfaceSize.pixelWidth, surfaceSize.pixelHeight)
-  context.scale(surfaceSize.pixelWidth / Math.max(1, surfaceSize.width), surfaceSize.pixelHeight / Math.max(1, surfaceSize.height))
-
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height)
+  context.scale(context.canvas.width / Math.max(1, surfaceSize.width), context.canvas.height / Math.max(1, surfaceSize.height))
   for (const item of scene.items) {
     drawTextItem(context, item)
   }
-
   context.restore()
 }
 
@@ -289,24 +282,25 @@ function drawTextDecorations(
   if (!item.underline && !item.strike) {
     return
   }
-  const metrics = context.measureText(text)
-  const left = item.align === 'right' ? textX - metrics.width : item.align === 'center' ? textX - metrics.width / 2 : textX
-  const right = left + metrics.width
+  const measured = context.measureText(text)
+  const actualWidth = measured.width
+  const left = item.align === 'right' ? textX - actualWidth : item.align === 'center' ? textX - actualWidth / 2 : textX
+  const lineWidth = Math.max(1, Math.round(item.fontSize / 14))
   context.save()
   context.strokeStyle = item.color
-  context.lineWidth = 1
+  context.lineWidth = lineWidth
   if (item.underline) {
-    const underlineY = textY + item.fontSize * 0.32
+    const underlineY = textY + Math.max(1, item.fontSize * 0.36)
     context.beginPath()
     context.moveTo(left, underlineY)
-    context.lineTo(right, underlineY)
+    context.lineTo(left + actualWidth, underlineY)
     context.stroke()
   }
   if (item.strike) {
-    const strikeY = textY - item.fontSize * 0.18
+    const strikeY = textY - Math.max(1, item.fontSize * 0.18)
     context.beginPath()
     context.moveTo(left, strikeY)
-    context.lineTo(right, strikeY)
+    context.lineTo(left + actualWidth, strikeY)
     context.stroke()
   }
   context.restore()

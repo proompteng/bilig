@@ -226,7 +226,7 @@ function WorkerWorkbookAppInner({
             <Profiler
               id="workbook-shell"
               onRender={() => {
-                getWorkbookScrollPerfCollector()?.noteReactCommit()
+                getWorkbookScrollPerfCollector()?.noteSurfaceCommit('workbookShell')
               }}
             >
               <WorkbookView

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { Profiler, useCallback, useEffect, useRef, useState } from 'react'
 import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from '@bilig/protocol'
 import { FormulaBar } from './FormulaBar.js'
 import type { GridEngineLike } from './grid-engine.js'
@@ -80,6 +80,15 @@ interface WorkbookViewProps {
 const MIN_SIDE_PANEL_WIDTH = 280
 const MAX_SIDE_PANEL_WIDTH = 420
 const SIDE_PANEL_VIEWPORT_FRACTION = 0.42
+
+function noteSurfaceCommit(surface: string): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  ;(window as Window & { __biligScrollPerf?: { noteSurfaceCommit?: (surface: string) => void } }).__biligScrollPerf?.noteSurfaceCommit?.(
+    surface,
+  )
+}
 
 function clampSidePanelWidth(width: number): number {
   const viewportWidth = typeof window === 'undefined' ? null : window.innerWidth
@@ -195,77 +204,89 @@ export function WorkbookView({
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans" data-testid="workbook-shell">
-      {ribbon ? <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div> : null}
+      {ribbon ? (
+        <Profiler id="workbook-ribbon" onRender={() => noteSurfaceCommit('ribbon')}>
+          <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div>
+        </Profiler>
+      ) : null}
       <div className="flex min-h-0 flex-1 bg-[var(--wb-surface)]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <FormulaBar
-            address={selectedAddr}
-            {...(definedNames ? { definedNames } : {})}
-            isEditing={isEditing}
-            onBeginEdit={onBeginFormulaEdit}
-            onAddressCommit={onAddressCommit}
-            onCancel={onCancelEdit}
-            onChange={onEditorChange}
-            onCommit={() => onCommitEdit()}
-            resolvedValue={resolvedValue}
-            selectionLabel={selectionLabel}
-            sheetName={sheetName}
-            value={editorValue}
-          />
-          <WorkbookGridSurface
-            editorValue={editorValue}
-            editorSelectionBehavior={editorSelectionBehavior}
-            engine={engine}
-            isEditingCell={isEditingCell}
-            onBeginEdit={onBeginEdit}
-            onCancelEdit={onCancelEdit}
-            onClearCell={onClearCell}
-            onCommitEdit={onCommitEdit}
-            onCopyRange={onCopyRange}
-            onEditorChange={onEditorChange}
-            onFillRange={onFillRange}
-            onMoveRange={onMoveRange}
-            onPaste={onPaste}
-            onToggleBooleanCell={onToggleBooleanCell}
-            onSelectionLabelChange={handleSelectionLabelChange}
-            onSelectionChange={onSelectionChange}
-            subscribeViewport={subscribeViewport}
-            columnWidths={columnWidths}
-            hiddenColumns={hiddenColumns}
-            hiddenRows={hiddenRows}
-            rowHeights={rowHeights}
-            freezeRows={freezeRows}
-            freezeCols={freezeCols}
-            onColumnWidthChange={onColumnWidthChange}
-            onRowHeightChange={onRowHeightChange}
-            onSetColumnHidden={onSetColumnHidden}
-            onSetRowHidden={onSetRowHidden}
-            onInsertRows={onInsertRows}
-            onDeleteRows={onDeleteRows}
-            onInsertColumns={onInsertColumns}
-            onDeleteColumns={onDeleteColumns}
-            onSetFreezePane={onSetFreezePane}
-            onAutofitColumn={onAutofitColumn}
-            onVisibleViewportChange={onVisibleViewportChange}
-            previewRanges={previewRanges}
-            restoreViewportTarget={restoreViewportTarget}
-            resolvedValue={resolvedValue}
-            selectedAddr={selectedAddr}
-            selectedCellSnapshot={selectedCellSnapshot}
-            selectionSnapshot={selectionSnapshot}
-            sheetName={sheetName}
-          />
-          <WorkbookSheetTabs
-            onCreateSheet={onCreateSheet}
-            onDeleteSheet={onDeleteSheet}
-            onRenameSheet={onRenameSheet}
-            onSelectSheet={onSelectSheet}
-            sheetName={sheetName}
-            sheetNames={sheetNames}
-            trailingContent={
-              <WorkbookSelectionStatus engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />
-            }
-          />
+          <Profiler id="workbook-formula-bar" onRender={() => noteSurfaceCommit('formulaBar')}>
+            <FormulaBar
+              address={selectedAddr}
+              {...(definedNames ? { definedNames } : {})}
+              isEditing={isEditing}
+              onBeginEdit={onBeginFormulaEdit}
+              onAddressCommit={onAddressCommit}
+              onCancel={onCancelEdit}
+              onChange={onEditorChange}
+              onCommit={() => onCommitEdit()}
+              resolvedValue={resolvedValue}
+              selectionLabel={selectionLabel}
+              sheetName={sheetName}
+              value={editorValue}
+            />
+          </Profiler>
+          <Profiler id="workbook-grid" onRender={() => noteSurfaceCommit('grid')}>
+            <WorkbookGridSurface
+              editorValue={editorValue}
+              editorSelectionBehavior={editorSelectionBehavior}
+              engine={engine}
+              isEditingCell={isEditingCell}
+              onBeginEdit={onBeginEdit}
+              onCancelEdit={onCancelEdit}
+              onClearCell={onClearCell}
+              onCommitEdit={onCommitEdit}
+              onCopyRange={onCopyRange}
+              onEditorChange={onEditorChange}
+              onFillRange={onFillRange}
+              onMoveRange={onMoveRange}
+              onPaste={onPaste}
+              onToggleBooleanCell={onToggleBooleanCell}
+              onSelectionLabelChange={handleSelectionLabelChange}
+              onSelectionChange={onSelectionChange}
+              subscribeViewport={subscribeViewport}
+              columnWidths={columnWidths}
+              hiddenColumns={hiddenColumns}
+              hiddenRows={hiddenRows}
+              rowHeights={rowHeights}
+              freezeRows={freezeRows}
+              freezeCols={freezeCols}
+              onColumnWidthChange={onColumnWidthChange}
+              onRowHeightChange={onRowHeightChange}
+              onSetColumnHidden={onSetColumnHidden}
+              onSetRowHidden={onSetRowHidden}
+              onInsertRows={onInsertRows}
+              onDeleteRows={onDeleteRows}
+              onInsertColumns={onInsertColumns}
+              onDeleteColumns={onDeleteColumns}
+              onSetFreezePane={onSetFreezePane}
+              onAutofitColumn={onAutofitColumn}
+              onVisibleViewportChange={onVisibleViewportChange}
+              previewRanges={previewRanges}
+              restoreViewportTarget={restoreViewportTarget}
+              resolvedValue={resolvedValue}
+              selectedAddr={selectedAddr}
+              selectedCellSnapshot={selectedCellSnapshot}
+              selectionSnapshot={selectionSnapshot}
+              sheetName={sheetName}
+            />
+          </Profiler>
+          <Profiler id="workbook-sheet-tabs" onRender={() => noteSurfaceCommit('sheetTabs')}>
+            <WorkbookSheetTabs
+              onCreateSheet={onCreateSheet}
+              onDeleteSheet={onDeleteSheet}
+              onRenameSheet={onRenameSheet}
+              onSelectSheet={onSelectSheet}
+              sheetName={sheetName}
+              sheetNames={sheetNames}
+              trailingContent={
+                <Profiler id="workbook-status" onRender={() => noteSurfaceCommit('statusBar')}>
+                  <WorkbookSelectionStatus engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />
+                </Profiler>
+              }
+            />
+          </Profiler>
         </div>
         {sidePanel ? (
           <aside

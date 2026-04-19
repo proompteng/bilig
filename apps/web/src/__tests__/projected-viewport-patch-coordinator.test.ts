@@ -77,7 +77,8 @@ describe('ProjectedViewportPatchCoordinator', () => {
     expect(axisStore.getFreezeCols('Sheet1')).toBe(2)
   })
 
-  it('tracks viewport subscriptions through the worker client', () => {
+  it('tracks viewport subscriptions through the worker client', async () => {
+    vi.useFakeTimers()
     const encodedPatch = new TextEncoder().encode(JSON.stringify(createPatch()))
     const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
       listener(encodedPatch)
@@ -105,8 +106,67 @@ describe('ProjectedViewportPatchCoordinator', () => {
       { sheetName: 'Sheet1', rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
       expect.any(Function),
     )
+    await vi.runAllTimersAsync()
     expect(listener).toHaveBeenCalledWith([{ cell: [0, 0] }])
 
     unsubscribe()
+    vi.useRealTimers()
+  })
+
+  it('coalesces repeated patch notifications into a single frame callback', async () => {
+    vi.useFakeTimers()
+    const patches: ((bytes: Uint8Array) => void)[] = []
+    const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
+      patches.push(listener)
+      return () => undefined
+    })
+    const coordinator = new ProjectedViewportPatchCoordinator({
+      client: {
+        invoke: async () => undefined,
+        ready: async () => undefined,
+        subscribe: () => () => undefined,
+        subscribeBatches: () => () => undefined,
+        subscribeViewportPatches,
+        dispose: () => undefined,
+      },
+      cellCache: new ProjectedViewportCellCache(),
+      axisStore: new ProjectedViewportAxisStore(),
+    })
+    const listener = vi.fn()
+
+    coordinator.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 }, listener)
+    const emit = patches[0]
+    if (!emit) {
+      throw new Error('expected viewport patch listener')
+    }
+
+    const secondPatch = createPatch('style-2')
+    emit(new TextEncoder().encode(JSON.stringify(createPatch('style-1'))))
+    emit(
+      new TextEncoder().encode(
+        JSON.stringify({
+          ...secondPatch,
+          cells: [
+            {
+              ...secondPatch.cells[0],
+              col: 1,
+              snapshot: {
+                ...secondPatch.cells[0].snapshot,
+                address: 'B1',
+              },
+              displayText: '43',
+              copyText: '43',
+              editorText: '43',
+            },
+          ],
+        }),
+      ),
+    )
+
+    expect(listener).not.toHaveBeenCalled()
+    await vi.runAllTimersAsync()
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenLastCalledWith([{ cell: [0, 0] }, { cell: [1, 0] }])
+    vi.useRealTimers()
   })
 })

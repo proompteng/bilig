@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
 import type { ViewportPatch } from '@bilig/worker-transport'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
@@ -553,5 +553,58 @@ describe('ProjectedViewportStore', () => {
     expect(countSheetCells(cache, 'Sheet1')).toBe(6000)
 
     unsubscribeCell()
+  })
+
+  it('notifies selected-cell listeners only for the addressed cell', () => {
+    const cache = new ProjectedViewportStore()
+    const selectedCellListener = vi.fn()
+    const unrelatedCellListener = vi.fn()
+
+    const unsubscribeSelected = cache.subscribeCell('Sheet1', 'A1', selectedCellListener)
+    const unsubscribeUnrelated = cache.subscribeCell('Sheet1', 'B2', unrelatedCellListener)
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'A1',
+      value: { tag: ValueTag.Number, value: 42 },
+      flags: 0,
+      version: 1,
+    })
+
+    expect(selectedCellListener).toHaveBeenCalledTimes(1)
+    expect(unrelatedCellListener).not.toHaveBeenCalled()
+
+    unsubscribeSelected()
+    unsubscribeUnrelated()
+  })
+
+  it('notifies only the subscribed sheet-axis channels for viewport axis patches', () => {
+    const cache = new ProjectedViewportStore()
+    const freezeListener = vi.fn()
+    const columnsListener = vi.fn()
+    const rowsListener = vi.fn()
+
+    const unsubscribeFreeze = cache.subscribeSheetChannel('Sheet1', 'freeze', freezeListener)
+    const unsubscribeColumns = cache.subscribeSheetChannel('Sheet1', 'columnWidths', columnsListener)
+    const unsubscribeRows = cache.subscribeSheetChannel('Sheet1', 'rowHeights', rowsListener)
+
+    cache.applyViewportPatch({
+      viewport: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 2 },
+      full: false,
+      cells: [],
+      styles: [],
+      columns: [{ index: 1, size: 140, hidden: false }],
+      rows: [],
+      freezeRows: 1,
+      freezeCols: 1,
+    })
+
+    expect(freezeListener).toHaveBeenCalledTimes(1)
+    expect(columnsListener).toHaveBeenCalledTimes(1)
+    expect(rowsListener).not.toHaveBeenCalled()
+
+    unsubscribeFreeze()
+    unsubscribeColumns()
+    unsubscribeRows()
   })
 })
