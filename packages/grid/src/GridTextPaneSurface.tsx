@@ -103,6 +103,19 @@ export const GridTextPaneSurface = memo(function GridTextPaneSurface({
     drawScene(context, surfaceSize, scene)
   }, [active, paneId, scene, surfaceSize])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    return () => {
+      if (!canvas) {
+        return
+      }
+      canvas.width = 0
+      canvas.height = 0
+      canvas.style.transform = ''
+      canvas.style.willChange = 'auto'
+    }
+  }, [])
+
   if (!active || frame.width <= 0 || frame.height <= 0 || surfaceSize.width <= 0 || surfaceSize.height <= 0) {
     return null
   }

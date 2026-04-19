@@ -709,10 +709,15 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   }, [active, scrollTransformStore])
 
   useEffect(() => {
+    const canvas = canvasRef.current
     return () => {
       if (scheduledDrawFrameRef.current !== null) {
         window.cancelAnimationFrame(scheduledDrawFrameRef.current)
         scheduledDrawFrameRef.current = null
+      }
+      if (canvas) {
+        canvas.width = 0
+        canvas.height = 0
       }
     }
   }, [])

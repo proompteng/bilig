@@ -225,6 +225,19 @@ export const GridGpuPaneSurface = memo(function GridGpuPaneSurface({
   }, [active])
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    return () => {
+      if (!canvas) {
+        return
+      }
+      canvas.width = 0
+      canvas.height = 0
+      canvas.style.transform = ''
+      canvas.style.willChange = 'auto'
+    }
+  }, [])
+
+  useEffect(() => {
     if (!active || !webGpuReady) {
       return
     }
