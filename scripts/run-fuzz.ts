@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { join, resolve } from 'node:path'
+import { buildVitestFuzzCommand } from './run-fuzz-config.js'
 
 type FuzzMode = 'default' | 'main' | 'nightly' | 'replay'
 
@@ -85,7 +87,7 @@ const env = {
 }
 
 const vitestFuzzFiles = selectVitestFuzzFiles(mode, listVitestFuzzFiles())
-runCommand(['pnpm', 'exec', 'vitest', 'run', ...vitestFuzzFiles], env)
+runCommand(buildVitestFuzzCommand(vitestFuzzFiles, availableParallelism()), env)
 
 if (shouldRunBrowserFuzz(mode, replayKind, resolvedReplayFixture !== null)) {
   runCommand(['bun', 'scripts/run-browser-tests.ts', '--grep', '@fuzz-browser'], {

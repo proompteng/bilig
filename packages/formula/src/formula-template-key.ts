@@ -44,16 +44,16 @@ export function buildRelativeFormulaTemplateTokenKey(source: string, ownerRow: n
       continue
     }
 
+    if (token.kind === 'identifier' && tokens[index + 1]?.kind === 'lparen') {
+      keyParts.push(`fn:${token.value.toUpperCase()}`)
+      index += 1
+      continue
+    }
+
     const referenceMatch = matchTemplateReference(tokens, index, ownerRow, ownerCol)
     if (referenceMatch) {
       keyParts.push(referenceMatch.key)
       index = referenceMatch.nextIndex
-      continue
-    }
-
-    if (token.kind === 'identifier' && tokens[index + 1]?.kind === 'lparen') {
-      keyParts.push(`fn:${token.value.toUpperCase()}`)
-      index += 1
       continue
     }
 

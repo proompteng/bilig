@@ -362,6 +362,17 @@ export function createEngineRecalcService(args: {
           }
           const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex)
           if (directLookupChanges !== undefined) {
+            if (
+              formula.compiled.mode === FormulaMode.WasmFastPath &&
+              (formula.directScalar !== undefined || formula.directAggregate !== undefined)
+            ) {
+              wasmCount += 1
+            } else if (
+              formula.compiled.mode !== FormulaMode.WasmFastPath &&
+              (formula.directScalar !== undefined || formula.directAggregate !== undefined)
+            ) {
+              jsCount += 1
+            }
             noteSpillChanges(directLookupChanges)
             queueKernelSync(cellIndex)
             continue

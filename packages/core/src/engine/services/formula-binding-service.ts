@@ -901,6 +901,7 @@ function buildDirectAggregateDescriptor(args: {
 function buildDirectScalarOperand(args: {
   readonly node: FormulaNode
   readonly ownerSheetName: string
+  readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
 }): RuntimeDirectScalarOperand | undefined {
   if (args.node.kind === 'NumberLiteral') {
@@ -910,7 +911,11 @@ function buildDirectScalarOperand(args: {
     if (args.node.sheetName && !args.ownerSheetName) {
       return undefined
     }
-    const parsed = parseCellAddress(args.node.ref, args.node.sheetName ?? args.ownerSheetName)
+    const targetSheetName = args.node.sheetName ?? args.ownerSheetName
+    if (args.node.sheetName && !args.workbook.getSheet(targetSheetName)) {
+      return undefined
+    }
+    const parsed = parseCellAddress(args.node.ref, targetSheetName)
     return {
       kind: 'cell',
       cellIndex: args.ensureCellTracked(parsed.sheetName ?? args.ownerSheetName, parsed.text),
@@ -922,6 +927,7 @@ function buildDirectScalarOperand(args: {
 function buildDirectScalarDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
+  readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
 }): RuntimeDirectScalarDescriptor | undefined {
   if (args.compiled.astMatchesSource === false) {
@@ -935,11 +941,13 @@ function buildDirectScalarDescriptor(args: {
     const left = buildDirectScalarOperand({
       node: node.left,
       ownerSheetName: args.ownerSheetName,
+      workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
     })
     const right = buildDirectScalarOperand({
       node: node.right,
       ownerSheetName: args.ownerSheetName,
+      workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
     })
     if (left && right) {
@@ -955,6 +963,7 @@ function buildDirectScalarDescriptor(args: {
     const operand = buildDirectScalarOperand({
       node: node.args[0]!,
       ownerSheetName: args.ownerSheetName,
+      workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
     })
     if (operand) {
@@ -1369,6 +1378,7 @@ export function createEngineFormulaBindingService(args: {
           : buildDirectScalarDescriptor({
               compiled: compiled as ParsedCompiledFormula,
               ownerSheetName,
+              workbook: args.state.workbook,
               ensureCellTracked: args.ensureCellTracked,
             })
       if (existing.directScalar !== undefined && !nextDirectScalar) {
@@ -2097,6 +2107,7 @@ export function createEngineFormulaBindingService(args: {
     const directScalar = buildDirectScalarDescriptor({
       compiled,
       ownerSheetName,
+      workbook: args.state.workbook,
       ensureCellTracked: args.ensureCellTracked,
     })
     const directCriteria = buildDirectCriteriaDescriptor({

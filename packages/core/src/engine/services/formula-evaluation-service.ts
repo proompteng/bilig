@@ -5,6 +5,7 @@ import {
   evaluatePlanResult,
   formatAddress,
   isArrayValue,
+  lowerToPlan,
   type EvaluationContext,
   type EvaluationResult,
   type FormulaNode,
@@ -785,7 +786,8 @@ export function createEngineFormulaEvaluationService(args: {
       listSheetNames: () =>
         [...args.state.workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order).map((sheet) => sheet.name),
     }
-    const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext)
+    const jsPlan = formula.compiled.jsPlan.length > 0 ? formula.compiled.jsPlan : lowerToPlan(formula.compiled.optimizedAst)
+    const result = evaluatePlanResult(jsPlan, evaluationContext)
     visiting.delete(visitKey)
     return isArrayValue(result) ? (result.values[0] ?? emptyValue()) : result
   }

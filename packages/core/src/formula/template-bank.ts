@@ -56,6 +56,9 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
 }
 
 function resolveTemplateCompiled(template: MutableTemplateRecord, source: string, ownerRow: number, ownerCol: number): CompiledFormula {
+  if (source === template.baseSource) {
+    return template.compiled
+  }
   const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
   if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
     return anchoredPrefixAggregate.compiled
