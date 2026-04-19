@@ -14,6 +14,7 @@ import { restoreWorkbookFromRuntimeImage, type RuntimeImage } from '../../snapsh
 import type { EngineRuntimeState, EngineReplicaSnapshot, TransactionRecord } from '../runtime-state.js'
 import { EngineSnapshotError } from '../errors.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
+import type { WorkbookPivotRecord } from '../../workbook-store.js'
 
 export interface EngineSnapshotService {
   readonly exportWorkbook: () => Effect.Effect<WorkbookSnapshot, EngineSnapshotError>
@@ -42,6 +43,7 @@ export function createEngineSnapshotService(args: {
     refs: readonly HydratedPreparedFormulaInitializationRef[],
     potentialNewCells?: number,
   ) => void
+  readonly materializePivot?: (pivot: WorkbookPivotRecord) => number[]
 }): EngineSnapshotService {
   return {
     exportWorkbook() {
@@ -244,6 +246,11 @@ export function createEngineSnapshotService(args: {
                 ? { initializeHydratedPreparedCellFormulasAt: args.initializeHydratedPreparedCellFormulasAt }
                 : {}),
             })
+            if (args.materializePivot) {
+              args.state.workbook.listPivots().forEach((pivot) => {
+                args.materializePivot!(pivot)
+              })
+            }
             return
           }
           args.resetWorkbook()

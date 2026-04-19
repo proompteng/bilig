@@ -634,6 +634,7 @@ export function createEngineServiceRuntime(args: {
       requireService(formulaInitialization, 'formulaInitialization').initializePreparedCellFormulasAtNow(refs, potentialNewCells),
     initializeHydratedPreparedCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializeHydratedPreparedCellFormulasAtNow(refs, potentialNewCells),
+    materializePivot: (pivotRecord) => requireService(pivot, 'pivot').materializePivotNow(pivotRecord),
   })
   const sync = createEngineReplicaSyncService({
     state: args.state,
