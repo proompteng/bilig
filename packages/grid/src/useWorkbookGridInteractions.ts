@@ -44,7 +44,7 @@ import { beginWorkbookGridColumnResize, beginWorkbookGridRowResize } from './gri
 import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
 import type { GridSelection, Item } from './gridTypes.js'
-import type { EditSelectionBehavior, GridSelectionSnapshot, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
+import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
 import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler.js'
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
@@ -281,17 +281,18 @@ export function useWorkbookGridInteractions(
   }, [focusGrid, isEditingCell])
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = 'caret-end') => {
+      const address = formatAddress(activeSelectionCell[1], activeSelectionCell[0])
       beginWorkbookGridEdit({
         engine,
         onBeginEdit,
         sheetName,
-        address: formatAddress(activeSelectionCell[1], activeSelectionCell[0]),
+        address,
         selectedCellSnapshot: null,
-        seed: seed ?? getCellEditorSeed?.(sheetName, formatAddress(activeSelectionCell[1], activeSelectionCell[0])) ?? editorValue,
+        seed: seed ?? getCellEditorSeed?.(sheetName, address) ?? undefined,
         selectionBehavior,
       })
     },
-    [activeSelectionCell, editorValue, engine, getCellEditorSeed, onBeginEdit, sheetName],
+    [activeSelectionCell, engine, getCellEditorSeed, onBeginEdit, sheetName],
   )
   const beginEditAt = useCallback(
     (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = 'caret-end') => {
@@ -307,20 +308,31 @@ export function useWorkbookGridInteractions(
     },
     [engine, getCellEditorSeed, onBeginEdit, sheetName],
   )
-  const syncMountedCellEditorValue = useCallback(() => {
+  const syncMountedCellEditorValue = useCallback((): string | null => {
     if (typeof document === 'undefined') {
-      return
+      return null
     }
     const editor = document.querySelector<HTMLTextAreaElement>('[data-testid="cell-editor-input"]')
-    if (!editor || editor.value === editorValue) {
-      return
+    if (!editor) {
+      return null
     }
-    onEditorChange(editor.value)
+    if (editor.value !== editorValue) {
+      flushSync(() => {
+        onEditorChange(editor.value)
+      })
+    }
+    return editor.value
   }, [editorValue, onEditorChange])
-  const commitActiveEdit = useCallback(() => {
-    syncMountedCellEditorValue()
-    onCommitEdit()
-  }, [onCommitEdit, syncMountedCellEditorValue])
+  const commitActiveEdit = useCallback(
+    (movement?: EditMovement) => {
+      const valueOverride = syncMountedCellEditorValue()
+      onCommitEdit(movement, valueOverride ?? undefined, {
+        sheetName,
+        address: formatAddress(activeSelectionCell[1], activeSelectionCell[0]),
+      })
+    },
+    [activeSelectionCell, onCommitEdit, sheetName, syncMountedCellEditorValue],
+  )
   const toggleBooleanCellAt = useCallback(
     (col: number, row: number): boolean => {
       return toggleWorkbookGridBooleanCell({

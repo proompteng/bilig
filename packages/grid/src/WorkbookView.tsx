@@ -37,7 +37,7 @@ interface WorkbookViewProps {
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
   onBeginFormulaEdit(this: void, seed?: string): void
   onEditorChange(this: void, next: string): void
-  onCommitEdit(this: void, movement?: EditMovement): void
+  onCommitEdit(this: void, movement?: EditMovement, valueOverride?: string): void
   onCancelEdit(this: void): void
   onClearCell(this: void): void
   onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void

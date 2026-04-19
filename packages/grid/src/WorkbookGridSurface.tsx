@@ -11,6 +11,7 @@ import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 export { hasSelectionTargetChanged } from './workbookGridViewport.js'
 export type {
+  EditTargetSelection,
   EditMovement,
   EditSelectionBehavior,
   GridSelectionSnapshot,
@@ -302,6 +303,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       {props.isEditingCell && renderState.overlayStyle ? (
         <CellEditorOverlay
           label={`${props.sheetName}!${props.selectedAddr}`}
+          targetSelection={{ sheetName: props.sheetName, address: props.selectedAddr }}
           onCancel={props.onCancelEdit}
           onChange={props.onEditorChange}
           onCommit={props.onCommitEdit}

@@ -2,6 +2,7 @@ export {
   WorkbookGridSurface,
   type WorkbookGridSurfaceProps as SheetGridViewProps,
   type WorkbookGridSurfaceProps,
+  type EditTargetSelection,
   type EditMovement,
   type EditSelectionBehavior,
   type SheetGridViewportSubscription,

@@ -70,7 +70,7 @@ interface HandleGridKeyOptions {
   isEditingCell: boolean
   onCancelEdit(this: void): void
   onClearCell(this: void): void
-  onCommitEdit(this: void, movement?: EditMovement): void
+  onCommitEdit(this: void, movement?: EditMovement, valueOverride?: string): void
   onEditorChange(this: void, next: string): void
   onSelectionChange(this: void, selection: GridSelection): void
   pendingClipboardCopySequenceRef: MutableRefObject<number>

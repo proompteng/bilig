@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
-import type { EditMovement } from './SheetGridView.js'
+import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
 
 function normalizeNumpadKey(key: string, code: string): string | null {
   if (!code.startsWith('Numpad')) {
@@ -38,8 +38,9 @@ interface CellEditorOverlayProps {
   font?: string
   fontSize?: number
   underline?: boolean
+  targetSelection: EditTargetSelection
   onChange(this: void, next: string): void
-  onCommit(this: void, movement?: EditMovement): void
+  onCommit(this: void, movement?: EditMovement, valueOverride?: string, targetSelectionOverride?: EditTargetSelection): void
   onCancel(this: void): void
   style?: CSSProperties
 }
@@ -55,6 +56,7 @@ export function CellEditorOverlay({
   font,
   fontSize = 13,
   underline = false,
+  targetSelection,
   onChange,
   onCommit,
   onCancel,
@@ -99,7 +101,7 @@ export function CellEditorOverlay({
       return
     }
     completionRef.current = 'commit'
-    onCommit(movement)
+    onCommit(movement, inputRef.current?.value ?? value, targetSelection)
   }
 
   const cancel = () => {

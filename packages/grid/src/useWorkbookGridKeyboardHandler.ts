@@ -22,7 +22,7 @@ export function useWorkbookGridKeyboardHandler(input: {
   isEditingCell: boolean
   onCancelEdit: () => void
   onClearCell: () => void
-  onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1]) => void
+  onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1], valueOverride?: string) => void
   onEditorChange: (next: string) => void
   onSelectionChange: (selection: GridSelection) => void
   pendingClipboardCopySequenceRef: MutableRefObject<number>
