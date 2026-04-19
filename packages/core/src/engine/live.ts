@@ -592,6 +592,12 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells, preparedCellAddressesByOpIndex)),
     applyCellMutationsAtBatchNow: (refs, batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyCellMutationsAt(refs, batch, source, potentialNewCells)),
+    hasExternallyVisibleLocalMutationObservers: () =>
+      args.state.events.hasListeners() ||
+      args.state.events.hasTrackedListeners() ||
+      args.state.events.hasCellListeners() ||
+      (args.state.batchListeners?.size ?? 0) > 0 ||
+      args.state.getSyncClientConnection() !== null,
   })
   const history = createEngineHistoryService({
     state: args.state,

@@ -335,10 +335,14 @@ export function createEngineMutationService(args: {
     source: 'local' | 'restore' | 'undo' | 'redo',
     potentialNewCells?: number,
   ) => void
+  readonly hasExternallyVisibleLocalMutationObservers?: () => boolean
 }): EngineMutationService {
   const emptyBatchOps: EngineOp[] = []
   const shouldCreateLocalBatch = (): boolean =>
     args.state.trackReplicaVersions || (args.state.batchListeners?.size ?? 0) > 0 || args.state.getSyncClientConnection?.() !== null
+  const hasExternallyVisibleBatchRequirement = (): boolean =>
+    args.hasExternallyVisibleLocalMutationObservers?.() ??
+    ((args.state.batchListeners?.size ?? 0) > 0 || args.state.getSyncClientConnection?.() !== null)
 
   const restoreCellOpFromRef = (ref: EngineCellMutationRef): EngineOp => {
     const sheet = args.state.workbook.getSheetById(ref.sheetId)
@@ -551,8 +555,7 @@ export function createEngineMutationService(args: {
       current.formula === undefined &&
       current.value === null &&
       current.format === null &&
-      !
-      (current.authoredBlank ?? false)
+      !(current.authoredBlank ?? false)
     ) {
       return false
     }
@@ -1616,7 +1619,7 @@ export function createEngineMutationService(args: {
   }
 
   const tryExecuteRenderCommitCellMutationFastPath = (ops: readonly CommitOp[]): boolean => {
-    if (shouldCreateLocalBatch()) {
+    if (hasExternallyVisibleBatchRequirement()) {
       return false
     }
 

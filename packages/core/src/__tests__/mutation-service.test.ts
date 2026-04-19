@@ -217,7 +217,7 @@ describe('EngineMutationService', () => {
     expect(engine.exportSnapshot()).toMatchObject({ sheets: [] })
   })
 
-  it('routes simple render-commit cell upserts through the cell-mutation fast path when no replica batch is needed', () => {
+  it('routes simple render-commit cell upserts through the cell-mutation fast path when no externally visible batch is needed', () => {
     const workbook = new WorkbookStore('render-commit-fast-path')
     let replayDepth = 0
     const applyBatchCalls: Array<readonly unknown[]> = []
@@ -228,7 +228,7 @@ describe('EngineMutationService', () => {
         replicaState: createReplicaState('local'),
         undoStack: [],
         redoStack: [],
-        trackReplicaVersions: false,
+        trackReplicaVersions: true,
         getSyncClientConnection: () => null,
         batchListeners: new Set(),
         formulas: new Map(),
@@ -282,6 +282,62 @@ describe('EngineMutationService', () => {
       { sheetId: 1, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 2 } },
       { sheetId: 1, mutation: { kind: 'setCellFormula', row: 2, col: 0, formula: 'A1+A2' } },
     ])
+  })
+
+  it('keeps simple render commits on the generic batch path when local observers would see split batches', () => {
+    const workbook = new WorkbookStore('render-commit-visible-batch')
+    let replayDepth = 0
+    const applyBatchCalls: Array<readonly unknown[]> = []
+    const applyCellMutationCalls: Array<readonly unknown[]> = []
+    const service = createEngineMutationService({
+      state: {
+        workbook,
+        replicaState: createReplicaState('local'),
+        undoStack: [],
+        redoStack: [],
+        trackReplicaVersions: true,
+        getSyncClientConnection: () => null,
+        batchListeners: new Set(),
+        formulas: new Map(),
+        getTransactionReplayDepth: () => replayDepth,
+        setTransactionReplayDepth: (next) => {
+          replayDepth = next
+        },
+      },
+      captureSheetCellState: () => [],
+      captureRowRangeCellState: () => [],
+      captureColumnRangeCellState: () => [],
+      captureStoredCellOps: () => [],
+      restoreCellOps: () => [],
+      readRangeCells: () => [],
+      toCellStateOps: () => [],
+      getCellByIndex: () => EMPTY_CELL_SNAPSHOT,
+      applyBatchNow: (batch) => {
+        applyBatchCalls.push(batch.ops)
+      },
+      applyCellMutationsAtBatchNow: (refs) => {
+        applyCellMutationCalls.push(refs)
+      },
+      hasExternallyVisibleLocalMutationObservers: () => true,
+    })
+
+    Effect.runSync(
+      service.renderCommit([
+        { kind: 'upsertWorkbook', name: 'after-render-commit' },
+        { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A1', value: 1 },
+        { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A2', value: 2 },
+      ]),
+    )
+
+    expect(applyBatchCalls).toHaveLength(1)
+    expect(applyBatchCalls[0]).toEqual([
+      { kind: 'upsertWorkbook', name: 'after-render-commit' },
+      { kind: 'upsertSheet', name: 'Sheet1', order: 0 },
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 1 },
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A2', value: 2 },
+    ])
+    expect(applyCellMutationCalls).toEqual([])
   })
 
   it('resolves each fast-path render-commit sheet only once before applying cell refs', () => {
