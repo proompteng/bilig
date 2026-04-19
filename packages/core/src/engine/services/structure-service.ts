@@ -168,8 +168,8 @@ function structuralRewritePreservesValue(
     formula.compiled.symbolicSpills.length === 0 &&
     formula.directLookup === undefined &&
     formula.directAggregate === undefined &&
-    formula.directScalar === undefined &&
     formula.directCriteria === undefined &&
+    (formula.directScalar === undefined || transform.kind === 'insert') &&
     isStructurallyStableSimpleFormulaNode(rewritten.compiled.optimizedAst)
   )
 }

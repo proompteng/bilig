@@ -55,6 +55,23 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
   ).compiled
 }
 
+function resolveTemplateCompiled(template: MutableTemplateRecord, source: string, ownerRow: number, ownerCol: number): CompiledFormula {
+  const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+  if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
+    return anchoredPrefixAggregate.compiled
+  }
+  const rowDelta = ownerRow - template.baseRow
+  const colDelta = ownerCol - template.baseCol
+  if (rowDelta === 0 && colDelta === 0) {
+    return template.compiled
+  }
+  try {
+    return translateTemplate(template.compiled, rowDelta, colDelta, source)
+  } catch {
+    return tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+  }
+}
+
 function tryMatchAnchoredPrefixAggregateTemplate(
   source: string,
   ownerRow: number,
@@ -135,12 +152,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled =
-        anchoredPrefixAggregate && template.templateKey === anchoredPrefixAggregate.templateKey
-          ? anchoredPrefixAggregate.compiled
-          : translated
-            ? translateTemplate(template.compiled, rowDelta, colDelta, source)
-            : template.compiled
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,
@@ -157,16 +169,10 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       if (!template) {
         return undefined
       }
-      const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled =
-        anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey
-          ? anchoredPrefixAggregate.compiled
-          : translated
-            ? translateTemplate(template.compiled, rowDelta, colDelta, source)
-            : template.compiled
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,

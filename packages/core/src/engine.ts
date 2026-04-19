@@ -755,19 +755,7 @@ export class SpreadsheetEngine {
     if (!sheet) {
       return false
     }
-    let cellImpact = false
-    sheet.grid.forEachCell((cellIndex) => {
-      if (cellImpact) {
-        return
-      }
-      if (!this.cellHasSemanticDeleteImpact(cellIndex)) {
-        return
-      }
-      const row = this.workbook.cellStore.rows[cellIndex] ?? -1
-      const col = this.workbook.cellStore.cols[cellIndex] ?? -1
-      cellImpact = axis === 'row' ? row >= start : col >= start
-    })
-    if (cellImpact) {
+    if (sheet.grid.someCellInAxisScope(axis, { start }, (cellIndex) => this.cellHasSemanticDeleteImpact(cellIndex))) {
       return true
     }
     const axisEntries = axis === 'row' ? this.workbook.listRowAxisEntries(sheetName) : this.workbook.listColumnAxisEntries(sheetName)

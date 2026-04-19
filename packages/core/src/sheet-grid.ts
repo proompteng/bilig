@@ -117,7 +117,7 @@ export class SheetGrid {
     })
   }
 
-  remapAxis(
+  collectAxisRemapEntries(
     axis: 'row' | 'column',
     remapIndex: (index: number) => number | undefined,
     scope?: SheetGridAxisRemapScope,
@@ -135,7 +135,6 @@ export class SheetGrid {
       nextRow: number | undefined
       nextCol: number | undefined
     }> = []
-    const touchedBlockKeys = new Set<number>()
     ;[...this.blocks.keys()]
       .filter((key) => blockIntersectsScope(axis, key, scope))
       .forEach((key) => {
@@ -171,10 +170,6 @@ export class SheetGrid {
                 nextRow,
                 nextCol: col,
               })
-              touchedBlockKeys.add(key)
-              if (nextRow !== undefined) {
-                touchedBlockKeys.add(blockKey(nextRow, col))
-              }
             }
           }
           return
@@ -199,13 +194,84 @@ export class SheetGrid {
               nextRow: row,
               nextCol,
             })
-            touchedBlockKeys.add(key)
-            if (nextCol !== undefined) {
-              touchedBlockKeys.add(blockKey(row, nextCol))
-            }
           }
         }
       })
+    return changedEntries
+  }
+
+  someCellInAxisScope(
+    axis: 'row' | 'column',
+    scope: SheetGridAxisRemapScope,
+    predicate: (cellIndex: number, row: number, col: number) => boolean,
+  ): boolean {
+    for (const key of this.blocks.keys()) {
+      if (!blockIntersectsScope(axis, key, scope)) {
+        continue
+      }
+      const block = this.blocks.get(key)
+      if (!block) {
+        continue
+      }
+      const blockRow = Math.floor(key / 1_000_000)
+      const blockCol = key % 1_000_000
+      const localAxisRange = localAxisRangeForBlock(axis, key, scope)
+      if (localAxisRange.start >= localAxisRange.end) {
+        continue
+      }
+      if (axis === 'row') {
+        for (let localRow = localAxisRange.start; localRow < localAxisRange.end; localRow += 1) {
+          const row = blockRow * BLOCK_ROWS + localRow
+          const rowOffset = localRow * BLOCK_COLS
+          for (let localCol = 0; localCol < BLOCK_COLS; localCol += 1) {
+            const value = block[rowOffset + localCol]!
+            if (value === 0) {
+              continue
+            }
+            const col = blockCol * BLOCK_COLS + localCol
+            if (predicate(value - 1, row, col)) {
+              return true
+            }
+          }
+        }
+        continue
+      }
+      for (let localCol = localAxisRange.start; localCol < localAxisRange.end; localCol += 1) {
+        const col = blockCol * BLOCK_COLS + localCol
+        for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
+          const value = block[localRow * BLOCK_COLS + localCol]!
+          if (value === 0) {
+            continue
+          }
+          const row = blockRow * BLOCK_ROWS + localRow
+          if (predicate(value - 1, row, col)) {
+            return true
+          }
+        }
+      }
+    }
+    return false
+  }
+
+  remapAxis(
+    axis: 'row' | 'column',
+    remapIndex: (index: number) => number | undefined,
+    scope?: SheetGridAxisRemapScope,
+  ): Array<{
+    cellIndex: number
+    row: number
+    col: number
+    nextRow: number | undefined
+    nextCol: number | undefined
+  }> {
+    const changedEntries = this.collectAxisRemapEntries(axis, remapIndex, scope)
+    const touchedBlockKeys = new Set<number>()
+    changedEntries.forEach(({ row, col, nextRow, nextCol }) => {
+      touchedBlockKeys.add(blockKey(row, col))
+      if (nextRow !== undefined && nextCol !== undefined) {
+        touchedBlockKeys.add(blockKey(nextRow, nextCol))
+      }
+    })
     changedEntries.forEach(({ row, col }) => {
       this.clear(row, col)
     })
