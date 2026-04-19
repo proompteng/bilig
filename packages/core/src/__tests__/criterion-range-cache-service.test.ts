@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { createDepPatternStore } from '../deps/dep-pattern-store.js'
+import { createRegionGraph } from '../deps/region-graph.js'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { createCriterionRangeCacheService } from '../engine/services/criterion-range-cache-service.js'
@@ -29,7 +31,11 @@ describe('createCriterionRangeCacheService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
-    const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
 
     expect(criterionCache.getOrBuildMatchingRows({ criteriaPairs: [] })).toEqual({
       tag: ValueTag.Error,
@@ -52,7 +58,11 @@ describe('createCriterionRangeCacheService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
-    const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
 
     const first = criterionCache.getOrBuildMatchingRows({
       criteriaPairs: [
@@ -121,7 +131,11 @@ describe('createCriterionRangeCacheService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
-    const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
 
     const matching = criterionCache.getOrBuildMatchingRows({
       criteriaPairs: [
@@ -174,7 +188,11 @@ describe('createCriterionRangeCacheService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
-    const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
 
     const gteMatches = criterionCache.getOrBuildMatchingRows({
       criteriaPairs: [
@@ -244,7 +262,11 @@ describe('createCriterionRangeCacheService', () => {
     const runtimeColumnStore = createEngineRuntimeColumnStoreService({
       state: { workbook, strings },
     })
-    const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
 
     const emptyMatches = criterionCache.getOrBuildMatchingRows({
       criteriaPairs: [

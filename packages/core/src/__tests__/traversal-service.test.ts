@@ -160,4 +160,25 @@ describe('EngineTraversalService', () => {
     expect(dependentAddresses).toContain('Sheet1!E1')
     expect(dependentAddresses).toContain('Sheet1!F1')
   })
+
+  it('collects direct aggregate and criteria subscribers through symbolic region ownership', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'traversal-region-dependents' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellValue('Sheet1', 'A4', 4)
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A3)')
+    engine.setCellFormula('Sheet1', 'C1', 'SUMIF(A1:A4,">1",A1:A4)')
+
+    const a2Index = engine.workbook.getCellIndex('Sheet1', 'A2')
+    expect(a2Index).toBeDefined()
+
+    const dependents = Effect.runSync(getTraversalService(engine).collectFormulaDependents(makeCellEntity(a2Index!)))
+    const dependentAddresses = [...dependents].map((cellIndex) => engine.workbook.getQualifiedAddress(cellIndex))
+
+    expect(dependentAddresses).toContain('Sheet1!B1')
+    expect(dependentAddresses).toContain('Sheet1!C1')
+  })
 })

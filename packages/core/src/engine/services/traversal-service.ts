@@ -11,6 +11,7 @@ import {
 import { growUint32 } from '../../engine-buffer-utils.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import { EngineTraversalError } from '../errors.js'
+import type { RegionGraph } from '../../deps/region-graph.js'
 
 export interface EngineTraversalService {
   readonly getEntityDependents: (entityId: number) => Effect.Effect<Uint32Array, EngineTraversalError>
@@ -35,6 +36,7 @@ function traversalErrorMessage(message: string, cause: unknown): string {
 
 export function createEngineTraversalService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'ranges'>
+  readonly regionGraph: Pick<RegionGraph, 'getRegion' | 'collectFormulaDependentsForCell'>
   readonly edgeArena: EdgeArena
   readonly reverseState: {
     reverseCellEdges: Array<EdgeSlice | undefined>
@@ -129,7 +131,26 @@ export function createEngineTraversalService(args: {
         push(members[memberIndex]!)
       }
     }
-    const pushDirectRange = (range: { sheetName: string; rowStart: number; rowEnd: number; col: number } | undefined): void => {
+    const pushDirectRegion = (regionId: number | undefined): void => {
+      if (regionId === undefined) {
+        return
+      }
+      const region = args.regionGraph.getRegion(regionId)
+      if (!region) {
+        return
+      }
+      const sheet = args.state.workbook.getSheet(region.sheetName)
+      if (!sheet) {
+        return
+      }
+      for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
+        const dependencyCellIndex = sheet.grid.get(row, region.col)
+        if (dependencyCellIndex !== -1) {
+          push(dependencyCellIndex)
+        }
+      }
+    }
+    const pushDirectLookupRange = (range: { sheetName: string; rowStart: number; rowEnd: number; col: number } | undefined): void => {
       if (!range) {
         return
       }
@@ -144,12 +165,12 @@ export function createEngineTraversalService(args: {
         }
       }
     }
-    pushDirectRange(formula.directAggregate)
+    pushDirectRegion(formula.directAggregate?.regionId)
     if (formula.directCriteria) {
-      pushDirectRange(formula.directCriteria.aggregateRange)
+      pushDirectRegion(formula.directCriteria.aggregateRange?.regionId)
       for (let index = 0; index < formula.directCriteria.criteriaPairs.length; index += 1) {
         const pair = formula.directCriteria.criteriaPairs[index]!
-        pushDirectRange(pair.range)
+        pushDirectRegion(pair.range.regionId)
         if (pair.criterion.kind === 'cell') {
           push(pair.criterion.cellIndex)
         }
@@ -158,7 +179,7 @@ export function createEngineTraversalService(args: {
     const directLookup = formula.directLookup
     if (directLookup) {
       if (directLookup.kind === 'exact' || directLookup.kind === 'approximate') {
-        pushDirectRange({
+        pushDirectLookupRange({
           sheetName: directLookup.prepared.sheetName,
           rowStart: directLookup.prepared.rowStart,
           rowEnd: directLookup.prepared.rowEnd,
@@ -166,7 +187,7 @@ export function createEngineTraversalService(args: {
         })
         push(directLookup.operandCellIndex)
       } else {
-        pushDirectRange({
+        pushDirectLookupRange({
           sheetName: directLookup.sheetName,
           rowStart: directLookup.rowStart,
           rowEnd: directLookup.rowEnd,
@@ -224,7 +245,21 @@ export function createEngineTraversalService(args: {
       if (!isRangeEntity(currentEntity) && !isExactLookupColumnEntity(currentEntity) && !isSortedLookupColumnEntity(currentEntity)) {
         const cellIndex = entityPayload(currentEntity)
         const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+        const row = args.state.workbook.cellStore.rows[cellIndex]
         const col = args.state.workbook.cellStore.cols[cellIndex]
+        if (sheetId !== undefined && row !== undefined && col !== undefined) {
+          const regionDependents = args.regionGraph.collectFormulaDependentsForCell(sheetId, row, col)
+          for (let index = 0; index < regionDependents.length; index += 1) {
+            const formulaCellIndex = regionDependents[index]!
+            if (topoFormulaSeen[formulaCellIndex] === topoFormulaSeenEpoch) {
+              continue
+            }
+            topoFormulaSeen[formulaCellIndex] = topoFormulaSeenEpoch
+            ensureFormulaBufferCapacity(formulaCount + 1)
+            topoFormulaBuffer[formulaCount] = formulaCellIndex
+            formulaCount += 1
+          }
+        }
         if (sheetId !== undefined && col !== undefined) {
           const exactLookupEntity = makeExactLookupColumnEntity(sheetId, col)
           const sortedLookupEntity = makeSortedLookupColumnEntity(sheetId, col)

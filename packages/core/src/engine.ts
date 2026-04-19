@@ -403,10 +403,16 @@ export class SpreadsheetEngine {
         noteExactLookupLiteralWrite: () => {
           return
         },
+        noteAggregateLiteralWrite: () => {
+          return
+        },
         noteSortedLookupLiteralWrite: () => {
           return
         },
         invalidateExactLookupColumn: () => {
+          return
+        },
+        invalidateAggregateColumn: () => {
           return
         },
         invalidateSortedLookupColumn: () => {

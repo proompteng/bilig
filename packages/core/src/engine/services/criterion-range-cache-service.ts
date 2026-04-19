@@ -1,6 +1,8 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { compileCriteriaMatcher, matchesCompiledCriteria, type CompiledCriteriaMatcher, type CriteriaOperator } from '@bilig/formula'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
+import type { DepPatternStore } from '../../deps/dep-pattern-store.js'
+import type { RegionGraph } from '../../deps/region-graph.js'
 
 export interface CriterionRangeDescriptor {
   readonly sheetName: string
@@ -217,17 +219,11 @@ function slicePredicateMatches(
   }
 }
 
-function requestKey(criteriaPairs: readonly CriterionRangePair[]): string {
-  return criteriaPairs
-    .map(({ range, criteria }) => `${range.sheetName}\t${range.col}\t${range.rowStart}\t${range.rowEnd}\t${criteriaCacheKey(criteria)}`)
-    .join('\u0001')
-}
-
 export function createCriterionRangeCacheService(args: {
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
+  readonly regionGraph: Pick<RegionGraph, 'internSingleColumnRegion'>
+  readonly depPatternStore: DepPatternStore
 }): CriterionRangeCacheService {
-  const cache = new Map<string, CriterionCacheEntry>()
-
   const getColumnView = (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }): RuntimeColumnView => {
     const direct = Reflect.get(args.runtimeColumnStore, 'getColumnView')
     if (typeof direct === 'function') {
@@ -279,24 +275,30 @@ export function createCriterionRangeCacheService(args: {
       return errorValue(ErrorCode.Value)
     }
 
-    const slices = criteriaPairs.map((pair) =>
-      getColumnView({
+    const resolvedPairs = criteriaPairs.map((pair) => ({
+      regionId: args.regionGraph.internSingleColumnRegion({
         sheetName: pair.range.sheetName,
         rowStart: pair.range.rowStart,
         rowEnd: pair.range.rowEnd,
         col: pair.range.col,
       }),
-    )
-    const key = requestKey(criteriaPairs)
-    const existing = cache.get(key)
-    if (
-      existing &&
-      existing.pairVersions.length === slices.length &&
-      existing.pairVersions.every(
-        (version, index) =>
-          version.columnVersion === slices[index]!.columnVersion && version.structureVersion === slices[index]!.structureVersion,
-      )
-    ) {
+      view: getColumnView({
+        sheetName: pair.range.sheetName,
+        rowStart: pair.range.rowStart,
+        rowEnd: pair.range.rowEnd,
+        col: pair.range.col,
+      }),
+      criteria: pair.criteria,
+    }))
+    const versionStamp = resolvedPairs
+      .map(({ regionId, view }) => `${regionId}:${view.columnVersion}:${view.structureVersion}`)
+      .join('\u0001')
+    const existing = args.depPatternStore.getCriteriaPattern({
+      regionIds: resolvedPairs.map(({ regionId }) => regionId),
+      criteriaKeys: resolvedPairs.map(({ criteria }) => criteriaCacheKey(criteria)),
+      versionStamp,
+    })
+    if (existing) {
       return existing
     }
 
@@ -305,7 +307,7 @@ export function createCriterionRangeCacheService(args: {
     for (let rowOffset = 0; rowOffset < expectedLength; rowOffset += 1) {
       let matches = true
       for (let pairIndex = 0; pairIndex < predicates.length; pairIndex += 1) {
-        if (!slicePredicateMatches(predicates[pairIndex]!, slices[pairIndex]!, rowOffset, args.runtimeColumnStore)) {
+        if (!slicePredicateMatches(predicates[pairIndex]!, resolvedPairs[pairIndex]!.view, rowOffset, args.runtimeColumnStore)) {
           matches = false
           break
         }
@@ -318,13 +320,18 @@ export function createCriterionRangeCacheService(args: {
     const entry: CriterionCacheEntry = {
       rows: Uint32Array.from(matchingRows),
       length: matchingRows.length,
-      pairVersions: slices.map((slice) => ({
-        columnVersion: slice.columnVersion,
-        structureVersion: slice.structureVersion,
+      pairVersions: resolvedPairs.map(({ view }) => ({
+        columnVersion: view.columnVersion,
+        structureVersion: view.structureVersion,
       })),
     }
-    cache.set(key, entry)
-    return entry
+    return args.depPatternStore.setCriteriaPattern({
+      regionIds: resolvedPairs.map(({ regionId }) => regionId),
+      criteriaKeys: resolvedPairs.map(({ criteria }) => criteriaCacheKey(criteria)),
+      versionStamp,
+      rows: entry.rows,
+      length: entry.length,
+    })
   }
 
   return {

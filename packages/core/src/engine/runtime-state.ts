@@ -171,6 +171,7 @@ export type RuntimeDirectLookupDescriptor =
     }
 
 export interface RuntimeDirectCriteriaRange {
+  readonly regionId: number
   readonly sheetName: string
   readonly rowStart: number
   readonly rowEnd: number
@@ -200,6 +201,7 @@ export interface RuntimeDirectCriteriaDescriptor {
 }
 
 export interface RuntimeDirectAggregateDescriptor {
+  readonly regionId: number
   readonly aggregateKind: 'sum' | 'average' | 'count' | 'min' | 'max'
   readonly sheetName: string
   readonly rowStart: number

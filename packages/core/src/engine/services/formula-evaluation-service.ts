@@ -627,12 +627,15 @@ export function createEngineFormulaEvaluationService(args: {
     // avoid rescanning shifted windows, while still allowing narrower anchors
     // when no compatible reusable prefix exists.
     const sharedPrefixStart = directAggregate.aggregateKind === 'count' ? 0 : directAggregate.rowStart
-    const prefix = args.aggregateCache.getOrBuildPrefix({
-      sheetName: directAggregate.sheetName,
-      rowStart: sharedPrefixStart,
-      rowEnd: directAggregate.rowEnd,
-      col: directAggregate.col,
-    })
+    const prefix = args.aggregateCache.getOrBuildPrefix(
+      {
+        sheetName: directAggregate.sheetName,
+        rowStart: sharedPrefixStart,
+        rowEnd: directAggregate.rowEnd,
+        col: directAggregate.col,
+      },
+      directAggregate.aggregateKind,
+    )
     const endOffset = directAggregate.rowEnd - prefix.rowStart
     const startOffset = directAggregate.rowStart - prefix.rowStart - 1
     const errorCode = prefix.prefixErrorCodes[endOffset]

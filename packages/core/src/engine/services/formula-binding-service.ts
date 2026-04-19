@@ -37,6 +37,7 @@ import { addEngineCounter, type EngineCounters } from '../../perf/engine-counter
 import { retargetFormulaInstance } from '../../formula/structural-retargeting.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
+import type { RegionGraph } from '../../deps/region-graph.js'
 import {
   type EngineRuntimeState,
   type MaterializedDependencies,
@@ -159,6 +160,29 @@ function parseQualifiedDependencySheetName(dependency: string): string | undefin
   }
   const qualifier = dependency.slice(0, delimiter)
   return qualifier.startsWith("'") && qualifier.endsWith("'") ? qualifier.slice(1, -1).replace(/''/g, "'") : qualifier
+}
+
+function directRegionIdsForFormula(
+  value:
+    | Pick<RuntimeFormula, 'directAggregate' | 'directCriteria'>
+    | {
+        directAggregate: RuntimeDirectAggregateDescriptor | undefined
+        directCriteria: RuntimeDirectCriteriaDescriptor | undefined
+      },
+): number[] {
+  const regionIds = new Set<number>()
+  if (value.directAggregate) {
+    regionIds.add(value.directAggregate.regionId)
+  }
+  if (value.directCriteria) {
+    if (value.directCriteria.aggregateRange) {
+      regionIds.add(value.directCriteria.aggregateRange.regionId)
+    }
+    value.directCriteria.criteriaPairs.forEach((pair) => {
+      regionIds.add(pair.range.regionId)
+    })
+  }
+  return [...regionIds]
 }
 
 function aggregateColumnDependencyKey(sheetId: number, col: number): number {
@@ -288,6 +312,7 @@ function directCriteriaStructureEqual(
   const leftRange = left.aggregateRange
   const rightRange = right.aggregateRange
   if (
+    leftRange?.regionId !== rightRange?.regionId ||
     leftRange?.sheetName !== rightRange?.sheetName ||
     leftRange?.rowStart !== rightRange?.rowStart ||
     leftRange?.rowEnd !== rightRange?.rowEnd ||
@@ -303,6 +328,7 @@ function directCriteriaStructureEqual(
     const leftPair = left.criteriaPairs[index]!
     const rightPair = right.criteriaPairs[index]!
     if (
+      leftPair.range.regionId !== rightPair.range.regionId ||
       leftPair.range.sheetName !== rightPair.range.sheetName ||
       leftPair.range.rowStart !== rightPair.range.rowStart ||
       leftPair.range.rowEnd !== rightPair.range.rowEnd ||
@@ -328,6 +354,7 @@ function directAggregateStructureEqual(
   }
   return (
     left.aggregateKind === right.aggregateKind &&
+    left.regionId === right.regionId &&
     left.sheetName === right.sheetName &&
     left.rowStart === right.rowStart &&
     left.rowEnd === right.rowEnd &&
@@ -746,6 +773,7 @@ function buildDirectCriteriaDescriptor(args: {
   readonly ownerSheetName: string
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
+  readonly regionGraph: RegionGraph
 }): RuntimeDirectCriteriaDescriptor | undefined {
   const node = args.compiled.optimizedAst
   if (node.kind !== 'CallExpr') {
@@ -782,7 +810,18 @@ function buildDirectCriteriaDescriptor(args: {
     if (!range || !criterion) {
       return undefined
     }
-    return { range, criterion }
+    return {
+      range: {
+        ...range,
+        regionId: args.regionGraph.internSingleColumnRegion({
+          sheetName: range.sheetName,
+          rowStart: range.rowStart,
+          rowEnd: range.rowEnd,
+          col: range.col,
+        }),
+      },
+      criterion,
+    }
   }
 
   if (callee === 'COUNTIF') {
@@ -831,7 +870,15 @@ function buildDirectCriteriaDescriptor(args: {
     }
     return {
       aggregateKind: callee === 'SUMIF' ? 'sum' : 'average',
-      aggregateRange,
+      aggregateRange: {
+        ...aggregateRange,
+        regionId: args.regionGraph.internSingleColumnRegion({
+          sheetName: aggregateRange.sheetName,
+          rowStart: aggregateRange.rowStart,
+          rowEnd: aggregateRange.rowEnd,
+          col: aggregateRange.col,
+        }),
+      },
       criteriaPairs: [criteriaPair],
     }
   }
@@ -853,7 +900,15 @@ function buildDirectCriteriaDescriptor(args: {
   }
   return {
     aggregateKind: callee === 'SUMIFS' ? 'sum' : callee === 'AVERAGEIFS' ? 'average' : callee === 'MINIFS' ? 'min' : 'max',
-    aggregateRange,
+    aggregateRange: {
+      ...aggregateRange,
+      regionId: args.regionGraph.internSingleColumnRegion({
+        sheetName: aggregateRange.sheetName,
+        rowStart: aggregateRange.rowStart,
+        rowEnd: aggregateRange.rowEnd,
+        col: aggregateRange.col,
+      }),
+    },
     criteriaPairs,
   }
 }
@@ -861,6 +916,7 @@ function buildDirectCriteriaDescriptor(args: {
 function buildDirectAggregateDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
+  readonly regionGraph: RegionGraph
 }): RuntimeDirectAggregateDescriptor | undefined {
   const directAggregateCandidate = args.compiled.directAggregateCandidate
   if (directAggregateCandidate) {
@@ -871,9 +927,16 @@ function buildDirectAggregateDescriptor(args: {
       (rangeInfo.sheetName === undefined || rangeInfo.sheetName === args.ownerSheetName) &&
       rangeInfo.startCol === rangeInfo.endCol
     ) {
+      const sheetName = rangeInfo.sheetName ?? args.ownerSheetName
       return {
+        regionId: args.regionGraph.internSingleColumnRegion({
+          sheetName,
+          rowStart: rangeInfo.startRow,
+          rowEnd: rangeInfo.endRow,
+          col: rangeInfo.startCol,
+        }),
         aggregateKind: directAggregateCandidate.aggregateKind,
-        sheetName: rangeInfo.sheetName ?? args.ownerSheetName,
+        sheetName,
         rowStart: rangeInfo.startRow,
         rowEnd: rangeInfo.endRow,
         col: rangeInfo.startCol,
@@ -904,6 +967,12 @@ function buildDirectAggregateDescriptor(args: {
     return undefined
   }
   return {
+    regionId: args.regionGraph.internSingleColumnRegion({
+      sheetName: range.sheetName,
+      rowStart: range.rowStart,
+      rowEnd: range.rowEnd,
+      col: range.col,
+    }),
     aggregateKind:
       callee === 'SUM' ? 'sum' : callee === 'COUNT' ? 'count' : callee === 'MIN' ? 'min' : callee === 'MAX' ? 'max' : 'average',
     sheetName: range.sheetName,
@@ -1089,6 +1158,7 @@ export function createEngineFormulaBindingService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges' | 'getUseColumnIndex'> & {
     counters?: EngineCounters
   }
+  readonly regionGraph: RegionGraph
   readonly compiledPlans: EngineCompiledPlanService
   readonly formulaInstances: FormulaInstanceTable
   readonly resolveTemplateForCell: (source: string, row: number, col: number) => FormulaTemplateResolution
@@ -1404,6 +1474,7 @@ export function createEngineFormulaBindingService(args: {
     args.scheduleWasmProgramSync()
     recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
 
     primeLookupCandidatesNow(ownerSheetName, undefined, prepared.indexedExactLookupCandidates, prepared.directApproximateLookupCandidates)
   }
@@ -1442,6 +1513,7 @@ export function createEngineFormulaBindingService(args: {
       nextDirectAggregate = buildDirectAggregateDescriptor({
         compiled: compiled as ParsedCompiledFormula,
         ownerSheetName,
+        regionGraph: args.regionGraph,
       })
       if (!nextDirectAggregate) {
         return false
@@ -1499,6 +1571,7 @@ export function createEngineFormulaBindingService(args: {
     }
     recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
     return true
   }
 
@@ -1827,6 +1900,7 @@ export function createEngineFormulaBindingService(args: {
   const clearFormulaNow = (cellIndex: number): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (existing) {
+      args.regionGraph.clearFormulaSubscriptions(cellIndex)
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
       const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
@@ -2103,6 +2177,7 @@ export function createEngineFormulaBindingService(args: {
       }
     }
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, runtimeFormula.compiled)
+    args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(runtimeFormula))
     args.scheduleWasmProgramSync()
 
     primeLookupCandidatesNow(
@@ -2160,6 +2235,7 @@ export function createEngineFormulaBindingService(args: {
     const directAggregateCandidate = buildDirectAggregateDescriptor({
       compiled,
       ownerSheetName,
+      regionGraph: args.regionGraph,
     })
     const directAggregate = directAggregateCandidate
     const directScalar = buildDirectScalarDescriptor({
@@ -2173,6 +2249,7 @@ export function createEngineFormulaBindingService(args: {
       ownerSheetName,
       workbook: args.state.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      regionGraph: args.regionGraph,
     })
     const indexedExactLookupCandidates =
       hasLookupInstruction && args.state.getUseColumnIndex() ? collectIndexedExactLookupCandidates(compiled.optimizedAst) : []
@@ -2431,6 +2508,7 @@ export function createEngineFormulaBindingService(args: {
           formulaColumnCounts.clear()
           formulaOwnerSheetCells.clear()
           formulaReferencedSheetCells.clear()
+          args.regionGraph.reset()
 
           const activeCellIndices: number[] = []
           pending.forEach(({ cellIndex, source }) => {

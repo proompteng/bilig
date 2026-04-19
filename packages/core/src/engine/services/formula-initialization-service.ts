@@ -84,6 +84,7 @@ export function createEngineFormulaInitializationService(args: {
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
   readonly flushWasmProgramSync: () => void
+  readonly prepareRegionQueryIndices: () => void
   readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
 }): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
@@ -200,6 +201,7 @@ export function createEngineFormulaInitializationService(args: {
         })
       }
     }
+    args.prepareRegionQueryIndices()
     formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
     const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
     const changedRoots = args.composeMutationRoots(changedInputCount, formulaChangedCount)

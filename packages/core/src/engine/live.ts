@@ -19,6 +19,9 @@ import {
 } from './services/formula-initialization-service.js'
 import { createEngineFormulaTemplateNormalizationService } from './services/formula-template-normalization-service.js'
 import { createEngineCompiledPlanService } from './services/compiled-plan-service.js'
+import { createAggregateStateStore } from '../deps/aggregate-state-store.js'
+import { createDepPatternStore } from '../deps/dep-pattern-store.js'
+import { createRegionGraph } from '../deps/region-graph.js'
 import { createFormulaInstanceTable } from '../formula/formula-instance-table.js'
 import { createEngineFormulaGraphService, type EngineFormulaGraphService } from './services/formula-graph-service.js'
 import { createEngineHistoryService, type EngineHistoryService } from './services/history-service.js'
@@ -113,6 +116,7 @@ type EngineFormulaBindingRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaBindingService>[0],
   | 'compiledPlans'
   | 'formulaInstances'
+  | 'regionGraph'
   | 'resolveTemplateForCell'
   | 'exactLookup'
   | 'sortedLookup'
@@ -185,6 +189,9 @@ type EngineOperationRuntimeConfig = Omit<
   Parameters<typeof createEngineOperationService>[0],
   | 'getSelectionState'
   | 'setSelection'
+  | 'hasRegionFormulaSubscriptionsForColumn'
+  | 'collectRegionFormulaDependentsForCell'
+  | 'prepareRegionQueryIndices'
   | 'rewriteDefinedNamesForSheetRename'
   | 'rewriteCellFormulasForSheetRename'
   | 'estimatePotentialNewCells'
@@ -224,7 +231,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'flushWasmProgramSync'
 >
 
-type EngineTraversalRuntimeConfig = Parameters<typeof createEngineTraversalService>[0]
+type EngineTraversalRuntimeConfig = Omit<Parameters<typeof createEngineTraversalService>[0], 'regionGraph'>
 
 function requireService<Service>(service: Service | undefined, name: string): Service {
   if (service === undefined) {
@@ -254,18 +261,28 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteSnapshot: (snapshot: WorkbookSnapshot) => void
 }): EngineServiceRuntime {
   const scratch = createEngineRuntimeScratchService()
-  const traversal = createEngineTraversalService(args.traversal)
+  const regionGraph = createRegionGraph({ workbook: args.state.workbook })
+  const traversal = createEngineTraversalService({
+    ...args.traversal,
+    regionGraph,
+  })
   const changeSetEmitter = createEngineChangeSetEmitterService({ state: args.state })
   const patchEmitter = createEnginePatchEmitterService({ state: args.state })
   const runtimeColumnStore = createEngineRuntimeColumnStoreService({ state: args.state })
   const columnIndexStore = createColumnIndexStore({ state: args.state, runtimeColumnStore })
+  const depPatternStore = createDepPatternStore()
+  const aggregateStateStore = createAggregateStateStore({
+    workbook: args.state.workbook,
+    runtimeColumnStore,
+    regionGraph,
+  })
   const compiledPlans = createEngineCompiledPlanService()
   const formulaTemplates = createEngineFormulaTemplateNormalizationService({ counters: args.state.counters })
   const formulaInstances = createFormulaInstanceTable()
-  const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore })
+  const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore, regionGraph, depPatternStore })
   const aggregateCache = createRangeAggregateCacheService({
-    state: args.state,
-    runtimeColumnStore,
+    regionGraph,
+    aggregateStateStore,
   })
   const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore, columnIndexStore })
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore, columnIndexStore })
@@ -378,6 +395,7 @@ export function createEngineServiceRuntime(args: {
   })
   binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
+    regionGraph,
     compiledPlans,
     formulaInstances,
     resolveTemplateForCell: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
@@ -533,6 +551,7 @@ export function createEngineServiceRuntime(args: {
       args.operation.setBatchMutationDepth(next)
     },
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
+    prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),
     writeHydratedFormulaValue: (cellIndex, value) => {
       args.state.workbook.cellStore.flags[cellIndex] =
         (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
@@ -551,6 +570,14 @@ export function createEngineServiceRuntime(args: {
     rebindDefinedNameDependents: (names, formulaChangedCount) => binding.rebindDefinedNameDependentsNow(names, formulaChangedCount),
     rebindTableDependents: (tableNames, formulaChangedCount) => binding.rebindTableDependentsNow(tableNames, formulaChangedCount),
     rebindFormulaCells: (candidates, formulaChangedCount) => binding.rebindFormulaCellsNow(candidates, formulaChangedCount),
+    hasRegionFormulaSubscriptionsForColumn: (sheetName, col) => {
+      const sheet = args.state.workbook.getSheet(sheetName)
+      return sheet ? regionGraph.hasFormulaSubscriptionsForColumn(sheet.id, col) : false
+    },
+    collectRegionFormulaDependentsForCell: (sheetName, row, col) => {
+      const sheet = args.state.workbook.getSheet(sheetName)
+      return sheet ? regionGraph.collectFormulaDependentsForCell(sheet.id, row, col) : new Uint32Array()
+    },
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
       binding.rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
@@ -589,12 +616,15 @@ export function createEngineServiceRuntime(args: {
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, 'recalc').reconcilePivotOutputsNow(baseChanged, forceAllPivots),
+    prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),
     flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
+    noteAggregateLiteralWrite: (request) => aggregateStateStore.noteLiteralWrite(request),
     noteSortedLookupLiteralWrite: (request) => sortedLookup.recordLiteralWrite(request),
     invalidateExactLookupColumn: (request) => exactLookup.invalidateColumn(request),
+    invalidateAggregateColumn: (request) => aggregateStateStore.invalidateColumn(request.sheetName, request.col),
     invalidateSortedLookupColumn: (request) => sortedLookup.invalidateColumn(request),
   })
   const mutation = createEngineMutationService({

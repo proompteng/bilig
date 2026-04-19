@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { createAggregateStateStore } from '../deps/aggregate-state-store.js'
+import { createRegionGraph } from '../deps/region-graph.js'
 import { createRangeAggregateCacheService } from '../engine/services/range-aggregate-cache-service.js'
 import type { RuntimeColumnSlice } from '../engine/services/runtime-column-store-service.js'
 import { WorkbookStore } from '../workbook-store.js'
@@ -61,10 +63,9 @@ describe('RangeAggregateCacheService', () => {
     }
     sheet.columnVersions = Uint32Array.of(7)
     sheet.structureVersion = 3
-    const service = createRangeAggregateCacheService({
-      state: {
-        workbook,
-      },
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
       runtimeColumnStore: {
         getColumnSlice,
         readCellValue: () => ({ tag: ValueTag.Empty }),
@@ -72,6 +73,11 @@ describe('RangeAggregateCacheService', () => {
         normalizeStringId: () => '',
         normalizeLookupText: () => '',
       },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
     })
 
     const first = service.getOrBuildPrefix({
@@ -86,10 +92,10 @@ describe('RangeAggregateCacheService', () => {
       rowEnd: 1,
       col: 0,
     })
-    expect(first.prefixSums).toEqual(Float64Array.from([2, 3]))
-    expect(first.prefixCount).toEqual(Uint32Array.from([1, 2]))
-    expect(first.prefixAverageCount).toEqual(Uint32Array.from([1, 2]))
-    expect(first.prefixErrorCodes).toEqual(Uint16Array.from([0, 0]))
+    expect(first.prefixSums.subarray(0, 2)).toEqual(Float64Array.from([2, 3]))
+    expect(first.prefixCount.subarray(0, 2)).toEqual(Uint32Array.from([1, 2]))
+    expect(first.prefixAverageCount.subarray(0, 2)).toEqual(Uint32Array.from([1, 2]))
+    expect(first.prefixErrorCodes.subarray(0, 2)).toEqual(Uint16Array.from([0, 0]))
 
     const extended = service.getOrBuildPrefix({
       sheetName: 'Sheet1',
@@ -103,10 +109,10 @@ describe('RangeAggregateCacheService', () => {
       rowEnd: 3,
       col: 0,
     })
-    expect(extended.prefixSums).toEqual(Float64Array.from([2, 3, 3, 3]))
-    expect(extended.prefixCount).toEqual(Uint32Array.from([1, 2, 2, 2]))
-    expect(extended.prefixAverageCount).toEqual(Uint32Array.from([1, 2, 3, 3]))
-    expect(extended.prefixErrorCodes).toEqual(Uint16Array.from([0, 0, 0, ErrorCode.NA]))
+    expect(extended.prefixSums.subarray(0, 4)).toEqual(Float64Array.from([2, 3, 3, 3]))
+    expect(extended.prefixCount.subarray(0, 4)).toEqual(Uint32Array.from([1, 2, 2, 2]))
+    expect(extended.prefixAverageCount.subarray(0, 4)).toEqual(Uint32Array.from([1, 2, 3, 3]))
+    expect(extended.prefixErrorCodes.subarray(0, 4)).toEqual(Uint16Array.from([0, 0, 0, ErrorCode.NA]))
 
     const reused = service.getOrBuildPrefix({
       sheetName: 'Sheet1',
@@ -132,8 +138,9 @@ describe('RangeAggregateCacheService', () => {
     }
     sheet.columnVersions = Uint32Array.of(columnVersion)
     sheet.structureVersion = 1
-    const service = createRangeAggregateCacheService({
-      state: { workbook },
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
       runtimeColumnStore: {
         getColumnSlice,
         readCellValue: () => ({ tag: ValueTag.Empty }),
@@ -141,6 +148,11 @@ describe('RangeAggregateCacheService', () => {
         normalizeStringId: () => '',
         normalizeLookupText: () => '',
       },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
     })
 
     const first = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 0, col: 0 })
@@ -176,8 +188,9 @@ describe('RangeAggregateCacheService', () => {
     }
     sheet.columnVersions = Uint32Array.of(9)
     sheet.structureVersion = 2
-    const service = createRangeAggregateCacheService({
-      state: { workbook },
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
       runtimeColumnStore: {
         getColumnSlice,
         readCellValue: () => ({ tag: ValueTag.Empty }),
@@ -185,6 +198,11 @@ describe('RangeAggregateCacheService', () => {
         normalizeStringId: () => '',
         normalizeLookupText: () => '',
       },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
     })
 
     service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 0, col: 0 })
@@ -195,8 +213,8 @@ describe('RangeAggregateCacheService', () => {
       col: 0,
     })
 
-    expect(extended.prefixSums).toEqual(Float64Array.from([1, 2, 4]))
-    expect(extended.prefixCount).toEqual(Uint32Array.from([1, 2, 3]))
+    expect(extended.prefixSums.subarray(0, 3)).toEqual(Float64Array.from([1, 2, 4]))
+    expect(extended.prefixCount.subarray(0, 3)).toEqual(Uint32Array.from([1, 2, 3]))
   })
 
   it('reuses a lower-start cached prefix for shifted windows on the same column', () => {
@@ -217,8 +235,9 @@ describe('RangeAggregateCacheService', () => {
     }
     sheet.columnVersions = Uint32Array.of(11)
     sheet.structureVersion = 4
-    const service = createRangeAggregateCacheService({
-      state: { workbook },
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
       runtimeColumnStore: {
         getColumnSlice,
         readCellValue: () => ({ tag: ValueTag.Empty }),
@@ -226,6 +245,11 @@ describe('RangeAggregateCacheService', () => {
         normalizeStringId: () => '',
         normalizeLookupText: () => '',
       },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
     })
 
     const anchored = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 })

@@ -1,15 +1,7 @@
 import { Effect } from 'effect'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
-import {
-  MAX_COLS,
-  ValueTag,
-  type CellRangeRef,
-  type CellValue,
-  type EngineChangedCell,
-  type EngineEvent,
-  type SelectionState,
-} from '@bilig/protocol'
+import { ValueTag, type CellRangeRef, type CellValue, type EngineChangedCell, type EngineEvent, type SelectionState } from '@bilig/protocol'
 import type { EdgeSlice } from '../../edge-arena.js'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import {
@@ -25,7 +17,13 @@ import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engin
 import { spillDependencyKey, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
-import type { EngineRuntimeState, PreparedCellAddress, RuntimeDirectLookupDescriptor, U32 } from '../runtime-state.js'
+import type {
+  EngineRuntimeState,
+  PreparedCellAddress,
+  RuntimeDirectCriteriaDescriptor,
+  RuntimeDirectLookupDescriptor,
+  U32,
+} from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 import type { EngineCellPatch } from '../../patches/patch-types.js'
 
@@ -89,10 +87,6 @@ function collectTrackedDependents(registry: Map<string | number, Set<number>>, k
     })
   })
   return [...candidates]
-}
-
-function aggregateColumnDependencyKey(sheetId: number, col: number): number {
-  return sheetId * MAX_COLS + col
 }
 
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
@@ -206,6 +200,30 @@ function normalizeApproximateTextValue(value: CellValue, lookupString: (id: numb
   }
 }
 
+function directCriteriaTouchesPoint(
+  directCriteria: RuntimeDirectCriteriaDescriptor,
+  request: { sheetName: string; row: number; col: number },
+): boolean {
+  if (directCriteria.aggregateRange) {
+    const aggregateRange = directCriteria.aggregateRange
+    if (
+      aggregateRange.sheetName === request.sheetName &&
+      aggregateRange.col === request.col &&
+      request.row >= aggregateRange.rowStart &&
+      request.row <= aggregateRange.rowEnd
+    ) {
+      return true
+    }
+  }
+  return directCriteria.criteriaPairs.some(
+    (pair) =>
+      pair.range.sheetName === request.sheetName &&
+      pair.range.col === request.col &&
+      request.row >= pair.range.rowStart &&
+      request.row <= pair.range.rowEnd,
+  )
+}
+
 function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[]): U32 {
   if (extras.length === 0) {
     return base instanceof Uint32Array ? base : Uint32Array.from(base)
@@ -294,11 +312,14 @@ export function createEngineOperationService(args: {
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
+  readonly prepareRegionQueryIndices: () => void
   readonly flushWasmProgramSync: () => void
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
   readonly getEntityDependents: (entityId: number) => Uint32Array
   readonly collectFormulaDependents: (entityId: number) => Uint32Array
+  readonly hasRegionFormulaSubscriptionsForColumn: (sheetName: string, col: number) => boolean
+  readonly collectRegionFormulaDependentsForCell: (sheetName: string, row: number, col: number) => Uint32Array
   readonly noteExactLookupLiteralWrite: (request: {
     sheetName: string
     row: number
@@ -307,6 +328,13 @@ export function createEngineOperationService(args: {
     newValue: CellValue
     oldStringId?: number
     newStringId?: number
+  }) => void
+  readonly noteAggregateLiteralWrite: (request: {
+    sheetName: string
+    row: number
+    col: number
+    oldValue: CellValue
+    newValue: CellValue
   }) => void
   readonly noteSortedLookupLiteralWrite: (request: {
     sheetName: string
@@ -319,6 +347,7 @@ export function createEngineOperationService(args: {
   }) => void
   readonly invalidateExactLookupColumn: (request: { sheetName: string; col: number }) => void
   readonly invalidateSortedLookupColumn: (request: { sheetName: string; col: number }) => void
+  readonly invalidateAggregateColumn: (request: { sheetName: string; col: number }) => void
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
     args.state.batchListeners.forEach((listener) => {
@@ -758,8 +787,10 @@ export function createEngineOperationService(args: {
     return slice !== undefined && slice.len > 0
   }
 
-  const hasTrackedDirectAggregateDependents = (sheetId: number, col: number): boolean =>
-    (args.reverseState.reverseAggregateColumnEdges.get(aggregateColumnDependencyKey(sheetId, col))?.size ?? 0) > 0
+  const hasTrackedDirectRangeDependents = (sheetId: number, col: number): boolean => {
+    const sheetName = args.state.workbook.getSheetNameById(sheetId)
+    return sheetName ? args.hasRegionFormulaSubscriptionsForColumn(sheetName, col) : false
+  }
 
   const markAffectedExactLookupDependents = (
     request: {
@@ -847,30 +878,29 @@ export function createEngineOperationService(args: {
     return formulaChangedCount
   }
 
-  const collectAffectedDirectAggregateDependents = (request: { sheetName: string; row: number; col: number }): number[] => {
-    const sheet = args.state.workbook.getSheet(request.sheetName)
-    if (!sheet) {
-      return []
-    }
-    const dependents = collectTrackedDependents(args.reverseState.reverseAggregateColumnEdges, [
-      aggregateColumnDependencyKey(sheet.id, request.col),
-    ])
+  const collectAffectedDirectRangeDependents = (request: { sheetName: string; row: number; col: number }): number[] => {
+    const dependents = args.collectRegionFormulaDependentsForCell(request.sheetName, request.row, request.col)
     if (dependents.length === 0) {
       return []
     }
-    return dependents.filter((formulaCellIndex) => {
-      const directAggregate = args.state.formulas.get(formulaCellIndex)?.directAggregate
-      return (
-        directAggregate !== undefined &&
+    return [...dependents].filter((formulaCellIndex) => {
+      const formula = args.state.formulas.get(formulaCellIndex)
+      const directAggregate = formula?.directAggregate
+      if (
+        directAggregate &&
         directAggregate.sheetName === request.sheetName &&
         directAggregate.col === request.col &&
         request.row >= directAggregate.rowStart &&
         request.row <= directAggregate.rowEnd
-      )
+      ) {
+        return true
+      }
+      const directCriteria = formula?.directCriteria
+      return directCriteria ? directCriteriaTouchesPoint(directCriteria, request) : false
     })
   }
 
-  const markAffectedDirectAggregateDependents = (
+  const markAffectedDirectRangeDependents = (
     request: {
       sheetName: string
       row: number
@@ -879,7 +909,7 @@ export function createEngineOperationService(args: {
     formulaChangedCount: number,
     postRecalcDirectFormulaIndices?: Set<number>,
   ): number => {
-    const dependents = collectAffectedDirectAggregateDependents(request)
+    const dependents = collectAffectedDirectRangeDependents(request)
     for (let index = 0; index < dependents.length; index += 1) {
       const formulaCellIndex = dependents[index]!
       if (postRecalcDirectFormulaIndices && (args.state.formulas.get(formulaCellIndex)?.dependencyIndices.length ?? 0) > 0) {
@@ -1516,7 +1546,7 @@ export function createEngineOperationService(args: {
             const sheetId = sheet?.id
             const hasExactLookupDependents = sheetId !== undefined ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col) : false
             const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
-            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectAggregateDependents(sheetId, parsedAddress.col) : false
+            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
             const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
             const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
             if (!isRestore) {
@@ -1531,6 +1561,9 @@ export function createEngineOperationService(args: {
             if (!isRestore) {
               changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
               const removedFormula = args.removeFormula(cellIndex)
+              if (removedFormula) {
+                args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+              }
               if (removedFormula) {
                 formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
               }
@@ -1560,7 +1593,14 @@ export function createEngineOperationService(args: {
                   formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                 }
                 if (hasAggregateDependents) {
-                  formulaChangedCount = markAffectedDirectAggregateDependents(
+                  args.noteAggregateLiteralWrite({
+                    sheetName: exactLookupRequest.sheetName,
+                    row: exactLookupRequest.row,
+                    col: exactLookupRequest.col,
+                    oldValue: exactLookupRequest.oldValue,
+                    newValue: exactLookupRequest.newValue,
+                  })
+                  formulaChangedCount = markAffectedDirectRangeDependents(
                     exactLookupRequest,
                     formulaChangedCount,
                     postRecalcDirectFormulaIndices,
@@ -1614,6 +1654,7 @@ export function createEngineOperationService(args: {
             const compileStarted = isRestore ? 0 : performance.now()
             try {
               const changedTopology = args.bindFormula(cellIndex, op.sheetName, op.formula)
+              args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted
               }
@@ -1624,7 +1665,7 @@ export function createEngineOperationService(args: {
                 formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
                 topologyChanged = true
               }
-              const aggregateDependents = collectAffectedDirectAggregateDependents({
+              const aggregateDependents = collectAffectedDirectRangeDependents({
                 sheetName: op.sheetName,
                 row: parsedAddress.row,
                 col: parsedAddress.col,
@@ -1690,7 +1731,7 @@ export function createEngineOperationService(args: {
             const sheetId = sheet?.id
             const hasExactLookupDependents = sheetId !== undefined ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col) : false
             const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
-            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectAggregateDependents(sheetId, parsedAddress.col) : false
+            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
             const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
             const prior = needsLookupValueRead ? readCellValueForLookup(cellIndex) : { value: emptyValue(), stringId: undefined }
             if (cellIndex === undefined) {
@@ -1703,6 +1744,9 @@ export function createEngineOperationService(args: {
             changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(cellIndex), changedInputCount)
             changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
             const removedFormula = args.removeFormula(cellIndex)
+            if (removedFormula) {
+              args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+            }
             if (removedFormula) {
               formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
             }
@@ -1725,7 +1769,14 @@ export function createEngineOperationService(args: {
                   formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                 }
                 if (hasAggregateDependents) {
-                  formulaChangedCount = markAffectedDirectAggregateDependents(
+                  args.noteAggregateLiteralWrite({
+                    sheetName: exactLookupRequest.sheetName,
+                    row: exactLookupRequest.row,
+                    col: exactLookupRequest.col,
+                    oldValue: exactLookupRequest.oldValue,
+                    newValue: exactLookupRequest.newValue,
+                  })
+                  formulaChangedCount = markAffectedDirectRangeDependents(
                     exactLookupRequest,
                     formulaChangedCount,
                     postRecalcDirectFormulaIndices,
@@ -1864,6 +1915,7 @@ export function createEngineOperationService(args: {
         changedInputCount = markCycleMemberInputsChanged(changedInputCount)
       }
     }
+    args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
     let recalculated: U32 = new Uint32Array()
@@ -2014,7 +2066,7 @@ export function createEngineOperationService(args: {
       }
       const hasExactLookupDependents = hasTrackedExactLookupDependents(sheetId, col)
       const hasSortedLookupDependents = hasTrackedSortedLookupDependents(sheetId, col)
-      const hasAggregateDependents = hasTrackedDirectAggregateDependents(sheetId, col)
+      const hasAggregateDependents = hasTrackedDirectRangeDependents(sheetId, col)
       const next = {
         hasExactLookupDependents,
         hasSortedLookupDependents,
@@ -2064,7 +2116,14 @@ export function createEngineOperationService(args: {
                       formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                     }
                     if (hasAggregateDependents) {
-                      formulaChangedCount = markAffectedDirectAggregateDependents(
+                      args.noteAggregateLiteralWrite({
+                        sheetName: exactLookupRequest.sheetName,
+                        row: exactLookupRequest.row,
+                        col: exactLookupRequest.col,
+                        oldValue: exactLookupRequest.oldValue,
+                        newValue: exactLookupRequest.newValue,
+                      })
+                      formulaChangedCount = markAffectedDirectRangeDependents(
                         exactLookupRequest,
                         formulaChangedCount,
                         postRecalcDirectFormulaIndices,
@@ -2103,6 +2162,9 @@ export function createEngineOperationService(args: {
                 const removedFormula = args.removeFormula(cellIndex)
                 topologyChanged = removedFormula || topologyChanged
                 if (removedFormula) {
+                  args.invalidateAggregateColumn({ sheetName, col: mutation.col })
+                }
+                if (removedFormula) {
                   clearTrackedColumnDependencyFlagCache()
                 }
               }
@@ -2126,7 +2188,14 @@ export function createEngineOperationService(args: {
                     formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                   }
                   if (hasAggregateDependents) {
-                    formulaChangedCount = markAffectedDirectAggregateDependents(
+                    args.noteAggregateLiteralWrite({
+                      sheetName: exactLookupRequest.sheetName,
+                      row: exactLookupRequest.row,
+                      col: exactLookupRequest.col,
+                      oldValue: exactLookupRequest.oldValue,
+                      newValue: exactLookupRequest.newValue,
+                    })
+                    formulaChangedCount = markAffectedDirectRangeDependents(
                       exactLookupRequest,
                       formulaChangedCount,
                       postRecalcDirectFormulaIndices,
@@ -2181,6 +2250,7 @@ export function createEngineOperationService(args: {
               const compileStarted = isRestore ? 0 : performance.now()
               try {
                 const changedTopology = args.bindFormula(cellIndex, sheetName, mutation.formula)
+                args.invalidateAggregateColumn({ sheetName, col: mutation.col })
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted
                 }
@@ -2188,7 +2258,7 @@ export function createEngineOperationService(args: {
                 changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
                 formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
                 topologyChanged = topologyChanged || changedTopology
-                const aggregateDependents = collectAffectedDirectAggregateDependents({
+                const aggregateDependents = collectAffectedDirectRangeDependents({
                   sheetName,
                   row: mutation.row,
                   col: mutation.col,
@@ -2247,7 +2317,14 @@ export function createEngineOperationService(args: {
                       formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                     }
                     if (hasAggregateDependents) {
-                      formulaChangedCount = markAffectedDirectAggregateDependents(
+                      args.noteAggregateLiteralWrite({
+                        sheetName: exactLookupRequest.sheetName,
+                        row: exactLookupRequest.row,
+                        col: exactLookupRequest.col,
+                        oldValue: exactLookupRequest.oldValue,
+                        newValue: exactLookupRequest.newValue,
+                      })
+                      formulaChangedCount = markAffectedDirectRangeDependents(
                         exactLookupRequest,
                         formulaChangedCount,
                         postRecalcDirectFormulaIndices,
@@ -2288,6 +2365,9 @@ export function createEngineOperationService(args: {
               const removedFormula = args.removeFormula(existingIndex)
               topologyChanged = removedFormula || topologyChanged
               if (removedFormula) {
+                args.invalidateAggregateColumn({ sheetName: resolveSheetName(sheetId), col: mutation.col })
+              }
+              if (removedFormula) {
                 clearTrackedColumnDependencyFlagCache()
               }
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
@@ -2309,7 +2389,14 @@ export function createEngineOperationService(args: {
                     formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
                   }
                   if (hasAggregateDependents) {
-                    formulaChangedCount = markAffectedDirectAggregateDependents(
+                    args.noteAggregateLiteralWrite({
+                      sheetName: exactLookupRequest.sheetName,
+                      row: exactLookupRequest.row,
+                      col: exactLookupRequest.col,
+                      oldValue: exactLookupRequest.oldValue,
+                      newValue: exactLookupRequest.newValue,
+                    })
+                    formulaChangedCount = markAffectedDirectRangeDependents(
                       exactLookupRequest,
                       formulaChangedCount,
                       postRecalcDirectFormulaIndices,
@@ -2388,6 +2475,7 @@ export function createEngineOperationService(args: {
         changedInputCount = markCycleMemberInputsChanged(changedInputCount)
       }
     }
+    args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
     let recalculated: U32 = new Uint32Array()
