@@ -13,6 +13,7 @@ export interface EngineFormulaTemplateNormalizationService {
     ownerRow: number,
     ownerCol: number,
   ) => FormulaTemplateResolution | undefined
+  readonly getTemplateSnapshot: (templateId: number) => FormulaTemplateSnapshot | undefined
   readonly listTemplates: () => FormulaTemplateSnapshot[]
   readonly hydrateTemplates: (snapshots: readonly FormulaTemplateSnapshot[]) => void
 }
@@ -37,6 +38,9 @@ export function createEngineFormulaTemplateNormalizationService(args?: {
     },
     resolveByTemplateId(templateId, source, ownerRow, ownerCol) {
       return templateBank.resolveById(templateId, source, ownerRow, ownerCol)
+    },
+    getTemplateSnapshot(templateId) {
+      return templateBank.get(templateId)
     },
     listTemplates() {
       return templateBank.list()

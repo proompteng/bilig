@@ -418,6 +418,7 @@ export function createEngineServiceRuntime(args: {
     clearOwnedPivot: (pivotRecord) => requireService(pivot, 'pivot').clearOwnedPivotNow(pivotRecord),
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
+    getTemplateSnapshot: (templateId) => formulaTemplates.getTemplateSnapshot(templateId),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
       pending.forEach(({ cellIndex, ownerSheetName, source, compiled, preservesBinding }) => {
