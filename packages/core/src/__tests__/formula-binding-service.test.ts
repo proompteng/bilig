@@ -307,6 +307,62 @@ describe('EngineFormulaBindingService', () => {
     }
   })
 
+  it('skips unmapped and missing-owner formulas during full rebuild', async () => {
+    const missingMappingEngine = new SpreadsheetEngine({ workbookName: 'binding-rebuild-missing-mapping' })
+    await missingMappingEngine.ready()
+    missingMappingEngine.createSheet('Sheet1')
+    missingMappingEngine.setCellValue('Sheet1', 'A1', 7)
+    missingMappingEngine.setCellFormula('Sheet1', 'B1', 'A1*2')
+
+    const missingMappingIndex = missingMappingEngine.workbook.getCellIndex('Sheet1', 'B1')
+    if (missingMappingIndex === undefined) {
+      throw new Error('expected formula index for missing mapping case')
+    }
+    missingMappingEngine.workbook.cellStore.sheetIds[missingMappingIndex] = undefined
+
+    const missingMappingResult = Effect.runSync(getBindingService(missingMappingEngine).rebuildAllFormulaBindings())
+    expect(missingMappingResult).toEqual([])
+    expect(readRuntimeFormula(missingMappingEngine, missingMappingIndex)).toBeUndefined()
+
+    const missingOwnerEngine = new SpreadsheetEngine({ workbookName: 'binding-rebuild-missing-owner' })
+    await missingOwnerEngine.ready()
+    missingOwnerEngine.createSheet('Sheet1')
+    missingOwnerEngine.setCellValue('Sheet1', 'A1', 7)
+    missingOwnerEngine.setCellFormula('Sheet1', 'B1', 'A1*2')
+
+    const missingOwnerIndex = missingOwnerEngine.workbook.getCellIndex('Sheet1', 'B1')
+    if (missingOwnerIndex === undefined) {
+      throw new Error('expected formula index for missing owner case')
+    }
+    missingOwnerEngine.workbook.sheetsByName.delete('Sheet1')
+
+    const missingOwnerResult = Effect.runSync(getBindingService(missingOwnerEngine).rebuildAllFormulaBindings())
+    expect(missingOwnerResult).toEqual([])
+    expect(readRuntimeFormula(missingOwnerEngine, missingOwnerIndex)).toBeUndefined()
+  })
+
+  it('invalidates formulas that fail to rebind during a full rebuild while preserving the active index list', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-rebuild-invalid-source' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 7)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+
+    const formulaIndex = engine.workbook.getCellIndex('Sheet1', 'B1')
+    if (formulaIndex === undefined) {
+      throw new Error('expected formula index')
+    }
+    const runtimeFormula = readRuntimeFormula(engine, formulaIndex)
+    if (typeof runtimeFormula !== 'object' || runtimeFormula === null) {
+      throw new Error('expected runtime formula to mutate source')
+    }
+    Reflect.set(runtimeFormula, 'source', 'SUM(')
+
+    const rebound = Effect.runSync(getBindingService(engine).rebuildAllFormulaBindings())
+    expect(rebound).toEqual([formulaIndex])
+    expect(readRuntimeFormula(engine, formulaIndex)).toBeUndefined()
+  })
+
   it('wraps rebuild and rebind failures with EngineFormulaBindingError', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'binding-error-wrappers' })
     await engine.ready()

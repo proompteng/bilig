@@ -29,15 +29,23 @@ describe('buildRelativeFormulaTemplateTokenKey', () => {
     expect(buildRelativeFormulaTemplateTokenKey('MY_FUNC(1,A1)', 0, 0)).toContain('fn:MY_FUNC')
   })
 
-  it('does not confuse function identifiers with column references', () => {
-    expect(buildRelativeFormulaTemplateTokenKey('BESSELI(1.5,1)', 0, 19)).toContain('fn:BESSELI')
-    expect(buildRelativeFormulaTemplateTokenKey('BESSELK(1.5,1)', 0, 21)).toContain('fn:BESSELK')
-    expect(buildRelativeFormulaTemplateTokenKey('BESSELI(1.5,1)', 0, 19)).not.toBe(
-      buildRelativeFormulaTemplateTokenKey('BESSELK(1.5,1)', 0, 21),
+  it('does not confuse function names that look like column labels with references', () => {
+    expect(buildRelativeFormulaTemplateTokenKey('BESSELI(1.5,1)', 0, 0)).toContain('fn:BESSELI')
+    expect(buildRelativeFormulaTemplateTokenKey('BESSELJ(1.5,1)', 0, 0)).toContain('fn:BESSELJ')
+    expect(buildRelativeFormulaTemplateTokenKey('BESSELK(1.5,1)', 0, 0)).toContain('fn:BESSELK')
+    expect(buildRelativeFormulaTemplateTokenKey('BESSELI(1.5,1)', 0, 0)).not.toBe(
+      buildRelativeFormulaTemplateTokenKey('BESSELK(1.5,1)', 0, 0),
     )
   })
 
   it('does not confuse plain numeric literals with row references', () => {
     expect(buildRelativeFormulaTemplateTokenKey('1+A1', 0, 0)).not.toBe(buildRelativeFormulaTemplateTokenKey('2+A2', 1, 0))
+  })
+
+  it('keeps malformed or mixed reference tokens from collapsing into the same family', () => {
+    expect(buildRelativeFormulaTemplateTokenKey('A1:', 0, 0)).toContain('tok:identifier:"A1"')
+    expect(buildRelativeFormulaTemplateTokenKey('A1:2', 0, 0)).toContain('tok:identifier:"A1"')
+    expect(buildRelativeFormulaTemplateTokenKey('1', 0, 0)).toBe('tok:number:"1"|eof')
+    expect(buildRelativeFormulaTemplateTokenKey('1:2', 0, 0)).toContain('range:rows')
   })
 })

@@ -77,6 +77,17 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     expect(counters.formulasParsed).toBe(2)
   })
 
+  it('reuses the same compiled owner for identical invariant sources across cells', () => {
+    const service = createEngineFormulaTemplateNormalizationService()
+
+    const first = service.resolveForCell('1+2', 0, 0)
+    const second = service.resolveForCell('1+2', 0, 1)
+
+    expect(second.templateId).toBe(first.templateId)
+    expect(second.compiled).toBe(first.compiled)
+    expect(second.compiled.source).toBe('1+2')
+  })
+
   it('keeps template families as runtime owners across transient cache clears', () => {
     const service = createEngineFormulaTemplateNormalizationService()
 
@@ -119,5 +130,34 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     expect(third.compiled.deps).toEqual(['A1:A3'])
     expect(second.compiled.astMatchesSource).toBe(true)
     expect(third.compiled.astMatchesSource).toBe(true)
+  })
+
+  it('returns undefined for unknown template ids and exposes hydrated template snapshots', () => {
+    const service = createEngineFormulaTemplateNormalizationService()
+    const first = service.resolveForCell('A1+B1', 0, 0)
+
+    expect(service.resolveByTemplateId(999_999, 'A1+B1', 0, 0)).toBeUndefined()
+    expect(service.listTemplates()).toEqual([
+      expect.objectContaining({
+        id: first.templateId,
+        templateKey: first.templateKey,
+        baseSource: 'A1+B1',
+      }),
+    ])
+
+    service.reset()
+    service.hydrateTemplates([
+      {
+        id: first.templateId,
+        templateKey: first.templateKey,
+        baseSource: 'A1+B1',
+        baseRow: 0,
+        baseCol: 0,
+        compiled: first.compiled,
+      },
+    ])
+
+    const hydrated = service.resolveByTemplateId(first.templateId, 'A1+B1', 0, 0)
+    expect(hydrated?.compiled).toBe(first.compiled)
   })
 })

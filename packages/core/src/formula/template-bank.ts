@@ -63,6 +63,9 @@ function resolveTemplateCompiled(template: MutableTemplateRecord, source: string
   if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
     return anchoredPrefixAggregate.compiled
   }
+  if (source === template.baseSource) {
+    return template.compiled
+  }
   const rowDelta = ownerRow - template.baseRow
   const colDelta = ownerCol - template.baseCol
   if (rowDelta === 0 && colDelta === 0) {

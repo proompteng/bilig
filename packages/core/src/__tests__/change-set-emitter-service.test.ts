@@ -120,6 +120,86 @@ describe('EngineChangeSetEmitterService', () => {
     expect(counters.changedCellPayloadsBuilt).toBe(2)
   })
 
+  it('captures large tracked patch sets while skipping unresolved entries', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-patches-large' })
+    engine.createSheet('Sheet1')
+    engine.createSheet('Sheet2')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet2', 'B1', 'pear')
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const a2 = engine.workbook.getCellIndex('Sheet1', 'A2')
+    const b1 = engine.workbook.getCellIndex('Sheet2', 'B1')
+    expect(a1).toBeDefined()
+    expect(a2).toBeDefined()
+    expect(b1).toBeDefined()
+
+    const patches = emitter.captureChangedPatches([a1!, 999_999, a2!, b1!])
+
+    expect(patches.map((patch) => `${patch.sheetName}!${patch.a1}`)).toEqual(['Sheet1!A1', 'Sheet1!A2', 'Sheet2!B1'])
+  })
+
+  it('preserves stale tiny-path tracked patches with empty sheet names after deletion', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-patches-stale' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    expect(a1).toBeDefined()
+    engine.workbook.deleteSheet('Sheet1')
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    expect(emitter.captureChangedPatches([a1!])).toEqual([
+      {
+        kind: 'cell',
+        cellIndex: a1,
+        address: { sheet: 1, row: 0, col: 0 },
+        sheetName: '',
+        a1: 'A1',
+        newValue: { tag: ValueTag.Number, value: 1 },
+      },
+    ])
+  })
+
+  it('keeps the tiny tracked-patch fast path when the second cell is unresolved', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-patches-tiny-mixed' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    expect(a1).toBeDefined()
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    expect(emitter.captureChangedPatches([a1!, 999_999])).toEqual([
+      {
+        kind: 'cell',
+        cellIndex: a1,
+        address: { sheet: 1, row: 0, col: 0 },
+        sheetName: 'Sheet1',
+        a1: 'A1',
+        newValue: { tag: ValueTag.Number, value: 1 },
+      },
+    ])
+  })
+
   it('captures larger cross-sheet change sets while skipping unresolved entries', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-large' })
     engine.createSheet('Sheet1')

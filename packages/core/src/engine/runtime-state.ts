@@ -1,5 +1,6 @@
 import type {
   CellValue,
+  ErrorCode,
   LiteralInput,
   RecalcMetrics,
   SelectionState,
@@ -211,6 +212,10 @@ export type RuntimeDirectScalarOperand =
   | {
       kind: 'cell'
       cellIndex: number
+    }
+  | {
+      kind: 'error'
+      code: ErrorCode
     }
   | {
       kind: 'literal-number'

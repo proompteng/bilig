@@ -333,6 +333,9 @@ function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, 
   if (left.kind === 'cell') {
     return right.kind === 'cell' && left.cellIndex === right.cellIndex
   }
+  if (left.kind === 'error') {
+    return right.kind === 'error' && left.code === right.code
+  }
   return right.kind === 'literal-number' && left.value === right.value
 }
 
@@ -908,17 +911,17 @@ function buildDirectScalarOperand(args: {
     return { kind: 'literal-number', value: args.node.value }
   }
   if (args.node.kind === 'CellRef') {
-    if (args.node.sheetName && !args.ownerSheetName) {
-      return undefined
+    const sheetName = args.node.sheetName ?? args.ownerSheetName
+    if (!args.workbook.getSheet(sheetName)) {
+      return {
+        kind: 'error',
+        code: ErrorCode.Ref,
+      }
     }
-    const targetSheetName = args.node.sheetName ?? args.ownerSheetName
-    if (args.node.sheetName && !args.workbook.getSheet(targetSheetName)) {
-      return undefined
-    }
-    const parsed = parseCellAddress(args.node.ref, targetSheetName)
+    const parsed = parseCellAddress(args.node.ref, sheetName)
     return {
       kind: 'cell',
-      cellIndex: args.ensureCellTracked(parsed.sheetName ?? args.ownerSheetName, parsed.text),
+      cellIndex: args.ensureCellTracked(parsed.sheetName ?? sheetName, parsed.text),
     }
   }
   return undefined

@@ -124,20 +124,14 @@ export function createEngineFormulaEvaluationService(args: {
   ) => CellValue
 }): EngineFormulaEvaluationService {
   const emptyChangedCellIndices: number[] = []
-  const reusableDirectNumberResult: CellValue = { tag: ValueTag.Number, value: 0 }
-  const reusableDirectErrorResult: CellValue = { tag: ValueTag.Error, code: ErrorCode.None }
+  const directNumberResult = (value: number): CellValue => ({ tag: ValueTag.Number, value })
 
-  const directNumberResult = (value: number): CellValue => {
-    reusableDirectNumberResult.value = value
-    return reusableDirectNumberResult
-  }
-
-  const directErrorResult = (code: ErrorCode): CellValue => {
-    reusableDirectErrorResult.code = code
-    return reusableDirectErrorResult
-  }
+  const directErrorResult = (code: ErrorCode): CellValue => ({ tag: ValueTag.Error, code })
 
   const readCellValue = (sheetName: string, address: string): CellValue => {
+    if (!args.state.workbook.getSheet(sheetName)) {
+      return errorValue(ErrorCode.Ref)
+    }
     const parsed = parseCellAddress(address, sheetName)
     return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col)
   }
@@ -290,6 +284,9 @@ export function createEngineFormulaEvaluationService(args: {
   ): CellValue[] => {
     if (refKind !== 'cells') {
       return []
+    }
+    if (!args.state.workbook.getSheet(sheetName)) {
+      return [errorValue(ErrorCode.Ref)]
     }
     const range = parseRangeAddress(`${start}:${end}`, sheetName)
     if (range.kind !== 'cells') {
@@ -731,6 +728,10 @@ export function createEngineFormulaEvaluationService(args: {
       return errorValue(ErrorCode.Cycle)
     }
 
+    if (!args.state.workbook.getSheet(sheetName)) {
+      return errorValue(ErrorCode.Ref)
+    }
+
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address)
     if (cellIndex === undefined) {
       return emptyValue()
@@ -864,20 +865,32 @@ export function createEngineFormulaEvaluationService(args: {
     return emptyChangedCellIndices
   }
 
-  const readDirectScalarOperand = (operand: RuntimeDirectScalarOperand): number | undefined => {
+  const readDirectScalarOperand = (operand: RuntimeDirectScalarOperand): CellValue | undefined => {
     if (operand.kind === 'literal-number') {
-      return operand.value
+      return { tag: ValueTag.Number, value: operand.value }
     }
-    const value = readCellValueByIndex(operand.cellIndex)
+    if (operand.kind === 'error') {
+      return errorValue(operand.code)
+    }
+    return readCellValueByIndex(operand.cellIndex)
+  }
+
+  const coerceDirectScalarNumeric = (
+    value: CellValue | undefined,
+  ): { kind: 'number'; value: number } | { kind: 'error'; code: ErrorCode } | undefined => {
+    if (!value) {
+      return undefined
+    }
     switch (value.tag) {
       case ValueTag.Number:
-        return value.value
+        return { kind: 'number', value: value.value }
       case ValueTag.Boolean:
-        return value.value ? 1 : 0
+        return { kind: 'number', value: value.value ? 1 : 0 }
       case ValueTag.Empty:
-        return 0
-      case ValueTag.String:
+        return { kind: 'number', value: 0 }
       case ValueTag.Error:
+        return { kind: 'error', code: value.code }
+      case ValueTag.String:
         return undefined
       default:
         return undefined
@@ -890,23 +903,35 @@ export function createEngineFormulaEvaluationService(args: {
       return undefined
     }
     if (directScalar.kind === 'abs') {
-      const operand = readDirectScalarOperand(directScalar.operand)
-      return operand === undefined ? undefined : directNumberResult(Math.abs(operand))
+      const operand = coerceDirectScalarNumeric(readDirectScalarOperand(directScalar.operand))
+      if (operand === undefined) {
+        return undefined
+      }
+      if (operand.kind === 'error') {
+        return directErrorResult(operand.code)
+      }
+      return directNumberResult(Math.abs(operand.value))
     }
-    const left = readDirectScalarOperand(directScalar.left)
-    const right = readDirectScalarOperand(directScalar.right)
+    const left = coerceDirectScalarNumeric(readDirectScalarOperand(directScalar.left))
+    const right = coerceDirectScalarNumeric(readDirectScalarOperand(directScalar.right))
     if (left === undefined || right === undefined) {
       return undefined
     }
+    if (left.kind === 'error') {
+      return directErrorResult(left.code)
+    }
+    if (right.kind === 'error') {
+      return directErrorResult(right.code)
+    }
     switch (directScalar.operator) {
       case '+':
-        return directNumberResult(left + right)
+        return directNumberResult(left.value + right.value)
       case '-':
-        return directNumberResult(left - right)
+        return directNumberResult(left.value - right.value)
       case '*':
-        return directNumberResult(left * right)
+        return directNumberResult(left.value * right.value)
       case '/':
-        return right === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(left / right)
+        return right.value === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(left.value / right.value)
     }
   }
 
@@ -1009,7 +1034,10 @@ export function createEngineFormulaEvaluationService(args: {
       },
       resolveLookupBuiltin: lookupBuiltinResolver,
     }
-    const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext)
+    const result = evaluatePlanResult(
+      formula.compiled.jsPlan.length > 0 ? formula.compiled.jsPlan : lowerToPlan(formula.compiled.ast),
+      evaluationContext,
+    )
     return storeFormulaResult(cellIndex, formula, result)
   }
 

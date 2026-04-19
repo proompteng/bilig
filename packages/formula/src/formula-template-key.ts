@@ -37,6 +37,12 @@ export function buildRelativeFormulaTemplateTokenKey(source: string, ownerRow: n
       break
     }
 
+    if (token.kind === 'identifier' && tokens[index + 1]?.kind === 'lparen') {
+      keyParts.push(`fn:${token.value.toUpperCase()}`)
+      index += 1
+      continue
+    }
+
     const explicitSheetMatch = matchTemplateReferenceWithExplicitSheet(tokens, index, ownerRow, ownerCol)
     if (explicitSheetMatch) {
       keyParts.push(explicitSheetMatch.key)

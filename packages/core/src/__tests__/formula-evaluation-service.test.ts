@@ -4,6 +4,7 @@ import { ErrorCode, ValueTag } from '@bilig/protocol'
 import type { FormulaNode } from '@bilig/formula'
 import { SpreadsheetEngine } from '../engine.js'
 import { EngineFormulaEvaluationError } from '../engine/errors.js'
+import type { RuntimeFormula } from '../engine/runtime-state.js'
 import type { EngineFormulaEvaluationService } from '../engine/services/formula-evaluation-service.js'
 import type { EngineMutationSupportService } from '../engine/services/mutation-support-service.js'
 
@@ -23,6 +24,13 @@ function isEngineMutationSupportService(value: unknown): value is EngineMutation
     return false
   }
   return typeof Reflect.get(value, 'clearOwnedSpill') === 'function'
+}
+
+function isRuntimeFormulaTable(value: unknown): value is { get(cellIndex: number): RuntimeFormula | undefined } {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  return typeof Reflect.get(value, 'get') === 'function'
 }
 
 function getEvaluationService(engine: SpreadsheetEngine): EngineFormulaEvaluationService {
@@ -49,16 +57,21 @@ function getMutationSupportService(engine: SpreadsheetEngine): EngineMutationSup
   return support
 }
 
-function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: string, address: string): string | undefined {
+function getInternalFormulaStore(engine: SpreadsheetEngine): { get(cellIndex: number): RuntimeFormula | undefined } {
   const formulas = Reflect.get(engine, 'formulas')
-  if (typeof formulas !== 'object' || formulas === null || typeof Reflect.get(formulas, 'get') !== 'function') {
+  if (!isRuntimeFormulaTable(formulas)) {
     throw new TypeError('Expected internal formulas store')
   }
+  return formulas
+}
+
+function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: string, address: string): string | undefined {
+  const formulas = getInternalFormulaStore(engine)
   const cellIndex = engine.workbook.getCellIndex(sheetName, address)
   if (cellIndex === undefined) {
     throw new Error(`expected runtime formula at ${sheetName}!${address}`)
   }
-  const runtimeFormula = Reflect.get(formulas, 'get').call(formulas, cellIndex)
+  const runtimeFormula = formulas.get(cellIndex)
   if (typeof runtimeFormula !== 'object' || runtimeFormula === null) {
     throw new Error(`expected runtime formula at ${sheetName}!${address}`)
   }
@@ -212,6 +225,55 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 2 })
   })
 
+  it('evaluates full-column MATCH formulas through the generic vector lookup fallback', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-full-column-match' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 3)
+    engine.setCellValue('Sheet1', 'A3', 5)
+    engine.setCellValue('Sheet1', 'A4', 'apple')
+    engine.setCellValue('Sheet1', 'A5', 'pear')
+    engine.setCellFormula('Sheet1', 'F1', 'MATCH(4,A:A,1)')
+    engine.setCellFormula('Sheet1', 'F2', 'MATCH("pear",A:A,0)')
+
+    const evaluation = getEvaluationService(engine)
+    const f1Index = engine.workbook.getCellIndex('Sheet1', 'F1')
+    const f2Index = engine.workbook.getCellIndex('Sheet1', 'F2')
+    expect(f1Index).toBeDefined()
+    expect(f2Index).toBeDefined()
+
+    Effect.runSync(evaluation.evaluateUnsupportedFormula(f1Index!))
+    Effect.runSync(evaluation.evaluateUnsupportedFormula(f2Index!))
+
+    expect(engine.getCellValue('Sheet1', 'F1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+    expect(engine.getCellValue('Sheet1', 'F2')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+  })
+
+  it('treats missing external sheets as #REF! during JS evaluation', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-missing-external-sheet' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellFormula('Sheet1', 'A1', 'Sheet2!B1*2')
+    engine.setCellFormula('Sheet1', 'A2', 'SUM(Sheet2!A1:A2)')
+
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+  })
+
   it('wraps workbook access failures from structured, spill, and multiple-operations helpers', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-error-wrappers' })
     await engine.ready()
@@ -256,6 +318,45 @@ describe('EngineFormulaEvaluationService', () => {
     expect(multipleOperations.left).toBeInstanceOf(EngineFormulaEvaluationError)
     expect(multipleOperations.left.message).toContain('multiple operations explode')
     getCellIndexSpy.mockRestore()
+  })
+
+  it('wraps direct-lookup and unsupported-formula evaluation failures', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'evaluation-top-level-wrapper-errors',
+      useColumnIndex: true,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellFormula('Sheet1', 'B1', 'MATCH(2,A1:A3,0)')
+    engine.setCellFormula('Sheet1', 'C1', 'SUM(A1:A3)')
+
+    const evaluation = getEvaluationService(engine)
+    const formulas = getInternalFormulaStore(engine)
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+    const c1Index = engine.workbook.getCellIndex('Sheet1', 'C1')
+    expect(b1Index).toBeDefined()
+    expect(c1Index).toBeDefined()
+
+    const getSpy = vi.spyOn(formulas, 'get').mockImplementation(() => {
+      throw new Error('formula explode')
+    })
+    const directLookup = Effect.runSync(Effect.either(evaluation.evaluateDirectLookupFormula(b1Index!)))
+    expect(directLookup._tag).toBe('Left')
+    expect(directLookup.left).toBeInstanceOf(EngineFormulaEvaluationError)
+    expect(directLookup.left.message).toContain('formula explode')
+    getSpy.mockRestore()
+
+    const getSheetNameByIdSpy = vi.spyOn(engine.workbook, 'getSheetNameById').mockImplementation(() => {
+      throw new Error('unsupported explode')
+    })
+    const unsupported = Effect.runSync(Effect.either(evaluation.evaluateUnsupportedFormula(c1Index!)))
+    expect(unsupported._tag).toBe('Left')
+    expect(unsupported.left).toBeInstanceOf(EngineFormulaEvaluationError)
+    expect(unsupported.left.message).toContain('unsupported explode')
+    getSheetNameByIdSpy.mockRestore()
   })
 
   it('evaluates direct exact lookup formulas across uniform, text, and mixed columns', async () => {
