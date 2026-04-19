@@ -650,7 +650,14 @@ export async function warmStartWorkbookScrollPerf(page: Page, workload: string, 
     if (!warmupReport) {
       throw new Error('warmup performance report was not available')
     }
-    if (warmupReport.counters.fullPatches === 0) {
+    const surfaceCommits = Object.values(warmupReport.counters.surfaceCommits ?? {})
+    const hasSurfaceCommitNoise = surfaceCommits.some((count) => count > 0)
+    const hasRenderNoise =
+      warmupReport.counters.fullPatches > 0 ||
+      warmupReport.counters.headerPaneBuilds > 0 ||
+      warmupReport.counters.reactCommits > 0 ||
+      hasSurfaceCommitNoise
+    if (!hasRenderNoise) {
       return
     }
     if (attempt >= maxAttempts) {
