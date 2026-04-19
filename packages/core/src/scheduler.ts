@@ -31,10 +31,10 @@ export class RecalcScheduler {
     hasFormula: (cellIndex: number) => boolean,
     rangeCount: number,
   ): SchedulerResult {
-    if (!this.calcChain.hasChainFor(formulaCount)) {
+    const dirty = this.dirtyFrontier.collectDirty(changedRoots, graph, hasFormula, cellStore.size, rangeCount)
+    if (!this.calcChain.hasChainFor(formulaCount) || !this.calcChain.coversDirty(dirty.dirtyFormulaCellIndices, dirty.dirtyFormulaCount)) {
       this.calcChain.rebuild(formulaCellIndices, cellStore)
     }
-    const dirty = this.dirtyFrontier.collectDirty(changedRoots, graph, hasFormula, cellStore.size, rangeCount)
     const ordered = this.calcChain.orderDirty(dirty.dirtyFormulaCellIndices, dirty.dirtyFormulaCount)
     return {
       orderedFormulaCellIndices: ordered.orderedFormulaCellIndices,

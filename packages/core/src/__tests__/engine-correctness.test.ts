@@ -7,6 +7,7 @@ import type { EngineOpBatch } from '@bilig/workbook-domain'
 import { SpreadsheetEngine } from '../engine.js'
 import { makeCellKey } from '../workbook-store.js'
 import { runProperty } from '@bilig/test-fuzz'
+import { createEngineSeedSnapshot } from './engine-fuzz-helpers.js'
 
 type CoreCorrectnessAction =
   | { kind: 'values'; range: CellRangeRef; values: LiteralInput[][] }
@@ -763,6 +764,30 @@ describe('engine correctness', () => {
     expect(engine.getDependents(sheetName, 'A1')).toEqual({
       directPrecedents: [],
       directDependents: [],
+    })
+  })
+
+  it('retargets cross-sheet formulas correctly after structural undo followed by another structural edit', async () => {
+    const initialSnapshot = await createEngineSeedSnapshot('cross-sheet-graph', 'correctness-structural-undo-retarget')
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-structural-undo-retarget',
+      replicaId: 'correctness-structural-undo-retarget',
+    })
+    await engine.ready()
+    engine.importSnapshot(initialSnapshot)
+
+    engine.insertRows('Sheet1', 0, 2)
+    expect(engine.undo()).toBe(true)
+    engine.deleteRows('Sheet1', 0, 2)
+
+    expect(
+      engine
+        .exportSnapshot()
+        .sheets.find((sheet) => sheet.name === 'Summary')
+        ?.cells.find((cell) => cell.address === 'D1'),
+    ).toEqual({
+      address: 'D1',
+      formula: 'SUM(Sheet1!B1:B1)',
     })
   })
 

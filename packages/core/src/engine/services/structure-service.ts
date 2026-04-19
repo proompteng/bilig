@@ -564,10 +564,14 @@ export function createEngineStructureService(args: {
         argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
       )
       const touchesChangedTable = formula.compiled.symbolicTables.some((name) => argsForResolve.changedTableNames.has(name))
+      const touchesTargetSheetDependency = formula.compiled.deps.some((dependency) =>
+        dependencyTouchesSheet(dependency, argsForResolve.sheetName),
+      )
+      const shouldBypassTemplateStructuralRewrite = ownerSheetName !== argsForResolve.sheetName && touchesTargetSheetDependency
       const representative = remappedCellsByIndex.get(cellIndex)
       const rewritten =
         !touchesChangedName && !touchesChangedTable
-          ? ((formula.templateId !== undefined
+          ? ((!shouldBypassTemplateStructuralRewrite && formula.templateId !== undefined
               ? rewriteFormulaFromTemplate(
                   formula,
                   {

@@ -77,6 +77,16 @@ export class CalcChain {
     return this.chainFormulaCount === formulaCount
   }
 
+  coversDirty(dirtyFormulaCellIndices: U32, dirtyFormulaCount: number): boolean {
+    for (let index = 0; index < dirtyFormulaCount; index += 1) {
+      const cellIndex = dirtyFormulaCellIndices[index]!
+      if ((this.chainIndexByCell[cellIndex] ?? 0) === 0) {
+        return false
+      }
+    }
+    return true
+  }
+
   orderDirty(dirtyFormulaCellIndices: U32, dirtyFormulaCount: number): CalcChainResult {
     if (dirtyFormulaCount === 0) {
       return {

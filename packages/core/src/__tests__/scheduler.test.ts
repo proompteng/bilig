@@ -81,4 +81,19 @@ describe('RecalcScheduler', () => {
     expect(Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount))).toEqual([10, 131, 130])
     expect(result.rangeNodeVisits).toBe(1)
   })
+
+  it('rebuilds the calc chain when the active formula identities change without a formula-count change', () => {
+    const store = new CellStore()
+    for (let index = 0; index < 3; index += 1) {
+      store.allocate(1, 0, index)
+      store.topoRanks[index] = index
+    }
+
+    const scheduler = new RecalcScheduler()
+    scheduler.rebuildChain([1], store)
+
+    const result = scheduler.collectDirty([2], { getDependents: () => new Uint32Array() }, store, [2], 1, (cellIndex) => cellIndex === 2, 0)
+
+    expect(Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount))).toEqual([2])
+  })
 })
