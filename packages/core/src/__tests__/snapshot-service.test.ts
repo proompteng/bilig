@@ -147,6 +147,17 @@ describe('EngineSnapshotService', () => {
     expect(runtimeImage).toBeDefined()
     expect(runtimeImage?.templateBank.length).toBeGreaterThan(0)
     expect(runtimeImage?.formulaInstances.length).toBe(2)
+    expect(runtimeImage?.sheetCells).toEqual([
+      {
+        sheetName: 'Sheet1',
+        coords: [
+          { row: 0, col: 0 },
+          { row: 0, col: 1 },
+          { row: 0, col: 2 },
+          { row: 0, col: 3 },
+        ],
+      },
+    ])
 
     const restored = new SpreadsheetEngine({
       workbookName: 'snapshot-runtime-image-restored',

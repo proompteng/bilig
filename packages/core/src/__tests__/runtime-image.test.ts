@@ -94,4 +94,66 @@ describe('restoreWorkbookFromRuntimeImage', () => {
     expect(preparedCalls[0]).toMatchObject({ sheetId: 1, row: 0, col: 1, source: 'A1+1', templateId: 7 })
     expect(plainCalls).toHaveLength(0)
   })
+
+  it('prefers runtime-image coordinates over reparsing snapshot addresses during restore', () => {
+    const workbook = new WorkbookStore('runtime-image-coords')
+    const plainCalls: Array<{ mutation: { col: number; formula: string; kind: string; row: number }; sheetId: number }> = []
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'runtime-image-coords' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: '__ignored_literal__', value: 1 },
+            { address: '__ignored_formula__', formula: 'A1+1' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromRuntimeImage({
+      snapshot,
+      runtimeImage: {
+        version: 1,
+        templateBank: [],
+        formulaInstances: [],
+        formulaValues: [],
+        sheetCells: [
+          {
+            sheetName: 'Sheet1',
+            coords: [
+              { row: 0, col: 0 },
+              { row: 0, col: 1 },
+            ],
+          },
+        ],
+      },
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      hydrateTemplateBank: () => {},
+      initializeCellFormulasAt: (refs) => {
+        plainCalls.push(...refs)
+      },
+    })
+
+    const sheet = workbook.getSheet('Sheet1')
+    expect(sheet).toBeDefined()
+    expect(sheet!.grid.get(0, 0)).toBeGreaterThanOrEqual(0)
+    expect(sheet!.grid.get(0, 1)).toBeGreaterThanOrEqual(0)
+    expect(plainCalls).toEqual([
+      {
+        sheetId: 1,
+        mutation: {
+          kind: 'setCellFormula',
+          row: 0,
+          col: 1,
+          formula: 'A1+1',
+        },
+      },
+    ])
+  })
 })

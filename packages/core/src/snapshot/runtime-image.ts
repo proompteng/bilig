@@ -25,6 +25,7 @@ export interface RuntimeImage {
   readonly templateBank: readonly FormulaTemplateSnapshot[]
   readonly formulaInstances: readonly FormulaInstanceSnapshot[]
   readonly formulaValues: readonly RuntimeImageFormulaValueSnapshot[]
+  readonly sheetCells?: readonly RuntimeImageSheetCellsSnapshot[]
 }
 
 export interface RuntimeImageFormulaValueSnapshot {
@@ -32,6 +33,16 @@ export interface RuntimeImageFormulaValueSnapshot {
   readonly row: number
   readonly col: number
   readonly value: CellValue
+}
+
+export interface RuntimeImageSheetCellsSnapshot {
+  readonly sheetName: string
+  readonly coords: readonly RuntimeImageCellCoordinateSnapshot[]
+}
+
+export interface RuntimeImageCellCoordinateSnapshot {
+  readonly row: number
+  readonly col: number
 }
 
 export interface RuntimeImageRestoreArgs {
@@ -65,6 +76,21 @@ export interface HydratedPreparedRuntimeFormulaRef extends PreparedRuntimeFormul
 
 function toFormulaInstanceKey(sheetName: string, row: number, col: number): string {
   return `${sheetName}\t${row}\t${col}`
+}
+
+function resolveRestoredCellCoordinates(args: {
+  readonly sheetName: string
+  readonly cellAddress: string
+  readonly indexedCoordinate: RuntimeImageCellCoordinateSnapshot | undefined
+}): RuntimeImageCellCoordinateSnapshot {
+  if (args.indexedCoordinate) {
+    return args.indexedCoordinate
+  }
+  const parsed = parseCellAddress(args.cellAddress, args.sheetName)
+  return {
+    row: parsed.row,
+    col: parsed.col,
+  }
 }
 
 function restoreWorkbookMetadata(args: {
@@ -239,6 +265,9 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
   args.runtimeImage.formulaValues.forEach((record) => {
     formulaValuesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record.value)
   })
+  const sheetCellsByName = new Map<string, readonly RuntimeImageCellCoordinateSnapshot[]>(
+    (args.runtimeImage.sheetCells ?? []).map((record) => [record.sheetName, record.coords]),
+  )
 
   const formulaRefs: EngineCellMutationRef[] = []
   const preparedFormulaRefs: PreparedRuntimeFormulaRef[] = []
@@ -248,10 +277,15 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     if (sheetId === undefined) {
       throw new Error(`Missing sheet during runtime image restore: ${sheet.name}`)
     }
-    sheet.cells.forEach((cell) => {
-      const parsed = parseCellAddress(cell.address, sheet.name)
-      const formulaInstance = formulaInstancesByAddress.get(toFormulaInstanceKey(sheet.name, parsed.row, parsed.col))
-      const ensured = args.workbook.ensureCellAt(sheetId, parsed.row, parsed.col)
+    const sheetCoords = sheetCellsByName.get(sheet.name)
+    sheet.cells.forEach((cell, index) => {
+      const coords = resolveRestoredCellCoordinates({
+        sheetName: sheet.name,
+        cellAddress: cell.address,
+        indexedCoordinate: sheetCoords?.[index],
+      })
+      const formulaInstance = formulaInstancesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+      const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
       if (cell.formula === undefined && formulaInstance === undefined) {
         writeLiteralToCellStore(args.workbook.cellStore, ensured.cellIndex, cell.value ?? null, args.strings)
         if (cell.value === null) {
@@ -263,19 +297,19 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
         args.workbook.setCellFormat(ensured.cellIndex, cell.format)
       }
       if (formulaInstance) {
-        const cachedValue = formulaValuesByAddress.get(toFormulaInstanceKey(sheet.name, parsed.row, parsed.col))
+        const cachedValue = formulaValuesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
         if (
           formulaInstance.templateId !== undefined &&
           args.resolveTemplateById &&
           args.initializeHydratedPreparedCellFormulasAt &&
           cachedValue !== undefined
         ) {
-          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, parsed.row, parsed.col)
+          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, coords.row, coords.col)
           if (template && !template.compiled.volatile && !template.compiled.producesSpill) {
             hydratedPreparedFormulaRefs.push({
               sheetId,
-              row: parsed.row,
-              col: parsed.col,
+              row: coords.row,
+              col: coords.col,
               source: formulaInstance.source,
               compiled: template.compiled,
               templateId: template.templateId,
@@ -285,12 +319,12 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
           }
         }
         if (formulaInstance.templateId !== undefined && args.resolveTemplateById && args.initializePreparedCellFormulasAt) {
-          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, parsed.row, parsed.col)
+          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, coords.row, coords.col)
           if (template) {
             preparedFormulaRefs.push({
               sheetId,
-              row: parsed.row,
-              col: parsed.col,
+              row: coords.row,
+              col: coords.col,
               source: formulaInstance.source,
               compiled: template.compiled,
               templateId: template.templateId,
@@ -302,8 +336,8 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
           sheetId,
           mutation: {
             kind: 'setCellFormula',
-            row: parsed.row,
-            col: parsed.col,
+            row: coords.row,
+            col: coords.col,
             formula: formulaInstance.source,
           },
         })
@@ -312,8 +346,8 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
           sheetId,
           mutation: {
             kind: 'setCellFormula',
-            row: parsed.row,
-            col: parsed.col,
+            row: coords.row,
+            col: coords.col,
             formula: cell.formula,
           },
         })

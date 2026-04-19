@@ -151,6 +151,7 @@ export function createEngineSnapshotService(args: {
             }
           }
 
+          const runtimeImageSheetCells: Array<{ sheetName: string; coords: Array<{ row: number; col: number }> }> = []
           const workbookSnapshot: WorkbookSnapshot = {
             version: 1,
             workbook,
@@ -159,7 +160,8 @@ export function createEngineSnapshotService(args: {
               .map((sheet) => {
                 const metadata = exportSheetMetadata(args.state.workbook, sheet.name)
                 const cells: WorkbookSnapshot['sheets'][number]['cells'] = []
-                sheet.grid.forEachCell((cellIndex) => {
+                const sheetCellCoords: Array<{ row: number; col: number }> = []
+                sheet.grid.forEachCellEntry((cellIndex, row, col) => {
                   const cellSnapshot = args.getCellByIndex(cellIndex)
                   const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
                   if ((cellSnapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
@@ -191,7 +193,9 @@ export function createEngineSnapshotService(args: {
                     cell.value = null
                   }
                   cells.push(cell)
+                  sheetCellCoords.push({ row, col })
                 })
+                runtimeImageSheetCells.push({ sheetName: sheet.name, coords: sheetCellCoords })
                 return metadata
                   ? { id: sheet.id, name: sheet.name, order: sheet.order, metadata, cells }
                   : { id: sheet.id, name: sheet.name, order: sheet.order, cells }
@@ -209,6 +213,7 @@ export function createEngineSnapshotService(args: {
                 col: record.col,
                 value: args.getCellByIndex(record.cellIndex).value,
               })),
+              sheetCells: runtimeImageSheetCells,
             } satisfies RuntimeImage)
           }
           return workbookSnapshot
