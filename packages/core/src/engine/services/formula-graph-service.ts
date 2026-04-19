@@ -5,6 +5,7 @@ import type { CycleDetector } from '../../cycle-detection.js'
 import { makeCellEntity } from '../../entity-ids.js'
 import { growUint32 } from '../../engine-buffer-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
+import { DynamicTopo } from '../../scheduler/dynamic-topo.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import { EngineFormulaGraphError } from '../errors.js'
 import type { Float64Arena, Uint32Arena } from '@bilig/formula'
@@ -12,6 +13,7 @@ import { addEngineCounter, type EngineCounters } from '../../perf/engine-counter
 
 export interface EngineFormulaGraphService {
   readonly rebuildTopoRanks: () => Effect.Effect<void, EngineFormulaGraphError>
+  readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => Effect.Effect<boolean, EngineFormulaGraphError>
   readonly detectCycles: () => Effect.Effect<void, EngineFormulaGraphError>
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
@@ -20,6 +22,7 @@ export interface EngineFormulaGraphService {
   readonly scheduleWasmProgramSync: () => Effect.Effect<void, EngineFormulaGraphError>
   readonly flushWasmProgramSync: () => Effect.Effect<void, EngineFormulaGraphError>
   readonly rebuildTopoRanksNow: () => void
+  readonly repairTopoRanksNow: (changedFormulaCells: readonly number[] | U32) => boolean
   readonly detectCyclesNow: () => void
   readonly scheduleWasmProgramSyncNow: () => void
   readonly flushWasmProgramSyncNow: () => void
@@ -105,6 +108,8 @@ export function createEngineFormulaGraphService(args: {
     }
   }
 
+  const dynamicTopo = new DynamicTopo()
+
   const rebuildTopoRanksNow = (): void => {
     if (args.state.counters) {
       addEngineCounter(args.state.counters, 'topoRebuilds')
@@ -151,6 +156,17 @@ export function createEngineFormulaGraphService(args: {
       }
     }
   }
+
+  const repairTopoRanksNow = (changedFormulaCells: readonly number[] | U32): boolean =>
+    dynamicTopo.repair(
+      changedFormulaCells,
+      {
+        forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
+        collectFormulaDependents: args.collectFormulaDependents,
+      },
+      args.state.workbook.cellStore,
+      (cellIndex) => args.state.formulas.has(cellIndex),
+    ).repaired
 
   const detectCyclesNow = (): void => {
     const result = args.cycleDetector.detect(
@@ -284,6 +300,16 @@ export function createEngineFormulaGraphService(args: {
           }),
       })
     },
+    repairTopoRanks(changedFormulaCells) {
+      return Effect.try({
+        try: () => repairTopoRanksNow(changedFormulaCells),
+        catch: (cause) =>
+          new EngineFormulaGraphError({
+            message: graphErrorMessage('Failed to repair topo ranks for the affected formula slice', cause),
+            cause,
+          }),
+      })
+    },
     detectCycles() {
       return Effect.try({
         try: () => {
@@ -333,6 +359,7 @@ export function createEngineFormulaGraphService(args: {
       })
     },
     rebuildTopoRanksNow,
+    repairTopoRanksNow,
     detectCyclesNow,
     scheduleWasmProgramSyncNow,
     flushWasmProgramSyncNow,

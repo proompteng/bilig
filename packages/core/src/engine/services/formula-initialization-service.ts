@@ -69,9 +69,17 @@ export function createEngineFormulaInitializationService(args: {
   readonly syncDynamicRanges: (formulaChangedCount: number) => number
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly getChangedInputBuffer: () => U32
+  readonly getChangedFormulaBuffer: () => U32
   readonly rebuildTopoRanks: () => void
+  readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
   readonly detectCycles: () => void
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
+  readonly recalculatePreordered: (
+    changedRoots: readonly number[] | U32,
+    orderedFormulaCellIndices: readonly number[] | U32,
+    orderedFormulaCount: number,
+    kernelSyncRoots?: readonly number[] | U32,
+  ) => U32
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
@@ -79,6 +87,15 @@ export function createEngineFormulaInitializationService(args: {
   readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
 }): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
+  const hasCycleMembersNow = (): boolean => {
+    let found = false
+    args.state.formulas.forEach((_formula, cellIndex) => {
+      if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+        found = true
+      }
+    })
+    return found
+  }
   const resolveSheetName = (sheetId: number): string => {
     const cached = sheetNameById.get(sheetId)
     if (cached !== undefined) {
@@ -109,6 +126,7 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     args.beginMutationCollection()
+    const hadCycleMembersBefore = hasCycleMembersNow()
     let changedInputCount = 0
     let formulaChangedCount = 0
     let topologyChanged = false
@@ -122,6 +140,7 @@ export function createEngineFormulaInitializationService(args: {
     const pendingFormulaCellIndices = hadExistingFormulas ? undefined : new Set<number>(targetCellIndices)
     let canAssignTopoInBatch = !hadExistingFormulas
     let nextTopoRank = 0
+    const orderedPreparedCellIndices: number[] = []
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -135,6 +154,7 @@ export function createEngineFormulaInitializationService(args: {
             compileMs += performance.now() - compileStarted
             formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
             topologyChanged = true
+            orderedPreparedCellIndices.push(prepared.cellIndex)
             if (canAssignTopoInBatch && pendingFormulaCellIndices) {
               const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
               if (
@@ -166,17 +186,27 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
-      args.rebuildTopoRanks()
-      args.detectCycles()
-      args.state.formulas.forEach((_formula, cellIndex) => {
-        if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
-          changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-        }
-      })
+      const repaired =
+        !hadCycleMembersBefore &&
+        formulaChangedCount > 0 &&
+        args.repairTopoRanks(args.getChangedFormulaBuffer().subarray(0, formulaChangedCount))
+      if (!repaired) {
+        args.rebuildTopoRanks()
+        args.detectCycles()
+        args.state.formulas.forEach((_formula, cellIndex) => {
+          if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+            changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
+          }
+        })
+      }
     }
     formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
     const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
-    let recalculated = args.recalculate(args.composeMutationRoots(changedInputCount, formulaChangedCount), changedInputArray)
+    const changedRoots = args.composeMutationRoots(changedInputCount, formulaChangedCount)
+    let recalculated =
+      canAssignTopoInBatch && !hadExistingFormulas && orderedPreparedCellIndices.length > 0
+        ? args.recalculatePreordered(changedRoots, orderedPreparedCellIndices, orderedPreparedCellIndices.length, changedInputArray)
+        : args.recalculate(changedRoots, changedInputArray)
     recalculated = args.reconcilePivotOutputs(recalculated, false)
     void recalculated
     const lastMetrics = args.state.getLastMetrics()
@@ -240,6 +270,7 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     args.beginMutationCollection()
+    const hadCycleMembersBefore = hasCycleMembersNow()
     let topologyChanged = false
     let compileMs = 0
     const reservedNewCells = Math.max(potentialNewCells ?? refs.length, refs.length)
@@ -285,8 +316,20 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
-      args.rebuildTopoRanks()
-      args.detectCycles()
+      const repaired =
+        !hadCycleMembersBefore &&
+        refs.length > 0 &&
+        args.repairTopoRanks(
+          Uint32Array.from(
+            targetCellIndices.length > 0
+              ? targetCellIndices
+              : refs.map((ref) => args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col)),
+          ),
+        )
+      if (!repaired) {
+        args.rebuildTopoRanks()
+        args.detectCycles()
+      }
     }
     const lastMetrics = args.state.getLastMetrics()
     args.state.setLastMetrics({

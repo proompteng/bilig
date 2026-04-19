@@ -51,6 +51,34 @@ describe('EngineFormulaGraphService', () => {
     expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!])
   })
 
+  it('repairs topo ranks for local acyclic formula slices without a full rebuild', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'graph-repair-topo' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 2)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+    engine.setCellFormula('Sheet1', 'C1', 'B1+1')
+    engine.setCellFormula('Sheet1', 'D1', 'C1+1')
+
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+    const c1Index = engine.workbook.getCellIndex('Sheet1', 'C1')
+    const d1Index = engine.workbook.getCellIndex('Sheet1', 'D1')
+
+    expect(b1Index).toBeDefined()
+    expect(c1Index).toBeDefined()
+    expect(d1Index).toBeDefined()
+
+    engine.workbook.cellStore.topoRanks[b1Index!] = 25
+    engine.workbook.cellStore.topoRanks[c1Index!] = 1
+    engine.workbook.cellStore.topoRanks[d1Index!] = 0
+
+    const repaired = Effect.runSync(getGraphService(engine).repairTopoRanks(Uint32Array.of(c1Index!)))
+
+    expect(repaired).toBe(true)
+    expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[c1Index!])
+    expect(engine.workbook.cellStore.topoRanks[c1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!])
+  })
+
   it('restores cycle flags and error values when cycle detection reruns through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'graph-cycle' })
     await engine.ready()

@@ -84,10 +84,11 @@ describe('RecalcScheduler edge cases', () => {
     }
 
     const scheduler = new RecalcScheduler()
-    Reflect.set(scheduler, 'exactLookupEpoch', 0xffff_fffe)
-    Reflect.set(scheduler, 'sortedLookupEpoch', 0xffff_fffe)
-    const visitedExactLookupColumns = readMapField(scheduler, 'visitedExactLookupColumns')
-    const visitedSortedLookupColumns = readMapField(scheduler, 'visitedSortedLookupColumns')
+    const dirtyFrontier = readObjectField(scheduler, 'dirtyFrontier')
+    Reflect.set(dirtyFrontier, 'exactLookupEpoch', 0xffff_fffe)
+    Reflect.set(dirtyFrontier, 'sortedLookupEpoch', 0xffff_fffe)
+    const visitedExactLookupColumns = readMapField(dirtyFrontier, 'visitedExactLookupColumns')
+    const visitedSortedLookupColumns = readMapField(dirtyFrontier, 'visitedSortedLookupColumns')
     visitedExactLookupColumns.set(10, 99)
     visitedSortedLookupColumns.set(11, 99)
 
@@ -100,8 +101,8 @@ describe('RecalcScheduler edge cases', () => {
       0,
     )
 
-    expect(readNumericField(scheduler, 'exactLookupEpoch')).toBe(1)
-    expect(readNumericField(scheduler, 'sortedLookupEpoch')).toBe(1)
+    expect(readNumericField(dirtyFrontier, 'exactLookupEpoch')).toBe(1)
+    expect(readNumericField(dirtyFrontier, 'sortedLookupEpoch')).toBe(1)
     expect(visitedExactLookupColumns.size).toBe(0)
     expect(visitedSortedLookupColumns.size).toBe(0)
     expect(Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount))).toEqual([2])
@@ -157,6 +158,14 @@ function readMapField(target: object, key: string): Map<unknown, unknown> {
   const value = Reflect.get(target, key)
   if (!(value instanceof Map)) {
     throw new Error(`Expected map field ${key}`)
+  }
+  return value
+}
+
+function readObjectField(target: object, key: string): object {
+  const value = Reflect.get(target, key)
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`Expected object field ${key}`)
   }
   return value
 }

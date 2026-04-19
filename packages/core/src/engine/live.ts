@@ -418,16 +418,15 @@ export function createEngineServiceRuntime(args: {
     clearOwnedPivot: (pivotRecord) => requireService(pivot, 'pivot').clearOwnedPivotNow(pivotRecord),
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
-    getTemplateSnapshot: (templateId) => formulaTemplates.getTemplateSnapshot(templateId),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
-      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, preservesBinding }) => {
+      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, templateId, preservesBinding }) => {
         try {
           if (compiled) {
-            if (preservesBinding === true && binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled)) {
+            if (preservesBinding === true && binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateId)) {
               return
             }
-            binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled)
+            binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId)
           } else {
             binding.bindFormulaNow(cellIndex, ownerSheetName, source)
           }
@@ -511,9 +510,18 @@ export function createEngineServiceRuntime(args: {
     composeMutationRoots: (changedInputCount, formulaChangedCount) =>
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    getChangedFormulaBuffer: () => scratch.getChangedFormulaBufferNow(),
     rebuildTopoRanks: () => graph.rebuildTopoRanksNow(),
+    repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
+    recalculatePreordered: (changedRoots, orderedFormulaCellIndices, orderedFormulaCount, kernelSyncRoots) =>
+      requireService(recalc, 'recalc').recalculatePreorderedNowSync(
+        changedRoots,
+        orderedFormulaCellIndices,
+        orderedFormulaCount,
+        kernelSyncRoots,
+      ),
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, 'recalc').reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     getBatchMutationDepth: () => args.operation.getBatchMutationDepth(),
@@ -564,12 +572,14 @@ export function createEngineServiceRuntime(args: {
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
     captureChangedPatches: (changedCellIndices) => patchEmitter.captureChangedPatches(changedCellIndices),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    getChangedFormulaBuffer: () => scratch.getChangedFormulaBufferNow(),
     ensureRecalcScratchCapacity: (size) => scratch.ensureRecalcCapacityNow(size),
     estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
     ensureCellTracked: (sheetName, address) => support.ensureCellTrackedNow(sheetName, address),
     resetMaterializedCellScratch: (expectedSize) => support.resetMaterializedCellScratchNow(expectedSize),
     syncDynamicRanges: (formulaChangedCount) => support.syncDynamicRangesNow(formulaChangedCount),
     rebuildTopoRanks: () => graph.rebuildTopoRanksNow(),
+    repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),

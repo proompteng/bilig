@@ -181,6 +181,32 @@ describe('EngineOperationService', () => {
     expect(engine.getColumnMetadata('Sheet1')).toEqual([{ sheetName: 'Sheet1', start: 0, count: 1, size: 90, hidden: true }])
   })
 
+  it('repairs topo ranks locally for acyclic formula rewrites without forcing a full rebuild', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-dynamic-topo' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+    engine.setCellFormula('Sheet1', 'C1', 'B1+1')
+    engine.setCellFormula('Sheet1', 'D1', 'C1+1')
+
+    engine.resetPerformanceCounters()
+    engine.setCellFormula('Sheet1', 'C1', 'B1+A1')
+
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+    const c1Index = engine.workbook.getCellIndex('Sheet1', 'C1')
+    const d1Index = engine.workbook.getCellIndex('Sheet1', 'D1')
+
+    expect(b1Index).toBeDefined()
+    expect(c1Index).toBeDefined()
+    expect(d1Index).toBeDefined()
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(engine.getPerformanceCounters().topoRebuilds).toBe(0)
+    expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[c1Index!])
+    expect(engine.workbook.cellStore.topoRanks[c1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!])
+  })
+
   it('treats batched clears of already-empty tracked dependency cells as no-ops', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'operation-batch-clear-empty-noop' })
     await engine.ready()

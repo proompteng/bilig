@@ -282,12 +282,14 @@ export function createEngineOperationService(args: {
   readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
   readonly captureChangedPatches: (changedCellIndices: readonly number[] | U32) => readonly EngineCellPatch[]
   readonly getChangedInputBuffer: () => U32
+  readonly getChangedFormulaBuffer: () => U32
   readonly ensureRecalcScratchCapacity: (size: number) => void
   readonly ensureCellTracked: (sheetName: string, address: string) => number
   readonly estimatePotentialNewCells: (ops: readonly EngineOp[]) => number
   readonly resetMaterializedCellScratch: (expectedSize: number) => void
   readonly syncDynamicRanges: (formulaChangedCount: number) => number
   readonly rebuildTopoRanks: () => void
+  readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
   readonly detectCycles: () => void
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
@@ -734,6 +736,16 @@ export function createEngineOperationService(args: {
       changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
     })
     return changedInputCount
+  }
+
+  const hasCycleMembersNow = (): boolean => {
+    let found = false
+    args.state.formulas.forEach((_formula, cellIndex) => {
+      if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+        found = true
+      }
+    })
+    return found
   }
 
   const hasTrackedExactLookupDependents = (sheetId: number, col: number): boolean => {
@@ -1201,6 +1213,7 @@ export function createEngineOperationService(args: {
     let refreshAllPivots = false
     let appliedOps = 0
     const canSkipOrderChecks = source !== 'remote'
+    const hadCycleMembersBefore = hasCycleMembersNow()
 
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops)
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
@@ -1839,9 +1852,17 @@ export function createEngineOperationService(args: {
     }
 
     if (topologyChanged) {
-      args.rebuildTopoRanks()
-      args.detectCycles()
-      changedInputCount = markCycleMemberInputsChanged(changedInputCount)
+      const repaired =
+        !hadCycleMembersBefore &&
+        !sheetDeleted &&
+        !structuralInvalidation &&
+        formulaChangedCount > 0 &&
+        args.repairTopoRanks(args.getChangedFormulaBuffer().subarray(0, formulaChangedCount))
+      if (!repaired) {
+        args.rebuildTopoRanks()
+        args.detectCycles()
+        changedInputCount = markCycleMemberInputsChanged(changedInputCount)
+      }
     }
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
@@ -1939,6 +1960,7 @@ export function createEngineOperationService(args: {
     const hasWatchedCellListeners = args.state.events.hasCellListeners()
     const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
     const trackExplicitChanges = !isRestore && requiresChangedSet
+    const hadCycleMembersBefore = hasCycleMembersNow()
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
@@ -2356,9 +2378,15 @@ export function createEngineOperationService(args: {
     }
 
     if (topologyChanged) {
-      args.rebuildTopoRanks()
-      args.detectCycles()
-      changedInputCount = markCycleMemberInputsChanged(changedInputCount)
+      const repaired =
+        !hadCycleMembersBefore &&
+        formulaChangedCount > 0 &&
+        args.repairTopoRanks(args.getChangedFormulaBuffer().subarray(0, formulaChangedCount))
+      if (!repaired) {
+        args.rebuildTopoRanks()
+        args.detectCycles()
+        changedInputCount = markCycleMemberInputsChanged(changedInputCount)
+      }
     }
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0

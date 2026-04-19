@@ -21,7 +21,6 @@ import {
   retargetStructurallyRewrittenTemplateInstance,
   type StructurallyRewrittenTemplate,
 } from '../../formula/structural-retargeting.js'
-import type { FormulaTemplateSnapshot } from '../../formula/template-bank.js'
 import type { RuntimeFormula } from '../runtime-state.js'
 import { EngineStructureError } from '../errors.js'
 import { makeCellKey, normalizeDefinedName, type WorkbookPivotRecord, type WorkbookStore } from '../../workbook-store.js'
@@ -46,6 +45,7 @@ interface StructuralFormulaRebindInput {
   readonly ownerSheetName: string
   readonly source: string
   readonly compiled?: CompiledFormula
+  readonly templateId?: number
   readonly preservesBinding?: boolean
   readonly preservesValue?: boolean
 }
@@ -253,7 +253,6 @@ export function createEngineStructureService(args: {
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[]
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
   readonly retargetRangeDependencies: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
-  readonly getTemplateSnapshot: (templateId: number) => FormulaTemplateSnapshot | undefined
   readonly rebindFormulaCells: (inputs: readonly StructuralFormulaRebindInput[]) => void
 }): EngineStructureService {
   const shouldCaptureStoredCell = (cellIndex: number): boolean => {
@@ -481,39 +480,40 @@ export function createEngineStructureService(args: {
 
     return (
       formula: RuntimeFormula,
-      cellIndex: number,
-      ownerSheetName: string,
+      representative: {
+        readonly templateId: number
+        readonly ownerSheetName: string
+        readonly targetSheetName: string
+        readonly representativeRow: number
+        readonly representativeCol: number
+        readonly ownerRow: number
+        readonly ownerCol: number
+      },
       targetSheetName: string,
       transform: StructuralAxisTransform,
     ): { source: string; compiled: CompiledFormula; reusedProgram: boolean } | undefined => {
       if (formula.directAggregate !== undefined || formula.directCriteria !== undefined) {
         return undefined
       }
-      const templateId = formula.templateId
-      if (templateId === undefined) {
-        return undefined
-      }
-      const ownerRow = args.state.workbook.cellStore.rows[cellIndex]
-      const ownerCol = args.state.workbook.cellStore.cols[cellIndex]
-      if (ownerRow === undefined || ownerCol === undefined) {
-        return undefined
-      }
-
       const cacheKey =
-        `${templateId}:${ownerSheetName}:${targetSheetName}:${transform.kind}:${transform.axis}:${transform.start}:${transform.count}:` +
+        `${representative.templateId}:${representative.ownerSheetName}:${targetSheetName}:${transform.kind}:${transform.axis}:${transform.start}:${transform.count}:` +
         `${transform.kind === 'move' ? transform.target : ''}`
       let rewrittenTemplate = cache.get(cacheKey)
       if (rewrittenTemplate === undefined) {
-        const template = args.getTemplateSnapshot(templateId)
         rewrittenTemplate =
-          template === undefined
-            ? null
-            : (rewriteTemplateForStructuralTransform({
-                template,
-                ownerSheetName,
-                targetSheetName,
-                transform,
-              }) ?? null)
+          rewriteTemplateForStructuralTransform({
+            template: {
+              id: representative.templateId,
+              templateKey: `runtime-template-${representative.templateId}`,
+              baseSource: formula.source,
+              baseRow: representative.representativeRow,
+              baseCol: representative.representativeCol,
+              compiled: formula.compiled,
+            },
+            ownerSheetName: representative.ownerSheetName,
+            targetSheetName,
+            transform,
+          }) ?? null
         cache.set(cacheKey, rewrittenTemplate)
       }
       if (rewrittenTemplate === null) {
@@ -523,8 +523,8 @@ export function createEngineStructureService(args: {
       try {
         return retargetStructurallyRewrittenTemplateInstance({
           rewrittenTemplate,
-          ownerRow,
-          ownerCol,
+          ownerRow: representative.ownerRow,
+          ownerCol: representative.ownerCol,
         })
       } catch {
         return undefined
@@ -536,10 +536,12 @@ export function createEngineStructureService(args: {
     readonly formulaCellIndices: readonly number[]
     readonly sheetName: string
     readonly transform: StructuralAxisTransform
+    readonly transaction: StructuralTransaction
     readonly changedDefinedNames: ReadonlySet<string>
     readonly changedTableNames: ReadonlySet<string>
   }): StructuralFormulaRebindInput[] => {
     const inputs: StructuralFormulaRebindInput[] = []
+    const remappedCellsByIndex = new Map(argsForResolve.transaction.remappedCells.map((entry) => [entry.cellIndex, entry] as const))
     argsForResolve.formulaCellIndices.forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
       if (!formula) {
@@ -549,14 +551,34 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return
       }
+      const ownerRow = args.state.workbook.cellStore.rows[cellIndex]
+      const ownerCol = args.state.workbook.cellStore.cols[cellIndex]
+      if (ownerRow === undefined || ownerCol === undefined) {
+        return
+      }
       const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
         argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
       )
       const touchesChangedTable = formula.compiled.symbolicTables.some((name) => argsForResolve.changedTableNames.has(name))
+      const representative = remappedCellsByIndex.get(cellIndex)
       const rewritten =
         !touchesChangedName && !touchesChangedTable
-          ? (rewriteFormulaFromTemplate(formula, cellIndex, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform) ??
-            rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform))
+          ? ((formula.templateId !== undefined
+              ? rewriteFormulaFromTemplate(
+                  formula,
+                  {
+                    templateId: formula.templateId,
+                    ownerSheetName,
+                    targetSheetName: argsForResolve.sheetName,
+                    representativeRow: representative?.fromRow ?? ownerRow,
+                    representativeCol: representative?.fromCol ?? ownerCol,
+                    ownerRow,
+                    ownerCol,
+                  },
+                  argsForResolve.sheetName,
+                  argsForResolve.transform,
+                )
+              : undefined) ?? rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform))
           : rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform)
       if (!rewritten) {
         if (!touchesChangedName && !touchesChangedTable && formula.directAggregate !== undefined) {
@@ -573,6 +595,7 @@ export function createEngineStructureService(args: {
                 ownerSheetName,
                 source: formula.source,
                 compiled: formula.compiled,
+                ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
               }
             : {
                 cellIndex,
@@ -608,6 +631,7 @@ export function createEngineStructureService(args: {
         ownerSheetName,
         source: rewritten.source,
         compiled: rewritten.compiled,
+        ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
         preservesBinding: preservesBinding && !rewrittenPlaceholderDependencyNeedsRebind,
         preservesValue:
           structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
@@ -1141,6 +1165,7 @@ export function createEngineStructureService(args: {
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex)),
             sheetName,
             transform,
+            transaction,
             changedDefinedNames,
             changedTableNames,
           })

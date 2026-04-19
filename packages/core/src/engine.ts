@@ -396,6 +396,8 @@ export class SpreadsheetEngine {
         refreshRangeDependencies: () => {
           return
         },
+        getChangedFormulaBuffer: () => new Uint32Array(),
+        repairTopoRanks: () => false,
         getEntityDependents: () => new Uint32Array(),
         collectFormulaDependents: () => new Uint32Array(),
         noteExactLookupLiteralWrite: () => {

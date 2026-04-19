@@ -135,6 +135,14 @@ function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unkno
   return engine.formulas.get(cellIndex)
 }
 
+function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): number | undefined {
+  const runtimeFormula = readRuntimeFormula(engine, cellIndex)
+  if (!isRecord(runtimeFormula)) {
+    return undefined
+  }
+  return typeof runtimeFormula.templateId === 'number' ? runtimeFormula.templateId : undefined
+}
+
 function isRuntimeFormulaWithDependencies(value: unknown): value is RuntimeFormulaWithDependencies {
   return isRecord(value) && value.dependencyIndices instanceof Uint32Array
 }
@@ -4991,11 +4999,14 @@ describe('SpreadsheetEngine', () => {
     }
 
     const planIdsBeforeInsert = new Map<string, number>()
+    const templateIdsBeforeInsert = new Map<string, number | undefined>()
     for (let row = 1; row <= 4; row += 1) {
       const cIndex = engine.workbook.getCellIndex('Sheet1', `C${row}`)
       const dIndex = engine.workbook.getCellIndex('Sheet1', `D${row}`)
       planIdsBeforeInsert.set(`C${row}`, readRuntimeFormula(engine, cIndex!)!.planId)
       planIdsBeforeInsert.set(`D${row}`, readRuntimeFormula(engine, dIndex!)!.planId)
+      templateIdsBeforeInsert.set(`C${row}`, readRuntimeTemplateId(engine, cIndex!))
+      templateIdsBeforeInsert.set(`D${row}`, readRuntimeTemplateId(engine, dIndex!))
     }
 
     engine.insertColumns('Sheet1', 1, 1)
@@ -5015,6 +5026,8 @@ describe('SpreadsheetEngine', () => {
       const eIndex = engine.workbook.getCellIndex('Sheet1', `E${row}`)
       expect(readRuntimeFormula(engine, dIndex!)?.planId).toBe(planIdsBeforeInsert.get(`C${row}`))
       expect(readRuntimeFormula(engine, eIndex!)?.planId).toBe(planIdsBeforeInsert.get(`D${row}`))
+      expect(readRuntimeTemplateId(engine, dIndex!)).toBe(templateIdsBeforeInsert.get(`C${row}`))
+      expect(readRuntimeTemplateId(engine, eIndex!)).toBe(templateIdsBeforeInsert.get(`D${row}`))
     }
 
     engine.deleteColumns('Sheet1', 1, 1)
@@ -5030,6 +5043,12 @@ describe('SpreadsheetEngine', () => {
         tag: ValueTag.Number,
         value: row * 6,
       })
+      const cIndex = engine.workbook.getCellIndex('Sheet1', `C${row}`)
+      const dIndex = engine.workbook.getCellIndex('Sheet1', `D${row}`)
+      expect(readRuntimeFormula(engine, cIndex!)?.planId).toBe(planIdsBeforeInsert.get(`C${row}`))
+      expect(readRuntimeFormula(engine, dIndex!)?.planId).toBe(planIdsBeforeInsert.get(`D${row}`))
+      expect(readRuntimeTemplateId(engine, cIndex!)).toBe(templateIdsBeforeInsert.get(`C${row}`))
+      expect(readRuntimeTemplateId(engine, dIndex!)).toBe(templateIdsBeforeInsert.get(`D${row}`))
     }
   })
 

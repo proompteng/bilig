@@ -31,11 +31,23 @@ export interface EngineRecalcService {
   readonly recalculateNow: () => Effect.Effect<number[], EngineRecalcError>
   readonly recalculateDirty: (dirtyRegions: ReadonlyArray<DirtyRegion>) => Effect.Effect<number[], EngineRecalcError>
   readonly recalculateDifferential: () => Effect.Effect<{ js: CellSnapshot[]; wasm: CellSnapshot[]; drift: string[] }, EngineRecalcError>
+  readonly recalculatePreordered: (
+    changedRoots: readonly number[] | U32,
+    orderedFormulaCellIndices: readonly number[] | U32,
+    orderedFormulaCount: number,
+    kernelSyncRoots?: readonly number[] | U32,
+  ) => Effect.Effect<U32, EngineRecalcError>
   readonly recalculate: (
     changedRoots: readonly number[] | U32,
     kernelSyncRoots?: readonly number[] | U32,
   ) => Effect.Effect<U32, EngineRecalcError>
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => Effect.Effect<U32, EngineRecalcError>
+  readonly recalculatePreorderedNowSync: (
+    changedRoots: readonly number[] | U32,
+    orderedFormulaCellIndices: readonly number[] | U32,
+    orderedFormulaCount: number,
+    kernelSyncRoots?: readonly number[] | U32,
+  ) => U32
   readonly recalculateNowSync: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly reconcilePivotOutputsNow: (baseChanged: U32, forceAllPivots?: boolean) => U32
 }
@@ -63,6 +75,17 @@ function consumeVolatileRandomValues(state: RecalcVolatileState, count: number, 
   const values = state.randomValues.slice(state.randomCursor, state.randomCursor + count)
   state.randomCursor += count
   return Float64Array.from(values)
+}
+
+function toOrderedUint32(ordered: readonly number[] | U32, orderedCount: number): U32 {
+  if (ordered instanceof Uint32Array) {
+    return ordered
+  }
+  const next = new Uint32Array(orderedCount)
+  for (let index = 0; index < orderedCount; index += 1) {
+    next[index] = ordered[index] ?? 0
+  }
+  return next
 }
 
 export function createEngineRecalcService(args: {
@@ -152,7 +175,14 @@ export function createEngineRecalcService(args: {
     return changedCellIndices.length === 0 ? args.emptyChangedSet() : Uint32Array.from(changedCellIndices)
   }
 
-  const recalculate = (changedRoots: readonly number[] | U32, kernelSyncRoots: readonly number[] | U32 = changedRoots): U32 => {
+  const recalculateInternal = (
+    changedRoots: readonly number[] | U32,
+    kernelSyncRoots: readonly number[] | U32,
+    firstPassOrder?: {
+      orderedFormulaCellIndices: readonly number[] | U32
+      orderedFormulaCount: number
+    },
+  ): U32 => {
     const started = args.performanceNow()
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1)
     let pendingKernelSync = args.getPendingKernelSync()
@@ -177,8 +207,9 @@ export function createEngineRecalcService(args: {
 
     const allChangedRoots = [...changedRoots]
     const allOrdered: number[] = []
-    let singlePassOrdered: U32 | null = null
+    let singlePassOrdered: readonly number[] | U32 | null = null
     let singlePassOrderedCount = 0
+    let pendingFirstPassOrder = firstPassOrder
     let passRoots = [...changedRoots]
     let passKernelRoots = [...kernelSyncRoots]
     let totalOrderedCount = 0
@@ -214,12 +245,22 @@ export function createEngineRecalcService(args: {
       return batchCount
     }
 
-    while (passRoots.length > 0) {
-      const scheduled = args.dirtyScheduler.collectDirty(passRoots)
-      const ordered = scheduled.orderedFormulaCellIndices
-      const orderedCount = scheduled.orderedFormulaCount
+    while (pendingFirstPassOrder || passRoots.length > 0) {
+      let ordered: readonly number[] | U32
+      let orderedCount: number
+      let rangeNodeVisits = 0
+      if (pendingFirstPassOrder) {
+        ordered = pendingFirstPassOrder.orderedFormulaCellIndices
+        orderedCount = pendingFirstPassOrder.orderedFormulaCount
+        pendingFirstPassOrder = undefined
+      } else {
+        const scheduled = args.dirtyScheduler.collectDirty(passRoots)
+        ordered = scheduled.orderedFormulaCellIndices
+        orderedCount = scheduled.orderedFormulaCount
+        rangeNodeVisits = scheduled.rangeNodeVisits
+      }
       totalOrderedCount += orderedCount
-      totalRangeNodeVisits += scheduled.rangeNodeVisits
+      totalRangeNodeVisits += rangeNodeVisits
       if (singlePassOrdered === null && allOrdered.length === 0) {
         singlePassOrdered = ordered
         singlePassOrderedCount = orderedCount
@@ -438,12 +479,30 @@ export function createEngineRecalcService(args: {
     if (singlePassOrdered !== null) {
       return totalOrderedCount === 0 && allChangedRoots.length === 0
         ? args.emptyChangedSet()
-        : args.composeChangedRootsAndOrdered(allChangedRoots, singlePassOrdered, singlePassOrderedCount)
+        : args.composeChangedRootsAndOrdered(
+            allChangedRoots,
+            toOrderedUint32(singlePassOrdered, singlePassOrderedCount),
+            singlePassOrderedCount,
+          )
     }
     return totalOrderedCount === 0 && allChangedRoots.length === 0
       ? args.emptyChangedSet()
       : args.composeChangedRootsAndOrdered(allChangedRoots, Uint32Array.from(allOrdered), allOrdered.length)
   }
+
+  const recalculate = (changedRoots: readonly number[] | U32, kernelSyncRoots: readonly number[] | U32 = changedRoots): U32 =>
+    recalculateInternal(changedRoots, kernelSyncRoots)
+
+  const recalculatePreordered = (
+    changedRoots: readonly number[] | U32,
+    orderedFormulaCellIndices: readonly number[] | U32,
+    orderedFormulaCount: number,
+    kernelSyncRoots: readonly number[] | U32 = changedRoots,
+  ): U32 =>
+    recalculateInternal(changedRoots, kernelSyncRoots, {
+      orderedFormulaCellIndices,
+      orderedFormulaCount,
+    })
 
   const reconcilePivotOutputs = (baseChanged: U32, forceAllPivots = false): U32 => {
     let aggregate = baseChanged
@@ -465,6 +524,16 @@ export function createEngineRecalcService(args: {
   }
 
   return {
+    recalculatePreordered(changedRoots, orderedFormulaCellIndices, orderedFormulaCount, kernelSyncRoots = changedRoots) {
+      return Effect.try({
+        try: () => recalculatePreordered(changedRoots, orderedFormulaCellIndices, orderedFormulaCount, kernelSyncRoots),
+        catch: (cause) =>
+          new EngineRecalcError({
+            message: 'Failed to recalculate workbook state from a preordered formula batch',
+            cause,
+          }),
+      })
+    },
     recalculate(changedRoots, kernelSyncRoots = changedRoots) {
       return Effect.try({
         try: () => recalculate(changedRoots, kernelSyncRoots),
@@ -485,8 +554,6 @@ export function createEngineRecalcService(args: {
           }),
       })
     },
-    recalculateNowSync: recalculate,
-    reconcilePivotOutputsNow: reconcilePivotOutputs,
     recalculateNow() {
       return Effect.try({
         try: () => {
@@ -656,5 +723,8 @@ export function createEngineRecalcService(args: {
           }),
       })
     },
+    recalculatePreorderedNowSync: recalculatePreordered,
+    recalculateNowSync: recalculate,
+    reconcilePivotOutputsNow: reconcilePivotOutputs,
   }
 }
