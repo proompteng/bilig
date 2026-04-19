@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ValueTag, type CellSnapshot, type CellStyleRecord } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
@@ -22,7 +22,7 @@ const engine = {
   getCell(sheetName: string, address: string): CellSnapshot {
     return createEmptySnapshot(sheetName, address)
   },
-  getCellStyle(_styleId: string | undefined): CellStyleRecord | undefined {
+  getCellStyle(_styleId: string | undefined) {
     return undefined
   },
   subscribeCells(): () => void {
