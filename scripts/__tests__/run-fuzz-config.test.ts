@@ -6,8 +6,8 @@ describe('run fuzz config', () => {
     expect(resolveVitestFuzzMaxWorkers(1)).toBe(1)
     expect(resolveVitestFuzzMaxWorkers(2)).toBe(1)
     expect(resolveVitestFuzzMaxWorkers(3)).toBe(2)
-    expect(resolveVitestFuzzMaxWorkers(8)).toBe(4)
-    expect(resolveVitestFuzzMaxWorkers(32)).toBe(4)
+    expect(resolveVitestFuzzMaxWorkers(8)).toBe(2)
+    expect(resolveVitestFuzzMaxWorkers(32)).toBe(2)
   })
 
   it('appends the maxWorkers flag to the vitest fuzz command', () => {
@@ -18,7 +18,7 @@ describe('run fuzz config', () => {
       'run',
       'packages/core/src/__tests__/snapshot-wire-parity.fuzz.test.ts',
       '--maxWorkers',
-      '4',
+      '2',
     ])
   })
 })
