@@ -149,6 +149,9 @@ importers:
       '@bilig/agent-api':
         specifier: workspace:*
         version: link:../../packages/agent-api
+      '@bilig/benchmarks':
+        specifier: workspace:*
+        version: link:../../packages/benchmarks
       '@bilig/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

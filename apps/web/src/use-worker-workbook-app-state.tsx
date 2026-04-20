@@ -963,7 +963,7 @@ export function useWorkerWorkbookAppState(input: {
       }
       if (corpus.presentation?.columnWidths) {
         await Promise.all(
-          corpus.presentation.columnWidths.map((column) =>
+          corpus.presentation.columnWidths.map((column: { readonly index: number; readonly size: number }) =>
             invokeColumnWidthMutation(corpus.primaryViewport.sheetName, column.index, column.size),
           ),
         )
