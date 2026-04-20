@@ -2,12 +2,7 @@ import { join } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import { createVitestAliasEntries, workspaceRootDir } from './scripts/workspace-resolution.js'
 
-const workspacePackageAliases = createVitestAliasEntries([
-  {
-    find: '@bilig/formula/program-arena',
-    replacement: join(workspaceRootDir, 'packages/formula/src/program-arena.ts'),
-  },
-])
+const workspacePackageAliases = createVitestAliasEntries()
 
 export default defineConfig({
   resolve: {

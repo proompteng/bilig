@@ -11,6 +11,14 @@
     "packageDir": "packages/benchmarks",
     "sourceEntry": "packages/benchmarks/src/index.ts"
   },
+  "@bilig/benchmarks/generate-workbook": {
+    "packageDir": "packages/benchmarks",
+    "sourceEntry": "packages/benchmarks/src/generate-workbook.ts"
+  },
+  "@bilig/benchmarks/workbook-corpus": {
+    "packageDir": "packages/benchmarks",
+    "sourceEntry": "packages/benchmarks/src/workbook-corpus.ts"
+  },
   "@bilig/binary-protocol": {
     "packageDir": "packages/binary-protocol",
     "sourceEntry": "packages/binary-protocol/src/index.ts"
@@ -34,6 +42,10 @@
   "@bilig/formula": {
     "packageDir": "packages/formula",
     "sourceEntry": "packages/formula/src/index.ts"
+  },
+  "@bilig/formula/program-arena": {
+    "packageDir": "packages/formula",
+    "sourceEntry": "packages/formula/src/program-arena.ts"
   },
   "@bilig/grid": {
     "packageDir": "packages/grid",

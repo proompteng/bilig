@@ -1,4 +1,3 @@
-import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -126,9 +125,7 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: createViteAliasRecord({
-      '@bilig/formula/program-arena': fileURLToPath(new URL('../../packages/formula/src/program-arena.ts', import.meta.url)),
-    }),
+    alias: createViteAliasRecord(),
   },
   server: {
     headers: crossOriginIsolationHeaders,

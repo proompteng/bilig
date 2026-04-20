@@ -943,7 +943,7 @@ export function useWorkerWorkbookAppState(input: {
         throw new Error('Workbook runtime is not ready for benchmark install')
       }
       getWorkbookScrollPerfCollector()?.setBenchmarkState('loading')
-      const benchmarks = await import('../../../packages/benchmarks/src/workbook-corpus.js')
+      const benchmarks = await import('@bilig/benchmarks/workbook-corpus')
       if (!benchmarks.isWorkbookBenchmarkCorpusId(corpusId)) {
         throw new Error(`Unknown benchmark corpus ${corpusId}`)
       }

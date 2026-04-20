@@ -21,6 +21,85 @@ function sortedEntries<T>(entries: Iterable<readonly [string, T]>): Array<readon
   return [...entries].toSorted(([left], [right]) => left.localeCompare(right))
 }
 
+function stripKnownModuleExtension(value: string): string {
+  if (value.endsWith('.d.ts')) {
+    return value.slice(0, -'.d.ts'.length)
+  }
+  return value.replace(/\.(?:[cm]?js|tsx?|jsx?)$/, '')
+}
+
+function resolveSourceEntryFromExportTarget(packageDir: string, packageDirRelative: string, exportTarget: string): string | null {
+  const normalizedTarget = normalizePath(exportTarget)
+  const candidateSourceStem = normalizedTarget.startsWith('./dist/')
+    ? stripKnownModuleExtension(normalizedTarget.slice('./dist/'.length))
+    : normalizedTarget.startsWith('./src/')
+      ? stripKnownModuleExtension(normalizedTarget.slice('./src/'.length))
+      : null
+  if (!candidateSourceStem) {
+    return null
+  }
+
+  for (const extension of ['.ts', '.tsx'] as const) {
+    const relativeSourceEntry = normalizePath(`src/${candidateSourceStem}${extension}`)
+    if (existsSync(join(packageDir, relativeSourceEntry))) {
+      return normalizePath(`${packageDirRelative}/${relativeSourceEntry}`)
+    }
+  }
+  return null
+}
+
+function resolveExportTargetPath(exportValue: unknown): string | null {
+  if (typeof exportValue === 'string') {
+    return exportValue
+  }
+  if (typeof exportValue !== 'object' || exportValue === null) {
+    return null
+  }
+
+  for (const key of ['import', 'types', 'default'] as const) {
+    const nestedValue = Reflect.get(exportValue, key)
+    if (typeof nestedValue === 'string') {
+      return nestedValue
+    }
+  }
+  return null
+}
+
+function scanWorkspaceExportEntries(
+  packageName: string,
+  packageDir: string,
+  packageDirRelative: string,
+  packageJsonValue: object,
+): Array<readonly [string, WorkspaceResolutionEntry]> {
+  const exportsValue = Reflect.get(packageJsonValue, 'exports')
+  if (typeof exportsValue !== 'object' || exportsValue === null) {
+    return []
+  }
+
+  const entries: Array<readonly [string, WorkspaceResolutionEntry]> = []
+  for (const [subpath, exportValue] of Object.entries(exportsValue)) {
+    if (!subpath.startsWith('./')) {
+      continue
+    }
+    const exportTarget = resolveExportTargetPath(exportValue)
+    if (!exportTarget) {
+      continue
+    }
+    const sourceEntry = resolveSourceEntryFromExportTarget(packageDir, packageDirRelative, exportTarget)
+    if (!sourceEntry) {
+      continue
+    }
+    entries.push([
+      `${packageName}/${subpath.slice(2)}`,
+      {
+        packageDir: normalizePath(packageDirRelative),
+        sourceEntry,
+      },
+    ])
+  }
+  return entries
+}
+
 export function scanWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceResolutionMap {
   const packagesDir = join(rootDir, 'packages')
   const entries: Array<readonly [string, WorkspaceResolutionEntry]> = []
@@ -42,13 +121,15 @@ export function scanWorkspaceResolution(rootDir = workspaceRootDir): WorkspaceRe
     if (typeof packageName !== 'string' || !packageName.startsWith('@bilig/')) {
       continue
     }
+    const packageDirRelative = normalizePath(`packages/${directoryEntry.name}`)
     entries.push([
       packageName,
       {
-        packageDir: normalizePath(`packages/${directoryEntry.name}`),
-        sourceEntry: normalizePath(`packages/${directoryEntry.name}/src/index.ts`),
+        packageDir: packageDirRelative,
+        sourceEntry: normalizePath(`${packageDirRelative}/src/index.ts`),
       },
     ])
+    entries.push(...scanWorkspaceExportEntries(packageName, packageDir, packageDirRelative, packageJsonValue))
   }
   return Object.fromEntries(sortedEntries(entries))
 }
