@@ -37,6 +37,7 @@ services:
       HOST: 0.0.0.0
       PORT: "4321"
       DATABASE_URL: postgresql://bilig:bilig@postgres:5432/bilig
+      BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: "true"
       BILIG_PUBLIC_SERVER_URL: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
       BILIG_WEB_APP_BASE_URL: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
       BILIG_CORS_ORIGIN: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
