@@ -96,6 +96,20 @@ export function buildGridTextScene({
   const headerFontSize = fullSheetSelected
     ? (engine.getCellStyle(selectedCellSnapshot?.styleId)?.font?.size ?? DEFAULT_HEADER_FONT_SIZE)
     : DEFAULT_HEADER_FONT_SIZE
+  const dataClipRect =
+    contentMode === 'data'
+      ? {
+          x: 0,
+          y: 0,
+          width: hostBounds.width,
+          height: hostBounds.height,
+        }
+      : {
+          x: gridMetrics.rowMarkerWidth,
+          y: gridMetrics.headerHeight,
+          width: hostBounds.width - gridMetrics.rowMarkerWidth,
+          height: hostBounds.height - gridMetrics.headerHeight,
+        }
   const items: GridTextItem[] = []
   const visibleColumnEnd = visibleItems.reduce((max, [visibleCol]) => Math.max(max, visibleCol), -1)
 
@@ -136,7 +150,7 @@ export function buildGridTextScene({
       visibleColumnEnd,
       selectedAddress: col === selectedCell[0] && row === selectedCell[1] ? `${indexToColumn(col)}${row + 1}` : null,
       snapshotOverride: selectedCellSnapshot,
-      gridMetrics,
+      clipRect: dataClipRect,
     })
     if (item) {
       items.push(item)
@@ -156,7 +170,7 @@ function buildCellTextItem({
   visibleColumnEnd,
   selectedAddress = null,
   snapshotOverride = null,
-  gridMetrics,
+  clipRect,
 }: {
   engine: GridEngineLike
   sheetName: string
@@ -167,7 +181,7 @@ function buildCellTextItem({
   visibleColumnEnd: number
   selectedAddress?: string | null
   snapshotOverride?: CellSnapshot | null
-  gridMetrics: GridMetrics
+  clipRect: Rectangle
 }): GridTextItem | null {
   const bounds = getCellBounds(col, row)
   if (!bounds) {
@@ -211,15 +225,7 @@ function buildCellTextItem({
 
   return {
     ...localBounds,
-    ...resolveClipInsets({
-      bounds: localBounds,
-      clipRect: {
-        x: gridMetrics.rowMarkerWidth,
-        y: gridMetrics.headerHeight,
-        width: hostBounds.width - gridMetrics.rowMarkerWidth,
-        height: hostBounds.height - gridMetrics.headerHeight,
-      },
-    }),
+    ...resolveClipInsets({ bounds: localBounds, clipRect }),
     text: renderCell.displayText,
     align: renderCell.align,
     wrap: renderCell.wrap,

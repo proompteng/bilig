@@ -46,7 +46,8 @@
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "class-variance-authority": "0.7.1",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "typegpu": "0.11.2"
   },
   "devDependencies": {
     "@types/react-dom": "19.2.3",

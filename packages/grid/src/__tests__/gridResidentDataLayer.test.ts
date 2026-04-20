@@ -115,6 +115,66 @@ describe('gridResidentDataLayer', () => {
     expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: -(2 * 22 + 9) })
     expect(rendered.find((pane) => pane.paneId === 'corner')?.contentOffset).toEqual({ x: 0, y: 0 })
   })
+
+  it('keeps body scene coordinates local while clipping resident content to the visible pane window', () => {
+    const gridMetrics = getGridMetrics()
+    const panes = buildResidentDataPaneScenes({
+      residentViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
+      engine,
+      sheetName: 'Sheet1',
+      columnWidths: {},
+      rowHeights: {},
+      freezeRows: 0,
+      freezeCols: 0,
+      frozenColumnWidth: 0,
+      frozenRowHeight: 0,
+      gridMetrics,
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      gridSelection: createGridSelection(1, 1),
+      selectedCell: [1, 1],
+      selectedCellSnapshot: emptyCell,
+      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      editingCell: null,
+      hoveredCell: null,
+      hoveredHeader: null,
+      resizeGuideColumn: null,
+      resizeGuideRow: null,
+      activeHeaderDrag: null,
+    })
+
+    const rendered = resolveResidentDataPaneRenderState({
+      panes,
+      residentViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
+      visibleViewport: { rowStart: 0, rowEnd: 25, colStart: 0, colEnd: 5 },
+      visibleRegion: { tx: 0, ty: 0 },
+      gridMetrics,
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      hostWidth: 640,
+      hostHeight: 586,
+      rowMarkerWidth: gridMetrics.rowMarkerWidth,
+      headerHeight: gridMetrics.headerHeight,
+      frozenColumnWidth: 0,
+      frozenRowHeight: 0,
+    })
+
+    const body = rendered.find((pane) => pane.paneId === 'body')
+    expect(body).toBeDefined()
+    expect(body?.gpuScene.fillRects).toContainEqual({
+      x: 105,
+      y: 23,
+      width: 206,
+      height: 42,
+      color: {
+        r: 0.12941176470588237,
+        g: 0.33725490196078434,
+        b: 0.22745098039215686,
+        a: 0.08,
+      },
+    })
+    expect(body?.gpuScene.borderRects.every((rect) => rect.x < body.frame.width && rect.y < body.frame.height)).toBe(true)
+  })
 })
 
 function renderedFrame(pane: { paneId: string } | undefined) {

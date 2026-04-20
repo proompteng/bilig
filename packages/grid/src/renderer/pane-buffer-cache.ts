@@ -1,16 +1,22 @@
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { TextDecorationRect } from './text-quad-buffer.js'
+import type { RectInstanceVertexBuffer, SurfaceUniformBuffer, TextInstanceVertexBuffer } from './typegpu-renderer.js'
+import type { TgpuBindGroup } from 'typegpu'
 
 export interface WorkbookPaneBufferEntry {
-  rectBuffer: GPUBuffer | null
+  rectBuffer: RectInstanceVertexBuffer | null
   rectCapacity: number
   rectCount: number
   rectScene: GridGpuScene | null
-  textBuffer: GPUBuffer | null
+  surfaceUniform: SurfaceUniformBuffer | null
+  surfaceBindGroup: TgpuBindGroup | null
+  textBuffer: TextInstanceVertexBuffer | null
   textCapacity: number
   textCount: number
   textScene: GridTextScene | null
+  textBindGroup: TgpuBindGroup | null
+  textBindGroupAtlasVersion: number
   decorationRects: readonly TextDecorationRect[] | null
 }
 
@@ -20,10 +26,14 @@ function createEmptyEntry(): WorkbookPaneBufferEntry {
     rectCapacity: 0,
     rectCount: 0,
     rectScene: null,
+    surfaceUniform: null,
+    surfaceBindGroup: null,
     textBuffer: null,
     textCapacity: 0,
     textCount: 0,
     textScene: null,
+    textBindGroup: null,
+    textBindGroupAtlasVersion: -1,
     decorationRects: null,
   }
 }
@@ -47,6 +57,7 @@ export class WorkbookPaneBufferCache {
       return
     }
     entry.rectBuffer?.destroy()
+    entry.surfaceUniform?.buffer.destroy()
     entry.textBuffer?.destroy()
     this.entries.delete(paneId)
   }

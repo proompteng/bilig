@@ -598,4 +598,43 @@ describe('gridTextScene', () => {
       strike: false,
     })
   })
+
+  test('does not clip the first visible cell in data pane mode', () => {
+    const scene = buildGridTextScene({
+      contentMode: 'data',
+      engine: makeEngine(
+        {},
+        {
+          B2: createCellSnapshot({ tag: ValueTag.Number, value: 123 }),
+        },
+      ),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [1, 1],
+      sheetName: 'Sheet1',
+      visibleItems: [[1, 1]],
+      visibleRegion: { range: { x: 1, y: 1, width: 1, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0, width: 104, height: 22 },
+      getCellBounds: () => ({ x: 0, y: 0, width: 104, height: 22 }),
+    })
+
+    expect(scene.items).toContainEqual({
+      x: 0,
+      y: 0,
+      width: 104,
+      height: 22,
+      clipInsetTop: 0,
+      clipInsetRight: 0,
+      clipInsetBottom: 0,
+      clipInsetLeft: 0,
+      text: '123',
+      align: 'right',
+      wrap: false,
+      color: CELL_TEXT_COLOR,
+      font: `400 13px ${CELL_FONT_FAMILY}`,
+      fontSize: 13,
+      underline: false,
+      strike: false,
+    })
+  })
 })

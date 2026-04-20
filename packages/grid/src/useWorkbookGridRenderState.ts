@@ -639,7 +639,7 @@ export function useWorkbookGridRenderState(input: {
     [freezeCols, freezeRows, hostElement, isEditingCell, residentViewport, selectedCell.col, selectedCell.row, selectionRange, sheetName],
   )
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
-  const workerResidentPaneScenes = useSyncExternalStore(
+  const _workerResidentPaneScenes = useSyncExternalStore(
     useCallback(
       (listener: () => void) =>
         residentSceneEngine && residentPaneSceneRequest
@@ -654,13 +654,12 @@ export function useWorkbookGridRenderState(input: {
     () => EMPTY_PANE_SCENES,
   )
   const residentDataPaneScenes = useMemo(() => {
-    if (residentSceneEngine && residentPaneSceneRequest) {
-      return workerResidentPaneScenes
-    }
     if (!hostElement) {
       return []
     }
     void sceneRevision
+    // Render resident panes from the projected engine state so visible body
+    // content stays current even when worker scene refreshes lag behind edits.
     return buildResidentDataPaneScenes({
       residentViewport,
       engine,
@@ -700,8 +699,6 @@ export function useWorkbookGridRenderState(input: {
     hoverState.header,
     isEditingCell,
     residentViewport,
-    residentPaneSceneRequest,
-    residentSceneEngine,
     resizeGuideColumn,
     resizeGuideRow,
     rowHeights,
@@ -713,7 +710,6 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    workerResidentPaneScenes,
   ])
   const residentDataPanes = useMemo(
     () =>

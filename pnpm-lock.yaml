@@ -355,6 +355,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      typegpu:
+        specifier: 0.11.2
+        version: 0.11.2
     devDependencies:
       '@types/react-dom':
         specifier: 19.2.3
@@ -3814,6 +3817,10 @@ packages:
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
+  tinyest@0.3.1:
+    resolution: {integrity: sha512-SJNnjbvTEo5VmIjsMYpUFL34b9RyaI382r1v7gyVXZpd4VnjIZKMrGk1mphXM4zkhrs3hZfO1Xwv63DoZX50yw==}
+    engines: {node: '>=12.20.0'}
+
   tinyexec@1.0.4:
     resolution: {integrity: sha512-u9r3uZC0bdpGOXtlxUIdwf9pkmvhqJdrVCH9fapQtgy/OeTTMZ1nqH7agtvEfmGui6e1XxjcdrlxvxJvc3sMqw==}
     engines: {node: '>=18'}
@@ -3871,6 +3878,9 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tsover-runtime@0.0.6:
+    resolution: {integrity: sha512-5h/j9l4SwMSVfTMLVC/d+dkRjgh2xj+WHkivs5hhSwqACbG3JKXxp+9jneRoT07oJRHb97b5nKafsPtZEAdQMg==}
+
   tsx@4.21.0:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
@@ -3878,6 +3888,13 @@ packages:
 
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
+
+  typed-binary@4.3.3:
+    resolution: {integrity: sha512-W2hLsSzt3k/tg38gDE4Fn/QiwcoqGuUHBc2cb3mXuH7KcYxe/GM57vzW14s2/bawB4R5knGgGq8Xb57vsaJ4Sg==}
+
+  typegpu@0.11.2:
+    resolution: {integrity: sha512-wJeYeW25uidpNMyD4+5lehn39qd9iVpH5gXuJNwHYSOig69xHSLMBeHy6XnbiBdh+F5fh9dDehdVARl9g7n2qw==}
+    engines: {node: '>=12.20.0'}
 
   typescript@6.0.2:
     resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
@@ -7419,6 +7436,8 @@ snapshots:
 
   tinybench@2.9.0: {}
 
+  tinyest@0.3.1: {}
+
   tinyexec@1.0.4: {}
 
   tinyglobby@0.2.15:
@@ -7470,6 +7489,8 @@ snapshots:
   tslib@2.8.1:
     optional: true
 
+  tsover-runtime@0.0.6: {}
+
   tsx@4.21.0:
     dependencies:
       esbuild: 0.27.4
@@ -7480,6 +7501,14 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  typed-binary@4.3.3: {}
+
+  typegpu@0.11.2:
+    dependencies:
+      tinyest: 0.3.1
+      tsover-runtime: 0.0.6
+      typed-binary: 4.3.3
 
   typescript@6.0.2: {}
 
