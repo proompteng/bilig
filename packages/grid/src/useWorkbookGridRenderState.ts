@@ -653,6 +653,7 @@ export function useWorkbookGridRenderState(input: {
         : EMPTY_PANE_SCENES,
     () => EMPTY_PANE_SCENES,
   )
+  void _workerResidentPaneScenes
   const residentDataPaneScenes = useMemo(() => {
     if (!hostElement) {
       return []

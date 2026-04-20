@@ -5,7 +5,7 @@ import type { Rectangle } from '../gridTypes.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from './pane-buffer-cache.js'
 import { createGlyphAtlas } from './glyph-atlas.js'
-import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene } from './text-quad-buffer.js'
+import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDecorationRect } from './text-quad-buffer.js'
 import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
@@ -68,10 +68,14 @@ function resolveSurfaceSize(host: HTMLElement): SurfaceSize {
   }
 }
 
-function buildRectInstanceData(input: { frame: Rectangle; scene: GridGpuScene }): Float32Array {
+function buildRectInstanceData(input: {
+  frame: Rectangle
+  scene: GridGpuScene
+  decorationRects?: readonly TextDecorationRect[]
+}): Float32Array {
   const rects = input.scene.fillRects
   const borders = input.scene.borderRects
-  const decorationRects = 'decorationRects' in input ? (input.decorationRects ?? []) : []
+  const decorationRects = input.decorationRects ?? []
   const total = rects.length + borders.length + decorationRects.length
   const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
 
