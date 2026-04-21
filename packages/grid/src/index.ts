@@ -14,6 +14,19 @@ export * from './workbookGridViewport.js'
 export * from './gridAxisWorldIndex.js'
 export * from './gridGeometry.js'
 export * from './gridTileResidencyV2.js'
+export * from './text/gridTextLayoutV2.js'
+export * from './text/gridTextMetrics.js'
+export * from './text/gridTextOverflow.js'
+export { CELL_TEXT_PADDING_X, CELL_TEXT_PADDING_Y } from './text/gridTextPacket.js'
+export type {
+  FontKey,
+  ResolvedCellTextLayout,
+  ResolvedGlyphPlacement,
+  ResolvedTextLine,
+  TextHorizontalAlign,
+  TextOverflowMode,
+  TextVerticalAlign,
+} from './text/gridTextPacket.js'
 export * from './renderer/glyph-atlas.js'
 export * from './renderer/pane-layout.js'
 export * from './renderer/pane-buffer-cache.js'
