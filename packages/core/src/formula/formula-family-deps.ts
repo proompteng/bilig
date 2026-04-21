@@ -11,18 +11,18 @@ export interface FormulaFamilyShapeKeyInput {
 }
 
 export function buildFormulaFamilyShapeKey(input: FormulaFamilyShapeKeyInput): string {
-  return JSON.stringify({
-    mode: input.compiled.mode,
-    deps: input.compiled.deps.length,
-    symbolicRanges: input.compiled.symbolicRanges.length,
-    symbolicNames: input.compiled.symbolicNames.length,
-    symbolicTables: input.compiled.symbolicTables.length,
-    symbolicSpills: input.compiled.symbolicSpills.length,
-    dependencyCount: input.dependencyCount,
-    rangeDependencyCount: input.rangeDependencyCount,
-    directAggregateKind: input.directAggregateKind ?? null,
-    directLookupKind: input.directLookupKind ?? null,
-    directScalarKind: input.directScalarKind ?? null,
-    directCriteriaKind: input.directCriteriaKind ?? null,
-  })
+  return [
+    input.compiled.mode,
+    input.compiled.deps.length,
+    input.compiled.symbolicRanges.length,
+    input.compiled.symbolicNames.length,
+    input.compiled.symbolicTables.length,
+    input.compiled.symbolicSpills.length,
+    input.dependencyCount,
+    input.rangeDependencyCount,
+    input.directAggregateKind ?? '',
+    input.directLookupKind ?? '',
+    input.directScalarKind ?? '',
+    input.directCriteriaKind ?? '',
+  ].join('|')
 }
