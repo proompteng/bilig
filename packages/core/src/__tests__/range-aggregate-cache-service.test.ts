@@ -220,7 +220,7 @@ describe('RangeAggregateCacheService', () => {
     expect(extended.prefixCount.subarray(0, 3)).toEqual(Uint32Array.from([1, 2, 3]))
   })
 
-  it('reuses a lower-start cached prefix for shifted windows on the same column', () => {
+  it('keeps shifted-window prefixes anchored at their requested row start', () => {
     const values: CellValue[] = [
       { tag: ValueTag.Number, value: 1 },
       { tag: ValueTag.Number, value: 2 },
@@ -259,7 +259,9 @@ describe('RangeAggregateCacheService', () => {
     const anchored = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 })
     const shifted = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 1, rowEnd: 3, col: 0 })
 
-    expect(shifted).toBe(anchored)
+    expect(shifted).not.toBe(anchored)
+    expect(anchored.prefixSums.subarray(0, 3)).toEqual(Float64Array.from([1, 3, 6]))
+    expect(shifted.prefixSums.subarray(0, 3)).toEqual(Float64Array.from([2, 5, 9]))
     expect(getColumnSlice).toHaveBeenCalledTimes(2)
     expect(getColumnSlice).toHaveBeenNthCalledWith(1, {
       sheetName: 'Sheet1',
@@ -269,7 +271,7 @@ describe('RangeAggregateCacheService', () => {
     })
     expect(getColumnSlice).toHaveBeenNthCalledWith(2, {
       sheetName: 'Sheet1',
-      rowStart: 3,
+      rowStart: 1,
       rowEnd: 3,
       col: 0,
     })

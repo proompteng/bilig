@@ -37,8 +37,8 @@ export interface AggregateStateStore {
   readonly invalidateColumn: (sheetName: string, col: number) => void
 }
 
-function columnKey(sheetName: string, col: number): string {
-  return `${sheetName}\t${col}`
+function columnKey(sheetName: string, col: number, rowStart: number): string {
+  return `${sheetName}\t${col}\t${rowStart}`
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
@@ -247,7 +247,7 @@ export function createAggregateStateStore(args: {
       if (!region) {
         throw new Error(`Unknown region id: ${regionId}`)
       }
-      const key = columnKey(region.sheetName, region.col)
+      const key = columnKey(region.sheetName, region.col, region.rowStart)
       const currentVersions = getCurrentVersions(region.sheetName, region.col)
       const existing = cache.get(key)
       if (
@@ -262,59 +262,62 @@ export function createAggregateStateStore(args: {
         regionId,
         sheetName: region.sheetName,
         col: region.col,
-        rowStart: 0,
-        rowEnd: -1,
+        rowStart: region.rowStart,
+        rowEnd: region.rowStart - 1,
         columnVersion: currentVersions.columnVersion,
         structureVersion: currentVersions.structureVersion,
         extremaValid: true,
-        prefixSums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
-        prefixCount: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd + 1, 16)),
-        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixMinimums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
-        prefixMaximums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
+        prefixSums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixCount: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixMinimums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixMaximums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
       }
       cache.set(key, next)
       return extendEntry(next, region.rowEnd)
     },
     noteLiteralWrite({ sheetName, row, col, oldValue, newValue }) {
-      const key = columnKey(sheetName, col)
-      const entry = cache.get(key)
-      if (!entry) {
-        return
-      }
+      const entries = [...cache.values()].filter((entry) => entry.sheetName === sheetName && entry.col === col)
       const currentVersions = getCurrentVersions(sheetName, col)
-      if (entry.structureVersion !== currentVersions.structureVersion) {
-        cache.delete(key)
-        return
+      for (const entry of entries) {
+        const key = columnKey(entry.sheetName, entry.col, entry.rowStart)
+        if (entry.structureVersion !== currentVersions.structureVersion) {
+          cache.delete(key)
+          continue
+        }
+        entry.columnVersion = currentVersions.columnVersion
+        entry.structureVersion = currentVersions.structureVersion
+        if (row < entry.rowStart || row > entry.rowEnd) {
+          continue
+        }
+        if (isErrorTag(oldValue) || isErrorTag(newValue) || (entry.prefixErrorCounts[entry.rowEnd - entry.rowStart] ?? 0) > 0) {
+          cache.delete(key)
+          continue
+        }
+        const sumDelta = numericContribution(newValue) - numericContribution(oldValue)
+        const countDelta = countContribution(newValue) - countContribution(oldValue)
+        const averageDelta = averageCountContribution(newValue) - averageCountContribution(oldValue)
+        if (sumDelta === 0 && countDelta === 0 && averageDelta === 0) {
+          continue
+        }
+        const offset = row - entry.rowStart
+        const length = entry.rowEnd - entry.rowStart + 1
+        for (let index = offset; index < length; index += 1) {
+          entry.prefixSums[index] = (entry.prefixSums[index] ?? 0) + sumDelta
+          entry.prefixCount[index] = (entry.prefixCount[index] ?? 0) + countDelta
+          entry.prefixAverageCount[index] = (entry.prefixAverageCount[index] ?? 0) + averageDelta
+        }
+        entry.extremaValid = false
       }
-      entry.columnVersion = currentVersions.columnVersion
-      entry.structureVersion = currentVersions.structureVersion
-      if (row < entry.rowStart || row > entry.rowEnd) {
-        return
-      }
-      if (isErrorTag(oldValue) || isErrorTag(newValue) || (entry.prefixErrorCounts[entry.rowEnd - entry.rowStart] ?? 0) > 0) {
-        cache.delete(key)
-        return
-      }
-      const sumDelta = numericContribution(newValue) - numericContribution(oldValue)
-      const countDelta = countContribution(newValue) - countContribution(oldValue)
-      const averageDelta = averageCountContribution(newValue) - averageCountContribution(oldValue)
-      if (sumDelta === 0 && countDelta === 0 && averageDelta === 0) {
-        return
-      }
-      const offset = row - entry.rowStart
-      const length = entry.rowEnd - entry.rowStart + 1
-      for (let index = offset; index < length; index += 1) {
-        entry.prefixSums[index] = (entry.prefixSums[index] ?? 0) + sumDelta
-        entry.prefixCount[index] = (entry.prefixCount[index] ?? 0) + countDelta
-        entry.prefixAverageCount[index] = (entry.prefixAverageCount[index] ?? 0) + averageDelta
-      }
-      entry.extremaValid = false
     },
     invalidateColumn(sheetName, col) {
-      cache.delete(columnKey(sheetName, col))
+      ;[...cache.keys()]
+        .filter((key) => key.startsWith(`${sheetName}\t${col}\t`))
+        .forEach((key) => {
+          cache.delete(key)
+        })
     },
   }
 }
