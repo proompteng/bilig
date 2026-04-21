@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import net from 'node:net'
+import { resolveBrowserLocalWebMode } from './browser-stack-config.js'
 
 const textDecoder = new TextDecoder()
 const playwrightArgs = process.argv.slice(2)
@@ -22,6 +23,7 @@ type ComposeInvocation = {
   command: string[]
   version: string
 }
+type BrowserStackProcess = ReturnType<typeof Bun.spawn>
 
 let composeInvocation: ComposeInvocation | null = null
 let composeInvocationProbed = false
@@ -394,6 +396,7 @@ function runPlaywright(args: string[]): void {
       BILIG_E2E_BASE_URL: getE2eBaseUrl(),
       BILIG_E2E_SYNC_SERVER_URL: getE2eSyncServerUrl(),
       BILIG_E2E_ZERO_KEEPALIVE_URL: getE2eZeroKeepaliveUrl(),
+      ...(browserStack === 'local' ? { BILIG_E2E_MANAGED_STACK: '1' } : {}),
     },
   })
   if (result.exitCode !== 0) {
@@ -581,13 +584,62 @@ async function runComposePlaywright(): Promise<void> {
   }
 }
 
+async function stopLocalPlaywrightStack(child: BrowserStackProcess): Promise<void> {
+  try {
+    child.kill('SIGTERM')
+  } catch {}
+
+  const exited = await Promise.race([child.exited, Bun.sleep(5_000).then(() => null)])
+  if (exited !== null) {
+    return
+  }
+
+  try {
+    child.kill('SIGKILL')
+  } catch {}
+  await child.exited.catch(() => undefined)
+}
+
+async function waitForLocalPlaywrightStack(child: BrowserStackProcess): Promise<void> {
+  await Promise.race([
+    waitForHttp(`${getE2eBaseUrl()}/runtime-config.json`, composeStartupTimeoutMs),
+    child.exited.then((code) => {
+      throw new Error(`local browser stack exited before ready with code ${code ?? 1}`)
+    }),
+  ])
+}
+
+async function runLocalPlaywright(): Promise<void> {
+  terminatePreviewServers()
+  const child = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
+    stdin: 'ignore',
+    stdout: 'inherit',
+    stderr: 'inherit',
+    env: {
+      ...process.env,
+      BILIG_WEB_DEV_PORT: e2eWebPort,
+      PORT: e2eSyncServerPort,
+      BILIG_DEV_POSTGRES_PORT: e2ePostgresPort,
+      BILIG_DEV_ZERO_PORT: e2eZeroPort,
+      BILIG_DEV_WEB_SERVER_MODE: resolveBrowserLocalWebMode(process.env),
+      BILIG_DEV_APP_SERVER_MODE: 'run',
+      BILIG_DEV_COMPOSE_PROJECT: 'bilig-playwright-local',
+      BILIG_DEV_CLEANUP_COMPOSE: 'true',
+      BILIG_DEV_DISABLE_COMPOSE: '1',
+      BILIG_E2E_REMOTE_SYNC: '0',
+    },
+  })
+  try {
+    await waitForLocalPlaywrightStack(child)
+    runConfiguredPlaywrightSuites()
+  } finally {
+    await stopLocalPlaywrightStack(child)
+    terminatePreviewServers()
+  }
+}
+
 if (browserStack === 'compose') {
   await runComposePlaywright()
 } else {
-  terminatePreviewServers()
-  try {
-    runConfiguredPlaywrightSuites()
-  } finally {
-    terminatePreviewServers()
-  }
+  await runLocalPlaywright()
 }

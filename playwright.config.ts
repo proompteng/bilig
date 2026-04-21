@@ -3,6 +3,7 @@ import { buildBrowserLocalStackCommand, resolveBrowserLocalWebMode } from './scr
 
 const browserStack = process.env['BILIG_BROWSER_STACK']
 const useComposeBrowserStack = browserStack === 'compose'
+const useManagedBrowserStack = process.env['BILIG_E2E_MANAGED_STACK'] === '1'
 const fuzzBrowserMode = process.env['BILIG_FUZZ_BROWSER'] === '1'
 const localNoCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
 const remoteSyncEnabled = process.env['BILIG_E2E_REMOTE_SYNC'] !== '0'
@@ -50,7 +51,7 @@ export default defineConfig({
       },
     },
   ],
-  ...(useComposeBrowserStack
+  ...(useComposeBrowserStack || useManagedBrowserStack
     ? {}
     : {
         webServer: {
