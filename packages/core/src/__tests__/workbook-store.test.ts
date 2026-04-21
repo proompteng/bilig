@@ -642,7 +642,7 @@ describe('WorkbookStore', () => {
     expect(counters.cellsRemapped).toBeGreaterThan(0)
   })
 
-  it('plans structural transactions from scoped remap entries while preserving logical ids', () => {
+  it('plans insert structural transactions without survivor remap entries', () => {
     const workbook = new WorkbookStore('planned-structural-transaction')
     workbook.createSheet('Sheet1')
 
@@ -661,17 +661,8 @@ describe('WorkbookStore', () => {
       : undefined
 
     expect(transaction).toBeDefined()
-    expect(transaction?.remappedCells).toEqual([
-      expect.objectContaining({
-        cellIndex: movedCellIndex,
-        fromRow: 1,
-        fromCol: 1,
-        toRow: 1,
-        toCol: 2,
-        fromRowId: 'logical-row-1',
-        fromColId: 'logical-column-1',
-      }),
-    ])
+    expect(transaction?.remappedCells).toEqual([])
+    expect(transaction?.removedCellIndices).toEqual([])
 
     if (transaction && hasPlannedStructuralAxisTransform(workbook)) {
       workbook.insertColumns('Sheet1', 1, 1)
@@ -681,5 +672,45 @@ describe('WorkbookStore', () => {
     expect(workbook.getCellIndex('Sheet1', 'A2')).toBe(unaffectedCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'C2')).toBe(movedCellIndex)
     expect(workbook.getCellIndex('Sheet1', 'B2')).toBeUndefined()
+  })
+
+  it('plans delete structural transactions from resident cells only', () => {
+    const workbook = new WorkbookStore('planned-structural-delete')
+    workbook.createSheet('Sheet1')
+
+    const deletedCellIndex = workbook.ensureCell('Sheet1', 'B2')
+    const shiftedCellIndex = workbook.ensureCell('Sheet1', 'C2')
+
+    const transaction = hasPlannedStructuralAxisTransform(workbook)
+      ? workbook.planStructuralAxisTransform('Sheet1', {
+          axis: 'column',
+          kind: 'delete',
+          start: 1,
+          count: 1,
+        })
+      : undefined
+
+    expect(transaction).toBeDefined()
+    expect(transaction?.removedCellIndices).toEqual([deletedCellIndex])
+    expect(transaction?.remappedCells).toEqual([
+      expect.objectContaining({
+        cellIndex: deletedCellIndex,
+        fromRow: 1,
+        fromCol: 1,
+        toRow: undefined,
+        toCol: undefined,
+        fromRowId: 'logical-row-1',
+        fromColId: 'logical-column-1',
+      }),
+    ])
+
+    if (transaction && hasPlannedStructuralAxisTransform(workbook)) {
+      workbook.deleteColumns('Sheet1', 1, 1)
+      workbook.applyPlannedStructuralTransaction(transaction)
+    }
+
+    expect(workbook.getCellIndex('Sheet1', 'B2')).toBe(shiftedCellIndex)
+    expect(workbook.getCellPosition(shiftedCellIndex)).toEqual({ sheetId: 1, row: 1, col: 1 })
+    expect(workbook.getCellIndex('Sheet1', 'C2')).toBeUndefined()
   })
 })

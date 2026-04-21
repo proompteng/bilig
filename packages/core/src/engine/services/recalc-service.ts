@@ -151,8 +151,9 @@ export function createEngineRecalcService(args: {
       if (sheetId === undefined || sheetId !== ownerSheet.id) {
         continue
       }
-      const row = args.state.workbook.cellStore.rows[cellIndex] ?? -1
-      const col = args.state.workbook.cellStore.cols[cellIndex] ?? -1
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      const row = position?.row ?? args.state.workbook.cellStore.rows[cellIndex] ?? -1
+      const col = position?.col ?? args.state.workbook.cellStore.cols[cellIndex] ?? -1
       if (row >= ownerStart.row && row <= ownerEnd.row && col >= ownerStart.col && col <= ownerEnd.col) {
         return true
       }

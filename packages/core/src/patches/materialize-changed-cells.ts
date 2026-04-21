@@ -35,17 +35,16 @@ export interface EnginePatchCaptureRequest {
 
 function readChangedCell(args: MaterializeChangedCellsArgs, cellIndex: number, fallbackSheetName?: string): EngineCellPatch | null {
   const sheetId = args.workbook.cellStore.sheetIds[cellIndex]
-  const row = args.workbook.cellStore.rows[cellIndex]
-  const col = args.workbook.cellStore.cols[cellIndex]
-  if (sheetId === undefined || row === undefined || col === undefined) {
+  const position = args.workbook.getCellPosition(cellIndex)
+  if (sheetId === undefined || !position) {
     return null
   }
   return {
     kind: 'cell',
     cellIndex,
-    address: { sheet: sheetId, row, col },
+    address: { sheet: sheetId, row: position.row, col: position.col },
     sheetName: fallbackSheetName ?? args.workbook.getSheetNameById(sheetId),
-    a1: formatAddress(row, col),
+    a1: formatAddress(position.row, position.col),
     newValue: args.workbook.cellStore.getValue(cellIndex, (id) => args.strings.get(id)),
   }
 }

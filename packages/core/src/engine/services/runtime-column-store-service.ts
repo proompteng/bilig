@@ -1,6 +1,6 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
-import { BLOCK_COLS, BLOCK_ROWS } from '../../sheet-grid.js'
+import { BLOCK_ROWS } from '../../sheet-grid.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface RuntimeColumnSlice {
@@ -198,53 +198,34 @@ export function createEngineRuntimeColumnStoreService(args: {
     const pages = new Map<number, RuntimeColumnPage>()
 
     if (sheet) {
-      const targetBlockCol = Math.floor(request.col / BLOCK_COLS)
-      const localCol = request.col % BLOCK_COLS
-      sheet.grid.blocks.forEach((block, key) => {
-        const blockCol = key % 1_000_000
-        if (blockCol !== targetBlockCol) {
+      sheet.logical.forEachVisibleColumnCellEntry(request.col, (cellIndex, row) => {
+        const pageRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS
+        let page = pages.get(pageRowStart)
+        if (!page) {
+          page = {
+            rowStart: pageRowStart,
+            tags: new Uint8Array(BLOCK_ROWS),
+            numbers: new Float64Array(BLOCK_ROWS),
+            stringIds: new Uint32Array(BLOCK_ROWS),
+            errors: new Uint16Array(BLOCK_ROWS),
+          }
+          pages.set(pageRowStart, page)
+        }
+        const localRow = row - pageRowStart
+        const tag = decodeValueTag(args.state.workbook.cellStore.tags[cellIndex])
+        page.tags[localRow] = tag
+        if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
+          const numeric = args.state.workbook.cellStore.numbers[cellIndex] ?? 0
+          page.numbers[localRow] = Object.is(numeric, -0) ? 0 : numeric
           return
         }
-        const pageRowStart = Math.floor(key / 1_000_000) * BLOCK_ROWS
-        const tags = new Uint8Array(BLOCK_ROWS)
-        const numbers = new Float64Array(BLOCK_ROWS)
-        const stringIds = new Uint32Array(BLOCK_ROWS)
-        const errors = new Uint16Array(BLOCK_ROWS)
-        let populated = false
-        for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
-          const offset = localRow * BLOCK_COLS + localCol
-          const encodedCellIndex = block[offset] ?? 0
-          if (encodedCellIndex === 0) {
-            tags[localRow] = ValueTag.Empty
-            continue
-          }
-          populated = true
-          const cellIndex = encodedCellIndex - 1
-          const tag = decodeValueTag(args.state.workbook.cellStore.tags[cellIndex])
-          tags[localRow] = tag
-          if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
-            const numeric = args.state.workbook.cellStore.numbers[cellIndex] ?? 0
-            numbers[localRow] = Object.is(numeric, -0) ? 0 : numeric
-            continue
-          }
-          if (tag === ValueTag.String) {
-            stringIds[localRow] = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
-            continue
-          }
-          if (tag === ValueTag.Error) {
-            errors[localRow] = args.state.workbook.cellStore.errors[cellIndex] ?? 0
-          }
-        }
-        if (!populated) {
+        if (tag === ValueTag.String) {
+          page.stringIds[localRow] = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
           return
         }
-        pages.set(pageRowStart, {
-          rowStart: pageRowStart,
-          tags,
-          numbers,
-          stringIds,
-          errors,
-        })
+        if (tag === ValueTag.Error) {
+          page.errors[localRow] = args.state.workbook.cellStore.errors[cellIndex] ?? 0
+        }
       })
     }
 

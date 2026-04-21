@@ -1380,7 +1380,8 @@ export function createEngineMutationService(args: {
       if (!ownerSheetName) {
         return
       }
-      const axisIndex = axis === 'row' ? args.state.workbook.cellStore.rows[cellIndex] : args.state.workbook.cellStore.cols[cellIndex]
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      const axisIndex = axis === 'row' ? ownerPosition?.row : ownerPosition?.col
       if (ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start && axisIndex < start + count) {
         return
       }

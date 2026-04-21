@@ -29,7 +29,9 @@ import { SheetGrid, type SheetGridAxisRemapScope } from './sheet-grid.js'
 import { CellFlags, CellStore } from './cell-store.js'
 import { mapStructuralAxisIndex } from './engine-structural-utils.js'
 import { buildStructuralTransaction, structuralScopeForTransform, type StructuralTransaction } from './engine/structural-transaction.js'
+import { AxisResidentCellIndex } from './storage/axis-resident-cell-index.js'
 import { CellPageStore } from './storage/cell-page-store.js'
+import { CellAxisIdentityStore } from './storage/cell-axis-identity-store.js'
 import { LogicalSheetStore } from './storage/logical-sheet-store.js'
 import { SheetAxisMap } from './storage/sheet-axis-map.js'
 import { addEngineCounter, type EngineCounters } from './perf/engine-counters.js'
@@ -135,6 +137,8 @@ export interface SheetRecord {
   axisMap: SheetAxisMap
   logicalAxisMap: SheetAxisMap
   logical: LogicalSheetStore
+  cellIdentities: CellAxisIdentityStore
+  residentCells: AxisResidentCellIndex
   columnVersions: Uint32Array
   structureVersion: number
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>
@@ -154,7 +158,7 @@ export class WorkbookStore {
   readonly cellStore = new CellStore()
   readonly sheetsByName = new Map<string, SheetRecord>()
   readonly sheetsById = new Map<number, SheetRecord>()
-  readonly cellKeyToIndex = new Map<number, number>()
+  readonly cellKeyToIndex: Map<number, number>
   readonly cellFormats = new Map<number, string>()
   readonly cellStyles = new Map<string, WorkbookCellStyleRecord>()
   readonly styleKeys = new Map<string, string>()
@@ -177,6 +181,7 @@ export class WorkbookStore {
     private readonly counters?: EngineCounters,
   ) {
     this.workbookName = workbookName
+    this.cellKeyToIndex = new LogicalCellKeyIndexMap((sheetId, row, col) => this.getCellIndexAt(sheetId, row, col))
     this.cellStore.onSetValue = (index) => {
       this.notifyCellValueWritten(index)
     }
@@ -199,18 +204,31 @@ export class WorkbookStore {
     }
     const axisMap = new SheetAxisMap()
     const logicalAxisMap = new SheetAxisMap()
+    const cellIdentities = new CellAxisIdentityStore()
+    const residentCells = new AxisResidentCellIndex()
+    const sheetId = id ?? this.nextSheetId++
+    const logical = new LogicalSheetStore(
+      sheetId,
+      logicalAxisMap,
+      new CellPageStore(new Map<string, number>(), (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId)),
+      cellIdentities,
+      residentCells,
+    )
     const sheet: SheetRecord = {
-      id: id ?? this.nextSheetId++,
+      id: sheetId,
       name,
       order,
-      grid: new SheetGrid(this.counters),
+      grid: new SheetGrid(this.counters, {
+        get: (row, col) => logical.getVisibleCell(row, col),
+        forEachCellEntry: (fn) => {
+          logical.forEachVisibleCellEntry(fn)
+        },
+      }),
       axisMap,
       logicalAxisMap,
-      logical: new LogicalSheetStore(
-        id ?? this.nextSheetId - 1,
-        logicalAxisMap,
-        new CellPageStore(new Map<string, number>(), (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId)),
-      ),
+      logical,
+      cellIdentities,
+      residentCells,
       columnVersions: new Uint32Array(MAX_COLS),
       structureVersion: 1,
       rowAxis: [],
@@ -230,9 +248,15 @@ export class WorkbookStore {
     const sheet = this.sheetsByName.get(name)
     if (!sheet) return
     sheet.grid.forEachCell((cellIndex) => {
-      const key = makeCellKey(sheet.id, this.cellStore.rows[cellIndex]!, this.cellStore.cols[cellIndex]!)
-      this.cellKeyToIndex.delete(key)
+      const position = this.getCellPosition(cellIndex)
+      if (position) {
+        this.cellKeyToIndex.delete(makeCellKey(sheet.id, position.row, position.col))
+      }
       this.cellFormats.delete(cellIndex)
+      const identity = sheet.logical.getCellIdentity(cellIndex)
+      if (identity) {
+        sheet.logical.deleteVisibleCellByIds(identity.rowId, identity.colId)
+      }
     })
     runWorkbookMetadataEffect(this.metadataService.deleteSheetRecords(name))
     sheet.rowAxis.length = 0
@@ -355,7 +379,7 @@ export class WorkbookStore {
 
   private bumpColumnVersionByCellIndex(cellIndex: number): void {
     const sheetId = this.cellStore.sheetIds[cellIndex]!
-    const col = this.cellStore.cols[cellIndex]!
+    const col = this.getCellPosition(cellIndex)?.col ?? this.cellStore.cols[cellIndex]!
     const pending = this.batchedColumnVersionUpdates
     if (pending) {
       let columns = pending.get(sheetId)
@@ -384,16 +408,39 @@ export class WorkbookStore {
     return sheet.logical.getVisibleCell(parsed.row, parsed.col)
   }
 
+  getCellIndexAt(sheetId: number, row: number, col: number): number | undefined {
+    return this.getSheetById(sheetId)?.logical.getVisibleCell(row, col)
+  }
+
   getSheetNameById(id: number): string {
     return this.sheetsById.get(id)?.name ?? ''
   }
 
   getAddress(index: number): string {
-    return formatAddress(this.cellStore.rows[index]!, this.cellStore.cols[index]!)
+    const position = this.getCellPosition(index)
+    return formatAddress(position?.row ?? this.cellStore.rows[index]!, position?.col ?? this.cellStore.cols[index]!)
   }
 
   getQualifiedAddress(index: number): string {
     return `${this.getSheetNameById(this.cellStore.sheetIds[index]!)}!${this.getAddress(index)}`
+  }
+
+  getCellPosition(index: number): { sheetId: number; row: number; col: number } | undefined {
+    const sheetId = this.cellStore.sheetIds[index]
+    if (sheetId === undefined || sheetId === 0) {
+      return undefined
+    }
+    const sheet = this.getSheetById(sheetId)
+    const logicalPosition = sheet?.logical.getCellVisiblePosition(index)
+    if (logicalPosition) {
+      return { sheetId, row: logicalPosition.row, col: logicalPosition.col }
+    }
+    const row = this.cellStore.rows[index]
+    const col = this.cellStore.cols[index]
+    if (row === undefined || col === undefined) {
+      return undefined
+    }
+    return { sheetId, row, col }
   }
 
   detachCellIndex(index: number): boolean {
@@ -402,8 +449,9 @@ export class WorkbookStore {
       return false
     }
     const sheet = this.getSheetById(sheetId)
-    const row = this.cellStore.rows[index]
-    const col = this.cellStore.cols[index]
+    const position = this.getCellPosition(index)
+    const row = position?.row
+    const col = position?.col
     if (sheet && row !== undefined && col !== undefined) {
       if (sheet.logical.getVisibleCell(row, col) === index) {
         sheet.logical.deleteVisibleCell(row, col)
@@ -429,8 +477,9 @@ export class WorkbookStore {
     if (!sheet) {
       return false
     }
-    const row = this.cellStore.rows[index]
-    const col = this.cellStore.cols[index]
+    const position = this.getCellPosition(index)
+    const row = position?.row
+    const col = position?.col
     if (row === undefined || col === undefined) {
       return false
     }
@@ -972,35 +1021,31 @@ export class WorkbookStore {
     if (this.counters) {
       addEngineCounter(this.counters, 'structuralTransactions')
     }
-    const scope = structuralScopeForTransform(transform)
     const remappedCells: Array<StructuralTransaction['remappedCells'][number]> = []
-    const remappedEntries = sheet.grid.collectAxisRemapEntries(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
-    if (this.counters && remappedEntries.length > 0) {
-      addEngineCounter(this.counters, 'structuralPlannedCells', remappedEntries.length)
-      addEngineCounter(
-        this.counters,
-        'structuralSurvivorCellsRemapped',
-        remappedEntries.filter((entry) => entry.nextRow !== undefined && entry.nextCol !== undefined).length,
-      )
-      addEngineCounter(
-        this.counters,
-        'structuralRemovedCells',
-        remappedEntries.filter((entry) => entry.nextRow === undefined || entry.nextCol === undefined).length,
-      )
+    if (transform.kind === 'delete') {
+      const deletedAxisIds = sheet.logicalAxisMap.snapshot(transform.axis, transform.start, transform.count).map((entry) => entry.id)
+      const removedCellIndices = sheet.logical.listResidentCellIndices(transform.axis, deletedAxisIds)
+      for (const cellIndex of removedCellIndices) {
+        const identity = sheet.logical.getCellIdentity(cellIndex)
+        const position = sheet.logical.getCellVisiblePosition(cellIndex)
+        if (!identity || !position) {
+          continue
+        }
+        remappedCells.push({
+          cellIndex,
+          fromRow: position.row,
+          fromCol: position.col,
+          fromRowId: identity.rowId,
+          fromColId: identity.colId,
+          toRow: undefined,
+          toCol: undefined,
+        })
+      }
     }
-    remappedEntries.forEach(({ cellIndex, row, col, nextRow, nextCol }) => {
-      const fromRowId = sheet.logicalAxisMap.getId('row', row)
-      const fromColId = sheet.logicalAxisMap.getId('column', col)
-      remappedCells.push({
-        cellIndex,
-        fromRow: row,
-        fromCol: col,
-        ...(fromRowId === undefined ? {} : { fromRowId }),
-        ...(fromColId === undefined ? {} : { fromColId }),
-        toRow: nextRow,
-        toCol: nextCol,
-      })
-    })
+    if (this.counters && remappedCells.length > 0) {
+      addEngineCounter(this.counters, 'structuralPlannedCells', remappedCells.length)
+      addEngineCounter(this.counters, 'structuralRemovedCells', remappedCells.length)
+    }
     return buildStructuralTransaction({
       sheetName,
       sheetId: sheet.id,
@@ -1327,4 +1372,36 @@ export function makeCellKey(sheetId: number, row: number, col: number): number {
 
 export function makeLogicalCellKey(sheetId: number, rowId: string, colId: string): string {
   return `${sheetId}\t${rowId}\t${colId}`
+}
+
+function decodeCellKey(key: number): { sheetId: number; row: number; col: number } | undefined {
+  if (!Number.isInteger(key) || key < 0) {
+    return undefined
+  }
+  const sheetId = Math.floor(key / SHEET_STRIDE)
+  const offset = key - sheetId * SHEET_STRIDE
+  const row = Math.floor(offset / MAX_COLS)
+  const col = offset - row * MAX_COLS
+  if (sheetId <= 0 || row < 0 || row >= MAX_ROWS || col < 0 || col >= MAX_COLS) {
+    return undefined
+  }
+  return { sheetId, row, col }
+}
+
+class LogicalCellKeyIndexMap extends Map<number, number> {
+  constructor(private readonly resolve: (sheetId: number, row: number, col: number) => number | undefined) {
+    super()
+  }
+
+  override get(key: number): number | undefined {
+    const decoded = decodeCellKey(key)
+    if (decoded) {
+      return this.resolve(decoded.sheetId, decoded.row, decoded.col)
+    }
+    return super.get(key)
+  }
+
+  override has(key: number): boolean {
+    return this.get(key) !== undefined
+  }
 }

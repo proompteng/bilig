@@ -12,6 +12,11 @@ export interface SheetGridAxisRemapScope {
   readonly end?: number
 }
 
+export interface SheetGridLogicalLookup {
+  get(row: number, col: number): number | undefined
+  forEachCellEntry(fn: (cellIndex: number, row: number, col: number) => void): void
+}
+
 function blockIntersectsScope(axis: 'row' | 'column', key: number, scope: SheetGridAxisRemapScope | undefined): boolean {
   if (!scope) {
     return true
@@ -54,7 +59,10 @@ function blockIsEmpty(block: Uint32Array): boolean {
 export class SheetGrid {
   readonly blocks = new Map<number, Uint32Array>()
 
-  constructor(private readonly counters?: EngineCounters) {}
+  constructor(
+    private readonly counters?: EngineCounters,
+    private readonly logicalLookup?: SheetGridLogicalLookup,
+  ) {}
 
   private setInBlocks(blocks: Map<number, Uint32Array>, row: number, col: number, cellIndex: number): void {
     const key = blockKey(row, col)
@@ -68,6 +76,9 @@ export class SheetGrid {
   }
 
   get(row: number, col: number): number {
+    if (this.logicalLookup) {
+      return this.logicalLookup.get(row, col) ?? -1
+    }
     const block = this.blocks.get(blockKey(row, col))
     if (!block) return -1
     const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
@@ -87,6 +98,17 @@ export class SheetGrid {
   }
 
   forEachInRange(rowStart: number, colStart: number, rowEnd: number, colEnd: number, fn: (cellIndex: number) => void): void {
+    if (this.logicalLookup) {
+      for (let row = rowStart; row <= rowEnd; row += 1) {
+        for (let col = colStart; col <= colEnd; col += 1) {
+          const value = this.logicalLookup.get(row, col)
+          if (value !== undefined) {
+            fn(value)
+          }
+        }
+      }
+      return
+    }
     for (let row = rowStart; row <= rowEnd; row += 1) {
       for (let col = colStart; col <= colEnd; col += 1) {
         const value = this.get(row, col)
@@ -104,6 +126,10 @@ export class SheetGrid {
   }
 
   forEachCellEntry(fn: (cellIndex: number, row: number, col: number) => void): void {
+    if (this.logicalLookup) {
+      this.logicalLookup.forEachCellEntry(fn)
+      return
+    }
     this.blocks.forEach((block, key) => {
       const blockRow = Math.floor(key / 1_000_000)
       const blockCol = key % 1_000_000
@@ -212,6 +238,20 @@ export class SheetGrid {
     scope: SheetGridAxisRemapScope,
     predicate: (cellIndex: number, row: number, col: number) => boolean,
   ): boolean {
+    if (this.logicalLookup) {
+      let found = false
+      this.logicalLookup.forEachCellEntry((cellIndex, row, col) => {
+        if (found) {
+          return
+        }
+        const axisIndex = axis === 'row' ? row : col
+        const inScope = scope.end === undefined ? axisIndex >= scope.start : axisIndex >= scope.start && axisIndex < scope.end
+        if (inScope && predicate(cellIndex, row, col)) {
+          found = true
+        }
+      })
+      return found
+    }
     for (const key of this.blocks.keys()) {
       if (!blockIntersectsScope(axis, key, scope)) {
         continue

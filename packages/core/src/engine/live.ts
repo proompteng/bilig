@@ -687,9 +687,8 @@ export function createEngineServiceRuntime(args: {
     exportFormulaInstances: () =>
       formulaInstances.list().flatMap((record) => {
         const sheetId = args.state.workbook.cellStore.sheetIds[record.cellIndex]
-        const row = args.state.workbook.cellStore.rows[record.cellIndex]
-        const col = args.state.workbook.cellStore.cols[record.cellIndex]
-        if (sheetId === undefined || row === undefined || col === undefined) {
+        const position = args.state.workbook.getCellPosition(record.cellIndex)
+        if (sheetId === undefined || !position) {
           return []
         }
         const sheetName = args.state.workbook.getSheetNameById(sheetId)
@@ -700,8 +699,8 @@ export function createEngineServiceRuntime(args: {
           {
             ...record,
             sheetName,
-            row,
-            col,
+            row: position.row,
+            col: position.col,
           },
         ]
       }),

@@ -245,10 +245,9 @@ export function createEngineTraversalService(args: {
       if (!isRangeEntity(currentEntity) && !isExactLookupColumnEntity(currentEntity) && !isSortedLookupColumnEntity(currentEntity)) {
         const cellIndex = entityPayload(currentEntity)
         const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-        const row = args.state.workbook.cellStore.rows[cellIndex]
-        const col = args.state.workbook.cellStore.cols[cellIndex]
-        if (sheetId !== undefined && row !== undefined && col !== undefined) {
-          const regionDependents = args.regionGraph.collectFormulaDependentsForCell(sheetId, row, col)
+        const position = args.state.workbook.getCellPosition(cellIndex)
+        if (sheetId !== undefined && position) {
+          const regionDependents = args.regionGraph.collectFormulaDependentsForCell(sheetId, position.row, position.col)
           for (let index = 0; index < regionDependents.length; index += 1) {
             const formulaCellIndex = regionDependents[index]!
             if (topoFormulaSeen[formulaCellIndex] === topoFormulaSeenEpoch) {
@@ -260,9 +259,9 @@ export function createEngineTraversalService(args: {
             formulaCount += 1
           }
         }
-        if (sheetId !== undefined && col !== undefined) {
-          const exactLookupEntity = makeExactLookupColumnEntity(sheetId, col)
-          const sortedLookupEntity = makeSortedLookupColumnEntity(sheetId, col)
+        if (sheetId !== undefined && position) {
+          const exactLookupEntity = makeExactLookupColumnEntity(sheetId, position.col)
+          const sortedLookupEntity = makeSortedLookupColumnEntity(sheetId, position.col)
           ensureEntityQueueCapacity(entityQueueLength + 2)
           topoEntityQueue[entityQueueLength] = exactLookupEntity
           entityQueueLength += 1

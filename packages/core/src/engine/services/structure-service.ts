@@ -560,11 +560,12 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return
       }
-      const ownerRow = args.state.workbook.cellStore.rows[cellIndex]
-      const ownerCol = args.state.workbook.cellStore.cols[cellIndex]
-      if (ownerRow === undefined || ownerCol === undefined) {
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      if (!ownerPosition) {
         return
       }
+      const ownerRow = ownerPosition.row
+      const ownerCol = ownerPosition.col
       const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
         argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
       )
@@ -958,12 +959,11 @@ export function createEngineStructureService(args: {
 
   const isCellIndexMapped = (cellIndex: number): boolean => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const row = args.state.workbook.cellStore.rows[cellIndex]
-    const col = args.state.workbook.cellStore.cols[cellIndex]
-    if (sheetId === undefined || row === undefined || col === undefined || !Number.isFinite(row) || !Number.isFinite(col)) {
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (sheetId === undefined || !position || !Number.isFinite(position.row) || !Number.isFinite(position.col)) {
       return false
     }
-    return args.state.workbook.cellKeyToIndex.get(makeCellKey(sheetId, row, col)) === cellIndex
+    return args.state.workbook.cellKeyToIndex.get(makeCellKey(sheetId, position.row, position.col)) === cellIndex
   }
 
   const structuralAxisIndexAffected = (axisIndex: number, transform: StructuralAxisTransform): boolean => {
@@ -1015,10 +1015,8 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return
       }
-      const axisIndex =
-        argsForImpact.transform.axis === 'row'
-          ? args.state.workbook.cellStore.rows[cellIndex]
-          : args.state.workbook.cellStore.cols[cellIndex]
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      const axisIndex = argsForImpact.transform.axis === 'row' ? ownerPosition?.row : ownerPosition?.col
       const ownerPositionAffected =
         ownerSheetName === argsForImpact.sheetName &&
         axisIndex !== undefined &&
@@ -1029,10 +1027,8 @@ export function createEngineStructureService(args: {
           if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== argsForImpact.targetSheetId) {
             return false
           }
-          const dependencyAxisIndex =
-            argsForImpact.transform.axis === 'row'
-              ? args.state.workbook.cellStore.rows[dependencyCellIndex]
-              : args.state.workbook.cellStore.cols[dependencyCellIndex]
+          const dependencyPosition = args.state.workbook.getCellPosition(dependencyCellIndex)
+          const dependencyAxisIndex = argsForImpact.transform.axis === 'row' ? dependencyPosition?.row : dependencyPosition?.col
           return dependencyAxisIndex !== undefined && structuralAxisIndexAffected(dependencyAxisIndex, argsForImpact.transform)
         }) ||
           formula.rangeDependencies.some((rangeIndex) =>

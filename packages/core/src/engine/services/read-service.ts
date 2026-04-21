@@ -58,8 +58,9 @@ export function createEngineReadService(args: {
   }
 
   const getCellByIndex = (cellIndex: number): CellSnapshot => {
-    const row = args.state.workbook.cellStore.rows[cellIndex]!
-    const col = args.state.workbook.cellStore.cols[cellIndex]!
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    const row = position?.row ?? args.state.workbook.cellStore.rows[cellIndex]!
+    const col = position?.col ?? args.state.workbook.cellStore.cols[cellIndex]!
     const address = args.state.workbook.getAddress(cellIndex)
     const sheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
     const formula = args.state.formulas.get(cellIndex)?.source

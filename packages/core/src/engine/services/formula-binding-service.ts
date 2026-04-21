@@ -1577,13 +1577,12 @@ export function createEngineFormulaBindingService(args: {
 
   const isCellIndexMappedNow = (cellIndex: number): boolean => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const row = args.state.workbook.cellStore.rows[cellIndex]
-    const col = args.state.workbook.cellStore.cols[cellIndex]
-    if (sheetId === undefined || row === undefined || col === undefined) {
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (sheetId === undefined || !position) {
       return false
     }
     const sheet = args.state.workbook.getSheetById(sheetId)
-    return sheet?.grid.get(row, col) === cellIndex
+    return sheet?.grid.get(position.row, position.col) === cellIndex
   }
 
   const compileFormulaForCell = (
@@ -1591,12 +1590,11 @@ export function createEngineFormulaBindingService(args: {
     currentSheetName: string,
     source: string,
   ): { compiled: ParsedCompiledFormula; templateResolution: FormulaTemplateResolution } => {
-    const row = args.state.workbook.cellStore.rows[cellIndex]
-    const col = args.state.workbook.cellStore.cols[cellIndex]
-    if (row === undefined || col === undefined) {
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (!position) {
       throw new Error(`Cannot resolve formula template without coordinates for cell ${cellIndex}`)
     }
-    const templateResolution = args.resolveTemplateForCell(source, row, col)
+    const templateResolution = args.resolveTemplateForCell(source, position.row, position.col)
     const compiled = normalizeLookupCompileMode(templateResolution.compiled as ParsedCompiledFormula)
     if (compiled.symbolicNames.length === 0 && compiled.symbolicTables.length === 0 && compiled.symbolicSpills.length === 0) {
       return {
@@ -1638,9 +1636,8 @@ export function createEngineFormulaBindingService(args: {
 
   const recordFormulaInstanceNow = (cellIndex: number, source: string, templateId: number | undefined): void => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const row = args.state.workbook.cellStore.rows[cellIndex]
-    const col = args.state.workbook.cellStore.cols[cellIndex]
-    if (sheetId === undefined || row === undefined || col === undefined) {
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (sheetId === undefined || !position) {
       args.formulaInstances.delete(cellIndex)
       return
     }
@@ -1654,8 +1651,8 @@ export function createEngineFormulaBindingService(args: {
       args.formulaInstances.upsert(
         retargetFormulaInstance(existing, {
           sheetName,
-          row,
-          col,
+          row: position.row,
+          col: position.col,
           source,
           ...(templateId !== undefined ? { templateId } : {}),
         }),
@@ -1665,8 +1662,8 @@ export function createEngineFormulaBindingService(args: {
     args.formulaInstances.upsert({
       cellIndex,
       sheetName,
-      row,
-      col,
+      row: position.row,
+      col: position.col,
       source,
       ...(templateId !== undefined ? { templateId } : {}),
     })
@@ -1904,7 +1901,7 @@ export function createEngineFormulaBindingService(args: {
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
       const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-      const col = args.state.workbook.cellStore.cols[cellIndex]
+      const col = args.state.workbook.getCellPosition(cellIndex)?.col
       if (sheetId !== undefined && col !== undefined) {
         const columnKey = formulaColumnCountKey(sheetId, col)
         const nextCount = (formulaColumnCounts.get(columnKey) ?? 1) - 1
@@ -2117,7 +2114,7 @@ export function createEngineFormulaBindingService(args: {
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula)
     runtimeFormula.formulaSlotId = formulaSlotId
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const col = args.state.workbook.cellStore.cols[cellIndex]
+    const col = args.state.workbook.getCellPosition(cellIndex)?.col
     if (sheetId !== undefined && col !== undefined) {
       const columnKey = formulaColumnCountKey(sheetId, col)
       formulaColumnCounts.set(columnKey, (formulaColumnCounts.get(columnKey) ?? 0) + 1)

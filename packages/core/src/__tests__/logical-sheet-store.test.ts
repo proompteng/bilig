@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { makeLogicalCellKey } from '../workbook-store.js'
+import { AxisResidentCellIndex } from '../storage/axis-resident-cell-index.js'
 import { CellPageStore } from '../storage/cell-page-store.js'
+import { CellAxisIdentityStore } from '../storage/cell-axis-identity-store.js'
 import { LogicalSheetStore } from '../storage/logical-sheet-store.js'
 import { SheetAxisMap } from '../storage/sheet-axis-map.js'
 
@@ -10,7 +12,7 @@ describe('LogicalSheetStore', () => {
       makeLogicalCellKey(location.sheetId, location.rowId, location.colId),
     )
     const axisMap = new SheetAxisMap()
-    const logical = new LogicalSheetStore(7, axisMap, cellPages)
+    const logical = new LogicalSheetStore(7, axisMap, cellPages, new CellAxisIdentityStore(), new AxisResidentCellIndex())
 
     logical.setVisibleCell(1, 1, 42, {
       createRowId: () => 'row-b',
@@ -37,6 +39,8 @@ describe('LogicalSheetStore', () => {
       colRef: { index: 0, id: 'column-b' },
     })
     expect(logical.getVisibleCell(0, 0)).toBe(42)
+    expect(logical.getCellVisiblePosition(42)).toEqual({ row: 0, col: 0 })
+    expect(logical.listResidentCellIndices('row', ['row-b'])).toEqual([42])
     expect(logical.getVisibleCell(1, 1)).toBeUndefined()
 
     logical.setSheetId(9)

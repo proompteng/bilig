@@ -399,8 +399,9 @@ export function createEngineMutationSupportService(args: {
       if (sheetId === 0) {
         continue
       }
-      const row = args.state.workbook.cellStore.rows[cellIndex] ?? 0
-      const col = args.state.workbook.cellStore.cols[cellIndex] ?? 0
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      const row = position?.row ?? args.state.workbook.cellStore.rows[cellIndex] ?? 0
+      const col = position?.col ?? args.state.workbook.cellStore.cols[cellIndex] ?? 0
       const isFormulaCell = (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0
       const rangeIndices = args.state.ranges.addDynamicMember(sheetId, row, col, cellIndex, isFormulaCell)
       if (rangeIndices.length > 0) {
