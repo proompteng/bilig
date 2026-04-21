@@ -177,6 +177,10 @@ export class LogicalSheetStore {
     return axis === 'row' ? this.residentCells.cellsInRows(axisIds) : this.residentCells.cellsInColumns(axisIds)
   }
 
+  listResidentCellIndicesUnordered(axis: AxisKind, axisIds: readonly string[]): number[] {
+    return axis === 'row' ? this.residentCells.cellsInRowsUnordered(axisIds) : this.residentCells.cellsInColumnsUnordered(axisIds)
+  }
+
   forEachVisibleCellEntry(callback: (cellIndex: number, row: number, col: number) => void): void {
     const entries: Array<{ cellIndex: number; row: number; col: number }> = []
     this.cellIdentities.forEach((identity, cellIndex) => {

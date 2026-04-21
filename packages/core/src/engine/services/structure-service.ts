@@ -406,7 +406,7 @@ export function createEngineStructureService(args: {
     }
     const axisIds = sheet.logicalAxisMap.snapshot(axis, start, count).map((entry) => entry.id)
     const captured: Array<{ cellIndex: number; row: number; col: number }> = []
-    sheet.logical.listResidentCellIndices(axis, axisIds).forEach((cellIndex) => {
+    sheet.logical.listResidentCellIndicesUnordered(axis, axisIds).forEach((cellIndex) => {
       if (!shouldCaptureStoredCell(cellIndex)) {
         return
       }

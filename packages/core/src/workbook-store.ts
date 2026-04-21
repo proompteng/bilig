@@ -1027,7 +1027,7 @@ export class WorkbookStore {
     const remappedCells: Array<StructuralTransaction['remappedCells'][number]> = []
     if (transform.kind === 'delete') {
       const deletedAxisIds = sheet.logicalAxisMap.snapshot(transform.axis, transform.start, transform.count).map((entry) => entry.id)
-      const removedCellIndices = sheet.logical.listResidentCellIndices(transform.axis, deletedAxisIds)
+      const removedCellIndices = sheet.logical.listResidentCellIndicesUnordered(transform.axis, deletedAxisIds)
       for (const cellIndex of removedCellIndices) {
         const identity = sheet.logical.getCellIdentity(cellIndex)
         const position = sheet.logical.getCellVisiblePosition(cellIndex)

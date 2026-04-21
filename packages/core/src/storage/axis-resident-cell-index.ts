@@ -51,6 +51,14 @@ export class AxisResidentCellIndex {
   cellsInColumns(colIds: readonly string[]): number[] {
     return sortedUniqueCells(colIds.flatMap((colId) => this.cellsInColumn(colId)))
   }
+
+  cellsInRowsUnordered(rowIds: readonly string[]): number[] {
+    return uniqueCells(rowIds.flatMap((rowId) => [...(this.byRow.get(rowId) ?? [])]))
+  }
+
+  cellsInColumnsUnordered(colIds: readonly string[]): number[] {
+    return uniqueCells(colIds.flatMap((colId) => [...(this.byColumn.get(colId) ?? [])]))
+  }
 }
 
 function addToSetMap(map: Map<string, Set<number>>, key: string, value: number): void {
@@ -79,4 +87,8 @@ function sortedCells(values: ReadonlySet<number> | undefined): number[] {
 
 function sortedUniqueCells(values: readonly number[]): number[] {
   return [...new Set(values)].toSorted((left, right) => left - right)
+}
+
+function uniqueCells(values: readonly number[]): number[] {
+  return [...new Set(values)]
 }

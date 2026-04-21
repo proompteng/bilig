@@ -28,6 +28,10 @@ export function orderWorkPaperCellChanges(
     return changes
   }
 
+  if (isReverseSortedCellChangeSlice(changes, compare, 0, changes.length)) {
+    return changes.toReversed()
+  }
+
   return changes.toSorted(compare)
 }
 
@@ -60,6 +64,20 @@ function isSortedCellChangeSlice(
 ): boolean {
   for (let index = start + 1; index < end; index += 1) {
     if (compare(changes[index - 1]!, changes[index]!) > 0) {
+      return false
+    }
+  }
+  return true
+}
+
+function isReverseSortedCellChangeSlice(
+  changes: readonly WorkPaperChange[],
+  compare: (left: WorkPaperChange, right: WorkPaperChange) => number,
+  start: number,
+  end: number,
+): boolean {
+  for (let index = start + 1; index < end; index += 1) {
+    if (compare(changes[index - 1]!, changes[index]!) < 0) {
       return false
     }
   }

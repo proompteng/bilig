@@ -25,4 +25,17 @@ describe('orderWorkPaperCellChanges', () => {
       '2:0',
     ])
   })
+
+  it('reverses descending single-sheet batches without falling back to a full sort', () => {
+    const changes = [cellChange(1, 3, 0), cellChange(1, 2, 0), cellChange(1, 1, 0)]
+
+    const ordered = orderWorkPaperCellChanges(changes, [{ id: 1, order: 0 }])
+
+    expect(ordered).not.toBe(changes)
+    expect(ordered.map((change) => (change.kind === 'cell' ? `${change.address.row}:${change.address.col}` : 'other'))).toEqual([
+      '1:0',
+      '2:0',
+      '3:0',
+    ])
+  })
 })
