@@ -619,7 +619,10 @@ async function stopLocalPlaywrightStack(child: BrowserStackProcess): Promise<voi
 
 async function waitForLocalPlaywrightStack(child: BrowserStackProcess): Promise<void> {
   await Promise.race([
-    waitForHttp(`${getE2eBaseUrl()}/runtime-config.json`, composeStartupTimeoutMs),
+    (async () => {
+      await waitForHttp(`${getE2eSyncServerUrl()}/runtime-config.json`, composeStartupTimeoutMs)
+      await waitForHttp(getE2eBaseUrl(), composeStartupTimeoutMs)
+    })(),
     child.exited.then((code) => {
       throw new Error(`local browser stack exited before ready with code ${code ?? 1}`)
     }),
@@ -637,7 +640,8 @@ async function isLocalPlaywrightStackReady(child: BrowserStackProcess): Promise<
   }
 
   try {
-    await waitForHttp(`${getE2eBaseUrl()}/runtime-config.json`, 2_000)
+    await waitForHttp(`${getE2eSyncServerUrl()}/runtime-config.json`, 2_000)
+    await waitForHttp(getE2eBaseUrl(), 2_000)
     return true
   } catch {
     return false

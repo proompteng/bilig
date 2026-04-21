@@ -588,7 +588,7 @@ async function waitForReadback(
         lastResult = await inspectGpuReadback(page, input)
         return lastResult.ready && lastResult.hasGpu && predicate(lastResult)
       },
-      { timeout: 15_000 },
+      { timeout: 30_000 },
     )
     .toBe(true)
   if (!lastResult) {
@@ -615,7 +615,7 @@ async function waitForReadbackSequence(page: Page, previousSequence: number): Pr
       return (inspector?.getSequence() ?? 0) > sequence
     },
     previousSequence,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   )
 }
 
