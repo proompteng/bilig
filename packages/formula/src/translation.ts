@@ -95,8 +95,13 @@ export function translateCompiledFormulaWithoutAst(
     translateParsedRangeReference(range, rowDelta, colDelta),
   )
   const source = sourceOverride ?? compiled.source
-  const translatedCellMap = buildTranslatedCellReferenceMap(compiled.parsedSymbolicRefs, translatedParsedSymbolicRefs)
-  const translatedRangeMap = buildTranslatedRangeReferenceMap(compiled.parsedSymbolicRanges, translatedParsedSymbolicRanges)
+  const canReuseJsPlan = compiled.symbolicRanges.length === 0 && compiled.mode === FormulaMode.WasmFastPath
+  const translatedCellMap = canReuseJsPlan
+    ? undefined
+    : buildTranslatedCellReferenceMap(compiled.parsedSymbolicRefs, translatedParsedSymbolicRefs)
+  const translatedRangeMap = canReuseJsPlan
+    ? undefined
+    : buildTranslatedRangeReferenceMap(compiled.parsedSymbolicRanges, translatedParsedSymbolicRanges)
 
   return {
     source,
@@ -113,12 +118,11 @@ export function translateCompiledFormulaWithoutAst(
       symbolicRanges:
         translatedParsedSymbolicRanges?.map((range) => formatParsedRangeReference(range)) ??
         compiled.symbolicRanges.map((range) => translateQualifiedRangeReference(range, rowDelta, colDelta)),
-      jsPlan:
-        compiled.symbolicRanges.length === 0 && compiled.mode === FormulaMode.WasmFastPath
-          ? compiled.jsPlan
-          : compiled.jsPlan.map((instruction) =>
-              translateJsPlanInstructionWithoutAst(instruction, translatedCellMap, translatedRangeMap, rowDelta, colDelta),
-            ),
+      jsPlan: canReuseJsPlan
+        ? compiled.jsPlan
+        : compiled.jsPlan.map((instruction) =>
+            translateJsPlanInstructionWithoutAst(instruction, translatedCellMap!, translatedRangeMap!, rowDelta, colDelta),
+          ),
       ...(translatedParsedDeps ? { parsedDeps: translatedParsedDeps } : {}),
       ...(translatedParsedSymbolicRefs ? { parsedSymbolicRefs: translatedParsedSymbolicRefs } : {}),
       ...(translatedParsedSymbolicRanges ? { parsedSymbolicRanges: translatedParsedSymbolicRanges } : {}),

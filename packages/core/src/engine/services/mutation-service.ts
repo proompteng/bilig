@@ -26,6 +26,7 @@ import {
   type EngineCellMutationRef,
 } from '../../cell-mutations-at.js'
 import type { CommitOp, EngineRuntimeState, PreparedCellAddress, TransactionRecord } from '../runtime-state.js'
+import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import { EngineMutationError } from '../errors.js'
 import { tryBuildFastMutationHistory, type FastMutationHistoryResult } from './mutation-history-fast-path.js'
 
@@ -385,7 +386,7 @@ export function createEngineMutationService(args: {
         kind: 'setCellFormula',
         sheetName: sheet.name,
         address,
-        formula: runtimeFormula.source,
+        formula: getRuntimeFormulaSource(runtimeFormula),
       }
     }
     const snapshot = args.getCellByIndex(cellIndex)

@@ -182,6 +182,8 @@ function structuralRewritePreservesValue(
     formula.compiled.symbolicNames.length === 0 &&
     formula.compiled.symbolicTables.length === 0 &&
     formula.compiled.symbolicSpills.length === 0 &&
+    formula.compiled.symbolicRanges.length === 0 &&
+    formula.compiled.deps.every((dependency) => !dependency.includes(':')) &&
     formula.directLookup === undefined &&
     formula.directAggregate === undefined &&
     formula.directCriteria === undefined &&
@@ -294,6 +296,19 @@ export function createEngineStructureService(args: {
     sourceSheetName?: string,
     sourceAddress?: string,
   ): EngineOp[] => args.captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress)
+
+  const canDeferSimpleInsertStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
+    transform.kind === 'insert' &&
+    formula.rangeDependencies.length === 0 &&
+    formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
+    !formula.compiled.volatile &&
+    formula.compiled.symbolicNames.length === 0 &&
+    formula.compiled.symbolicTables.length === 0 &&
+    formula.compiled.symbolicSpills.length === 0 &&
+    formula.directLookup === undefined &&
+    formula.directAggregate === undefined &&
+    formula.directCriteria === undefined &&
+    isStructurallyStableSimpleFormulaNode(formula.compiled.ast)
 
   const captureAxisRangeCellState = (sheetName: string, axis: 'row' | 'column', start: number, count: number): EngineOp[] => {
     const sheet = args.state.workbook.getSheet(sheetName)
@@ -628,6 +643,17 @@ export function createEngineStructureService(args: {
           ? mapStructuralAxisIndex(previousOwnerCol, argsForResolve.transform)
           : previousOwnerCol)
       if (ownerRow === undefined || ownerCol === undefined) {
+        return
+      }
+      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleInsertStructuralFormulaSource(formula, argsForResolve.transform)) {
+        formula.structuralSourceTransform = {
+          ownerSheetName,
+          targetSheetName: argsForResolve.sheetName,
+          transform: argsForResolve.transform,
+          preservesValue: true,
+        }
+        hasDeferredStructuralFormulaSources = true
+        preservedCellIndices.push(cellIndex)
         return
       }
       const templateRewrite =
