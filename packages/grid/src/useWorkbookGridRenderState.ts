@@ -29,7 +29,7 @@ import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyle } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import type { GridSelection, Rectangle } from './gridTypes.js'
+import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
@@ -47,10 +47,12 @@ import { noteGridScrollInput } from './renderer/grid-render-counters.js'
 import { GridCameraStore } from './renderer-v2/gridCameraStore.js'
 import { visibleRegionFromCamera, viewportFromVisibleRegion } from './useGridCameraState.js'
 import { sameBounds } from './useGridOverlayState.js'
-import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { canUseWorkerResidentPaneScenes, noteWorkerResidentPaneScenesApplied } from './useGridSceneResidency.js'
 import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
 import { collectViewportSubscriptions } from './useGridViewportSubscriptions.js'
+
+const BASE_HEADER_SELECTED_CELL: Item = [-1, -1]
+const BASE_HEADER_GRID_SELECTION: GridSelection = createGridSelection(-1, -1)
 
 function noteViewportSubscription(): void {
   if (typeof window === 'undefined') {
@@ -659,14 +661,6 @@ export function useWorkbookGridRenderState(input: {
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
   }, [engine, invalidateScene, sheetName, subscribeViewport, visibleAddresses])
 
-  const resizeGuideColumn = useMemo(
-    () => resolveResizeGuideColumn({ activeResizeColumn, cursor: hoverState.cursor, header: hoverState.header }),
-    [activeResizeColumn, hoverState.cursor, hoverState.header],
-  )
-  const resizeGuideRow = useMemo(
-    () => resolveResizeGuideRow({ activeResizeRow, cursor: hoverState.cursor, header: hoverState.header }),
-    [activeResizeRow, hoverState.cursor, hoverState.header],
-  )
   const residentPaneSceneRequest = useMemo<WorkbookPaneSceneRequest | null>(
     () => ({
       sheetName,
@@ -812,12 +806,11 @@ export function useWorkbookGridRenderState(input: {
       editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
       hoveredCell: null,
       hoveredHeader: null,
-      resizeGuideColumn,
-      resizeGuideRow,
-      activeHeaderDrag,
+      resizeGuideColumn: null,
+      resizeGuideRow: null,
+      activeHeaderDrag: null,
     })
   }, [
-    activeHeaderDrag,
     canUseWorkerResidentPaneScenesResult,
     columnWidths,
     engine,
@@ -830,8 +823,6 @@ export function useWorkbookGridRenderState(input: {
     hostElement,
     isEditingCell,
     residentViewport,
-    resizeGuideColumn,
-    resizeGuideRow,
     rowHeights,
     sceneRevision,
     selectedCell.col,
@@ -937,13 +928,13 @@ export function useWorkbookGridRenderState(input: {
       columnWidths,
       rowHeights,
       gridMetrics,
-      gridSelection,
-      activeHeaderDrag,
+      gridSelection: BASE_HEADER_GRID_SELECTION,
+      activeHeaderDrag: null,
       hoveredCell: null,
       hoveredHeader: null,
-      resizeGuideColumn,
-      resizeGuideRow,
-      selectedCell: [selectedCell.col, selectedCell.row],
+      resizeGuideColumn: null,
+      resizeGuideRow: null,
+      selectedCell: BASE_HEADER_SELECTED_CELL,
       selectionRange: null,
       sheetName,
       visibleItems: residentHeaderItems,
@@ -955,20 +946,14 @@ export function useWorkbookGridRenderState(input: {
       getCellBounds: getHeaderCellLocalBounds,
     })
   }, [
-    activeHeaderDrag,
     columnWidths,
     emptyGpuScene,
     engine,
     getHeaderCellLocalBounds,
     gridMetrics,
-    gridSelection,
     hostElement,
-    resizeGuideColumn,
-    resizeGuideRow,
     rowHeights,
     sceneRevision,
-    selectedCell.col,
-    selectedCell.row,
     sheetName,
     residentHeaderItems,
     residentHeaderRegion,
@@ -986,10 +971,10 @@ export function useWorkbookGridRenderState(input: {
       rowHeights,
       editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
       gridMetrics,
-      activeHeaderDrag,
+      activeHeaderDrag: null,
       hoveredHeader: null,
-      resizeGuideColumn,
-      selectedCell: [selectedCell.col, selectedCell.row],
+      resizeGuideColumn: null,
+      selectedCell: BASE_HEADER_SELECTED_CELL,
       selectedCellSnapshot,
       selectionRange: null,
       sheetName,
@@ -1004,7 +989,6 @@ export function useWorkbookGridRenderState(input: {
       getCellBounds: getHeaderCellLocalBounds,
     })
   }, [
-    activeHeaderDrag,
     columnWidths,
     emptyTextScene,
     engine,
@@ -1014,7 +998,6 @@ export function useWorkbookGridRenderState(input: {
     hostClientHeight,
     hostClientWidth,
     isEditingCell,
-    resizeGuideColumn,
     rowHeights,
     sceneRevision,
     selectedCellSnapshot,

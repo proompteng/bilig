@@ -282,6 +282,85 @@ test('main workbook shell keeps header labels and body text visible while scroll
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
+test('main workbook shell keeps typegpu grid lines exactly aligned after diagonal scroll', async ({ page }, testInfo) => {
+  const scrollLeft = PRODUCT_COLUMN_WIDTH * 4 + 17
+  const scrollTop = PRODUCT_ROW_HEIGHT * 5 + 9
+  const visibleStartCol = Math.floor(scrollLeft / PRODUCT_COLUMN_WIDTH)
+  const visibleStartRow = Math.floor(scrollTop / PRODUCT_ROW_HEIGHT)
+  const verticalLineAfterCol = visibleStartCol + 3
+  const horizontalLineAfterRow = visibleStartRow + 7
+  const verticalLineX = PRODUCT_ROW_MARKER_WIDTH + (verticalLineAfterCol + 1) * PRODUCT_COLUMN_WIDTH - scrollLeft - 1
+  const horizontalLineY = PRODUCT_HEADER_HEIGHT + (horizontalLineAfterRow + 1) * PRODUCT_ROW_HEIGHT - scrollTop - 1
+  const bodyProbeY = PRODUCT_HEADER_HEIGHT + 180
+  const bodyProbeX = PRODUCT_ROW_MARKER_WIDTH + 360
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page)
+  await waitForWorkbookReady(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const initialSequence = await page.evaluate(() => {
+    return (
+      (
+        window as Window & { __biligGpuReadbackInspector?: { readonly getSequence: () => number } }
+      ).__biligGpuReadbackInspector?.getSequence() ?? 0
+    )
+  })
+
+  await page.getByTestId('grid-scroll-viewport').evaluate(
+    (viewport, target) => {
+      if (!(viewport instanceof HTMLDivElement)) {
+        throw new Error('grid scroll viewport is not a div')
+      }
+      viewport.scrollLeft = target.left
+      viewport.scrollTop = target.top
+      viewport.dispatchEvent(new Event('scroll'))
+    },
+    { left: scrollLeft, top: scrollTop },
+  )
+  await waitForReadbackSequence(page, initialSequence)
+
+  const readback = await waitForReadback(
+    page,
+    {
+      points: [
+        { name: 'headerVerticalLine', x: verticalLineX, y: Math.floor(PRODUCT_HEADER_HEIGHT / 2) },
+        { name: 'bodyVerticalLine', x: verticalLineX, y: bodyProbeY },
+        { name: 'bodyVerticalBlank', x: verticalLineX - 3, y: bodyProbeY },
+        { name: 'rowHeaderHorizontalLine', x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2), y: horizontalLineY },
+        { name: 'bodyHorizontalLine', x: bodyProbeX, y: horizontalLineY },
+        { name: 'bodyHorizontalBlank', x: bodyProbeX, y: horizontalLineY - 3 },
+      ],
+      regions: [],
+    },
+    (result) =>
+      result.points.headerVerticalLine.a > 150 &&
+      result.points.bodyVerticalLine.a > 150 &&
+      result.points.rowHeaderHorizontalLine.a > 150 &&
+      result.points.bodyHorizontalLine.a > 150,
+  )
+
+  expect(readback.points.headerVerticalLine.a).toBeGreaterThan(150)
+  expect(readback.points.bodyVerticalLine.a).toBeGreaterThan(150)
+  expect(readback.points.bodyVerticalBlank.a).toBeLessThan(50)
+  expect(readback.points.rowHeaderHorizontalLine.a).toBeGreaterThan(150)
+  expect(readback.points.bodyHorizontalLine.a).toBeGreaterThan(150)
+  expect(readback.points.bodyHorizontalBlank.a).toBeLessThan(50)
+  expect(verticalLineX).toBeGreaterThan(PRODUCT_ROW_MARKER_WIDTH)
+  expect(horizontalLineY).toBeGreaterThan(PRODUCT_HEADER_HEIGHT)
+
+  await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-exact-scroll-readback.png', 'main-workbook-grid-exact-scroll-readback')
+})
+
 test('main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)

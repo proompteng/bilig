@@ -114,7 +114,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     (geometry: NonNullable<typeof v2Geometry>) =>
       buildDynamicGridOverlayPacket({
         geometry,
+        activeHeaderDrag: renderState.activeHeaderDrag,
+        gridSelection: renderState.gridSelection,
         hoveredCell: renderState.hoverState.cell,
+        selectedCell: [renderState.selectedCell.col, renderState.selectedCell.row],
         selectionRange: renderState.selectionRange,
         showFillHandle:
           renderState.selectionRange !== null &&
@@ -136,13 +139,15 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     [
       renderState.activeResizeColumn,
       renderState.activeResizeRow,
+      renderState.activeHeaderDrag,
       renderState.hoverState.cell,
       renderState.hoverState.cursor,
       renderState.hoverState.header,
       renderState.fillPreviewRange,
-      renderState.gridSelection.columns.length,
-      renderState.gridSelection.rows.length,
+      renderState.gridSelection,
       renderState.isRangeMoveDragging,
+      renderState.selectedCell.col,
+      renderState.selectedCell.row,
       renderState.selectionRange,
     ],
   )
