@@ -6,12 +6,16 @@ import {
   buildLookupColumnOwner,
   type LookupColumnOwner,
   type LookupColumnOwnerWrite,
+  type LookupColumnOwnerWriteOptions,
 } from '../engine/services/lookup-column-owner.js'
 
 export interface ColumnIndexStore {
   readonly getLookupColumnOwner: (request: { sheetName: string; col: number }) => LookupColumnOwner | undefined
   readonly invalidateColumn: (request: { sheetName: string; col: number }) => void
-  readonly recordLiteralWrite: (request: LookupColumnOwnerWrite & { sheetName: string; col: number }) => void
+  readonly recordLiteralWrite: (
+    request: LookupColumnOwnerWrite & { sheetName: string; col: number },
+    options?: LookupColumnOwnerWriteOptions,
+  ) => void
 }
 
 function registryKey(sheetName: string, col: number): string {
@@ -78,7 +82,7 @@ export function createColumnIndexStore(args: {
     invalidateColumn(request) {
       ownerIndices.delete(registryKey(request.sheetName, request.col))
     },
-    recordLiteralWrite(request) {
+    recordLiteralWrite(request, options) {
       const key = registryKey(request.sheetName, request.col)
       const owner = ownerIndices.get(key)
       if (!owner) {
@@ -93,6 +97,7 @@ export function createColumnIndexStore(args: {
           owner,
           write: request,
           normalizeStringId: args.runtimeColumnStore.normalizeStringId,
+          ...options,
         })
       ) {
         ownerIndices.delete(key)

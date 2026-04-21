@@ -6,6 +6,7 @@ import type { WorkPaperCellChange } from './work-paper-types.js'
 export function materializeTrackedIndexChanges(
   engine: SpreadsheetEngine,
   changedCellIndices: readonly number[] | Uint32Array,
+  options: { readonly explicitChangedCount?: number } = {},
 ): readonly WorkPaperCellChange[] {
   if (changedCellIndices.length === 0) {
     return []
@@ -46,6 +47,60 @@ export function materializeTrackedIndexChanges(
     const sheet = workbook.getSheetById(firstSheetId)
     const sheetName = sheet?.name ?? workbook.getSheetNameById(firstSheetId)
     const isPhysicalSheet = !sheet || sheet.structureVersion === 1
+    const split = options.explicitChangedCount
+    if (
+      isPhysicalSheet &&
+      split !== undefined &&
+      split > 0 &&
+      split < changedCellIndices.length &&
+      isTrackedIndexSliceSorted(cellStore, changedCellIndices, 0, split) &&
+      isTrackedIndexSliceSorted(cellStore, changedCellIndices, split, changedCellIndices.length)
+    ) {
+      let explicitIndex = 0
+      let recalculatedIndex = split
+      while (explicitIndex < split && recalculatedIndex < changedCellIndices.length) {
+        const explicitCellIndex = changedCellIndices[explicitIndex]!
+        const recalculatedCellIndex = changedCellIndices[recalculatedIndex]!
+        if (compareTrackedPhysicalCellIndices(cellStore, explicitCellIndex, recalculatedCellIndex) <= 0) {
+          changes.push(
+            readPhysicalTrackedIndexChange(explicitCellIndex, firstSheetId, sheetName, cellStore, readValue, formatAddressCached),
+          )
+          explicitIndex += 1
+        } else {
+          changes.push(
+            readPhysicalTrackedIndexChange(recalculatedCellIndex, firstSheetId, sheetName, cellStore, readValue, formatAddressCached),
+          )
+          recalculatedIndex += 1
+        }
+      }
+      while (explicitIndex < split) {
+        changes.push(
+          readPhysicalTrackedIndexChange(
+            changedCellIndices[explicitIndex]!,
+            firstSheetId,
+            sheetName,
+            cellStore,
+            readValue,
+            formatAddressCached,
+          ),
+        )
+        explicitIndex += 1
+      }
+      while (recalculatedIndex < changedCellIndices.length) {
+        changes.push(
+          readPhysicalTrackedIndexChange(
+            changedCellIndices[recalculatedIndex]!,
+            firstSheetId,
+            sheetName,
+            cellStore,
+            readValue,
+            formatAddressCached,
+          ),
+        )
+        recalculatedIndex += 1
+      }
+      return changes
+    }
     for (let index = 0; index < changedCellIndices.length; index += 1) {
       const cellIndex = changedCellIndices[index]!
       if (cellStore.sheetIds[cellIndex] !== firstSheetId) {
@@ -116,4 +171,46 @@ export function materializeTrackedIndexChanges(
     })
   }
   return changes
+}
+
+type TrackedCellStore = SpreadsheetEngine['workbook']['cellStore']
+
+function compareTrackedPhysicalCellIndices(cellStore: TrackedCellStore, leftCellIndex: number, rightCellIndex: number): number {
+  return (
+    (cellStore.rows[leftCellIndex] ?? 0) - (cellStore.rows[rightCellIndex] ?? 0) ||
+    (cellStore.cols[leftCellIndex] ?? 0) - (cellStore.cols[rightCellIndex] ?? 0)
+  )
+}
+
+function isTrackedIndexSliceSorted(
+  cellStore: TrackedCellStore,
+  changedCellIndices: readonly number[] | Uint32Array,
+  start: number,
+  end: number,
+): boolean {
+  for (let index = start + 1; index < end; index += 1) {
+    if (compareTrackedPhysicalCellIndices(cellStore, changedCellIndices[index - 1]!, changedCellIndices[index]!) > 0) {
+      return false
+    }
+  }
+  return true
+}
+
+function readPhysicalTrackedIndexChange(
+  cellIndex: number,
+  sheetId: number,
+  sheetName: string,
+  cellStore: TrackedCellStore,
+  readValue: (cellIndex: number) => CellValue,
+  formatAddressCached: (row: number, col: number) => string,
+): WorkPaperCellChange {
+  const row = cellStore.rows[cellIndex]!
+  const col = cellStore.cols[cellIndex]!
+  return {
+    kind: 'cell',
+    address: { sheet: sheetId, row, col },
+    sheetName,
+    a1: formatAddressCached(row, col),
+    newValue: readValue(cellIndex),
+  }
 }

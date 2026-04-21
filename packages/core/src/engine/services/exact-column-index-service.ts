@@ -637,7 +637,7 @@ export function createExactColumnIndexService(args: {
     },
     recordLiteralWrite(request) {
       const registryKey = columnRegistryKey(request.sheetName, request.col)
-      args.columnIndexStore.recordLiteralWrite(request)
+      args.columnIndexStore.recordLiteralWrite(request, { updateApproximateSummaries: false })
       const cacheKeys = cacheKeysByColumn.get(registryKey)
       if (!cacheKeys || cacheKeys.size === 0) {
         return

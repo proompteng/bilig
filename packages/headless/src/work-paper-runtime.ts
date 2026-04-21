@@ -3121,7 +3121,7 @@ export class WorkPaper {
       return { changes: cellPatches, canReusePublicChanges: false }
     }
     return {
-      changes: materializeTrackedIndexChanges(this.engine, event.changedCellIndices),
+      changes: materializeTrackedIndexChanges(this.engine, event.changedCellIndices, { explicitChangedCount: event.explicitChangedCount }),
       canReusePublicChanges: true,
     }
   }

@@ -104,6 +104,10 @@ export interface LookupColumnOwnerWrite {
   readonly newStringId?: number
 }
 
+export interface LookupColumnOwnerWriteOptions {
+  readonly updateApproximateSummaries?: boolean
+}
+
 function decodeValueTag(rawTag: number | undefined): ValueTag {
   if (rawTag === undefined) {
     return ValueTag.Empty
@@ -590,6 +594,7 @@ export function applyLookupColumnOwnerLiteralWrite(args: {
   readonly owner: LookupColumnOwner
   readonly write: LookupColumnOwnerWrite
   readonly normalizeStringId: (stringId: number) => string
+  readonly updateApproximateSummaries?: boolean
 }): boolean {
   if (args.write.row < args.owner.rowStart || args.write.row > args.owner.rowEnd) {
     return false
@@ -600,11 +605,13 @@ export function applyLookupColumnOwnerLiteralWrite(args: {
 
   if (oldKey !== undefined) {
     if (!removeOwnerKeyRow(args.owner, oldKey, args.write.row)) {
-      return false
+      if (newKey === undefined || exactLookupKeyAt(args.owner, offset) !== newKey) {
+        return false
+      }
+    } else if (newKey !== undefined) {
+      insertOwnerKeyRow(args.owner, newKey, args.write.row)
     }
-  }
-
-  if (newKey !== undefined) {
+  } else if (newKey !== undefined) {
     insertOwnerKeyRow(args.owner, newKey, args.write.row)
   }
 
@@ -615,6 +622,10 @@ export function applyLookupColumnOwnerLiteralWrite(args: {
     args.owner.textValues[offset] = textValueForValue(args.write.newValue, args.normalizeStringId, args.write.newStringId)
   } else if (offset < args.owner.textValues.length) {
     args.owner.textValues[offset] = ''
+  }
+  if (args.updateApproximateSummaries === false) {
+    args.owner.summariesDirty = true
+    return true
   }
   if (args.owner.summariesDirty) {
     initializeApproximateLookupSummaries(args.owner)

@@ -241,6 +241,61 @@ describe('lookup column owner helpers', () => {
     })
   })
 
+  it('defers approximate summary maintenance for exact-only literal writes', () => {
+    const workbook = new WorkbookStore('lookup-owner-exact-write')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+    ;[1, 3, 5, 7].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, { tag: ValueTag.Number, value })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const owner = buildLookupColumnOwner({
+      owner: runtimeColumnStore.getColumnOwner({ sheetName: 'Sheet1', col: 0 }),
+      normalizeStringId: runtimeColumnStore.normalizeStringId,
+    })
+
+    expect(owner).toBeDefined()
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: 3,
+          oldValue: { tag: ValueTag.Number, value: 7 },
+          newValue: { tag: ValueTag.Number, value: 9 },
+        },
+        normalizeStringId: runtimeColumnStore.normalizeStringId,
+        updateApproximateSummaries: false,
+      }),
+    ).toBe(true)
+    expect(findExactMatchInRange(owner!, 'n:7', 0, 3, 1)).toBeUndefined()
+    expect(findExactMatchInRange(owner!, 'n:9', 0, 3, 1)).toBe(3)
+    expect(owner!.summariesDirty).toBe(true)
+
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: 3,
+          oldValue: { tag: ValueTag.Number, value: 7 },
+          newValue: { tag: ValueTag.Number, value: 9 },
+        },
+        normalizeStringId: runtimeColumnStore.normalizeStringId,
+        updateApproximateSummaries: false,
+      }),
+    ).toBe(true)
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+    expect(owner!.summariesDirty).toBe(false)
+  })
+
   it('handles mixed and invalid owners conservatively', () => {
     const workbook = new WorkbookStore('lookup-owner-mixed')
     const strings = new StringPool()
