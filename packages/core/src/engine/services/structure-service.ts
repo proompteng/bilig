@@ -504,6 +504,7 @@ export function createEngineStructureService(args: {
     formula.compiled.symbolicNames.length === 0 &&
     formula.compiled.symbolicTables.length === 0 &&
     formula.compiled.symbolicSpills.length === 0 &&
+    formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
     !formula.source.includes('#REF!') &&
     formula.compiled.deps.every((dependency) => !dependency.includes('#REF!')) &&
     isStructurallyStableSimpleFormulaNode(formula.compiled.optimizedAst)
