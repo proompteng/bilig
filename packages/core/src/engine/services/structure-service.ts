@@ -25,6 +25,7 @@ import type { RuntimeFormula } from '../runtime-state.js'
 import { EngineStructureError } from '../errors.js'
 import { makeCellKey, normalizeDefinedName, type WorkbookPivotRecord, type WorkbookStore } from '../../workbook-store.js'
 import type { RangeRegistry } from '../../range-registry.js'
+import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -38,6 +39,7 @@ interface EngineStructureState {
   readonly formulas: FormulaTable<RuntimeFormula>
   readonly ranges: RangeRegistry
   readonly pivotOutputOwners: Map<number, string>
+  readonly counters?: EngineCounters
 }
 
 interface StructuralFormulaRebindInput {
@@ -298,6 +300,9 @@ export function createEngineStructureService(args: {
         captured.push({ cellIndex, row, col })
       }
     })
+    if (args.state.counters && captured.length > 0) {
+      addEngineCounter(args.state.counters, 'structuralUndoCapturedCells', captured.length)
+    }
     return captured
       .toSorted((left, right) => left.row - right.row || left.col - right.col)
       .flatMap(({ cellIndex, row, col }) => captureStoredCellState(cellIndex, sheetName, formatAddress(row, col)))
@@ -995,6 +1000,9 @@ export function createEngineStructureService(args: {
         candidateCellIndices.add(cellIndex)
       })
     }
+    if (args.state.counters && candidateCellIndices.size > 0) {
+      addEngineCounter(args.state.counters, 'structuralFormulaImpactCandidates', candidateCellIndices.size)
+    }
     candidateCellIndices.forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
       if (!formula) {
@@ -1198,6 +1206,9 @@ export function createEngineStructureService(args: {
             changedDefinedNames,
             changedTableNames,
           })
+          if (args.state.counters && rebindInputs.length > 0) {
+            addEngineCounter(args.state.counters, 'structuralFormulaRebindInputs', rebindInputs.length)
+          }
           const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex))
           const onlyDirectAggregateFormulaCells =
             formulaCellIndices.length > 0 &&

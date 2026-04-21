@@ -1,3 +1,5 @@
+import { addEngineCounter, type EngineCounters } from './perf/engine-counters.js'
+
 export const BLOCK_ROWS = 128
 export const BLOCK_COLS = 32
 
@@ -51,6 +53,8 @@ function blockIsEmpty(block: Uint32Array): boolean {
 
 export class SheetGrid {
   readonly blocks = new Map<number, Uint32Array>()
+
+  constructor(private readonly counters?: EngineCounters) {}
 
   private setInBlocks(blocks: Map<number, Uint32Array>, row: number, col: number, cellIndex: number): void {
     const key = blockKey(row, col)
@@ -138,6 +142,9 @@ export class SheetGrid {
     ;[...this.blocks.keys()]
       .filter((key) => blockIntersectsScope(axis, key, scope))
       .forEach((key) => {
+        if (this.counters) {
+          addEngineCounter(this.counters, 'sheetGridBlockScans')
+        }
         const block = this.blocks.get(key)
         if (!block) {
           return

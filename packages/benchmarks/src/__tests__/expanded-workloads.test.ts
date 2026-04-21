@@ -2,11 +2,20 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { ENGINE_COUNTER_KEYS } from '../../../core/src/perf/engine-counters.js'
 import {
   EXPANDED_COMPARATIVE_WORKLOADS,
   buildExpandedComparativeBenchmarkReport,
   type ExpandedComparativeBenchmarkWorkload,
 } from '../benchmark-workpaper-vs-hyperformula-expanded.js'
+import {
+  measureWorkPaperStructuralDeleteColumnsSample,
+  measureWorkPaperStructuralDeleteRowsSample,
+  measureWorkPaperStructuralInsertColumnsSample,
+  measureWorkPaperStructuralInsertRowsSample,
+  measureWorkPaperStructuralMoveColumnsSample,
+  measureWorkPaperStructuralMoveRowsSample,
+} from '../benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js'
 import {
   EXPANDED_COMPARATIVE_FAMILY_GROUPS,
   EXPANDED_COMPARATIVE_FAMILY_ORDER,
@@ -182,5 +191,21 @@ describe('expanded comparative benchmark workloads', () => {
         hyperformulaWins: 0,
       },
     })
+  })
+
+  it('emits engine counters for additional WorkPaper structural workload helpers', () => {
+    const samples = [
+      measureWorkPaperStructuralInsertRowsSample(32),
+      measureWorkPaperStructuralDeleteRowsSample(32),
+      measureWorkPaperStructuralMoveRowsSample(32),
+      measureWorkPaperStructuralInsertColumnsSample(32),
+      measureWorkPaperStructuralDeleteColumnsSample(32),
+      measureWorkPaperStructuralMoveColumnsSample(32),
+    ]
+
+    for (const sample of samples) {
+      expect(sample.engineCounters).toBeDefined()
+      expect(Object.keys(sample.engineCounters ?? {}).toSorted()).toEqual([...ENGINE_COUNTER_KEYS].toSorted())
+    }
   })
 })

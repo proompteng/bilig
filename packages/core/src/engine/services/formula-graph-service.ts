@@ -160,6 +160,10 @@ export function createEngineFormulaGraphService(args: {
   }
 
   const repairTopoRanksNow = (changedFormulaCells: readonly number[] | U32): boolean => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'topoRepairs')
+      addEngineCounter(args.state.counters, 'topoRepairAffectedFormulas', changedFormulaCells.length)
+    }
     const result = dynamicTopo.repair(
       changedFormulaCells,
       {
@@ -171,6 +175,8 @@ export function createEngineFormulaGraphService(args: {
     )
     if (result.repaired) {
       args.rebuildCalcChain()
+    } else if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'topoRepairFailures')
     }
     return result.repaired
   }

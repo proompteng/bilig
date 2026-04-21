@@ -1,4 +1,5 @@
 import type { WorkbookStore } from '../workbook-store.js'
+import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import { createRegionNodeStore, type RegionId, type RegionNodeStore, type SingleColumnRegionNode } from './region-node-store.js'
 
 interface IntervalRegionRef {
@@ -104,6 +105,7 @@ function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: 
 
 export function createRegionGraph(args: {
   readonly workbook: Pick<WorkbookStore, 'getSheet'>
+  readonly counters?: EngineCounters
   readonly nodeStore?: RegionNodeStore
 }): RegionGraph {
   const nodeStore = args.nodeStore ?? createRegionNodeStore()
@@ -191,6 +193,9 @@ export function createRegionGraph(args: {
         rowEnd: region.rowEnd,
       })
     })
+    if (args.counters) {
+      addEngineCounter(args.counters, 'regionQueryIndexBuilds')
+    }
     subscriptions.tree = buildIntervalTree(intervals)
     subscriptions.dirty = false
     dirtyColumns.delete(key)

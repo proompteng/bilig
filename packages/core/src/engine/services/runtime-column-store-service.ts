@@ -189,6 +189,9 @@ export function createEngineRuntimeColumnStoreService(args: {
   }
 
   const buildColumnOwner = (request: { sheetName: string; col: number }): RuntimeColumnOwner => {
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'columnOwnerBuilds')
+    }
     const sheet = args.state.workbook.getSheet(request.sheetName)
     const sheetColumnVersions = sheet?.columnVersions ?? emptyColumnVersions
     const structureVersion = sheet?.structureVersion ?? 0

@@ -3,6 +3,7 @@ import { WorkPaper } from '@bilig/headless'
 import { ValueTag } from '@bilig/protocol'
 import type { RawCellContent as HyperFormulaRawCellContent, Sheet as HyperFormulaSheet } from 'hyperformula'
 import { HYPERFORMULA_LICENSE_KEY } from './benchmark-workpaper-vs-hyperformula.js'
+import type { EngineCounters } from '../../core/src/perf/engine-counters.js'
 import type { MemoryMeasurement } from './metrics.js'
 import { measureMemory, sampleMemory } from './metrics.js'
 
@@ -11,8 +12,14 @@ export type HyperFormulaInstance = ReturnType<typeof HyperFormula.buildFromSheet
 
 export interface BenchmarkSample {
   elapsedMs: number
+  engineCounters?: EngineCounters
   memory: MemoryMeasurement
   verification: Record<string, unknown>
+}
+
+type CounterAwareWorkPaper = WorkPaper & {
+  getPerformanceCounters(): EngineCounters
+  resetPerformanceCounters(): void
 }
 
 export function measureWorkPaperBuildFromSheets(
@@ -26,9 +33,12 @@ export function measureWorkPaperBuildFromSheets(
   const elapsedMs = performance.now() - started
   const memoryAfter = sampleMemory()
   const result = verification(workbook)
+  const counterAwareWorkbook = workbook as CounterAwareWorkPaper
+  const engineCounters = counterAwareWorkbook.getPerformanceCounters()
   workbook.dispose()
   return {
     elapsedMs,
+    engineCounters,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: result,
   }
@@ -68,15 +78,19 @@ export function measureMutationSample<Result>(
   execute: () => Result,
   verification: (result: Result) => Record<string, unknown>,
 ): BenchmarkSample {
+  const counterAwareWorkbook = workbook as CounterAwareWorkPaper
+  counterAwareWorkbook.resetPerformanceCounters()
   const memoryBefore = sampleMemory()
   const started = performance.now()
   const result = execute()
   const elapsedMs = performance.now() - started
   const memoryAfter = sampleMemory()
   const resolvedVerification = verification(result)
+  const engineCounters = counterAwareWorkbook.getPerformanceCounters()
   workbook.dispose()
   return {
     elapsedMs,
+    engineCounters,
     memory: measureMemory(memoryBefore, memoryAfter),
     verification: resolvedVerification,
   }

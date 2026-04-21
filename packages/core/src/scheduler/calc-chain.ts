@@ -1,5 +1,6 @@
 import type { CellStore } from '../cell-store.js'
 import { growUint32 } from '../engine-buffer-utils.js'
+import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 
 type U32 = Uint32Array
 
@@ -17,6 +18,8 @@ export class CalcChain {
   private dirtySeen: U32 = new Uint32Array(128)
   private dirtyEpoch = 1
   private chainFormulaCount = 0
+
+  constructor(private readonly counters?: EngineCounters) {}
 
   rebuild(formulaCellIndices: Iterable<number> | readonly number[] | U32, cellStore: CellStore): void {
     this.ensureCellCapacity(cellStore.size + 1)
@@ -115,6 +118,9 @@ export class CalcChain {
     }
 
     let orderedCount = 0
+    if (this.counters) {
+      addEngineCounter(this.counters, 'calcChainFullScans')
+    }
     for (let index = 0; index < this.chainFormulaCount; index += 1) {
       const cellIndex = this.orderedChain[index]!
       if (this.dirtySeen[cellIndex] !== this.dirtyEpoch) {

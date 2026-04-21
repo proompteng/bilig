@@ -101,7 +101,7 @@ export class SpreadsheetEngine {
   readonly events = new EngineEventBus()
   private readonly replicaState: ReplicaState
   readonly ranges = new RangeRegistry(this.performanceCounters)
-  readonly scheduler = new RecalcScheduler()
+  readonly scheduler = new RecalcScheduler(this.performanceCounters)
   readonly wasm = new WasmKernelFacade()
 
   private readonly formulas: FormulaTable<RuntimeFormula>

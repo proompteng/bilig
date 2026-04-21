@@ -1,5 +1,6 @@
 import type { EngineRuntimeState } from '../engine/runtime-state.js'
 import type { EngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
+import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import {
   applyLookupColumnOwnerLiteralWrite,
   buildLookupColumnOwner,
@@ -37,7 +38,7 @@ function getCurrentColumnVersions(
 }
 
 export function createColumnIndexStore(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'> & { counters?: EngineCounters }
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
 }): ColumnIndexStore {
   const ownerIndices = new Map<string, LookupColumnOwner>()
@@ -55,6 +56,9 @@ export function createColumnIndexStore(args: {
       return existing
     }
 
+    if (args.state.counters) {
+      addEngineCounter(args.state.counters, 'lookupOwnerBuilds')
+    }
     const owner = buildLookupColumnOwner({
       owner: args.runtimeColumnStore.getColumnOwner({ sheetName, col }),
       normalizeStringId: args.runtimeColumnStore.normalizeStringId,

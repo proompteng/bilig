@@ -261,7 +261,7 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteSnapshot: (snapshot: WorkbookSnapshot) => void
 }): EngineServiceRuntime {
   const scratch = createEngineRuntimeScratchService()
-  const regionGraph = createRegionGraph({ workbook: args.state.workbook })
+  const regionGraph = createRegionGraph({ workbook: args.state.workbook, counters: args.state.counters })
   const traversal = createEngineTraversalService({
     ...args.traversal,
     regionGraph,
@@ -430,6 +430,7 @@ export function createEngineServiceRuntime(args: {
       formulas: args.state.formulas,
       ranges: args.state.ranges,
       pivotOutputOwners: args.pivotState.pivotOutputOwners,
+      counters: args.state.counters,
     },
     captureStoredCellOps: (cellIndex, sheetName, address, sourceSheetName, sourceAddress) =>
       cellState.captureStoredCellOpsNow(cellIndex, sheetName, address, sourceSheetName, sourceAddress),

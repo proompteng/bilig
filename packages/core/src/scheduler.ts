@@ -1,4 +1,5 @@
 import type { CellStore } from './cell-store.js'
+import type { EngineCounters } from './perf/engine-counters.js'
 import { CalcChain } from './scheduler/calc-chain.js'
 import { DirtyFrontier } from './scheduler/dirty-frontier.js'
 
@@ -16,7 +17,11 @@ export interface SchedulerResult {
 
 export class RecalcScheduler {
   private readonly dirtyFrontier = new DirtyFrontier()
-  private readonly calcChain = new CalcChain()
+  private readonly calcChain: CalcChain
+
+  constructor(counters?: EngineCounters) {
+    this.calcChain = new CalcChain(counters)
+  }
 
   rebuildChain(formulaCellIndices: Iterable<number> | readonly number[] | U32, cellStore: CellStore): void {
     this.calcChain.rebuild(formulaCellIndices, cellStore)

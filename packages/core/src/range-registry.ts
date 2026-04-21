@@ -373,6 +373,9 @@ export class RangeRegistry {
         ...this.refresh(rangeIndex, materializer),
       })
     })
+    if (this.counters && touched.length > 0) {
+      addEngineCounter(this.counters, 'structuralRangeRetargets', touched.length)
+    }
     return touched
   }
 }

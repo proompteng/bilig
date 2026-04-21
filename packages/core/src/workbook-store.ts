@@ -203,7 +203,7 @@ export class WorkbookStore {
       id: id ?? this.nextSheetId++,
       name,
       order,
-      grid: new SheetGrid(),
+      grid: new SheetGrid(this.counters),
       axisMap,
       logicalAxisMap,
       logical: new LogicalSheetStore(
@@ -969,9 +969,25 @@ export class WorkbookStore {
     if (!sheet) {
       return undefined
     }
+    if (this.counters) {
+      addEngineCounter(this.counters, 'structuralTransactions')
+    }
     const scope = structuralScopeForTransform(transform)
     const remappedCells: Array<StructuralTransaction['remappedCells'][number]> = []
     const remappedEntries = sheet.grid.collectAxisRemapEntries(transform.axis, (index) => mapStructuralAxisIndex(index, transform), scope)
+    if (this.counters && remappedEntries.length > 0) {
+      addEngineCounter(this.counters, 'structuralPlannedCells', remappedEntries.length)
+      addEngineCounter(
+        this.counters,
+        'structuralSurvivorCellsRemapped',
+        remappedEntries.filter((entry) => entry.nextRow !== undefined && entry.nextCol !== undefined).length,
+      )
+      addEngineCounter(
+        this.counters,
+        'structuralRemovedCells',
+        remappedEntries.filter((entry) => entry.nextRow === undefined || entry.nextCol === undefined).length,
+      )
+    }
     remappedEntries.forEach(({ cellIndex, row, col, nextRow, nextCol }) => {
       const fromRowId = sheet.logicalAxisMap.getId('row', row)
       const fromColId = sheet.logicalAxisMap.getId('column', col)
@@ -1270,12 +1286,18 @@ export class WorkbookStore {
       snapshotAxisEntriesInRange(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, insertCount),
     )
     sheet.logicalAxisMap.splice(axis, start, deleteCount, insertCount, [])
+    if (this.counters) {
+      addEngineCounter(this.counters, 'axisMapSplices')
+    }
     return removed
   }
 
   private moveAxisEntries(sheet: SheetRecord, axis: 'row' | 'column', start: number, count: number, target: number): void {
     sheet.axisMap.move(axis, start, count, target)
     sheet.logicalAxisMap.move(axis, start, count, target)
+    if (this.counters) {
+      addEngineCounter(this.counters, 'axisMapMoves')
+    }
     moveAxisEntries(axis === 'row' ? sheet.rowAxis : sheet.columnAxis, start, count, target, () => this.createAxisEntry(axis))
   }
 
