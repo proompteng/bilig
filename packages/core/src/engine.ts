@@ -1553,7 +1553,7 @@ export class SpreadsheetEngine {
     if (ops.length === 0) {
       return null
     }
-    return this.runtime.mutation.executeLocalNow(ops, potentialNewCells)
+    return this.runtime.mutation.executeLocalNow(ops, potentialNewCells, { returnUndoOps: false })
   }
 }
 

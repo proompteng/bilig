@@ -1201,6 +1201,17 @@ export function createEngineStructureService(args: {
       if (!formula) {
         return false
       }
+      if (canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
+        formula.structuralSourceTransform = {
+          ownerSheetName: argsForImpact.sheetName,
+          targetSheetName: argsForImpact.sheetName,
+          transform: argsForImpact.transform,
+          preservesValue: true,
+        }
+        hasDeferredStructuralFormulaSources = true
+        preservedCellIndices.add(cellIndex)
+        return true
+      }
       const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
       if (
         !ownerPosition ||

@@ -180,6 +180,13 @@ interface ComparableCellState {
   authoredBlank?: boolean
 }
 
+interface StructuralFormulaUndoRecord {
+  readonly sheetName: string
+  readonly row: number
+  readonly col: number
+  readonly formula: string
+}
+
 function translateFormulaForTarget(
   formula: string,
   sourceSheetName: string,
@@ -224,13 +231,26 @@ function dependencyTouchesStructuralDeleteSpan(
   return (axis === 'row' ? parsed.row : parsed.col) >= start
 }
 
+function structuralFormulaUndoRecordToOp(record: StructuralFormulaUndoRecord): EngineOp {
+  return {
+    kind: 'setCellFormula',
+    sheetName: record.sheetName,
+    address: formatAddress(record.row, record.col),
+    formula: record.formula,
+  }
+}
+
 export interface EngineMutationService {
   readonly executeTransactionNow: (record: TransactionRecord, source: 'local' | 'restore' | 'undo' | 'redo') => void
   readonly executeTransaction: (
     record: TransactionRecord,
     source: 'local' | 'restore' | 'undo' | 'redo',
   ) => Effect.Effect<void, EngineMutationError>
-  readonly executeLocalNow: (ops: EngineOp[], potentialNewCells?: number) => readonly EngineOp[] | null
+  readonly executeLocalNow: (
+    ops: EngineOp[],
+    potentialNewCells?: number,
+    options?: { readonly returnUndoOps?: boolean },
+  ) => readonly EngineOp[] | null
   readonly executeLocalCellMutationsAtNow: (
     refs: readonly EngineCellMutationRef[],
     potentialNewCells?: number,
@@ -259,13 +279,18 @@ export interface EngineMutationService {
       reuseRefs?: boolean
     },
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>
-  readonly executeLocal: (ops: EngineOp[], potentialNewCells?: number) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>
+  readonly executeLocal: (
+    ops: EngineOp[],
+    potentialNewCells?: number,
+    options?: { readonly returnUndoOps?: boolean },
+  ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>
   readonly applyOpsNow: (
     ops: readonly EngineOp[],
     options?: {
       captureUndo?: boolean
       potentialNewCells?: number
       source?: 'local' | 'restore'
+      returnUndoOps?: boolean
       trusted?: boolean
     },
   ) => readonly EngineOp[] | null
@@ -275,6 +300,7 @@ export interface EngineMutationService {
       captureUndo?: boolean
       potentialNewCells?: number
       source?: 'local' | 'restore'
+      returnUndoOps?: boolean
       trusted?: boolean
     },
   ) => Effect.Effect<readonly EngineOp[] | null, EngineMutationError>
@@ -603,171 +629,121 @@ export function createEngineMutationService(args: {
     }
   }
 
-  const inverseOpsFor = (op: EngineOp): EngineOp[] => {
-    const captureStructuralWorkbookMetadataOps = (): EngineOp[] => {
-      const restoredOps: EngineOp[] = []
-      args.state.workbook.listDefinedNames().forEach(({ name, value }) => {
-        restoredOps.push({
-          kind: 'upsertDefinedName',
-          name,
-          value: structuredClone(value),
-        })
+  const captureStructuralWorkbookMetadataOps = (): EngineOp[] => {
+    const restoredOps: EngineOp[] = []
+    args.state.workbook.listDefinedNames().forEach(({ name, value }) => {
+      restoredOps.push({ kind: 'upsertDefinedName', name, value: structuredClone(value) })
+    })
+    args.state.workbook.listTables().forEach((table) => {
+      restoredOps.push({
+        kind: 'upsertTable',
+        table: {
+          name: table.name,
+          sheetName: table.sheetName,
+          startAddress: table.startAddress,
+          endAddress: table.endAddress,
+          columnNames: [...table.columnNames],
+          headerRow: table.headerRow,
+          totalsRow: table.totalsRow,
+        },
       })
-      args.state.workbook.listTables().forEach((table) => {
-        restoredOps.push({
-          kind: 'upsertTable',
-          table: {
-            name: table.name,
-            sheetName: table.sheetName,
-            startAddress: table.startAddress,
-            endAddress: table.endAddress,
-            columnNames: [...table.columnNames],
-            headerRow: table.headerRow,
-            totalsRow: table.totalsRow,
-          },
-        })
+    })
+    args.state.workbook.listSpills().forEach((spill) => {
+      restoredOps.push({ kind: 'upsertSpillRange', sheetName: spill.sheetName, address: spill.address, rows: spill.rows, cols: spill.cols })
+    })
+    args.state.workbook.listPivots().forEach((pivot) => {
+      restoredOps.push({
+        kind: 'upsertPivotTable',
+        name: pivot.name,
+        sheetName: pivot.sheetName,
+        address: pivot.address,
+        source: { ...pivot.source },
+        groupBy: [...pivot.groupBy],
+        values: pivot.values.map((value) => Object.assign({}, value)),
+        rows: pivot.rows,
+        cols: pivot.cols,
       })
-      args.state.workbook.listSpills().forEach((spill) => {
-        restoredOps.push({
-          kind: 'upsertSpillRange',
-          sheetName: spill.sheetName,
-          address: spill.address,
-          rows: spill.rows,
-          cols: spill.cols,
-        })
-      })
-      args.state.workbook.listPivots().forEach((pivot) => {
-        restoredOps.push({
-          kind: 'upsertPivotTable',
-          name: pivot.name,
-          sheetName: pivot.sheetName,
-          address: pivot.address,
-          source: { ...pivot.source },
-          groupBy: [...pivot.groupBy],
-          values: pivot.values.map((value) => Object.assign({}, value)),
-          rows: pivot.rows,
-          cols: pivot.cols,
-        })
-      })
-      args.state.workbook.listCharts().forEach((chart) => {
-        restoredOps.push({
-          kind: 'upsertChart',
-          chart: structuredClone(chart),
-        })
-      })
-      args.state.workbook.listImages().forEach((image) => {
-        restoredOps.push({
-          kind: 'upsertImage',
-          image: structuredClone(image),
-        })
-      })
-      args.state.workbook.listShapes().forEach((shape) => {
-        restoredOps.push({
-          kind: 'upsertShape',
-          shape: structuredClone(shape),
-        })
-      })
-      return restoredOps
-    }
+    })
+    args.state.workbook.listCharts().forEach((chart) => {
+      restoredOps.push({ kind: 'upsertChart', chart: structuredClone(chart) })
+    })
+    args.state.workbook.listImages().forEach((image) => {
+      restoredOps.push({ kind: 'upsertImage', image: structuredClone(image) })
+    })
+    args.state.workbook.listShapes().forEach((shape) => {
+      restoredOps.push({ kind: 'upsertShape', shape: structuredClone(shape) })
+    })
+    return restoredOps
+  }
 
-    const clearStructuralSheetMetadataOps = (sheetName: string, transform: ReturnType<typeof structuralTransformForOp>): EngineOp[] => {
-      const clearedOps: EngineOp[] = []
-      args.state.workbook.listStyleRanges(sheetName).forEach((record) => {
-        const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
-        if (!range) {
-          return
-        }
+  const clearStructuralSheetMetadataOps = (sheetName: string, transform: ReturnType<typeof structuralTransformForOp>): EngineOp[] => {
+    const clearedOps: EngineOp[] = []
+    args.state.workbook.listStyleRanges(sheetName).forEach((record) => {
+      const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
+      if (range) {
         clearedOps.push({
           kind: 'setStyleRange',
-          range: {
-            ...record.range,
-            startAddress: range.startAddress,
-            endAddress: range.endAddress,
-          },
+          range: { ...record.range, startAddress: range.startAddress, endAddress: range.endAddress },
           styleId: WorkbookStore.defaultStyleId,
         })
-      })
-      args.state.workbook.listFormatRanges(sheetName).forEach((record) => {
-        const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
-        if (!range) {
-          return
-        }
+      }
+    })
+    args.state.workbook.listFormatRanges(sheetName).forEach((record) => {
+      const range = rewriteRangeForStructuralTransform(record.range.startAddress, record.range.endAddress, transform)
+      if (range) {
         clearedOps.push({
           kind: 'setFormatRange',
-          range: {
-            ...record.range,
-            startAddress: range.startAddress,
-            endAddress: range.endAddress,
-          },
+          range: { ...record.range, startAddress: range.startAddress, endAddress: range.endAddress },
           formatId: WorkbookStore.defaultFormatId,
         })
-      })
-      args.state.workbook.listFilters(sheetName).forEach((filter) => {
-        const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform)
-        if (!range) {
-          return
-        }
+      }
+    })
+    args.state.workbook.listFilters(sheetName).forEach((filter) => {
+      const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform)
+      if (range) {
         clearedOps.push({
           kind: 'clearFilter',
           sheetName,
-          range: {
-            ...filter.range,
-            startAddress: range.startAddress,
-            endAddress: range.endAddress,
-          },
+          range: { ...filter.range, startAddress: range.startAddress, endAddress: range.endAddress },
         })
-      })
-      args.state.workbook.listSorts(sheetName).forEach((sort) => {
-        const range = rewriteRangeForStructuralTransform(sort.range.startAddress, sort.range.endAddress, transform)
-        if (!range) {
-          return
-        }
+      }
+    })
+    args.state.workbook.listSorts(sheetName).forEach((sort) => {
+      const range = rewriteRangeForStructuralTransform(sort.range.startAddress, sort.range.endAddress, transform)
+      if (range) {
         clearedOps.push({
           kind: 'clearSort',
           sheetName,
           range: { ...sort.range, startAddress: range.startAddress, endAddress: range.endAddress },
         })
-      })
-      args.state.workbook.listDataValidations(sheetName).forEach((validation) => {
-        const range = rewriteRangeForStructuralTransform(validation.range.startAddress, validation.range.endAddress, transform)
-        if (!range) {
-          return
-        }
+      }
+    })
+    args.state.workbook.listDataValidations(sheetName).forEach((validation) => {
+      const range = rewriteRangeForStructuralTransform(validation.range.startAddress, validation.range.endAddress, transform)
+      if (range) {
         clearedOps.push({
           kind: 'clearDataValidation',
           sheetName,
-          range: {
-            ...validation.range,
-            startAddress: range.startAddress,
-            endAddress: range.endAddress,
-          },
+          range: { ...validation.range, startAddress: range.startAddress, endAddress: range.endAddress },
         })
-      })
-      args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
-        const address = rewriteAddressForStructuralTransform(thread.address, transform)
-        if (!address) {
-          return
-        }
-        clearedOps.push({
-          kind: 'deleteCommentThread',
-          sheetName,
-          address,
-        })
-      })
-      args.state.workbook.listNotes(sheetName).forEach((note) => {
-        const address = rewriteAddressForStructuralTransform(note.address, transform)
-        if (!address) {
-          return
-        }
-        clearedOps.push({
-          kind: 'deleteNote',
-          sheetName,
-          address,
-        })
-      })
-      return clearedOps
-    }
+      }
+    })
+    args.state.workbook.listCommentThreads(sheetName).forEach((thread) => {
+      const address = rewriteAddressForStructuralTransform(thread.address, transform)
+      if (address) {
+        clearedOps.push({ kind: 'deleteCommentThread', sheetName, address })
+      }
+    })
+    args.state.workbook.listNotes(sheetName).forEach((note) => {
+      const address = rewriteAddressForStructuralTransform(note.address, transform)
+      if (address) {
+        clearedOps.push({ kind: 'deleteNote', sheetName, address })
+      }
+    })
+    return clearedOps
+  }
 
+  const inverseOpsFor = (op: EngineOp): EngineOp[] => {
     switch (op.kind) {
       case 'upsertWorkbook':
         return [{ kind: 'upsertWorkbook', name: args.state.workbook.workbookName }]
@@ -1365,13 +1341,13 @@ export function createEngineMutationService(args: {
     return inverseOps
   }
 
-  const captureFormulaCellStateForStructuralUndo = (
+  const captureFormulaCellRecordsForStructuralUndo = (
     sheetName: string,
     axis: 'row' | 'column',
     start: number,
     count: number,
-  ): EngineOp[] => {
-    const captured: EngineOp[] = []
+  ): StructuralFormulaUndoRecord[] => {
+    const captured: StructuralFormulaUndoRecord[] = []
     args.state.formulas.forEach((formula, cellIndex) => {
       const ownerSheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
       if (ownerSheetId === undefined) {
@@ -1387,9 +1363,11 @@ export function createEngineMutationService(args: {
         return
       }
       const ownerPositionAffected = ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start + count
-      const dependencyPositionAffected = formula.compiled.deps.some((dependency) =>
-        dependencyTouchesStructuralDeleteSpan(dependency, ownerSheetName, sheetName, axis, start),
-      )
+      const dependencyPositionAffected =
+        !ownerPositionAffected &&
+        formula.compiled.deps.some((dependency) =>
+          dependencyTouchesStructuralDeleteSpan(dependency, ownerSheetName, sheetName, axis, start),
+        )
       const metadataSensitive =
         formula.compiled.symbolicNames.length > 0 ||
         formula.compiled.symbolicTables.length > 0 ||
@@ -1398,13 +1376,77 @@ export function createEngineMutationService(args: {
         return
       }
       captured.push({
-        kind: 'setCellFormula',
         sheetName: ownerSheetName,
-        address: args.state.workbook.getAddress(cellIndex),
+        row: ownerPosition?.row ?? 0,
+        col: ownerPosition?.col ?? 0,
         formula: getRuntimeFormulaSource(formula),
       })
     })
     return captured
+  }
+
+  const captureFormulaCellStateForStructuralUndo = (sheetName: string, axis: 'row' | 'column', start: number, count: number): EngineOp[] =>
+    captureFormulaCellRecordsForStructuralUndo(sheetName, axis, start, count).map(structuralFormulaUndoRecordToOp)
+
+  const createLazyStructuralDeleteInverseRecord = (
+    prefixOps: readonly EngineOp[],
+    formulaRecords: readonly StructuralFormulaUndoRecord[],
+    potentialNewCells: number,
+  ): TransactionRecord => {
+    const record: { kind: 'ops'; ops: EngineOp[]; potentialNewCells?: number } = {
+      kind: 'ops',
+      get ops() {
+        cachedOps ??= [...prefixOps, ...formulaRecords.map(structuralFormulaUndoRecordToOp)]
+        return cachedOps
+      },
+      potentialNewCells,
+    }
+    let cachedOps: EngineOp[] | undefined
+    return record
+  }
+
+  const buildStructuralDeleteInverseRecord = (op: Extract<EngineOp, { kind: 'deleteRows' | 'deleteColumns' }>): TransactionRecord => {
+    const axis = op.kind === 'deleteRows' ? 'row' : 'column'
+    const entries =
+      axis === 'row'
+        ? args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count)
+        : args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count)
+    const transform = structuralTransformForOp(op)
+    const prefixOps: EngineOp[] = [
+      ...clearStructuralSheetMetadataOps(op.sheetName, transform),
+      axis === 'row'
+        ? {
+            kind: 'insertRows',
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            entries,
+          }
+        : {
+            kind: 'insertColumns',
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            entries,
+          },
+      ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
+      ...(axis === 'row'
+        ? args.captureRowRangeCellState(op.sheetName, op.start, op.count)
+        : args.captureColumnRangeCellState(op.sheetName, op.start, op.count)),
+      ...captureStructuralWorkbookMetadataOps(),
+    ]
+    return createLazyStructuralDeleteInverseRecord(
+      prefixOps,
+      captureFormulaCellRecordsForStructuralUndo(op.sheetName, axis, op.start, op.count),
+      1,
+    )
+  }
+
+  const buildInverseRecord = (ops: readonly EngineOp[]): TransactionRecord => {
+    if (ops.length === 1 && (ops[0]?.kind === 'deleteRows' || ops[0]?.kind === 'deleteColumns')) {
+      return buildStructuralDeleteInverseRecord(ops[0])
+    }
+    return { kind: 'ops', ops: buildInverseOps(ops), potentialNewCells: ops.length }
   }
 
   const canonicalizeForwardOps = (ops: readonly EngineOp[]): EngineOp[] =>
@@ -1501,11 +1543,7 @@ export function createEngineMutationService(args: {
         }
       : baseFastHistoryArgs
     const fastHistory = tryBuildFastMutationHistory(fastHistoryArgs)
-    const inverse: TransactionRecord = fastHistory?.inverse ?? {
-      kind: 'ops',
-      ops: buildInverseOps(ops),
-      potentialNewCells: ops.length,
-    }
+    const inverse: TransactionRecord = fastHistory?.inverse ?? buildInverseRecord(ops)
     applyForward(forward)
     if (args.state.getTransactionReplayDepth() === 0) {
       args.state.undoStack.push({
@@ -1850,14 +1888,14 @@ export function createEngineMutationService(args: {
           }),
       })
     },
-    executeLocalNow(ops, potentialNewCells) {
+    executeLocalNow(ops, potentialNewCells, options = {}) {
       return executeLocalNowWithCustomApply(
         ops,
         potentialNewCells,
         (forward) => {
           executeTransactionNow(forward, 'local')
         },
-        { returnUndoOps: true, reuseForwardOps: false },
+        { returnUndoOps: options.returnUndoOps ?? true, reuseForwardOps: false },
       )
     },
     executeLocalCellMutationsAtNow(refs, potentialNewCells) {
@@ -1876,9 +1914,9 @@ export function createEngineMutationService(args: {
           }),
       })
     },
-    executeLocal(ops, potentialNewCells) {
+    executeLocal(ops, potentialNewCells, options = {}) {
       return Effect.try({
-        try: () => this.executeLocalNow(ops, potentialNewCells),
+        try: () => this.executeLocalNow(ops, potentialNewCells, options),
         catch: (cause) =>
           new EngineMutationError({
             message: 'Failed to execute local transaction',
@@ -1892,7 +1930,9 @@ export function createEngineMutationService(args: {
         return null
       }
       if (options.captureUndo) {
-        return this.executeLocalNow(nextOps, options.potentialNewCells)
+        return options.returnUndoOps === undefined
+          ? this.executeLocalNow(nextOps, options.potentialNewCells)
+          : this.executeLocalNow(nextOps, options.potentialNewCells, { returnUndoOps: options.returnUndoOps })
       }
       executeTransactionNow(
         options.potentialNewCells === undefined
