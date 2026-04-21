@@ -15,6 +15,7 @@ import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDe
 import type { WorkbookPaneBufferEntry, WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import { GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT, type GridScenePacketV2 } from './scene-packet-v2.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = 20
 
@@ -49,11 +50,13 @@ export function syncTypeGpuPaneResources(input: {
           resolveGridRectSceneSignature({
             decorationRects: paneCache.decorationRects ?? [],
             frame: pane.frame,
+            packedScene: pane.packedScene,
             scene: pane.gpuScene,
           }))
         : resolveGridRectSceneSignature({
             decorationRects: paneCache.decorationRects ?? [],
             frame: pane.frame,
+            packedScene: pane.packedScene,
             scene: pane.gpuScene,
           })
     if (paneCache.rectSignature !== rectSignature) {
@@ -121,22 +124,31 @@ function syncRectResource(input: {
   readonly rectSignature: string
 }): void {
   const decorationRects = input.paneCache.decorationRects ?? []
-  const rectFloats = buildRectInstanceData({
-    frame: input.pane.frame,
-    scene: input.pane.gpuScene,
-    ...(decorationRects.length > 0 ? { decorationRects } : {}),
-  })
+  const rectPayload = input.pane.packedScene
+    ? buildRectInstanceDataFromPacket({
+        decorationRects,
+        frame: input.pane.frame,
+        packet: input.pane.packedScene,
+      })
+    : {
+        count: input.pane.gpuScene.fillRects.length + input.pane.gpuScene.borderRects.length + decorationRects.length,
+        floats: buildRectInstanceData({
+          frame: input.pane.frame,
+          scene: input.pane.gpuScene,
+          ...(decorationRects.length > 0 ? { decorationRects } : {}),
+        }),
+      }
   const rectBuffer = ensureTypeGpuVertexBuffer(
     input.artifacts.root,
     WORKBOOK_RECT_INSTANCE_LAYOUT,
     input.paneCache.rectBuffer,
     input.paneCache.rectCapacity,
-    input.pane.gpuScene.fillRects.length + input.pane.gpuScene.borderRects.length + decorationRects.length,
+    rectPayload.count,
   )
   input.paneCache.rectBuffer = rectBuffer.buffer
   input.paneCache.rectCapacity = rectBuffer.capacity
-  input.paneCache.rectCount = input.pane.gpuScene.fillRects.length + input.pane.gpuScene.borderRects.length + decorationRects.length
-  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectFloats)
+  input.paneCache.rectCount = rectPayload.count
+  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats)
   input.paneCache.rectScene = input.pane.gpuScene
   input.paneCache.rectSignature = input.rectSignature
 }
@@ -168,18 +180,29 @@ export function resolveGridTextSceneSignature(scene: GridTextScene): string {
 export function resolveGridRectSceneSignature(input: {
   readonly frame: Rectangle
   readonly scene: GridGpuScene
+  readonly packedScene?: GridScenePacketV2 | undefined
   readonly decorationRects?: readonly TextDecorationRect[] | undefined
 }): string {
   let hash = createHash()
   hash = mixNumber(hash, input.frame.width)
   hash = mixNumber(hash, input.frame.height)
-  hash = mixNumber(hash, input.scene.fillRects.length)
-  hash = mixNumber(hash, input.scene.borderRects.length)
-  for (const rect of input.scene.fillRects) {
-    hash = mixGpuRect(hash, rect)
-  }
-  for (const rect of input.scene.borderRects) {
-    hash = mixGpuRect(hash, rect)
+  if (input.packedScene) {
+    hash = mixNumber(hash, input.packedScene.generation)
+    hash = mixNumber(hash, input.packedScene.rectCount)
+    hash = mixNumber(hash, input.packedScene.fillRectCount)
+    hash = mixNumber(hash, input.packedScene.borderRectCount)
+    for (let index = 0; index < input.packedScene.rectCount * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT; index += 1) {
+      hash = mixNumber(hash, input.packedScene.rects[index] ?? 0)
+    }
+  } else {
+    hash = mixNumber(hash, input.scene.fillRects.length)
+    hash = mixNumber(hash, input.scene.borderRects.length)
+    for (const rect of input.scene.fillRects) {
+      hash = mixGpuRect(hash, rect)
+    }
+    for (const rect of input.scene.borderRects) {
+      hash = mixGpuRect(hash, rect)
+    }
   }
   const decorationRects = input.decorationRects ?? []
   hash = mixNumber(hash, decorationRects.length)
@@ -229,6 +252,48 @@ function buildTextInstanceData(input: { textScene: GridTextScene; atlas: ReturnT
   quadCount: number
 } {
   return buildTextQuadsFromScene(input.textScene.items, input.atlas)
+}
+
+function buildRectInstanceDataFromPacket(input: {
+  readonly frame: Rectangle
+  readonly packet: GridScenePacketV2
+  readonly decorationRects?: readonly TextDecorationRect[]
+}): { readonly floats: Float32Array; readonly count: number } {
+  const decorationRects = input.decorationRects ?? []
+  const total = input.packet.rectCount + decorationRects.length
+  const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
+  const clipX = 0
+  const clipY = 0
+  const clipX1 = input.frame.width
+  const clipY1 = input.frame.height
+  let offset = 0
+  for (let index = 0; index < input.packet.rectCount; index += 1) {
+    const source = index * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT
+    const isFill = index < input.packet.fillRectCount
+    floats[offset + 0] = input.packet.rects[source + 0] ?? 0
+    floats[offset + 1] = input.packet.rects[source + 1] ?? 0
+    floats[offset + 2] = input.packet.rects[source + 2] ?? 0
+    floats[offset + 3] = input.packet.rects[source + 3] ?? 0
+    floats[offset + 4] = isFill ? (input.packet.rects[source + 4] ?? 0) : 0
+    floats[offset + 5] = isFill ? (input.packet.rects[source + 5] ?? 0) : 0
+    floats[offset + 6] = isFill ? (input.packet.rects[source + 6] ?? 0) : 0
+    floats[offset + 7] = isFill ? (input.packet.rects[source + 7] ?? 0) : 0
+    floats[offset + 8] = isFill ? 0 : (input.packet.rects[source + 4] ?? 0)
+    floats[offset + 9] = isFill ? 0 : (input.packet.rects[source + 5] ?? 0)
+    floats[offset + 10] = isFill ? 0 : (input.packet.rects[source + 6] ?? 0)
+    floats[offset + 11] = isFill ? 0 : (input.packet.rects[source + 7] ?? 0)
+    floats[offset + 12] = isFill && (input.packet.rects[source + 7] ?? 0) < 0.2 ? 2 : 0
+    floats[offset + 13] = isFill ? 0 : 1
+    floats[offset + 14] = 0
+    floats[offset + 15] = 0
+    floats[offset + 16] = clipX
+    floats[offset + 17] = clipY
+    floats[offset + 18] = clipX1
+    floats[offset + 19] = clipY1
+    offset += RECT_INSTANCE_FLOAT_COUNT
+  }
+  writeDecorationRects(floats, offset, decorationRects, clipX, clipY, clipX1, clipY1)
+  return { count: total, floats }
 }
 
 function buildRectInstanceData(input: {
@@ -296,29 +361,57 @@ function buildRectInstanceData(input: {
   }
 
   for (const rect of decorationRects) {
-    const color = parseGpuColor(rect.color)
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = color.r
-    floats[offset + 5] = color.g
-    floats[offset + 6] = color.b
-    floats[offset + 7] = color.a
-    floats[offset + 8] = 0
-    floats[offset + 9] = 0
-    floats[offset + 10] = 0
-    floats[offset + 11] = 0
-    floats[offset + 12] = 0
-    floats[offset + 13] = 0
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
+    offset = writeDecorationRect(floats, offset, rect, clipX, clipY, clipX1, clipY1)
   }
 
   return floats
+}
+
+function writeDecorationRects(
+  floats: Float32Array,
+  offset: number,
+  decorationRects: readonly TextDecorationRect[],
+  clipX: number,
+  clipY: number,
+  clipX1: number,
+  clipY1: number,
+): number {
+  let next = offset
+  for (const rect of decorationRects) {
+    next = writeDecorationRect(floats, next, rect, clipX, clipY, clipX1, clipY1)
+  }
+  return next
+}
+
+function writeDecorationRect(
+  floats: Float32Array,
+  offset: number,
+  rect: TextDecorationRect,
+  clipX: number,
+  clipY: number,
+  clipX1: number,
+  clipY1: number,
+): number {
+  const color = parseGpuColor(rect.color)
+  floats[offset + 0] = rect.x
+  floats[offset + 1] = rect.y
+  floats[offset + 2] = rect.width
+  floats[offset + 3] = rect.height
+  floats[offset + 4] = color.r
+  floats[offset + 5] = color.g
+  floats[offset + 6] = color.b
+  floats[offset + 7] = color.a
+  floats[offset + 8] = 0
+  floats[offset + 9] = 0
+  floats[offset + 10] = 0
+  floats[offset + 11] = 0
+  floats[offset + 12] = 0
+  floats[offset + 13] = 0
+  floats[offset + 14] = 0
+  floats[offset + 15] = 0
+  floats[offset + 16] = clipX
+  floats[offset + 17] = clipY
+  floats[offset + 18] = clipX1
+  floats[offset + 19] = clipY1
+  return offset + RECT_INSTANCE_FLOAT_COUNT
 }

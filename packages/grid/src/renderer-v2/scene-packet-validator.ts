@@ -44,6 +44,15 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   if (!Number.isInteger(packet.rectCount) || packet.rectCount < 0) {
     return invalid('bad rect count')
   }
+  if (!Number.isInteger(packet.fillRectCount) || packet.fillRectCount < 0) {
+    return invalid('bad fill rect count')
+  }
+  if (!Number.isInteger(packet.borderRectCount) || packet.borderRectCount < 0) {
+    return invalid('bad border rect count')
+  }
+  if (packet.fillRectCount + packet.borderRectCount !== packet.rectCount) {
+    return invalid('rect count mismatch')
+  }
   if (!Number.isInteger(packet.textCount) || packet.textCount < 0) {
     return invalid('bad text count')
   }

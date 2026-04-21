@@ -21,6 +21,8 @@ export function packWorkerGridScenePacket(input: {
 }): WorkerPackedGridScenePacket {
   return {
     generation: input.generation,
+    borderRectCount: input.gpuScene.borderRects.length,
+    fillRectCount: input.gpuScene.fillRects.length,
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,

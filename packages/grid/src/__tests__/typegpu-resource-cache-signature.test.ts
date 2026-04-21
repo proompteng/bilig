@@ -1,4 +1,10 @@
 import { describe, expect, test } from 'vitest'
+import {
+  GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_VERSION,
+} from '../renderer-v2/scene-packet-v2.js'
 import { resolveGridRectSceneSignature, resolveGridTextSceneSignature } from '../renderer-v2/typegpu-buffer-pool.js'
 
 describe('typegpu resource cache signatures', () => {
@@ -50,5 +56,46 @@ describe('typegpu resource cache signatures', () => {
         scene,
       }),
     )
+  })
+
+  test('uses packed rect data in rect signatures', () => {
+    const scene = {
+      borderRects: [],
+      fillRects: [],
+    }
+    const basePacket = {
+      borderRectCount: 0,
+      fillRectCount: 1,
+      generation: 1,
+      magic: GRID_SCENE_PACKET_V2_MAGIC,
+      paneId: 'body' as const,
+      rectCount: 1,
+      rects: new Float32Array([0, 0, 10, 10, 1, 0, 0, 1]),
+      sheetName: 'Sheet1',
+      surfaceSize: { height: 100, width: 100 },
+      textCount: 0,
+      textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
+      version: GRID_SCENE_PACKET_V2_VERSION,
+      viewport: { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 },
+    }
+    const changedPacket = {
+      ...basePacket,
+      rects: new Float32Array([0, 0, 11, 10, 1, 0, 0, 1]),
+    }
+
+    expect(
+      resolveGridRectSceneSignature({
+        frame: { height: 100, width: 200, x: 0, y: 0 },
+        packedScene: basePacket,
+        scene,
+      }),
+    ).not.toBe(
+      resolveGridRectSceneSignature({
+        frame: { height: 100, width: 200, x: 0, y: 0 },
+        packedScene: changedPacket,
+        scene,
+      }),
+    )
+    expect(basePacket.rects.length).toBe(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
   })
 })

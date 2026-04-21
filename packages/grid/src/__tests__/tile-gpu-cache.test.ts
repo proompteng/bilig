@@ -11,6 +11,8 @@ import { TileGpuCache, buildTileGpuCacheKey, syncTileGpuCacheFromPanes } from '.
 function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
   return {
     generation,
+    borderRectCount: 0,
+    fillRectCount: 0,
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 0,

@@ -37,6 +37,8 @@ describe('ProjectedSceneStore', () => {
         gpuScene: { fillRects: [], borderRects: [] },
         textScene: { items: [] },
         packedScene: {
+          borderRectCount: 0,
+          fillRectCount: 0,
           generation: 1,
           magic: GRID_SCENE_PACKET_V2_MAGIC,
           paneId: 'body',

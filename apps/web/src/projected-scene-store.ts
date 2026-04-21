@@ -55,6 +55,8 @@ function isGridScenePacketV2(value: unknown): value is GridScenePacketV2 {
     isSurfaceSizeRecord(value['surfaceSize']) &&
     value['rects'] instanceof Float32Array &&
     typeof value['rectCount'] === 'number' &&
+    typeof value['fillRectCount'] === 'number' &&
+    typeof value['borderRectCount'] === 'number' &&
     value['textMetrics'] instanceof Float32Array &&
     typeof value['textCount'] === 'number'
   )

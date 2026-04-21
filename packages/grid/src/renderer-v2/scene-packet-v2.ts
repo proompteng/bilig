@@ -19,6 +19,8 @@ export interface GridScenePacketV2 {
   }
   readonly rects: Float32Array
   readonly rectCount: number
+  readonly fillRectCount: number
+  readonly borderRectCount: number
   readonly textMetrics: Float32Array
   readonly textCount: number
 }

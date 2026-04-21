@@ -44,6 +44,8 @@ describe('worker-runtime-render-packet', () => {
     expect(packet.surfaceSize).toEqual({ width: 400, height: 200 })
     expect(packet.textMetrics).toBeInstanceOf(Float32Array)
     expect(packet.rectCount).toBe(2)
+    expect(packet.fillRectCount).toBe(1)
+    expect(packet.borderRectCount).toBe(1)
     expect(packet.textCount).toBe(1)
     expect(Array.from(packet.rects.slice(0, 8))).toEqual([1, 2, 3, 4, 1, 0.5, 0.25, 1])
     expect(Array.from(packet.textMetrics.slice(0, 8))).toEqual([10, 11, 100, 20, 3, 2, 0, 1])

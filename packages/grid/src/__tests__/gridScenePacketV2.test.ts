@@ -11,6 +11,8 @@ import { validateGridScenePacketV2 } from '../renderer-v2/scene-packet-validator
 function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePacketV2 {
   return {
     generation: 1,
+    borderRectCount: 0,
+    fillRectCount: 1,
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 1,
