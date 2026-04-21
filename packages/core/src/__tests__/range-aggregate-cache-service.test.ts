@@ -276,4 +276,80 @@ describe('RangeAggregateCacheService', () => {
       col: 0,
     })
   })
+
+  it('updates only cached aggregate prefixes that can contain the edited row', () => {
+    const values: CellValue[] = [
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: 2 },
+      { tag: ValueTag.Number, value: 3 },
+      { tag: ValueTag.Number, value: 4 },
+    ]
+    let columnVersion = 15
+    const getColumnSlice = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeSlice(values, request, columnVersion, 6),
+    )
+    const workbook = new WorkbookStore('aggregate-cache-note-write')
+    workbook.createSheet('Sheet1')
+    const sheet = workbook.getSheet('Sheet1')
+    if (!sheet) {
+      throw new Error('expected Sheet1 to exist')
+    }
+    sheet.columnVersions = Uint32Array.of(columnVersion)
+    sheet.structureVersion = 6
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        readRangeValueMatrix: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
+    })
+
+    const prefix = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 3, col: 0 })
+    const shifted = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 2, rowEnd: 3, col: 0 })
+
+    columnVersion = 16
+    sheet.columnVersions[0] = columnVersion
+    aggregateStateStore.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 1,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 2 },
+      newValue: { tag: ValueTag.Number, value: 5 },
+    })
+
+    expect(prefix.prefixSums.subarray(0, 4)).toEqual(Float64Array.from([1, 6, 9, 13]))
+    expect(shifted.prefixSums.subarray(0, 2)).toEqual(Float64Array.from([3, 7]))
+    expect(getColumnSlice).toHaveBeenCalledTimes(2)
+
+    aggregateStateStore.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 1,
+      col: 0,
+      oldValue: { tag: ValueTag.String, value: 'a', stringId: 0 },
+      newValue: { tag: ValueTag.String, value: 'b', stringId: 0 },
+    })
+    expect(prefix.prefixSums.subarray(0, 4)).toEqual(Float64Array.from([1, 6, 9, 13]))
+
+    aggregateStateStore.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 0,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 1 },
+      newValue: { tag: ValueTag.Error, code: ErrorCode.NA },
+    })
+
+    const rebuilt = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 3, col: 0 })
+    expect(rebuilt).not.toBe(prefix)
+    expect(getColumnSlice).toHaveBeenCalledTimes(3)
+  })
 })

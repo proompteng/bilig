@@ -206,6 +206,15 @@ describe('createEngineRuntimeColumnStoreService', () => {
     expect(runtimeColumnStore.readCellValue('Sheet1', 0, 0)).toEqual({
       tag: ValueTag.Empty,
     })
+    expect(
+      runtimeColumnStore.readRangeValueMatrix({
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      }),
+    ).toEqual([[{ tag: ValueTag.Empty }]])
   })
 
   it('materializes error cells and falls back to raw lookup text when no string id is present', () => {
@@ -225,6 +234,15 @@ describe('createEngineRuntimeColumnStoreService', () => {
       tag: ValueTag.Error,
       code: 42,
     })
+    expect(
+      runtimeColumnStore.readRangeValueMatrix({
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      }),
+    ).toEqual([[{ tag: ValueTag.Error, code: 42 }]])
     expect(
       runtimeColumnStore.normalizeLookupText({
         tag: ValueTag.String,
