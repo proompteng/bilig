@@ -21,6 +21,7 @@ export interface WorkbookPaneRendererV2Props {
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayPacket | null | undefined) | undefined
   readonly overlay?:
     | {
@@ -79,6 +80,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   overlay,
   overlayBuilder,
   panes,
+  preloadPanes = [],
   scrollTransformStore = null,
 }: WorkbookPaneRendererV2Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -91,6 +93,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const webGpuReadyRef = useRef(false)
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
+  const preloadPanePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
   const overlayRef = useRef<typeof overlay>(overlay)
   const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
@@ -175,6 +178,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [panes])
 
   useEffect(() => {
+    preloadPanePayloadsRef.current = preloadPanes
+  }, [preloadPanes])
+
+  useEffect(() => {
     overlayBuilderRef.current = overlayBuilder
   }, [overlayBuilder])
 
@@ -211,6 +218,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       const backend = backendRef.current
       const surface = surfaceSizeRef.current
       const basePanePayloads = panePayloadsRef.current
+      const preloadPanePayloads = preloadPanePayloadsRef.current
       if (!backend || surface.width <= 0 || surface.height <= 0) {
         return
       }
@@ -250,6 +258,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         backend,
         deferTextUploads,
         panes: resolvedPanePayloads,
+        preloadPanes: preloadPanePayloads,
+        syncPreloadPanes: !deferTextUploads,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
           geometry: latestGeometry,
@@ -260,7 +270,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     }
 
     drawFrameRef.current()
-  }, [active, overlay, overlayBuilder, panes, surfaceSize, webGpuReady])
+  }, [active, overlay, overlayBuilder, panes, preloadPanes, surfaceSize, webGpuReady])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {

@@ -56,19 +56,24 @@ export function syncWorkbookTypeGpuSurface(input: {
 export function drawWorkbookTypeGpuFrame(input: {
   readonly backend: WorkbookTypeGpuBackend
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
+  readonly syncPreloadPanes?: boolean | undefined
   readonly deferTextUploads?: boolean | undefined
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
   readonly surface: TypeGpuDrawSurface
 }): void {
+  const retainPanes = input.preloadPanes?.length ? [...input.preloadPanes, ...input.panes] : input.panes
+  const resourcePanes = input.syncPreloadPanes === false ? input.panes : retainPanes
   syncTileGpuCacheFromPanes({
     cache: input.backend.tileCache,
-    panes: input.panes,
+    panes: resourcePanes,
   })
   syncTypeGpuPaneResources({
     artifacts: input.backend.artifacts,
     atlas: input.backend.atlas,
     paneBuffers: input.backend.paneBuffers,
-    panes: input.panes,
+    panes: resourcePanes,
+    retainPanes,
     deferTextUploads: input.deferTextUploads,
   })
   syncTypeGpuAtlasResources(input.backend.artifacts, input.backend.atlas)

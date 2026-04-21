@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
@@ -16,6 +17,7 @@ function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePack
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 1,
+    rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
     rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
     sheetName: 'Sheet1',
     surfaceSize: { height: 220, width: 480 },
@@ -30,6 +32,7 @@ function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePack
 describe('grid scene packet v2', () => {
   test('accepts well-formed typed scene packets', () => {
     const packet = createPacket()
+    packet.rectInstances.set([0, 0, 104, 22, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 220])
     packet.rects.set([0, 0, 104, 22, 1, 1, 1, 1])
     packet.textMetrics.set([4, 3, 80, 16, 0, 0, 0, 0])
 
@@ -40,6 +43,10 @@ describe('grid scene packet v2', () => {
     expect(validateGridScenePacketV2(createPacket({ rects: new Float32Array(1) }))).toEqual({
       ok: false,
       reason: 'rect buffer too small',
+    })
+    expect(validateGridScenePacketV2(createPacket({ rectInstances: new Float32Array(1) }))).toEqual({
+      ok: false,
+      reason: 'rect instance buffer too small',
     })
     expect(validateGridScenePacketV2(createPacket({ viewport: { colEnd: 1, colStart: 2, rowEnd: 1, rowStart: 0 } }))).toEqual({
       ok: false,

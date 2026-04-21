@@ -1,6 +1,7 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
@@ -59,6 +60,9 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   if (packet.rects.length < Math.max(1, packet.rectCount) * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT) {
     return invalid('rect buffer too small')
   }
+  if (packet.rectInstances.length < Math.max(1, packet.rectCount) * GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT) {
+    return invalid('rect instance buffer too small')
+  }
   if (packet.textMetrics.length < Math.max(1, packet.textCount) * GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT) {
     return invalid('text buffer too small')
   }
@@ -74,6 +78,32 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
       if (!isFiniteNumber(readFloat(packet.rects, offset + colorOffset))) {
         return invalid('bad rect color')
       }
+    }
+    const instanceOffset = index * GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
+    if (
+      !isFiniteNumber(readFloat(packet.rectInstances, instanceOffset + 0)) ||
+      !isFiniteNumber(readFloat(packet.rectInstances, instanceOffset + 1))
+    ) {
+      return invalid('bad rect instance position')
+    }
+    if (
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 2)) ||
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 3))
+    ) {
+      return invalid('bad rect instance size')
+    }
+    for (let colorOffset = 4; colorOffset < 12; colorOffset += 1) {
+      if (!isFiniteNumber(readFloat(packet.rectInstances, instanceOffset + colorOffset))) {
+        return invalid('bad rect instance color')
+      }
+    }
+    if (
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 16)) ||
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 17)) ||
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 18)) ||
+      !isFiniteNonNegative(readFloat(packet.rectInstances, instanceOffset + 19))
+    ) {
+      return invalid('bad rect instance clip')
     }
   }
   for (let index = 0; index < packet.textCount; index += 1) {

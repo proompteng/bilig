@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { GRID_SCENE_PACKET_V2_VERSION } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { packWorkerGridScenePacket } from '../worker-runtime-render-packet.js'
 
 describe('worker-runtime-render-packet', () => {
@@ -37,9 +38,10 @@ describe('worker-runtime-render-packet', () => {
       },
     })
 
+    expect(packet.rectInstances).toBeInstanceOf(Float32Array)
     expect(packet.rects).toBeInstanceOf(Float32Array)
     expect(packet.magic).toBe('bilig.grid.scene.v2')
-    expect(packet.version).toBe(1)
+    expect(packet.version).toBe(GRID_SCENE_PACKET_V2_VERSION)
     expect(packet.sheetName).toBe('Sheet1')
     expect(packet.surfaceSize).toEqual({ width: 400, height: 200 })
     expect(packet.textMetrics).toBeInstanceOf(Float32Array)
@@ -47,6 +49,8 @@ describe('worker-runtime-render-packet', () => {
     expect(packet.fillRectCount).toBe(1)
     expect(packet.borderRectCount).toBe(1)
     expect(packet.textCount).toBe(1)
+    expect(Array.from(packet.rectInstances.slice(0, 20))).toEqual([1, 2, 3, 4, 1, 0.5, 0.25, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 400, 200])
+    expect(Array.from(packet.rectInstances.slice(20, 40))).toEqual([5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 400, 200])
     expect(Array.from(packet.rects.slice(0, 8))).toEqual([1, 2, 3, 4, 1, 0.5, 0.25, 1])
     expect(Array.from(packet.textMetrics.slice(0, 8))).toEqual([10, 11, 100, 20, 3, 2, 0, 1])
   })

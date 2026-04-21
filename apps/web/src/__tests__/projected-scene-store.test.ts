@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GRID_SCENE_PACKET_V2_MAGIC, GRID_SCENE_PACKET_V2_VERSION } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
+import {
+  GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_VERSION,
+} from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedSceneStore } from '../projected-scene-store.js'
 
 describe('ProjectedSceneStore', () => {
@@ -44,10 +50,11 @@ describe('ProjectedSceneStore', () => {
           magic: GRID_SCENE_PACKET_V2_MAGIC,
           paneId: 'body',
           rectCount: 0,
-          rects: new Float32Array(8),
+          rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
+          rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
           sheetName: request.sheetName,
           surfaceSize: { width: 400, height: 200 },
-          textMetrics: new Float32Array(8),
+          textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
           textCount: 0,
           version: GRID_SCENE_PACKET_V2_VERSION,
           viewport: request.residentViewport,

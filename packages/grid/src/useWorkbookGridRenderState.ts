@@ -668,31 +668,27 @@ export function useWorkbookGridRenderState(input: {
     [activeResizeRow, hoverState.cursor, hoverState.header],
   )
   const residentPaneSceneRequest = useMemo<WorkbookPaneSceneRequest | null>(
-    () =>
-      hostElement
+    () => ({
+      sheetName,
+      residentViewport,
+      freezeRows,
+      freezeCols,
+      selectedCell: {
+        col: selectedCell.col,
+        row: selectedCell.row,
+      },
+      selectedCellSnapshot,
+      selectionRange,
+      editingCell: isEditingCell
         ? {
-            sheetName,
-            residentViewport,
-            freezeRows,
-            freezeCols,
-            selectedCell: {
-              col: selectedCell.col,
-              row: selectedCell.row,
-            },
-            selectedCellSnapshot,
-            selectionRange,
-            editingCell: isEditingCell
-              ? {
-                  col: selectedCell.col,
-                  row: selectedCell.row,
-                }
-              : null,
+            col: selectedCell.col,
+            row: selectedCell.row,
           }
         : null,
+    }),
     [
       freezeCols,
       freezeRows,
-      hostElement,
       isEditingCell,
       residentViewport,
       selectedCell.col,
@@ -703,9 +699,6 @@ export function useWorkbookGridRenderState(input: {
     ],
   )
   const warmResidentPaneSceneRequests = useMemo<readonly WorkbookPaneSceneRequest[]>(() => {
-    if (!hostElement) {
-      return []
-    }
     return warmResidentViewports
       .filter((warmViewport) => !sameViewportBounds(warmViewport, residentViewport))
       .map((warmViewport) => ({
@@ -729,7 +722,6 @@ export function useWorkbookGridRenderState(input: {
   }, [
     freezeCols,
     freezeRows,
-    hostElement,
     isEditingCell,
     residentViewport,
     selectedCell.col,
@@ -740,13 +732,15 @@ export function useWorkbookGridRenderState(input: {
     warmResidentViewports,
   ])
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
+  const [warmSceneRevision, setWarmSceneRevision] = useState(0)
   useEffect(() => {
     if (!residentSceneEngine || warmResidentPaneSceneRequests.length === 0) {
       return
     }
-    const cleanups = warmResidentPaneSceneRequests.map((request) =>
-      residentSceneEngine.subscribeResidentPaneScenes(request, () => undefined),
-    )
+    const listener = () => {
+      setWarmSceneRevision((current) => current + 1)
+    }
+    const cleanups = warmResidentPaneSceneRequests.map((request) => residentSceneEngine.subscribeResidentPaneScenes(request, listener))
     return () => {
       cleanups.forEach((cleanup) => cleanup())
     }
@@ -885,6 +879,55 @@ export function useWorkbookGridRenderState(input: {
     ],
   )
   const residentBodyPane = residentDataPanes.find((pane) => pane.paneId === 'body') ?? null
+  const preloadDataPanes = useMemo<readonly WorkbookRenderPaneState[]>(() => {
+    if (!hostElement || !residentSceneEngine || warmResidentPaneSceneRequests.length === 0) {
+      return []
+    }
+    void warmSceneRevision
+    return warmResidentPaneSceneRequests.flatMap((request) => {
+      const warmScenes = residentSceneEngine.peekResidentPaneScenes(request)?.filter((pane) => pane.packedScene !== undefined) ?? []
+      if (warmScenes.length === 0) {
+        return []
+      }
+      return resolveResidentDataPaneRenderState({
+        panes: warmScenes,
+        residentViewport: request.residentViewport,
+        visibleViewport: request.residentViewport,
+        visibleRegion: {
+          tx: 0,
+          ty: 0,
+        },
+        gridMetrics,
+        sortedColumnWidthOverrides,
+        sortedRowHeightOverrides,
+        hostWidth: hostClientWidth,
+        hostHeight: hostClientHeight,
+        rowMarkerWidth: gridMetrics.rowMarkerWidth,
+        headerHeight: gridMetrics.headerHeight,
+        frozenColumnWidth,
+        frozenRowHeight,
+      }).map((pane) =>
+        Object.assign(pane, {
+          scrollAxes: {
+            x: pane.paneId === 'body' || pane.paneId === 'top',
+            y: pane.paneId === 'body' || pane.paneId === 'left',
+          },
+        }),
+      )
+    })
+  }, [
+    frozenColumnWidth,
+    frozenRowHeight,
+    gridMetrics,
+    hostClientHeight,
+    hostClientWidth,
+    hostElement,
+    residentSceneEngine,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+    warmResidentPaneSceneRequests,
+    warmSceneRevision,
+  ])
 
   const headerGpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
@@ -1420,6 +1463,7 @@ export function useWorkbookGridRenderState(input: {
     overlayStyle,
     previewColumnWidth,
     previewRowHeight,
+    preloadDataPanes,
     renderPanes,
     residentDataPanes,
     rowHeights,

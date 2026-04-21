@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
@@ -70,6 +71,7 @@ describe('typegpu resource cache signatures', () => {
       magic: GRID_SCENE_PACKET_V2_MAGIC,
       paneId: 'body' as const,
       rectCount: 1,
+      rectInstances: new Float32Array([0, 0, 10, 10, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 100]),
       rects: new Float32Array([0, 0, 10, 10, 1, 0, 0, 1]),
       sheetName: 'Sheet1',
       surfaceSize: { height: 100, width: 100 },
@@ -80,7 +82,12 @@ describe('typegpu resource cache signatures', () => {
     }
     const changedPacket = {
       ...basePacket,
+      rectInstances: new Float32Array([0, 0, 11, 10, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 100]),
       rects: new Float32Array([0, 0, 11, 10, 1, 0, 0, 1]),
+    }
+    const newerPacketWithSameRects = {
+      ...basePacket,
+      generation: 2,
     }
 
     expect(
@@ -96,6 +103,20 @@ describe('typegpu resource cache signatures', () => {
         scene,
       }),
     )
+    expect(
+      resolveGridRectSceneSignature({
+        frame: { height: 100, width: 200, x: 0, y: 0 },
+        packedScene: basePacket,
+        scene,
+      }),
+    ).toBe(
+      resolveGridRectSceneSignature({
+        frame: { height: 100, width: 200, x: 0, y: 0 },
+        packedScene: newerPacketWithSameRects,
+        scene,
+      }),
+    )
     expect(basePacket.rects.length).toBe(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
+    expect(basePacket.rectInstances.length).toBe(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT)
   })
 })

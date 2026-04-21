@@ -15,10 +15,14 @@ import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDe
 import type { WorkbookPaneBufferEntry, WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
-import { GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT, type GridScenePacketV2 } from './scene-packet-v2.js'
+import {
+  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
+  type GridScenePacketV2,
+} from './scene-packet-v2.js'
 import { buildTileGpuCacheKey } from './tile-gpu-cache.js'
 
-const RECT_INSTANCE_FLOAT_COUNT = 20
+const RECT_INSTANCE_FLOAT_COUNT = GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
 
 export function syncTypeGpuPaneResources(input: {
   readonly artifacts: TypeGpuRendererArtifacts
@@ -207,7 +211,6 @@ export function resolveGridRectSceneSignature(input: {
   hash = mixNumber(hash, input.frame.width)
   hash = mixNumber(hash, input.frame.height)
   if (input.packedScene) {
-    hash = mixNumber(hash, input.packedScene.generation)
     hash = mixNumber(hash, input.packedScene.rectCount)
     hash = mixNumber(hash, input.packedScene.fillRectCount)
     hash = mixNumber(hash, input.packedScene.borderRectCount)
@@ -281,37 +284,17 @@ function buildRectInstanceDataFromPacket(input: {
 }): { readonly floats: Float32Array; readonly count: number } {
   const decorationRects = input.decorationRects ?? []
   const total = input.packet.rectCount + decorationRects.length
+  if (decorationRects.length === 0) {
+    return { count: total, floats: input.packet.rectInstances }
+  }
   const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
   const clipX = 0
   const clipY = 0
   const clipX1 = input.frame.width
   const clipY1 = input.frame.height
-  let offset = 0
-  for (let index = 0; index < input.packet.rectCount; index += 1) {
-    const source = index * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT
-    const isFill = index < input.packet.fillRectCount
-    floats[offset + 0] = input.packet.rects[source + 0] ?? 0
-    floats[offset + 1] = input.packet.rects[source + 1] ?? 0
-    floats[offset + 2] = input.packet.rects[source + 2] ?? 0
-    floats[offset + 3] = input.packet.rects[source + 3] ?? 0
-    floats[offset + 4] = isFill ? (input.packet.rects[source + 4] ?? 0) : 0
-    floats[offset + 5] = isFill ? (input.packet.rects[source + 5] ?? 0) : 0
-    floats[offset + 6] = isFill ? (input.packet.rects[source + 6] ?? 0) : 0
-    floats[offset + 7] = isFill ? (input.packet.rects[source + 7] ?? 0) : 0
-    floats[offset + 8] = isFill ? 0 : (input.packet.rects[source + 4] ?? 0)
-    floats[offset + 9] = isFill ? 0 : (input.packet.rects[source + 5] ?? 0)
-    floats[offset + 10] = isFill ? 0 : (input.packet.rects[source + 6] ?? 0)
-    floats[offset + 11] = isFill ? 0 : (input.packet.rects[source + 7] ?? 0)
-    floats[offset + 12] = isFill && (input.packet.rects[source + 7] ?? 0) < 0.2 ? 2 : 0
-    floats[offset + 13] = isFill ? 0 : 1
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
+  const packedFloatCount = input.packet.rectCount * RECT_INSTANCE_FLOAT_COUNT
+  floats.set(input.packet.rectInstances.subarray(0, packedFloatCount), 0)
+  const offset = packedFloatCount
   writeDecorationRects(floats, offset, decorationRects, clipX, clipY, clipX1, clipY1)
   return { count: total, floats }
 }

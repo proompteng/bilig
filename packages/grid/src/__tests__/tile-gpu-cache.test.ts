@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
@@ -16,6 +17,7 @@ function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 0,
+    rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
     rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
     sheetName: 'Sheet1',
     surfaceSize: { height: 200, width: 400 },
@@ -53,6 +55,7 @@ describe('TileGpuCache', () => {
   test('rejects invalid packets', () => {
     const cache = new TileGpuCache()
     expect(() => cache.upsert({ ...createPacket(1), rects: new Float32Array(1) })).toThrow(/rect buffer too small/u)
+    expect(() => cache.upsert({ ...createPacket(1), rectInstances: new Float32Array(1) })).toThrow(/rect instance buffer too small/u)
   })
 
   test('syncs renderer panes into visible cache entries', () => {

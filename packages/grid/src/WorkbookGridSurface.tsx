@@ -209,6 +209,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           host={renderState.hostElement}
           overlayBuilder={dynamicOverlayBuilder}
           panes={renderState.renderPanes}
+          preloadPanes={renderState.preloadDataPanes}
           scrollTransformStore={renderState.scrollTransformStore}
         />
         <button
