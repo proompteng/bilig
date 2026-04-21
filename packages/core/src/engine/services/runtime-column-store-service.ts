@@ -195,6 +195,28 @@ export function createEngineRuntimeColumnStoreService(args: {
     }
   }
 
+  const materializeCellValueFromCellIndex = (cellIndex: number): CellValue => {
+    switch (args.state.workbook.cellStore.tags[cellIndex] ?? 0) {
+      case 1:
+        return { tag: ValueTag.Number, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 }
+      case 2:
+        return { tag: ValueTag.Boolean, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 }
+      case 3: {
+        const stringId = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
+        return {
+          tag: ValueTag.String,
+          value: stringId === 0 ? '' : args.state.strings.get(stringId),
+          stringId,
+        }
+      }
+      case 4:
+        return { tag: ValueTag.Error, code: args.state.workbook.cellStore.errors[cellIndex]! }
+      case 0:
+      default:
+        return { tag: ValueTag.Empty }
+    }
+  }
+
   const buildColumnOwner = (request: { sheetName: string; col: number }): RuntimeColumnOwner => {
     if (args.state.counters) {
       addEngineCounter(args.state.counters, 'columnOwnerBuilds')
@@ -371,6 +393,23 @@ export function createEngineRuntimeColumnStoreService(args: {
       const height = rowEnd - rowStart + 1
       const area = width * height
       const sheet = area <= 16_384 ? args.state.workbook.getSheet(sheetName) : undefined
+      if (sheet?.structureVersion === 1) {
+        const rows: CellValue[][] = Array.from({ length: height }, () => [])
+        let filledCells = 0
+        sheet.grid.forEachPhysicalRangeEntry(rowStart, colStart, rowEnd, colEnd, (cellIndex, row, col) => {
+          rows[row - rowStart]![col - colStart] = materializeCellValueFromCellIndex(cellIndex)
+          filledCells += 1
+        })
+        if (filledCells < area) {
+          for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+            const row = rows[rowOffset]!
+            for (let colOffset = 0; colOffset < width; colOffset += 1) {
+              row[colOffset] ??= { tag: ValueTag.Empty }
+            }
+          }
+        }
+        return rows
+      }
       if (sheet) {
         const rows: CellValue[][] = Array.from({ length: height }, () => [])
         for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
@@ -381,30 +420,7 @@ export function createEngineRuntimeColumnStoreService(args: {
               row[colOffset] = { tag: ValueTag.Empty }
               continue
             }
-            switch (args.state.workbook.cellStore.tags[cellIndex] ?? 0) {
-              case 1:
-                row[colOffset] = { tag: ValueTag.Number, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 }
-                break
-              case 2:
-                row[colOffset] = { tag: ValueTag.Boolean, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 }
-                break
-              case 3: {
-                const stringId = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
-                row[colOffset] = {
-                  tag: ValueTag.String,
-                  value: stringId === 0 ? '' : args.state.strings.get(stringId),
-                  stringId,
-                }
-                break
-              }
-              case 4:
-                row[colOffset] = { tag: ValueTag.Error, code: args.state.workbook.cellStore.errors[cellIndex]! }
-                break
-              case 0:
-              default:
-                row[colOffset] = { tag: ValueTag.Empty }
-                break
-            }
+            row[colOffset] = materializeCellValueFromCellIndex(cellIndex)
           }
         }
         return rows

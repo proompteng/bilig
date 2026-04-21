@@ -143,6 +143,11 @@ function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): nu
   return typeof runtimeFormula.templateId === 'number' ? runtimeFormula.templateId : undefined
 }
 
+function readRuntimeDirectScalar(engine: SpreadsheetEngine, cellIndex: number): unknown {
+  const runtimeFormula = readRuntimeFormula(engine, cellIndex)
+  return isRecord(runtimeFormula) ? runtimeFormula.directScalar : undefined
+}
+
 function isRuntimeFormulaWithDependencies(value: unknown): value is RuntimeFormulaWithDependencies {
   return isRecord(value) && value.dependencyIndices instanceof Uint32Array
 }
@@ -5000,6 +5005,7 @@ describe('SpreadsheetEngine', () => {
 
     const planIdsBeforeInsert = new Map<string, number>()
     const templateIdsBeforeInsert = new Map<string, number | undefined>()
+    const directScalarsBeforeInsert = new Map<string, unknown>()
     for (let row = 1; row <= 4; row += 1) {
       const cIndex = engine.workbook.getCellIndex('Sheet1', `C${row}`)
       const dIndex = engine.workbook.getCellIndex('Sheet1', `D${row}`)
@@ -5007,6 +5013,8 @@ describe('SpreadsheetEngine', () => {
       planIdsBeforeInsert.set(`D${row}`, readRuntimeFormula(engine, dIndex!)!.planId)
       templateIdsBeforeInsert.set(`C${row}`, readRuntimeTemplateId(engine, cIndex!))
       templateIdsBeforeInsert.set(`D${row}`, readRuntimeTemplateId(engine, dIndex!))
+      directScalarsBeforeInsert.set(`C${row}`, readRuntimeDirectScalar(engine, cIndex!))
+      directScalarsBeforeInsert.set(`D${row}`, readRuntimeDirectScalar(engine, dIndex!))
     }
 
     engine.insertColumns('Sheet1', 1, 1)
@@ -5028,6 +5036,8 @@ describe('SpreadsheetEngine', () => {
       expect(readRuntimeFormula(engine, eIndex!)?.planId).toBe(planIdsBeforeInsert.get(`D${row}`))
       expect(readRuntimeTemplateId(engine, dIndex!)).toBe(templateIdsBeforeInsert.get(`C${row}`))
       expect(readRuntimeTemplateId(engine, eIndex!)).toBe(templateIdsBeforeInsert.get(`D${row}`))
+      expect(readRuntimeDirectScalar(engine, dIndex!)).toBe(directScalarsBeforeInsert.get(`C${row}`))
+      expect(readRuntimeDirectScalar(engine, eIndex!)).toBe(directScalarsBeforeInsert.get(`D${row}`))
     }
 
     engine.deleteColumns('Sheet1', 1, 1)

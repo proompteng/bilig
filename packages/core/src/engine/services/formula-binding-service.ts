@@ -1621,7 +1621,6 @@ export function createEngineFormulaBindingService(args: {
       !existing ||
       existing.directLookup !== undefined ||
       existing.directAggregate !== undefined ||
-      existing.directScalar !== undefined ||
       existing.directCriteria !== undefined ||
       existing.rangeDependencies.length !== 0 ||
       !canRewriteCompiledPreservingBindings(existing, compiled)
@@ -1638,7 +1637,9 @@ export function createEngineFormulaBindingService(args: {
     existing.constants = compiled.constants
     existing.programLength = existing.runtimeProgram.length
     existing.constNumberLength = compiled.constants.length
-    recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
+    if (!args.formulaInstances.get(cellIndex)) {
+      recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
+    }
     return true
   }
 

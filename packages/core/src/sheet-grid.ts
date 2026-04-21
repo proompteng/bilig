@@ -79,11 +79,53 @@ export class SheetGrid {
     if (this.logicalLookup) {
       return this.logicalLookup.get(row, col) ?? -1
     }
+    return this.getPhysical(row, col)
+  }
+
+  getPhysical(row: number, col: number): number {
     const block = this.blocks.get(blockKey(row, col))
     if (!block) return -1
     const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
     const value = block[offset]!
     return value === 0 ? -1 : value - 1
+  }
+
+  forEachPhysicalRangeEntry(
+    rowStart: number,
+    colStart: number,
+    rowEnd: number,
+    colEnd: number,
+    fn: (cellIndex: number, row: number, col: number) => void,
+  ): void {
+    const blockRowStart = Math.floor(rowStart / BLOCK_ROWS)
+    const blockRowEnd = Math.floor(rowEnd / BLOCK_ROWS)
+    const blockColStart = Math.floor(colStart / BLOCK_COLS)
+    const blockColEnd = Math.floor(colEnd / BLOCK_COLS)
+    for (let blockRow = blockRowStart; blockRow <= blockRowEnd; blockRow += 1) {
+      const absoluteBlockRow = blockRow * BLOCK_ROWS
+      const localRowStart = Math.max(rowStart - absoluteBlockRow, 0)
+      const localRowEnd = Math.min(rowEnd - absoluteBlockRow, BLOCK_ROWS - 1)
+      for (let blockCol = blockColStart; blockCol <= blockColEnd; blockCol += 1) {
+        const block = this.blocks.get(blockRow * 1_000_000 + blockCol)
+        if (!block) {
+          continue
+        }
+        const absoluteBlockCol = blockCol * BLOCK_COLS
+        const localColStart = Math.max(colStart - absoluteBlockCol, 0)
+        const localColEnd = Math.min(colEnd - absoluteBlockCol, BLOCK_COLS - 1)
+        for (let localRow = localRowStart; localRow <= localRowEnd; localRow += 1) {
+          const row = absoluteBlockRow + localRow
+          const rowOffset = localRow * BLOCK_COLS
+          for (let localCol = localColStart; localCol <= localColEnd; localCol += 1) {
+            const value = block[rowOffset + localCol]!
+            if (value === 0) {
+              continue
+            }
+            fn(value - 1, row, absoluteBlockCol + localCol)
+          }
+        }
+      }
+    }
   }
 
   set(row: number, col: number, cellIndex: number): void {
