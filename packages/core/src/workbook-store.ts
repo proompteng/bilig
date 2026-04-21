@@ -1065,6 +1065,7 @@ export class WorkbookStore {
     if (this.counters && transaction.remappedCells.length > 0) {
       addEngineCounter(this.counters, 'cellsRemapped', transaction.remappedCells.length)
     }
+    let hasSurvivingRemap = false
     for (const entry of transaction.remappedCells) {
       this.cellKeyToIndex.delete(makeCellKey(sheet.id, entry.fromRow, entry.fromCol))
       if (sheet.grid.get(entry.fromRow, entry.fromCol) === entry.cellIndex) {
@@ -1072,7 +1073,12 @@ export class WorkbookStore {
       }
       if ((entry.toRow === undefined || entry.toCol === undefined) && entry.fromRowId && entry.fromColId) {
         sheet.logical.deleteVisibleCellByIds(entry.fromRowId, entry.fromColId)
+      } else {
+        hasSurvivingRemap = true
       }
+    }
+    if (!hasSurvivingRemap) {
+      return transaction
     }
     for (const entry of transaction.remappedCells) {
       if (entry.toRow === undefined || entry.toCol === undefined) {
