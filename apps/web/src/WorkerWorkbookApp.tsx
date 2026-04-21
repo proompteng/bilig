@@ -6,6 +6,7 @@ import type { ZeroClient } from './runtime-session.js'
 import { parseSelectionTarget, type ZeroConnectionState } from './worker-workbook-app-model.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { WorkbookToastRegion } from './WorkbookToastRegion.js'
+import { resolveWebWorkbookRendererMode } from './renderer-flags.js'
 import { useWorkbookImportPane } from './use-workbook-import-pane.js'
 import { useWorkbookShortcutDialog } from './use-workbook-shortcut-dialog.js'
 import { useWorkerWorkbookAppState } from './use-worker-workbook-app-state.js'
@@ -19,6 +20,7 @@ const persistenceBannerButtonClass =
 
 export function WorkerWorkbookApp(props: { config: BiligRuntimeConfig; connectionState: ZeroConnectionState; zero?: ZeroClient }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config])
+  const rendererMode = useMemo(() => resolveWebWorkbookRendererMode(), [])
   const runtimeKey = [runtimeConfig.documentId, runtimeConfig.persistState ? 'persist' : 'memory'].join('|')
 
   return (
@@ -26,6 +28,7 @@ export function WorkerWorkbookApp(props: { config: BiligRuntimeConfig; connectio
       key={runtimeKey}
       runtimeConfig={runtimeConfig}
       connectionState={props.connectionState}
+      rendererMode={rendererMode}
       {...(props.zero ? { zero: props.zero } : {})}
     />
   )
@@ -34,10 +37,12 @@ export function WorkerWorkbookApp(props: { config: BiligRuntimeConfig; connectio
 function WorkerWorkbookAppInner({
   runtimeConfig,
   connectionState,
+  rendererMode,
   zero,
 }: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>
   connectionState: ZeroConnectionState
+  rendererMode: ReturnType<typeof resolveWebWorkbookRendererMode>
   zero?: ZeroClient
 }) {
   const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
@@ -231,6 +236,7 @@ function WorkerWorkbookAppInner({
             >
               <WorkbookView
                 ribbon={app.ribbon}
+                rendererMode={rendererMode}
                 editorValue={app.visibleEditorValue}
                 editorSelectionBehavior={app.editorSelectionBehavior}
                 engine={app.workerHandle.viewportStore}

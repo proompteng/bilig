@@ -1,6 +1,7 @@
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridSelectionSnapshot } from './gridTypes.js'
+import type { WorkbookRendererMode } from './workbookRendererMode.js'
 
 export type { GridSelectionSnapshot } from './gridTypes.js'
 
@@ -71,4 +72,5 @@ export interface WorkbookGridSurfaceProps {
         readonly viewport: Viewport
       }
     | undefined
+  rendererMode?: WorkbookRendererMode | undefined
 }

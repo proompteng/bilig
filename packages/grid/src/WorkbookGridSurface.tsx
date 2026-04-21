@@ -3,10 +3,13 @@ import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
+import { createGridGeometrySnapshot } from './gridGeometry.js'
 import { WorkbookPaneRenderer } from './renderer/WorkbookPaneRenderer.js'
+import { WorkbookPaneRendererV2 } from './renderer-v2/index.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
+import { DEFAULT_WORKBOOK_RENDERER_MODE } from './workbookRendererMode.js'
 export { hasSelectionTargetChanged } from './workbookGridViewport.js'
 export type {
   EditTargetSelection,
@@ -74,6 +77,40 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   })
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
+  const rendererMode = props.rendererMode ?? DEFAULT_WORKBOOK_RENDERER_MODE
+  const v2Geometry = useMemo(
+    () =>
+      rendererMode === 'typegpu-v2' && renderState.hostElement
+        ? createGridGeometrySnapshot({
+            columnWidths: props.columnWidths,
+            dpr: typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1),
+            freezeCols: props.freezeCols,
+            freezeRows: props.freezeRows,
+            gridMetrics: renderState.gridMetrics,
+            hiddenColumns: props.hiddenColumns,
+            hiddenRows: props.hiddenRows,
+            hostHeight: renderState.hostElement.clientHeight,
+            hostWidth: renderState.hostElement.clientWidth,
+            rowHeights: props.rowHeights,
+            scrollLeft: renderState.scrollViewportRef.current?.scrollLeft ?? 0,
+            scrollTop: renderState.scrollViewportRef.current?.scrollTop ?? 0,
+            sheetName: props.sheetName,
+          })
+        : null,
+    [
+      props.columnWidths,
+      props.freezeCols,
+      props.freezeRows,
+      props.hiddenColumns,
+      props.hiddenRows,
+      props.rowHeights,
+      props.sheetName,
+      renderState.gridMetrics,
+      renderState.hostElement,
+      renderState.scrollViewportRef,
+      rendererMode,
+    ],
+  )
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])
       .filter((range) => range.sheetName === props.sheetName)
@@ -147,12 +184,16 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        <WorkbookPaneRenderer
-          active={renderState.hostElement !== null}
-          host={renderState.hostElement}
-          panes={renderState.renderPanes}
-          scrollTransformStore={renderState.scrollTransformStore}
-        />
+        {rendererMode === 'typegpu-v2' ? (
+          <WorkbookPaneRendererV2 active={renderState.hostElement !== null} geometry={v2Geometry} host={renderState.hostElement} />
+        ) : (
+          <WorkbookPaneRenderer
+            active={renderState.hostElement !== null}
+            host={renderState.hostElement}
+            panes={renderState.renderPanes}
+            scrollTransformStore={renderState.scrollTransformStore}
+          />
+        )}
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"
