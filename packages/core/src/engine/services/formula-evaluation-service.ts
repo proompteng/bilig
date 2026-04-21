@@ -124,9 +124,43 @@ export function createEngineFormulaEvaluationService(args: {
   ) => CellValue
 }): EngineFormulaEvaluationService {
   const emptyChangedCellIndices: number[] = []
+  const directCriteriaAggregateCache = new Map<string, CellValue>()
   const directNumberResult = (value: number): CellValue => ({ tag: ValueTag.Number, value })
 
   const directErrorResult = (code: ErrorCode): CellValue => ({ tag: ValueTag.Error, code })
+
+  const directCriteriaCacheValueKey = (value: CellValue): string => {
+    switch (value.tag) {
+      case ValueTag.Empty:
+        return 'e:'
+      case ValueTag.Number:
+        return `n:${Object.is(value.value, -0) ? 0 : value.value}`
+      case ValueTag.Boolean:
+        return value.value ? 'b:1' : 'b:0'
+      case ValueTag.String:
+        return `s:${value.value}`
+      case ValueTag.Error:
+        return `r:${value.code}`
+    }
+  }
+
+  const directCriteriaRangeVersionKey = (range: { sheetName: string; rowStart: number; rowEnd: number; col: number }): string => {
+    const sheet = args.state.workbook.getSheet(range.sheetName)
+    return `${range.sheetName}:${range.rowStart}:${range.rowEnd}:${range.col}:${sheet?.columnVersions[range.col] ?? 0}:${
+      sheet?.structureVersion ?? 0
+    }`
+  }
+
+  const rememberDirectCriteriaResult = (key: string, value: CellValue): CellValue => {
+    if (directCriteriaAggregateCache.size >= 512) {
+      const firstKey = directCriteriaAggregateCache.keys().next().value
+      if (firstKey !== undefined) {
+        directCriteriaAggregateCache.delete(firstKey)
+      }
+    }
+    directCriteriaAggregateCache.set(key, value)
+    return value
+  }
 
   const readCellValue = (sheetName: string, address: string): CellValue => {
     if (!args.state.workbook.getSheet(sheetName)) {
@@ -508,6 +542,15 @@ export function createEngineFormulaEvaluationService(args: {
     if (!aggregateRange) {
       return undefined
     }
+    const aggregateCacheKey = [
+      directCriteria.aggregateKind,
+      directCriteriaRangeVersionKey(aggregateRange),
+      resolvedPairs.map((pair) => `${directCriteriaRangeVersionKey(pair.range)}:${directCriteriaCacheValueKey(pair.criteria)}`).join('|'),
+    ].join('\u0000')
+    const cachedAggregate = directCriteriaAggregateCache.get(aggregateCacheKey)
+    if (cachedAggregate) {
+      return cachedAggregate
+    }
     const aggregateSlice = args.runtimeColumnStore.getColumnSlice({
       sheetName: aggregateRange.sheetName,
       rowStart: aggregateRange.rowStart,
@@ -520,7 +563,7 @@ export function createEngineFormulaEvaluationService(args: {
       for (let index = 0; index < matches.length; index += 1) {
         sum += numericLikeValueAt(aggregateSlice, matches.rows[index]!) ?? 0
       }
-      return directNumberResult(sum)
+      return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(sum))
     }
 
     if (directCriteria.aggregateKind === 'average') {
@@ -534,7 +577,10 @@ export function createEngineFormulaEvaluationService(args: {
         count += 1
         sum += numeric
       }
-      return count === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / count)
+      return rememberDirectCriteriaResult(
+        aggregateCacheKey,
+        count === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / count),
+      )
     }
 
     if (directCriteria.aggregateKind === 'min') {
@@ -546,7 +592,7 @@ export function createEngineFormulaEvaluationService(args: {
         }
         minimum = Math.min(minimum, numeric)
       }
-      return directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum)
+      return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum))
     }
 
     let maximum = Number.NEGATIVE_INFINITY
@@ -557,7 +603,7 @@ export function createEngineFormulaEvaluationService(args: {
       }
       maximum = Math.max(maximum, numeric)
     }
-    return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum)
+    return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum))
   }
 
   const tryEvaluateDirectAggregate = (formula: RuntimeFormula): CellValue | undefined => {
