@@ -180,7 +180,13 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        <WorkbookPaneRendererV2 active={renderState.hostElement !== null} geometry={v2Geometry} host={renderState.hostElement} />
+        <WorkbookPaneRendererV2
+          active={renderState.hostElement !== null}
+          geometry={v2Geometry}
+          host={renderState.hostElement}
+          panes={renderState.renderPanes}
+          scrollTransformStore={renderState.scrollTransformStore}
+        />
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"
