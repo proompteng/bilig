@@ -14,6 +14,8 @@ export interface GridCameraInput {
   readonly freezeCols?: number
   readonly columnWidths: Readonly<Record<number, number>>
   readonly rowHeights: Readonly<Record<number, number>>
+  readonly hiddenColumns?: Readonly<Record<number, true>> | undefined
+  readonly hiddenRows?: Readonly<Record<number, true>> | undefined
   readonly gridMetrics: ReturnType<typeof getGridMetrics>
   readonly previous?: GridCameraSnapshot | null
   readonly updatedAt?: number
@@ -26,6 +28,8 @@ export function createGridCameraSnapshot(input: GridCameraInput): GridCameraSnap
     ...(input.freezeCols === undefined ? {} : { freezeCols: input.freezeCols }),
     ...(input.freezeRows === undefined ? {} : { freezeRows: input.freezeRows }),
     gridMetrics: input.gridMetrics,
+    hiddenColumns: input.hiddenColumns,
+    hiddenRows: input.hiddenRows,
     rowHeights: input.rowHeights,
     scrollLeft: input.scrollLeft,
     scrollTop: input.scrollTop,

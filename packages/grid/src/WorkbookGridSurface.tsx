@@ -30,6 +30,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,
+    controlledHiddenColumns: props.hiddenColumns,
+    controlledHiddenRows: props.hiddenRows,
     getCellEditorSeed: props.getCellEditorSeed,
     freezeRows: props.freezeRows,
     freezeCols: props.freezeCols,

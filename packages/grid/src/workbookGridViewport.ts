@@ -2,6 +2,7 @@ import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT
 import { createAxisIndexFromRecord, createAxisIndexFromSortedOverrides } from './gridAxisIndex.js'
 import type { getGridMetrics } from './gridMetrics.js'
 import { MAX_COLUMN_WIDTH, MAX_ROW_HEIGHT, getResolvedColumnWidth, getResolvedRowHeight } from './gridMetrics.js'
+import { applyHiddenAxisSizes } from './gridScrollSurface.js'
 import type { Item } from './gridTypes.js'
 import type { VisibleRegionState } from './gridPointer.js'
 
@@ -46,6 +47,8 @@ export function resolveVisibleRegionFromScroll(options: {
   freezeCols?: number
   columnWidths: Readonly<Record<number, number>>
   rowHeights: Readonly<Record<number, number>>
+  hiddenColumns?: Readonly<Record<number, true>> | undefined
+  hiddenRows?: Readonly<Record<number, true>> | undefined
   gridMetrics: ReturnType<typeof getGridMetrics>
 }): VisibleRegionState {
   const {
@@ -57,12 +60,22 @@ export function resolveVisibleRegionFromScroll(options: {
     freezeCols: requestedFreezeCols = 0,
     columnWidths,
     rowHeights,
+    hiddenColumns,
+    hiddenRows,
     gridMetrics,
   } = options
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
   const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols))
-  const columnAxis = createAxisIndexFromRecord({ axisLength: MAX_COLS, defaultSize: gridMetrics.columnWidth, sizes: columnWidths })
-  const rowAxis = createAxisIndexFromRecord({ axisLength: MAX_ROWS, defaultSize: gridMetrics.rowHeight, sizes: rowHeights })
+  const columnAxis = createAxisIndexFromRecord({
+    axisLength: MAX_COLS,
+    defaultSize: gridMetrics.columnWidth,
+    sizes: applyHiddenAxisSizes(columnWidths, hiddenColumns),
+  })
+  const rowAxis = createAxisIndexFromRecord({
+    axisLength: MAX_ROWS,
+    defaultSize: gridMetrics.rowHeight,
+    sizes: applyHiddenAxisSizes(rowHeights, hiddenRows),
+  })
   const frozenWidth = columnAxis.resolveSpan(0, freezeCols)
   const frozenHeight = rowAxis.resolveSpan(0, freezeRows)
   const bodyWidth = Math.max(0, viewportWidth - gridMetrics.rowMarkerWidth - frozenWidth)
