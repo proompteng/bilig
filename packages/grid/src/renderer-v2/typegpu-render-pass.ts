@@ -1,16 +1,16 @@
 import type { Rectangle } from '../gridTypes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
 import type { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
-import type { WorkbookRenderPaneState } from './pane-scene-types.js'
+import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
   WORKBOOK_TEXT_INSTANCE_LAYOUT,
   WORKBOOK_UNIT_QUAD_LAYOUT,
   type TypeGpuRendererArtifacts,
   updateTypeGpuSurfaceUniform,
-} from './typegpu-renderer.js'
-import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
-import { ensurePaneSurfaceBindings } from './typegpu-resource-cache.js'
+} from './typegpu-backend.js'
+import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../renderer/grid-render-counters.js'
+import { ensurePaneSurfaceBindings } from './typegpu-buffer-pool.js'
 
 export interface TypeGpuDrawSurface {
   readonly width: number

@@ -10,11 +10,11 @@ import {
   ensureTypeGpuVertexBuffer,
   type TypeGpuRendererArtifacts,
   writeTypeGpuVertexBuffer,
-} from './typegpu-renderer.js'
-import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDecorationRect } from './text-quad-buffer.js'
+} from './typegpu-backend.js'
+import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDecorationRect } from '../renderer/text-quad-buffer.js'
 import type { WorkbookPaneBufferEntry, WorkbookPaneBufferCache } from './pane-buffer-cache.js'
-import type { createGlyphAtlas } from './glyph-atlas.js'
-import type { WorkbookRenderPaneState } from './pane-scene-types.js'
+import type { createGlyphAtlas } from '../renderer/glyph-atlas.js'
+import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = 20
 

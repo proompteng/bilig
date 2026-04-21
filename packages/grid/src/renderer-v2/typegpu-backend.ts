@@ -17,7 +17,7 @@ import {
   noteTypeGpuBufferWrite,
   noteTypeGpuConfigure,
   noteTypeGpuUniformWrite,
-} from './grid-render-counters.js'
+} from '../renderer/grid-render-counters.js'
 
 const UNIT_QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1])
 const UNIT_QUAD_VERTEX_COUNT = 6

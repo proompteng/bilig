@@ -4,17 +4,17 @@ import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { createGlyphAtlas } from '../renderer/glyph-atlas.js'
-import { WorkbookPaneBufferCache } from '../renderer/pane-buffer-cache.js'
+import { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
-import { drawTypeGpuPanes } from '../renderer/typegpu-draw-pass.js'
-import { syncTypeGpuPaneResources } from '../renderer/typegpu-resource-cache.js'
+import { drawTypeGpuPanes } from './typegpu-render-pass.js'
+import { syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
 import {
   createTypeGpuRenderer,
   destroyTypeGpuRenderer,
   syncTypeGpuAtlasResources,
   type TypeGpuRendererArtifacts,
-} from '../renderer/typegpu-renderer.js'
-import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from '../renderer/typegpu-surface-manager.js'
+} from './typegpu-backend.js'
+import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from './typegpu-surface.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
 

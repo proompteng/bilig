@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { resolveGridRectSceneSignature, resolveGridTextSceneSignature } from '../renderer/typegpu-resource-cache.js'
+import { resolveGridRectSceneSignature, resolveGridTextSceneSignature } from '../renderer-v2/typegpu-buffer-pool.js'
 
 describe('typegpu resource cache signatures', () => {
   test('keeps equivalent text scenes stable without relying on object identity', () => {

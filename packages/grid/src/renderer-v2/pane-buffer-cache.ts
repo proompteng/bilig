@@ -1,7 +1,7 @@
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
-import type { TextDecorationRect } from './text-quad-buffer.js'
-import type { RectInstanceVertexBuffer, SurfaceUniformBuffer, TextInstanceVertexBuffer } from './typegpu-renderer.js'
+import type { TextDecorationRect } from '../renderer/text-quad-buffer.js'
+import type { RectInstanceVertexBuffer, SurfaceUniformBuffer, TextInstanceVertexBuffer } from './typegpu-backend.js'
 import type { TgpuBindGroup } from 'typegpu'
 
 export interface WorkbookPaneBufferEntry {
