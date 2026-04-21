@@ -94,6 +94,72 @@ export function materializeChangedCellPatches(
     }
     return patches
   }
+  let firstSheetId: number | undefined
+  for (let index = 0; index < changedCellIndices.length; index += 1) {
+    const sheetId = args.workbook.cellStore.sheetIds[changedCellIndices[index]!]
+    if (sheetId !== undefined) {
+      firstSheetId = sheetId
+      break
+    }
+  }
+  if (firstSheetId === undefined) {
+    return []
+  }
+  let isSingleSheetChangeSet = true
+  for (let index = 0; index < changedCellIndices.length; index += 1) {
+    const sheetId = args.workbook.cellStore.sheetIds[changedCellIndices[index]!]
+    if (sheetId !== undefined && sheetId !== firstSheetId) {
+      isSingleSheetChangeSet = false
+      break
+    }
+  }
+  if (isSingleSheetChangeSet) {
+    const sheet = args.workbook.getSheetById(firstSheetId)
+    const sheetName = sheet?.name ?? args.workbook.getSheetNameById(firstSheetId)
+    const isPhysicalSheet = !sheet || sheet.structureVersion === 1
+    const columnLabels: string[] = []
+    const formatAddressCached = (row: number, col: number): string => {
+      let label = columnLabels[col]
+      if (label === undefined) {
+        label = indexToColumn(col)
+        columnLabels[col] = label
+      }
+      return `${label}${row + 1}`
+    }
+    const patches: EngineCellPatch[] = []
+    for (let index = 0; index < changedCellIndices.length; index += 1) {
+      const cellIndex = changedCellIndices[index]!
+      if (args.workbook.cellStore.sheetIds[cellIndex] !== firstSheetId) {
+        continue
+      }
+      let row: number
+      let col: number
+      if (isPhysicalSheet) {
+        row = args.workbook.cellStore.rows[cellIndex]!
+        col = args.workbook.cellStore.cols[cellIndex]!
+      } else {
+        const position = args.workbook.getCellPosition(cellIndex)
+        /* v8 ignore next -- defensive guard for stale logical indices without visible positions. */
+        if (!position) {
+          continue
+        }
+        row = position.row
+        col = position.col
+      }
+      patches.push({
+        kind: 'cell',
+        cellIndex,
+        address: { sheet: firstSheetId, row, col },
+        sheetName,
+        a1: formatAddressCached(row, col),
+        newValue: args.workbook.cellStore.getValue(cellIndex, (id) => args.strings.get(id)),
+      })
+    }
+    if (args.counters) {
+      addEngineCounter(args.counters, 'changedCellPayloadsBuilt', patches.length)
+    }
+    return patches
+  }
   const sheetNames = new Map<number, string>()
   const physicalSheetIds = new Set<number>()
   const logicalSheetIds = new Set<number>()

@@ -84,6 +84,22 @@ function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: strin
 }
 
 describe('EngineFormulaEvaluationService', () => {
+  it('evaluates scalar JS references without materializing column owners', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-scalar-direct-reads' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 20)
+    engine.setCellValue('Sheet1', 'C1', 30)
+    engine.setCellFormula('Sheet1', 'D1', 'IF(A1>0,B1,C1)')
+    engine.resetPerformanceCounters()
+
+    engine.setCellValue('Sheet1', 'A1', 2)
+
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getPerformanceCounters().columnOwnerBuilds).toBe(0)
+  })
+
   it('re-evaluates JS indirection spills through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-indirect' })
     await engine.ready()

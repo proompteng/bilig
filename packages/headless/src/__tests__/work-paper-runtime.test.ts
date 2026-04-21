@@ -162,6 +162,7 @@ describe('WorkPaper', () => {
     const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
 
     expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
+    expect(changes.every((change) => change.kind !== 'cell' || !('cellIndex' in change))).toBe(true)
     expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
       tag: ValueTag.Number,
       value: 18,
@@ -191,6 +192,7 @@ describe('WorkPaper', () => {
     })
 
     expect(changes).toHaveLength(rowCount * 2)
+    expect(changes.every((change) => change.kind !== 'cell' || !('cellIndex' in change))).toBe(true)
     expect(workbook.getCellValue(cell(sheetId, rowCount - 1, 1))).toEqual({
       tag: ValueTag.Number,
       value: (rowCount - 1) * 6,
@@ -877,6 +879,12 @@ describe('WorkPaper', () => {
     expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 6 })
     expect(workbook.getCellValue(cell(sheetId, 2, 3))).toEqual({ tag: ValueTag.Number, value: 9 })
     expect(workbook.getCellValue(cell(sheetId, 2, 4))).toEqual({ tag: ValueTag.Number, value: 18 })
+
+    const undoChanges = workbook.undo()
+    expect(undoChanges).toHaveLength(6)
+    expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 4, height: 3 })
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 2))).toBe('=A1+B1')
+    expect(workbook.getCellSerialized(cell(sheetId, 0, 3))).toBe('=C1*2')
   })
 
   it('applies function translations to registered languages and exposes license validity', () => {

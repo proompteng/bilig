@@ -62,6 +62,19 @@ describe('EngineReadService', () => {
     expect(explanation.value).toEqual({ tag: ValueTag.Number, value: 20 })
   })
 
+  it('reads single cell values without materializing column owners', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'read-single-cell-direct' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 10)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+    engine.resetPerformanceCounters()
+
+    expect(Effect.runSync(getReadService(engine).getCellValue('Sheet1', 'B1'))).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(Effect.runSync(getReadService(engine).getCell('Sheet1', 'B1')).value).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getPerformanceCounters().columnOwnerBuilds).toBe(0)
+  })
+
   it('infers short date formatting for serials under date-like headers without explicit formats', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'read-date-headers' })
     await engine.ready()

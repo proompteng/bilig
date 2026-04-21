@@ -54,8 +54,20 @@ export function createEngineReadService(args: {
     if (row === 0) {
       return undefined
     }
-    const headerValue = args.runtimeColumnStore.readCellValue(sheetName, row - 1, col)
+    const headerValue = readCellValueAt(sheetName, row - 1, col)
     return isDateLikeHeaderValue(headerValue) ? 'date:short' : undefined
+  }
+
+  const readCellValueByIndex = (cellIndex: number | undefined): CellValue => {
+    if (cellIndex === undefined) {
+      return emptyValue()
+    }
+    return args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id))
+  }
+
+  const readCellValueAt = (sheetName: string, row: number, col: number): CellValue => {
+    const sheet = args.state.workbook.getSheet(sheetName)
+    return readCellValueByIndex(sheet?.logical.getVisibleCell(row, col))
   }
 
   const getCellByIndex = (cellIndex: number): CellSnapshot => {
@@ -69,7 +81,7 @@ export function createEngineReadService(args: {
     const snapshot: CellSnapshot = {
       sheetName,
       address,
-      value: args.runtimeColumnStore.readCellValue(sheetName, row, col),
+      value: readCellValueByIndex(cellIndex),
       flags: args.state.workbook.cellStore.flags[cellIndex]!,
       version: args.state.workbook.cellStore.versions[cellIndex] ?? 0,
     }
@@ -125,7 +137,7 @@ export function createEngineReadService(args: {
 
   const getCellValue = (sheetName: string, address: string): CellValue => {
     const parsed = parseCellAddress(address, sheetName)
-    return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col)
+    return readCellValueAt(sheetName, parsed.row, parsed.col)
   }
 
   const readRangeValueMatrix = (range: CellRangeRef): CellValue[][] => {

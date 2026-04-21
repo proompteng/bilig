@@ -169,11 +169,19 @@ export function createEngineFormulaEvaluationService(args: {
       return errorValue(ErrorCode.Ref)
     }
     const parsed = parseCellAddress(address, sheetName)
-    return args.runtimeColumnStore.readCellValue(sheetName, parsed.row, parsed.col)
+    return readCellValueAt(sheetName, parsed.row, parsed.col)
   }
 
-  const readCellValueByIndex = (cellIndex: number): CellValue => {
+  const readCellValueByIndex = (cellIndex: number | undefined): CellValue => {
+    if (cellIndex === undefined) {
+      return emptyValue()
+    }
     return args.state.workbook.cellStore.getValue(cellIndex, (stringId) => (stringId === 0 ? '' : args.state.strings.get(stringId)))
+  }
+
+  const readCellValueAt = (sheetName: string, row: number, col: number): CellValue => {
+    const sheet = args.state.workbook.getSheet(sheetName)
+    return sheet ? readCellValueByIndex(sheet.logical.getVisibleCell(row, col)) : errorValue(ErrorCode.Ref)
   }
 
   const numericLikeValueAt = (slice: RuntimeColumnSlice, offset: number): number | undefined => {
@@ -796,8 +804,7 @@ export function createEngineFormulaEvaluationService(args: {
 
     const formula = args.state.formulas.get(cellIndex)
     if (!formula) {
-      const parsedCell = parseCellAddress(address, sheetName)
-      return args.runtimeColumnStore.readCellValue(sheetName, parsedCell.row, parsedCell.col)
+      return readCellValueByIndex(cellIndex)
     }
 
     visiting.add(visitKey)

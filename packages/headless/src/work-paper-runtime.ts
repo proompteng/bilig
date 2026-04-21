@@ -2313,6 +2313,12 @@ export class WorkPaper {
     if (!this.isItPossibleToAddRows(sheetId, ...indexes)) {
       throw new WorkPaperOperationError('Rows cannot be added')
     }
+    if (indexes.length === 1 && this.canUseTrackedStructuralFastPath()) {
+      const [start, amount] = indexes[0]!
+      return this.captureTrackedChangesWithoutVisibilityCache(() => {
+        this.engine.insertRows(this.sheetName(sheetId), start, amount)
+      })
+    }
     return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertRows(this.sheetName(sheetId), start, amount)
@@ -2331,6 +2337,12 @@ export class WorkPaper {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals)
     if (!this.isItPossibleToRemoveRows(sheetId, ...indexes)) {
       throw new WorkPaperOperationError('Rows cannot be removed')
+    }
+    if (indexes.length === 1 && this.canUseTrackedStructuralFastPath()) {
+      const [start, amount] = indexes[0]!
+      return this.captureTrackedChangesWithoutVisibilityCache(() => {
+        this.engine.deleteRows(this.sheetName(sheetId), start, amount)
+      })
     }
     return this.batchStructuralChanges(() => {
       indexes
@@ -2353,6 +2365,12 @@ export class WorkPaper {
     if (!this.isItPossibleToAddColumns(sheetId, ...indexes)) {
       throw new WorkPaperOperationError('Columns cannot be added')
     }
+    if (indexes.length === 1 && this.canUseTrackedStructuralFastPath()) {
+      const [start, amount] = indexes[0]!
+      return this.captureTrackedChangesWithoutVisibilityCache(() => {
+        this.engine.insertColumns(this.sheetName(sheetId), start, amount)
+      })
+    }
     return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertColumns(this.sheetName(sheetId), start, amount)
@@ -2371,6 +2389,12 @@ export class WorkPaper {
     const indexes = this.normalizeAxisIntervals(startOrInterval, countOrInterval, restIntervals)
     if (!this.isItPossibleToRemoveColumns(sheetId, ...indexes)) {
       throw new WorkPaperOperationError('Columns cannot be removed')
+    }
+    if (indexes.length === 1 && this.canUseTrackedStructuralFastPath()) {
+      const [start, amount] = indexes[0]!
+      return this.captureTrackedChangesWithoutVisibilityCache(() => {
+        this.engine.deleteColumns(this.sheetName(sheetId), start, amount)
+      })
     }
     return this.batchStructuralChanges(() => {
       indexes
@@ -2401,7 +2425,7 @@ export class WorkPaper {
       throw new WorkPaperOperationError('Rows cannot be moved')
     }
     return this.canUseTrackedStructuralFastPath()
-      ? this.batchStructuralChanges(() => {
+      ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveRows(this.sheetName(sheetId), start, count, target)
         })
       : this.captureChanges(undefined, () => {
@@ -2414,7 +2438,7 @@ export class WorkPaper {
       throw new WorkPaperOperationError('Columns cannot be moved')
     }
     return this.canUseTrackedStructuralFastPath()
-      ? this.batchStructuralChanges(() => {
+      ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
         })
       : this.captureChanges(undefined, () => {
@@ -3146,14 +3170,26 @@ export class WorkPaper {
     if (events.length === 1) {
       const event = events[0]!
       const eventChanges = this.materializeTrackedEventChanges(event)
+      const directChanges: WorkPaperCellChange[] = []
+      const seenCellKeys = eventChanges.length > 4 ? new Set<number>() : undefined
+      const smallCellKeys: number[] | undefined = seenCellKeys === undefined && eventChanges.length > 1 ? [] : undefined
       let hasDuplicateCellKey = false
-      if (eventChanges.length <= 4) {
-        for (let index = 0; index < eventChanges.length; index += 1) {
-          const change = eventChanges[index]!
-          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+      let alreadySorted = true
+      let previousSheetOrder = -1
+      let previousRow = -1
+      let previousCol = -1
+      for (let index = 0; index < eventChanges.length; index += 1) {
+        const change = eventChanges[index]!
+        const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+        if (seenCellKeys) {
+          if (seenCellKeys.has(cellKey)) {
+            hasDuplicateCellKey = true
+            break
+          }
+          seenCellKeys.add(cellKey)
+        } else {
           for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-            const prior = eventChanges[priorIndex]!
-            if (makeCellKey(prior.address.sheet, prior.address.row, prior.address.col) === cellKey) {
+            if (smallCellKeys![priorIndex] === cellKey) {
               hasDuplicateCellKey = true
               break
             }
@@ -3161,52 +3197,35 @@ export class WorkPaper {
           if (hasDuplicateCellKey) {
             break
           }
-        }
-      } else {
-        const seenCellKeys = new Set<number>()
-        for (let index = 0; index < eventChanges.length; index += 1) {
-          const change = eventChanges[index]!
-          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
-          if (seenCellKeys.has(cellKey)) {
-            hasDuplicateCellKey = true
-            break
+          if (smallCellKeys) {
+            smallCellKeys[index] = cellKey
           }
-          seenCellKeys.add(cellKey)
         }
+        const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
+        if (
+          sheet.order < previousSheetOrder ||
+          (sheet.order === previousSheetOrder &&
+            (change.address.row < previousRow || (change.address.row === previousRow && change.address.col < previousCol)))
+        ) {
+          alreadySorted = false
+        }
+        if (change.newValue.tag === ValueTag.Empty) {
+          sheet.cells.delete(cellKey)
+        } else {
+          sheet.cells.set(cellKey, change.newValue)
+        }
+        directChanges[index] = {
+          kind: 'cell',
+          address: change.address,
+          sheetName: change.sheetName,
+          a1: change.a1,
+          newValue: change.newValue,
+        }
+        previousSheetOrder = sheet.order
+        previousRow = change.address.row
+        previousCol = change.address.col
       }
       if (!hasDuplicateCellKey) {
-        const directChanges: WorkPaperCellChange[] = []
-        let alreadySorted = true
-        let previousSheetOrder = -1
-        let previousRow = -1
-        let previousCol = -1
-        for (let index = 0; index < eventChanges.length; index += 1) {
-          const change = eventChanges[index]!
-          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
-          const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
-          if (
-            sheet.order < previousSheetOrder ||
-            (sheet.order === previousSheetOrder &&
-              (change.address.row < previousRow || (change.address.row === previousRow && change.address.col < previousCol)))
-          ) {
-            alreadySorted = false
-          }
-          if (change.newValue.tag === ValueTag.Empty) {
-            sheet.cells.delete(cellKey)
-          } else {
-            sheet.cells.set(cellKey, change.newValue)
-          }
-          directChanges[index] = {
-            kind: 'cell',
-            address: change.address,
-            sheetName: change.sheetName,
-            a1: change.a1,
-            newValue: change.newValue,
-          }
-          previousSheetOrder = sheet.order
-          previousRow = change.address.row
-          previousCol = change.address.col
-        }
         return {
           changes: alreadySorted
             ? directChanges
