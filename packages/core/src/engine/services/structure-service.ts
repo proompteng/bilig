@@ -1093,7 +1093,28 @@ export function createEngineStructureService(args: {
     const preservedCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
+    const tryDeferOwnedSimpleFormula = (cellIndex: number): boolean => {
+      if (argsForImpact.changedDefinedNames.size > 0 || argsForImpact.changedTableNames.size > 0) {
+        return false
+      }
+      const formula = args.state.formulas.get(cellIndex)
+      if (!formula || !canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
+        return false
+      }
+      formula.structuralSourceTransform = {
+        ownerSheetName: argsForImpact.sheetName,
+        targetSheetName: argsForImpact.sheetName,
+        transform: argsForImpact.transform,
+        preservesValue: true,
+      }
+      hasDeferredStructuralFormulaSources = true
+      preservedCellIndices.add(cellIndex)
+      return true
+    }
     args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
+      if (tryDeferOwnedSimpleFormula(cellIndex)) {
+        return
+      }
       candidateCellIndices.add(cellIndex)
     })
     args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
