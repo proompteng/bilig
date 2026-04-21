@@ -2,7 +2,7 @@ import type { Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
-import type { PackedGridScenePacket } from './grid-scene-packet.js'
+import type { GridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
 
@@ -18,7 +18,7 @@ export interface WorkbookPaneScenePacket {
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
-  readonly packedScene?: PackedGridScenePacket
+  readonly packedScene?: GridScenePacketV2
 }
 
 export interface WorkbookPaneSceneRequest {
