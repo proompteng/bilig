@@ -59,6 +59,12 @@ describe('gridGeometry', () => {
     })
     expect(geometry.columnHeaderScreenRect(2)).toMatchObject({ height: metrics.headerHeight, width: 100, x: 196, y: 0 })
     expect(geometry.rowHeaderScreenRect(3)).toMatchObject({ height: 20, width: metrics.rowMarkerWidth, x: 0, y: 74 })
+    expect(geometry.cellScreenRectForPane(2, 3, 'body')).toEqual({ height: 20, width: 100, x: 196, y: 74 })
+    expect(geometry.cellScreenRectForPane(0, 0, 'body')).toBeNull()
+    expect(geometry.cellScreenRectForPane(0, 0, 'frozen-cells')).toEqual({ height: 20, width: 100, x: 46, y: 24 })
+    expect(geometry.editorScreenRect(2, 3)).toEqual({ height: 20, width: 100, x: 196, y: 74 })
+    expect(geometry.resizeGuideScreenRect({ kind: 'column', index: 2 })).toEqual({ height: 220, width: 1, x: 295, y: 0 })
+    expect(geometry.resizeGuideScreenRect({ kind: 'row', index: 3 })).toEqual({ height: 1, width: 520, x: 0, y: 93 })
   })
 
   test('hit-tests through body and frozen panes with hidden axes skipped', () => {
@@ -113,6 +119,7 @@ describe('gridGeometry', () => {
       { height: 20, width: 150, x: 146, y: 24 },
       { height: 30, width: 150, x: 146, y: 44 },
     ])
+    expect(geometry.rangeWorldRects({ x: 0, y: 0, width: 3, height: 3 })).toEqual([{ height: 60, width: 300, x: 0, y: 0 }])
     expect(geometry.fillHandleScreenRect({ x: 0, y: 0, width: 3, height: 3 })).toEqual({
       height: 8,
       width: 8,

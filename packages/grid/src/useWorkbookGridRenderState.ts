@@ -21,6 +21,7 @@ import {
 import { createGridSelection, isSheetSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
 import { buildHeaderPaneStates } from './gridHeaderPanes.js'
+import { applyEditorOverlayBounds, resolveEditorOverlayScreenBounds } from './gridEditorOverlayGeometry.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { applyHiddenAxisSizes, resolveGridScrollSpacerSize } from './gridScrollSurface.js'
@@ -73,20 +74,6 @@ function noteHeaderPaneBuild(): void {
     return
   }
   ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
-}
-
-function applyEditorOverlayBounds(bounds: Rectangle): void {
-  if (typeof document === 'undefined') {
-    return
-  }
-  const element = document.querySelector('[data-testid="cell-editor-overlay"]')
-  if (!(element instanceof HTMLElement)) {
-    return
-  }
-  element.style.height = `${bounds.height}px`
-  element.style.left = `${bounds.x}px`
-  element.style.top = `${bounds.y}px`
-  element.style.width = `${bounds.width}px`
 }
 
 function sameVisibleRegionWindow(left: VisibleRegionState, right: VisibleRegionState): boolean {
@@ -1138,7 +1125,13 @@ export function useWorkbookGridRenderState(input: {
 
   const refreshOverlayBounds = useCallback(
     (options?: { readonly commitReactState?: boolean }) => {
-      const next = getCellScreenBounds(selectedCell.col, selectedCell.row)
+      const next = resolveEditorOverlayScreenBounds({
+        col: selectedCell.col,
+        row: selectedCell.row,
+        geometry: gridCameraStore.getSnapshot(),
+        getCellLocalBounds,
+        hostElement: hostRef.current,
+      })
       if (!next) {
         return
       }
@@ -1150,7 +1143,7 @@ export function useWorkbookGridRenderState(input: {
         return sameBounds(current, next) ? current : next
       })
     },
-    [getCellScreenBounds, selectedCell.col, selectedCell.row],
+    [getCellLocalBounds, gridCameraStore, selectedCell.col, selectedCell.row],
   )
 
   useLayoutEffect(() => {

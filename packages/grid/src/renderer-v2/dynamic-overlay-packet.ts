@@ -231,41 +231,33 @@ function appendResizeGuides(input: {
   const color = parseGpuColor('rgba(33, 86, 58, 0.72)')
   const glowColor = parseGpuColor('rgba(191, 213, 196, 0.28)')
   if (input.resizeGuideColumn !== null) {
-    const rect = input.geometry.columnHeaderScreenRect(input.resizeGuideColumn)
+    const rect = input.geometry.resizeGuideScreenRect({ kind: 'column', index: input.resizeGuideColumn })
     if (rect) {
-      const x = rect.x + rect.width - 1
       input.borderRects.push({
-        x: x - 1,
-        y: 0,
+        x: rect.x - 1,
+        y: rect.y,
         width: 3,
-        height: input.geometry.camera.bodyViewportHeight + input.geometry.camera.frozenHeight + rect.height,
+        height: rect.height,
         color: glowColor,
       })
       input.borderRects.push({
-        x,
-        y: 0,
-        width: 1,
-        height: input.geometry.camera.bodyViewportHeight + input.geometry.camera.frozenHeight + rect.height,
+        ...rect,
         color,
       })
     }
   }
   if (input.resizeGuideRow !== null) {
-    const rect = input.geometry.rowHeaderScreenRect(input.resizeGuideRow)
+    const rect = input.geometry.resizeGuideScreenRect({ kind: 'row', index: input.resizeGuideRow })
     if (rect) {
-      const y = rect.y + rect.height - 1
       input.borderRects.push({
-        x: 0,
-        y: y - 1,
-        width: input.geometry.camera.bodyViewportWidth + input.geometry.camera.frozenWidth + rect.width,
+        x: rect.x,
+        y: rect.y - 1,
+        width: rect.width,
         height: 3,
         color: glowColor,
       })
       input.borderRects.push({
-        x: 0,
-        y,
-        width: input.geometry.camera.bodyViewportWidth + input.geometry.camera.frozenWidth + rect.width,
-        height: 1,
+        ...rect,
         color,
       })
     }

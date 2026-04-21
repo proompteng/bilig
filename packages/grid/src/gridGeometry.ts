@@ -55,12 +55,18 @@ export interface GridGeometrySnapshot {
   readonly rows: GridAxisWorldIndex
   cellWorldRect(col: number, row: number): Rectangle | null
   cellScreenRect(col: number, row: number): Rectangle | null
+  cellScreenRectForPane(col: number, row: number, paneKind: GridPaneKind): Rectangle | null
+  rangeWorldRects(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): readonly Rectangle[]
   rangeScreenRects(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): readonly Rectangle[]
   fillHandleScreenRect(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): Rectangle | null
+  editorScreenRect(col: number, row: number): Rectangle | null
+  resizeGuideScreenRect(input: GridResizeGuideState): Rectangle | null
   columnHeaderScreenRect(col: number): Rectangle | null
   rowHeaderScreenRect(row: number): Rectangle | null
   hitTestScreenPoint(point: { readonly x: number; readonly y: number }): { readonly col: number; readonly row: number } | null
 }
+
+export type GridResizeGuideState = { readonly kind: 'column'; readonly index: number } | { readonly kind: 'row'; readonly index: number }
 
 export function createGridGeometrySnapshot(input: {
   readonly seq?: number
@@ -176,12 +182,17 @@ export function createGridGeometrySnapshotFromAxes(input: {
     camera,
     columns: input.columns,
     rows: input.rows,
+    cellScreenRectForPane: (col, row, paneKind) =>
+      resolveCellScreenRectForPane({ camera, col, columns: input.columns, paneKind, row, rows: input.rows }),
     cellScreenRect: (col, row) => resolveCellScreenRect({ camera, col, columns: input.columns, row, rows: input.rows }),
     cellWorldRect: (col, row) => resolveCellWorldRect({ col, columns: input.columns, row, rows: input.rows }),
     columnHeaderScreenRect: (col) => resolveColumnHeaderScreenRect({ camera, col, columns: input.columns }),
+    editorScreenRect: (col, row) => resolveEditorScreenRect({ camera, col, columns: input.columns, row, rows: input.rows }),
     fillHandleScreenRect: (range) => resolveFillHandleScreenRect({ camera, columns: input.columns, range, rows: input.rows }),
     hitTestScreenPoint: (point) => hitTestScreenPoint({ camera, columns: input.columns, point, rows: input.rows }),
+    rangeWorldRects: (range) => resolveRangeWorldRects({ columns: input.columns, range, rows: input.rows }),
     rangeScreenRects: (range) => resolveRangeScreenRects({ camera, columns: input.columns, range, rows: input.rows }),
+    resizeGuideScreenRect: (state) => resolveResizeGuideScreenRect({ camera, columns: input.columns, rows: input.rows, state }),
     rowHeaderScreenRect: (row) => resolveRowHeaderScreenRect({ camera, row, rows: input.rows }),
   }
 }
@@ -277,6 +288,57 @@ function resolveCellScreenRect(input: {
   return rect(x, y, world.width, world.height)
 }
 
+function resolveCellScreenRectForPane(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly col: number
+  readonly row: number
+  readonly paneKind: GridPaneKind
+}): Rectangle | null {
+  if (!cellBelongsToPane(input.camera, input.col, input.row, input.paneKind)) {
+    return null
+  }
+  const screenRect = resolveCellScreenRect(input)
+  const pane = input.camera.panes.find((candidate) => candidate.kind === input.paneKind)
+  return screenRect && pane ? clipRect(screenRect, pane.frame) : null
+}
+
+function cellBelongsToPane(camera: GridCameraSnapshotV2, col: number, row: number, paneKind: GridPaneKind): boolean {
+  const frozenCol = col < camera.frozenColumnCount
+  const frozenRow = row < camera.frozenRowCount
+  switch (paneKind) {
+    case 'frozen-cells':
+      return frozenCol && frozenRow
+    case 'frozen-rows':
+      return !frozenCol && frozenRow
+    case 'frozen-columns':
+      return frozenCol && !frozenRow
+    case 'body':
+      return !frozenCol && !frozenRow
+    case 'corner-header':
+    case 'column-header-frozen':
+    case 'column-header-body':
+    case 'row-header-frozen':
+    case 'row-header-body':
+      return false
+  }
+}
+
+function resolveRangeWorldRects(input: {
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+}): readonly Rectangle[] {
+  const colStart = Math.max(0, Math.min(MAX_COLS - 1, input.range.x))
+  const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.range.y))
+  const colEndExclusive = Math.max(colStart + 1, Math.min(MAX_COLS, input.range.x + input.range.width))
+  const rowEndExclusive = Math.max(rowStart + 1, Math.min(MAX_ROWS, input.range.y + input.range.height))
+  const width = input.columns.span(colStart, colEndExclusive)
+  const height = input.rows.span(rowStart, rowEndExclusive)
+  return width <= 0 || height <= 0 ? [] : [rect(input.columns.offsetOf(colStart), input.rows.offsetOf(rowStart), width, height)]
+}
+
 function resolveRangeScreenRects(input: {
   readonly camera: GridCameraSnapshotV2
   readonly columns: GridAxisWorldIndex
@@ -312,6 +374,58 @@ function resolveRangeScreenRects(input: {
     }
   }
   return rects
+}
+
+function resolveEditorScreenRect(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly col: number
+  readonly row: number
+}): Rectangle | null {
+  return resolveCellScreenRectForPane({
+    camera: input.camera,
+    col: input.col,
+    columns: input.columns,
+    paneKind: resolveCellPaneKind(input.camera, input.col, input.row),
+    row: input.row,
+    rows: input.rows,
+  })
+}
+
+function resolveCellPaneKind(camera: GridCameraSnapshotV2, col: number, row: number): GridPaneKind {
+  const frozenCol = col < camera.frozenColumnCount
+  const frozenRow = row < camera.frozenRowCount
+  if (frozenCol && frozenRow) {
+    return 'frozen-cells'
+  }
+  if (frozenCol) {
+    return 'frozen-columns'
+  }
+  if (frozenRow) {
+    return 'frozen-rows'
+  }
+  return 'body'
+}
+
+function resolveResizeGuideScreenRect(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly state: GridResizeGuideState
+}): Rectangle | null {
+  if (input.state.kind === 'column') {
+    const headerRect = resolveColumnHeaderScreenRect({ camera: input.camera, col: input.state.index, columns: input.columns })
+    if (!headerRect) {
+      return null
+    }
+    return rect(headerRect.x + headerRect.width - 1, 0, 1, getHostHeight(input.camera))
+  }
+  const headerRect = resolveRowHeaderScreenRect({ camera: input.camera, row: input.state.index, rows: input.rows })
+  if (!headerRect) {
+    return null
+  }
+  return rect(0, headerRect.y + headerRect.height - 1, getHostWidth(input.camera), 1)
 }
 
 function resolveFillHandleScreenRect(input: {
