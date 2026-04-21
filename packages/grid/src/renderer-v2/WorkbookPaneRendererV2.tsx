@@ -15,6 +15,9 @@ import {
   type WorkbookTypeGpuBackend,
 } from './workbook-typegpu-backend.js'
 
+export const TYPEGPU_ACTIVE_RESOURCE_DEFER_MS = 48
+const TYPEGPU_IDLE_RESOURCE_RETRY_MS = 64
+
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
   readonly host: HTMLDivElement | null
@@ -70,6 +73,22 @@ export function resolveTypeGpuV2DrawScrollSnapshot(input: {
     renderTx: bodyWorldX - input.geometry.columns.offsetOf(bodyPane.viewport.colStart),
     renderTy: bodyWorldY - input.geometry.rows.offsetOf(bodyPane.viewport.rowStart),
   }
+}
+
+export function shouldDeferTypeGpuResourceUploads(input: {
+  readonly now: number
+  readonly lastScrollSignalAt: number
+  readonly camera: {
+    readonly updatedAt: number
+    readonly velocityX: number
+    readonly velocityY: number
+  } | null
+}): boolean {
+  const hasMovingCamera =
+    input.camera !== null &&
+    Math.abs(input.camera.velocityX) + Math.abs(input.camera.velocityY) > 0.01 &&
+    input.now - input.camera.updatedAt < TYPEGPU_ACTIVE_RESOURCE_DEFER_MS
+  return hasMovingCamera || input.now - input.lastScrollSignalAt < TYPEGPU_ACTIVE_RESOURCE_DEFER_MS
 }
 
 export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
@@ -224,9 +243,12 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       }
       const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
       const camera = latestGeometry?.camera ?? null
-      const isCameraMoving =
-        camera !== null && Math.abs(camera.velocityX) + Math.abs(camera.velocityY) > 0.01 && performance.now() - camera.updatedAt < 180
-      const deferTextUploads = isCameraMoving || performance.now() - lastScrollSignalAtRef.current < 240
+      const now = performance.now()
+      const deferTextUploads = shouldDeferTypeGpuResourceUploads({
+        camera,
+        lastScrollSignalAt: lastScrollSignalAtRef.current,
+        now,
+      })
       if (deferTextUploads) {
         if (idleTextUploadFrameRef.current !== null) {
           window.clearTimeout(idleTextUploadFrameRef.current)
@@ -235,7 +257,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
           idleTextUploadFrameRef.current = null
           renderLoopRef.current ??= new GridRenderLoop()
           renderLoopRef.current.requestDraw(drawFrameRef.current)
-        }, 280)
+        }, TYPEGPU_IDLE_RESOURCE_RETRY_MS)
       }
       const overlayPacket = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
       const resolvedPanePayloads = overlayPacket

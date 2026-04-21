@@ -6,6 +6,9 @@ import { applyHiddenAxisSizes } from './gridScrollSurface.js'
 import type { Item } from './gridTypes.js'
 import type { VisibleRegionState } from './gridPointer.js'
 
+export const RESIDENT_VIEWPORT_COLUMN_COUNT = VIEWPORT_TILE_COLUMN_COUNT * 2
+export const RESIDENT_VIEWPORT_ROW_COUNT = VIEWPORT_TILE_ROW_COUNT * 3
+
 function resolveFrozenColumnOffset(freezeCols: number, columnWidths: Readonly<Record<number, number>>, defaultWidth: number): number {
   let width = 0
   for (let col = 0; col < freezeCols; col += 1) {
@@ -108,15 +111,13 @@ export function resolveVisibleRegionFromScroll(options: {
 }
 
 export function resolveResidentViewport(viewport: Viewport): Viewport {
-  const rowStart = clampAxisStart(viewport.rowStart, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
-  const rowEnd = clampAxisEnd(viewport.rowEnd, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
-  const colStart = clampAxisStart(viewport.colStart, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
-  const colEnd = clampAxisEnd(viewport.colEnd, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
+  const rowWindow = resolveResidentAxisWindow(viewport.rowStart, viewport.rowEnd, RESIDENT_VIEWPORT_ROW_COUNT, MAX_ROWS)
+  const colWindow = resolveResidentAxisWindow(viewport.colStart, viewport.colEnd, RESIDENT_VIEWPORT_COLUMN_COUNT, MAX_COLS)
   return {
-    rowStart,
-    rowEnd,
-    colStart,
-    colEnd,
+    rowStart: rowWindow.start,
+    rowEnd: rowWindow.end,
+    colStart: colWindow.start,
+    colEnd: colWindow.end,
   }
 }
 
@@ -254,12 +255,21 @@ function resolveVisibleRowCount(options: {
   return options.axis.resolveVisibleCount(options.startRow, options.bodyHeight, MAX_ROW_HEIGHT)
 }
 
-function clampAxisStart(value: number, tileSize: number, axisMax: number): number {
-  const clamped = Math.max(0, Math.min(axisMax - 1, value))
-  return Math.floor(clamped / tileSize) * tileSize
-}
-
-function clampAxisEnd(value: number, tileSize: number, axisMax: number): number {
-  const clamped = Math.max(0, Math.min(axisMax - 1, value))
-  return Math.min(axisMax - 1, Math.ceil((clamped + 1) / tileSize) * tileSize - 1)
+function resolveResidentAxisWindow(
+  visibleStart: number,
+  visibleEnd: number,
+  baseWindowSize: number,
+  axisMax: number,
+): { readonly start: number; readonly end: number } {
+  const clampedStart = Math.max(0, Math.min(axisMax - 1, visibleStart))
+  const clampedEnd = Math.max(clampedStart, Math.min(axisMax - 1, visibleEnd))
+  let windowSize = Math.max(baseWindowSize, Math.ceil((clampedEnd - clampedStart + 1) / baseWindowSize) * baseWindowSize)
+  const windowStart = Math.floor(clampedStart / windowSize) * windowSize
+  while (windowStart + windowSize - 1 < clampedEnd && windowSize < axisMax) {
+    windowSize += baseWindowSize
+  }
+  return {
+    end: Math.min(axisMax - 1, windowStart + windowSize - 1),
+    start: windowStart,
+  }
 }

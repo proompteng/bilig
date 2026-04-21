@@ -135,9 +135,9 @@ describe('workbookGridViewport', () => {
       }),
     ).toEqual({
       rowStart: 0,
-      rowEnd: 31,
+      rowEnd: 95,
       colStart: 0,
-      colEnd: 127,
+      colEnd: 255,
     })
 
     expect(
@@ -149,13 +149,13 @@ describe('workbookGridViewport', () => {
       }),
     ).toEqual({
       rowStart: 0,
-      rowEnd: 31,
+      rowEnd: 95,
       colStart: 0,
-      colEnd: 127,
+      colEnd: 255,
     })
   })
 
-  test('advances the resident viewport only when the visible viewport crosses a tile boundary', () => {
+  test('keeps the resident viewport stable through near-boundary overscan', () => {
     expect(
       resolveResidentViewport({
         rowStart: 10,
@@ -165,7 +165,7 @@ describe('workbookGridViewport', () => {
       }),
     ).toEqual({
       rowStart: 0,
-      rowEnd: 31,
+      rowEnd: 95,
       colStart: 0,
       colEnd: 255,
     })
@@ -178,10 +178,26 @@ describe('workbookGridViewport', () => {
         colEnd: 138,
       }),
     ).toEqual({
-      rowStart: 32,
-      rowEnd: 63,
-      colStart: 128,
+      rowStart: 0,
+      rowEnd: 95,
+      colStart: 0,
       colEnd: 255,
+    })
+  })
+
+  test('advances the resident viewport after crossing the overscan window', () => {
+    expect(
+      resolveResidentViewport({
+        rowStart: 96,
+        rowEnd: 120,
+        colStart: 256,
+        colEnd: 280,
+      }),
+    ).toEqual({
+      rowStart: 96,
+      rowEnd: 191,
+      colStart: 256,
+      colEnd: 511,
     })
   })
 })

@@ -1,5 +1,5 @@
 import type { Viewport } from '@bilig/protocol'
-import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { resolveResidentViewport } from './workbookGridViewport.js'
 
 export interface GridTileKey {
@@ -84,8 +84,10 @@ function viewportToTileKey(viewport: Viewport): GridTileKey {
 }
 
 function offsetTile(tile: GridTileKey, rowSteps: number, colSteps: number): GridTileKey {
-  const rowStart = clampStart(tile.rowStart + rowSteps * VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
-  const colStart = clampStart(tile.colStart + colSteps * VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
+  const rowSpan = tile.rowEnd - tile.rowStart + 1
+  const colSpan = tile.colEnd - tile.colStart + 1
+  const rowStart = clampStart(tile.rowStart + rowSteps * rowSpan, MAX_ROWS)
+  const colStart = clampStart(tile.colStart + colSteps * colSpan, MAX_COLS)
   return {
     colEnd: Math.min(MAX_COLS - 1, colStart + tile.colEnd - tile.colStart),
     colStart,

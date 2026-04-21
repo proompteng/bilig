@@ -6,6 +6,7 @@ import type { ProjectedViewportAxisStore } from './projected-viewport-axis-store
 import { applyProjectedViewportPatch, type ProjectedViewportPatchApplicationResult } from './projected-viewport-patch-application.js'
 
 type CellItem = readonly [number, number]
+const ACTIVE_SCROLL_PATCH_DEFER_MS = 96
 
 export class ProjectedViewportPatchCoordinator {
   constructor(
@@ -24,7 +25,9 @@ export class ProjectedViewportPatchCoordinator {
     let frameHandle: number | null = null
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null
     const pendingDamage = new Map<string, { cell: CellItem }>()
+    const pendingPatchBytes: Uint8Array[] = []
     let pendingStructuralChange = false
+    let patchTimeoutHandle: ReturnType<typeof setTimeout> | null = null
     const scheduleFlush = () => {
       if (frameHandle !== null || timeoutHandle !== null) {
         return
@@ -46,13 +49,35 @@ export class ProjectedViewportPatchCoordinator {
       }
       frameHandle = window.requestAnimationFrame(flush)
     }
-    const unsubscribe = this.options.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
+    const applyPatchBytes = (bytes: Uint8Array) => {
       const result = this.applyViewportPatchDetailed(decodeViewportPatch(bytes))
       for (const entry of result.damage) {
         pendingDamage.set(`${entry.cell[0]}:${entry.cell[1]}`, entry)
       }
       pendingStructuralChange = pendingStructuralChange || result.axisChanged || result.freezeChanged
-      scheduleFlush()
+    }
+    const schedulePatchApply = () => {
+      if (patchTimeoutHandle !== null) {
+        return
+      }
+      const collector = getWorkbookScrollPerfCollector()
+      const delay = collector?.isGridScrollRecentlyActive(ACTIVE_SCROLL_PATCH_DEFER_MS) ? ACTIVE_SCROLL_PATCH_DEFER_MS : 0
+      patchTimeoutHandle = setTimeout(() => {
+        patchTimeoutHandle = null
+        if (collector?.isGridScrollRecentlyActive(ACTIVE_SCROLL_PATCH_DEFER_MS) && pendingPatchBytes.length > 0) {
+          schedulePatchApply()
+          return
+        }
+        const patches = pendingPatchBytes.splice(0)
+        for (const patchBytes of patches) {
+          applyPatchBytes(patchBytes)
+        }
+        scheduleFlush()
+      }, delay)
+    }
+    const unsubscribe = this.options.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
+      pendingPatchBytes.push(bytes)
+      schedulePatchApply()
     })
     return () => {
       if (frameHandle !== null) {
@@ -62,6 +87,10 @@ export class ProjectedViewportPatchCoordinator {
       if (timeoutHandle !== null) {
         clearTimeout(timeoutHandle)
         timeoutHandle = null
+      }
+      if (patchTimeoutHandle !== null) {
+        clearTimeout(patchTimeoutHandle)
+        patchTimeoutHandle = null
       }
       unsubscribe()
       stopTrackingViewport()

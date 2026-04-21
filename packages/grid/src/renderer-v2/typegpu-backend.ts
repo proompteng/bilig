@@ -415,7 +415,11 @@ export function resolveTypeGpuVertexBufferCapacity(input: {
   return nextCapacity
 }
 
-export function writeTypeGpuVertexBuffer<TData extends WgslArray>(buffer: TypeGpuVertexBuffer<TData>, floats: Float32Array): void {
+export function writeTypeGpuVertexBuffer<TData extends WgslArray>(
+  buffer: TypeGpuVertexBuffer<TData>,
+  floats: Float32Array,
+  label = 'vertex',
+): void {
   const source: ArrayBuffer =
     floats.byteOffset === 0 && floats.byteLength === floats.buffer.byteLength && floats.buffer instanceof ArrayBuffer
       ? floats.buffer
@@ -423,7 +427,7 @@ export function writeTypeGpuVertexBuffer<TData extends WgslArray>(buffer: TypeGp
   buffer.write(source, {
     endOffset: floats.byteLength,
   })
-  noteTypeGpuBufferWrite(floats.byteLength, 'vertex')
+  noteTypeGpuBufferWrite(floats.byteLength, label)
 }
 
 export function createTypeGpuSurfaceUniform(root: TgpuRoot): SurfaceUniformBuffer {

@@ -100,6 +100,7 @@ class WorkbookScrollPerfCollector {
   private rafHandle: number | null = null
   private lastFrameAt: number | null = null
   private lastScrollInputAt: number | null = null
+  private lastAnyScrollInputAt: number | null = null
   private observer: PerformanceObserver | null = null
   private warmupFramesRemaining = 0
 
@@ -211,10 +212,15 @@ class WorkbookScrollPerfCollector {
   }
 
   noteGridScrollInput(timestamp: number): void {
+    this.lastAnyScrollInputAt = timestamp
     if (this.warmupFramesRemaining > 0) {
       return
     }
     this.lastScrollInputAt = timestamp
+  }
+
+  isGridScrollRecentlyActive(thresholdMs = 120, now = performance.now()): boolean {
+    return this.lastAnyScrollInputAt !== null && now - this.lastAnyScrollInputAt < thresholdMs
   }
 
   noteGridDrawFrame(timestamp: number): void {

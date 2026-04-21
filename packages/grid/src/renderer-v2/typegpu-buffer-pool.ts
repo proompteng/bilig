@@ -130,7 +130,7 @@ function syncTextResource(input: {
   input.paneCache.textBuffer = textBuffer.buffer
   input.paneCache.textCapacity = textBuffer.capacity
   input.paneCache.textCount = textPayload.quadCount
-  writeTypeGpuVertexBuffer(input.paneCache.textBuffer, textPayload.floats)
+  writeTypeGpuVertexBuffer(input.paneCache.textBuffer, textPayload.floats, `text:${resolveWorkbookPaneBufferKey(input.pane)}`)
   input.paneCache.textScene = input.pane.textScene
   input.paneCache.textSignature = input.textSignature
 }
@@ -172,7 +172,7 @@ function syncRectResource(input: {
   input.paneCache.rectBuffer = rectBuffer.buffer
   input.paneCache.rectCapacity = rectBuffer.capacity
   input.paneCache.rectCount = rectPayload.count
-  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats)
+  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats, `rect:${resolveWorkbookPaneBufferKey(input.pane)}`)
   input.paneCache.rectScene = input.pane.gpuScene
   input.paneCache.rectSignature = input.rectSignature
 }

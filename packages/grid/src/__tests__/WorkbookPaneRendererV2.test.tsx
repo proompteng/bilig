@@ -6,7 +6,12 @@ import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
-import { WorkbookPaneRendererV2, resolveTypeGpuV2DrawScrollSnapshot } from '../renderer-v2/WorkbookPaneRendererV2.js'
+import {
+  TYPEGPU_ACTIVE_RESOURCE_DEFER_MS,
+  WorkbookPaneRendererV2,
+  resolveTypeGpuV2DrawScrollSnapshot,
+  shouldDeferTypeGpuResourceUploads,
+} from '../renderer-v2/WorkbookPaneRendererV2.js'
 
 describe('WorkbookPaneRendererV2', () => {
   const originalResizeObserver = globalThis.ResizeObserver
@@ -138,5 +143,39 @@ describe('WorkbookPaneRendererV2', () => {
       renderTx: 64 * metrics.columnWidth,
       renderTy: 0,
     })
+  })
+
+  test('defers resource uploads only while scroll input or camera velocity is fresh', () => {
+    expect(
+      shouldDeferTypeGpuResourceUploads({
+        camera: null,
+        lastScrollSignalAt: 1_000,
+        now: 1_000 + TYPEGPU_ACTIVE_RESOURCE_DEFER_MS - 1,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldDeferTypeGpuResourceUploads({
+        camera: {
+          updatedAt: 2_000,
+          velocityX: 1,
+          velocityY: 0,
+        },
+        lastScrollSignalAt: 0,
+        now: 2_000 + TYPEGPU_ACTIVE_RESOURCE_DEFER_MS - 1,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldDeferTypeGpuResourceUploads({
+        camera: {
+          updatedAt: 2_000,
+          velocityX: 1,
+          velocityY: 0,
+        },
+        lastScrollSignalAt: 1_000,
+        now: 2_000 + TYPEGPU_ACTIVE_RESOURCE_DEFER_MS + 1,
+      }),
+    ).toBe(false)
   })
 })
