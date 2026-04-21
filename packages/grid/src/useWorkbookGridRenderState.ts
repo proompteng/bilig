@@ -207,6 +207,7 @@ export function useWorkbookGridRenderState(input: {
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row))
   const gridMetrics = useMemo(() => getGridMetrics(), [])
+  const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const gridTheme = useMemo(() => getGridTheme(), [])
   const columnResizePreviewRef = useRef<{
     sheetName: string
@@ -654,6 +655,7 @@ export function useWorkbookGridRenderState(input: {
       residentViewport,
       freezeRows,
       freezeCols,
+      dprBucket,
       selectedCell: {
         col: selectedCell.col,
         row: selectedCell.row,
@@ -670,6 +672,7 @@ export function useWorkbookGridRenderState(input: {
     [
       freezeCols,
       freezeRows,
+      dprBucket,
       isEditingCell,
       residentViewport,
       selectedCell.col,
@@ -687,6 +690,7 @@ export function useWorkbookGridRenderState(input: {
         residentViewport: warmViewport,
         freezeRows,
         freezeCols,
+        dprBucket,
         selectedCell: {
           col: selectedCell.col,
           row: selectedCell.row,
@@ -703,6 +707,7 @@ export function useWorkbookGridRenderState(input: {
   }, [
     freezeCols,
     freezeRows,
+    dprBucket,
     isEditingCell,
     residentViewport,
     selectedCell.col,

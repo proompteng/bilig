@@ -8,6 +8,7 @@ import {
   GRID_SCENE_PACKET_V2_VERSION,
   createGridTileKeyV2,
   type GridScenePacketV2,
+  type GridTileKeyV2,
 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 
 export type WorkerPackedGridScenePacket = GridScenePacketV2
@@ -17,6 +18,7 @@ export function packWorkerGridScenePacket(input: {
   readonly sheetName: string
   readonly paneId: WorkbookPaneId
   readonly viewport: Viewport
+  readonly key?: GridTileKeyV2 | undefined
   readonly surfaceSize: { readonly width: number; readonly height: number }
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
@@ -25,11 +27,7 @@ export function packWorkerGridScenePacket(input: {
     generation: input.generation,
     borderRectCount: input.gpuScene.borderRects.length,
     fillRectCount: input.gpuScene.fillRects.length,
-    key: createGridTileKeyV2({
-      paneId: input.paneId,
-      sheetName: input.sheetName,
-      viewport: input.viewport,
-    }),
+    key: input.key ?? createGridTileKeyV2({ paneId: input.paneId, sheetName: input.sheetName, viewport: input.viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,

@@ -118,6 +118,7 @@ function buildRequestKey(request: WorkbookPaneSceneRequest): string {
     request.residentViewport.colEnd,
     request.freezeRows,
     request.freezeCols,
+    request.dprBucket ?? 1,
     request.selectedCell.col,
     request.selectedCell.row,
     selectedSnapshot?.address ?? '',

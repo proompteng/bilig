@@ -66,6 +66,7 @@ export interface WorkbookPaneSceneRequest {
   readonly residentViewport: Viewport
   readonly freezeRows: number
   readonly freezeCols: number
+  readonly dprBucket?: number | undefined
   readonly selectedCell: {
     readonly col: number
     readonly row: number
