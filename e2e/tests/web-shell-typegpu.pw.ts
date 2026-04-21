@@ -8,6 +8,7 @@ import {
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
   PRODUCT_ROW_MARKER_WIDTH,
+  waitForBenchmarkCorpus,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 
@@ -198,6 +199,68 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
   expect(rangeReadback.points.topHeaderSelectionFill.a).toBeGreaterThan(0)
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')
+})
+
+test('main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
+  await waitForWorkbookReady(page)
+  await waitForBenchmarkCorpus(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const initialReadback = await waitForReadback(
+    page,
+    {
+      points: [],
+      regions: [
+        { name: 'columnHeaderText', x0: 60, y0: 4, x1: 220, y1: 18 },
+        { name: 'rowHeaderText', x0: 6, y0: 48, x1: 36, y1: 140 },
+        { name: 'bodyText', x0: 70, y0: 48, x1: 280, y1: 120 },
+      ],
+    },
+    (result) =>
+      result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20,
+  )
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    if (!(viewport instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not a div')
+    }
+    viewport.scrollLeft = 1_768
+    viewport.scrollTop = 418
+    viewport.dispatchEvent(new Event('scroll'))
+  })
+  await waitForReadbackSequence(page, initialReadback.sequence)
+
+  const scrolledReadback = await waitForReadback(
+    page,
+    {
+      points: [],
+      regions: [
+        { name: 'columnHeaderText', x0: 60, y0: 4, x1: 220, y1: 18 },
+        { name: 'rowHeaderText', x0: 6, y0: 48, x1: 36, y1: 140 },
+        { name: 'bodyText', x0: 70, y0: 48, x1: 280, y1: 120 },
+      ],
+    },
+    (result) =>
+      result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20,
+  )
+
+  expect(scrolledReadback.sequence).toBeGreaterThan(initialReadback.sequence)
+  expect(scrolledReadback.darkPixelCounts.columnHeaderText).toBeGreaterThan(10)
+  expect(scrolledReadback.darkPixelCounts.rowHeaderText).toBeGreaterThan(5)
+  expect(scrolledReadback.darkPixelCounts.bodyText).toBeGreaterThan(20)
+
+  await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
 async function installTypeGpuReadbackHarness(page: Page): Promise<void> {

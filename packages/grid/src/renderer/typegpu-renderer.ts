@@ -11,9 +11,18 @@ import typegpuCore, {
   type VertexFlag,
 } from 'typegpu'
 import type { WgslArray } from 'typegpu/data'
+import {
+  noteTypeGpuAtlasUpload,
+  noteTypeGpuBufferAllocation,
+  noteTypeGpuBufferWrite,
+  noteTypeGpuConfigure,
+  noteTypeGpuUniformWrite,
+} from './grid-render-counters.js'
 
 const UNIT_QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1])
 const UNIT_QUAD_VERTEX_COUNT = 6
+const RECT_INSTANCE_FLOAT_COUNT = 20
+const TEXT_INSTANCE_FLOAT_COUNT = 16
 
 const surfaceUniformSchema = d.struct({
   origin: d.vec2f,
@@ -138,10 +147,11 @@ const textVertex = typegpuCore.vertexFn({
     position: d.builtin.position,
     uv: d.location(0, d.vec2f),
     color: d.location(1, d.vec4f),
-    panePixel: d.location(2, d.vec2f),
+    clipSpacePixel: d.location(2, d.vec2f),
     clip: d.location(3, d.vec4f),
   },
 })`{
+  let clipSpacePixel = in.rectOrigin + in.quad * in.rectSize;
   let paneOrigin = in.rectOrigin + surface.scrollOffset;
   let snappedPaneOrigin = round(paneOrigin * surface.dpr) / surface.dpr;
   let panePixel = snappedPaneOrigin + in.quad * in.rectSize;
@@ -158,7 +168,7 @@ const textVertex = typegpuCore.vertexFn({
       mix(in.uv0.y, in.uv1.y, in.quad.y),
     ),
     in.tint,
-    panePixel,
+    clipSpacePixel,
     in.clipRect,
   );
 }`.$uses({
@@ -169,16 +179,16 @@ const textFragment = typegpuCore.fragmentFn({
   in: {
     uv: d.location(0, d.vec2f),
     color: d.location(1, d.vec4f),
-    panePixel: d.location(2, d.vec2f),
+    clipSpacePixel: d.location(2, d.vec2f),
     clip: d.location(3, d.vec4f),
   },
   out: d.location(0, d.vec4f),
 })`{
   if (
-    in.panePixel.x < in.clip.x ||
-    in.panePixel.y < in.clip.y ||
-    in.panePixel.x > in.clip.z ||
-    in.panePixel.y > in.clip.w
+    in.clipSpacePixel.x < in.clip.x ||
+    in.clipSpacePixel.y < in.clip.y ||
+    in.clipSpacePixel.x > in.clip.z ||
+    in.clipSpacePixel.y > in.clip.w
   ) {
     discard;
   }
@@ -239,9 +249,12 @@ export async function createTypeGpuRenderer(canvas: HTMLCanvasElement): Promise<
     canvas,
     format,
   })
+  noteTypeGpuConfigure()
 
   const quadBuffer = root.createBuffer(WORKBOOK_UNIT_QUAD_LAYOUT.schemaForCount(UNIT_QUAD_VERTEX_COUNT)).$usage('vertex')
+  noteTypeGpuBufferAllocation(UNIT_QUAD.byteLength, 'unit-quad')
   quadBuffer.write(UNIT_QUAD.buffer, { endOffset: UNIT_QUAD.byteLength })
+  noteTypeGpuBufferWrite(UNIT_QUAD.byteLength, 'unit-quad')
 
   const sampler = root.createSampler({
     magFilter: 'linear',
@@ -364,12 +377,14 @@ export function ensureTypeGpuVertexBuffer(
   current?.destroy()
 
   if (layout === WORKBOOK_RECT_INSTANCE_LAYOUT) {
+    noteTypeGpuBufferAllocation(nextCapacity * RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT, 'rect-instances')
     return {
       buffer: root.createBuffer(WORKBOOK_RECT_INSTANCE_LAYOUT.schemaForCount(nextCapacity)).$usage('vertex') as RectInstanceVertexBuffer,
       capacity: nextCapacity,
     }
   }
 
+  noteTypeGpuBufferAllocation(nextCapacity * TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT, 'text-instances')
   return {
     buffer: root.createBuffer(WORKBOOK_TEXT_INSTANCE_LAYOUT.schemaForCount(nextCapacity)).$usage('vertex') as TextInstanceVertexBuffer,
     capacity: nextCapacity,
@@ -382,6 +397,7 @@ export function writeTypeGpuVertexBuffer<TData extends WgslArray>(buffer: TypeGp
   buffer.write(copy.buffer, {
     endOffset: copy.byteLength,
   })
+  noteTypeGpuBufferWrite(copy.byteLength, 'vertex')
 }
 
 export function createTypeGpuSurfaceUniform(root: TgpuRoot): SurfaceUniformBuffer {
@@ -428,6 +444,7 @@ export function updateTypeGpuSurfaceUniform(
     dpr: surface.dpr,
     _pad: 0,
   })
+  noteTypeGpuUniformWrite(32, 'surface')
 }
 
 export function syncTypeGpuAtlasResources(
@@ -455,6 +472,7 @@ export function syncTypeGpuAtlasResources(
   }
 
   artifacts.atlasTexture?.write(atlasCanvas)
+  noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
   artifacts.atlasVersion = nextVersion
 }
 

@@ -637,11 +637,30 @@ export async function waitForBenchmarkCorpus(page: Page, timeoutMs = 60_000) {
 export async function startWorkbookScrollPerf(page: Page, workload: string) {
   await page.bringToFront()
   await settleWorkbookScrollPerf(page, 2)
+  await primeWorkbookGridScrollRenderer(page)
   await page.evaluate((nextWorkload) => {
     ;(window as Window & { __biligScrollPerf?: { startSampling?: (workload: string) => void } }).__biligScrollPerf?.startSampling?.(
       nextWorkload,
     )
   }, workload)
+}
+
+async function primeWorkbookGridScrollRenderer(page: Page) {
+  await page.getByTestId('grid-scroll-viewport').evaluate(async (element) => {
+    if (!(element instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not an HTMLDivElement')
+    }
+    const startLeft = element.scrollLeft
+    const startTop = element.scrollTop
+    element.scrollLeft = startLeft + 1
+    element.scrollTop = startTop + 1
+    element.dispatchEvent(new Event('scroll'))
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+    element.scrollLeft = startLeft
+    element.scrollTop = startTop
+    element.dispatchEvent(new Event('scroll'))
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+  })
 }
 
 export async function warmStartWorkbookScrollPerf(page: Page, workload: string, warmupFrames = 12, maxAttempts = 4) {
@@ -654,11 +673,18 @@ export async function warmStartWorkbookScrollPerf(page: Page, workload: string, 
     }
     const surfaceCommits = Object.values(warmupReport.counters.surfaceCommits ?? {})
     const hasSurfaceCommitNoise = surfaceCommits.some((count) => count > 0)
+    const hasTypeGpuWarmupNoise =
+      warmupReport.counters.typeGpuAtlasUploadBytes > 0 ||
+      warmupReport.counters.typeGpuBufferAllocations > 0 ||
+      warmupReport.counters.typeGpuConfigures > 0 ||
+      warmupReport.counters.typeGpuSurfaceResizes > 0 ||
+      warmupReport.counters.typeGpuVertexUploadBytes > 0
     const hasRenderNoise =
       warmupReport.counters.fullPatches > 0 ||
       warmupReport.counters.headerPaneBuilds > 0 ||
       warmupReport.counters.reactCommits > 0 ||
-      hasSurfaceCommitNoise
+      hasSurfaceCommitNoise ||
+      hasTypeGpuWarmupNoise
     if (!hasRenderNoise) {
       return
     }
@@ -689,9 +715,10 @@ export async function stopWorkbookScrollPerf(page: Page) {
             stopSampling?: () => {
               workload: string
               fixture: { id: string; materializedCellCount: number; sheetName: string } | null
-              samples: { frameMs: number[]; longTasksMs: number[] }
+              samples: { frameMs: number[]; inputToDrawMs: number[]; longTasksMs: number[] }
               summary: {
                 frameMs: { min: number; median: number; p95: number; p99: number; max: number }
+                inputToDrawMs: { min: number; median: number; p95: number; p99: number; max: number }
                 longTasksMs: { min: number; median: number; p95: number; p99: number; max: number }
               }
               counters: {
@@ -704,6 +731,18 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 domSurfaceMounts: number
                 canvasPaints: Record<string, number>
                 surfaceCommits: Record<string, number>
+                typeGpuAtlasUploadBytes: number
+                typeGpuBufferAllocationBytes: number
+                typeGpuBufferAllocations: number
+                typeGpuConfigures: number
+                typeGpuDrawCalls: number
+                typeGpuPaneDraws: number
+                typeGpuScenePacketsApplied: number
+                typeGpuSubmits: number
+                typeGpuSurfaceResizes: number
+                typeGpuTileMisses: number
+                typeGpuUniformWriteBytes: number
+                typeGpuVertexUploadBytes: number
               }
             } | null
           }
@@ -714,6 +753,18 @@ export async function stopWorkbookScrollPerf(page: Page) {
 }
 
 export async function performHorizontalGridBrowse(page: Page, input: { distancePx: number; steps?: number }) {
+  await performGridBrowse(page, { deltaX: input.distancePx, deltaY: 0, ...(input.steps ? { steps: input.steps } : {}) })
+}
+
+export async function performVerticalGridBrowse(page: Page, input: { distancePx: number; steps?: number }) {
+  await performGridBrowse(page, { deltaX: 0, deltaY: input.distancePx, ...(input.steps ? { steps: input.steps } : {}) })
+}
+
+export async function performDiagonalGridBrowse(page: Page, input: { deltaX: number; deltaY: number; steps?: number }) {
+  await performGridBrowse(page, input)
+}
+
+async function performGridBrowse(page: Page, input: { deltaX: number; deltaY: number; steps?: number }) {
   await page.getByTestId('grid-scroll-viewport').evaluate(
     async (element, options) => {
       if (!(element instanceof HTMLDivElement)) {
@@ -721,20 +772,21 @@ export async function performHorizontalGridBrowse(page: Page, input: { distanceP
       }
       const viewport = element
       const steps = Math.max(1, options.steps ?? 120)
-      const start = viewport.scrollLeft
-      const distance = options.distancePx
+      const startLeft = viewport.scrollLeft
+      const startTop = viewport.scrollTop
       const advance = async (step: number): Promise<void> => {
         if (step > steps) {
           return
         }
-        viewport.scrollLeft = start + (distance * step) / steps
+        viewport.scrollLeft = startLeft + (options.deltaX * step) / steps
+        viewport.scrollTop = startTop + (options.deltaY * step) / steps
         viewport.dispatchEvent(new Event('scroll'))
         await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
         await advance(step + 1)
       }
       await advance(1)
     },
-    { distancePx: input.distancePx, ...(input.steps ? { steps: input.steps } : {}) },
+    { deltaX: input.deltaX, deltaY: input.deltaY, ...(input.steps ? { steps: input.steps } : {}) },
   )
 }
 

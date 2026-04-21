@@ -18,11 +18,24 @@ interface WorkbookScrollPerfCounters {
   domSurfaceMounts: number
   canvasPaints: Record<string, number>
   surfaceCommits: Record<string, number>
+  typeGpuConfigures: number
+  typeGpuSubmits: number
+  typeGpuDrawCalls: number
+  typeGpuPaneDraws: number
+  typeGpuUniformWriteBytes: number
+  typeGpuVertexUploadBytes: number
+  typeGpuBufferAllocations: number
+  typeGpuBufferAllocationBytes: number
+  typeGpuAtlasUploadBytes: number
+  typeGpuSurfaceResizes: number
+  typeGpuTileMisses: number
+  typeGpuScenePacketsApplied: number
 }
 
 interface WorkbookScrollPerfSamples {
   readonly frameMs: number[]
   readonly longTasksMs: number[]
+  readonly inputToDrawMs: number[]
 }
 
 interface WorkbookScrollPerfSummary {
@@ -39,6 +52,7 @@ export interface WorkbookScrollPerfReport {
   readonly samples: WorkbookScrollPerfSamples
   readonly summary: {
     readonly frameMs: WorkbookScrollPerfSummary
+    readonly inputToDrawMs: WorkbookScrollPerfSummary
     readonly longTasksMs: WorkbookScrollPerfSummary
   }
   readonly counters: WorkbookScrollPerfCounters
@@ -62,16 +76,30 @@ class WorkbookScrollPerfCollector {
     domSurfaceMounts: 0,
     canvasPaints: {},
     surfaceCommits: {},
+    typeGpuAtlasUploadBytes: 0,
+    typeGpuBufferAllocationBytes: 0,
+    typeGpuBufferAllocations: 0,
+    typeGpuConfigures: 0,
+    typeGpuDrawCalls: 0,
+    typeGpuPaneDraws: 0,
+    typeGpuScenePacketsApplied: 0,
+    typeGpuSubmits: 0,
+    typeGpuSurfaceResizes: 0,
+    typeGpuTileMisses: 0,
+    typeGpuUniformWriteBytes: 0,
+    typeGpuVertexUploadBytes: 0,
   }
   private baselineCounters: WorkbookScrollPerfCounters | null = null
   private frameSamples: number[] = []
   private longTaskSamples: number[] = []
+  private inputToDrawSamples: number[] = []
   private workload = 'idle'
   private fixture: WorkbookScrollPerfFixture | null = null
   private benchmarkState: BenchmarkState = 'idle'
   private benchmarkError: string | null = null
   private rafHandle: number | null = null
   private lastFrameAt: number | null = null
+  private lastScrollInputAt: number | null = null
   private observer: PerformanceObserver | null = null
   private warmupFramesRemaining = 0
 
@@ -137,13 +165,75 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.canvasPaints[layer] = (this.totalCounters.canvasPaints[layer] ?? 0) + 1
   }
 
+  noteTypeGpuConfigure(): void {
+    this.totalCounters.typeGpuConfigures += 1
+  }
+
+  noteTypeGpuSubmit(): void {
+    this.totalCounters.typeGpuSubmits += 1
+  }
+
+  noteTypeGpuDrawCall(count: number): void {
+    this.totalCounters.typeGpuDrawCalls += count
+  }
+
+  noteTypeGpuPaneDraw(count: number): void {
+    this.totalCounters.typeGpuPaneDraws += count
+  }
+
+  noteTypeGpuUniformWrite(bytes: number): void {
+    this.totalCounters.typeGpuUniformWriteBytes += bytes
+  }
+
+  noteTypeGpuBufferWrite(bytes: number): void {
+    this.totalCounters.typeGpuVertexUploadBytes += bytes
+  }
+
+  noteTypeGpuBufferAllocation(bytes: number): void {
+    this.totalCounters.typeGpuBufferAllocations += 1
+    this.totalCounters.typeGpuBufferAllocationBytes += bytes
+  }
+
+  noteTypeGpuAtlasUpload(bytes: number): void {
+    this.totalCounters.typeGpuAtlasUploadBytes += bytes
+  }
+
+  noteTypeGpuSurfaceResize(): void {
+    this.totalCounters.typeGpuSurfaceResizes += 1
+  }
+
+  noteTypeGpuTileMiss(): void {
+    this.totalCounters.typeGpuTileMisses += 1
+  }
+
+  noteTypeGpuScenePacketApplied(): void {
+    this.totalCounters.typeGpuScenePacketsApplied += 1
+  }
+
+  noteGridScrollInput(timestamp: number): void {
+    if (this.warmupFramesRemaining > 0) {
+      return
+    }
+    this.lastScrollInputAt = timestamp
+  }
+
+  noteGridDrawFrame(timestamp: number): void {
+    if (this.warmupFramesRemaining > 0 || this.lastScrollInputAt === null) {
+      return
+    }
+    this.inputToDrawSamples.push(Math.max(0, timestamp - this.lastScrollInputAt))
+    this.lastScrollInputAt = null
+  }
+
   startSampling(workload: string): void {
     this.stopSampling()
     this.workload = workload
     this.frameSamples = []
     this.longTaskSamples = []
+    this.inputToDrawSamples = []
     this.baselineCounters = null
     this.lastFrameAt = null
+    this.lastScrollInputAt = null
     this.warmupFramesRemaining = WARMUP_FRAME_COUNT
     this.installLongTaskObserver()
     this.scheduleFrame()
@@ -164,10 +254,12 @@ class WorkbookScrollPerfCollector {
       fixture: this.fixture,
       samples: {
         frameMs: [...this.frameSamples],
+        inputToDrawMs: [...this.inputToDrawSamples],
         longTasksMs: [...this.longTaskSamples],
       },
       summary: {
         frameMs: summarizeNumbers(this.frameSamples),
+        inputToDrawMs: summarizeNumbers(this.inputToDrawSamples),
         longTasksMs: summarizeNumbers(this.longTaskSamples),
       },
       counters: subtractCounters(this.totalCounters, this.baselineCounters),
@@ -175,7 +267,9 @@ class WorkbookScrollPerfCollector {
     this.baselineCounters = null
     this.frameSamples = []
     this.longTaskSamples = []
+    this.inputToDrawSamples = []
     this.lastFrameAt = null
+    this.lastScrollInputAt = null
     this.warmupFramesRemaining = 0
     return report
   }
@@ -189,6 +283,8 @@ class WorkbookScrollPerfCollector {
             this.baselineCounters = cloneCounters(this.totalCounters)
             this.frameSamples = []
             this.longTaskSamples = []
+            this.inputToDrawSamples = []
+            this.lastScrollInputAt = null
           }
         } else {
           this.frameSamples.push(timestamp - this.lastFrameAt)
@@ -242,6 +338,18 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     domSurfaceMounts: counters.domSurfaceMounts - baseline.domSurfaceMounts,
     canvasPaints: subtractRecordCounters(counters.canvasPaints, baseline.canvasPaints),
     surfaceCommits: subtractRecordCounters(counters.surfaceCommits, baseline.surfaceCommits),
+    typeGpuAtlasUploadBytes: counters.typeGpuAtlasUploadBytes - baseline.typeGpuAtlasUploadBytes,
+    typeGpuBufferAllocationBytes: counters.typeGpuBufferAllocationBytes - baseline.typeGpuBufferAllocationBytes,
+    typeGpuBufferAllocations: counters.typeGpuBufferAllocations - baseline.typeGpuBufferAllocations,
+    typeGpuConfigures: counters.typeGpuConfigures - baseline.typeGpuConfigures,
+    typeGpuDrawCalls: counters.typeGpuDrawCalls - baseline.typeGpuDrawCalls,
+    typeGpuPaneDraws: counters.typeGpuPaneDraws - baseline.typeGpuPaneDraws,
+    typeGpuScenePacketsApplied: counters.typeGpuScenePacketsApplied - baseline.typeGpuScenePacketsApplied,
+    typeGpuSubmits: counters.typeGpuSubmits - baseline.typeGpuSubmits,
+    typeGpuSurfaceResizes: counters.typeGpuSurfaceResizes - baseline.typeGpuSurfaceResizes,
+    typeGpuTileMisses: counters.typeGpuTileMisses - baseline.typeGpuTileMisses,
+    typeGpuUniformWriteBytes: counters.typeGpuUniformWriteBytes - baseline.typeGpuUniformWriteBytes,
+    typeGpuVertexUploadBytes: counters.typeGpuVertexUploadBytes - baseline.typeGpuVertexUploadBytes,
   }
 }
 

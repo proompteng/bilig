@@ -22,6 +22,9 @@ import {
   updateTypeGpuSurfaceUniform,
   writeTypeGpuVertexBuffer,
 } from './typegpu-renderer.js'
+import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
+import { GridRenderScheduler } from './grid-render-scheduler.js'
+import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from './typegpu-surface-manager.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = 20
 
@@ -216,8 +219,9 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   const artifactsRef = useRef<TypeGpuRendererArtifacts | null>(null)
   const paneBuffersRef = useRef(new WorkbookPaneBufferCache())
   const atlasRef = useRef(createGlyphAtlas())
+  const surfaceStateRef = useRef(createTypeGpuSurfaceState())
+  const renderSchedulerRef = useRef<GridRenderScheduler | null>(null)
   const drawFrameRef = useRef<() => void>(() => {})
-  const scheduledDrawFrameRef = useRef<number | null>(null)
   const [webGpuReady, setWebGpuReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0, pixelWidth: 0, pixelHeight: 0, dpr: 1 })
 
@@ -318,6 +322,23 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   }, [scrollTransformStore])
 
   useEffect(() => {
+    if (!active || !webGpuReady) {
+      return
+    }
+    const artifacts = artifactsRef.current
+    const canvas = canvasRef.current
+    if (!artifacts || !canvas) {
+      return
+    }
+    syncTypeGpuCanvasSurface({
+      artifacts,
+      canvas,
+      size: surfaceSize,
+      state: surfaceStateRef.current,
+    })
+  }, [active, surfaceSize, webGpuReady])
+
+  useEffect(() => {
     drawFrameRef.current = () => {
       if (!activeRef.current || !webGpuReadyRef.current) {
         return
@@ -330,20 +351,6 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
       if (!artifacts || !canvas || surface.width <= 0 || surface.height <= 0) {
         return
       }
-
-      if (canvas.width !== surface.pixelWidth) {
-        canvas.width = surface.pixelWidth
-      }
-      if (canvas.height !== surface.pixelHeight) {
-        canvas.height = surface.pixelHeight
-      }
-      canvas.style.width = `${surface.width}px`
-      canvas.style.height = `${surface.height}px`
-      artifacts.context.configure({
-        alphaMode: 'premultiplied',
-        device: artifacts.device,
-        format: artifacts.format,
-      })
 
       const atlas = atlasRef.current
       paneBuffersRef.current.pruneExcept(new Set(resolvedPanePayloads.map((pane) => pane.paneId)))
@@ -430,6 +437,7 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
             .with(WORKBOOK_UNIT_QUAD_LAYOUT, artifacts.quadBuffer)
             .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectBuffer)
             .draw(6, paneCache.rectCount)
+          noteTypeGpuDrawCall(1)
         }
 
         if (paneCache.textCount > 0 && paneCache.textBuffer && paneCache.textBindGroup) {
@@ -438,11 +446,15 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
             .with(WORKBOOK_UNIT_QUAD_LAYOUT, artifacts.quadBuffer)
             .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textBuffer)
             .draw(6, paneCache.textCount)
+          noteTypeGpuDrawCall(1)
         }
+        noteTypeGpuPaneDraw(1)
       })
 
       pass.end()
       artifacts.device.queue.submit([commandEncoder.finish()])
+      noteTypeGpuSubmit()
+      noteGridDrawFrame(performance.now())
     }
 
     drawFrameRef.current()
@@ -454,13 +466,8 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
     }
 
     const scheduleDraw = () => {
-      if (scheduledDrawFrameRef.current !== null) {
-        return
-      }
-      scheduledDrawFrameRef.current = window.requestAnimationFrame(() => {
-        scheduledDrawFrameRef.current = null
-        drawFrameRef.current()
-      })
+      renderSchedulerRef.current ??= new GridRenderScheduler()
+      renderSchedulerRef.current.requestDraw(drawFrameRef.current)
     }
 
     return scrollTransformStore.subscribe(scheduleDraw)
@@ -469,10 +476,8 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
   useEffect(() => {
     const canvas = canvasRef.current
     return () => {
-      if (scheduledDrawFrameRef.current !== null) {
-        window.cancelAnimationFrame(scheduledDrawFrameRef.current)
-        scheduledDrawFrameRef.current = null
-      }
+      renderSchedulerRef.current?.cancel()
+      renderSchedulerRef.current = null
       if (canvas) {
         canvas.width = 0
         canvas.height = 0

@@ -1,5 +1,13 @@
 import type { GridTextItem } from '../gridTextScene.js'
-import type { GlyphAtlasEntry } from './glyph-atlas.js'
+import {
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_TEXT_FONT,
+  parseTextCssColor,
+  parseTextFontSize,
+  resolveTextClipRect,
+  resolveTextLineLayouts,
+  type GlyphAtlasLike,
+} from './gridTextLayout.js'
 
 export interface TextQuadRun {
   readonly text: string
@@ -46,146 +54,7 @@ export interface TextDecorationRect {
   readonly color: string
 }
 
-interface GlyphAtlasLike {
-  intern(font: string, glyph: string): GlyphAtlasEntry
-}
-
-const DEFAULT_FONT = '400 11px sans-serif'
-const DEFAULT_COLOR = '#1f2933'
-const DEFAULT_HEIGHT = 16
-const DEFAULT_WIDTH = Number.POSITIVE_INFINITY
-const HORIZONTAL_PADDING = 8
-const WRAP_TOP_PADDING = 4
-const WRAP_LINE_HEIGHT = 1.2
 const TEXT_INSTANCE_FLOAT_COUNT = 16
-
-interface ResolvedLineLayout {
-  readonly text: string
-  readonly x: number
-  readonly y: number
-  readonly width: number
-}
-
-function parseFontSize(font: string): number {
-  const match = font.match(/(\d+(?:\.\d+)?)px/)
-  return match ? Number(match[1]) : 11
-}
-
-function parseCssColor(color: string): readonly [number, number, number, number] {
-  if (color.startsWith('#')) {
-    const hex = color.slice(1)
-    if (hex.length === 3) {
-      return [parseInt(hex[0]! + hex[0], 16) / 255, parseInt(hex[1]! + hex[1], 16) / 255, parseInt(hex[2]! + hex[2], 16) / 255, 1.0]
-    }
-    return [
-      parseInt(hex.slice(0, 2), 16) / 255,
-      parseInt(hex.slice(2, 4), 16) / 255,
-      parseInt(hex.slice(4, 6), 16) / 255,
-      hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1.0,
-    ]
-  }
-  if (color.startsWith('rgba')) {
-    const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
-    if (m) return [Number(m[1]) / 255, Number(m[2]) / 255, Number(m[3]) / 255, m[4] ? Number(m[4]) : 1.0]
-  }
-  return [0, 0, 0, 1]
-}
-
-function measureTextWidth(text: string, font: string, atlas: GlyphAtlasLike): number {
-  if (text.length === 0) {
-    return 0
-  }
-  let width = 0
-  for (const glyph of text) {
-    width += atlas.intern(font, glyph).advance
-  }
-  return width
-}
-
-function breakWord(word: string, font: string, atlas: GlyphAtlasLike, maxWidth: number): string[] {
-  const segments: string[] = []
-  let current = ''
-  for (const glyph of word) {
-    const candidate = `${current}${glyph}`
-    if (current.length > 0 && measureTextWidth(candidate, font, atlas) > maxWidth) {
-      segments.push(current)
-      current = glyph
-      continue
-    }
-    current = candidate
-  }
-  if (current.length > 0) {
-    segments.push(current)
-  }
-  return segments
-}
-
-function wrapWords(run: TextQuadRun, atlas: GlyphAtlasLike, font: string, maxWidth: number): readonly string[] {
-  if (!run.wrap || !Number.isFinite(maxWidth)) {
-    return run.text.split('\n')
-  }
-
-  const lines: string[] = []
-  for (const paragraph of run.text.split('\n')) {
-    if (paragraph.length === 0) {
-      lines.push('')
-      continue
-    }
-
-    const words = paragraph.split(/(\s+)/).filter((segment) => segment.length > 0)
-    let current = ''
-    for (const word of words) {
-      const candidate = current.length === 0 ? word : `${current}${word}`
-      if (measureTextWidth(candidate, font, atlas) <= maxWidth) {
-        current = candidate
-        continue
-      }
-      if (current.length > 0) {
-        lines.push(current.trimEnd())
-      }
-      current = ''
-      if (measureTextWidth(word, font, atlas) <= maxWidth) {
-        current = word.trimStart()
-        continue
-      }
-      for (const segment of breakWord(word, font, atlas, maxWidth)) {
-        lines.push(segment)
-      }
-    }
-    if (current.length > 0) {
-      lines.push(current.trimEnd())
-    }
-  }
-
-  return lines
-}
-
-function resolveLineLayouts(run: TextQuadRun, atlas: GlyphAtlasLike, font: string, fontSize: number): ResolvedLineLayout[] {
-  const lineHeight = Math.ceil(fontSize * WRAP_LINE_HEIGHT)
-  const availableWidth = Math.max(0, (run.width ?? DEFAULT_WIDTH) - HORIZONTAL_PADDING * 2)
-  const lines = wrapWords(run, atlas, font, availableWidth)
-  let lineY = run.wrap ? run.y + WRAP_TOP_PADDING : run.y + Math.max(0, ((run.height ?? DEFAULT_HEIGHT) - fontSize) / 2)
-
-  return lines.map((line) => {
-    const lineWidth = line.length === 0 ? 0 : atlas.intern(font, line).advance
-    const startX =
-      (run.align ?? 'left') === 'right'
-        ? run.x + (run.width ?? lineWidth) - HORIZONTAL_PADDING - lineWidth
-        : (run.align ?? 'left') === 'center'
-          ? run.x + ((run.width ?? lineWidth) - lineWidth) / 2
-          : run.x + HORIZONTAL_PADDING
-    const resolvedLine = {
-      text: line,
-      x: startX,
-      y: lineY,
-      width: lineWidth,
-    }
-    if (run.wrap) {
-      lineY += lineHeight
-    }
-    return resolvedLine
-  })
-}
 
 export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextQuad[] {
   const quads: TextQuad[] = []
@@ -194,16 +63,10 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
       continue
     }
 
-    const font = run.font ?? DEFAULT_FONT
-    const fontSize = run.fontSize ?? parseFontSize(font)
-    const lineLayouts = resolveLineLayouts(run, atlas, font, fontSize)
-    const measuredWidth = Math.max(0, ...lineLayouts.map((line) => line.width))
-    const clipX = run.clipX ?? run.x
-    const clipY = run.clipY ?? run.y
-    const clipWidth =
-      run.clipWidth ?? (Number.isFinite(run.width ?? DEFAULT_WIDTH) ? (run.width ?? DEFAULT_WIDTH) : measuredWidth + HORIZONTAL_PADDING * 2)
-    const clipHeight = run.clipHeight ?? run.height ?? DEFAULT_HEIGHT
-    if (clipWidth <= 0 || clipHeight <= 0) {
+    const font = run.font ?? DEFAULT_TEXT_FONT
+    const lineLayouts = resolveTextLineLayouts(run, atlas)
+    const clipRect = resolveTextClipRect(run, lineLayouts)
+    if (clipRect.width <= 0 || clipRect.height <= 0) {
       continue
     }
 
@@ -224,11 +87,11 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
         v0: entry.v0,
         u1: entry.u1,
         v1: entry.v1,
-        color: run.color ?? DEFAULT_COLOR,
-        clipX,
-        clipY,
-        clipWidth,
-        clipHeight,
+        color: run.color ?? DEFAULT_TEXT_COLOR,
+        clipHeight: clipRect.height,
+        clipWidth: clipRect.width,
+        clipX: clipRect.x,
+        clipY: clipRect.y,
       })
     }
   }
@@ -244,7 +107,7 @@ function packTextQuads(quads: readonly TextQuad[], targetBuffer?: Float32Array):
 
   quads.forEach((quad, index) => {
     const base = index * TEXT_INSTANCE_FLOAT_COUNT
-    const [r, g, b, a] = parseCssColor(quad.color)
+    const [r, g, b, a] = parseTextCssColor(quad.color)
     floats[base + 0] = quad.x
     floats[base + 1] = quad.y
     floats[base + 2] = quad.width
@@ -303,22 +166,17 @@ export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: Gl
       continue
     }
 
-    const font = run.font ?? DEFAULT_FONT
-    const fontSize = run.fontSize ?? parseFontSize(font)
-    const color = run.color ?? DEFAULT_COLOR
+    const font = run.font ?? DEFAULT_TEXT_FONT
+    const fontSize = run.fontSize ?? parseTextFontSize(font)
+    const color = run.color ?? DEFAULT_TEXT_COLOR
     const lineThickness = Math.max(1, Math.round(fontSize / 14))
-    const lineLayouts = resolveLineLayouts(run, atlas, font, fontSize)
-    const measuredWidth = Math.max(0, ...lineLayouts.map((line) => line.width))
-    const clipX = run.clipX ?? run.x
-    const clipRight =
-      clipX +
-      (run.clipWidth ??
-        (Number.isFinite(run.width ?? DEFAULT_WIDTH) ? (run.width ?? DEFAULT_WIDTH) : measuredWidth + HORIZONTAL_PADDING * 2))
-    const clipY = run.clipY ?? run.y
-    const clipBottom = clipY + (run.clipHeight ?? run.height ?? DEFAULT_HEIGHT)
+    const lineLayouts = resolveTextLineLayouts(run, atlas)
+    const clipRect = resolveTextClipRect(run, lineLayouts)
+    const clipRight = clipRect.x + clipRect.width
+    const clipBottom = clipRect.y + clipRect.height
 
     for (const line of lineLayouts) {
-      const left = Math.max(line.x, clipX)
+      const left = Math.max(line.x, clipRect.x)
       const right = Math.min(line.x + line.width, clipRight)
       const visibleWidth = right - left
       if (visibleWidth <= 0) {
@@ -326,7 +184,7 @@ export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: Gl
       }
       if (run.underline) {
         const underlineY = line.y + Math.max(1, fontSize * 0.36)
-        if (underlineY >= clipY && underlineY <= clipBottom) {
+        if (underlineY >= clipRect.y && underlineY <= clipBottom) {
           rects.push({
             x: left,
             y: underlineY,
@@ -338,7 +196,7 @@ export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: Gl
       }
       if (run.strike) {
         const strikeY = line.y - Math.max(1, fontSize * 0.18)
-        if (strikeY >= clipY && strikeY <= clipBottom) {
+        if (strikeY >= clipRect.y && strikeY <= clipBottom) {
           rects.push({
             x: left,
             y: strikeY,

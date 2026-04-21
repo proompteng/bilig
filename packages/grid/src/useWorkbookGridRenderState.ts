@@ -4,6 +4,7 @@ import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
 import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
+import { createGridCameraSnapshot } from './gridCamera.js'
 import {
   EMPTY_COLUMN_WIDTHS,
   EMPTY_ROW_HEIGHTS,
@@ -29,6 +30,7 @@ import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.j
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest, WorkbookRenderPaneState } from './renderer/pane-scene-types.js'
+import type { GridCameraSnapshot } from './renderer/grid-render-contract.js'
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
@@ -36,10 +38,10 @@ import {
   resolveFrozenColumnWidth,
   resolveFrozenRowHeight,
   resolveViewportScrollPosition,
-  resolveVisibleRegionFromScroll,
   scrollCellIntoView,
 } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
+import { noteGridScrollInput, noteTypeGpuScenePacketApplied } from './renderer/grid-render-counters.js'
 
 function noteViewportSubscription(): void {
   if (typeof window === 'undefined') {
@@ -190,6 +192,7 @@ export function useWorkbookGridRenderState(input: {
   const scrollSyncFrameRef = useRef<number | null>(null)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
+  const gridCameraRef = useRef<GridCameraSnapshot | null>(null)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
   const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
@@ -456,17 +459,32 @@ export function useWorkbookGridRenderState(input: {
     if (!scrollViewport) {
       return
     }
-    const next = resolveVisibleRegionFromScroll({
+    const camera = createGridCameraSnapshot({
       scrollLeft: scrollViewport.scrollLeft,
       scrollTop: scrollViewport.scrollTop,
       viewportWidth: scrollViewport.clientWidth,
       viewportHeight: scrollViewport.clientHeight,
+      dpr: window.devicePixelRatio || 1,
       freezeRows,
       freezeCols,
       columnWidths,
       rowHeights,
       gridMetrics,
+      previous: gridCameraRef.current,
     })
+    gridCameraRef.current = camera
+    const next = {
+      range: {
+        x: camera.visibleViewport.colStart,
+        y: camera.visibleViewport.rowStart,
+        width: camera.visibleViewport.colEnd - camera.visibleViewport.colStart + 1,
+        height: camera.visibleViewport.rowEnd - camera.visibleViewport.rowStart + 1,
+      },
+      tx: camera.tx,
+      ty: camera.ty,
+      freezeRows,
+      freezeCols,
+    }
     scrollTransformRef.current = {
       tx: next.tx,
       ty: next.ty,
@@ -487,8 +505,6 @@ export function useWorkbookGridRenderState(input: {
       if (
         current.freezeCols === next.freezeCols &&
         current.freezeRows === next.freezeRows &&
-        current.range.width === next.range.width &&
-        current.range.height === next.range.height &&
         sameViewportBounds(currentResidentViewport, targetResidentViewport)
       ) {
         return current
@@ -569,7 +585,8 @@ export function useWorkbookGridRenderState(input: {
       })
     }
     const handleScroll = () => {
-      scheduleVisibleRegionSync()
+      noteGridScrollInput()
+      syncVisibleRegion()
     }
     scrollViewport.addEventListener('scroll', handleScroll, { passive: true })
     const observer = new ResizeObserver(() => {
@@ -639,7 +656,7 @@ export function useWorkbookGridRenderState(input: {
     [freezeCols, freezeRows, hostElement, isEditingCell, residentViewport, selectedCell.col, selectedCell.row, selectionRange, sheetName],
   )
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
-  const _workerResidentPaneScenes = useSyncExternalStore(
+  const workerResidentPaneScenes = useSyncExternalStore(
     useCallback(
       (listener: () => void) =>
         residentSceneEngine && residentPaneSceneRequest
@@ -653,10 +670,28 @@ export function useWorkbookGridRenderState(input: {
         : EMPTY_PANE_SCENES,
     () => EMPTY_PANE_SCENES,
   )
-  void _workerResidentPaneScenes
+  const canUseWorkerResidentPaneScenes =
+    workerResidentPaneScenes.length > 0 &&
+    !requiresLiveViewportState &&
+    hoverState.cell === null &&
+    hoverState.header === null &&
+    activeHeaderDrag === null
+  useEffect(() => {
+    if (!canUseWorkerResidentPaneScenes) {
+      return
+    }
+    workerResidentPaneScenes.forEach((scene) => {
+      noteTypeGpuScenePacketApplied(
+        `${scene.paneId}:${scene.viewport.rowStart}:${scene.viewport.rowEnd}:${scene.viewport.colStart}:${scene.viewport.colEnd}`,
+      )
+    })
+  }, [canUseWorkerResidentPaneScenes, workerResidentPaneScenes])
   const residentDataPaneScenes = useMemo(() => {
     if (!hostElement) {
       return []
+    }
+    if (canUseWorkerResidentPaneScenes) {
+      return workerResidentPaneScenes
     }
     void sceneRevision
     // Render resident panes from the projected engine state so visible body
@@ -687,6 +722,7 @@ export function useWorkbookGridRenderState(input: {
     })
   }, [
     activeHeaderDrag,
+    canUseWorkerResidentPaneScenes,
     columnWidths,
     engine,
     freezeCols,
@@ -711,6 +747,7 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    workerResidentPaneScenes,
   ])
   const residentDataPanes = useMemo(
     () =>
