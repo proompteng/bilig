@@ -23,7 +23,10 @@ type ComposeInvocation = {
   command: string[]
   version: string
 }
-type BrowserStackProcess = ReturnType<typeof Bun.spawn>
+interface BrowserStackProcess {
+  readonly exited: Promise<number | null>
+  kill(signal?: 'SIGINT' | 'SIGTERM' | 'SIGKILL' | number): void
+}
 
 let composeInvocation: ComposeInvocation | null = null
 let composeInvocationProbed = false
@@ -408,16 +411,23 @@ function runPlaywright(args: string[]): void {
   }
 }
 
-function runConfiguredPlaywrightSuites(): void {
+function configuredPlaywrightArgSets(): string[][] {
   if (playwrightArgs.length > 0) {
-    runPlaywright(playwrightArgs)
-    return
+    return [playwrightArgs]
   }
 
-  runPlaywright(['--grep-invert', `${CLIPBOARD_GLOBAL_GREP}|${BROWSER_PERF_GREP}|${BROWSER_SERIAL_GREP}`])
-  runPlaywright(['--workers=1', '--grep', BROWSER_PERF_GREP])
-  runPlaywright(['--workers=1', '--grep', BROWSER_SERIAL_GREP])
-  runPlaywright(['--workers=1', '--grep', CLIPBOARD_GLOBAL_GREP])
+  return [
+    ['--grep-invert', `${CLIPBOARD_GLOBAL_GREP}|${BROWSER_PERF_GREP}|${BROWSER_SERIAL_GREP}`],
+    ['--workers=1', '--grep', BROWSER_PERF_GREP],
+    ['--workers=1', '--grep', BROWSER_SERIAL_GREP],
+    ['--workers=1', '--grep', CLIPBOARD_GLOBAL_GREP],
+  ]
+}
+
+function runConfiguredPlaywrightSuites(): void {
+  for (const args of configuredPlaywrightArgSets()) {
+    runPlaywright(args)
+  }
 }
 
 async function pollHttp(url: string, deadline: number, lastError = 'unknown error'): Promise<void> {
@@ -613,7 +623,25 @@ async function waitForLocalPlaywrightStack(child: BrowserStackProcess): Promise<
   ])
 }
 
-async function runLocalPlaywright(): Promise<void> {
+async function readLocalPlaywrightStackExitCode(child: BrowserStackProcess): Promise<number | null | undefined> {
+  return await Promise.race([child.exited, Bun.sleep(0).then(() => undefined)])
+}
+
+async function isLocalPlaywrightStackReady(child: BrowserStackProcess): Promise<boolean> {
+  const exitCode = await readLocalPlaywrightStackExitCode(child)
+  if (exitCode !== undefined) {
+    return false
+  }
+
+  try {
+    await waitForHttp(`${getE2eBaseUrl()}/runtime-config.json`, 2_000)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function startLocalPlaywrightStack(): Promise<BrowserStackProcess> {
   terminatePreviewServers()
   const child = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
     stdin: 'ignore',
@@ -633,14 +661,38 @@ async function runLocalPlaywright(): Promise<void> {
       BILIG_E2E_REMOTE_SYNC: '0',
     },
   })
-  try {
-    await waitForLocalPlaywrightStack(child)
-    runConfiguredPlaywrightSuites()
-  } finally {
+  await waitForLocalPlaywrightStack(child)
+  return child
+}
+
+async function stopAndReapLocalPlaywrightStack(child: BrowserStackProcess | null): Promise<void> {
+  if (child) {
     await stopLocalPlaywrightStack(child)
-    terminatePreviewServers()
-    await Bun.sleep(1_000)
-    terminatePreviewServers()
+  }
+  terminatePreviewServers()
+  await Bun.sleep(1_000)
+  terminatePreviewServers()
+}
+
+async function ensureLocalPlaywrightStack(child: BrowserStackProcess | null): Promise<BrowserStackProcess> {
+  if (child && (await isLocalPlaywrightStackReady(child))) {
+    return child
+  }
+
+  await stopAndReapLocalPlaywrightStack(child)
+  return startLocalPlaywrightStack()
+}
+
+async function runLocalPlaywright(): Promise<void> {
+  let child: BrowserStackProcess | null = null
+  try {
+    for (const args of configuredPlaywrightArgSets()) {
+      // oxlint-disable-next-line eslint(no-await-in-loop)
+      child = await ensureLocalPlaywrightStack(child)
+      runPlaywright(args)
+    }
+  } finally {
+    await stopAndReapLocalPlaywrightStack(child)
   }
 }
 
