@@ -35,6 +35,8 @@ function decodeErrorCode(rawCode: number | undefined): ErrorCode {
   return rawCode ?? ErrorCode.None
 }
 
+const DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64
+
 export interface EngineFormulaEvaluationService {
   readonly evaluateDirectLookupFormula: (cellIndex: number) => Effect.Effect<number[] | undefined, EngineFormulaEvaluationError>
   readonly evaluateDirectLookupFormulaNow: (cellIndex: number) => number[] | undefined
@@ -611,7 +613,7 @@ export function createEngineFormulaEvaluationService(args: {
     if (!directAggregate) {
       return undefined
     }
-    if (formula.dependencyIndices.length > 0) {
+    if (formula.dependencyIndices.length > 0 || directAggregate.length <= DIRECT_AGGREGATE_SCAN_MAX_LENGTH) {
       const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
       if (!aggregateSheet) {
         return undefined
@@ -622,7 +624,10 @@ export function createEngineFormulaEvaluationService(args: {
       let minimum = Number.POSITIVE_INFINITY
       let maximum = Number.NEGATIVE_INFINITY
       for (let row = directAggregate.rowStart; row <= directAggregate.rowEnd; row += 1) {
-        const memberCellIndex = aggregateSheet.grid.get(row, directAggregate.col)
+        const memberCellIndex =
+          aggregateSheet.structureVersion === 1
+            ? aggregateSheet.grid.getPhysical(row, directAggregate.col)
+            : aggregateSheet.grid.get(row, directAggregate.col)
         const value: CellValue = memberCellIndex === -1 ? { tag: ValueTag.Empty } : readCellValueByIndex(memberCellIndex)
         switch (value.tag) {
           case ValueTag.Number:

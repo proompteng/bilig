@@ -128,6 +128,24 @@ export class SheetGrid {
     }
   }
 
+  forEachPhysicalColumnEntry(col: number, fn: (cellIndex: number, row: number) => void): void {
+    const blockCol = Math.floor(col / BLOCK_COLS)
+    const localCol = col % BLOCK_COLS
+    for (const [key, block] of this.blocks) {
+      if (key % 1_000_000 !== blockCol) {
+        continue
+      }
+      const blockRow = Math.floor(key / 1_000_000)
+      const absoluteBlockRow = blockRow * BLOCK_ROWS
+      for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
+        const value = block[localRow * BLOCK_COLS + localCol]!
+        if (value !== 0) {
+          fn(value - 1, absoluteBlockRow + localRow)
+        }
+      }
+    }
+  }
+
   set(row: number, col: number, cellIndex: number): void {
     this.setInBlocks(this.blocks, row, col, cellIndex)
   }

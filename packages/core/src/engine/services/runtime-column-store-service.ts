@@ -226,7 +226,37 @@ export function createEngineRuntimeColumnStoreService(args: {
     const structureVersion = sheet?.structureVersion ?? 0
     const pages = new Map<number, RuntimeColumnPage>()
 
-    if (sheet) {
+    if (sheet?.structureVersion === 1) {
+      sheet.grid.forEachPhysicalColumnEntry(request.col, (cellIndex, row) => {
+        const pageRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS
+        let page = pages.get(pageRowStart)
+        if (!page) {
+          page = {
+            rowStart: pageRowStart,
+            tags: new Uint8Array(BLOCK_ROWS),
+            numbers: new Float64Array(BLOCK_ROWS),
+            stringIds: new Uint32Array(BLOCK_ROWS),
+            errors: new Uint16Array(BLOCK_ROWS),
+          }
+          pages.set(pageRowStart, page)
+        }
+        const localRow = row - pageRowStart
+        const tag = decodeValueTag(args.state.workbook.cellStore.tags[cellIndex])
+        page.tags[localRow] = tag
+        if (tag === ValueTag.Number || tag === ValueTag.Boolean) {
+          const numeric = args.state.workbook.cellStore.numbers[cellIndex] ?? 0
+          page.numbers[localRow] = Object.is(numeric, -0) ? 0 : numeric
+          return
+        }
+        if (tag === ValueTag.String) {
+          page.stringIds[localRow] = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
+          return
+        }
+        if (tag === ValueTag.Error) {
+          page.errors[localRow] = args.state.workbook.cellStore.errors[cellIndex] ?? 0
+        }
+      })
+    } else if (sheet) {
       sheet.logical.forEachVisibleColumnCellEntry(request.col, (cellIndex, row) => {
         const pageRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS
         let page = pages.get(pageRowStart)

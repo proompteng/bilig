@@ -1281,7 +1281,7 @@ export function createEngineOperationService(args: {
 
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops)
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
-    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
 
     const preparedSheetIdByName = new Map<string, number>()
@@ -2062,7 +2062,7 @@ export function createEngineOperationService(args: {
     const hadCycleMembersBefore = hasCycleMembersNow()
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
-    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.capacity + 1)
+    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
 
     const sheetNameById = new Map<number, string>()

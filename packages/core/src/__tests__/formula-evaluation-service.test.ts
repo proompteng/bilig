@@ -706,4 +706,27 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 2 })
     expect(engine.getCellValue('Sheet1', 'B4')).toEqual({ tag: ValueTag.Number, value: 6 })
   })
+
+  it('evaluates short direct aggregate windows without building column owners', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-aggregate-short-window' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    let expected = 0
+    for (let row = 1; row <= 32; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      expected += row
+    }
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
+
+    const evaluation = getEvaluationService(engine)
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+    expect(b1Index).toBeDefined()
+
+    engine.resetPerformanceCounters()
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(b1Index!))
+
+    expect(engine.getPerformanceCounters().columnOwnerBuilds).toBe(0)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: expected })
+  })
 })
