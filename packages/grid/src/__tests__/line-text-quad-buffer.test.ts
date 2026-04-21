@@ -25,7 +25,7 @@ const atlas = {
 }
 
 describe('text-quad-buffer', () => {
-  it('builds one quad per resolved line with atlas uv coordinates', () => {
+  it('builds one quad per resolved glyph with atlas uv coordinates', () => {
     const quads = buildTextQuads(
       [
         {
@@ -38,19 +38,20 @@ describe('text-quad-buffer', () => {
       atlas,
     )
 
-    expect(quads).toHaveLength(1)
+    expect(quads).toHaveLength(2)
     expect(quads[0]).toMatchObject({
-      atlasKey: 'atlas:AB',
+      atlasKey: 'atlas:A',
       x: 18,
       y: 24.4,
-      width: 16,
+      width: 8,
       height: 12,
       clipX: 18,
       clipY: 23,
       clipWidth: 16,
       clipHeight: 16,
     })
-    expect(quads[0]?.glyph).toBe('AB')
+    expect(quads[0]?.glyph).toBe('A')
+    expect(quads[1]).toMatchObject({ atlasKey: 'atlas:B', glyph: 'B', x: 26, y: 24.4 })
   })
 
   it('wraps and centers lines inside the clipped layout box', () => {
@@ -71,9 +72,9 @@ describe('text-quad-buffer', () => {
       atlas,
     )
 
-    expect(quads).toHaveLength(2)
+    expect(quads).toHaveLength(6)
     expect(quads[0]).toMatchObject({ x: 8, y: 13 })
-    expect(quads[1]).toMatchObject({ x: 8, y: 25 })
+    expect(quads[3]).toMatchObject({ x: 8, y: 25 })
   })
 
   it('packs clipped scene items into gpu text instance buffers', () => {
@@ -101,9 +102,11 @@ describe('text-quad-buffer', () => {
       atlas,
     )
 
-    expect(quadCount).toBe(1)
+    expect(quadCount).toBe(2)
     expect(floats[0]).toBe(8)
     expect(floats[1]).toBe(4)
+    expect(floats[16]).toBe(16)
+    expect(floats[17]).toBe(4)
     expect(floats[12]).toBe(10)
     expect(floats[13]).toBe(3)
     expect(floats[14]).toBe(32)

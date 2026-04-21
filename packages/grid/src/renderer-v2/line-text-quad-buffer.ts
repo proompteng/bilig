@@ -79,24 +79,26 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
         continue
       }
 
-      const entry = atlas.intern(font, line.text)
-      quads.push({
-        atlasKey: entry.key,
-        glyph: line.text,
-        x: line.worldX - entry.originOffsetX,
-        y: line.baselineWorldY - entry.baseline,
-        width: entry.width,
-        height: entry.height,
-        u0: entry.u0,
-        v0: entry.v0,
-        u1: entry.u1,
-        v1: entry.v1,
-        color: run.color ?? DEFAULT_TEXT_COLOR,
-        clipHeight: clipRect.height,
-        clipWidth: clipRect.width,
-        clipX: clipRect.x,
-        clipY: clipRect.y,
-      })
+      for (const glyph of line.glyphs) {
+        const entry = atlas.intern(font, glyph.glyph)
+        quads.push({
+          atlasKey: entry.key,
+          glyph: glyph.glyph,
+          x: glyph.worldX - entry.originOffsetX,
+          y: line.baselineWorldY - entry.baseline,
+          width: entry.width,
+          height: entry.height,
+          u0: entry.u0,
+          v0: entry.v0,
+          u1: entry.u1,
+          v1: entry.v1,
+          color: run.color ?? DEFAULT_TEXT_COLOR,
+          clipHeight: clipRect.height,
+          clipWidth: clipRect.width,
+          clipX: clipRect.x,
+          clipY: clipRect.y,
+        })
+      }
     }
   }
 
@@ -294,25 +296,50 @@ function createAtlasTextMetricsProvider(atlas: GlyphAtlasLike): GridTextMetricsP
     measure(text, fontKey) {
       const font = fontKeyToCssFont(fontKey)
       if (text.length === 0) {
-        const sample = atlas.intern(font, 'Mg')
-        const ascent = Math.max(1, sample.baseline)
-        const descent = Math.max(1, sample.height - ascent)
+        const sample = measureAtlasText(font, 'Mg', atlas)
         return {
           advance: 0,
-          ascent,
-          descent,
-          lineHeight: Math.max(fontKey.sizeCssPx * 1.2, ascent + descent),
+          ascent: sample.ascent,
+          descent: sample.descent,
+          lineHeight: Math.max(fontKey.sizeCssPx * 1.2, sample.ascent + sample.descent),
         }
       }
-      const entry = atlas.intern(font, text)
-      const ascent = Math.max(1, entry.baseline)
-      const descent = Math.max(1, entry.height - ascent)
+      const measured = measureAtlasText(font, text, atlas)
       return {
-        advance: entry.advance,
-        ascent,
-        descent,
-        lineHeight: Math.max(fontKey.sizeCssPx * 1.2, ascent + descent),
+        advance: measured.advance,
+        ascent: measured.ascent,
+        descent: measured.descent,
+        lineHeight: Math.max(fontKey.sizeCssPx * 1.2, measured.ascent + measured.descent),
       }
     },
   }
+}
+
+function measureAtlasText(
+  font: string,
+  text: string,
+  atlas: GlyphAtlasLike,
+): {
+  readonly advance: number
+  readonly ascent: number
+  readonly descent: number
+} {
+  let advance = 0
+  let ascent = 1
+  let descent = 1
+  for (const glyph of splitGraphemes(text)) {
+    const entry = atlas.intern(font, glyph)
+    advance += entry.advance
+    ascent = Math.max(ascent, entry.baseline)
+    descent = Math.max(descent, entry.height - entry.baseline)
+  }
+  return { advance, ascent, descent }
+}
+
+function splitGraphemes(text: string): readonly string[] {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    return [...segmenter.segment(text)].map((segment) => segment.segment)
+  }
+  return Array.from(text)
 }

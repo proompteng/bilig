@@ -21,6 +21,7 @@ export interface FontKey {
 
 export interface ResolvedGlyphPlacement {
   readonly glyphId: number
+  readonly glyph: string
   readonly atlasGlyphKey: string
   readonly worldX: number
   readonly worldY: number

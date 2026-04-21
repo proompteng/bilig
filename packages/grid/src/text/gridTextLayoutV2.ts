@@ -133,6 +133,7 @@ function buildGlyphPlacements(input: {
     glyphs.push({
       advance: measured.advance,
       atlasGlyphKey: `${input.fontKey.family}:${input.fontKey.weight}:${input.fontKey.style}:${input.fontKey.sizeCssPx}:${input.fontKey.dprBucket}:${glyph}`,
+      glyph,
       glyphId: glyph.codePointAt(0) ?? 0,
       height: measured.ascent + measured.descent,
       uvPadding: 1,
