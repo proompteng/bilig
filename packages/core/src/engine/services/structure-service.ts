@@ -297,8 +297,8 @@ export function createEngineStructureService(args: {
     sourceAddress?: string,
   ): EngineOp[] => args.captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress)
 
-  const canDeferSimpleInsertStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
-    transform.kind === 'insert' &&
+  const canDeferSimpleStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
+    transform.kind !== 'delete' &&
     formula.rangeDependencies.length === 0 &&
     formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
     !formula.compiled.volatile &&
@@ -645,7 +645,7 @@ export function createEngineStructureService(args: {
       if (ownerRow === undefined || ownerCol === undefined) {
         return
       }
-      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleInsertStructuralFormulaSource(formula, argsForResolve.transform)) {
+      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleStructuralFormulaSource(formula, argsForResolve.transform)) {
         formula.structuralSourceTransform = {
           ownerSheetName,
           targetSheetName: argsForResolve.sheetName,
@@ -1140,7 +1140,7 @@ export function createEngineStructureService(args: {
       const touchesChangedTable =
         argsForImpact.changedTableNames.size > 0 &&
         formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
-      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleInsertStructuralFormulaSource(formula, argsForImpact.transform)) {
+      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
         formula.structuralSourceTransform = {
           ownerSheetName,
           targetSheetName: argsForImpact.sheetName,
