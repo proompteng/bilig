@@ -13,12 +13,7 @@ import {
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue } from '../../engine-value-utils.js'
-import {
-  inverseMapStructuralAxisIndex,
-  mapStructuralAxisIndex,
-  mapStructuralBoundary,
-  structuralTransformForOp,
-} from '../../engine-structural-utils.js'
+import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { FormulaTable } from '../../formula-table.js'
 import {
@@ -555,6 +550,7 @@ export function createEngineStructureService(args: {
     readonly transaction: StructuralTransaction
     readonly changedDefinedNames: ReadonlySet<string>
     readonly changedTableNames: ReadonlySet<string>
+    readonly ownerPositions: ReadonlyMap<number, { sheetName: string; row: number; col: number }>
   }): StructuralFormulaRebindInput[] => {
     const inputs: StructuralFormulaRebindInput[] = []
     const templateRewriteCache = new Map<string, StructurallyRewrittenTemplate | null>()
@@ -564,16 +560,11 @@ export function createEngineStructureService(args: {
       if (!formula) {
         return
       }
-      const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-      if (!ownerSheetName) {
+      const previousOwnerPosition = argsForResolve.ownerPositions.get(cellIndex)
+      if (!previousOwnerPosition) {
         return
       }
-      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
-      if (!ownerPosition) {
-        return
-      }
-      const ownerRow = ownerPosition.row
-      const ownerCol = ownerPosition.col
+      const ownerSheetName = previousOwnerPosition.sheetName
       const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
         argsForResolve.changedDefinedNames.has(normalizeDefinedName(name)),
       )
@@ -583,16 +574,21 @@ export function createEngineStructureService(args: {
       )
       const shouldBypassTemplateStructuralRewrite = ownerSheetName !== argsForResolve.sheetName && touchesTargetSheetDependency
       const representative = remappedCellsByIndex.get(cellIndex)
-      const previousOwnerRow =
-        representative?.fromRow ??
+      const previousOwnerRow = representative?.fromRow ?? previousOwnerPosition.row
+      const previousOwnerCol = representative?.fromCol ?? previousOwnerPosition.col
+      const ownerRow =
+        representative?.toRow ??
         (ownerSheetName === argsForResolve.sheetName && argsForResolve.transform.axis === 'row'
-          ? inverseMapStructuralAxisIndex(ownerRow, argsForResolve.transform)
-          : ownerRow)
-      const previousOwnerCol =
-        representative?.fromCol ??
+          ? mapStructuralAxisIndex(previousOwnerRow, argsForResolve.transform)
+          : previousOwnerRow)
+      const ownerCol =
+        representative?.toCol ??
         (ownerSheetName === argsForResolve.sheetName && argsForResolve.transform.axis === 'column'
-          ? inverseMapStructuralAxisIndex(ownerCol, argsForResolve.transform)
-          : ownerCol)
+          ? mapStructuralAxisIndex(previousOwnerCol, argsForResolve.transform)
+          : previousOwnerCol)
+      if (ownerRow === undefined || ownerCol === undefined) {
+        return
+      }
       const templateRewrite =
         !touchesChangedName &&
         !touchesChangedTable &&
@@ -1015,10 +1011,12 @@ export function createEngineStructureService(args: {
   }): {
     formulaCellIndices: number[]
     rebindCellIndices: number[]
+    ownerPositions: Map<number, { sheetName: string; row: number; col: number }>
   } => {
     const formulaCellIndices = new Set<number>()
     const rebindCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
+    const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
     args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
       candidateCellIndices.add(cellIndex)
     })
@@ -1051,6 +1049,10 @@ export function createEngineStructureService(args: {
         return
       }
       const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      if (!ownerPosition) {
+        return
+      }
+      ownerPositions.set(cellIndex, { sheetName: ownerSheetName, row: ownerPosition.row, col: ownerPosition.col })
       const axisIndex = argsForImpact.transform.axis === 'row' ? ownerPosition?.row : ownerPosition?.col
       const ownerPositionAffected =
         ownerSheetName === argsForImpact.sheetName &&
@@ -1126,6 +1128,7 @@ export function createEngineStructureService(args: {
     return {
       formulaCellIndices: [...formulaCellIndices],
       rebindCellIndices: [...rebindCellIndices],
+      ownerPositions,
     }
   }
 
@@ -1242,6 +1245,7 @@ export function createEngineStructureService(args: {
             transaction,
             changedDefinedNames,
             changedTableNames,
+            ownerPositions: impactedFormulas.ownerPositions,
           })
           if (args.state.counters && rebindInputs.length > 0) {
             addEngineCounter(args.state.counters, 'structuralFormulaRebindInputs', rebindInputs.length)
