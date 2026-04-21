@@ -110,6 +110,12 @@ function syncTextResource(input: {
     atlas: input.atlas,
     textScene: input.pane.textScene,
   })
+  if (textPayload.quadCount === 0) {
+    input.paneCache.textCount = 0
+    input.paneCache.textScene = input.pane.textScene
+    input.paneCache.textSignature = input.textSignature
+    return
+  }
   const textBuffer = ensureTypeGpuVertexBuffer(
     input.artifacts.root,
     WORKBOOK_TEXT_INSTANCE_LAYOUT,
@@ -146,6 +152,12 @@ function syncRectResource(input: {
           ...(decorationRects.length > 0 ? { decorationRects } : {}),
         }),
       }
+  if (rectPayload.count === 0) {
+    input.paneCache.rectCount = 0
+    input.paneCache.rectScene = input.pane.gpuScene
+    input.paneCache.rectSignature = input.rectSignature
+    return
+  }
   const rectBuffer = ensureTypeGpuVertexBuffer(
     input.artifacts.root,
     WORKBOOK_RECT_INSTANCE_LAYOUT,

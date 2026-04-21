@@ -215,6 +215,9 @@ export type SurfaceUniformBuffer = TgpuUniform<typeof surfaceUniformSchema>
 
 type AtlasTexture = TgpuTexture & SampledFlag
 
+export const MIN_TYPEGPU_RECT_VERTEX_CAPACITY = 2048
+export const MIN_TYPEGPU_TEXT_VERTEX_CAPACITY = 4096
+
 export interface TypeGpuRendererArtifacts {
   readonly root: TgpuRoot
   readonly device: GPUDevice
@@ -372,7 +375,11 @@ export function ensureTypeGpuVertexBuffer(
     }
   }
 
-  const nextCapacity = currentCapacity > 0 ? Math.max(minCapacity, Math.ceil(currentCapacity * 1.5)) : minCapacity
+  const nextCapacity = resolveTypeGpuVertexBufferCapacity({
+    currentCapacity,
+    minimumCapacity: layout === WORKBOOK_RECT_INSTANCE_LAYOUT ? MIN_TYPEGPU_RECT_VERTEX_CAPACITY : MIN_TYPEGPU_TEXT_VERTEX_CAPACITY,
+    nextCount,
+  })
   current?.destroy()
 
   if (layout === WORKBOOK_RECT_INSTANCE_LAYOUT) {
@@ -388,6 +395,24 @@ export function ensureTypeGpuVertexBuffer(
     buffer: root.createBuffer(WORKBOOK_TEXT_INSTANCE_LAYOUT.schemaForCount(nextCapacity)).$usage('vertex') as TextInstanceVertexBuffer,
     capacity: nextCapacity,
   }
+}
+
+export function resolveTypeGpuVertexBufferCapacity(input: {
+  readonly currentCapacity: number
+  readonly minimumCapacity: number
+  readonly nextCount: number
+}): number {
+  const required = Math.max(1, Math.ceil(input.nextCount))
+  const currentCapacity = Math.max(0, Math.floor(input.currentCapacity))
+  if (currentCapacity >= required) {
+    return currentCapacity
+  }
+
+  let nextCapacity = Math.max(1, Math.ceil(input.minimumCapacity))
+  while (nextCapacity < required) {
+    nextCapacity *= 2
+  }
+  return nextCapacity
 }
 
 export function writeTypeGpuVertexBuffer<TData extends WgslArray>(buffer: TypeGpuVertexBuffer<TData>, floats: Float32Array): void {
