@@ -165,6 +165,10 @@ function parseQualifiedDependencySheetName(dependency: string): string | undefin
   return qualifier.startsWith("'") && qualifier.endsWith("'") ? qualifier.slice(1, -1).replace(/''/g, "'") : qualifier
 }
 
+function hasQualifiedDependencies(compiled: Pick<CompiledFormula, 'deps'>): boolean {
+  return compiled.deps.some((dependency) => dependency.includes('!'))
+}
+
 function directRegionIdsForFormula(
   value:
     | Pick<RuntimeFormula, 'directAggregate' | 'directCriteria'>
@@ -1538,7 +1542,11 @@ export function createEngineFormulaBindingService(args: {
     const nextTemplateId = templateId ?? existing.templateId
     const plan = args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
     const previousDirectAggregate = existing.directAggregate
-    untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    const shouldRefreshSheetIndexes = hasQualifiedDependencies(existing.compiled) || hasQualifiedDependencies(compiled)
+    if (shouldRefreshSheetIndexes) {
+      untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    }
+    const hadDirectRegions = existing.directAggregate !== undefined || existing.directCriteria !== undefined
     existing.source = source
     existing.planId = plan.id
     existing.templateId = nextTemplateId
@@ -1576,8 +1584,12 @@ export function createEngineFormulaBindingService(args: {
     }
     recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
     registerFormulaFamilyNow(cellIndex, existing)
-    trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
-    args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
+    if (shouldRefreshSheetIndexes) {
+      trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    }
+    if (hadDirectRegions || existing.directAggregate !== undefined || existing.directCriteria !== undefined) {
+      args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
+    }
     return true
   }
 
