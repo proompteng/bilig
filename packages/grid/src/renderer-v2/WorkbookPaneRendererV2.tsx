@@ -84,6 +84,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const backendRef = useRef<WorkbookTypeGpuBackend | null>(null)
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
+  const idleTextUploadFrameRef = useRef<number | null>(null)
+  const lastScrollSignalAtRef = useRef(0)
   const drawFrameRef = useRef<() => void>(() => {})
   const activeRef = useRef(active)
   const webGpuReadyRef = useRef(false)
@@ -213,6 +215,20 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         return
       }
       const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
+      const camera = latestGeometry?.camera ?? null
+      const isCameraMoving =
+        camera !== null && Math.abs(camera.velocityX) + Math.abs(camera.velocityY) > 0.01 && performance.now() - camera.updatedAt < 180
+      const deferTextUploads = isCameraMoving || performance.now() - lastScrollSignalAtRef.current < 240
+      if (deferTextUploads) {
+        if (idleTextUploadFrameRef.current !== null) {
+          window.clearTimeout(idleTextUploadFrameRef.current)
+        }
+        idleTextUploadFrameRef.current = window.setTimeout(() => {
+          idleTextUploadFrameRef.current = null
+          renderLoopRef.current ??= new GridRenderLoop()
+          renderLoopRef.current.requestDraw(drawFrameRef.current)
+        }, 280)
+      }
       const overlayPacket = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
       const resolvedPanePayloads = overlayPacket
         ? [
@@ -232,6 +248,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
       drawWorkbookTypeGpuFrame({
         backend,
+        deferTextUploads,
         panes: resolvedPanePayloads,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
@@ -250,6 +267,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       return
     }
     const scheduleDraw = () => {
+      lastScrollSignalAtRef.current = performance.now()
       renderLoopRef.current ??= new GridRenderLoop()
       renderLoopRef.current.requestDraw(drawFrameRef.current)
     }
@@ -261,6 +279,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       return
     }
     const scheduleDraw = () => {
+      lastScrollSignalAtRef.current = performance.now()
       renderLoopRef.current ??= new GridRenderLoop()
       renderLoopRef.current.requestDraw(drawFrameRef.current)
     }
@@ -272,6 +291,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     return () => {
       renderLoopRef.current?.cancel()
       renderLoopRef.current = null
+      if (idleTextUploadFrameRef.current !== null) {
+        window.clearTimeout(idleTextUploadFrameRef.current)
+        idleTextUploadFrameRef.current = null
+      }
       if (canvas) {
         canvas.width = 0
         canvas.height = 0

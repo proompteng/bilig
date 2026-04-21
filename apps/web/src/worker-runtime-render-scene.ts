@@ -61,7 +61,10 @@ export function buildWorkerResidentPaneScenes(input: {
   const { engine, request, generation } = input
   const gridMetrics = getGridMetrics()
   const selectedAddress = formatAddress(request.selectedCell.row, request.selectedCell.col)
-  const selectedCellSnapshot = engine.getCell(request.sheetName, selectedAddress)
+  const selectedCellSnapshot =
+    request.selectedCellSnapshot?.sheetName === request.sheetName && request.selectedCellSnapshot.address === selectedAddress
+      ? request.selectedCellSnapshot
+      : engine.getCell(request.sheetName, selectedAddress)
   const columnAxis = buildRenderedAxisState(engine.getColumnAxisEntries(request.sheetName), gridMetrics.columnWidth)
   const rowAxis = buildRenderedAxisState(engine.getRowAxisEntries(request.sheetName), gridMetrics.rowHeight)
   const freezeRows = request.freezeRows
@@ -121,6 +124,7 @@ export function buildWorkerResidentPaneScenes(input: {
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {
   const range = request.selectionRange
+  const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
     request.residentViewport.rowStart,
@@ -131,6 +135,12 @@ export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest
     request.freezeCols,
     request.selectedCell.col,
     request.selectedCell.row,
+    selectedSnapshot?.address ?? '',
+    selectedSnapshot?.version ?? -1,
+    selectedSnapshot?.styleId ?? '',
+    selectedSnapshot?.formula ?? '',
+    selectedSnapshot?.input ?? '',
+    selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
     range?.x ?? -1,
     range?.y ?? -1,
     range?.width ?? -1,

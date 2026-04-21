@@ -10,7 +10,7 @@ import {
   updateTypeGpuSurfaceUniform,
 } from './typegpu-backend.js'
 import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../renderer/grid-render-counters.js'
-import { ensurePaneSurfaceBindings } from './typegpu-buffer-pool.js'
+import { ensurePaneSurfaceBindings, resolveWorkbookPaneBufferKey } from './typegpu-buffer-pool.js'
 
 export interface TypeGpuDrawSurface {
   readonly width: number
@@ -40,7 +40,7 @@ export function drawTypeGpuPanes(input: {
   })
 
   input.panes.forEach((pane) => {
-    const paneCache = input.paneBuffers.get(pane.paneId)
+    const paneCache = input.paneBuffers.get(resolveWorkbookPaneBufferKey(pane))
     const scissorRect = resolveClampedScissorRect(pane.frame, input.surface)
     if (!scissorRect) {
       return

@@ -87,6 +87,19 @@ describe('grid hook boundary helpers', () => {
         isRangeMoveDragging: false,
       }),
     ).toBe(true)
+    expect(
+      resolveRequiresLiveViewportState({
+        fillPreviewActive: false,
+        hasActiveHeaderDrag: false,
+        hasActiveResizeColumn: false,
+        hasActiveResizeRow: false,
+        hasColumnResizePreview: false,
+        hasRowResizePreview: false,
+        isEditingCell: true,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+      }),
+    ).toBe(false)
     expect(resolveResizeGuideColumn({ activeResizeColumn: null, cursor: 'col-resize', header: { kind: 'column', index: 4 } })).toBe(4)
     expect(resolveResizeGuideRow({ activeResizeRow: null, cursor: 'row-resize', header: { kind: 'row', index: 6 } })).toBe(6)
     expect(sameBounds({ x: 1, y: 2, width: 3, height: 4 }, { x: 1, y: 2, width: 3, height: 4 })).toBe(true)

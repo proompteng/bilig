@@ -26,6 +26,13 @@ const atlas = {
 
 describe('text-quad-buffer', () => {
   it('builds one quad per resolved glyph with atlas uv coordinates', () => {
+    const internedGlyphs: string[] = []
+    const recordingAtlas = {
+      intern(font: string, glyph: string) {
+        internedGlyphs.push(glyph)
+        return atlas.intern(font, glyph)
+      },
+    }
     const quads = buildTextQuads(
       [
         {
@@ -35,7 +42,7 @@ describe('text-quad-buffer', () => {
           font: '400 11px Geist',
         },
       ],
-      atlas,
+      recordingAtlas,
     )
 
     expect(quads).toHaveLength(2)
@@ -52,6 +59,7 @@ describe('text-quad-buffer', () => {
     })
     expect(quads[0]?.glyph).toBe('A')
     expect(quads[1]).toMatchObject({ atlasKey: 'atlas:B', glyph: 'B', x: 26, y: 24.4 })
+    expect(internedGlyphs).not.toContain('AB')
   })
 
   it('wraps and centers lines inside the clipped layout box', () => {

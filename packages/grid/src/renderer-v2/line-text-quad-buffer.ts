@@ -238,7 +238,7 @@ function resolveRunTextLayout(run: TextQuadRun, atlas: GlyphAtlasLike, fontKey: 
 
 function resolveRunCellWorldRect(run: TextQuadRun, atlas: GlyphAtlasLike): Rectangle {
   const font = run.font ?? DEFAULT_TEXT_FONT
-  const measuredAdvance = run.text.length === 0 ? 0 : atlas.intern(font, run.text).advance
+  const measuredAdvance = run.text.length === 0 ? 0 : measureAtlasText(font, run.text, atlas).advance
   return {
     x: run.x,
     y: run.y,

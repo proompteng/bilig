@@ -25,6 +25,7 @@ describe('ProjectedSceneStore', () => {
       freezeRows: 1,
       freezeCols: 1,
       selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
       selectionRange: null,
       editingCell: null,
     } as const
@@ -76,6 +77,7 @@ describe('ProjectedSceneStore', () => {
       freezeRows: 1,
       freezeCols: 1,
       selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
       selectionRange: null,
       editingCell: null,
     } as const

@@ -1,4 +1,4 @@
-import type { Viewport } from '@bilig/protocol'
+import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
@@ -30,6 +30,7 @@ export interface WorkbookPaneSceneRequest {
     readonly col: number
     readonly row: number
   }
+  readonly selectedCellSnapshot: CellSnapshot | null
   readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   readonly editingCell: {
     readonly col: number

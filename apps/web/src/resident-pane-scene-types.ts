@@ -1,4 +1,4 @@
-import type { Viewport } from '@bilig/protocol'
+import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { WorkerPackedGridScenePacket } from './worker-runtime-render-packet.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
@@ -70,6 +70,7 @@ export interface WorkbookPaneSceneRequest {
     readonly col: number
     readonly row: number
   }
+  readonly selectedCellSnapshot: CellSnapshot | null
   readonly selectionRange: {
     readonly x: number
     readonly y: number

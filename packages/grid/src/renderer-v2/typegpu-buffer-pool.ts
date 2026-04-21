@@ -16,6 +16,7 @@ import type { WorkbookPaneBufferEntry, WorkbookPaneBufferCache } from './pane-bu
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
 import { GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT, type GridScenePacketV2 } from './scene-packet-v2.js'
+import { buildTileGpuCacheKey } from './tile-gpu-cache.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = 20
 
@@ -24,18 +25,21 @@ export function syncTypeGpuPaneResources(input: {
   readonly atlas: ReturnType<typeof createGlyphAtlas>
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly retainPanes?: readonly WorkbookRenderPaneState[] | undefined
+  readonly deferTextUploads?: boolean | undefined
 }): void {
-  const paneIds = new Set(input.panes.map((pane) => pane.paneId))
+  const paneIds = new Set((input.retainPanes ?? input.panes).map(resolveWorkbookPaneBufferKey))
   input.paneBuffers.pruneExcept(paneIds)
 
   input.panes.forEach((pane) => {
-    const paneCache = input.paneBuffers.get(pane.paneId)
+    const paneCache = input.paneBuffers.get(resolveWorkbookPaneBufferKey(pane))
     const textSignature =
       paneCache.textScene === pane.textScene && paneCache.textSignature !== null
         ? paneCache.textSignature
         : resolveGridTextSceneSignature(pane.textScene)
     const textSceneChanged = paneCache.textSignature !== textSignature
-    if (textSceneChanged) {
+    const deferTextUpload = input.deferTextUploads === true && pane.packedScene !== undefined
+    if (textSceneChanged && !deferTextUpload) {
       syncTextResource({
         artifacts: input.artifacts,
         atlas: input.atlas,
@@ -68,6 +72,10 @@ export function syncTypeGpuPaneResources(input: {
       })
     }
   })
+}
+
+export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {
+  return pane.packedScene ? buildTileGpuCacheKey(pane.packedScene) : pane.paneId
 }
 
 export function ensurePaneSurfaceBindings(artifacts: TypeGpuRendererArtifacts, paneCache: WorkbookPaneBufferEntry): void {

@@ -73,6 +73,20 @@ function noteHeaderPaneBuild(): void {
   ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
 }
 
+function applyEditorOverlayBounds(bounds: Rectangle): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+  const element = document.querySelector('[data-testid="cell-editor-overlay"]')
+  if (!(element instanceof HTMLElement)) {
+    return
+  }
+  element.style.height = `${bounds.height}px`
+  element.style.left = `${bounds.x}px`
+  element.style.top = `${bounds.y}px`
+  element.style.width = `${bounds.width}px`
+}
+
 function sameVisibleRegionWindow(left: VisibleRegionState, right: VisibleRegionState): boolean {
   return (
     (left.freezeCols ?? 0) === (right.freezeCols ?? 0) &&
@@ -639,17 +653,6 @@ export function useWorkbookGridRenderState(input: {
   }, [hostElement, syncVisibleRegion])
 
   useEffect(() => {
-    if (!subscribeViewport) {
-      return
-    }
-    noteViewportSubscription()
-    const cleanups = residentViewports.map((nextViewport) => subscribeViewport(sheetName, nextViewport, invalidateScene))
-    return () => {
-      cleanups.forEach((cleanup) => cleanup())
-    }
-  }, [invalidateScene, residentViewports, sheetName, subscribeViewport])
-
-  useEffect(() => {
     if (subscribeViewport) {
       return
     }
@@ -676,6 +679,7 @@ export function useWorkbookGridRenderState(input: {
               col: selectedCell.col,
               row: selectedCell.row,
             },
+            selectedCellSnapshot,
             selectionRange,
             editingCell: isEditingCell
               ? {
@@ -685,9 +689,68 @@ export function useWorkbookGridRenderState(input: {
               : null,
           }
         : null,
-    [freezeCols, freezeRows, hostElement, isEditingCell, residentViewport, selectedCell.col, selectedCell.row, selectionRange, sheetName],
+    [
+      freezeCols,
+      freezeRows,
+      hostElement,
+      isEditingCell,
+      residentViewport,
+      selectedCell.col,
+      selectedCell.row,
+      selectedCellSnapshot,
+      selectionRange,
+      sheetName,
+    ],
   )
+  const warmResidentPaneSceneRequests = useMemo<readonly WorkbookPaneSceneRequest[]>(() => {
+    if (!hostElement) {
+      return []
+    }
+    return warmResidentViewports
+      .filter((warmViewport) => !sameViewportBounds(warmViewport, residentViewport))
+      .map((warmViewport) => ({
+        sheetName,
+        residentViewport: warmViewport,
+        freezeRows,
+        freezeCols,
+        selectedCell: {
+          col: selectedCell.col,
+          row: selectedCell.row,
+        },
+        selectedCellSnapshot,
+        selectionRange,
+        editingCell: isEditingCell
+          ? {
+              col: selectedCell.col,
+              row: selectedCell.row,
+            }
+          : null,
+      }))
+  }, [
+    freezeCols,
+    freezeRows,
+    hostElement,
+    isEditingCell,
+    residentViewport,
+    selectedCell.col,
+    selectedCell.row,
+    selectedCellSnapshot,
+    selectionRange,
+    sheetName,
+    warmResidentViewports,
+  ])
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
+  useEffect(() => {
+    if (!residentSceneEngine || warmResidentPaneSceneRequests.length === 0) {
+      return
+    }
+    const cleanups = warmResidentPaneSceneRequests.map((request) =>
+      residentSceneEngine.subscribeResidentPaneScenes(request, () => undefined),
+    )
+    return () => {
+      cleanups.forEach((cleanup) => cleanup())
+    }
+  }, [residentSceneEngine, warmResidentPaneSceneRequests])
   const workerResidentPaneScenes = useSyncExternalStore(
     useCallback(
       (listener: () => void) =>
@@ -714,6 +777,17 @@ export function useWorkbookGridRenderState(input: {
     }
     noteWorkerResidentPaneScenesApplied(workerResidentPaneScenes)
   }, [canUseWorkerResidentPaneScenesResult, workerResidentPaneScenes])
+  useEffect(() => {
+    if (!subscribeViewport) {
+      return
+    }
+    noteViewportSubscription()
+    const listener = canUseWorkerResidentPaneScenesResult ? () => undefined : invalidateScene
+    const cleanups = residentViewports.map((nextViewport) => subscribeViewport(sheetName, nextViewport, listener))
+    return () => {
+      cleanups.forEach((cleanup) => cleanup())
+    }
+  }, [canUseWorkerResidentPaneScenesResult, invalidateScene, residentViewports, sheetName, subscribeViewport])
   const residentDataPaneScenes = useMemo(() => {
     if (!hostElement) {
       return []
@@ -972,7 +1046,6 @@ export function useWorkbookGridRenderState(input: {
     ],
     [renderHeaderPanes, residentDataPanes],
   )
-
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
     if (!fillPreviewRange) {
       return undefined
@@ -1045,15 +1118,22 @@ export function useWorkbookGridRenderState(input: {
     scrollViewport.scrollTop = nextScrollTop
   }, [freezeCols, freezeRows, gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides, sortedRowHeightOverrides])
 
-  const refreshOverlayBounds = useCallback(() => {
-    const next = getCellScreenBounds(selectedCell.col, selectedCell.row)
-    setOverlayBounds((current) => {
+  const refreshOverlayBounds = useCallback(
+    (options?: { readonly commitReactState?: boolean }) => {
+      const next = getCellScreenBounds(selectedCell.col, selectedCell.row)
       if (!next) {
-        return current
+        return
       }
-      return sameBounds(current, next) ? current : next
-    })
-  }, [getCellScreenBounds, selectedCell.col, selectedCell.row])
+      applyEditorOverlayBounds(next)
+      if (options?.commitReactState === false) {
+        return
+      }
+      setOverlayBounds((current) => {
+        return sameBounds(current, next) ? current : next
+      })
+    },
+    [getCellScreenBounds, selectedCell.col, selectedCell.row],
+  )
 
   useLayoutEffect(() => {
     if (!isEditingCell) {
@@ -1061,8 +1141,8 @@ export function useWorkbookGridRenderState(input: {
       return
     }
 
-    const frame = window.requestAnimationFrame(refreshOverlayBounds)
-    const unsubscribeScrollTransform = scrollTransformStore.subscribe(refreshOverlayBounds)
+    const frame = window.requestAnimationFrame(() => refreshOverlayBounds({ commitReactState: true }))
+    const unsubscribeScrollTransform = scrollTransformStore.subscribe(() => refreshOverlayBounds({ commitReactState: false }))
     return () => {
       window.cancelAnimationFrame(frame)
       unsubscribeScrollTransform()

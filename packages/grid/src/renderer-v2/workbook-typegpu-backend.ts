@@ -56,6 +56,7 @@ export function syncWorkbookTypeGpuSurface(input: {
 export function drawWorkbookTypeGpuFrame(input: {
   readonly backend: WorkbookTypeGpuBackend
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly deferTextUploads?: boolean | undefined
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
   readonly surface: TypeGpuDrawSurface
 }): void {
@@ -68,6 +69,7 @@ export function drawWorkbookTypeGpuFrame(input: {
     atlas: input.backend.atlas,
     paneBuffers: input.backend.paneBuffers,
     panes: input.panes,
+    deferTextUploads: input.deferTextUploads,
   })
   syncTypeGpuAtlasResources(input.backend.artifacts, input.backend.atlas)
   drawTypeGpuPanes({
