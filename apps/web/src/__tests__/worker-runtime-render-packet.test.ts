@@ -6,6 +6,8 @@ describe('worker-runtime-render-packet', () => {
     const packet = packWorkerGridScenePacket({
       generation: 3,
       paneId: 'body',
+      sheetName: 'Sheet1',
+      surfaceSize: { width: 400, height: 200 },
       viewport: { rowStart: 0, rowEnd: 1, colStart: 0, colEnd: 1 },
       gpuScene: {
         fillRects: [{ x: 1, y: 2, width: 3, height: 4, color: { r: 1, g: 0.5, b: 0.25, a: 1 } }],
@@ -36,6 +38,10 @@ describe('worker-runtime-render-packet', () => {
     })
 
     expect(packet.rects).toBeInstanceOf(Float32Array)
+    expect(packet.magic).toBe('bilig.grid.scene.v2')
+    expect(packet.version).toBe(1)
+    expect(packet.sheetName).toBe('Sheet1')
+    expect(packet.surfaceSize).toEqual({ width: 400, height: 200 })
     expect(packet.textMetrics).toBeInstanceOf(Float32Array)
     expect(packet.rectCount).toBe(2)
     expect(packet.textCount).toBe(1)

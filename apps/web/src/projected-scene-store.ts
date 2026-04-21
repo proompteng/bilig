@@ -1,4 +1,10 @@
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
+import {
+  GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_VERSION,
+  type GridScenePacketV2,
+} from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
+import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import { residentPaneSceneRequestNeedsRefresh } from './projected-scene-damage.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
@@ -20,7 +26,38 @@ function isOptionalPackedScene(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
-  return isRecord(value) && value['rects'] instanceof Float32Array && value['textMetrics'] instanceof Float32Array
+  return isGridScenePacketV2(value) && validateGridScenePacketV2(value).ok
+}
+
+function isViewportRecord(value: unknown): value is GridScenePacketV2['viewport'] {
+  return (
+    isRecord(value) &&
+    typeof value['rowStart'] === 'number' &&
+    typeof value['rowEnd'] === 'number' &&
+    typeof value['colStart'] === 'number' &&
+    typeof value['colEnd'] === 'number'
+  )
+}
+
+function isSurfaceSizeRecord(value: unknown): value is GridScenePacketV2['surfaceSize'] {
+  return isRecord(value) && typeof value['width'] === 'number' && typeof value['height'] === 'number'
+}
+
+function isGridScenePacketV2(value: unknown): value is GridScenePacketV2 {
+  return (
+    isRecord(value) &&
+    value['magic'] === GRID_SCENE_PACKET_V2_MAGIC &&
+    value['version'] === GRID_SCENE_PACKET_V2_VERSION &&
+    typeof value['generation'] === 'number' &&
+    typeof value['sheetName'] === 'string' &&
+    typeof value['paneId'] === 'string' &&
+    isViewportRecord(value['viewport']) &&
+    isSurfaceSizeRecord(value['surfaceSize']) &&
+    value['rects'] instanceof Float32Array &&
+    typeof value['rectCount'] === 'number' &&
+    value['textMetrics'] instanceof Float32Array &&
+    typeof value['textCount'] === 'number'
+  )
 }
 
 function isDisposedWorkerClientError(error: unknown): boolean {

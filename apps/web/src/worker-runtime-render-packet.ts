@@ -1,40 +1,42 @@
 import type { GridGpuScene, GridTextScene, WorkbookPaneId } from './resident-pane-scene-types.js'
 import type { Viewport } from '@bilig/protocol'
+import {
+  GRID_SCENE_PACKET_V2_MAGIC,
+  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
+  GRID_SCENE_PACKET_V2_VERSION,
+  type GridScenePacketV2,
+} from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 
-export const WORKER_PACKED_RECT_FLOAT_COUNT = 8
-export const WORKER_PACKED_TEXT_ITEM_FLOAT_COUNT = 8
-
-export interface WorkerPackedGridScenePacket {
-  readonly generation: number
-  readonly paneId: WorkbookPaneId
-  readonly viewport: Viewport
-  readonly rects: Float32Array
-  readonly rectCount: number
-  readonly textMetrics: Float32Array
-  readonly textCount: number
-}
+export type WorkerPackedGridScenePacket = GridScenePacketV2
 
 export function packWorkerGridScenePacket(input: {
   readonly generation: number
+  readonly sheetName: string
   readonly paneId: WorkbookPaneId
   readonly viewport: Viewport
+  readonly surfaceSize: { readonly width: number; readonly height: number }
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
 }): WorkerPackedGridScenePacket {
   return {
     generation: input.generation,
+    magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
     rects: packRects(input.gpuScene),
+    sheetName: input.sheetName,
+    surfaceSize: input.surfaceSize,
     textCount: input.textScene.items.length,
     textMetrics: packTextMetrics(input.textScene),
+    version: GRID_SCENE_PACKET_V2_VERSION,
     viewport: input.viewport,
   }
 }
 
 function packRects(scene: GridGpuScene): Float32Array {
   const rectCount = scene.fillRects.length + scene.borderRects.length
-  const floats = new Float32Array(Math.max(1, rectCount) * WORKER_PACKED_RECT_FLOAT_COUNT)
+  const floats = new Float32Array(Math.max(1, rectCount) * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
   let offset = 0
   for (const rect of scene.fillRects) {
     floats[offset + 0] = rect.x
@@ -45,7 +47,7 @@ function packRects(scene: GridGpuScene): Float32Array {
     floats[offset + 5] = rect.color.g
     floats[offset + 6] = rect.color.b
     floats[offset + 7] = rect.color.a
-    offset += WORKER_PACKED_RECT_FLOAT_COUNT
+    offset += GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT
   }
   for (const rect of scene.borderRects) {
     floats[offset + 0] = rect.x
@@ -56,15 +58,15 @@ function packRects(scene: GridGpuScene): Float32Array {
     floats[offset + 5] = rect.color.g
     floats[offset + 6] = rect.color.b
     floats[offset + 7] = rect.color.a
-    offset += WORKER_PACKED_RECT_FLOAT_COUNT
+    offset += GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT
   }
   return floats
 }
 
 function packTextMetrics(scene: GridTextScene): Float32Array {
-  const floats = new Float32Array(Math.max(1, scene.items.length) * WORKER_PACKED_TEXT_ITEM_FLOAT_COUNT)
+  const floats = new Float32Array(Math.max(1, scene.items.length) * GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT)
   scene.items.forEach((item, index) => {
-    const offset = index * WORKER_PACKED_TEXT_ITEM_FLOAT_COUNT
+    const offset = index * GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT
     floats[offset + 0] = item.x
     floats[offset + 1] = item.y
     floats[offset + 2] = item.width

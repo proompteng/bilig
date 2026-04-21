@@ -4,6 +4,7 @@ import { buildResidentDataPaneScenes } from '../../../packages/grid/src/gridResi
 import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { createGridSelection } from '../../../packages/grid/src/gridSelection.js'
 import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packages/grid/src/workbookGridViewport.js'
+import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import { packWorkerGridScenePacket } from './worker-runtime-render-packet.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
@@ -92,23 +93,30 @@ export function buildWorkerResidentPaneScenes(input: {
     selectedCellSnapshot,
     selectionRange: normalizeSelectionRange(request),
     editingCell: request.editingCell ? [request.editingCell.col, request.editingCell.row] : null,
-  }).map(
-    (scene): WorkbookPaneScenePacket => ({
+  }).map((scene): WorkbookPaneScenePacket => {
+    const packedScene = packWorkerGridScenePacket({
+      generation,
+      gpuScene: scene.gpuScene,
+      paneId: scene.paneId,
+      sheetName: request.sheetName,
+      surfaceSize: scene.surfaceSize,
+      textScene: scene.textScene,
+      viewport: scene.viewport,
+    })
+    const validation = validateGridScenePacketV2(packedScene)
+    if (!validation.ok) {
+      throw new Error(`Invalid worker grid scene packet: ${validation.reason}`)
+    }
+    return {
       generation,
       paneId: scene.paneId,
-      packedScene: packWorkerGridScenePacket({
-        generation,
-        gpuScene: scene.gpuScene,
-        paneId: scene.paneId,
-        textScene: scene.textScene,
-        viewport: scene.viewport,
-      }),
+      packedScene,
       viewport: scene.viewport,
       surfaceSize: scene.surfaceSize,
       gpuScene: scene.gpuScene,
       textScene: scene.textScene,
-    }),
-  )
+    }
+  })
 }
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {

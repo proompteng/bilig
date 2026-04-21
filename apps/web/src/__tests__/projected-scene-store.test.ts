@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GRID_SCENE_PACKET_V2_MAGIC, GRID_SCENE_PACKET_V2_VERSION } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedSceneStore } from '../projected-scene-store.js'
 
 describe('ProjectedSceneStore', () => {
@@ -37,12 +38,16 @@ describe('ProjectedSceneStore', () => {
         textScene: { items: [] },
         packedScene: {
           generation: 1,
+          magic: GRID_SCENE_PACKET_V2_MAGIC,
           paneId: 'body',
-          viewport: request.residentViewport,
-          rects: new Float32Array(8),
           rectCount: 0,
+          rects: new Float32Array(8),
+          sheetName: request.sheetName,
+          surfaceSize: { width: 400, height: 200 },
           textMetrics: new Float32Array(8),
           textCount: 0,
+          version: GRID_SCENE_PACKET_V2_VERSION,
+          viewport: request.residentViewport,
         },
       },
     ] as const
