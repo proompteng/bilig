@@ -30,6 +30,7 @@ describe('GridTextOverlay', () => {
       beginPath() {},
       clearRect() {},
       clip() {},
+      fillRect() {},
       fillText() {},
       lineTo() {},
       measureText(text: string) {
