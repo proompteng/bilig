@@ -218,12 +218,17 @@ describe('EngineFormulaBindingService', () => {
     engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
     engine.setCellFormula('Sheet1', 'D1', 'C1*2')
 
+    engine.resetPerformanceCounters()
     engine.setCellFormula('Sheet1', 'C1', 'A1*B1')
 
     expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 6 })
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 12 })
     expect(engine.getDependencies('Sheet1', 'A1').directDependents).toContain('Sheet1!C1')
     expect(engine.getDependencies('Sheet1', 'C1').directDependents).toContain('Sheet1!D1')
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      topoRepairs: 0,
+      topoRepairAffectedFormulas: 0,
+    })
   })
 
   it('binds direct criteria descriptors for supported conditional aggregate families', async () => {

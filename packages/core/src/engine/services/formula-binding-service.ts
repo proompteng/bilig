@@ -428,43 +428,6 @@ function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
   }
 }
 
-function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, right: RuntimeDirectScalarOperand | undefined): boolean {
-  if (left === right) {
-    return true
-  }
-  if (!left || !right || left.kind !== right.kind) {
-    return false
-  }
-  if (left.kind === 'cell') {
-    return right.kind === 'cell' && left.cellIndex === right.cellIndex
-  }
-  if (left.kind === 'error') {
-    return right.kind === 'error' && left.code === right.code
-  }
-  return right.kind === 'literal-number' && left.value === right.value
-}
-
-function directScalarStructureEqual(
-  left: RuntimeDirectScalarDescriptor | undefined,
-  right: RuntimeDirectScalarDescriptor | undefined,
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (!left || !right || left.kind !== right.kind) {
-    return false
-  }
-  if (left.kind === 'abs') {
-    return right.kind === 'abs' && directScalarOperandEqual(left.operand, right.operand)
-  }
-  return (
-    right.kind === 'binary' &&
-    left.operator === right.operator &&
-    directScalarOperandEqual(left.left, right.left) &&
-    directScalarOperandEqual(left.right, right.right)
-  )
-}
-
 function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
   if (!node) {
     return undefined
@@ -563,7 +526,6 @@ function hasInPlaceDependencyRebindShape(existing: RuntimeFormula, prepared: Pre
     prepared.directLookup === undefined &&
     existing.directAggregate === undefined &&
     prepared.directAggregate === undefined &&
-    directScalarStructureEqual(existing.directScalar, prepared.directScalar) &&
     existing.directCriteria === undefined &&
     prepared.directCriteria === undefined
   )
@@ -2224,7 +2186,6 @@ export function createEngineFormulaBindingService(args: {
       !stringArrayEqual(existing.compiled.symbolicSpills, prepared.compiled.symbolicSpills) ||
       !directLookupStructureEqual(existing.directLookup, prepared.directLookup) ||
       !directAggregateStructureEqual(existing.directAggregate, prepared.directAggregate) ||
-      !directScalarStructureEqual(existing.directScalar, prepared.directScalar) ||
       !directCriteriaStructureEqual(existing.directCriteria, prepared.directCriteria)
 
     if (existing && !topologyChanged) {
@@ -2265,7 +2226,7 @@ export function createEngineFormulaBindingService(args: {
     }
     if (existing && hasInPlaceDependencyRebindShape(existing, prepared)) {
       updateFormulaDependenciesInPlaceNow(cellIndex, existing, prepared, ownerSheetName, source)
-      return true
+      return topologyChanged
     }
     if (existing) {
       clearFormulaNow(cellIndex)
