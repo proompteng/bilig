@@ -4990,7 +4990,9 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 5 })
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 10 })
 
+    engine.resetPerformanceCounters()
     engine.moveColumns('Sheet1', 1, 1, 0)
+    expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
 
     expect(engine.getCell('Sheet1', 'C1').formula).toBe('B1+A1')
     expect(engine.getCell('Sheet1', 'D1').formula).toBe('C1*2')

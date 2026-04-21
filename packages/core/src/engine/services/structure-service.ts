@@ -494,7 +494,7 @@ export function createEngineStructureService(args: {
     transform: StructuralAxisTransform,
   ): string => rewriteFormulaForStructuralTransform(source, ownerSheetName, sheetName, transform)
 
-  const canDeferStructuralDirectCellInsert = (formula: RuntimeFormula): boolean =>
+  const canDeferStructuralDirectCellTransform = (formula: RuntimeFormula): boolean =>
     formula.structuralSourceTransform === undefined &&
     formula.directLookup === undefined &&
     formula.directAggregate === undefined &&
@@ -647,8 +647,8 @@ export function createEngineStructureService(args: {
         !touchesChangedName &&
         !touchesChangedTable &&
         !shouldBypassTemplateStructuralRewrite &&
-        argsForResolve.transform.kind === 'insert' &&
-        canDeferStructuralDirectCellInsert(formula)
+        argsForResolve.transform.kind !== 'delete' &&
+        canDeferStructuralDirectCellTransform(formula)
       ) {
         formula.structuralSourceTransform = {
           ownerSheetName,
@@ -1127,7 +1127,7 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return
       }
-      if (argsForImpact.transform.kind === 'insert' && canDeferStructuralDirectCellInsert(formula)) {
+      if (argsForImpact.transform.kind !== 'delete' && canDeferStructuralDirectCellTransform(formula)) {
         formula.structuralSourceTransform = {
           ownerSheetName,
           targetSheetName: argsForImpact.sheetName,
