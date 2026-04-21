@@ -394,7 +394,7 @@ function runPlaywright(args: string[]): void {
     },
   })
   if (result.exitCode !== 0) {
-    process.exit(result.exitCode ?? 1)
+    throw new Error(`playwright test ${args.join(' ')} failed with exit code ${result.exitCode ?? 1}`)
   }
 }
 
@@ -582,6 +582,9 @@ if (browserStack === 'compose') {
   await runComposePlaywright()
 } else {
   terminatePreviewServers()
-  runConfiguredPlaywrightSuites()
-  terminatePreviewServers()
+  try {
+    runConfiguredPlaywrightSuites()
+  } finally {
+    terminatePreviewServers()
+  }
 }
