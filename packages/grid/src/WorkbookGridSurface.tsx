@@ -114,6 +114,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     (geometry: NonNullable<typeof v2Geometry>) =>
       buildDynamicGridOverlayPacket({
         geometry,
+        hoveredCell: renderState.hoverState.cell,
         selectionRange: null,
         showFillHandle: false,
         resizeGuideColumn: resolveResizeGuideColumn({
@@ -127,7 +128,13 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           header: renderState.hoverState.header,
         }),
       }),
-    [renderState.activeResizeColumn, renderState.activeResizeRow, renderState.hoverState.cursor, renderState.hoverState.header],
+    [
+      renderState.activeResizeColumn,
+      renderState.activeResizeRow,
+      renderState.hoverState.cell,
+      renderState.hoverState.cursor,
+      renderState.hoverState.header,
+    ],
   )
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])

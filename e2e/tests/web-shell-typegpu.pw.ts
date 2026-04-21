@@ -276,6 +276,67 @@ test('main workbook shell keeps header labels and body text visible while scroll
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
+test('main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
+  await waitForWorkbookReady(page)
+  await waitForBenchmarkCorpus(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const grid = await page.getByTestId('sheet-grid').boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+  await page.mouse.move(grid.x + PRODUCT_ROW_MARKER_WIDTH + 180, grid.y + PRODUCT_HEADER_HEIGHT + 96)
+
+  const initialSequence = await page.evaluate(() => {
+    return (
+      (
+        window as Window & { __biligGpuReadbackInspector?: { readonly getSequence: () => number } }
+      ).__biligGpuReadbackInspector?.getSequence() ?? 0
+    )
+  })
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    if (!(viewport instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not a div')
+    }
+    viewport.scrollLeft = 2_600
+    viewport.scrollTop = 520
+    viewport.dispatchEvent(new Event('scroll'))
+  })
+  await waitForReadbackSequence(page, initialSequence)
+
+  const readback = await waitForReadback(
+    page,
+    {
+      points: [],
+      regions: [
+        { name: 'columnHeaderText', x0: PRODUCT_ROW_MARKER_WIDTH, y0: 0, x1: 360, y1: PRODUCT_HEADER_HEIGHT },
+        { name: 'rowHeaderText', x0: 0, y0: PRODUCT_HEADER_HEIGHT, x1: PRODUCT_ROW_MARKER_WIDTH, y1: 220 },
+        { name: 'bodyText', x0: PRODUCT_ROW_MARKER_WIDTH, y0: PRODUCT_HEADER_HEIGHT, x1: 420, y1: 240 },
+      ],
+    },
+    (result) =>
+      result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20,
+  )
+
+  expect(readback.darkPixelCounts.columnHeaderText).toBeGreaterThan(10)
+  expect(readback.darkPixelCounts.rowHeaderText).toBeGreaterThan(5)
+  expect(readback.darkPixelCounts.bodyText).toBeGreaterThan(20)
+
+  await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-hover-scroll-readback.png', 'main-workbook-grid-hover-scroll-readback')
+})
+
 test('main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 900, height: 680 })
   await installTypeGpuReadbackHarness(page)

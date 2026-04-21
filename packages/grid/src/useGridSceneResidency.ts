@@ -7,7 +7,7 @@ export function canUseWorkerResidentPaneScenes(input: {
   readonly hasHoverState: boolean
   readonly hasActiveHeaderDrag: boolean
 }): boolean {
-  return input.workerResidentPaneScenes.length > 0 && !input.requiresLiveViewportState && !input.hasHoverState && !input.hasActiveHeaderDrag
+  return input.workerResidentPaneScenes.length > 0 && !input.requiresLiveViewportState && !input.hasActiveHeaderDrag
 }
 
 export function noteWorkerResidentPaneScenesApplied(workerResidentPaneScenes: readonly WorkbookPaneScenePacket[]): void {

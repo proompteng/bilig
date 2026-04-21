@@ -24,6 +24,7 @@ describe('dynamic overlay packet', () => {
 
     const overlay = buildDynamicGridOverlayPacket({
       geometry,
+      hoveredCell: [3, 3],
       resizeGuideColumn: 2,
       resizeGuideRow: 2,
       selectionRange: { x: 1, y: 1, width: 2, height: 2 },
@@ -35,6 +36,7 @@ describe('dynamic overlay packet', () => {
       expect.arrayContaining([
         expect.objectContaining({ x: 146, y: 44, width: 150, height: 30 }),
         expect.objectContaining({ x: 292, y: 70, width: 8, height: 8 }),
+        expect.objectContaining({ x: 297, y: 75, width: 98, height: 18 }),
       ]),
     )
     expect(overlay.gpuScene.borderRects).toEqual(

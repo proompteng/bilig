@@ -11,6 +11,7 @@ export interface DynamicGridOverlayPacket {
 export function buildDynamicGridOverlayPacket(input: {
   readonly geometry: GridGeometrySnapshot
   readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
+  readonly hoveredCell?: readonly [number, number] | null | undefined
   readonly showFillHandle: boolean
   readonly resizeGuideColumn?: number | null | undefined
   readonly resizeGuideRow?: number | null | undefined
@@ -23,6 +24,12 @@ export function buildDynamicGridOverlayPacket(input: {
     geometry: input.geometry,
     selectionRange: input.selectionRange,
     showFillHandle: input.showFillHandle,
+  })
+  appendHoverOverlay({
+    fillRects,
+    geometry: input.geometry,
+    hoveredCell: input.hoveredCell ?? null,
+    selectionRange: input.selectionRange,
   })
   appendResizeGuides({
     borderRects,
@@ -38,6 +45,38 @@ export function buildDynamicGridOverlayPacket(input: {
     },
     textScene: { items: [] },
   }
+}
+
+function appendHoverOverlay(input: {
+  readonly geometry: GridGeometrySnapshot
+  readonly hoveredCell: readonly [number, number] | null
+  readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
+  readonly fillRects: GridGpuRect[]
+}): void {
+  if (!input.hoveredCell) {
+    return
+  }
+  const [col, row] = input.hoveredCell
+  if (
+    input.selectionRange &&
+    col >= input.selectionRange.x &&
+    col < input.selectionRange.x + input.selectionRange.width &&
+    row >= input.selectionRange.y &&
+    row < input.selectionRange.y + input.selectionRange.height
+  ) {
+    return
+  }
+  const rect = input.geometry.cellScreenRect(col, row)
+  if (!rect) {
+    return
+  }
+  input.fillRects.push({
+    x: rect.x + 1,
+    y: rect.y + 1,
+    width: Math.max(0, rect.width - 2),
+    height: Math.max(0, rect.height - 2),
+    color: parseGpuColor('rgba(31, 122, 67, 0.05)'),
+  })
 }
 
 function appendSelectionOverlay(input: {

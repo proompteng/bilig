@@ -24,7 +24,7 @@ describe('grid hook boundary helpers', () => {
     ])
   })
 
-  test('keeps worker scenes behind live interaction states', () => {
+  test('keeps worker scenes behind live interaction states without blocking hover overlays', () => {
     const workerResidentPaneScenes = [
       {
         generation: 1,
@@ -48,6 +48,14 @@ describe('grid hook boundary helpers', () => {
       canUseWorkerResidentPaneScenes({
         hasActiveHeaderDrag: false,
         hasHoverState: true,
+        requiresLiveViewportState: false,
+        workerResidentPaneScenes,
+      }),
+    ).toBe(true)
+    expect(
+      canUseWorkerResidentPaneScenes({
+        hasActiveHeaderDrag: true,
+        hasHoverState: false,
         requiresLiveViewportState: false,
         workerResidentPaneScenes,
       }),
