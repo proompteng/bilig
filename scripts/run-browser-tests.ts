@@ -357,24 +357,28 @@ function terminatePreviewServers(): void {
   const ports = [...DEFAULT_PREVIEW_PORTS, Number.parseInt(e2eWebPort, 10), Number.parseInt(e2eSyncServerPort, 10)].filter(
     (port) => Number.isInteger(port) && port > 0,
   )
-  const pids = Array.from(new Set(ports.flatMap((port) => getListeningPids(port))))
-  if (pids.length === 0) {
-    return
-  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const pids = Array.from(new Set(ports.flatMap((port) => getListeningPids(port))))
+    if (pids.length === 0) {
+      return
+    }
 
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM')
-    } catch {}
-  }
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch {}
+    }
 
-  sleep(300)
+    sleep(300)
 
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 0)
-      process.kill(pid, 'SIGKILL')
-    } catch {}
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 0)
+        process.kill(pid, 'SIGKILL')
+      } catch {}
+    }
+
+    sleep(100)
   }
 }
 
