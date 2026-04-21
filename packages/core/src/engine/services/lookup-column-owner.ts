@@ -1,7 +1,7 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { RuntimeColumnOwner } from './runtime-column-store-service.js'
 
-const MAX_COLUMN_OWNER_SPAN = 65_536
+const MAX_COLUMN_OWNER_SPAN = 1_048_576
 
 const EMPTY_KIND = 0
 const NUMERIC_KIND = 1
@@ -518,7 +518,7 @@ export function buildLookupColumnOwner(args: {
 
   const kindCodes = new Uint8Array(length)
   const numericValues = new Float64Array(length)
-  const textValues = Array.from({ length }, () => '')
+  const textValues: string[] = []
 
   args.owner.pages.forEach((page) => {
     for (let localRow = 0; localRow < page.tags.length; localRow += 1) {
@@ -611,7 +611,11 @@ export function applyLookupColumnOwnerLiteralWrite(args: {
   const previousKind = decodeComparableKindCode(args.owner.kindCodes[offset])
   args.owner.kindCodes[offset] = kindCodeForValue(args.write.newValue)
   args.owner.numericValues[offset] = numericValueForValue(args.write.newValue)
-  args.owner.textValues[offset] = textValueForValue(args.write.newValue, args.normalizeStringId, args.write.newStringId)
+  if (args.write.newValue.tag === ValueTag.String) {
+    args.owner.textValues[offset] = textValueForValue(args.write.newValue, args.normalizeStringId, args.write.newStringId)
+  } else if (offset < args.owner.textValues.length) {
+    args.owner.textValues[offset] = ''
+  }
   if (args.owner.summariesDirty) {
     initializeApproximateLookupSummaries(args.owner)
   }

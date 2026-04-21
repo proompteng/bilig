@@ -3,6 +3,7 @@ import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
+import type { RuntimeColumnOwner } from '../engine/services/runtime-column-store-service.js'
 import {
   applyLookupColumnOwnerLiteralWrite,
   buildLookupColumnOwner,
@@ -18,6 +19,34 @@ import {
 function setStoredCellValue(workbook: WorkbookStore, strings: StringPool, sheetName: string, address: string, value: CellValue): void {
   const cellIndex = workbook.ensureCell(sheetName, address)
   workbook.cellStore.setValue(cellIndex, value, value.tag === ValueTag.String ? strings.intern(value.value) : 0)
+}
+
+function createDenseNumericRuntimeColumnOwner(length: number): RuntimeColumnOwner {
+  const tags = new Uint8Array(length)
+  const numbers = new Float64Array(length)
+  tags.fill(ValueTag.Number)
+  for (let row = 0; row < length; row += 1) {
+    numbers[row] = row + 1
+  }
+  return {
+    sheetName: 'Sheet1',
+    col: 0,
+    columnVersion: 1,
+    structureVersion: 1,
+    sheetColumnVersions: new Uint32Array([1]),
+    pages: new Map([
+      [
+        0,
+        {
+          rowStart: 0,
+          tags,
+          numbers,
+          stringIds: new Uint32Array(length),
+          errors: new Uint16Array(length),
+        },
+      ],
+    ]),
+  }
 }
 
 describe('lookup column owner helpers', () => {
@@ -60,6 +89,47 @@ describe('lookup column owner helpers', () => {
     })
     expect(supportsNumericApproximateRange(owner!, 0, 3, 1)).toBe(true)
     expect(supportsNumericApproximateRange(owner!, 0, 3, -1)).toBe(false)
+  })
+
+  it('keeps owner-backed exact and approximate lookup available past 65k rows', () => {
+    const length = 70_000
+    const owner = buildLookupColumnOwner({
+      owner: createDenseNumericRuntimeColumnOwner(length),
+      normalizeStringId: () => '',
+    })
+
+    expect(owner).toBeDefined()
+    expect(owner!.rowStart).toBe(0)
+    expect(owner!.rowEnd).toBe(length - 1)
+    expect(owner!.length).toBe(length)
+    expect(owner!.textValues.length).toBe(0)
+    expect(findExactMatchInRange(owner!, `n:${length}`, 0, length - 1, 1)).toBe(length - 1)
+    expect(findExactMatchInRange(owner!, `n:${length}`, 0, length - 1, -1)).toBe(length - 1)
+    expect(summarizeExactRange(owner!, 0, length - 1)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: 1,
+      uniformStep: 1,
+    })
+    expect(summarizeApproximateRange(owner!, 0, length - 1)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: 1,
+      uniformStep: 1,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: length - 1,
+          oldValue: { tag: ValueTag.Number, value: length },
+          newValue: { tag: ValueTag.Number, value: length + 1 },
+        },
+        normalizeStringId: () => '',
+      }),
+    ).toBe(true)
+    expect(owner!.textValues.length).toBe(0)
+    expect(findExactMatchInRange(owner!, `n:${length + 1}`, 0, length - 1, 1)).toBe(length - 1)
   })
 
   it('updates text owners in place and tracks text-sorted summaries', () => {
