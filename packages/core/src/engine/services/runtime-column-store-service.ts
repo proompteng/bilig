@@ -64,6 +64,13 @@ export interface EngineRuntimeColumnStoreService {
     colStart: number
     colEnd: number
   }) => CellValue[]
+  readonly readRangeValueMatrix: (request: {
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    colStart: number
+    colEnd: number
+  }) => CellValue[][]
   readonly normalizeStringId: (stringId: number) => string
   readonly normalizeLookupText: (value: Extract<CellValue, { tag: ValueTag.String }>) => string
 }
@@ -358,6 +365,18 @@ export function createEngineRuntimeColumnStoreService(args: {
         }
       }
       return values
+    },
+    readRangeValueMatrix({ sheetName, rowStart, rowEnd, colStart, colEnd }) {
+      const width = colEnd - colStart + 1
+      const height = rowEnd - rowStart + 1
+      const rows: CellValue[][] = Array.from({ length: height }, () => [])
+      for (let colOffset = 0; colOffset < width; colOffset += 1) {
+        const slice = getColumnSlice({ sheetName, rowStart, rowEnd, col: colStart + colOffset })
+        for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+          rows[rowOffset]![colOffset] = materializeCellValueFromSlice(slice, rowOffset)
+        }
+      }
+      return rows
     },
     normalizeStringId,
     normalizeLookupText(value) {

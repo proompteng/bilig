@@ -633,6 +633,9 @@ describe('createExactColumnIndexService', () => {
       readRangeValues() {
         return []
       },
+      readRangeValueMatrix() {
+        return []
+      },
       normalizeStringId(stringId) {
         return strings.get(stringId).toUpperCase()
       },

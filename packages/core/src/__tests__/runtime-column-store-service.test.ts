@@ -140,6 +140,21 @@ describe('createEngineRuntimeColumnStoreService', () => {
       { tag: ValueTag.Boolean, value: false },
       { tag: ValueTag.Empty },
     ])
+    expect(
+      runtimeColumnStore.readRangeValueMatrix({
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toEqual([
+      [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: 'pear', stringId: expect.any(Number) },
+      ],
+      [{ tag: ValueTag.Boolean, value: false }, { tag: ValueTag.Empty }],
+    ])
   })
 
   it('invalidates cached column slices after structural row remaps', () => {

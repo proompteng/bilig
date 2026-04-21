@@ -128,26 +128,13 @@ export function createEngineReadService(args: {
 
   const readRangeValueMatrix = (range: CellRangeRef): CellValue[][] => {
     const bounds = normalizeRange(range)
-    const width = bounds.endCol - bounds.startCol + 1
-    const height = bounds.endRow - bounds.startRow + 1
-    const flatValues = args.runtimeColumnStore.readRangeValues({
+    return args.runtimeColumnStore.readRangeValueMatrix({
       sheetName: range.sheetName,
       rowStart: bounds.startRow,
       rowEnd: bounds.endRow,
       colStart: bounds.startCol,
       colEnd: bounds.endCol,
     })
-    const rows = Array.from<CellValue[]>({ length: height })
-
-    for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-      const values = Array.from<CellValue>({ length: width })
-      for (let colOffset = 0; colOffset < width; colOffset += 1) {
-        values[colOffset] = flatValues[rowOffset * width + colOffset] ?? emptyValue()
-      }
-      rows[rowOffset] = values
-    }
-
-    return rows
   }
 
   const getDependencies = (sheetName: string, address: string): DependencySnapshot => {
