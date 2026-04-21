@@ -4746,6 +4746,23 @@ describe('SpreadsheetEngine', () => {
     }
   })
 
+  it('retargets direct aggregate region subscriptions across structural column inserts', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structural-aggregate-columns' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A3' }, [[1], [2], [3]])
+    engine.setCellFormula('Sheet1', 'D1', 'SUM(A1:A3)')
+
+    engine.insertColumns('Sheet1', 0, 1)
+
+    expect(engine.getCell('Sheet1', 'E1').formula).toBe('SUM(B1:B3)')
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 6 })
+
+    engine.setCellValue('Sheet1', 'B2', 20)
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 24 })
+  })
+
   it('rewrites metadata-backed ranges, names, freeze panes, and pivot sources across structural row edits', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()

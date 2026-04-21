@@ -71,4 +71,31 @@ describe('RegionGraph', () => {
 
     expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 20, 0)]).toEqual([20])
   })
+
+  it('replaces a single formula region subscription without disturbing other subscribers', () => {
+    const workbook = new WorkbookStore('region-graph-replace-single')
+    const sheet = workbook.createSheet('Sheet1')
+    const regionGraph = createRegionGraph({ workbook })
+
+    const first = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 2,
+      col: 0,
+    })
+    const second = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 3,
+      rowEnd: 5,
+      col: 0,
+    })
+
+    regionGraph.replaceFormulaSubscriptions(10, [first])
+    regionGraph.replaceFormulaSubscriptions(20, [first])
+    regionGraph.replaceSingleFormulaSubscription(10, first, second)
+
+    expect(regionGraph.getFormulaSubscriptions(10)).toEqual([second])
+    expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 1, 0)]).toEqual([20])
+    expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 4, 0)]).toEqual([10])
+  })
 })

@@ -448,6 +448,24 @@ export function createEngineServiceRuntime(args: {
     collectFormulaCellsReferencingSheet: (sheetName) => binding.collectFormulaCellsReferencingSheetNow(sheetName),
     collectFormulaCellsForDefinedNames: (names) => binding.collectFormulaCellsForDefinedNamesNow(names),
     collectFormulaCellsForTables: (tableNames) => binding.collectFormulaCellsForTablesNow(tableNames),
+    retargetDirectAggregateFormulaForStructuralTransform: ({ cellIndex, ownerSheetName, preservesValue }, targetSheetName, transform) =>
+      binding.retargetDirectAggregateFormulaForStructuralTransformNow(
+        cellIndex,
+        ownerSheetName,
+        targetSheetName,
+        transform,
+        preservesValue === true,
+      ),
+    rewriteFormulaCompiledPreservingBinding: ({ cellIndex, ownerSheetName, ownerRow, ownerCol, source, compiled, templateId }) => {
+      if (!compiled) {
+        return false
+      }
+      return binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateId, {
+        sheetName: ownerSheetName,
+        row: ownerRow,
+        col: ownerCol,
+      })
+    },
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
       pending.forEach(

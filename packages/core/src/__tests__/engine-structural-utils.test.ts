@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   inverseMapStructuralAxisIndex,
+  mapStructuralAxisInterval,
   mapStructuralAxisIndex,
   mapStructuralBoundary,
   structuralTransformForOp,
@@ -76,6 +77,7 @@ describe('engine structural utils', () => {
     expect(mapStructuralAxisIndex(6, transform)).toBe(2)
     expect(inverseMapStructuralAxisIndex(1, transform)).toBe(5)
     expect(inverseMapStructuralAxisIndex(3, transform)).toBe(1)
+    expect(inverseMapStructuralAxisIndex(0, transform)).toBe(0)
   })
 
   it('maps moved spans when the target is after the source', () => {
@@ -94,6 +96,46 @@ describe('engine structural utils', () => {
     expect(mapStructuralBoundary(3, transform)).toBe(6)
     expect(inverseMapStructuralAxisIndex(5, transform)).toBe(2)
     expect(inverseMapStructuralAxisIndex(2, transform)).toBe(4)
+    expect(inverseMapStructuralAxisIndex(8, transform)).toBe(8)
+    expect(inverseMapStructuralAxisIndex(3, { kind: 'move', axis: 'column', start: 2, count: 1, target: 2 })).toBe(3)
+  })
+
+  it('maps structural intervals across insert, delete, and move transforms', () => {
+    expect(mapStructuralAxisInterval(5, 7, { kind: 'insert', axis: 'row', start: 3, count: 2 })).toEqual({
+      start: 7,
+      end: 9,
+    })
+    expect(mapStructuralAxisInterval(1, 5, { kind: 'insert', axis: 'row', start: 3, count: 2 })).toEqual({
+      start: 1,
+      end: 7,
+    })
+    expect(mapStructuralAxisInterval(1, 2, { kind: 'insert', axis: 'row', start: 3, count: 2 })).toEqual({
+      start: 1,
+      end: 2,
+    })
+
+    expect(mapStructuralAxisInterval(5, 7, { kind: 'delete', axis: 'row', start: 2, count: 2 })).toEqual({
+      start: 3,
+      end: 5,
+    })
+    expect(mapStructuralAxisInterval(0, 1, { kind: 'delete', axis: 'row', start: 2, count: 2 })).toEqual({
+      start: 0,
+      end: 1,
+    })
+    expect(mapStructuralAxisInterval(1, 5, { kind: 'delete', axis: 'row', start: 2, count: 2 })).toEqual({
+      start: 1,
+      end: 3,
+    })
+    expect(mapStructuralAxisInterval(2, 3, { kind: 'delete', axis: 'row', start: 2, count: 2 })).toBeUndefined()
+
+    expect(mapStructuralAxisInterval(1, 5, { kind: 'move', axis: 'row', start: 6, count: 2, target: 2 })).toEqual({
+      start: 1,
+      end: 7,
+    })
+    expect(mapStructuralAxisInterval(2, 8, { kind: 'move', axis: 'row', start: 2, count: 2, target: 6 })).toEqual({
+      start: 2,
+      end: 8,
+    })
   })
 
   it('throws for unsupported structural op and transform variants', () => {
@@ -107,6 +149,12 @@ describe('engine structural utils', () => {
       'Unhandled structural transform case: {"kind":"noop","sheetName":"Sheet1","start":0,"count":1}',
     )
     expect(() => mapStructuralAxisIndex(0, invalidTransform)).toThrow(
+      'Unhandled structural transform case: {"kind":"noop","axis":"row","start":0,"count":1}',
+    )
+    expect(() => inverseMapStructuralAxisIndex(0, invalidTransform)).toThrow(
+      'Unhandled structural transform case: {"kind":"noop","axis":"row","start":0,"count":1}',
+    )
+    expect(() => mapStructuralAxisInterval(0, 1, invalidTransform)).toThrow(
       'Unhandled structural transform case: {"kind":"noop","axis":"row","start":0,"count":1}',
     )
   })

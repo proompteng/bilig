@@ -8,6 +8,7 @@ import {
   type ParsedCellReferenceInfo,
   type ParsedDependencyReference,
   type ParsedRangeReferenceInfo,
+  type StructuralAxisTransform,
   parseCellAddress,
   parseRangeAddress,
   renameFormulaSheetReferences,
@@ -35,6 +36,7 @@ import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js
 import type { FormulaFamilyStats, FormulaFamilyStore } from '../../formula/formula-family-store.js'
 import type { FormulaInstanceTable } from '../../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
+import { mapStructuralAxisInterval } from '../../engine-structural-utils.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 import { retargetFormulaInstance } from '../../formula/structural-retargeting.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
@@ -105,6 +107,13 @@ export interface EngineFormulaBindingService {
     compiled: CompiledFormula,
     templateId?: number,
     ownerPosition?: FormulaOwnerPosition,
+  ) => boolean
+  readonly retargetDirectAggregateFormulaForStructuralTransformNow: (
+    cellIndex: number,
+    ownerSheetName: string,
+    targetSheetName: string,
+    transform: StructuralAxisTransform,
+    preservesValue: boolean,
   ) => boolean
   readonly bindInitialFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void
   readonly clearFormulaNow: (cellIndex: number) => boolean
@@ -382,6 +391,41 @@ function directAggregateStructureEqual(
     left.col === right.col &&
     left.length === right.length
   )
+}
+
+function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
+  readonly descriptor: RuntimeDirectAggregateDescriptor
+  readonly targetSheetName: string
+  readonly transform: StructuralAxisTransform
+  readonly regionGraph: RegionGraph
+}): RuntimeDirectAggregateDescriptor | undefined {
+  if (args.descriptor.sheetName !== args.targetSheetName) {
+    return undefined
+  }
+  const nextRows =
+    args.transform.axis === 'row'
+      ? mapStructuralAxisInterval(args.descriptor.rowStart, args.descriptor.rowEnd, args.transform)
+      : { start: args.descriptor.rowStart, end: args.descriptor.rowEnd }
+  const nextCols =
+    args.transform.axis === 'column'
+      ? mapStructuralAxisInterval(args.descriptor.col, args.descriptor.col, args.transform)
+      : { start: args.descriptor.col, end: args.descriptor.col }
+  if (!nextRows || !nextCols || nextCols.start !== nextCols.end) {
+    return undefined
+  }
+  return {
+    ...args.descriptor,
+    regionId: args.regionGraph.internSingleColumnRegion({
+      sheetName: args.descriptor.sheetName,
+      rowStart: nextRows.start,
+      rowEnd: nextRows.end,
+      col: nextCols.start,
+    }),
+    rowStart: nextRows.start,
+    rowEnd: nextRows.end,
+    col: nextCols.start,
+    length: nextRows.end - nextRows.start + 1,
+  }
 }
 
 function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, right: RuntimeDirectScalarOperand | undefined): boolean {
@@ -1646,6 +1690,53 @@ export function createEngineFormulaBindingService(args: {
     return true
   }
 
+  const retargetDirectAggregateFormulaForStructuralTransformNow = (
+    cellIndex: number,
+    ownerSheetName: string,
+    targetSheetName: string,
+    transform: StructuralAxisTransform,
+    preservesValue: boolean,
+  ): boolean => {
+    const existing = args.state.formulas.get(cellIndex)
+    if (!existing?.directAggregate) {
+      return false
+    }
+    const previousDirectAggregate = existing.directAggregate
+    const nextDirectAggregate = rewriteDirectAggregateDescriptorForStructuralTransform({
+      descriptor: previousDirectAggregate,
+      targetSheetName,
+      transform,
+      regionGraph: args.regionGraph,
+    })
+    if (!nextDirectAggregate) {
+      return false
+    }
+    existing.directAggregate = nextDirectAggregate
+    existing.structuralSourceTransform = {
+      ownerSheetName,
+      targetSheetName,
+      transform,
+      preservesValue,
+    }
+    if (previousDirectAggregate.col !== nextDirectAggregate.col) {
+      const aggregateSheet = args.state.workbook.getSheet(nextDirectAggregate.sheetName)
+      if (aggregateSheet) {
+        removeTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(aggregateSheet.id, previousDirectAggregate.col),
+          cellIndex,
+        )
+        appendTrackedReverseEdge(
+          args.reverseState.reverseAggregateColumnEdges,
+          aggregateColumnDependencyKey(aggregateSheet.id, nextDirectAggregate.col),
+          cellIndex,
+        )
+      }
+    }
+    args.regionGraph.replaceSingleFormulaSubscription(cellIndex, previousDirectAggregate.regionId, nextDirectAggregate.regionId)
+    return true
+  }
+
   const isCellIndexMappedNow = (cellIndex: number): boolean => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
     const position = args.state.workbook.getCellPosition(cellIndex)
@@ -2716,6 +2807,7 @@ export function createEngineFormulaBindingService(args: {
     bindPreparedFormulaNow,
     rewriteFormulaCompiledPreservingBindingNow,
     rewriteFormulaMetadataPreservingRuntimeNow,
+    retargetDirectAggregateFormulaForStructuralTransformNow,
     bindInitialFormulaNow,
     clearFormulaNow,
     invalidateFormulaNow,

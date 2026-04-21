@@ -31,6 +31,7 @@ export interface RegionGraph {
   }) => RegionId
   readonly getRegion: (regionId: RegionId) => SingleColumnRegionNode | undefined
   readonly replaceFormulaSubscriptions: (formulaCellIndex: number, regionIds: readonly RegionId[]) => void
+  readonly replaceSingleFormulaSubscription: (formulaCellIndex: number, previousRegionId: RegionId, nextRegionId: RegionId) => void
   readonly clearFormulaSubscriptions: (formulaCellIndex: number) => void
   readonly getFormulaSubscriptions: (formulaCellIndex: number) => readonly RegionId[]
   readonly prepareQueryIndices: () => void
@@ -239,6 +240,27 @@ export function createRegionGraph(args: {
         addRegionSubscription(formulaCellIndex, regionId)
       })
       formulaRegions.set(formulaCellIndex, next)
+    },
+    replaceSingleFormulaSubscription(formulaCellIndex, previousRegionId, nextRegionId) {
+      if (previousRegionId === nextRegionId) {
+        return
+      }
+      const previous = formulaRegions.get(formulaCellIndex)
+      if (!previous || previous.size !== 1 || !previous.has(previousRegionId)) {
+        if (previous) {
+          previous.forEach((regionId) => {
+            removeRegionSubscription(formulaCellIndex, regionId)
+          })
+        }
+        const next = new Set<RegionId>([nextRegionId])
+        addRegionSubscription(formulaCellIndex, nextRegionId)
+        formulaRegions.set(formulaCellIndex, next)
+        return
+      }
+      removeRegionSubscription(formulaCellIndex, previousRegionId)
+      previous.clear()
+      previous.add(nextRegionId)
+      addRegionSubscription(formulaCellIndex, nextRegionId)
     },
     clearFormulaSubscriptions(formulaCellIndex) {
       const previous = formulaRegions.get(formulaCellIndex)

@@ -268,6 +268,12 @@ export function createEngineStructureService(args: {
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
   readonly retargetRangeDependencies: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
   readonly rebindFormulaCells: (inputs: readonly StructuralFormulaRebindInput[]) => void
+  readonly retargetDirectAggregateFormulaForStructuralTransform: (
+    input: StructuralFormulaRebindInput,
+    targetSheetName: string,
+    transform: StructuralAxisTransform,
+  ) => boolean
+  readonly rewriteFormulaCompiledPreservingBinding: (input: StructuralFormulaRebindInput) => boolean
   readonly collectFormulaCellsOwnedBySheet: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsReferencingSheet: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsForDefinedNames: (names: readonly string[]) => readonly number[]
@@ -1378,9 +1384,8 @@ export function createEngineStructureService(args: {
       if (
         formula.structuralSourceTransform === undefined ||
         formula.directLookup !== undefined ||
-        formula.directAggregate !== undefined ||
         formula.directCriteria !== undefined ||
-        formula.rangeDependencies.length !== 0 ||
+        (formula.directAggregate === undefined && formula.rangeDependencies.length !== 0) ||
         !isCellIndexMapped(cellIndex)
       ) {
         return
@@ -1552,25 +1557,56 @@ export function createEngineStructureService(args: {
             ownerPositions: impactedFormulas.ownerPositions,
           })
           const rebindInputs = rebindResolution.inputs
-          if (args.state.counters && rebindInputs.length > 0) {
-            addEngineCounter(args.state.counters, 'structuralFormulaRebindInputs', rebindInputs.length)
+          const directRetargetedFormulaCellIndices: number[] = []
+          const directRetargetedPreservedFormulaCellIndices: number[] = []
+          const remainingRebindInputs: StructuralFormulaRebindInput[] = []
+          rebindInputs.forEach((input) => {
+            const formula = args.state.formulas.get(input.cellIndex)
+            const directAggregateRetargeted =
+              input.preservesBinding === true &&
+              formula?.directAggregate !== undefined &&
+              args.retargetDirectAggregateFormulaForStructuralTransform(input, sheetName, transform)
+            if (directAggregateRetargeted) {
+              hasDeferredStructuralFormulaSources = true
+            }
+            if (
+              directAggregateRetargeted ||
+              (input.preservesBinding === true &&
+                formula?.directAggregate !== undefined &&
+                input.compiled !== undefined &&
+                args.rewriteFormulaCompiledPreservingBinding(input))
+            ) {
+              directRetargetedFormulaCellIndices.push(input.cellIndex)
+              if (input.preservesValue) {
+                directRetargetedPreservedFormulaCellIndices.push(input.cellIndex)
+              }
+              return
+            }
+            remainingRebindInputs.push(input)
+          })
+          if (args.state.counters && remainingRebindInputs.length > 0) {
+            addEngineCounter(args.state.counters, 'structuralFormulaRebindInputs', remainingRebindInputs.length)
           }
           const formulaCellIndices = impactedFormulas.formulaCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex))
           const onlyDirectAggregateFormulaCells =
             formulaCellIndices.length > 0 &&
             formulaCellIndices.every((cellIndex) => args.state.formulas.get(cellIndex)?.directAggregate !== undefined)
-          args.rebindFormulaCells(rebindInputs)
-          const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
+          args.rebindFormulaCells(remainingRebindInputs)
+          const reboundFormulaCellIndices = new Set([
+            ...directRetargetedFormulaCellIndices,
+            ...remainingRebindInputs.map((input) => input.cellIndex),
+          ])
           const preservedFormulaCellIndices = new Set([
             ...impactedFormulas.preservedCellIndices,
             ...rebindResolution.preservedCellIndices,
-            ...rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex),
+            ...directRetargetedPreservedFormulaCellIndices,
+            ...remainingRebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex),
           ])
           const lostSurvivingFormulaCells = impactedFormulas.formulaCellIndices.some(
             (cellIndex) =>
               !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex) && !removedFormulaCellIndexSet.has(cellIndex),
           )
-          const hasNonPreservedRebind = rebindInputs.some((input) => input.preservesBinding !== true)
+          const hasNonPreservedRebind = remainingRebindInputs.some((input) => input.preservesBinding !== true)
           const deleteOnlyAcyclicRebind =
             transform.kind === 'delete' && !hadCycleFormulas && changedDefinedNames.size === 0 && changedTableNames.size === 0
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells

@@ -58,6 +58,84 @@ export function mapStructuralAxisIndex(index: number, transform: StructuralAxisT
   }
 }
 
+export function mapStructuralAxisInterval(
+  start: number,
+  end: number,
+  transform: StructuralAxisTransform,
+): { start: number; end: number } | undefined {
+  switch (transform.kind) {
+    case 'insert':
+      if (transform.start <= start) {
+        return { start: start + transform.count, end: end + transform.count }
+      }
+      if (transform.start <= end) {
+        return { start, end: end + transform.count }
+      }
+      return { start, end }
+    case 'delete': {
+      const deleteEnd = transform.start + transform.count - 1
+      if (deleteEnd < start) {
+        return { start: start - transform.count, end: end - transform.count }
+      }
+      if (transform.start > end) {
+        return { start, end }
+      }
+      const survivingStart = start < transform.start ? start : deleteEnd + 1
+      const survivingEnd = end > deleteEnd ? end : transform.start - 1
+      if (survivingStart > survivingEnd) {
+        return undefined
+      }
+      const nextStart = mapStructuralAxisIndex(survivingStart, transform)
+      const nextEnd = mapStructuralAxisIndex(survivingEnd, transform)
+      return nextStart === undefined || nextEnd === undefined ? undefined : { start: nextStart, end: nextEnd }
+    }
+    case 'move': {
+      const segments =
+        transform.target < transform.start
+          ? [
+              { start: 0, end: transform.target - 1, delta: 0 },
+              { start: transform.target, end: transform.start - 1, delta: transform.count },
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              { start: transform.start + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
+            ]
+          : [
+              { start: 0, end: transform.start - 1, delta: 0 },
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              {
+                start: transform.start + transform.count,
+                end: transform.target + transform.count - 1,
+                delta: -transform.count,
+              },
+              { start: transform.target + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
+            ]
+      let nextStart: number | undefined
+      let nextEnd: number | undefined
+      segments.forEach((segment) => {
+        const overlapStart = Math.max(start, segment.start)
+        const overlapEnd = Math.min(end, segment.end)
+        if (overlapStart > overlapEnd) {
+          return
+        }
+        const mappedStart = overlapStart + segment.delta
+        const mappedEnd = overlapEnd + segment.delta
+        nextStart = nextStart === undefined ? mappedStart : Math.min(nextStart, mappedStart)
+        nextEnd = nextEnd === undefined ? mappedEnd : Math.max(nextEnd, mappedEnd)
+      })
+      return nextStart === undefined || nextEnd === undefined ? undefined : { start: nextStart, end: nextEnd }
+    }
+    default:
+      return assertNever(transform)
+  }
+}
+
 export function inverseMapStructuralAxisIndex(index: number, transform: StructuralAxisTransform): number | undefined {
   switch (transform.kind) {
     case 'insert':
