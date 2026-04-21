@@ -7,7 +7,6 @@ import { createGlyphAtlas } from '../renderer/glyph-atlas.js'
 import { WorkbookPaneBufferCache } from '../renderer/pane-buffer-cache.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
 import { drawTypeGpuPanes } from '../renderer/typegpu-draw-pass.js'
-import { GridRenderScheduler } from '../renderer/grid-render-scheduler.js'
 import { syncTypeGpuPaneResources } from '../renderer/typegpu-resource-cache.js'
 import {
   createTypeGpuRenderer,
@@ -17,6 +16,7 @@ import {
 } from '../renderer/typegpu-renderer.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from '../renderer/typegpu-surface-manager.js'
 import type { GridCameraStore } from './gridCameraStore.js'
+import { GridRenderLoop } from './gridRenderLoop.js'
 
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
@@ -87,7 +87,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const paneBuffersRef = useRef(new WorkbookPaneBufferCache())
   const atlasRef = useRef(createGlyphAtlas())
   const surfaceStateRef = useRef(createTypeGpuSurfaceState())
-  const renderSchedulerRef = useRef<GridRenderScheduler | null>(null)
+  const renderLoopRef = useRef<GridRenderLoop | null>(null)
   const drawFrameRef = useRef<() => void>(() => {})
   const activeRef = useRef(active)
   const webGpuReadyRef = useRef(false)
@@ -257,8 +257,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       return
     }
     const scheduleDraw = () => {
-      renderSchedulerRef.current ??= new GridRenderScheduler()
-      renderSchedulerRef.current.requestDraw(drawFrameRef.current)
+      renderLoopRef.current ??= new GridRenderLoop()
+      renderLoopRef.current.requestDraw(drawFrameRef.current)
     }
     return scrollTransformStore.subscribe(scheduleDraw)
   }, [active, scrollTransformStore])
@@ -268,8 +268,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       return
     }
     const scheduleDraw = () => {
-      renderSchedulerRef.current ??= new GridRenderScheduler()
-      renderSchedulerRef.current.requestDraw(drawFrameRef.current)
+      renderLoopRef.current ??= new GridRenderLoop()
+      renderLoopRef.current.requestDraw(drawFrameRef.current)
     }
     return cameraStore.subscribe(scheduleDraw)
   }, [active, cameraStore])
@@ -277,8 +277,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   useEffect(() => {
     const canvas = canvasRef.current
     return () => {
-      renderSchedulerRef.current?.cancel()
-      renderSchedulerRef.current = null
+      renderLoopRef.current?.cancel()
+      renderLoopRef.current = null
       if (canvas) {
         canvas.width = 0
         canvas.height = 0
