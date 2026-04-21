@@ -47,6 +47,18 @@ function projectAxisEntryIds(entries: Array<{ id: string; index: number }>): Arr
 }
 
 describe('WorkbookStore', () => {
+  it('reads physical positions directly before structural edits and logical positions after edits', () => {
+    const workbook = new WorkbookStore('cell-position-fast-path')
+    workbook.createSheet('Sheet1')
+
+    const cellIndex = workbook.ensureCellRecord('Sheet1', 'B2').cellIndex
+    expect(workbook.getCellPosition(cellIndex)).toEqual({ sheetId: 1, row: 1, col: 1 })
+
+    workbook.insertColumns('Sheet1', 0, 1)
+
+    expect(workbook.getCellPosition(cellIndex)).toEqual({ sheetId: 1, row: 1, col: 2 })
+  })
+
   it('keeps logical cell lookups stable when metadata materializes structural axis entries', () => {
     const workbook = new WorkbookStore('logical-axis-stability')
     workbook.createSheet('Sheet1')

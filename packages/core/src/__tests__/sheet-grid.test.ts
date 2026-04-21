@@ -30,6 +30,38 @@ describe('SheetGrid', () => {
     expect(all.toSorted((left, right) => left - right)).toEqual([1, 2, 3])
   })
 
+  it('iterates physical range and column cache entries across blocks', () => {
+    const grid = new SheetGrid()
+    grid.set(0, 0, 1)
+    grid.set(0, 2, 2)
+    grid.set(129, 2, 3)
+    grid.set(130, 33, 4)
+
+    expect(grid.getPhysical(0, 2)).toBe(2)
+    expect(grid.getPhysical(5, 5)).toBe(-1)
+
+    const rangeEntries: Array<{ cellIndex: number; row: number; col: number }> = []
+    grid.forEachPhysicalRangeEntry(0, 1, 130, 33, (cellIndex, row, col) => {
+      rangeEntries.push({ cellIndex, row, col })
+    })
+
+    expect(rangeEntries).toEqual([
+      { cellIndex: 2, row: 0, col: 2 },
+      { cellIndex: 3, row: 129, col: 2 },
+      { cellIndex: 4, row: 130, col: 33 },
+    ])
+
+    const columnEntries: Array<{ cellIndex: number; row: number }> = []
+    grid.forEachPhysicalColumnEntry(2, (cellIndex, row) => {
+      columnEntries.push({ cellIndex, row })
+    })
+
+    expect(columnEntries).toEqual([
+      { cellIndex: 2, row: 0 },
+      { cellIndex: 3, row: 129 },
+    ])
+  })
+
   it('remaps only cells inside the requested axis scope', () => {
     const grid = new SheetGrid()
     grid.set(0, 0, 1)

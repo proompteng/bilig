@@ -220,6 +220,48 @@ describe('RangeAggregateCacheService', () => {
     expect(extended.prefixCount.subarray(0, 3)).toEqual(Uint32Array.from([1, 2, 3]))
   })
 
+  it('grows aggregate prefix buffers when an existing prefix extends past capacity', () => {
+    const values: CellValue[] = Array.from({ length: 24 }, (_, index) => ({ tag: ValueTag.Number, value: index + 1 }))
+    const getColumnSlice = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeSlice(values, request, 10, 2),
+    )
+    const workbook = new WorkbookStore('aggregate-cache-grow')
+    workbook.createSheet('Sheet1')
+    const sheet = workbook.getSheet('Sheet1')
+    if (!sheet) {
+      throw new Error('expected Sheet1 to exist')
+    }
+    sheet.columnVersions = Uint32Array.of(10)
+    sheet.structureVersion = 2
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        readRangeValueMatrix: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
+    })
+
+    const prefix = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 0, col: 0 })
+    const initialCapacity = prefix.prefixSums.length
+    const extended = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 23, col: 0 })
+
+    expect(extended).toBe(prefix)
+    expect(extended.prefixSums.length).toBeGreaterThan(initialCapacity)
+    expect(extended.prefixSums[23]).toBe(300)
+    expect(extended.prefixCount[23]).toBe(24)
+    expect(extended.prefixAverageCount[23]).toBe(24)
+  })
+
   it('keeps shifted-window prefixes anchored at their requested row start', () => {
     const values: CellValue[] = [
       { tag: ValueTag.Number, value: 1 },
@@ -351,5 +393,57 @@ describe('RangeAggregateCacheService', () => {
     const rebuilt = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 3, col: 0 })
     expect(rebuilt).not.toBe(prefix)
     expect(getColumnSlice).toHaveBeenCalledTimes(3)
+  })
+
+  it('drops stale aggregate prefixes when structure versions change or columns invalidate', () => {
+    const values: CellValue[] = [
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: 2 },
+    ]
+    const getColumnSlice = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeSlice(values, request, 20, 1),
+    )
+    const workbook = new WorkbookStore('aggregate-cache-stale')
+    workbook.createSheet('Sheet1')
+    const sheet = workbook.getSheet('Sheet1')
+    if (!sheet) {
+      throw new Error('expected Sheet1 to exist')
+    }
+    sheet.columnVersions = Uint32Array.of(20)
+    sheet.structureVersion = 1
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        readRangeValueMatrix: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
+    })
+
+    const prefix = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 1, col: 0 })
+    sheet.structureVersion = 2
+    aggregateStateStore.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 0,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 1 },
+      newValue: { tag: ValueTag.Number, value: 3 },
+    })
+    const rebuiltAfterStructureChange = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 1, col: 0 })
+    expect(rebuiltAfterStructureChange).not.toBe(prefix)
+
+    aggregateStateStore.invalidateColumn('Sheet1', 0)
+    const rebuiltAfterInvalidation = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 1, col: 0 })
+    expect(rebuiltAfterInvalidation).not.toBe(rebuiltAfterStructureChange)
+    aggregateStateStore.invalidateColumn('Sheet1', 1)
   })
 })
