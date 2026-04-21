@@ -2,7 +2,11 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { WorkbookPaneRendererV2 } from '../renderer-v2/WorkbookPaneRendererV2.js'
+import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
+import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
+import { getGridMetrics } from '../gridMetrics.js'
+import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import { WorkbookPaneRendererV2, resolveTypeGpuV2DrawScrollSnapshot } from '../renderer-v2/WorkbookPaneRendererV2.js'
 
 describe('WorkbookPaneRendererV2', () => {
   const originalResizeObserver = globalThis.ResizeObserver
@@ -75,6 +79,64 @@ describe('WorkbookPaneRendererV2', () => {
 
     await act(async () => {
       root.unmount()
+    })
+  })
+
+  test('derives draw scroll from live scroll and the current resident body viewport', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.columnWidth }),
+      dpr: 1,
+      gridMetrics: metrics,
+      hostHeight: 720,
+      hostWidth: 1280,
+      rows: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.rowHeight }),
+      scrollLeft: 0,
+      scrollTop: 0,
+      sheetName: 'Sheet1',
+    })
+    const makeBodyPane = (rowStart: number): WorkbookRenderPaneState => ({
+      contentOffset: { x: 0, y: 0 },
+      frame: { x: metrics.rowMarkerWidth, y: metrics.headerHeight, width: 1234, height: 696 },
+      generation: 1,
+      gpuScene: { borderRects: [], fillRects: [] },
+      paneId: 'body',
+      scrollAxes: { x: true, y: true },
+      surfaceSize: { width: 1234, height: 696 },
+      textScene: { items: [] },
+      viewport: { colStart: 0, colEnd: 127, rowStart, rowEnd: rowStart + 31 },
+    })
+
+    expect(
+      resolveTypeGpuV2DrawScrollSnapshot({
+        fallback: {
+          scrollLeft: 64 * metrics.columnWidth,
+          scrollTop: 20 * metrics.rowHeight,
+          tx: 0,
+          ty: 0,
+        },
+        geometry,
+        panes: [makeBodyPane(0)],
+      }),
+    ).toMatchObject({
+      renderTx: 64 * metrics.columnWidth,
+      renderTy: 20 * metrics.rowHeight,
+    })
+
+    expect(
+      resolveTypeGpuV2DrawScrollSnapshot({
+        fallback: {
+          scrollLeft: 64 * metrics.columnWidth,
+          scrollTop: 32 * metrics.rowHeight,
+          tx: 0,
+          ty: 0,
+        },
+        geometry,
+        panes: [makeBodyPane(32)],
+      }),
+    ).toMatchObject({
+      renderTx: 64 * metrics.columnWidth,
+      renderTy: 0,
     })
   })
 })

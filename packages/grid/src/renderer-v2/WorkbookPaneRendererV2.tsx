@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
-import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { createGlyphAtlas } from '../renderer/glyph-atlas.js'
 import { WorkbookPaneBufferCache } from '../renderer/pane-buffer-cache.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
@@ -50,6 +50,25 @@ function resolveSurfaceSize(host: HTMLElement): TypeGpuSurfaceSize {
   }
 }
 
+export function resolveTypeGpuV2DrawScrollSnapshot(input: {
+  readonly fallback: WorkbookGridScrollSnapshot
+  readonly geometry: GridGeometrySnapshot | null
+  readonly panes: readonly WorkbookRenderPaneState[]
+}): WorkbookGridScrollSnapshot {
+  const bodyPane = input.panes.find((pane) => pane.paneId === 'body' && pane.viewport)
+  if (!input.geometry || !bodyPane?.viewport) {
+    return input.fallback
+  }
+
+  const bodyWorldX = input.geometry.camera.frozenWidth + (input.fallback.scrollLeft ?? input.geometry.camera.bodyScrollX)
+  const bodyWorldY = input.geometry.camera.frozenHeight + (input.fallback.scrollTop ?? input.geometry.camera.bodyScrollY)
+  return {
+    ...input.fallback,
+    renderTx: bodyWorldX - input.geometry.columns.offsetOf(bodyPane.viewport.colStart),
+    renderTy: bodyWorldY - input.geometry.rows.offsetOf(bodyPane.viewport.rowStart),
+  }
+}
+
 export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   active,
   geometry,
@@ -69,6 +88,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const webGpuReadyRef = useRef(false)
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
+  const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore | null>(scrollTransformStore)
   const [webGpuReady, setWebGpuReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
@@ -156,6 +176,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [surfaceSize])
 
   useEffect(() => {
+    geometryRef.current = geometry
+  }, [geometry])
+
+  useEffect(() => {
     panePayloadsRef.current = panePayloads
   }, [panePayloads])
 
@@ -206,7 +230,11 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         artifacts,
         paneBuffers: paneBuffersRef.current,
         panes: resolvedPanePayloads,
-        scrollSnapshot: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
+        scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
+          fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
+          geometry: geometryRef.current,
+          panes: resolvedPanePayloads,
+        }),
         surface,
       })
     }

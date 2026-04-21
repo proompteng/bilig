@@ -150,7 +150,21 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
     expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
       renderTx: 64 * 104,
+      scrollLeft: 64 * 104,
       tx: 0,
+    })
+
+    await act(async () => {
+      scrollViewport!.scrollTop = 8 * 22
+      scrollViewport!.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+      renderTy: 8 * 22,
+      scrollTop: 8 * 22,
+      ty: 0,
     })
 
     await act(async () => {

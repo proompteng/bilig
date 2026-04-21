@@ -469,6 +469,8 @@ export function useWorkbookGridRenderState(input: {
     scrollTransformRef.current = {
       renderTx,
       renderTy,
+      scrollLeft: scrollViewport.scrollLeft,
+      scrollTop: scrollViewport.scrollTop,
       tx: next.tx,
       ty: next.ty,
     }

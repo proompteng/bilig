@@ -53,6 +53,7 @@ export interface WorkbookPaneScrollAxes {
 export interface WorkbookRenderPaneState {
   readonly paneId: string
   readonly generation: number
+  readonly viewport?: Viewport | undefined
   readonly frame: Rectangle
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly contentOffset: {
