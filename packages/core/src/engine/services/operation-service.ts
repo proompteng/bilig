@@ -290,6 +290,7 @@ export function createEngineOperationService(args: {
   readonly applyStructuralAxisOp: (op: StructuralAxisOp) => {
     transaction: StructuralTransaction
     changedCellIndices: number[]
+    precomputedChangedInputCellIndices: number[]
     formulaCellIndices: number[]
     topologyChanged: boolean
     graphRefreshRequired: boolean
@@ -1290,6 +1291,7 @@ export function createEngineOperationService(args: {
     const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = []
     const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = []
     const postRecalcDirectFormulaIndices = new Set<number>()
+    const precomputedKernelSyncCellIndices: number[] = []
     let refreshAllPivots = false
     let appliedOps = 0
     const canSkipOrderChecks = source !== 'remote'
@@ -1438,6 +1440,13 @@ export function createEngineOperationService(args: {
           case 'deleteColumns':
           case 'moveColumns': {
             const structural = args.applyStructuralAxisOp(op)
+            structural.transaction.removedCellIndices.forEach((cellIndex) => {
+              precomputedKernelSyncCellIndices.push(cellIndex)
+            })
+            structural.precomputedChangedInputCellIndices.forEach((cellIndex) => {
+              precomputedKernelSyncCellIndices.push(cellIndex)
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
+            })
             structural.formulaCellIndices.forEach((cellIndex) => {
               formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
             })
@@ -1981,7 +1990,11 @@ export function createEngineOperationService(args: {
     if (hasActiveFormulas || hasActivePivots || refreshAllPivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
-      recalculated = args.recalculate(args.composeMutationRoots(changedInputCount, formulaChangedCount), changedInputArray)
+      const kernelSyncRoots =
+        precomputedKernelSyncCellIndices.length === 0
+          ? changedInputArray
+          : Uint32Array.from([...changedInputArray, ...precomputedKernelSyncCellIndices])
+      recalculated = args.recalculate(args.composeMutationRoots(changedInputCount, formulaChangedCount), kernelSyncRoots)
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {

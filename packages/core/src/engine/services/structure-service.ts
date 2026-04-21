@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { ValueTag, type SheetFormatRangeSnapshot, type SheetStyleRangeSnapshot } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type SheetFormatRangeSnapshot, type SheetStyleRangeSnapshot } from '@bilig/protocol'
 import {
   type CompiledFormula,
   formatAddress,
@@ -12,7 +12,7 @@ import {
 } from '@bilig/formula'
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
-import { emptyValue } from '../../engine-value-utils.js'
+import { emptyValue, errorValue } from '../../engine-value-utils.js'
 import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { FormulaTable } from '../../formula-table.js'
@@ -245,6 +245,7 @@ export interface EngineStructureService {
     {
       transaction: StructuralTransaction
       changedCellIndices: number[]
+      precomputedChangedInputCellIndices: number[]
       formulaCellIndices: number[]
       topologyChanged: boolean
       graphRefreshRequired: boolean
@@ -298,6 +299,41 @@ export function createEngineStructureService(args: {
     sourceAddress?: string,
   ): EngineOp[] => args.captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress)
 
+  const captureStoredCellStateForUndo = (cellIndex: number, sheetName: string, address: string): EngineOp[] => {
+    const formula = args.state.formulas.get(cellIndex)
+    if (formula) {
+      return [{ kind: 'setCellFormula', sheetName, address, formula: getRuntimeFormulaSource(formula) }]
+    }
+    const tag: ValueTag = args.state.workbook.cellStore.tags[cellIndex] ?? ValueTag.Empty
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0
+    const shouldRestoreExplicitBlank =
+      (args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0 || (flags & CellFlags.AuthoredBlank) !== 0
+    const ops: EngineOp[] = []
+    switch (tag) {
+      case ValueTag.Number:
+        ops.push({ kind: 'setCellValue', sheetName, address, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 })
+        break
+      case ValueTag.Boolean:
+        ops.push({ kind: 'setCellValue', sheetName, address, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 })
+        break
+      case ValueTag.String:
+        return captureStoredCellState(cellIndex, sheetName, address)
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        ops.push(
+          shouldRestoreExplicitBlank
+            ? { kind: 'setCellValue', sheetName, address, value: null }
+            : { kind: 'clearCell', sheetName, address },
+        )
+        break
+    }
+    const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
+    if (explicitFormat !== undefined) {
+      ops.push({ kind: 'setCellFormat', sheetName, address, format: explicitFormat ?? null })
+    }
+    return ops
+  }
+
   const isSimpleStructuralFormulaSourceDeferrable = (formula: RuntimeFormula): boolean =>
     formula.rangeDependencies.length === 0 &&
     formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
@@ -335,16 +371,44 @@ export function createEngineStructureService(args: {
     })
   }
 
+  const canDeferSimpleDeleteRefErrorFormulaSource = (
+    formula: RuntimeFormula,
+    targetSheetId: number | undefined,
+    transform: StructuralAxisTransform,
+  ): boolean => {
+    if (
+      transform.kind !== 'delete' ||
+      transform.axis !== 'column' ||
+      targetSheetId === undefined ||
+      !isSimpleStructuralFormulaSourceDeferrable(formula)
+    ) {
+      return false
+    }
+    return formula.dependencyIndices.some((dependencyCellIndex) => {
+      if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== targetSheetId) {
+        return false
+      }
+      const dependencyPosition = args.state.workbook.getCellPosition(dependencyCellIndex)
+      return dependencyPosition !== undefined && mapStructuralAxisIndex(dependencyPosition.col, transform) === undefined
+    })
+  }
+
   const captureAxisRangeCellState = (sheetName: string, axis: 'row' | 'column', start: number, count: number): EngineOp[] => {
     const sheet = args.state.workbook.getSheet(sheetName)
     if (!sheet) {
       return []
     }
+    const axisIds = sheet.logicalAxisMap.snapshot(axis, start, count).map((entry) => entry.id)
     const captured: Array<{ cellIndex: number; row: number; col: number }> = []
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+    sheet.logical.listResidentCellIndices(axis, axisIds).forEach((cellIndex) => {
       if (!shouldCaptureStoredCell(cellIndex)) {
         return
       }
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      if (!position) {
+        return
+      }
+      const { row, col } = position
       const index = axis === 'row' ? row : col
       if (index >= start && index < start + count) {
         captured.push({ cellIndex, row, col })
@@ -355,7 +419,7 @@ export function createEngineStructureService(args: {
     }
     return captured
       .toSorted((left, right) => left.row - right.row || left.col - right.col)
-      .flatMap(({ cellIndex, row, col }) => captureStoredCellState(cellIndex, sheetName, formatAddress(row, col)))
+      .flatMap(({ cellIndex, row, col }) => captureStoredCellStateForUndo(cellIndex, sheetName, formatAddress(row, col)))
   }
 
   const captureSheetCellState = (sheetName: string): EngineOp[] => {
@@ -1114,11 +1178,13 @@ export function createEngineStructureService(args: {
     formulaCellIndices: number[]
     rebindCellIndices: number[]
     preservedCellIndices: number[]
+    precomputedChangedInputCellIndices: number[]
     ownerPositions: Map<number, { sheetName: string; row: number; col: number }>
   } => {
     const formulaCellIndices = new Set<number>()
     const rebindCellIndices = new Set<number>()
     const preservedCellIndices = new Set<number>()
+    const precomputedChangedInputCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
     const tryDeferOwnedSimpleFormula = (cellIndex: number): boolean => {
@@ -1138,7 +1204,14 @@ export function createEngineStructureService(args: {
         return false
       }
       const preservesValue = canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)
-      if (!preservesValue && !canDeferSimpleDeleteStructuralFormulaSource(formula, argsForImpact.targetSheetId, argsForImpact.transform)) {
+      const preservesBinding =
+        preservesValue || canDeferSimpleDeleteStructuralFormulaSource(formula, argsForImpact.targetSheetId, argsForImpact.transform)
+      const becomesRefError =
+        !preservesBinding && canDeferSimpleDeleteRefErrorFormulaSource(formula, argsForImpact.targetSheetId, argsForImpact.transform)
+      const dependsOnPrecomputedRefError = formula.dependencyIndices.some((dependencyCellIndex) =>
+        precomputedChangedInputCellIndices.has(dependencyCellIndex),
+      )
+      if (!preservesBinding && !becomesRefError && !dependsOnPrecomputedRefError) {
         return false
       }
       formula.structuralSourceTransform = {
@@ -1150,6 +1223,9 @@ export function createEngineStructureService(args: {
       hasDeferredStructuralFormulaSources = true
       if (preservesValue) {
         preservedCellIndices.add(cellIndex)
+      } else if (becomesRefError || dependsOnPrecomputedRefError) {
+        args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Ref))
+        precomputedChangedInputCellIndices.add(cellIndex)
       } else {
         formulaCellIndices.add(cellIndex)
       }
@@ -1288,6 +1364,7 @@ export function createEngineStructureService(args: {
       formulaCellIndices: [...formulaCellIndices],
       rebindCellIndices: [...rebindCellIndices],
       preservedCellIndices: [...preservedCellIndices],
+      precomputedChangedInputCellIndices: [...precomputedChangedInputCellIndices],
       ownerPositions,
     }
   }
@@ -1503,6 +1580,7 @@ export function createEngineStructureService(args: {
           return {
             transaction,
             changedCellIndices: [...transaction.removedCellIndices],
+            precomputedChangedInputCellIndices: impactedFormulas.precomputedChangedInputCellIndices,
             formulaCellIndices: formulaCellIndices.filter((cellIndex) => !preservedFormulaCellIndices.has(cellIndex)),
             topologyChanged,
             graphRefreshRequired,
