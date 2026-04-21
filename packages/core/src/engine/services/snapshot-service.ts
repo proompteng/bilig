@@ -499,6 +499,9 @@ export function createEngineSnapshotService(args: {
             addEngineCounter(args.state.counters, 'snapshotOpsReplayed', ops.length)
           }
           args.executeRestoreTransaction(potentialNewCells > 0 ? { kind: 'ops', ops, potentialNewCells } : { kind: 'ops', ops })
+          snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
+            args.state.workbook.setPivot(pivot)
+          })
         },
         catch: (cause) =>
           new EngineSnapshotError({
