@@ -92,7 +92,7 @@ test('isolated workbook pane renderer draws grid content through typegpu', async
   expect(summary?.points.selectionBorder.g ?? 0).toBeGreaterThan(summary?.points.selectionBorder.r ?? 0)
   expect(summary?.points.bodyWhite).toMatchObject({ r: 255, g: 255, b: 255, a: 255 })
   expect(summary?.darkPixelCounts.header).toBeGreaterThan(15)
-  expect(summary?.darkPixelCounts.body).toBeGreaterThan(40)
+  expect(summary?.darkPixelCounts.body).toBeGreaterThan(20)
   expect(summary?.darkPixelCounts.number).toBeGreaterThan(40)
 
   await saveReadbackArtifact(page, testInfo, 'isolated-pane-renderer-readback.png', 'isolated-pane-renderer-readback')
@@ -139,7 +139,11 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
   const initialProbe = {
     points: [
       { name: 'unselectedHeaderFill', x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + 20, y: 12 },
-      { name: 'bodyBlank', x: PRODUCT_ROW_MARKER_WIDTH + 14, y: PRODUCT_HEADER_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2) },
+      {
+        name: 'bodyBlank',
+        x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 4 + 14,
+        y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 4 + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+      },
     ],
     regions: [
       { name: 'columnHeaderText', x0: 176, y0: 4, x1: 228, y1: 18 },

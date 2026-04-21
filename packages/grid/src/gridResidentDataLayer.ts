@@ -93,10 +93,8 @@ function buildPaneScene(input: {
     selectedCellSnapshot,
     selectionRange = null,
     editingCell = null,
-    hoveredCell = null,
     hoveredHeader = null,
     resizeGuideColumn = null,
-    resizeGuideRow = null,
     activeHeaderDrag = null,
   } = input
   const getCellBounds = createPaneCellBoundsResolver({
@@ -136,12 +134,12 @@ function buildPaneScene(input: {
     getCellBounds,
     gridSelection,
     selectedCell,
-    selectionRange,
-    hoveredCell,
-    hoveredHeader,
-    resizeGuideColumn,
-    resizeGuideRow,
-    activeHeaderDrag,
+    selectionRange: null,
+    hoveredCell: null,
+    hoveredHeader: null,
+    resizeGuideColumn: null,
+    resizeGuideRow: null,
+    activeHeaderDrag: null,
   })
   const textScene = buildGridTextScene({
     contentMode: 'data',
