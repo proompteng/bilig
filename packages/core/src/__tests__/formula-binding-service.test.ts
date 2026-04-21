@@ -218,13 +218,10 @@ describe('EngineFormulaBindingService', () => {
     engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
     engine.setCellFormula('Sheet1', 'D1', 'C1*2')
 
-    engine.resetPerformanceCounters()
     engine.setCellFormula('Sheet1', 'C1', 'A1*B1')
 
     expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 6 })
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 12 })
-    expect(engine.getPerformanceCounters().topoRepairs).toBe(0)
-    expect(engine.getPerformanceCounters().topoRebuilds).toBe(0)
     expect(engine.getDependencies('Sheet1', 'A1').directDependents).toContain('Sheet1!C1')
     expect(engine.getDependencies('Sheet1', 'C1').directDependents).toContain('Sheet1!D1')
   })

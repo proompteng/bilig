@@ -2133,6 +2133,7 @@ export function createEngineFormulaBindingService(args: {
       !stringArrayEqual(existing.compiled.symbolicSpills, prepared.compiled.symbolicSpills) ||
       !directLookupStructureEqual(existing.directLookup, prepared.directLookup) ||
       !directAggregateStructureEqual(existing.directAggregate, prepared.directAggregate) ||
+      !directScalarStructureEqual(existing.directScalar, prepared.directScalar) ||
       !directCriteriaStructureEqual(existing.directCriteria, prepared.directCriteria)
 
     if (existing && !topologyChanged) {
