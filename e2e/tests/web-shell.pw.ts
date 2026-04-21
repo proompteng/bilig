@@ -238,8 +238,7 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(cellEditor).toBeHidden()
 
   await expect(nameBox).toHaveValue('A2')
-  await nameBox.fill('A1')
-  await nameBox.press('Enter')
+  await clickProductCell(page, 0, 0)
   await expect(formulaInput).toHaveValue('h')
 
   await clickProductCell(page, 0, 1)
@@ -251,8 +250,7 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(cellEditor).toBeHidden()
 
   await expect(nameBox).toHaveValue('B2')
-  await nameBox.fill('A2')
-  await nameBox.press('Enter')
+  await clickProductCell(page, 0, 1)
   await expect(formulaInput).toHaveValue('w')
 
   await grid.press('Enter')
