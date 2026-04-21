@@ -5053,6 +5053,7 @@ describe('SpreadsheetEngine', () => {
     engine.resetPerformanceCounters()
     engine.deleteColumns('Sheet1', 1, 1)
     expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
+    expect(engine.getPerformanceCounters().topoRepairs).toBe(0)
 
     for (let row = 1; row <= 4; row += 1) {
       expect(engine.getCell('Sheet1', `C${row}`).formula).toBe(`A${row}+B${row}`)

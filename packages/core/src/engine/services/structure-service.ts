@@ -216,6 +216,25 @@ function structuralRewritePreservesBinding(
   )
 }
 
+function structuralRewriteOnlyRemovesDirectDependencies(formula: RuntimeFormula, rewritten: { compiled: CompiledFormula }): boolean {
+  if (
+    formula.directLookup !== undefined ||
+    formula.directAggregate !== undefined ||
+    formula.directCriteria !== undefined ||
+    formula.rangeDependencies.length !== 0 ||
+    formula.compiled.symbolicNames.length > 0 ||
+    formula.compiled.symbolicTables.length > 0 ||
+    formula.compiled.symbolicSpills.length > 0 ||
+    rewritten.compiled.symbolicNames.length > 0 ||
+    rewritten.compiled.symbolicTables.length > 0 ||
+    rewritten.compiled.symbolicSpills.length > 0 ||
+    rewritten.compiled.deps.length > formula.compiled.deps.length
+  ) {
+    return false
+  }
+  return rewritten.compiled.deps.every((dependency) => formula.compiled.deps.includes(dependency))
+}
+
 function structuralDirectAggregateRewritePreservesValue(
   formula: RuntimeFormula,
   rewritten: { compiled: CompiledFormula; reusedProgram: boolean },
@@ -746,12 +765,15 @@ export function createEngineStructureService(args: {
         return
       }
       const preservesDirectCellDependencies = structuralRewritePreservesDirectCellDependencies(formula, rewritten, ownerSheetName)
+      const removesOnlyDirectDependencies = structuralRewriteOnlyRemovesDirectDependencies(formula, rewritten)
       const preservesBinding =
         structuralRewritePreservesBinding(
           formula,
           rewritten,
           formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
-        ) || preservesDirectCellDependencies
+        ) ||
+        preservesDirectCellDependencies ||
+        removesOnlyDirectDependencies
       const preservesValue =
         structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
         structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform)
@@ -762,7 +784,7 @@ export function createEngineStructureService(args: {
         formula.compiled.deps.length !== rewritten.compiled.deps.length ||
         formula.compiled.deps.some((dependency, index) => dependency !== rewritten.compiled.deps[index])
       const rewrittenPlaceholderDependencyNeedsRebind =
-        preservesBinding && rewrittenDirectDependenciesChanged && hasOnlyPlaceholderDirectDependencies
+        preservesBinding && rewrittenDirectDependenciesChanged && hasOnlyPlaceholderDirectDependencies && !removesOnlyDirectDependencies
       inputs.push({
         cellIndex,
         ownerSheetName,
