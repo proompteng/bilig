@@ -16,11 +16,13 @@ import {
   type TypeGpuRendererArtifacts,
 } from '../renderer/typegpu-renderer.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from '../renderer/typegpu-surface-manager.js'
+import type { GridCameraStore } from './gridCameraStore.js'
 
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
   readonly host: HTMLDivElement | null
   readonly geometry: GridGeometrySnapshot | null
+  readonly cameraStore?: GridCameraStore | null
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly overlay?: {
     readonly gpuScene: GridGpuScene
@@ -71,6 +73,7 @@ export function resolveTypeGpuV2DrawScrollSnapshot(input: {
 
 export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   active,
+  cameraStore = null,
   geometry,
   host,
   overlay,
@@ -89,6 +92,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
+  const cameraStoreRef = useRef<GridCameraStore | null>(cameraStore)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore | null>(scrollTransformStore)
   const [webGpuReady, setWebGpuReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
@@ -180,6 +184,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [geometry])
 
   useEffect(() => {
+    cameraStoreRef.current = cameraStore
+  }, [cameraStore])
+
+  useEffect(() => {
     panePayloadsRef.current = panePayloads
   }, [panePayloads])
 
@@ -232,7 +240,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         panes: resolvedPanePayloads,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
-          geometry: geometryRef.current,
+          geometry: cameraStoreRef.current?.getSnapshot() ?? geometryRef.current,
           panes: resolvedPanePayloads,
         }),
         surface,
@@ -252,6 +260,17 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     }
     return scrollTransformStore.subscribe(scheduleDraw)
   }, [active, scrollTransformStore])
+
+  useEffect(() => {
+    if (!active || !cameraStore) {
+      return
+    }
+    const scheduleDraw = () => {
+      renderSchedulerRef.current ??= new GridRenderScheduler()
+      renderSchedulerRef.current.requestDraw(drawFrameRef.current)
+    }
+    return cameraStore.subscribe(scheduleDraw)
+  }, [active, cameraStore])
 
   useEffect(() => {
     const canvas = canvasRef.current

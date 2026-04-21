@@ -81,7 +81,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     () =>
       renderState.hostElement
         ? createGridGeometrySnapshot({
-            columnWidths: props.columnWidths,
+            columnWidths: renderState.columnWidths,
             dpr: typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1),
             freezeCols: props.freezeCols,
             freezeRows: props.freezeRows,
@@ -90,22 +90,22 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
             hiddenRows: props.hiddenRows,
             hostHeight: renderState.hostElement.clientHeight,
             hostWidth: renderState.hostElement.clientWidth,
-            rowHeights: props.rowHeights,
+            rowHeights: renderState.rowHeights,
             scrollLeft: renderState.scrollViewportRef.current?.scrollLeft ?? 0,
             scrollTop: renderState.scrollViewportRef.current?.scrollTop ?? 0,
             sheetName: props.sheetName,
           })
         : null,
     [
-      props.columnWidths,
       props.freezeCols,
       props.freezeRows,
       props.hiddenColumns,
       props.hiddenRows,
-      props.rowHeights,
       props.sheetName,
+      renderState.columnWidths,
       renderState.gridMetrics,
       renderState.hostElement,
+      renderState.rowHeights,
       renderState.scrollViewportRef,
     ],
   )
@@ -184,6 +184,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         </div>
         <WorkbookPaneRendererV2
           active={renderState.hostElement !== null}
+          cameraStore={renderState.gridCameraStore}
           geometry={v2Geometry}
           host={renderState.hostElement}
           panes={renderState.renderPanes}

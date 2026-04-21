@@ -22,6 +22,7 @@ import { createGridSelection, isSheetSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
 import { buildHeaderPaneStates } from './gridHeaderPanes.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
+import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { applyHiddenAxisSizes, resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import type { GridHoverState } from './gridHover.js'
@@ -43,6 +44,7 @@ import {
 } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import { noteGridScrollInput } from './renderer/grid-render-counters.js'
+import { GridCameraStore } from './renderer-v2/gridCameraStore.js'
 import { visibleRegionFromCamera, viewportFromVisibleRegion } from './useGridCameraState.js'
 import { sameBounds } from './useGridOverlayState.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
@@ -164,6 +166,7 @@ export function useWorkbookGridRenderState(input: {
   const scrollSyncFrameRef = useRef<number | null>(null)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
+  const gridCameraStoreRef = useRef<GridCameraStore>(new GridCameraStore())
   const gridCameraRef = useRef<GridCameraSnapshot | null>(null)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
@@ -303,6 +306,7 @@ export function useWorkbookGridRenderState(input: {
   const totalGridHeight = scrollSpacerSize.height
   const selectionRange = gridSelection.current?.range ?? null
   const scrollTransformStore = scrollTransformStoreRef.current
+  const gridCameraStore = gridCameraStoreRef.current
 
   const getCellLocalBounds = useCallback(
     (col: number, row: number): Rectangle | undefined => {
@@ -473,6 +477,22 @@ export function useWorkbookGridRenderState(input: {
       previous: gridCameraRef.current,
     })
     gridCameraRef.current = camera
+    gridCameraStore.setSnapshot(
+      createGridGeometrySnapshotFromAxes({
+        columns: columnAxis,
+        dpr: window.devicePixelRatio || 1,
+        freezeCols,
+        freezeRows,
+        gridMetrics,
+        hostHeight: scrollViewport.clientHeight,
+        hostWidth: scrollViewport.clientWidth,
+        previousCamera: gridCameraStore.getSnapshot()?.camera ?? null,
+        rows: rowAxis,
+        scrollLeft: scrollViewport.scrollLeft,
+        scrollTop: scrollViewport.scrollTop,
+        sheetName,
+      }),
+    )
     const next = visibleRegionFromCamera({ camera, freezeCols, freezeRows })
     const renderTx =
       resolveColumnOffset(next.range.x, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
@@ -515,15 +535,19 @@ export function useWorkbookGridRenderState(input: {
     })
   }, [
     columnWidths,
+    columnAxis,
     freezeCols,
     freezeRows,
+    gridCameraStore,
     gridMetrics,
     onVisibleViewportChange,
     controlledHiddenColumns,
     controlledHiddenRows,
     requiresLiveViewportState,
     rowHeights,
+    rowAxis,
     scrollTransformStore,
+    sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     viewport.colStart,
@@ -1291,6 +1315,7 @@ export function useWorkbookGridRenderState(input: {
     getPreviewRowHeight,
     gridMetrics,
     gridSelection,
+    gridCameraStore,
     gridTheme,
     handleHostRef,
     headerPanes: renderHeaderPanes,
