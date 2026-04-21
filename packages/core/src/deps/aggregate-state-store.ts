@@ -41,6 +41,10 @@ function columnKey(sheetName: string, col: number, rowStart: number): string {
   return `${sheetName}\t${col}\t${rowStart}`
 }
 
+function columnOnlyKey(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`
+}
+
 function decodeValueTag(rawTag: number | undefined): ValueTag {
   if (rawTag === undefined) {
     return ValueTag.Empty
@@ -121,6 +125,37 @@ export function createAggregateStateStore(args: {
   readonly regionGraph: Pick<RegionGraph, 'getRegion'>
 }): AggregateStateStore {
   const cache = new Map<string, AggregateStateEntry>()
+  const entriesByColumn = new Map<string, AggregateStateEntry[]>()
+
+  const registerEntry = (entry: AggregateStateEntry): void => {
+    const key = columnOnlyKey(entry.sheetName, entry.col)
+    let entries = entriesByColumn.get(key)
+    if (!entries) {
+      entries = []
+      entriesByColumn.set(key, entries)
+    }
+    const insertAt = entries.findIndex((candidate) => candidate.rowStart > entry.rowStart)
+    if (insertAt === -1) {
+      entries.push(entry)
+    } else {
+      entries.splice(insertAt, 0, entry)
+    }
+  }
+
+  const deleteEntry = (entry: AggregateStateEntry): void => {
+    cache.delete(columnKey(entry.sheetName, entry.col, entry.rowStart))
+    const entries = entriesByColumn.get(columnOnlyKey(entry.sheetName, entry.col))
+    if (!entries) {
+      return
+    }
+    const index = entries.indexOf(entry)
+    if (index !== -1) {
+      entries.splice(index, 1)
+    }
+    if (entries.length === 0) {
+      entriesByColumn.delete(columnOnlyKey(entry.sheetName, entry.col))
+    }
+  }
 
   const getCurrentVersions = (sheetName: string, col: number) => {
     const sheet = args.workbook.getSheet(sheetName)
@@ -258,6 +293,9 @@ export function createAggregateStateStore(args: {
       ) {
         return existing.rowEnd >= region.rowEnd ? existing : extendEntry(existing, region.rowEnd)
       }
+      if (existing) {
+        deleteEntry(existing)
+      }
       const next: AggregateStateEntry = {
         regionId,
         sheetName: region.sheetName,
@@ -276,15 +314,23 @@ export function createAggregateStateStore(args: {
         prefixMaximums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
       }
       cache.set(key, next)
+      registerEntry(next)
       return extendEntry(next, region.rowEnd)
     },
     noteLiteralWrite({ sheetName, row, col, oldValue, newValue }) {
-      const entries = [...cache.values()].filter((entry) => entry.sheetName === sheetName && entry.col === col)
+      const entries = entriesByColumn.get(columnOnlyKey(sheetName, col))
+      if (!entries) {
+        return
+      }
       const currentVersions = getCurrentVersions(sheetName, col)
-      for (const entry of entries) {
-        const key = columnKey(entry.sheetName, entry.col, entry.rowStart)
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+        const entry = entries[entryIndex]!
+        if (entry.rowStart > row) {
+          break
+        }
         if (entry.structureVersion !== currentVersions.structureVersion) {
-          cache.delete(key)
+          deleteEntry(entry)
+          entryIndex -= 1
           continue
         }
         entry.columnVersion = currentVersions.columnVersion
@@ -293,7 +339,8 @@ export function createAggregateStateStore(args: {
           continue
         }
         if (isErrorTag(oldValue) || isErrorTag(newValue) || (entry.prefixErrorCounts[entry.rowEnd - entry.rowStart] ?? 0) > 0) {
-          cache.delete(key)
+          deleteEntry(entry)
+          entryIndex -= 1
           continue
         }
         const sumDelta = numericContribution(newValue) - numericContribution(oldValue)
@@ -313,11 +360,15 @@ export function createAggregateStateStore(args: {
       }
     },
     invalidateColumn(sheetName, col) {
-      ;[...cache.keys()]
-        .filter((key) => key.startsWith(`${sheetName}\t${col}\t`))
-        .forEach((key) => {
-          cache.delete(key)
-        })
+      const key = columnOnlyKey(sheetName, col)
+      const entries = entriesByColumn.get(key)
+      if (!entries) {
+        return
+      }
+      entries.forEach((entry) => {
+        cache.delete(columnKey(entry.sheetName, entry.col, entry.rowStart))
+      })
+      entriesByColumn.delete(key)
     },
   }
 }

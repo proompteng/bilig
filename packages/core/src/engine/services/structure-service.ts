@@ -1047,6 +1047,7 @@ export function createEngineStructureService(args: {
         axisIndex !== undefined &&
         structuralAxisIndexAffected(axisIndex, argsForImpact.transform)
       const dependencyPositionAffected =
+        !ownerPositionAffected &&
         argsForImpact.targetSheetId !== undefined &&
         (formula.dependencyIndices.some((dependencyCellIndex) => {
           if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== argsForImpact.targetSheetId) {
@@ -1094,11 +1095,16 @@ export function createEngineStructureService(args: {
                   }
                 : undefined,
           ))
-      const touchesSheetDependency = formula.compiled.deps.some((dependency) => dependencyTouchesSheet(dependency, argsForImpact.sheetName))
-      const touchesChangedName = formula.compiled.symbolicNames.some((name) =>
-        argsForImpact.changedDefinedNames.has(normalizeDefinedName(name)),
-      )
-      const touchesChangedTable = formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
+      const touchesSheetDependency =
+        !ownerPositionAffected &&
+        !dependencyPositionAffected &&
+        formula.compiled.deps.some((dependency) => dependencyTouchesSheet(dependency, argsForImpact.sheetName))
+      const touchesChangedName =
+        argsForImpact.changedDefinedNames.size > 0 &&
+        formula.compiled.symbolicNames.some((name) => argsForImpact.changedDefinedNames.has(normalizeDefinedName(name)))
+      const touchesChangedTable =
+        argsForImpact.changedTableNames.size > 0 &&
+        formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
       if (!ownerPositionAffected && !dependencyPositionAffected && !touchesSheetDependency && !touchesChangedName && !touchesChangedTable) {
         return
       }
