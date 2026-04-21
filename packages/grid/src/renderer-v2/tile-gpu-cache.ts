@@ -69,6 +69,22 @@ export class TileGpuCache {
   }
 }
 
+export function syncTileGpuCacheFromPanes(input: {
+  readonly cache: TileGpuCache
+  readonly panes: readonly { readonly packedScene?: GridScenePacketV2 | undefined }[]
+  readonly maxEntries?: number | undefined
+}): void {
+  const visibleKeys = new Set<string>()
+  for (const pane of input.panes) {
+    if (!pane.packedScene) {
+      continue
+    }
+    visibleKeys.add(input.cache.upsert(pane.packedScene).key)
+  }
+  input.cache.markVisible(visibleKeys)
+  input.cache.evictTo(input.maxEntries ?? 128)
+}
+
 export function buildTileGpuCacheKey(packet: GridScenePacketV2): string {
   const viewport = packet.viewport
   return [packet.sheetName, packet.paneId, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd].join(':')

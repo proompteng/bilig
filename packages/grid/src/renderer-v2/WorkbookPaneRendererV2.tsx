@@ -17,6 +17,7 @@ import {
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from './typegpu-surface.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
+import { TileGpuCache, syncTileGpuCacheFromPanes } from './tile-gpu-cache.js'
 
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
@@ -85,6 +86,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artifactsRef = useRef<TypeGpuRendererArtifacts | null>(null)
   const paneBuffersRef = useRef(new WorkbookPaneBufferCache())
+  const tileCacheRef = useRef(new TileGpuCache())
   const atlasRef = useRef(createGlyphAtlas())
   const surfaceStateRef = useRef(createTypeGpuSurfaceState())
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
@@ -228,6 +230,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       }
 
       const atlas = atlasRef.current
+      syncTileGpuCacheFromPanes({
+        cache: tileCacheRef.current,
+        panes: resolvedPanePayloads,
+      })
       syncTypeGpuPaneResources({
         artifacts,
         atlas,

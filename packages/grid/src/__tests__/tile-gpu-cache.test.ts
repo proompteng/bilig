@@ -6,7 +6,7 @@ import {
   GRID_SCENE_PACKET_V2_VERSION,
   type GridScenePacketV2,
 } from '../renderer-v2/scene-packet-v2.js'
-import { TileGpuCache, buildTileGpuCacheKey } from '../renderer-v2/tile-gpu-cache.js'
+import { TileGpuCache, buildTileGpuCacheKey, syncTileGpuCacheFromPanes } from '../renderer-v2/tile-gpu-cache.js'
 
 function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
   return {
@@ -51,5 +51,13 @@ describe('TileGpuCache', () => {
   test('rejects invalid packets', () => {
     const cache = new TileGpuCache()
     expect(() => cache.upsert({ ...createPacket(1), rects: new Float32Array(1) })).toThrow(/rect buffer too small/u)
+  })
+
+  test('syncs renderer panes into visible cache entries', () => {
+    const cache = new TileGpuCache()
+    const packet = createPacket(1)
+    syncTileGpuCacheFromPanes({ cache, maxEntries: 8, panes: [{ packedScene: packet }] })
+
+    expect(cache.get(buildTileGpuCacheKey(packet))?.visible).toBe(true)
   })
 })
