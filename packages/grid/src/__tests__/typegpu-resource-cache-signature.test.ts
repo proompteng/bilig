@@ -5,6 +5,7 @@ import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  createGridTileKeyV2,
 } from '../renderer-v2/scene-packet-v2.js'
 import {
   resolveGridRectSceneSignature,
@@ -68,10 +69,12 @@ describe('typegpu resource cache signatures', () => {
       borderRects: [],
       fillRects: [],
     }
+    const viewport = { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 }
     const basePacket = {
       borderRectCount: 0,
       fillRectCount: 1,
       generation: 1,
+      key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
       magic: GRID_SCENE_PACKET_V2_MAGIC,
       paneId: 'body' as const,
       rectCount: 1,
@@ -82,7 +85,7 @@ describe('typegpu resource cache signatures', () => {
       textCount: 0,
       textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
       version: GRID_SCENE_PACKET_V2_VERSION,
-      viewport: { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 },
+      viewport,
     }
     const changedPacket = {
       ...basePacket,

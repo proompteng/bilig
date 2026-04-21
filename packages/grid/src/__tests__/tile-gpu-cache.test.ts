@@ -5,15 +5,18 @@ import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  createGridTileKeyV2,
   type GridScenePacketV2,
 } from '../renderer-v2/scene-packet-v2.js'
 import { TileGpuCache, buildTileGpuCacheKey, syncTileGpuCacheFromPanes } from '../renderer-v2/tile-gpu-cache.js'
 
 function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
+  const viewport = { colEnd: colStart + 127, colStart, rowEnd: 31, rowStart: 0 }
   return {
     generation,
     borderRectCount: 0,
     fillRectCount: 0,
+    key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 0,
@@ -24,7 +27,7 @@ function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
     textCount: 0,
     textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
     version: GRID_SCENE_PACKET_V2_VERSION,
-    viewport: { colEnd: colStart + 127, colStart, rowEnd: 31, rowStart: 0 },
+    viewport,
   }
 }
 
@@ -64,5 +67,28 @@ describe('TileGpuCache', () => {
     syncTileGpuCacheFromPanes({ cache, maxEntries: 8, panes: [{ packedScene: packet }] })
 
     expect(cache.get(buildTileGpuCacheKey(packet))?.visible).toBe(true)
+  })
+
+  test('finds stale-valid overlapping tiles across value and style revisions', () => {
+    const cache = new TileGpuCache()
+    const stale = createPacket(1, 0)
+    cache.upsert(stale)
+
+    const desired = {
+      ...stale.key,
+      valueVersion: stale.key.valueVersion + 2,
+      styleVersion: stale.key.styleVersion + 1,
+    }
+
+    expect(cache.findStaleValid(desired)?.packet).toBe(stale)
+  })
+
+  test('does not use stale tiles across axis or freeze revisions', () => {
+    const cache = new TileGpuCache()
+    const stale = createPacket(1, 0)
+    cache.upsert(stale)
+
+    expect(cache.findStaleValid({ ...stale.key, axisVersionX: stale.key.axisVersionX + 1 })).toBeNull()
+    expect(cache.findStaleValid({ ...stale.key, freezeVersion: stale.key.freezeVersion + 1 })).toBeNull()
   })
 })

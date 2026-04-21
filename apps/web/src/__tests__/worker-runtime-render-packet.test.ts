@@ -43,6 +43,17 @@ describe('worker-runtime-render-packet', () => {
     expect(packet.magic).toBe('bilig.grid.scene.v2')
     expect(packet.version).toBe(GRID_SCENE_PACKET_V2_VERSION)
     expect(packet.sheetName).toBe('Sheet1')
+    expect(packet.key).toMatchObject({
+      axisVersionX: 0,
+      axisVersionY: 0,
+      colTile: 0,
+      dprBucket: 1,
+      paneKind: 'body',
+      rowTile: 0,
+      sheetName: 'Sheet1',
+      valueVersion: 0,
+      styleVersion: 0,
+    })
     expect(packet.surfaceSize).toEqual({ width: 400, height: 200 })
     expect(packet.textMetrics).toBeInstanceOf(Float32Array)
     expect(packet.rectCount).toBe(2)

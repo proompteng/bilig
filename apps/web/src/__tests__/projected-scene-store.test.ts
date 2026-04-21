@@ -6,6 +6,7 @@ import {
   GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  createGridTileKeyV2,
 } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedSceneStore } from '../projected-scene-store.js'
 
@@ -33,6 +34,7 @@ describe('ProjectedSceneStore', () => {
           borderRectCount: 0,
           fillRectCount: 0,
           generation: 1,
+          key: createGridTileKeyV2({ paneId: 'body', sheetName: request.sheetName, viewport: request.residentViewport }),
           magic: GRID_SCENE_PACKET_V2_MAGIC,
           paneId: 'body',
           rectCount: 0,

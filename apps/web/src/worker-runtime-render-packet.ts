@@ -6,6 +6,7 @@ import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  createGridTileKeyV2,
   type GridScenePacketV2,
 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 
@@ -24,6 +25,11 @@ export function packWorkerGridScenePacket(input: {
     generation: input.generation,
     borderRectCount: input.gpuScene.borderRects.length,
     fillRectCount: input.gpuScene.fillRects.length,
+    key: createGridTileKeyV2({
+      paneId: input.paneId,
+      sheetName: input.sheetName,
+      viewport: input.viewport,
+    }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,

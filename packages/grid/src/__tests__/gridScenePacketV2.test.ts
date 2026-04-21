@@ -5,15 +5,20 @@ import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  createGridTileKeyV2,
+  isStaleValidGridTileKeyV2,
+  serializeGridTileKeyV2,
   type GridScenePacketV2,
 } from '../renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../renderer-v2/scene-packet-validator.js'
 
 function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePacketV2 {
+  const viewport = { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 }
   return {
     generation: 1,
     borderRectCount: 0,
     fillRectCount: 1,
+    key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 1,
@@ -24,7 +29,7 @@ function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePack
     textCount: 1,
     textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
     version: GRID_SCENE_PACKET_V2_VERSION,
-    viewport: { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 },
+    viewport,
     ...overrides,
   }
 }
@@ -56,5 +61,45 @@ describe('grid scene packet v2', () => {
       ok: false,
       reason: 'bad rect size',
     })
+  })
+
+  test('rejects mismatched tile packet keys', () => {
+    expect(
+      validateGridScenePacketV2(
+        createPacket({
+          key: createGridTileKeyV2({
+            paneId: 'body',
+            sheetName: 'Sheet2',
+            viewport: { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 },
+          }),
+        }),
+      ),
+    ).toEqual({ ok: false, reason: 'tile key sheet mismatch' })
+    expect(
+      validateGridScenePacketV2(
+        createPacket({
+          key: createGridTileKeyV2({
+            paneId: 'left',
+            sheetName: 'Sheet1',
+            viewport: { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 },
+          }),
+        }),
+      ),
+    ).toEqual({ ok: false, reason: 'tile key pane mismatch' })
+  })
+
+  test('serializes full revision identity and permits stale-valid value/style reuse only across matching geometry', () => {
+    const base = createGridTileKeyV2({
+      paneId: 'body',
+      sheetName: 'Sheet1',
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+      valueVersion: 1,
+      styleVersion: 1,
+    })
+    const desired = { ...base, valueVersion: 4, styleVersion: 3 }
+
+    expect(serializeGridTileKeyV2(desired)).not.toBe(serializeGridTileKeyV2(base))
+    expect(isStaleValidGridTileKeyV2(base, desired)).toBe(true)
+    expect(isStaleValidGridTileKeyV2({ ...base, axisVersionX: 1 }, desired)).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import type { Viewport } from '@bilig/protocol'
+import { VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 
@@ -8,11 +8,41 @@ export const GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT = 8
 export const GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT = 20
 export const GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT = 8
 export type GridScenePacketPaneId = 'body' | 'top' | 'left' | 'corner' | 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body' | 'overlay'
+export type GridTilePaneKind =
+  | 'body'
+  | 'frozenTop'
+  | 'frozenLeft'
+  | 'frozenCorner'
+  | 'columnHeaderBody'
+  | 'columnHeaderFrozen'
+  | 'rowHeaderBody'
+  | 'rowHeaderFrozen'
+  | 'dynamicOverlay'
+
+export interface GridTileKeyV2 {
+  readonly sheetName: string
+  readonly paneKind: GridTilePaneKind
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly colStart: number
+  readonly colEnd: number
+  readonly rowTile: number
+  readonly colTile: number
+  readonly axisVersionX: number
+  readonly axisVersionY: number
+  readonly valueVersion: number
+  readonly styleVersion: number
+  readonly selectionIndependentVersion: number
+  readonly freezeVersion: number
+  readonly textEpoch: number
+  readonly dprBucket: number
+}
 
 export interface GridScenePacketV2 {
   readonly magic: typeof GRID_SCENE_PACKET_V2_MAGIC
   readonly version: typeof GRID_SCENE_PACKET_V2_VERSION
   readonly generation: number
+  readonly key: GridTileKeyV2
   readonly sheetName: string
   readonly paneId: GridScenePacketPaneId
   readonly viewport: Viewport
@@ -34,14 +64,23 @@ export function packGridScenePacketV2(input: {
   readonly sheetName: string
   readonly paneId: GridScenePacketPaneId
   readonly viewport: Viewport
+  readonly key?: GridTileKeyV2 | undefined
   readonly surfaceSize: { readonly width: number; readonly height: number }
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
 }): GridScenePacketV2 {
+  const key =
+    input.key ??
+    createGridTileKeyV2({
+      paneId: input.paneId,
+      sheetName: input.sheetName,
+      viewport: input.viewport,
+    })
   return {
     generation: input.generation,
     borderRectCount: input.gpuScene.borderRects.length,
     fillRectCount: input.gpuScene.fillRects.length,
+    key,
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
@@ -54,6 +93,105 @@ export function packGridScenePacketV2(input: {
     version: GRID_SCENE_PACKET_V2_VERSION,
     viewport: input.viewport,
   }
+}
+
+export function createGridTileKeyV2(input: {
+  readonly sheetName: string
+  readonly paneId: GridScenePacketPaneId
+  readonly viewport: Viewport
+  readonly rowTile?: number | undefined
+  readonly colTile?: number | undefined
+  readonly axisVersionX?: number | undefined
+  readonly axisVersionY?: number | undefined
+  readonly valueVersion?: number | undefined
+  readonly styleVersion?: number | undefined
+  readonly selectionIndependentVersion?: number | undefined
+  readonly freezeVersion?: number | undefined
+  readonly textEpoch?: number | undefined
+  readonly dprBucket?: number | undefined
+}): GridTileKeyV2 {
+  return {
+    axisVersionX: input.axisVersionX ?? 0,
+    axisVersionY: input.axisVersionY ?? 0,
+    colEnd: input.viewport.colEnd,
+    colStart: input.viewport.colStart,
+    colTile: input.colTile ?? Math.floor(input.viewport.colStart / VIEWPORT_TILE_COLUMN_COUNT),
+    dprBucket: input.dprBucket ?? 1,
+    freezeVersion: input.freezeVersion ?? 0,
+    paneKind: resolveGridTilePaneKind(input.paneId),
+    rowEnd: input.viewport.rowEnd,
+    rowStart: input.viewport.rowStart,
+    rowTile: input.rowTile ?? Math.floor(input.viewport.rowStart / VIEWPORT_TILE_ROW_COUNT),
+    selectionIndependentVersion: input.selectionIndependentVersion ?? 0,
+    sheetName: input.sheetName,
+    styleVersion: input.styleVersion ?? 0,
+    textEpoch: input.textEpoch ?? 0,
+    valueVersion: input.valueVersion ?? 0,
+  }
+}
+
+export function resolveGridTilePaneKind(paneId: GridScenePacketPaneId): GridTilePaneKind {
+  switch (paneId) {
+    case 'body':
+      return 'body'
+    case 'top':
+      return 'frozenTop'
+    case 'left':
+      return 'frozenLeft'
+    case 'corner':
+      return 'frozenCorner'
+    case 'top-body':
+      return 'columnHeaderBody'
+    case 'top-frozen':
+      return 'columnHeaderFrozen'
+    case 'left-body':
+      return 'rowHeaderBody'
+    case 'left-frozen':
+      return 'rowHeaderFrozen'
+    case 'overlay':
+      return 'dynamicOverlay'
+  }
+}
+
+export function serializeGridTileKeyV2(key: GridTileKeyV2): string {
+  return [
+    key.sheetName,
+    key.paneKind,
+    key.rowStart,
+    key.rowEnd,
+    key.colStart,
+    key.colEnd,
+    key.rowTile,
+    key.colTile,
+    key.axisVersionX,
+    key.axisVersionY,
+    key.valueVersion,
+    key.styleVersion,
+    key.selectionIndependentVersion,
+    key.freezeVersion,
+    key.textEpoch,
+    key.dprBucket,
+  ].join(':')
+}
+
+export function gridTileKeyV2Overlaps(left: GridTileKeyV2, right: GridTileKeyV2): boolean {
+  return !(left.rowEnd < right.rowStart || right.rowEnd < left.rowStart || left.colEnd < right.colStart || right.colEnd < left.colStart)
+}
+
+export function isStaleValidGridTileKeyV2(candidate: GridTileKeyV2, desired: GridTileKeyV2): boolean {
+  return (
+    candidate.sheetName === desired.sheetName &&
+    candidate.paneKind === desired.paneKind &&
+    candidate.axisVersionX === desired.axisVersionX &&
+    candidate.axisVersionY === desired.axisVersionY &&
+    candidate.freezeVersion === desired.freezeVersion &&
+    candidate.textEpoch === desired.textEpoch &&
+    candidate.dprBucket === desired.dprBucket &&
+    candidate.valueVersion <= desired.valueVersion &&
+    candidate.styleVersion <= desired.styleVersion &&
+    candidate.selectionIndependentVersion <= desired.selectionIndependentVersion &&
+    gridTileKeyV2Overlaps(candidate, desired)
+  )
 }
 
 function packRectInstances(scene: GridGpuScene, surfaceSize: { readonly width: number; readonly height: number }): Float32Array {

@@ -3,6 +3,7 @@ import {
   GRID_SCENE_PACKET_V2_MAGIC,
   GRID_SCENE_PACKET_V2_VERSION,
   type GridScenePacketV2,
+  type GridTileKeyV2,
 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import { residentPaneSceneRequestNeedsRefresh } from './projected-scene-damage.js'
@@ -43,12 +44,35 @@ function isSurfaceSizeRecord(value: unknown): value is GridScenePacketV2['surfac
   return isRecord(value) && typeof value['width'] === 'number' && typeof value['height'] === 'number'
 }
 
+function isGridTileKeyV2(value: unknown): value is GridTileKeyV2 {
+  return (
+    isRecord(value) &&
+    typeof value['sheetName'] === 'string' &&
+    typeof value['paneKind'] === 'string' &&
+    typeof value['rowStart'] === 'number' &&
+    typeof value['rowEnd'] === 'number' &&
+    typeof value['colStart'] === 'number' &&
+    typeof value['colEnd'] === 'number' &&
+    typeof value['rowTile'] === 'number' &&
+    typeof value['colTile'] === 'number' &&
+    typeof value['axisVersionX'] === 'number' &&
+    typeof value['axisVersionY'] === 'number' &&
+    typeof value['valueVersion'] === 'number' &&
+    typeof value['styleVersion'] === 'number' &&
+    typeof value['selectionIndependentVersion'] === 'number' &&
+    typeof value['freezeVersion'] === 'number' &&
+    typeof value['textEpoch'] === 'number' &&
+    typeof value['dprBucket'] === 'number'
+  )
+}
+
 function isGridScenePacketV2(value: unknown): value is GridScenePacketV2 {
   return (
     isRecord(value) &&
     value['magic'] === GRID_SCENE_PACKET_V2_MAGIC &&
     value['version'] === GRID_SCENE_PACKET_V2_VERSION &&
     typeof value['generation'] === 'number' &&
+    isGridTileKeyV2(value['key']) &&
     typeof value['sheetName'] === 'string' &&
     typeof value['paneId'] === 'string' &&
     isViewportRecord(value['viewport']) &&

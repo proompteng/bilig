@@ -5,7 +5,9 @@ import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
+  resolveGridTilePaneKind,
   type GridScenePacketV2,
+  type GridTileKeyV2,
 } from './scene-packet-v2.js'
 
 export type GridScenePacketValidationResult =
@@ -25,6 +27,10 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   if (!Number.isInteger(packet.generation) || packet.generation < 0) {
     return invalid('bad generation')
   }
+  const keyValidation = validateGridTileKeyV2(packet.key)
+  if (!keyValidation.ok) {
+    return keyValidation
+  }
   if (packet.sheetName.length === 0) {
     return invalid('missing sheet name')
   }
@@ -38,6 +44,20 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   }
   if (packet.viewport.rowEnd < packet.viewport.rowStart || packet.viewport.colEnd < packet.viewport.colStart) {
     return invalid('empty viewport')
+  }
+  if (packet.key.sheetName !== packet.sheetName) {
+    return invalid('tile key sheet mismatch')
+  }
+  if (packet.key.paneKind !== resolveGridTilePaneKind(packet.paneId)) {
+    return invalid('tile key pane mismatch')
+  }
+  if (
+    packet.key.rowStart !== packet.viewport.rowStart ||
+    packet.key.rowEnd !== packet.viewport.rowEnd ||
+    packet.key.colStart !== packet.viewport.colStart ||
+    packet.key.colEnd !== packet.viewport.colEnd
+  ) {
+    return invalid('tile key viewport mismatch')
   }
   if (!isFiniteNonNegative(packet.surfaceSize.width) || !isFiniteNonNegative(packet.surfaceSize.height)) {
     return invalid('bad surface size')
@@ -122,6 +142,38 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
         return invalid('bad text clip')
       }
     }
+  }
+  return { ok: true }
+}
+
+export function validateGridTileKeyV2(key: GridTileKeyV2): GridScenePacketValidationResult {
+  if (!key || key.sheetName.length === 0) {
+    return invalid('missing tile key')
+  }
+  if (
+    key.rowStart < 0 ||
+    key.colStart < 0 ||
+    key.rowEnd >= MAX_ROWS ||
+    key.colEnd >= MAX_COLS ||
+    key.rowEnd < key.rowStart ||
+    key.colEnd < key.colStart
+  ) {
+    return invalid('bad tile key bounds')
+  }
+  const integerFields = [
+    key.rowTile,
+    key.colTile,
+    key.axisVersionX,
+    key.axisVersionY,
+    key.valueVersion,
+    key.styleVersion,
+    key.selectionIndependentVersion,
+    key.freezeVersion,
+    key.textEpoch,
+    key.dprBucket,
+  ]
+  if (integerFields.some((value) => !Number.isInteger(value) || value < 0)) {
+    return invalid('bad tile key revision')
   }
   return { ok: true }
 }

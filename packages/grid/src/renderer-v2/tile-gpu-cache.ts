@@ -1,4 +1,4 @@
-import type { GridScenePacketV2 } from './scene-packet-v2.js'
+import { isStaleValidGridTileKeyV2, serializeGridTileKeyV2, type GridScenePacketV2, type GridTileKeyV2 } from './scene-packet-v2.js'
 import { validateGridScenePacketV2 } from './scene-packet-validator.js'
 
 export interface TileGpuCacheEntry {
@@ -34,6 +34,18 @@ export class TileGpuCache {
     }
     this.entries.set(key, entry)
     return entry
+  }
+
+  findStaleValid(desiredKey: GridTileKeyV2): TileGpuCacheEntry | null {
+    const match = [...this.entries.values()]
+      .filter((entry) => isStaleValidGridTileKeyV2(entry.packet.key, desiredKey))
+      .toSorted((left, right) => right.lastUsedSeq - left.lastUsedSeq)[0]
+    if (!match) {
+      return null
+    }
+    const next = { ...match, lastUsedSeq: ++this.seq }
+    this.entries.set(match.key, next)
+    return next
   }
 
   get(key: string): TileGpuCacheEntry | null {
@@ -86,6 +98,5 @@ export function syncTileGpuCacheFromPanes(input: {
 }
 
 export function buildTileGpuCacheKey(packet: GridScenePacketV2): string {
-  const viewport = packet.viewport
-  return [packet.sheetName, packet.paneId, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd].join(':')
+  return serializeGridTileKeyV2(packet.key)
 }
