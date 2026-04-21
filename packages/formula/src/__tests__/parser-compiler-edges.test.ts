@@ -46,6 +46,7 @@ describe('formula parser/compiler edges', () => {
       { kind: 'percent', value: '%' },
     ])
     expect(lexFormula('"he said ""hi"""').slice(0, 1)).toEqual([{ kind: 'string', value: 'he said "hi"' }])
+    expect(lexFormula('A1<>B1').slice(1, 2)).toEqual([{ kind: 'neq', value: '<>' }])
     expect(() => lexFormula('@oops')).toThrow("Unexpected token '@'")
   })
 
