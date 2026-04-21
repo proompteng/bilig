@@ -4,6 +4,7 @@ import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { EngineFormulaBindingError } from '../engine/errors.js'
 import type { EngineFormulaBindingService } from '../engine/services/formula-binding-service.js'
+import type { FormulaFamilyStore } from '../formula/formula-family-store.js'
 
 function isEngineFormulaBindingService(value: unknown): value is EngineFormulaBindingService {
   if (typeof value !== 'object' || value === null) {
@@ -13,6 +14,15 @@ function isEngineFormulaBindingService(value: unknown): value is EngineFormulaBi
     typeof Reflect.get(value, 'bindFormula') === 'function' &&
     typeof Reflect.get(value, 'clearFormula') === 'function' &&
     typeof Reflect.get(value, 'rewriteCellFormulasForSheetRename') === 'function'
+  )
+}
+
+function isFormulaFamilyStore(value: unknown): value is FormulaFamilyStore {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'getStats') === 'function' &&
+    typeof Reflect.get(value, 'listFamilies') === 'function'
   )
 }
 
@@ -26,6 +36,18 @@ function getBindingService(engine: SpreadsheetEngine): EngineFormulaBindingServi
     throw new TypeError('Expected engine formula binding service')
   }
   return binding
+}
+
+function getFormulaFamilyStore(engine: SpreadsheetEngine): FormulaFamilyStore {
+  const runtime = Reflect.get(engine, 'runtime')
+  if (typeof runtime !== 'object' || runtime === null) {
+    throw new TypeError('Expected engine runtime')
+  }
+  const formulaFamilies = Reflect.get(runtime, 'formulaFamilies')
+  if (!isFormulaFamilyStore(formulaFamilies)) {
+    throw new TypeError('Expected formula family store')
+  }
+  return formulaFamilies
 }
 
 function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unknown {
@@ -147,6 +169,30 @@ describe('EngineFormulaBindingService', () => {
     expect(readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'F2')!)).toBe(
       readRuntimeTemplateId(engine, engine.workbook.getCellIndex('Sheet1', 'F1')!),
     )
+  })
+
+  it('registers repeated template formulas into compressed family runs', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-formula-families' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= 100; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+    }
+
+    expect(getBindingService(engine).getFormulaFamilyStatsNow()).toEqual({
+      familyCount: 4,
+      runCount: 4,
+      memberCount: 200,
+    })
+    expect(
+      getFormulaFamilyStore(engine)
+        .listFamilies()
+        .flatMap((family) => family.runs.map((run) => run.cellIndices.length)),
+    ).toEqual([1, 99, 1, 99])
   })
 
   it('runs tracked rebinding wrappers through the service surface', async () => {

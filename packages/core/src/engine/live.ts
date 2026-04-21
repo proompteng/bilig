@@ -22,6 +22,7 @@ import { createEngineCompiledPlanService } from './services/compiled-plan-servic
 import { createAggregateStateStore } from '../deps/aggregate-state-store.js'
 import { createDepPatternStore } from '../deps/dep-pattern-store.js'
 import { createRegionGraph } from '../deps/region-graph.js'
+import { createFormulaFamilyStore, type FormulaFamilyStore } from '../formula/formula-family-store.js'
 import { createFormulaInstanceTable } from '../formula/formula-instance-table.js'
 import { createEngineFormulaGraphService, type EngineFormulaGraphService } from './services/formula-graph-service.js'
 import { createEngineHistoryService, type EngineHistoryService } from './services/history-service.js'
@@ -52,6 +53,7 @@ export interface EngineServiceRuntime {
   readonly evaluation: EngineFormulaEvaluationService
   readonly selection: EngineSelectionService
   readonly binding: EngineFormulaBindingService
+  readonly formulaFamilies: FormulaFamilyStore
   readonly formulaInitialization: EngineFormulaInitializationService
   readonly graph: EngineFormulaGraphService
   readonly history: EngineHistoryService
@@ -116,6 +118,7 @@ type EngineFormulaBindingRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaBindingService>[0],
   | 'compiledPlans'
   | 'formulaInstances'
+  | 'formulaFamilies'
   | 'regionGraph'
   | 'resolveTemplateForCell'
   | 'exactLookup'
@@ -279,6 +282,7 @@ export function createEngineServiceRuntime(args: {
   const compiledPlans = createEngineCompiledPlanService()
   const formulaTemplates = createEngineFormulaTemplateNormalizationService({ counters: args.state.counters })
   const formulaInstances = createFormulaInstanceTable()
+  const formulaFamilies = createFormulaFamilyStore()
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore, regionGraph, depPatternStore })
   const aggregateCache = createRangeAggregateCacheService({
     regionGraph,
@@ -399,6 +403,7 @@ export function createEngineServiceRuntime(args: {
     regionGraph,
     compiledPlans,
     formulaInstances,
+    formulaFamilies,
     resolveTemplateForCell: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     exactLookup,
     sortedLookup,
@@ -473,6 +478,7 @@ export function createEngineServiceRuntime(args: {
       compiledPlans.clear()
       formulaTemplates.reset()
       formulaInstances.clear()
+      formulaFamilies.clear()
     },
     resetWasmState: () => {
       args.state.wasm.resetStoreState()
@@ -728,6 +734,7 @@ export function createEngineServiceRuntime(args: {
     evaluation,
     selection,
     binding,
+    formulaFamilies,
     formulaInitialization,
     graph,
     history,

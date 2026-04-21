@@ -31,6 +31,8 @@ import {
 import { growUint32 } from '../../engine-buffer-utils.js'
 import { resolveMetadataReferencesInAst, spillDependencyKeyFromRef, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
+import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js'
+import type { FormulaFamilyStats, FormulaFamilyStore } from '../../formula/formula-family-store.js'
 import type { FormulaInstanceTable } from '../../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
@@ -109,6 +111,7 @@ export interface EngineFormulaBindingService {
   readonly collectFormulaCellsReferencingSheetNow: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsForDefinedNamesNow: (names: readonly string[]) => readonly number[]
   readonly collectFormulaCellsForTablesNow: (tableNames: readonly string[]) => readonly number[]
+  readonly getFormulaFamilyStatsNow: () => FormulaFamilyStats
 }
 
 function formulaBindingErrorMessage(message: string, cause: unknown): string {
@@ -1161,6 +1164,7 @@ export function createEngineFormulaBindingService(args: {
   readonly regionGraph: RegionGraph
   readonly compiledPlans: EngineCompiledPlanService
   readonly formulaInstances: FormulaInstanceTable
+  readonly formulaFamilies: FormulaFamilyStore
   readonly resolveTemplateForCell: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'primeColumnIndex' | 'prepareVectorLookup'>
@@ -1473,6 +1477,7 @@ export function createEngineFormulaBindingService(args: {
     }
     args.scheduleWasmProgramSync()
     recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+    registerFormulaFamilyNow(cellIndex, existing)
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
 
@@ -1570,6 +1575,7 @@ export function createEngineFormulaBindingService(args: {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
     recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
+    registerFormulaFamilyNow(cellIndex, existing)
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(existing))
     return true
@@ -1666,6 +1672,34 @@ export function createEngineFormulaBindingService(args: {
       col: position.col,
       source,
       ...(templateId !== undefined ? { templateId } : {}),
+    })
+  }
+
+  const registerFormulaFamilyNow = (cellIndex: number, formula: RuntimeFormula): void => {
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (sheetId === undefined || !position || formula.templateId === undefined) {
+      args.formulaFamilies.unregisterFormula(cellIndex)
+      return
+    }
+    if (args.formulaFamilies.getMembership(cellIndex)) {
+      return
+    }
+    args.formulaFamilies.upsertFormula({
+      cellIndex,
+      sheetId,
+      row: position.row,
+      col: position.col,
+      templateId: formula.templateId,
+      shapeKey: buildFormulaFamilyShapeKey({
+        compiled: formula.compiled,
+        dependencyCount: formula.dependencyIndices.length,
+        rangeDependencyCount: formula.rangeDependencies.length,
+        directAggregateKind: formula.directAggregate?.aggregateKind,
+        directLookupKind: formula.directLookup?.kind,
+        directScalarKind: formula.directScalar?.kind,
+        directCriteriaKind: formula.directCriteria?.aggregateKind,
+      }),
     })
   }
 
@@ -1980,6 +2014,7 @@ export function createEngineFormulaBindingService(args: {
       args.compiledPlans.release(existing.planId)
     }
     args.formulaInstances.delete(cellIndex)
+    args.formulaFamilies.unregisterFormula(cellIndex)
     args.state.formulas.delete(cellIndex)
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
@@ -2032,6 +2067,7 @@ export function createEngineFormulaBindingService(args: {
       }
       args.scheduleWasmProgramSync()
       recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+      registerFormulaFamilyNow(cellIndex, existing)
 
       primeLookupCandidatesNow(
         ownerSheetName,
@@ -2127,6 +2163,7 @@ export function createEngineFormulaBindingService(args: {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
     recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+    registerFormulaFamilyNow(cellIndex, runtimeFormula)
 
     for (let rangeCursor = 0; rangeCursor < prepared.dependencies.newRangeCount; rangeCursor += 1) {
       const rangeIndex = prepared.dependencies.newRangeIndices[rangeCursor]!
@@ -2613,6 +2650,9 @@ export function createEngineFormulaBindingService(args: {
         args.reverseState.reverseTableEdges,
         tableNames.map((name) => tableDependencyKey(name)),
       )
+    },
+    getFormulaFamilyStatsNow() {
+      return args.formulaFamilies.getStats()
     },
   }
 }
