@@ -51,6 +51,20 @@ function isStructuralAxisOp(op: EngineOp): op is StructuralAxisOp {
 
 type DerivedOp = Extract<EngineOp, { kind: 'upsertSpillRange' | 'deleteSpillRange' | 'upsertPivotTable' | 'deletePivotTable' }>
 
+interface ExactLookupImpactEntry {
+  readonly formulaCellIndex: number
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly operandKey: string | undefined
+}
+
+interface ExactLookupImpactCache {
+  readonly entries: readonly ExactLookupImpactEntry[]
+  readonly operandKeys: ReadonlySet<string>
+}
+
+type ExactLookupImpactCaches = Map<string, ExactLookupImpactCache>
+
 export interface EngineOperationService {
   readonly applyBatch: (
     batch: EngineOpBatch,
@@ -249,6 +263,10 @@ function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly
     merged.add(extras[index]!)
   }
   return Uint32Array.from(merged)
+}
+
+function lookupImpactCacheKey(sheetId: number, col: number): string {
+  return `${sheetId}:${col}`
 }
 
 export function createEngineOperationService(args: {
@@ -834,6 +852,41 @@ export function createEngineOperationService(args: {
     return sheetName ? args.hasRegionFormulaSubscriptionsForColumn(sheetName, col) : false
   }
 
+  const getExactLookupImpactCache = (sheetId: number, col: number, caches: ExactLookupImpactCaches): ExactLookupImpactCache => {
+    const cacheKey = lookupImpactCacheKey(sheetId, col)
+    const cached = caches.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    const dependents = args.collectFormulaDependents(makeExactLookupColumnEntity(sheetId, col))
+    const entries: ExactLookupImpactEntry[] = []
+    const operandKeys = new Set<string>()
+    for (let index = 0; index < dependents.length; index += 1) {
+      const formulaCellIndex = dependents[index]!
+      const directLookup = args.state.formulas.get(formulaCellIndex)?.directLookup
+      /* v8 ignore next -- defensive guard for stale exact-lookup reverse edges. */
+      if (directLookup?.kind !== 'exact' && directLookup?.kind !== 'exact-uniform-numeric') {
+        continue
+      }
+      const rowStart = directLookup.kind === 'exact' ? directLookup.prepared.rowStart : directLookup.rowStart
+      const rowEnd = directLookup.kind === 'exact' ? directLookup.prepared.rowEnd : directLookup.rowEnd
+      const operand = readCellValueForLookup(directLookup.operandCellIndex)
+      const operandKey = normalizeExactLookupKey(operand.value, (id) => args.state.strings.get(id), operand.stringId)
+      if (operandKey !== undefined) {
+        operandKeys.add(operandKey)
+      }
+      entries.push({
+        formulaCellIndex,
+        rowStart,
+        rowEnd,
+        operandKey,
+      })
+    }
+    const cache = { entries, operandKeys }
+    caches.set(cacheKey, cache)
+    return cache
+  }
+
   const cellTouchesPivotSource = (sheetName: string, row: number, col: number): boolean =>
     args.state.workbook.listPivots().some((pivot) => {
       if (pivot.source.sheetName !== sheetName) {
@@ -855,38 +908,37 @@ export function createEngineOperationService(args: {
       newStringId?: number
     },
     formulaChangedCount: number,
+    caches: ExactLookupImpactCaches,
   ): number => {
     const sheet = args.state.workbook.getSheet(request.sheetName)
+    /* v8 ignore next -- defensive guard for stale lookup writes after sheet deletion. */
     if (!sheet) {
-      return formulaChangedCount
-    }
-    const dependents = args.collectFormulaDependents(makeExactLookupColumnEntity(sheet.id, request.col))
-    if (dependents.length === 0) {
       return formulaChangedCount
     }
     const oldKey = normalizeExactLookupKey(request.oldValue, (id) => args.state.strings.get(id), request.oldStringId)
     const newKey = normalizeExactLookupKey(request.newValue, (id) => args.state.strings.get(id), request.newStringId)
-    for (let index = 0; index < dependents.length; index += 1) {
-      const formulaCellIndex = dependents[index]!
-      const formula = args.state.formulas.get(formulaCellIndex)
-      const directLookup = formula?.directLookup
-      if (!directLookup) {
+    /* v8 ignore next -- error values cannot affect exact lookup matches. */
+    if (oldKey === undefined && newKey === undefined) {
+      return formulaChangedCount
+    }
+    const cache = getExactLookupImpactCache(sheet.id, request.col, caches)
+    if (
+      cache.entries.length === 0 ||
+      ((oldKey === undefined || !cache.operandKeys.has(oldKey)) && (newKey === undefined || !cache.operandKeys.has(newKey)))
+    ) {
+      return formulaChangedCount
+    }
+    for (let index = 0; index < cache.entries.length; index += 1) {
+      const entry = cache.entries[index]!
+      /* v8 ignore next -- cached ranges are normally aligned with the lookup owner. */
+      if (request.row < entry.rowStart || request.row > entry.rowEnd) {
         continue
       }
-      if (directLookup.kind !== 'exact' && directLookup.kind !== 'exact-uniform-numeric') {
+      /* v8 ignore next -- operand keys are prefiltered before scanning entries. */
+      if (entry.operandKey === undefined || (entry.operandKey !== oldKey && entry.operandKey !== newKey)) {
         continue
       }
-      const rowStart = directLookup.kind === 'exact' ? directLookup.prepared.rowStart : directLookup.rowStart
-      const rowEnd = directLookup.kind === 'exact' ? directLookup.prepared.rowEnd : directLookup.rowEnd
-      if (request.row < rowStart || request.row > rowEnd) {
-        continue
-      }
-      const operand = readCellValueForLookup(directLookup.operandCellIndex)
-      const operandKey = normalizeExactLookupKey(operand.value, (id) => args.state.strings.get(id), operand.stringId)
-      if (operandKey === undefined || (operandKey !== oldKey && operandKey !== newKey)) {
-        continue
-      }
-      formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount)
+      formulaChangedCount = args.markFormulaChanged(entry.formulaCellIndex, formulaChangedCount)
     }
     return formulaChangedCount
   }
@@ -1297,6 +1349,10 @@ export function createEngineOperationService(args: {
     let appliedOps = 0
     const canSkipOrderChecks = source !== 'remote'
     const hadCycleMembersBefore = hasCycleMembersNow()
+    const exactLookupImpactCaches: ExactLookupImpactCaches = new Map()
+    const clearLookupImpactCaches = (): void => {
+      exactLookupImpactCaches.clear()
+    }
 
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops)
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
@@ -1629,6 +1685,7 @@ export function createEngineOperationService(args: {
               const removedFormula = args.removeFormula(cellIndex)
               if (removedFormula) {
                 args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+                clearLookupImpactCaches()
               }
               if (removedFormula) {
                 formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
@@ -1656,7 +1713,7 @@ export function createEngineOperationService(args: {
                 })
                 if (hasExactLookupDependents) {
                   args.noteExactLookupLiteralWrite(exactLookupRequest)
-                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount, exactLookupImpactCaches)
                 }
                 if (hasAggregateDependents) {
                   args.noteAggregateLiteralWrite({
@@ -1724,6 +1781,7 @@ export function createEngineOperationService(args: {
             try {
               const changedTopology = args.bindFormula(cellIndex, op.sheetName, op.formula)
               args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+              clearLookupImpactCaches()
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted
               }
@@ -1815,6 +1873,7 @@ export function createEngineOperationService(args: {
             const removedFormula = args.removeFormula(cellIndex)
             if (removedFormula) {
               args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+              clearLookupImpactCaches()
             }
             if (removedFormula) {
               formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
@@ -1835,7 +1894,7 @@ export function createEngineOperationService(args: {
                 })
                 if (hasExactLookupDependents) {
                   args.noteExactLookupLiteralWrite(exactLookupRequest)
-                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount, exactLookupImpactCaches)
                 }
                 if (hasAggregateDependents) {
                   args.noteAggregateLiteralWrite({
@@ -2132,8 +2191,10 @@ export function createEngineOperationService(args: {
         }
       >
     >()
+    const exactLookupImpactCaches: ExactLookupImpactCaches = new Map()
     const clearTrackedColumnDependencyFlagCache = (): void => {
       trackedColumnDependencyFlagsBySheet.clear()
+      exactLookupImpactCaches.clear()
     }
     const resolveTrackedColumnDependencyFlags = (
       sheetId: number,
@@ -2202,7 +2263,11 @@ export function createEngineOperationService(args: {
                     })
                     if (hasExactLookupDependents) {
                       args.noteExactLookupLiteralWrite(exactLookupRequest)
-                      formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                      formulaChangedCount = markAffectedExactLookupDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                        exactLookupImpactCaches,
+                      )
                     }
                     if (hasAggregateDependents) {
                       args.noteAggregateLiteralWrite({
@@ -2274,7 +2339,11 @@ export function createEngineOperationService(args: {
                   })
                   if (hasExactLookupDependents) {
                     args.noteExactLookupLiteralWrite(exactLookupRequest)
-                    formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                    formulaChangedCount = markAffectedExactLookupDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                      exactLookupImpactCaches,
+                    )
                   }
                   if (hasAggregateDependents) {
                     args.noteAggregateLiteralWrite({
@@ -2403,7 +2472,11 @@ export function createEngineOperationService(args: {
                     })
                     if (hasExactLookupDependents) {
                       args.noteExactLookupLiteralWrite(exactLookupRequest)
-                      formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                      formulaChangedCount = markAffectedExactLookupDependents(
+                        exactLookupRequest,
+                        formulaChangedCount,
+                        exactLookupImpactCaches,
+                      )
                     }
                     if (hasAggregateDependents) {
                       args.noteAggregateLiteralWrite({
@@ -2475,7 +2548,11 @@ export function createEngineOperationService(args: {
                   })
                   if (hasExactLookupDependents) {
                     args.noteExactLookupLiteralWrite(exactLookupRequest)
-                    formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount)
+                    formulaChangedCount = markAffectedExactLookupDependents(
+                      exactLookupRequest,
+                      formulaChangedCount,
+                      exactLookupImpactCaches,
+                    )
                   }
                   if (hasAggregateDependents) {
                     args.noteAggregateLiteralWrite({

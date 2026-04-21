@@ -3322,6 +3322,88 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
   })
 
+  it('caches exact indexed lookup impact across irrelevant coordinate batch writes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'indexed-lookup-batch-impact', useColumnIndex: true })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 0; row < 10; row += 1) {
+      engine.setCellValueAt(sheetId, row, 0, row + 1)
+    }
+    engine.setCellValue('Sheet1', 'D1', 2)
+    engine.setCellFormula('Sheet1', 'E1', '=MATCH(D1,A1:A10,0)')
+
+    engine.applyCellMutationsAtWithOptions(
+      Array.from({ length: 4 }, (_, offset) => ({
+        sheetId,
+        mutation: { kind: 'setCellValue' as const, row: 6 + offset, col: 0, value: 100 + offset },
+      })),
+      { captureUndo: false, potentialNewCells: 0, returnUndoOps: false },
+    )
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+  })
+
+  it('caches exact indexed lookup impact across ordinary transaction batches', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'indexed-lookup-op-batch-impact', useColumnIndex: true })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 10; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+    engine.setCellValue('Sheet1', 'D1', 2)
+    engine.setCellFormula('Sheet1', 'E1', '=MATCH(D1,A1:A10,0)')
+    const executeLocalTransaction = Reflect.get(engine, 'executeLocalTransaction')
+    if (typeof executeLocalTransaction !== 'function') {
+      throw new TypeError('Expected executeLocalTransaction')
+    }
+
+    executeLocalTransaction.call(engine, [
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A8', value: 108 },
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A9', value: 109 },
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A10', value: 110 },
+    ])
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+  })
+
+  it('marks exact indexed lookup dependents once a coordinate batch touches the operand key', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'indexed-lookup-batch-hit', useColumnIndex: true })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 0; row < 10; row += 1) {
+      engine.setCellValueAt(sheetId, row, 0, row + 1)
+    }
+    engine.setCellValue('Sheet1', 'D1', 2)
+    engine.setCellFormula('Sheet1', 'E1', '=MATCH(D1,A1:A10,0)')
+
+    engine.applyCellMutationsAtWithOptions(
+      [
+        { sheetId, mutation: { kind: 'setCellValue', row: 7, col: 0, value: 107 } },
+        { sheetId, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 20 } },
+      ],
+      { captureUndo: false, potentialNewCells: 0, returnUndoOps: false },
+    )
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.NA })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 1,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+  })
+
   it('uses the direct indexed path for exact string MATCH and reverse XMATCH when column indexing is enabled', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'indexed-string-lookup',

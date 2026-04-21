@@ -232,6 +232,32 @@ describe('EngineChangeSetEmitterService', () => {
     })
   })
 
+  it('uses logical positions for large change sets after structural edits', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-logical-large' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const a2 = engine.workbook.getCellIndex('Sheet1', 'A2')
+    const a3 = engine.workbook.getCellIndex('Sheet1', 'A3')
+    expect(a1).toBeDefined()
+    expect(a2).toBeDefined()
+    expect(a3).toBeDefined()
+
+    engine.insertRows('Sheet1', 0, 1)
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    const changes = emitter.captureChangedCells([a1!, a2!, a3!])
+
+    expect(changes.map((change) => `${change.sheetName}!${change.a1}`)).toEqual(['Sheet1!A2', 'Sheet1!A3', 'Sheet1!A4'])
+  })
+
   it('preserves stale large-path cell indices with empty sheet names after sheet deletion', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-stale-large' })
     engine.createSheet('Sheet1')

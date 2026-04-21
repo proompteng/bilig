@@ -37,16 +37,29 @@ export interface EnginePatchCaptureRequest {
 
 function readChangedCell(args: MaterializeChangedCellsArgs, cellIndex: number, fallbackSheetName?: string): EngineCellPatch | null {
   const sheetId = args.workbook.cellStore.sheetIds[cellIndex]
-  const position = args.workbook.getCellPosition(cellIndex)
-  if (sheetId === undefined || !position) {
+  if (sheetId === undefined) {
+    return null
+  }
+  const sheet = args.workbook.getSheetById(sheetId)
+  const position =
+    sheet?.structureVersion === 1
+      ? {
+          row: args.workbook.cellStore.rows[cellIndex],
+          col: args.workbook.cellStore.cols[cellIndex],
+        }
+      : args.workbook.getCellPosition(cellIndex)
+  const row = position?.row
+  const col = position?.col
+  /* v8 ignore next -- defensive guard for stale logical indices without visible positions. */
+  if (row === undefined || col === undefined) {
     return null
   }
   return {
     kind: 'cell',
     cellIndex,
-    address: { sheet: sheetId, row: position.row, col: position.col },
+    address: { sheet: sheetId, row, col },
     sheetName: fallbackSheetName ?? args.workbook.getSheetNameById(sheetId),
-    a1: formatAddress(position.row, position.col),
+    a1: formatAddress(row, col),
     newValue: args.workbook.cellStore.getValue(cellIndex, (id) => args.strings.get(id)),
   }
 }
@@ -82,6 +95,8 @@ export function materializeChangedCellPatches(
     return patches
   }
   const sheetNames = new Map<number, string>()
+  const physicalSheetIds = new Set<number>()
+  const logicalSheetIds = new Set<number>()
   const columnLabels: string[] = []
   const formatAddressCached = (row: number, col: number): string => {
     let label = columnLabels[col]
@@ -98,21 +113,37 @@ export function materializeChangedCellPatches(
     if (sheetId === undefined) {
       continue
     }
-    const position = args.workbook.getCellPosition(cellIndex)
-    if (!position) {
-      continue
-    }
     let sheetName = sheetNames.get(sheetId)
     if (sheetName === undefined) {
-      sheetName = args.workbook.getSheetNameById(sheetId)
+      const sheet = args.workbook.getSheetById(sheetId)
+      sheetName = sheet?.name ?? args.workbook.getSheetNameById(sheetId)
       sheetNames.set(sheetId, sheetName)
+      if (!sheet || sheet.structureVersion === 1) {
+        physicalSheetIds.add(sheetId)
+      } else {
+        logicalSheetIds.add(sheetId)
+      }
+    }
+    let row: number
+    let col: number
+    if (physicalSheetIds.has(sheetId)) {
+      row = args.workbook.cellStore.rows[cellIndex]!
+      col = args.workbook.cellStore.cols[cellIndex]!
+    } else {
+      const position = args.workbook.getCellPosition(cellIndex)
+      /* v8 ignore next -- defensive guard for stale logical indices without visible positions. */
+      if (!position) {
+        continue
+      }
+      row = position.row
+      col = position.col
     }
     patches.push({
       kind: 'cell',
       cellIndex,
-      address: { sheet: sheetId, row: position.row, col: position.col },
+      address: { sheet: sheetId, row, col },
       sheetName,
-      a1: formatAddressCached(position.row, position.col),
+      a1: formatAddressCached(row, col),
       newValue: args.workbook.cellStore.getValue(cellIndex, (id) => args.strings.get(id)),
     })
   }
