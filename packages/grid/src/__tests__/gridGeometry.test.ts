@@ -131,10 +131,10 @@ describe('gridGeometry', () => {
     ])
     expect(geometry.rangeWorldRects({ x: 0, y: 0, width: 3, height: 3 })).toEqual([{ height: 60, width: 300, x: 0, y: 0 }])
     expect(geometry.fillHandleScreenRect({ x: 0, y: 0, width: 3, height: 3 })).toEqual({
-      height: 8,
-      width: 8,
-      x: 292,
-      y: 70,
+      height: 12,
+      width: 12,
+      x: 290,
+      y: 68,
     })
   })
 })

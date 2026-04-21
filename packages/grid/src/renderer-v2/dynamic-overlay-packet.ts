@@ -129,6 +129,7 @@ function appendSelectionOverlay(input: {
     const handle = input.geometry.fillHandleScreenRect(input.selectionRange)
     if (handle) {
       input.fillRects.push({ ...handle, color: borderColor })
+      appendSolidRectAsBorderStrips(input.borderRects, handle, borderColor)
       appendBorderRects(input.borderRects, handle, parseGpuColor(workbookThemeColors.surface), 1)
     }
   }
@@ -438,4 +439,17 @@ function appendBorderRects(target: GridGpuRect[], rect: Rectangle, color: GridGp
     { x: rect.x, y: rect.y, width: thickness, height: rect.height, color },
     { x: rect.x + rect.width - thickness, y: rect.y, width: thickness, height: rect.height, color },
   )
+}
+
+function appendSolidRectAsBorderStrips(target: GridGpuRect[], rect: Rectangle, color: GridGpuRect['color']): void {
+  const width = Math.max(1, Math.ceil(rect.width))
+  for (let offset = 0; offset < width; offset += 1) {
+    target.push({
+      x: rect.x + offset,
+      y: rect.y,
+      width: 1,
+      height: rect.height,
+      color,
+    })
+  }
 }

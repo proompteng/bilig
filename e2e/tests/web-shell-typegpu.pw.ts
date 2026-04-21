@@ -132,7 +132,7 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
 
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
-  await gotoWorkbookShell(page)
+  await gotoWorkbookShell(page, `/?document=typegpu-grid-updates-${Date.now()}`)
   await waitForWorkbookReady(page)
   await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
   await page.waitForFunction(
@@ -207,23 +207,26 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
     points: [
       { name: 'rangeFill', x: rangeFillPoint.x, y: rangeFillPoint.y },
       { name: 'rangeBorder', x: rangeBorderPoint.x, y: rangeBorderPoint.y },
-      {
-        name: 'fillHandle',
-        x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 3,
-        y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 3,
-      },
       { name: 'topHeaderSelectionFill', x: topHeaderSelectionFillPoint.x, y: topHeaderSelectionFillPoint.y },
     ],
-    regions: [],
+    regions: [
+      {
+        name: 'fillHandleRegion',
+        x0: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 3 - 12,
+        y0: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 3 - 12,
+        x1: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 3 + 12,
+        y1: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 3 + 12,
+      },
+    ],
   } as const
 
   const rangeReadback = await waitForReadback(page, rangeProbe, (result) => {
-    return result.points.rangeBorder.a > 150 && result.points.fillHandle.a > 150 && result.points.topHeaderSelectionFill.a > 0
+    return result.points.rangeBorder.a > 150 && result.darkPixelCounts.fillHandleRegion > 4 && result.points.topHeaderSelectionFill.a > 0
   })
 
   expect(rangeReadback.points.rangeFill.a).toBeLessThanOrEqual(25)
   expect(rangeReadback.points.rangeBorder.a).toBeGreaterThan(150)
-  expect(rangeReadback.points.fillHandle.a).toBeGreaterThan(150)
+  expect(rangeReadback.darkPixelCounts.fillHandleRegion).toBeGreaterThan(4)
   expect(rangeReadback.points.topHeaderSelectionFill.a).toBeGreaterThan(0)
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')

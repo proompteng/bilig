@@ -42,7 +42,14 @@ export function syncTypeGpuPaneResources(input: {
         ? paneCache.textSignature
         : resolveGridTextSceneSignature(pane.textScene)
     const textSceneChanged = paneCache.textSignature !== textSignature
-    const deferTextUpload = input.deferTextUploads === true && pane.packedScene !== undefined
+    const deferTextUpload = shouldDeferPaneTextUpload({
+      currentTextCount: paneCache.textCount,
+      currentTextSignature: paneCache.textSignature,
+      deferTextUploads: input.deferTextUploads === true,
+      hasPackedScene: pane.packedScene !== undefined,
+      hasTextBuffer: paneCache.textBuffer !== null,
+      nextTextItemCount: pane.textScene.items.length,
+    })
     if (textSceneChanged && !deferTextUpload) {
       syncTextResource({
         artifacts: input.artifacts,
@@ -76,6 +83,26 @@ export function syncTypeGpuPaneResources(input: {
       })
     }
   })
+}
+
+export function shouldDeferPaneTextUpload(input: {
+  readonly deferTextUploads: boolean
+  readonly hasPackedScene: boolean
+  readonly currentTextSignature: string | null
+  readonly hasTextBuffer: boolean
+  readonly currentTextCount: number
+  readonly nextTextItemCount: number
+}): boolean {
+  if (!input.deferTextUploads || !input.hasPackedScene) {
+    return false
+  }
+  if (input.currentTextSignature === null) {
+    return false
+  }
+  if (input.nextTextItemCount > 0 && (!input.hasTextBuffer || input.currentTextCount === 0)) {
+    return false
+  }
+  return true
 }
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {

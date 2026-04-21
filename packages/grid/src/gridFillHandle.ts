@@ -1,5 +1,7 @@
 import type { Item, Rectangle } from './gridTypes.js'
 
+export const GRID_FILL_HANDLE_SIZE = 12
+
 export interface FillHandleOverlayBounds {
   readonly x: number
   readonly y: number
@@ -113,7 +115,7 @@ export function resolveFillHandleOverlayBounds(options: {
   minY?: number
   size?: number
 }): FillHandleOverlayBounds | undefined {
-  const { getCellBounds, hostBounds, minX = 0, minY = 0, size = 12, sourceRange } = options
+  const { getCellBounds, hostBounds, minX = 0, minY = 0, size = GRID_FILL_HANDLE_SIZE, sourceRange } = options
   const anchorBounds = getCellBounds(sourceRange.x + sourceRange.width - 1, sourceRange.y + sourceRange.height - 1)
   if (!anchorBounds) {
     return undefined

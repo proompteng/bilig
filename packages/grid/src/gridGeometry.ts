@@ -1,4 +1,5 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
+import { GRID_FILL_HANDLE_SIZE } from './gridFillHandle.js'
 import { COLUMN_RESIZE_HANDLE_THRESHOLD, type GridMetrics } from './gridMetrics.js'
 import type { Rectangle } from './gridTypes.js'
 import { createGridAxisWorldIndexFromRecords, type GridAxisAnchor, type GridAxisWorldIndex } from './gridAxisWorldIndex.js'
@@ -450,7 +451,7 @@ function resolveFillHandleScreenRect(input: {
   if (!anchor) {
     return null
   }
-  const size = 8
+  const size = GRID_FILL_HANDLE_SIZE
   const handle = rect(anchor.x + anchor.width - size / 2, anchor.y + anchor.height - size / 2, size, size)
   return clipRect(handle, rect(0, 0, getHostWidth(input.camera), getHostHeight(input.camera)))
 }

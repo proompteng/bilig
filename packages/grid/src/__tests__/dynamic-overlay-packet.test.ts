@@ -36,7 +36,7 @@ describe('dynamic overlay packet', () => {
     expect(overlay.gpuScene.fillRects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 146, y: 44, width: 150, height: 30 }),
-        expect.objectContaining({ x: 292, y: 70, width: 8, height: 8 }),
+        expect.objectContaining({ x: 290, y: 68, width: 12, height: 12 }),
         expect.objectContaining({ x: 297, y: 75, width: 98, height: 18 }),
       ]),
     )
@@ -44,6 +44,7 @@ describe('dynamic overlay packet', () => {
       expect.arrayContaining([
         expect.objectContaining({ x: 295, y: 0, width: 1, height: 220 }),
         expect.objectContaining({ x: 0, y: 73, width: 520, height: 1 }),
+        expect.objectContaining({ x: 290, y: 68, width: 1, height: 12 }),
         expect.objectContaining({ x: 145, y: 0, width: 1, height: 220 }),
         expect.objectContaining({ x: 0, y: 43, width: 520, height: 1 }),
       ]),

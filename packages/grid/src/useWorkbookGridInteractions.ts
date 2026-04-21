@@ -13,6 +13,7 @@ import {
 import { formatAddress } from '@bilig/formula'
 import { flushSync } from 'react-dom'
 import { createRectangleSelectionFromRange, rectangleToAddresses, selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
+import { resolveGridSelectionPendingSync } from './gridSelectionPendingSync.js'
 import { resolveFillHandlePreviewRange, resolveFillHandleSelectionRange } from './gridFillHandle.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import type { HeaderSelection, PointerGeometry, VisibleRegionState } from './gridPointer.js'
@@ -51,16 +52,6 @@ import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
-
-function selectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelectionSnapshot): boolean {
-  return (
-    left.sheetName === right.sheetName &&
-    left.address === right.address &&
-    left.kind === right.kind &&
-    left.range.startAddress === right.range.startAddress &&
-    left.range.endAddress === right.range.endAddress
-  )
-}
 
 export function useWorkbookGridInteractions(
   input: Pick<
@@ -189,6 +180,7 @@ export function useWorkbookGridInteractions(
   const suppressNextNativePasteRef = useRef(false)
   const pendingTypeSeedRef = useRef<string | null>(null)
   const pendingLocalSelectionSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
+  const pendingLocalSelectionBaseSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
   const lastResizeHandleActivationRef = useRef<{ columnIndex: number; at: number } | null>(null)
   const fillPreviewRangeRef = useRef(fillPreviewRange)
   const fillHandleCleanupRef = useRef<(() => void) | null>(null)
@@ -247,23 +239,16 @@ export function useWorkbookGridInteractions(
     activeSheetRef.current = sheetName
     setGridSelection((current) => {
       const currentSnapshot = selectionToSnapshot(current, selectionSnapshot.sheetName, selectionSnapshot.address)
-      const pendingLocalSelection = pendingLocalSelectionSnapshotRef.current
-      if (sheetChanged) {
-        pendingLocalSelectionSnapshotRef.current = null
-      } else if (pendingLocalSelection && selectionSnapshotsEqual(pendingLocalSelection, selectionSnapshot)) {
-        pendingLocalSelectionSnapshotRef.current = null
-        return current
-      } else if (pendingLocalSelection && selectionSnapshotsEqual(currentSnapshot, pendingLocalSelection)) {
-        return current
-      }
-      if (
-        !sheetChanged &&
-        currentSnapshot.sheetName === selectionSnapshot.sheetName &&
-        currentSnapshot.address === selectionSnapshot.address &&
-        currentSnapshot.kind === selectionSnapshot.kind &&
-        currentSnapshot.range.startAddress === selectionSnapshot.range.startAddress &&
-        currentSnapshot.range.endAddress === selectionSnapshot.range.endAddress
-      ) {
+      const sync = resolveGridSelectionPendingSync({
+        currentSnapshot,
+        externalSnapshot: selectionSnapshot,
+        pendingBaseSnapshot: pendingLocalSelectionBaseSnapshotRef.current,
+        pendingLocalSnapshot: pendingLocalSelectionSnapshotRef.current,
+        sheetChanged,
+      })
+      pendingLocalSelectionSnapshotRef.current = sync.pendingLocalSnapshot
+      pendingLocalSelectionBaseSnapshotRef.current = sync.pendingBaseSnapshot
+      if (sync.keepCurrentSelection) {
         return current
       }
       clearGridPendingPointerActivation(interactionState)
@@ -356,10 +341,11 @@ export function useWorkbookGridInteractions(
   const emitSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
       const nextSelectionSnapshot = selectionToSnapshot(nextSelection, sheetName, selectionSnapshot.address)
+      pendingLocalSelectionBaseSnapshotRef.current = selectionSnapshot
       pendingLocalSelectionSnapshotRef.current = nextSelectionSnapshot
       onSelectionChange(nextSelectionSnapshot)
     },
-    [onSelectionChange, selectionSnapshot.address, sheetName],
+    [onSelectionChange, selectionSnapshot, sheetName],
   )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
