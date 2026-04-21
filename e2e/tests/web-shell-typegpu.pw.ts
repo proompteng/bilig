@@ -69,6 +69,10 @@ function isResizeGuidePixel(point: ReadbackPoint): boolean {
   return point.a > 150 && point.g > point.r && point.r < 180 && point.b < 180
 }
 
+function expectNear(actual: number, expected: number, tolerance: number): void {
+  expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance)
+}
+
 test('isolated workbook pane renderer draws grid content through typegpu', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 640, height: 480 })
   await installTypeGpuReadbackHarness(page)
@@ -437,6 +441,112 @@ test('main workbook shell draws typegpu resize guides at exact geometry position
   await page.mouse.up()
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-resize-guide-readback.png', 'main-workbook-grid-resize-guide-readback')
+})
+
+test('main workbook shell keeps DOM editor overlay aligned to typegpu geometry while scrolling', async ({ page }, testInfo) => {
+  const targetCol = 3
+  const targetRow = 7
+  const scrollLeft = 37
+  const scrollTop = 13
+  const expectedLocalX = PRODUCT_ROW_MARKER_WIDTH + targetCol * PRODUCT_COLUMN_WIDTH - scrollLeft
+  const expectedLocalY = PRODUCT_HEADER_HEIGHT + targetRow * PRODUCT_ROW_HEIGHT - scrollTop
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page)
+  await waitForWorkbookReady(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const grid = await page.getByTestId('sheet-grid').boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  await clickProductCell(page, targetCol, targetRow)
+  await page.keyboard.press('F2')
+  await expect(page.getByTestId('cell-editor-input')).toBeVisible()
+
+  const initialSequence = await page.evaluate(() => {
+    return (
+      (
+        window as Window & { __biligGpuReadbackInspector?: { readonly getSequence: () => number } }
+      ).__biligGpuReadbackInspector?.getSequence() ?? 0
+    )
+  })
+
+  await page.getByTestId('grid-scroll-viewport').evaluate(
+    (viewport, target) => {
+      if (!(viewport instanceof HTMLDivElement)) {
+        throw new Error('grid scroll viewport is not a div')
+      }
+      viewport.scrollLeft = target.left
+      viewport.scrollTop = target.top
+      viewport.dispatchEvent(new Event('scroll'))
+    },
+    { left: scrollLeft, top: scrollTop },
+  )
+  await waitForReadbackSequence(page, initialSequence)
+
+  const dpr = await page.evaluate(() => window.devicePixelRatio || 1)
+  const tolerance = Math.max(1, 1 / dpr)
+  const expectedViewportRect = {
+    x: grid.x + expectedLocalX,
+    y: grid.y + expectedLocalY,
+    width: PRODUCT_COLUMN_WIDTH,
+    height: PRODUCT_ROW_HEIGHT,
+  }
+
+  await expect
+    .poll(
+      async () => {
+        const box = await page.getByTestId('cell-editor-overlay').boundingBox()
+        if (!box) {
+          return Number.POSITIVE_INFINITY
+        }
+        return Math.max(
+          Math.abs(box.x - expectedViewportRect.x),
+          Math.abs(box.y - expectedViewportRect.y),
+          Math.abs(box.width - expectedViewportRect.width),
+          Math.abs(box.height - expectedViewportRect.height),
+        )
+      },
+      { timeout: 15_000 },
+    )
+    .toBeLessThanOrEqual(tolerance)
+
+  const editorBox = await page.getByTestId('cell-editor-overlay').boundingBox()
+  if (!editorBox) {
+    throw new Error('cell editor overlay is not visible')
+  }
+  expectNear(editorBox.x, expectedViewportRect.x, tolerance)
+  expectNear(editorBox.y, expectedViewportRect.y, tolerance)
+  expectNear(editorBox.width, expectedViewportRect.width, tolerance)
+  expectNear(editorBox.height, expectedViewportRect.height, tolerance)
+
+  const readback = await waitForReadback(
+    page,
+    {
+      points: [
+        { name: 'activeCellTopBorder', x: expectedLocalX + Math.floor(PRODUCT_COLUMN_WIDTH / 2), y: expectedLocalY },
+        { name: 'activeCellLeftBorder', x: expectedLocalX, y: expectedLocalY + Math.floor(PRODUCT_ROW_HEIGHT / 2) },
+      ],
+      regions: [],
+    },
+    (result) => result.points.activeCellTopBorder.a > 150 && result.points.activeCellLeftBorder.a > 150,
+  )
+
+  expect(readback.points.activeCellTopBorder.a).toBeGreaterThan(150)
+  expect(readback.points.activeCellLeftBorder.a).toBeGreaterThan(150)
+
+  await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-editor-overlay-readback.png', 'main-workbook-grid-editor-overlay-readback')
 })
 
 test('main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
