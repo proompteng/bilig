@@ -299,6 +299,7 @@ export function createEngineStructureService(args: {
 
   const canDeferSimpleStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
     transform.kind !== 'delete' &&
+    transform.axis === 'column' &&
     formula.rangeDependencies.length === 0 &&
     formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
     !formula.compiled.volatile &&
