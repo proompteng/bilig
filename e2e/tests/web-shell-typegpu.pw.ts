@@ -97,7 +97,7 @@ test('isolated workbook pane renderer draws grid content through typegpu', async
   await saveReadbackArtifact(page, testInfo, 'isolated-pane-renderer-readback.png', 'isolated-pane-renderer-readback')
 })
 
-test('main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {
+test('@browser-serial main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {
   const rangeFillPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 2 + 24,
     y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 2 + Math.floor(PRODUCT_ROW_HEIGHT / 2),
