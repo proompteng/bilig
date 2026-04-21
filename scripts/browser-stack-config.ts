@@ -19,6 +19,7 @@ export function buildBrowserLocalStackCommand(input: {
     `BILIG_DEV_POSTGRES_PORT=${input.browserPostgresPort}`,
     `BILIG_DEV_ZERO_PORT=${input.browserZeroPort}`,
     `BILIG_DEV_WEB_SERVER_MODE=${input.webMode}`,
+    'BILIG_DEV_APP_SERVER_MODE=run',
     'BILIG_DEV_COMPOSE_PROJECT=bilig-playwright-local',
     'BILIG_DEV_CLEANUP_COMPOSE=true',
     input.disableCompose ? 'BILIG_DEV_DISABLE_COMPOSE=1' : null,

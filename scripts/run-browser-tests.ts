@@ -184,7 +184,7 @@ const composeFile = process.env['BILIG_E2E_COMPOSE_FILE'] ?? 'compose.yaml'
 const composeProject = process.env['BILIG_E2E_COMPOSE_PROJECT'] ?? `bilig-e2e-${Date.now()}`
 const composeStartupTimeoutMs = resolveTimeoutMs(process.env['BILIG_E2E_STARTUP_TIMEOUT_MS'], isCi ? 300_000 : 120_000)
 
-const PREVIEW_PORTS = [4179, 4180]
+const DEFAULT_PREVIEW_PORTS = [4179, 4180] as const
 
 function resolveTimeoutMs(value: string | undefined, fallbackMs: number): number {
   if (!value) {
@@ -352,7 +352,10 @@ function getE2eZeroKeepaliveUrl(): string {
 }
 
 function terminatePreviewServers(): void {
-  const pids = Array.from(new Set(PREVIEW_PORTS.flatMap((port) => getListeningPids(port))))
+  const ports = [...DEFAULT_PREVIEW_PORTS, Number.parseInt(e2eWebPort, 10), Number.parseInt(e2eSyncServerPort, 10)].filter(
+    (port) => Number.isInteger(port) && port > 0,
+  )
+  const pids = Array.from(new Set(ports.flatMap((port) => getListeningPids(port))))
   if (pids.length === 0) {
     return
   }

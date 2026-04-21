@@ -11,16 +11,17 @@ describe('browser stack config', () => {
   })
 
   it('adds the resolved web mode to the local playwright stack command', () => {
-    expect(
-      buildBrowserLocalStackCommand({
-        browserWebPort: '4180',
-        browserAppPort: '54422',
-        browserPostgresPort: '55433',
-        browserZeroPort: '54849',
-        disableCompose: true,
-        remoteSyncEnabled: false,
-        webMode: 'preview',
-      }),
-    ).toContain('BILIG_DEV_WEB_SERVER_MODE=preview')
+    const command = buildBrowserLocalStackCommand({
+      browserWebPort: '4180',
+      browserAppPort: '54422',
+      browserPostgresPort: '55433',
+      browserZeroPort: '54849',
+      disableCompose: true,
+      remoteSyncEnabled: false,
+      webMode: 'preview',
+    })
+
+    expect(command).toContain('BILIG_DEV_WEB_SERVER_MODE=preview')
+    expect(command).toContain('BILIG_DEV_APP_SERVER_MODE=run')
   })
 })

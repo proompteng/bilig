@@ -24,6 +24,7 @@ const preferredWebPort = Number.parseInt(process.env['BILIG_WEB_DEV_PORT'] ?? '5
 const configuredZeroProxyUpstream = process.env['BILIG_ZERO_PROXY_UPSTREAM']
 const disableCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
 const webServerMode = process.env['BILIG_DEV_WEB_SERVER_MODE'] === 'preview' ? 'preview' : 'dev'
+const appServerMode = process.env['BILIG_DEV_APP_SERVER_MODE'] === 'run' ? 'run' : 'watch'
 const preferredZeroPort = resolvePreferredZeroPort(process.env['BILIG_DEV_ZERO_PORT'], configuredZeroProxyUpstream, 4848)
 const composePublishedHost = resolveComposePublishedHost()
 const cleanupCompose = process.env['BILIG_DEV_CLEANUP_COMPOSE'] === 'true'
@@ -474,7 +475,11 @@ function spawnAppDev(
     env['BILIG_ZERO_PROXY_UPSTREAM'] = options.zeroProxyUpstream
     env['BILIG_ZERO_CACHE_URL'] = '/zero'
   }
-  return Bun.spawn(['pnpm', '--filter', '@bilig/app', 'run', 'dev'], {
+  const command =
+    appServerMode === 'run'
+      ? ['pnpm', '--filter', '@bilig/app', 'exec', 'tsx', 'src/index.ts']
+      : ['pnpm', '--filter', '@bilig/app', 'run', 'dev']
+  return Bun.spawn(command, {
     stdin: childStdinMode(),
     stdout: 'inherit',
     stderr: 'inherit',
