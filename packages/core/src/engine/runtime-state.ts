@@ -247,6 +247,7 @@ export interface RuntimeStructuralFormulaSourceTransform {
   readonly ownerSheetName: string
   readonly targetSheetName: string
   readonly transform: StructuralAxisTransform
+  readonly preservesValue: boolean
 }
 
 export interface RuntimeFormula {

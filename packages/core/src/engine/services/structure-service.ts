@@ -504,7 +504,8 @@ export function createEngineStructureService(args: {
     formula.compiled.symbolicNames.length === 0 &&
     formula.compiled.symbolicTables.length === 0 &&
     formula.compiled.symbolicSpills.length === 0 &&
-    formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
+    !formula.source.includes('#REF!') &&
+    formula.compiled.deps.every((dependency) => !dependency.includes('#REF!')) &&
     isStructurallyStableSimpleFormulaNode(formula.compiled.optimizedAst)
 
   const structuralRewritePreservesDirectCellDependencies = (
@@ -654,9 +655,27 @@ export function createEngineStructureService(args: {
           ownerSheetName,
           targetSheetName: argsForResolve.sheetName,
           transform: argsForResolve.transform,
+          preservesValue: true,
         }
         hasDeferredStructuralFormulaSources = true
         preservedCellIndices.push(cellIndex)
+        return
+      }
+      if (
+        !touchesChangedName &&
+        !touchesChangedTable &&
+        !shouldBypassTemplateStructuralRewrite &&
+        argsForResolve.transform.kind === 'delete' &&
+        canDeferStructuralDirectCellTransform(formula) &&
+        formula.dependencyIndices.every((dependencyCellIndex) => isCellIndexMapped(dependencyCellIndex))
+      ) {
+        formula.structuralSourceTransform = {
+          ownerSheetName,
+          targetSheetName: argsForResolve.sheetName,
+          transform: argsForResolve.transform,
+          preservesValue: false,
+        }
+        hasDeferredStructuralFormulaSources = true
         return
       }
       const templateRewrite =
@@ -1132,6 +1151,7 @@ export function createEngineStructureService(args: {
           ownerSheetName,
           targetSheetName: argsForImpact.sheetName,
           transform: argsForImpact.transform,
+          preservesValue: true,
         }
         hasDeferredStructuralFormulaSources = true
         preservedCellIndices.add(cellIndex)
@@ -1249,6 +1269,7 @@ export function createEngineStructureService(args: {
       }
       const source = getRuntimeFormulaSource(formula)
       const compiled = getRuntimeFormulaStructuralCompiled(formula)
+      const preservesValue = formula.structuralSourceTransform.preservesValue
       inputs.push({
         cellIndex,
         ownerSheetName,
@@ -1260,7 +1281,7 @@ export function createEngineStructureService(args: {
               compiled,
               ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
               preservesBinding: true,
-              preservesValue: true,
+              preservesValue,
             }
           : {}),
       })
