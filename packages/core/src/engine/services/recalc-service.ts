@@ -244,6 +244,27 @@ export function createEngineRecalcService(args: {
     let pendingKernelSyncCount = deferredKernelSyncCount
     const volatileState = createRecalcVolatileState(args.now)
 
+    if (changedRoots.length === 0 && kernelSyncRoots.length > 0) {
+      for (let index = 0; index < kernelSyncRoots.length; index += 1) {
+        const cellIndex = kernelSyncRoots[index]!
+        if (deferredKernelSyncSeen[cellIndex] === deferredKernelSyncEpoch) {
+          continue
+        }
+        deferredKernelSyncSeen[cellIndex] = deferredKernelSyncEpoch
+        pendingKernelSync[pendingKernelSyncCount] = cellIndex
+        pendingKernelSyncCount += 1
+      }
+      const lastMetrics = { ...args.state.getLastMetrics() }
+      lastMetrics.dirtyFormulaCount = 0
+      lastMetrics.jsFormulaCount = 0
+      lastMetrics.wasmFormulaCount = 0
+      lastMetrics.rangeNodeVisits = 0
+      lastMetrics.recalcMs = args.performanceNow() - started
+      args.state.setLastMetrics(lastMetrics)
+      args.setDeferredKernelSyncCount(pendingKernelSyncCount)
+      return args.emptyChangedSet()
+    }
+
     const flushWasmBatch = (batchCount: number, hasVolatile: boolean, randCount: number): number => {
       if (batchCount === 0) {
         return 0

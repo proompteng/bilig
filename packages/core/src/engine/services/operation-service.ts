@@ -837,6 +837,16 @@ export function createEngineOperationService(args: {
     return found
   }
 
+  const canSkipDirtyTraversalForChangedInputs = (changedInputCellIndices: U32, changedInputCount: number): boolean => {
+    for (let index = 0; index < changedInputCount; index += 1) {
+      const cellIndex = changedInputCellIndices[index]!
+      if (args.getEntityDependents(makeCellEntity(cellIndex)).length > 0) {
+        return false
+      }
+    }
+    return true
+  }
+
   const hasTrackedExactLookupDependents = (sheetId: number, col: number): boolean => {
     const slice = args.reverseState.reverseExactLookupColumnEdges.get(entityPayload(makeExactLookupColumnEntity(sheetId, col)))
     return slice !== undefined && slice.len > 0
@@ -858,7 +868,7 @@ export function createEngineOperationService(args: {
     if (cached !== undefined) {
       return cached
     }
-    const dependents = args.collectFormulaDependents(makeExactLookupColumnEntity(sheetId, col))
+    const dependents = args.getEntityDependents(makeExactLookupColumnEntity(sheetId, col))
     const entries: ExactLookupImpactEntry[] = []
     const operandKeys = new Set<string>()
     for (let index = 0; index < dependents.length; index += 1) {
@@ -959,7 +969,7 @@ export function createEngineOperationService(args: {
     if (!sheet) {
       return formulaChangedCount
     }
-    const dependents = args.collectFormulaDependents(makeSortedLookupColumnEntity(sheet.id, request.col))
+    const dependents = args.getEntityDependents(makeSortedLookupColumnEntity(sheet.id, request.col))
     if (dependents.length === 0) {
       return formulaChangedCount
     }
@@ -2050,11 +2060,20 @@ export function createEngineOperationService(args: {
     if (hasActiveFormulas || hasActivePivots || refreshAllPivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
+      const canUseKernelSyncOnlyRecalc =
+        formulaChangedCount === 0 &&
+        changedInputCount > 0 &&
+        precomputedKernelSyncCellIndices.length === 0 &&
+        !refreshAllPivots &&
+        canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount)
+      const changedRoots = canUseKernelSyncOnlyRecalc
+        ? new Uint32Array()
+        : args.composeMutationRoots(changedInputCount, formulaChangedCount)
       const kernelSyncRoots =
         precomputedKernelSyncCellIndices.length === 0
           ? changedInputArray
           : Uint32Array.from([...changedInputArray, ...precomputedKernelSyncCellIndices])
-      recalculated = args.recalculate(args.composeMutationRoots(changedInputCount, formulaChangedCount), kernelSyncRoots)
+      recalculated = args.recalculate(changedRoots, kernelSyncRoots)
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {
@@ -2648,7 +2667,12 @@ export function createEngineOperationService(args: {
     if (hasActiveFormulas || hasActivePivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
-      recalculated = args.recalculate(args.composeMutationRoots(changedInputCount, formulaChangedCount), changedInputArray)
+      const canUseKernelSyncOnlyRecalc =
+        formulaChangedCount === 0 && changedInputCount > 0 && canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount)
+      const changedRoots = canUseKernelSyncOnlyRecalc
+        ? new Uint32Array()
+        : args.composeMutationRoots(changedInputCount, formulaChangedCount)
+      recalculated = args.recalculate(changedRoots, changedInputArray)
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {
