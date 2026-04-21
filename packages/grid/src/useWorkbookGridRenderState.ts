@@ -313,6 +313,10 @@ export function useWorkbookGridRenderState(input: {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return undefined
       }
+      const geometryRect = gridCameraStore.getSnapshot()?.cellScreenRect(col, row)
+      if (geometryRect) {
+        return geometryRect
+      }
       const width = columnAxis.sizeOf(col)
       const height = rowAxis.sizeOf(row)
       if (width <= 0 || height <= 0 || columnAxis.isHidden(col) || rowAxis.isHidden(row)) {
@@ -330,7 +334,7 @@ export function useWorkbookGridRenderState(input: {
         height,
       }
     },
-    [columnAxis, freezeCols, freezeRows, gridMetrics.headerHeight, gridMetrics.rowMarkerWidth, rowAxis],
+    [columnAxis, freezeCols, freezeRows, gridCameraStore, gridMetrics.headerHeight, gridMetrics.rowMarkerWidth, rowAxis],
   )
 
   const getCellScreenBounds = useCallback(
