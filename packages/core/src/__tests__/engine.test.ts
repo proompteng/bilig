@@ -4999,6 +4999,38 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 10 })
   })
 
+  it('defers deleted-column ref errors without rebinding simple formulas', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structural-column-ref-error-deferral' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 2)
+    engine.setCellValue('Sheet1', 'B1', 3)
+    engine.setCellValue('Sheet1', 'B2', true)
+    engine.setCellValue('Sheet1', 'B3', 'restore-me')
+    engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
+    engine.setCellFormula('Sheet1', 'D1', 'C1*2')
+
+    engine.resetPerformanceCounters()
+    engine.deleteColumns('Sheet1', 1, 1)
+
+    expect(engine.getCell('Sheet1', 'B1').formula).toBe('A1+#REF!')
+    expect(engine.getCell('Sheet1', 'C1').formula).toBe('B1*2')
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref })
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      structuralFormulaImpactCandidates: 0,
+      structuralFormulaRebindInputs: 0,
+      structuralUndoCapturedCells: 3,
+    })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Boolean, value: true })
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.String, value: 'restore-me', stringId: expect.any(Number) })
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 5 })
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 10 })
+  })
+
   it('keeps repeated row-shifted formula families correct across structural column transforms', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structural-column-families' })
     await engine.ready()
