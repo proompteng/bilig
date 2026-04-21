@@ -58,6 +58,43 @@ export function mapStructuralAxisIndex(index: number, transform: StructuralAxisT
   }
 }
 
+export function inverseMapStructuralAxisIndex(index: number, transform: StructuralAxisTransform): number | undefined {
+  switch (transform.kind) {
+    case 'insert':
+      if (index < transform.start) {
+        return index
+      }
+      if (index >= transform.start + transform.count) {
+        return index - transform.count
+      }
+      return undefined
+    case 'delete':
+      return index >= transform.start ? index + transform.count : index
+    case 'move':
+      if (transform.target < transform.start) {
+        if (index >= transform.target && index < transform.target + transform.count) {
+          return transform.start + (index - transform.target)
+        }
+        if (index >= transform.target + transform.count && index < transform.start + transform.count) {
+          return index - transform.count
+        }
+        return index
+      }
+      if (transform.target > transform.start) {
+        if (index >= transform.target && index < transform.target + transform.count) {
+          return transform.start + (index - transform.target)
+        }
+        if (index >= transform.start && index < transform.target) {
+          return index + transform.count
+        }
+        return index
+      }
+      return index
+    default:
+      return assertNever(transform)
+  }
+}
+
 export function mapStructuralBoundary(boundary: number, transform: StructuralAxisTransform): number {
   if (boundary <= 0) {
     return 0

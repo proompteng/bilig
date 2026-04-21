@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../engine-structural-utils.js'
+import {
+  inverseMapStructuralAxisIndex,
+  mapStructuralAxisIndex,
+  mapStructuralBoundary,
+  structuralTransformForOp,
+} from '../engine-structural-utils.js'
 
 describe('engine structural utils', () => {
   it('builds structural transforms from workbook ops', () => {
@@ -38,7 +43,22 @@ describe('engine structural utils', () => {
     expect(mapStructuralAxisIndex(3, transform)).toBeUndefined()
     expect(mapStructuralAxisIndex(4, transform)).toBeUndefined()
     expect(mapStructuralAxisIndex(6, transform)).toBe(4)
+    expect(inverseMapStructuralAxisIndex(4, transform)).toBe(6)
     expect(mapStructuralBoundary(4, transform)).toBe(0)
+  })
+
+  it('maps inserted spans back to previous coordinates outside the inserted gap', () => {
+    const transform = structuralTransformForOp({
+      kind: 'insertColumns',
+      sheetName: 'Sheet1',
+      start: 3,
+      count: 2,
+    })
+
+    expect(inverseMapStructuralAxisIndex(2, transform)).toBe(2)
+    expect(inverseMapStructuralAxisIndex(3, transform)).toBeUndefined()
+    expect(inverseMapStructuralAxisIndex(4, transform)).toBeUndefined()
+    expect(inverseMapStructuralAxisIndex(5, transform)).toBe(3)
   })
 
   it('maps moved spans when the target is before the source', () => {
@@ -54,6 +74,8 @@ describe('engine structural utils', () => {
     expect(mapStructuralAxisIndex(4, transform)).toBe(6)
     expect(mapStructuralAxisIndex(5, transform)).toBe(1)
     expect(mapStructuralAxisIndex(6, transform)).toBe(2)
+    expect(inverseMapStructuralAxisIndex(1, transform)).toBe(5)
+    expect(inverseMapStructuralAxisIndex(3, transform)).toBe(1)
   })
 
   it('maps moved spans when the target is after the source', () => {
@@ -70,6 +92,8 @@ describe('engine structural utils', () => {
     expect(mapStructuralAxisIndex(4, transform)).toBe(2)
     expect(mapStructuralAxisIndex(6, transform)).toBe(4)
     expect(mapStructuralBoundary(3, transform)).toBe(6)
+    expect(inverseMapStructuralAxisIndex(5, transform)).toBe(2)
+    expect(inverseMapStructuralAxisIndex(2, transform)).toBe(4)
   })
 
   it('throws for unsupported structural op and transform variants', () => {

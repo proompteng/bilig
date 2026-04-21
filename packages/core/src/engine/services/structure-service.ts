@@ -13,7 +13,12 @@ import {
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue } from '../../engine-value-utils.js'
-import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
+import {
+  inverseMapStructuralAxisIndex,
+  mapStructuralAxisIndex,
+  mapStructuralBoundary,
+  structuralTransformForOp,
+} from '../../engine-structural-utils.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { FormulaTable } from '../../formula-table.js'
 import {
@@ -509,6 +514,9 @@ export function createEngineStructureService(args: {
         `${transform.kind === 'move' ? transform.target : ''}`
       let rewrittenTemplate = cache.get(cacheKey)
       if (rewrittenTemplate === undefined) {
+        if (formula.compiled.astMatchesSource === false) {
+          return undefined
+        }
         rewrittenTemplate =
           rewriteTemplateForStructuralTransform({
             template: {
@@ -575,23 +583,41 @@ export function createEngineStructureService(args: {
       )
       const shouldBypassTemplateStructuralRewrite = ownerSheetName !== argsForResolve.sheetName && touchesTargetSheetDependency
       const representative = remappedCellsByIndex.get(cellIndex)
-      const compiledRewrite = rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform)
+      const previousOwnerRow =
+        representative?.fromRow ??
+        (ownerSheetName === argsForResolve.sheetName && argsForResolve.transform.axis === 'row'
+          ? inverseMapStructuralAxisIndex(ownerRow, argsForResolve.transform)
+          : ownerRow)
+      const previousOwnerCol =
+        representative?.fromCol ??
+        (ownerSheetName === argsForResolve.sheetName && argsForResolve.transform.axis === 'column'
+          ? inverseMapStructuralAxisIndex(ownerCol, argsForResolve.transform)
+          : ownerCol)
       const templateRewrite =
-        !touchesChangedName && !touchesChangedTable && !shouldBypassTemplateStructuralRewrite && formula.templateId !== undefined
+        !touchesChangedName &&
+        !touchesChangedTable &&
+        !shouldBypassTemplateStructuralRewrite &&
+        formula.templateId !== undefined &&
+        previousOwnerRow !== undefined &&
+        previousOwnerCol !== undefined
           ? rewriteFormulaFromTemplate(
               formula,
               {
                 templateId: formula.templateId,
                 ownerSheetName,
                 targetSheetName: argsForResolve.sheetName,
-                representativeRow: representative?.fromRow ?? ownerRow,
-                representativeCol: representative?.fromCol ?? ownerCol,
+                representativeRow: previousOwnerRow,
+                representativeCol: previousOwnerCol,
                 ownerRow,
                 ownerCol,
               },
               argsForResolve.sheetName,
               argsForResolve.transform,
             )
+          : undefined
+      const compiledRewrite =
+        templateRewrite === undefined
+          ? rewriteStructuralFormulaCompiled(formula, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform)
           : undefined
       const rewritten = !touchesChangedName && !touchesChangedTable ? (compiledRewrite ?? templateRewrite) : compiledRewrite
       if (!rewritten) {
