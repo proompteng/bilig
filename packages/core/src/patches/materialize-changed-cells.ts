@@ -1,4 +1,4 @@
-import { formatAddress } from '@bilig/formula'
+import { formatAddress, indexToColumn } from '@bilig/formula'
 import type { EngineChangedCell } from '@bilig/protocol'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import type { StringPool } from '../string-pool.js'
@@ -80,6 +80,15 @@ export function materializeChangedCellPatches(
     return patches
   }
   const sheetNames = new Map<number, string>()
+  const columnLabels: string[] = []
+  const formatAddressCached = (row: number, col: number): string => {
+    let label = columnLabels[col]
+    if (label === undefined) {
+      label = indexToColumn(col)
+      columnLabels[col] = label
+    }
+    return `${label}${row + 1}`
+  }
   const patches: EngineCellPatch[] = []
   for (let index = 0; index < changedCellIndices.length; index += 1) {
     const cellIndex = changedCellIndices[index]!
@@ -87,15 +96,23 @@ export function materializeChangedCellPatches(
     if (sheetId === undefined) {
       continue
     }
+    const position = args.workbook.getCellPosition(cellIndex)
+    if (!position) {
+      continue
+    }
     let sheetName = sheetNames.get(sheetId)
     if (sheetName === undefined) {
       sheetName = args.workbook.getSheetNameById(sheetId)
       sheetNames.set(sheetId, sheetName)
     }
-    const patch = readChangedCell(args, cellIndex, sheetName)
-    if (patch) {
-      patches.push(patch)
-    }
+    patches.push({
+      kind: 'cell',
+      cellIndex,
+      address: { sheet: sheetId, row: position.row, col: position.col },
+      sheetName,
+      a1: formatAddressCached(position.row, position.col),
+      newValue: args.workbook.cellStore.getValue(cellIndex, (id) => args.strings.get(id)),
+    })
   }
   if (args.counters) {
     addEngineCounter(args.counters, 'changedCellPayloadsBuilt', patches.length)

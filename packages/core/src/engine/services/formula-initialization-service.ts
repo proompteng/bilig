@@ -114,7 +114,10 @@ export function createEngineFormulaInitializationService(args: {
     refs: readonly Entry[],
     potentialNewCells: number | undefined,
     resolveCellIndex: (ref: Entry) => number,
-    resolveEntry: (ref: Entry) => {
+    resolveEntry: (
+      ref: Entry,
+      cellIndex: number,
+    ) => {
       cellIndex: number
       ownerSheetName: string
       source: string
@@ -146,13 +149,14 @@ export function createEngineFormulaInitializationService(args: {
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
+      const compileStarted = performance.now()
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
-        refs.forEach((ref, refIndex) => {
-          const compileStarted = performance.now()
+        for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
+          const ref = refs[refIndex]!
+          const cellIndex = hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!
           try {
-            const prepared = resolveEntry(ref)
+            const prepared = resolveEntry(ref, cellIndex)
             args.bindPreparedFormula(prepared.cellIndex, prepared.ownerSheetName, prepared.source, prepared.compiled, prepared.templateId)
-            compileMs += performance.now() - compileStarted
             formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
             topologyChanged = true
             orderedPreparedCellIndices.push(prepared.cellIndex)
@@ -169,18 +173,17 @@ export function createEngineFormulaInitializationService(args: {
               }
             }
           } catch {
-            compileMs += performance.now() - compileStarted
-            const cellIndex = hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!
             topologyChanged = args.removeFormula(cellIndex) || topologyChanged
             args.setInvalidFormulaValue(cellIndex)
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
           }
-          pendingFormulaCellIndices?.delete(hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!)
-        })
+          pendingFormulaCellIndices?.delete(cellIndex)
+        }
         const reboundCount = formulaChangedCount
         formulaChangedCount = args.syncDynamicRanges(formulaChangedCount)
         topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
       })
+      compileMs += performance.now() - compileStarted
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
       args.flushWasmProgramSync()
@@ -230,12 +233,11 @@ export function createEngineFormulaInitializationService(args: {
         }
         return args.ensureCellTrackedByCoords(ref.sheetId, ref.mutation.row, ref.mutation.col)
       },
-      (ref) => {
+      (ref, cellIndex) => {
         if (ref.mutation.kind !== 'setCellFormula') {
           throw new Error('initializeCellFormulasAt only supports setCellFormula coordinate mutations')
         }
         const ownerSheetName = resolveSheetName(ref.sheetId)
-        const cellIndex = args.ensureCellTrackedByCoords(ref.sheetId, ref.mutation.row, ref.mutation.col)
         const template = args.compileTemplateFormula(ref.mutation.formula, ref.mutation.row, ref.mutation.col)
         return {
           cellIndex,
@@ -253,8 +255,8 @@ export function createEngineFormulaInitializationService(args: {
       refs,
       potentialNewCells,
       (ref) => args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col),
-      (ref) => ({
-        cellIndex: args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col),
+      (ref, cellIndex) => ({
+        cellIndex,
         ownerSheetName: resolveSheetName(ref.sheetId),
         source: ref.source,
         compiled: ref.compiled,
@@ -288,16 +290,16 @@ export function createEngineFormulaInitializationService(args: {
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
+      const compileStarted = performance.now()
       args.state.workbook.withBatchedColumnVersionUpdates(() => {
-        refs.forEach((ref, refIndex) => {
-          const compileStarted = performance.now()
+        for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
+          const ref = refs[refIndex]!
           const cellIndex = hadExistingFormulas
             ? args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col)
             : targetCellIndices[refIndex]!
           const ownerSheetName = resolveSheetName(ref.sheetId)
           topologyChanged = args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId) || topologyChanged
           args.writeHydratedFormulaValue(cellIndex, ref.value)
-          compileMs += performance.now() - compileStarted
           if (canAssignTopoInBatch && pendingFormulaCellIndices) {
             const runtimeFormula = args.state.formulas.get(cellIndex)
             if (
@@ -311,8 +313,9 @@ export function createEngineFormulaInitializationService(args: {
             }
           }
           pendingFormulaCellIndices?.delete(cellIndex)
-        })
+        }
       })
+      compileMs += performance.now() - compileStarted
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
     }

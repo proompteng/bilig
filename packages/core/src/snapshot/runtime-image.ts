@@ -74,8 +74,20 @@ export interface HydratedPreparedRuntimeFormulaRef extends PreparedRuntimeFormul
   readonly value: CellValue
 }
 
+interface RestoredFormulaInstance {
+  readonly record: FormulaInstanceSnapshot
+  readonly value?: CellValue
+}
+
 function toFormulaInstanceKey(sheetName: string, row: number, col: number): string {
   return `${sheetName}\t${row}\t${col}`
+}
+
+function formulaValueMatchesInstance(
+  record: FormulaInstanceSnapshot,
+  value: RuntimeImageFormulaValueSnapshot | undefined,
+): value is RuntimeImageFormulaValueSnapshot {
+  return value !== undefined && value.sheetName === record.sheetName && value.row === record.row && value.col === record.col
 }
 
 function resolveRestoredCellCoordinates(args: {
@@ -257,14 +269,23 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
 
   args.hydrateTemplateBank(args.runtimeImage.templateBank)
 
-  const formulaInstancesByAddress = new Map<string, FormulaInstanceSnapshot>()
-  args.runtimeImage.formulaInstances.forEach((record) => {
-    formulaInstancesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record)
+  let formulaValuesByAddress: Map<string, CellValue> | undefined
+  const formulaInstancesByAddress = new Map<string, RestoredFormulaInstance>()
+  args.runtimeImage.formulaInstances.forEach((record, index) => {
+    const valueRecord = args.runtimeImage.formulaValues[index]
+    if (!formulaValueMatchesInstance(record, valueRecord)) {
+      formulaValuesByAddress ??= new Map<string, CellValue>()
+    }
+    formulaInstancesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), {
+      record,
+      ...(formulaValueMatchesInstance(record, valueRecord) ? { value: valueRecord.value } : {}),
+    })
   })
-  const formulaValuesByAddress = new Map<string, CellValue>()
-  args.runtimeImage.formulaValues.forEach((record) => {
-    formulaValuesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record.value)
-  })
+  if (formulaValuesByAddress) {
+    args.runtimeImage.formulaValues.forEach((record) => {
+      formulaValuesByAddress!.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record.value)
+    })
+  }
   const sheetCellsByName = new Map<string, readonly RuntimeImageCellCoordinateSnapshot[]>(
     (args.runtimeImage.sheetCells ?? []).map((record) => [record.sheetName, record.coords]),
   )
@@ -278,13 +299,15 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
       throw new Error(`Missing sheet during runtime image restore: ${sheet.name}`)
     }
     const sheetCoords = sheetCellsByName.get(sheet.name)
-    sheet.cells.forEach((cell, index) => {
+    for (let index = 0; index < sheet.cells.length; index += 1) {
+      const cell = sheet.cells[index]!
       const coords = resolveRestoredCellCoordinates({
         sheetName: sheet.name,
         cellAddress: cell.address,
         indexedCoordinate: sheetCoords?.[index],
       })
-      const formulaInstance = formulaInstancesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+      const restoredFormula = formulaInstancesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+      const formulaInstance = restoredFormula?.record
       const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
       if (cell.formula === undefined && formulaInstance === undefined) {
         writeLiteralToCellStore(args.workbook.cellStore, ensured.cellIndex, cell.value ?? null, args.strings)
@@ -297,7 +320,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
         args.workbook.setCellFormat(ensured.cellIndex, cell.format)
       }
       if (formulaInstance) {
-        const cachedValue = formulaValuesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+        const cachedValue = restoredFormula.value ?? formulaValuesByAddress?.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
         if (
           formulaInstance.templateId !== undefined &&
           args.resolveTemplateById &&
@@ -315,7 +338,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
               templateId: template.templateId,
               value: cachedValue,
             })
-            return
+            continue
           }
         }
         if (formulaInstance.templateId !== undefined && args.resolveTemplateById && args.initializePreparedCellFormulasAt) {
@@ -329,7 +352,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
               compiled: template.compiled,
               templateId: template.templateId,
             })
-            return
+            continue
           }
         }
         formulaRefs.push({
@@ -352,7 +375,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
           },
         })
       }
-    })
+    }
   })
 
   if (hydratedPreparedFormulaRefs.length > 0 && args.initializeHydratedPreparedCellFormulasAt) {

@@ -369,11 +369,74 @@ export function createEngineRuntimeColumnStoreService(args: {
     readRangeValueMatrix({ sheetName, rowStart, rowEnd, colStart, colEnd }) {
       const width = colEnd - colStart + 1
       const height = rowEnd - rowStart + 1
+      const area = width * height
+      const sheet = area <= 16_384 ? args.state.workbook.getSheet(sheetName) : undefined
+      if (sheet) {
+        const rows: CellValue[][] = Array.from({ length: height }, () => [])
+        for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+          const row = rows[rowOffset]!
+          for (let colOffset = 0; colOffset < width; colOffset += 1) {
+            const cellIndex = sheet.grid.get(rowStart + rowOffset, colStart + colOffset)
+            if (cellIndex === -1) {
+              row[colOffset] = { tag: ValueTag.Empty }
+              continue
+            }
+            switch (args.state.workbook.cellStore.tags[cellIndex] ?? 0) {
+              case 1:
+                row[colOffset] = { tag: ValueTag.Number, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 }
+                break
+              case 2:
+                row[colOffset] = { tag: ValueTag.Boolean, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 }
+                break
+              case 3: {
+                const stringId = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
+                row[colOffset] = {
+                  tag: ValueTag.String,
+                  value: stringId === 0 ? '' : args.state.strings.get(stringId),
+                  stringId,
+                }
+                break
+              }
+              case 4:
+                row[colOffset] = { tag: ValueTag.Error, code: args.state.workbook.cellStore.errors[cellIndex]! }
+                break
+              case 0:
+              default:
+                row[colOffset] = { tag: ValueTag.Empty }
+                break
+            }
+          }
+        }
+        return rows
+      }
       const rows: CellValue[][] = Array.from({ length: height }, () => [])
       for (let colOffset = 0; colOffset < width; colOffset += 1) {
         const slice = getColumnSlice({ sheetName, rowStart, rowEnd, col: colStart + colOffset })
         for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-          rows[rowOffset]![colOffset] = materializeCellValueFromSlice(slice, rowOffset)
+          switch (slice.tags[rowOffset] ?? 0) {
+            case 1:
+              rows[rowOffset]![colOffset] = { tag: ValueTag.Number, value: slice.numbers[rowOffset] ?? 0 }
+              break
+            case 2:
+              rows[rowOffset]![colOffset] = { tag: ValueTag.Boolean, value: (slice.numbers[rowOffset] ?? 0) !== 0 }
+              break
+            case 3: {
+              const stringId = slice.stringIds[rowOffset] ?? 0
+              rows[rowOffset]![colOffset] = {
+                tag: ValueTag.String,
+                value: stringId === 0 ? '' : args.state.strings.get(stringId),
+                stringId,
+              }
+              break
+            }
+            case 4:
+              rows[rowOffset]![colOffset] = { tag: ValueTag.Error, code: slice.errors[rowOffset]! }
+              break
+            case 0:
+            default:
+              rows[rowOffset]![colOffset] = { tag: ValueTag.Empty }
+              break
+          }
         }
       }
       return rows

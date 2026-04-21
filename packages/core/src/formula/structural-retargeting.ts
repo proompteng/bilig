@@ -1,6 +1,10 @@
 import {
+  canTranslateCompiledFormulaWithoutAst,
+  columnToIndex,
+  indexToColumn,
   rewriteCompiledFormulaForStructuralTransform,
   translateCompiledFormula,
+  translateCompiledFormulaWithoutAst,
   type CompiledFormula,
   type StructuralAxisTransform,
 } from '@bilig/formula'
@@ -94,10 +98,54 @@ export function retargetStructurallyRewrittenTemplateInstance(args: {
     }
   }
 
+  if (canTranslateCompiledFormulaWithoutAst(args.rewrittenTemplate.compiled)) {
+    const source = translateSimpleReferenceSource(args.rewrittenTemplate.source, rowDelta, colDelta)
+    if (source !== undefined) {
+      const translated = translateCompiledFormulaWithoutAst(args.rewrittenTemplate.compiled, rowDelta, colDelta, source)
+      return {
+        source: translated.source,
+        compiled: translated.compiled,
+        reusedProgram: args.rewrittenTemplate.reusedProgram,
+      }
+    }
+  }
+
   const translated = translateCompiledFormula(args.rewrittenTemplate.compiled, rowDelta, colDelta)
   return {
     source: translated.source,
     compiled: translated.compiled,
     reusedProgram: args.rewrittenTemplate.reusedProgram,
   }
+}
+
+const SIMPLE_REFERENCE_TOKEN_RE = /(^|[^A-Z0-9_.$])(\$?)([A-Z]{1,3})(\$?)([1-9][0-9]*)(?=$|[^A-Z0-9_])/g
+
+function translateSimpleReferenceSource(source: string, rowDelta: number, colDelta: number): string | undefined {
+  if (
+    source.includes('"') ||
+    source.includes("'") ||
+    source.includes('!') ||
+    source.includes('[') ||
+    source.includes(']') ||
+    source.includes('{') ||
+    source.includes('}')
+  ) {
+    return undefined
+  }
+  let failed = false
+  const translated = source.replace(
+    SIMPLE_REFERENCE_TOKEN_RE,
+    (token: string, prefix: string, colAbsolute: string, columnText: string, rowAbsolute: string, rowText: string) => {
+      const sourceCol = columnToIndex(columnText)
+      const sourceRow = Number.parseInt(rowText, 10) - 1
+      const nextCol = colAbsolute === '$' ? sourceCol : sourceCol + colDelta
+      const nextRow = rowAbsolute === '$' ? sourceRow : sourceRow + rowDelta
+      if (nextCol < 0 || nextRow < 0) {
+        failed = true
+        return token
+      }
+      return `${prefix}${colAbsolute}${indexToColumn(nextCol)}${rowAbsolute}${nextRow + 1}`
+    },
+  )
+  return failed ? undefined : translated
 }
