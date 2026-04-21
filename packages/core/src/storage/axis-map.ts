@@ -11,6 +11,7 @@ function createAxisEntrySnapshot(id: string, index: number): AxisEntrySnapshot {
 
 export class AxisMap {
   private readonly entries: Array<string | undefined> = []
+  private readonly idToIndex = new Map<string, number>()
 
   get(index: number): string | undefined {
     return this.entries[index]
@@ -21,7 +22,12 @@ export class AxisMap {
   }
 
   set(index: number, id: string): void {
+    const previous = this.entries[index]
+    if (previous !== undefined) {
+      this.idToIndex.delete(previous)
+    }
     this.entries[index] = id
+    this.idToIndex.set(id, index)
   }
 
   setId(index: number, id: string): void {
@@ -38,6 +44,7 @@ export class AxisMap {
     }
     const id = createId()
     this.entries[index] = id
+    this.idToIndex.set(id, index)
     return id
   }
 
@@ -46,7 +53,7 @@ export class AxisMap {
   }
 
   indexOf(id: string): number {
-    return this.entries.indexOf(id)
+    return this.idToIndex.get(id) ?? -1
   }
 
   get length(): number {
@@ -86,7 +93,12 @@ export class AxisMap {
       if (entry.index < start) {
         continue
       }
+      const previous = this.entries[entry.index]
+      if (previous !== undefined) {
+        this.idToIndex.delete(previous)
+      }
       this.entries[entry.index] = entry.id
+      this.idToIndex.set(entry.id, entry.index)
     }
   }
 
@@ -116,6 +128,7 @@ export class AxisMap {
       inserted[offset] = entry.id
     }
     const removed = this.entries.splice(start, deleteCount, ...inserted)
+    this.rebuildIndex()
     return removed.flatMap((id, index) => (id === undefined ? [] : [createAxisEntrySnapshot(id, start + index)]))
   }
 
@@ -125,5 +138,16 @@ export class AxisMap {
     }
     const moved = this.entries.splice(start, count)
     this.entries.splice(target, 0, ...moved)
+    this.rebuildIndex()
+  }
+
+  private rebuildIndex(): void {
+    this.idToIndex.clear()
+    for (let index = 0; index < this.entries.length; index += 1) {
+      const id = this.entries[index]
+      if (id !== undefined) {
+        this.idToIndex.set(id, index)
+      }
+    }
   }
 }
