@@ -162,7 +162,18 @@ describe('gridResidentDataLayer', () => {
 
     const body = rendered.find((pane) => pane.paneId === 'body')
     expect(body).toBeDefined()
-    expect(body?.gpuScene.fillRects).not.toContainEqual(expect.objectContaining({ color: expect.objectContaining({ a: 0.08 }) }))
+    expect(body?.gpuScene.fillRects).toContainEqual({
+      x: 105,
+      y: 23,
+      width: 206,
+      height: 42,
+      color: {
+        r: 0.12941176470588237,
+        g: 0.33725490196078434,
+        b: 0.22745098039215686,
+        a: 0.08,
+      },
+    })
     expect(body?.gpuScene.borderRects.some((rect) => rect.x >= body.frame.width || rect.y >= body.frame.height)).toBe(true)
   })
 })

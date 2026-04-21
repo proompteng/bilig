@@ -634,10 +634,18 @@ export async function waitForBenchmarkCorpus(page: Page, timeoutMs = 60_000) {
   return benchmarkState
 }
 
-export async function startWorkbookScrollPerf(page: Page, workload: string) {
+export async function startWorkbookScrollPerf(
+  page: Page,
+  workload: string,
+  options: {
+    readonly primeRenderer?: boolean
+  } = {},
+) {
   await page.bringToFront()
   await settleWorkbookScrollPerf(page, 2)
-  await primeWorkbookGridScrollRenderer(page)
+  if (options.primeRenderer ?? true) {
+    await primeWorkbookGridScrollRenderer(page)
+  }
   await page.evaluate((nextWorkload) => {
     ;(window as Window & { __biligScrollPerf?: { startSampling?: (workload: string) => void } }).__biligScrollPerf?.startSampling?.(
       nextWorkload,
@@ -694,7 +702,7 @@ export async function warmStartWorkbookScrollPerf(page: Page, workload: string, 
     await runWarmup(attempt + 1)
   }
   await runWarmup(1)
-  await startWorkbookScrollPerf(page, workload)
+  await startWorkbookScrollPerf(page, workload, { primeRenderer: false })
 }
 
 export async function settleWorkbookScrollPerf(page: Page, frames = 4) {
