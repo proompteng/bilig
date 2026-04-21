@@ -449,27 +449,33 @@ export function createEngineServiceRuntime(args: {
     collectFormulaCellsForTables: (tableNames) => binding.collectFormulaCellsForTablesNow(tableNames),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
-      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, templateId, preservesBinding, preservesValue }) => {
-        try {
-          if (compiled) {
-            if (
-              preservesBinding === true &&
-              preservesValue === true &&
-              binding.rewriteFormulaMetadataPreservingRuntimeNow(cellIndex, source, compiled, templateId)
-            ) {
-              return
+      pending.forEach(
+        ({ cellIndex, ownerSheetName, ownerRow, ownerCol, source, compiled, templateId, preservesBinding, preservesValue }) => {
+          const ownerPosition = { sheetName: ownerSheetName, row: ownerRow, col: ownerCol }
+          try {
+            if (compiled) {
+              if (
+                preservesBinding === true &&
+                preservesValue === true &&
+                binding.rewriteFormulaMetadataPreservingRuntimeNow(cellIndex, source, compiled, templateId, ownerPosition)
+              ) {
+                return
+              }
+              if (
+                preservesBinding === true &&
+                binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateId, ownerPosition)
+              ) {
+                return
+              }
+              binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId)
+            } else {
+              binding.bindFormulaNow(cellIndex, ownerSheetName, source)
             }
-            if (preservesBinding === true && binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateId)) {
-              return
-            }
-            binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId)
-          } else {
-            binding.bindFormulaNow(cellIndex, ownerSheetName, source)
+          } catch {
+            binding.invalidateFormulaNow(cellIndex)
           }
-        } catch {
-          binding.invalidateFormulaNow(cellIndex)
-        }
-      })
+        },
+      )
     },
   })
   const maintenance = createEngineMaintenanceService({

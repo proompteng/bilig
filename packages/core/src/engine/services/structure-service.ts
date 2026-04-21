@@ -50,6 +50,8 @@ interface EngineStructureState {
 interface StructuralFormulaRebindInput {
   readonly cellIndex: number
   readonly ownerSheetName: string
+  readonly ownerRow: number
+  readonly ownerCol: number
   readonly source: string
   readonly compiled?: CompiledFormula
   readonly templateId?: number
@@ -632,6 +634,8 @@ export function createEngineStructureService(args: {
             ? {
                 cellIndex,
                 ownerSheetName,
+                ownerRow,
+                ownerCol,
                 source: formula.source,
                 compiled: formula.compiled,
                 ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
@@ -639,6 +643,8 @@ export function createEngineStructureService(args: {
             : {
                 cellIndex,
                 ownerSheetName,
+                ownerRow,
+                ownerCol,
                 source: formula.source,
               },
         )
@@ -648,6 +654,8 @@ export function createEngineStructureService(args: {
         inputs.push({
           cellIndex,
           ownerSheetName,
+          ownerRow,
+          ownerCol,
           source: rewriteFormulaSourceFallback(formula.source, ownerSheetName, argsForResolve.sheetName, argsForResolve.transform),
         })
         return
@@ -668,6 +676,8 @@ export function createEngineStructureService(args: {
       inputs.push({
         cellIndex,
         ownerSheetName,
+        ownerRow,
+        ownerCol,
         source: rewritten.source,
         compiled: rewritten.compiled,
         ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),

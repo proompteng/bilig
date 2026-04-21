@@ -97,12 +97,14 @@ export interface EngineFormulaBindingService {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
+    ownerPosition?: FormulaOwnerPosition,
   ) => boolean
   readonly rewriteFormulaMetadataPreservingRuntimeNow: (
     cellIndex: number,
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
+    ownerPosition?: FormulaOwnerPosition,
   ) => boolean
   readonly bindInitialFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void
   readonly clearFormulaNow: (cellIndex: number) => boolean
@@ -118,6 +120,12 @@ export interface EngineFormulaBindingService {
   readonly collectFormulaCellsForDefinedNamesNow: (names: readonly string[]) => readonly number[]
   readonly collectFormulaCellsForTablesNow: (tableNames: readonly string[]) => readonly number[]
   readonly getFormulaFamilyStatsNow: () => FormulaFamilyStats
+}
+
+interface FormulaOwnerPosition {
+  readonly sheetName: string
+  readonly row: number
+  readonly col: number
 }
 
 function formulaBindingErrorMessage(message: string, cause: unknown): string {
@@ -1499,12 +1507,14 @@ export function createEngineFormulaBindingService(args: {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
+    ownerPosition?: FormulaOwnerPosition,
   ): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (!existing) {
       return false
     }
-    const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+    const ownerSheetName =
+      ownerPosition?.sheetName ?? args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
     if (!ownerSheetName) {
       return false
     }
@@ -1588,7 +1598,7 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
-    recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
+    recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
     registerFormulaFamilyNow(cellIndex, existing)
     if (shouldRefreshSheetIndexes) {
       trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
@@ -1604,6 +1614,7 @@ export function createEngineFormulaBindingService(args: {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
+    ownerPosition?: FormulaOwnerPosition,
   ): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     if (
@@ -1627,7 +1638,7 @@ export function createEngineFormulaBindingService(args: {
     existing.constants = compiled.constants
     existing.programLength = existing.runtimeProgram.length
     existing.constNumberLength = compiled.constants.length
-    recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
+    recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
     return true
   }
 
@@ -1690,7 +1701,36 @@ export function createEngineFormulaBindingService(args: {
     }
   }
 
-  const recordFormulaInstanceNow = (cellIndex: number, source: string, templateId: number | undefined): void => {
+  const recordFormulaInstanceNow = (
+    cellIndex: number,
+    source: string,
+    templateId: number | undefined,
+    ownerPosition?: FormulaOwnerPosition,
+  ): void => {
+    if (ownerPosition) {
+      const existing = args.formulaInstances.get(cellIndex)
+      if (existing) {
+        args.formulaInstances.upsert(
+          retargetFormulaInstance(existing, {
+            sheetName: ownerPosition.sheetName,
+            row: ownerPosition.row,
+            col: ownerPosition.col,
+            source,
+            ...(templateId !== undefined ? { templateId } : {}),
+          }),
+        )
+        return
+      }
+      args.formulaInstances.upsert({
+        cellIndex,
+        sheetName: ownerPosition.sheetName,
+        row: ownerPosition.row,
+        col: ownerPosition.col,
+        source,
+        ...(templateId !== undefined ? { templateId } : {}),
+      })
+      return
+    }
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
     const position = args.state.workbook.getCellPosition(cellIndex)
     if (sheetId === undefined || !position) {
