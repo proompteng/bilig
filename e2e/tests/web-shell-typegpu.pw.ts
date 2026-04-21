@@ -198,17 +198,23 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
     points: [
       { name: 'rangeFill', x: rangeFillPoint.x, y: rangeFillPoint.y },
       { name: 'rangeBorder', x: rangeBorderPoint.x, y: rangeBorderPoint.y },
+      {
+        name: 'fillHandle',
+        x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 3,
+        y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 3,
+      },
       { name: 'topHeaderSelectionFill', x: topHeaderSelectionFillPoint.x, y: topHeaderSelectionFillPoint.y },
     ],
     regions: [],
   } as const
 
   const rangeReadback = await waitForReadback(page, rangeProbe, (result) => {
-    return result.points.rangeBorder.a > 150 && result.points.topHeaderSelectionFill.a > 0
+    return result.points.rangeBorder.a > 150 && result.points.fillHandle.a > 150 && result.points.topHeaderSelectionFill.a > 0
   })
 
   expect(rangeReadback.points.rangeFill.a).toBeLessThanOrEqual(25)
   expect(rangeReadback.points.rangeBorder.a).toBeGreaterThan(150)
+  expect(rangeReadback.points.fillHandle.a).toBeGreaterThan(150)
   expect(rangeReadback.points.topHeaderSelectionFill.a).toBeGreaterThan(0)
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')

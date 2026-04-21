@@ -42,17 +42,6 @@ function buildRenderedAxisState(
   }
 }
 
-function normalizeSelectionRange(request: WorkbookPaneSceneRequest) {
-  return (
-    request.selectionRange ?? {
-      x: request.selectedCell.col,
-      y: request.selectedCell.row,
-      width: 1,
-      height: 1,
-    }
-  )
-}
-
 export function buildWorkerResidentPaneScenes(input: {
   engine: ResidentPaneSceneEngineLike
   request: WorkbookPaneSceneRequest
@@ -94,7 +83,7 @@ export function buildWorkerResidentPaneScenes(input: {
     gridSelection: createGridSelection(request.selectedCell.col, request.selectedCell.row),
     selectedCell: [request.selectedCell.col, request.selectedCell.row],
     selectedCellSnapshot,
-    selectionRange: normalizeSelectionRange(request),
+    selectionRange: null,
     editingCell: request.editingCell ? [request.editingCell.col, request.editingCell.row] : null,
   }).map((scene): WorkbookPaneScenePacket => {
     const packedScene = packWorkerGridScenePacket({
@@ -123,7 +112,6 @@ export function buildWorkerResidentPaneScenes(input: {
 }
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {
-  const range = request.selectionRange
   const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
@@ -141,10 +129,6 @@ export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest
     selectedSnapshot?.formula ?? '',
     selectedSnapshot?.input ?? '',
     selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
-    range?.x ?? -1,
-    range?.y ?? -1,
-    range?.width ?? -1,
-    range?.height ?? -1,
     request.editingCell?.col ?? -1,
     request.editingCell?.row ?? -1,
   ].join(':')

@@ -85,7 +85,6 @@ function isResidentPaneScenePacketArray(value: unknown): value is readonly Workb
 }
 
 function buildRequestKey(request: WorkbookPaneSceneRequest): string {
-  const range = request.selectionRange
   const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
@@ -103,10 +102,6 @@ function buildRequestKey(request: WorkbookPaneSceneRequest): string {
     selectedSnapshot?.formula ?? '',
     selectedSnapshot?.input ?? '',
     selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
-    range?.x ?? -1,
-    range?.y ?? -1,
-    range?.width ?? -1,
-    range?.height ?? -1,
     request.editingCell?.col ?? -1,
     request.editingCell?.row ?? -1,
   ].join(':')
