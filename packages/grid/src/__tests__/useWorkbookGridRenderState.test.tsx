@@ -77,6 +77,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const subscribeViewport = vi.fn(() => () => undefined)
+    let latestScrollTransformStore: ReturnType<typeof useWorkbookGridRenderState>['scrollTransformStore'] | null = null
     let hostElement: HTMLDivElement | null = null
     let scrollViewport: HTMLDivElement | null = null
 
@@ -90,6 +91,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         isEditingCell: false,
         subscribeViewport,
       })
+      latestScrollTransformStore = renderState.scrollTransformStore
 
       return (
         <div
@@ -146,6 +148,10 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
 
     expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+      renderTx: 64 * 104,
+      tx: 0,
+    })
 
     await act(async () => {
       scrollViewport!.scrollLeft = 128 * 104
@@ -154,6 +160,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
 
     expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount + 2)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({ tx: 0 })
     expect(subscribeViewport).toHaveBeenCalledWith(
       'Sheet1',
       expect.objectContaining({

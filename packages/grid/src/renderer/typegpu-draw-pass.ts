@@ -103,10 +103,17 @@ function resolvePaneOrigin(pane: WorkbookRenderPaneState): { x: number; y: numbe
 
 function resolvePaneRenderOffset(
   pane: WorkbookRenderPaneState,
-  scrollSnapshot: { readonly tx: number; readonly ty: number },
+  scrollSnapshot: {
+    readonly tx: number
+    readonly ty: number
+    readonly renderTx?: number | undefined
+    readonly renderTy?: number | undefined
+  },
 ): { x: number; y: number } {
+  const renderTx = scrollSnapshot.renderTx ?? scrollSnapshot.tx
+  const renderTy = scrollSnapshot.renderTy ?? scrollSnapshot.ty
   return {
-    x: pane.contentOffset.x - (pane.scrollAxes.x ? scrollSnapshot.tx : 0),
-    y: pane.contentOffset.y - (pane.scrollAxes.y ? scrollSnapshot.ty : 0),
+    x: pane.contentOffset.x - (pane.scrollAxes.x ? renderTx : 0),
+    y: pane.contentOffset.y - (pane.scrollAxes.y ? renderTy : 0),
   }
 }

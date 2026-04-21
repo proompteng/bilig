@@ -458,7 +458,17 @@ export function useWorkbookGridRenderState(input: {
     })
     gridCameraRef.current = camera
     const next = visibleRegionFromCamera({ camera, freezeCols, freezeRows })
+    const renderTx =
+      resolveColumnOffset(next.range.x, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
+      resolveColumnOffset(viewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) +
+      next.tx
+    const renderTy =
+      resolveRowOffset(next.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight) -
+      resolveRowOffset(viewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight) +
+      next.ty
     scrollTransformRef.current = {
+      renderTx,
+      renderTy,
       tx: next.tx,
       ty: next.ty,
     }
@@ -494,6 +504,10 @@ export function useWorkbookGridRenderState(input: {
     requiresLiveViewportState,
     rowHeights,
     scrollTransformStore,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+    viewport.colStart,
+    viewport.rowStart,
   ])
 
   useEffect(() => {

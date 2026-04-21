@@ -4,40 +4,11 @@ import { buildGridGpuScene } from './gridGpuScene.js'
 import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset, type GridMetrics } from './gridMetrics.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildGridTextScene } from './gridTextScene.js'
-import type { GridTextScene } from './gridTextScene.js'
 import type { HeaderSelection } from './gridPointer.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
 import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
 import { getPaneFrame, resolvePaneLayout } from './renderer/pane-layout.js'
-
-function intersectsWindow(
-  bounds: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>,
-  window: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>,
-): boolean {
-  return (
-    bounds.x < window.x + window.width &&
-    bounds.x + bounds.width > window.x &&
-    bounds.y < window.y + window.height &&
-    bounds.y + bounds.height > window.y
-  )
-}
-
-function clipPaneGpuSceneToWindow(
-  scene: WorkbookPaneScenePacket['gpuScene'],
-  window: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>,
-): WorkbookPaneScenePacket['gpuScene'] {
-  return {
-    fillRects: scene.fillRects.filter((rect) => intersectsWindow(rect, window)),
-    borderRects: scene.borderRects.filter((rect) => intersectsWindow(rect, window)),
-  }
-}
-
-function clipPaneTextSceneToWindow(scene: GridTextScene, window: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): GridTextScene {
-  return {
-    items: scene.items.filter((item) => intersectsWindow(item, window)),
-  }
-}
 
 function resolveViewportWidth(
   viewport: Viewport,
@@ -437,21 +408,14 @@ export function resolveResidentDataPaneRenderState(input: {
           : pane.paneId === 'left'
             ? { x: 0, y: bodyOffsetY }
             : { x: 0, y: 0 }
-    const visibleWindow = {
-      x: -contentOffset.x,
-      y: -contentOffset.y,
-      width: frame.width,
-      height: frame.height,
-    }
-
     return {
       generation: pane.generation,
       paneId: pane.paneId,
       viewport: pane.viewport,
       frame,
       surfaceSize: pane.surfaceSize,
-      gpuScene: clipPaneGpuSceneToWindow(pane.gpuScene, visibleWindow),
-      textScene: clipPaneTextSceneToWindow(pane.textScene, visibleWindow),
+      gpuScene: pane.gpuScene,
+      textScene: pane.textScene,
       contentOffset,
     }
   })
