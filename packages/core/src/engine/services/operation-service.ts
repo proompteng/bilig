@@ -625,6 +625,10 @@ export function createEngineOperationService(args: {
     if (!sheet) {
       return { value: emptyValue(), stringId: undefined }
     }
+    if (sheet.structureVersion === 1) {
+      const cellIndex = sheet.grid.getPhysical(row, col)
+      return readCellValueForLookup(cellIndex === -1 ? undefined : cellIndex)
+    }
     return readCellValueForLookup(sheet.logical.getVisibleCell(row, col))
   }
 
