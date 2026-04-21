@@ -45,6 +45,7 @@ describe('buildRelativeFormulaTemplateTokenKey', () => {
   it('keeps malformed or mixed reference tokens from collapsing into the same family', () => {
     expect(buildRelativeFormulaTemplateTokenKey('A1:', 0, 0)).toContain('tok:identifier:"A1"')
     expect(buildRelativeFormulaTemplateTokenKey('A1:2', 0, 0)).toContain('tok:identifier:"A1"')
+    expect(buildRelativeFormulaTemplateTokenKey('_bad:1', 0, 0)).toContain('tok:identifier:"_bad"')
     expect(buildRelativeFormulaTemplateTokenKey('1', 0, 0)).toBe('tok:number:"1"|eof')
     expect(buildRelativeFormulaTemplateTokenKey('1:2', 0, 0)).toContain('range:rows')
   })

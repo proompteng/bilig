@@ -36,9 +36,6 @@ function columnToIndex(column: string): number {
   let value = 0
   for (let index = 0; index < column.length; index += 1) {
     const code = column.charCodeAt(index)
-    if (code < 65 || code > 90) {
-      return -1
-    }
     value = value * 26 + (code - 64)
   }
   return value - 1
@@ -55,9 +52,6 @@ function tryParseSimpleColumnRange(rawRange: string): SimpleColumnRangeInfo | un
     return undefined
   }
   const startCol = columnToIndex(startColumn)
-  if (startCol < 0) {
-    return undefined
-  }
   const startRowNumber = Number.parseInt(match[2]!, 10)
   const endRowNumber = Number.parseInt(match[4]!, 10)
   if (endRowNumber < startRowNumber) {
@@ -83,10 +77,7 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
   }
 
   const callee = match.groups['callee']!.toUpperCase()
-  const aggregateKind = DIRECT_AGGREGATE_KIND_BY_CALLEE[callee]
-  if (!aggregateKind) {
-    return undefined
-  }
+  const aggregateKind = DIRECT_AGGREGATE_KIND_BY_CALLEE[callee]!
 
   const rawRange = match.groups['range']!.trim()
   const fastRange = tryParseSimpleColumnRange(rawRange)

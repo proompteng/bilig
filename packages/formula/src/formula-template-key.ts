@@ -54,12 +54,6 @@ export function buildRelativeFormulaTemplateTokenKey(source: string, ownerRow: n
       continue
     }
 
-    if (token.kind === 'identifier' && tokens[index + 1]?.kind === 'lparen') {
-      keyParts.push(`fn:${token.value.toUpperCase()}`)
-      index += 1
-      continue
-    }
-
     const referenceMatch = matchTemplateReference(tokens, index, ownerRow, ownerCol)
     if (referenceMatch) {
       keyParts.push(referenceMatch.key)
@@ -332,10 +326,7 @@ function matchTemplateReference(
   }
 
   if (tokens[index + 1]?.kind === 'colon') {
-    const endToken = tokens[index + 2]
-    if (!endToken) {
-      return undefined
-    }
+    const endToken = tokens[index + 2]!
     const endRef = parseReferenceToken(endToken, ownerRow, ownerCol, true)
     if (!endRef || endRef.kind !== startRef.kind) {
       return undefined
@@ -352,10 +343,6 @@ function matchTemplateReference(
       key: `spill:${templateSheetKey(sheetName)}:${startRef.key}`,
       nextIndex: index + 2,
     }
-  }
-
-  if (startToken.kind === 'number' && sheetName === undefined) {
-    return undefined
   }
 
   return {
