@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CellStore } from '../cell-store.js'
 import { CalcChain } from '../scheduler/calc-chain.js'
+import { createEngineCounters } from '../perf/engine-counters.js'
 
 describe('CalcChain', () => {
   it('rebuilds a persistent chain from topo ranks and orders dirty cells by chain position', () => {
@@ -41,5 +42,24 @@ describe('CalcChain', () => {
 
     const ordered = chain.orderDirty(Uint32Array.of(2, 1), 2)
     expect(Array.from(ordered.orderedFormulaCellIndices.subarray(0, ordered.orderedFormulaCount))).toEqual([1, 2])
+  })
+
+  it('orders sparse dirty cells without scanning the full chain', () => {
+    const store = new CellStore()
+    for (let index = 0; index < 100; index += 1) {
+      store.allocate(1, 0, index)
+      store.topoRanks[index] = 100 - index
+    }
+    const counters = createEngineCounters()
+    const chain = new CalcChain(counters)
+    chain.rebuild(
+      Array.from({ length: 100 }, (_, index) => index),
+      store,
+    )
+
+    const ordered = chain.orderDirty(Uint32Array.of(1, 90, 10), 3)
+
+    expect(Array.from(ordered.orderedFormulaCellIndices.subarray(0, ordered.orderedFormulaCount))).toEqual([90, 10, 1])
+    expect(counters.calcChainFullScans).toBe(0)
   })
 })

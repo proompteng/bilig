@@ -105,6 +105,25 @@ export class CalcChain {
       }
     }
 
+    if (dirtyFormulaCount <= 64 || dirtyFormulaCount * 8 <= this.chainFormulaCount) {
+      let orderedCount = 0
+      for (let index = 0; index < dirtyFormulaCount; index += 1) {
+        const cellIndex = dirtyFormulaCellIndices[index]!
+        if ((this.chainIndexByCell[cellIndex] ?? 0) === 0) {
+          continue
+        }
+        this.orderedDirty[orderedCount] = cellIndex
+        orderedCount += 1
+      }
+      this.orderedDirty
+        .subarray(0, orderedCount)
+        .sort((left, right) => (this.chainIndexByCell[left] ?? 0) - (this.chainIndexByCell[right] ?? 0))
+      return {
+        orderedFormulaCellIndices: this.orderedDirty,
+        orderedFormulaCount: orderedCount,
+      }
+    }
+
     this.dirtyEpoch += 1
     if (this.dirtyEpoch === 0xffff_ffff) {
       this.dirtyEpoch = 1
