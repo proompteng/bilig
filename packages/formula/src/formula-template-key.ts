@@ -27,6 +27,10 @@ interface TemplateReferenceMatch {
 }
 
 export function buildRelativeFormulaTemplateTokenKey(source: string, ownerRow: number, ownerCol: number): string {
+  const fastKey = tryBuildFastRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
+  if (fastKey !== undefined) {
+    return fastKey
+  }
   const tokens = lexFormula(source.startsWith('=') ? source.slice(1) : source)
   const keyParts: string[] = []
 
@@ -68,6 +72,232 @@ export function buildRelativeFormulaTemplateTokenKey(source: string, ownerRow: n
   }
 
   return keyParts.join('|')
+}
+
+function tryBuildFastRelativeFormulaTemplateTokenKey(source: string, ownerRow: number, ownerCol: number): string | undefined {
+  const input = source.startsWith('=') ? source.slice(1) : source
+  if (
+    input.includes("'") ||
+    input.includes('"') ||
+    input.includes('!') ||
+    input.includes('#') ||
+    input.includes('.') ||
+    input.includes('[') ||
+    input.includes(']')
+  ) {
+    return undefined
+  }
+
+  const keyParts: string[] = []
+  let index = 0
+  while (index < input.length) {
+    index = skipWhitespace(input, index)
+    if (index >= input.length) {
+      break
+    }
+
+    const char = input[index]!
+    if (isIdentifierStart(char)) {
+      const identifier = readIdentifier(input, index)
+      const nextIndex = skipWhitespace(input, identifier.nextIndex)
+      if (input[nextIndex] === '(') {
+        keyParts.push(`fn:${identifier.text.toUpperCase()}`)
+        index = identifier.nextIndex
+        continue
+      }
+      const referenceMatch = matchFastTemplateReference(input, index, ownerRow, ownerCol)
+      if (!referenceMatch) {
+        return undefined
+      }
+      keyParts.push(referenceMatch.key)
+      index = referenceMatch.nextIndex
+      continue
+    }
+
+    if (isDigit(char)) {
+      const rowRangeMatch = matchFastTemplateReference(input, index, ownerRow, ownerCol)
+      if (rowRangeMatch?.kind === 'range') {
+        keyParts.push(rowRangeMatch.key)
+        index = rowRangeMatch.nextIndex
+        continue
+      }
+      const number = readNumber(input, index)
+      keyParts.push(`tok:number:${JSON.stringify(number.text)}`)
+      index = number.nextIndex
+      continue
+    }
+
+    const tokenKind = fastTokenKindForChar(char)
+    if (!tokenKind) {
+      return undefined
+    }
+    keyParts.push(`tok:${tokenKind}:${JSON.stringify(char)}`)
+    index += 1
+  }
+  keyParts.push('eof')
+  return keyParts.join('|')
+}
+
+interface FastToken {
+  readonly text: string
+  readonly nextIndex: number
+}
+
+interface FastParsedReference {
+  readonly kind: 'cell' | 'row' | 'col'
+  readonly key: string
+  readonly nextIndex: number
+}
+
+interface FastTemplateReferenceMatch {
+  readonly key: string
+  readonly nextIndex: number
+  readonly kind: 'single' | 'range'
+}
+
+function matchFastTemplateReference(
+  input: string,
+  index: number,
+  ownerRow: number,
+  ownerCol: number,
+): FastTemplateReferenceMatch | undefined {
+  const startRef = parseFastReferenceToken(input, index, ownerRow, ownerCol, false)
+  if (!startRef) {
+    return undefined
+  }
+  const afterStart = skipWhitespace(input, startRef.nextIndex)
+  if (input[afterStart] === ':') {
+    const endRef = parseFastReferenceToken(input, skipWhitespace(input, afterStart + 1), ownerRow, ownerCol, true)
+    if (!endRef || endRef.kind !== startRef.kind) {
+      return undefined
+    }
+    const refKind = startRef.kind === 'cell' ? 'cells' : startRef.kind === 'row' ? 'rows' : 'cols'
+    return {
+      key: `range:${refKind}:.:${startRef.key}:${endRef.key}`,
+      nextIndex: endRef.nextIndex,
+      kind: 'range',
+    }
+  }
+  if (startRef.kind === 'row') {
+    return undefined
+  }
+  return {
+    key: `${startRef.kind}:.:${startRef.key}`,
+    nextIndex: startRef.nextIndex,
+    kind: 'single',
+  }
+}
+
+function parseFastReferenceToken(
+  input: string,
+  index: number,
+  ownerRow: number,
+  ownerCol: number,
+  allowStandaloneRow: boolean,
+): FastParsedReference | undefined {
+  const token = isDigit(input[index]!) ? readNumber(input, index) : readIdentifier(input, index)
+  const upperValue = token.text.toUpperCase()
+  const cell = parseCellReferenceParts(upperValue)
+  if (cell) {
+    return {
+      kind: 'cell',
+      key: buildRelativeCellReferenceKey(cell, ownerRow, ownerCol),
+      nextIndex: token.nextIndex,
+    }
+  }
+  const column = parseAxisReferenceParts(upperValue, 'column')
+  if (column) {
+    return {
+      kind: 'col',
+      key: buildRelativeAxisReferenceKey(column, ownerCol),
+      nextIndex: token.nextIndex,
+    }
+  }
+  if (!allowStandaloneRow) {
+    return undefined
+  }
+  const row = parseAxisReferenceParts(token.text, 'row')
+  if (!row) {
+    return undefined
+  }
+  return {
+    kind: 'row',
+    key: buildRelativeAxisReferenceKey(row, ownerRow),
+    nextIndex: token.nextIndex,
+  }
+}
+
+function readIdentifier(input: string, index: number): FastToken {
+  let nextIndex = index
+  while (nextIndex < input.length) {
+    const char = input[nextIndex]!
+    if (!isIdentifierPart(char)) {
+      break
+    }
+    nextIndex += 1
+  }
+  return {
+    text: input.slice(index, nextIndex),
+    nextIndex,
+  }
+}
+
+function readNumber(input: string, index: number): FastToken {
+  let nextIndex = index
+  while (nextIndex < input.length && isDigit(input[nextIndex]!)) {
+    nextIndex += 1
+  }
+  return {
+    text: input.slice(index, nextIndex),
+    nextIndex,
+  }
+}
+
+function skipWhitespace(input: string, index: number): number {
+  let nextIndex = index
+  while (nextIndex < input.length && /\s/.test(input[nextIndex]!)) {
+    nextIndex += 1
+  }
+  return nextIndex
+}
+
+function isIdentifierStart(char: string): boolean {
+  return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || char === '$' || char === '_'
+}
+
+function isIdentifierPart(char: string): boolean {
+  return isIdentifierStart(char) || isDigit(char)
+}
+
+function isDigit(char: string): boolean {
+  return char >= '0' && char <= '9'
+}
+
+function fastTokenKindForChar(char: string): string | undefined {
+  switch (char) {
+    case '(':
+      return 'lparen'
+    case ')':
+      return 'rparen'
+    case '+':
+      return 'plus'
+    case '-':
+      return 'minus'
+    case '*':
+      return 'star'
+    case '/':
+      return 'slash'
+    case '^':
+      return 'caret'
+    case ',':
+      return 'comma'
+    case ';':
+      return 'semicolon'
+    case '&':
+      return 'ampersand'
+    default:
+      return undefined
+  }
 }
 
 function matchTemplateReferenceWithExplicitSheet(

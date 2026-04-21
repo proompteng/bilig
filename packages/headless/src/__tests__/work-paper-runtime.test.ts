@@ -170,6 +170,35 @@ describe('WorkPaper', () => {
     readTrackedCellChange.mockRestore()
   })
 
+  it('uses typed tracked patches for large literal batches without rereading changed cells', () => {
+    const rowCount = 600
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: rowCount }, (_, row) => [row + 1, `=A${row + 1}*2`]),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    expect(hasReadTrackedCellChange(workbook)).toBe(true)
+    if (!hasReadTrackedCellChange(workbook)) {
+      throw new Error('Expected work paper runtime to expose readTrackedCellChange in tests')
+    }
+    const readTrackedCellChange = vi.spyOn(workbook, 'readTrackedCellChange').mockImplementation(() => {
+      throw new Error('large tracked batches should use typed patches')
+    })
+
+    const changes = workbook.batch(() => {
+      for (let row = 0; row < rowCount; row += 1) {
+        workbook.setCellContents(cell(sheetId, row, 0), row * 3)
+      }
+    })
+
+    expect(changes).toHaveLength(rowCount * 2)
+    expect(workbook.getCellValue(cell(sheetId, rowCount - 1, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: (rowCount - 1) * 6,
+    })
+    expect(readTrackedCellChange).not.toHaveBeenCalled()
+    readTrackedCellChange.mockRestore()
+  })
+
   it('supports sheet-scoped named expressions and restores public formulas', () => {
     const workbook = WorkPaper.buildFromSheets({
       Summary: [[]],

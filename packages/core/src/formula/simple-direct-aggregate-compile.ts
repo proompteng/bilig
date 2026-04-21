@@ -9,6 +9,7 @@ import {
 } from '@bilig/formula'
 
 const SIMPLE_DIRECT_AGGREGATE_RE = /^(?<callee>SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*(?<range>[^(),]+:[^(),]+)\s*\)$/i
+const SIMPLE_COLUMN_RANGE_RE = /^([A-Za-z]+)([1-9][0-9]*):([A-Za-z]+)([1-9][0-9]*)$/
 
 type DirectAggregateKind = DirectAggregateCandidate['aggregateKind']
 
@@ -19,6 +20,60 @@ const DIRECT_AGGREGATE_KIND_BY_CALLEE: Record<string, DirectAggregateKind> = {
   COUNT: 'count',
   MIN: 'min',
   MAX: 'max',
+}
+
+interface SimpleColumnRangeInfo {
+  readonly address: string
+  readonly startAddress: string
+  readonly endAddress: string
+  readonly startRow: number
+  readonly endRow: number
+  readonly startCol: number
+  readonly endCol: number
+}
+
+function columnToIndex(column: string): number {
+  let value = 0
+  for (let index = 0; index < column.length; index += 1) {
+    const code = column.charCodeAt(index)
+    if (code < 65 || code > 90) {
+      return -1
+    }
+    value = value * 26 + (code - 64)
+  }
+  return value - 1
+}
+
+function tryParseSimpleColumnRange(rawRange: string): SimpleColumnRangeInfo | undefined {
+  const match = SIMPLE_COLUMN_RANGE_RE.exec(rawRange)
+  if (!match) {
+    return undefined
+  }
+  const startColumn = match[1]!.toUpperCase()
+  const endColumn = match[3]!.toUpperCase()
+  if (startColumn !== endColumn) {
+    return undefined
+  }
+  const startCol = columnToIndex(startColumn)
+  if (startCol < 0) {
+    return undefined
+  }
+  const startRowNumber = Number.parseInt(match[2]!, 10)
+  const endRowNumber = Number.parseInt(match[4]!, 10)
+  if (endRowNumber < startRowNumber) {
+    return undefined
+  }
+  const startAddress = `${startColumn}${startRowNumber}`
+  const endAddress = `${endColumn}${endRowNumber}`
+  return {
+    address: `${startAddress}:${endAddress}`,
+    startAddress,
+    endAddress,
+    startRow: startRowNumber - 1,
+    endRow: endRowNumber - 1,
+    startCol,
+    endCol: startCol,
+  }
 }
 
 export function tryCompileSimpleDirectAggregateFormula(source: string): CompiledFormula | undefined {
@@ -34,28 +89,42 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
   }
 
   const rawRange = match.groups['range']!.trim()
-  const parsedRange = parseRangeAddress(rawRange)
-  if (parsedRange.kind !== 'cells' || parsedRange.start.col !== parsedRange.end.col || parsedRange.sheetName !== undefined) {
-    return undefined
+  const fastRange = tryParseSimpleColumnRange(rawRange)
+  let rangeInfo: SimpleColumnRangeInfo
+  if (fastRange) {
+    rangeInfo = fastRange
+  } else {
+    const parsedRange = parseRangeAddress(rawRange)
+    if (parsedRange.kind !== 'cells' || parsedRange.sheetName !== undefined) {
+      return undefined
+    }
+    const start = parsedRange.start as { readonly text: string; readonly row: number; readonly col: number }
+    const end = parsedRange.end as { readonly text: string; readonly row: number; readonly col: number }
+    if (start.col !== end.col) {
+      return undefined
+    }
+    rangeInfo = {
+      address: rawRange,
+      startAddress: start.text,
+      endAddress: end.text,
+      startRow: start.row,
+      endRow: end.row,
+      startCol: start.col,
+      endCol: end.col,
+    }
   }
 
   const parsedRangeInfo: ParsedRangeReferenceInfo = {
-    address: rawRange,
+    ...rangeInfo,
     kind: 'range',
     refKind: 'cells',
-    startAddress: parsedRange.start.text,
-    endAddress: parsedRange.end.text,
-    startRow: parsedRange.start.row,
-    endRow: parsedRange.end.row,
-    startCol: parsedRange.start.col,
-    endCol: parsedRange.end.col,
   }
 
   const rangeNode: FormulaNode = {
     kind: 'RangeRef',
     refKind: 'cells',
-    start: parsedRange.start.text,
-    end: parsedRange.end.text,
+    start: rangeInfo.startAddress,
+    end: rangeInfo.endAddress,
   }
 
   const ast: FormulaNode = {
@@ -91,7 +160,7 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
     optimizedAst: ast,
     astMatchesSource: true,
     directAggregateCandidate,
-    deps: [rawRange],
+    deps: [rangeInfo.address],
     parsedDeps: [parsedRangeInfo satisfies ParsedDependencyReference],
     symbolicNames: [],
     symbolicTables: [],
@@ -104,7 +173,7 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
     constants: new Float64Array(),
     symbolicRefs: [],
     parsedSymbolicRefs: [],
-    symbolicRanges: [rawRange],
+    symbolicRanges: [rangeInfo.address],
     parsedSymbolicRanges: [parsedRangeInfo],
     symbolicStrings: [],
   }

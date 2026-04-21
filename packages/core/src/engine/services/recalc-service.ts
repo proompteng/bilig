@@ -19,7 +19,7 @@ import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
 import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-scheduler-service.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 
-const TRACKED_CELL_PATCH_LIMIT = 512
+const TRACKED_CELL_PATCH_LIMIT = 2_048
 
 export interface DirtyRegion {
   readonly sheetName: string

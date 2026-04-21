@@ -28,7 +28,8 @@ import { EngineMutationError } from '../errors.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
-const TRACKED_CELL_PATCH_LIMIT = 512
+const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
+const TRACKED_CELL_PATCH_LIMIT = 2_048
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -2033,7 +2034,7 @@ export function createEngineOperationService(args: {
       const shouldMaterializeChangedCells =
         hasGeneralEventListeners &&
         invalidation !== 'full' &&
-        (changed.length <= TRACKED_CELL_PATCH_LIMIT ||
+        (changed.length <= GENERAL_CHANGED_CELL_PAYLOAD_LIMIT ||
           (invalidatedRanges.length === 0 && invalidatedRows.length === 0 && invalidatedColumns.length === 0))
       const event: EngineEvent & { explicitChangedCount: number } = {
         kind: 'batch',
