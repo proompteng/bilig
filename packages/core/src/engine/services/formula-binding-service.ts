@@ -98,6 +98,12 @@ export interface EngineFormulaBindingService {
     compiled: CompiledFormula,
     templateId?: number,
   ) => boolean
+  readonly rewriteFormulaMetadataPreservingRuntimeNow: (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ) => boolean
   readonly bindInitialFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void
   readonly clearFormulaNow: (cellIndex: number) => boolean
   readonly invalidateFormulaNow: (cellIndex: number) => void
@@ -1593,6 +1599,38 @@ export function createEngineFormulaBindingService(args: {
     return true
   }
 
+  const rewriteFormulaMetadataPreservingRuntimeNow = (
+    cellIndex: number,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+  ): boolean => {
+    const existing = args.state.formulas.get(cellIndex)
+    if (
+      !existing ||
+      existing.directLookup !== undefined ||
+      existing.directAggregate !== undefined ||
+      existing.directScalar !== undefined ||
+      existing.directCriteria !== undefined ||
+      existing.rangeDependencies.length !== 0 ||
+      !canRewriteCompiledPreservingBindings(existing, compiled)
+    ) {
+      return false
+    }
+    const nextTemplateId = templateId ?? existing.templateId
+    const plan = args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
+    existing.source = source
+    existing.planId = plan.id
+    existing.templateId = nextTemplateId
+    existing.compiled = plan.compiled
+    existing.plan = plan
+    existing.constants = compiled.constants
+    existing.programLength = existing.runtimeProgram.length
+    existing.constNumberLength = compiled.constants.length
+    recordFormulaInstanceNow(cellIndex, source, nextTemplateId)
+    return true
+  }
+
   const isCellIndexMappedNow = (cellIndex: number): boolean => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
     const position = args.state.workbook.getCellPosition(cellIndex)
@@ -2631,6 +2669,7 @@ export function createEngineFormulaBindingService(args: {
     bindFormulaNow,
     bindPreparedFormulaNow,
     rewriteFormulaCompiledPreservingBindingNow,
+    rewriteFormulaMetadataPreservingRuntimeNow,
     bindInitialFormulaNow,
     clearFormulaNow,
     invalidateFormulaNow,

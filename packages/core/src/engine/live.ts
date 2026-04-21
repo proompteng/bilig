@@ -449,9 +449,16 @@ export function createEngineServiceRuntime(args: {
     collectFormulaCellsForTables: (tableNames) => binding.collectFormulaCellsForTablesNow(tableNames),
     rebindFormulaCells: (inputs) => {
       const pending = inputs.filter(({ cellIndex }) => args.state.formulas.get(cellIndex))
-      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, templateId, preservesBinding }) => {
+      pending.forEach(({ cellIndex, ownerSheetName, source, compiled, templateId, preservesBinding, preservesValue }) => {
         try {
           if (compiled) {
+            if (
+              preservesBinding === true &&
+              preservesValue === true &&
+              binding.rewriteFormulaMetadataPreservingRuntimeNow(cellIndex, source, compiled, templateId)
+            ) {
+              return
+            }
             if (preservesBinding === true && binding.rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateId)) {
               return
             }
