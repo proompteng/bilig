@@ -8,7 +8,7 @@ import type {
   WorkbookPivotSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
-import type { CompiledFormula } from '@bilig/formula'
+import type { CompiledFormula, StructuralAxisTransform } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import type { OpOrder, ReplicaSnapshot, ReplicaState, ReplicaVersionSnapshot } from '../replica-state.js'
 import type { EdgeSlice } from '../edge-arena.js'
@@ -243,6 +243,12 @@ export interface CompiledPlanRecord {
   readonly templateId?: number
 }
 
+export interface RuntimeStructuralFormulaSourceTransform {
+  readonly ownerSheetName: string
+  readonly targetSheetName: string
+  readonly transform: StructuralAxisTransform
+}
+
 export interface RuntimeFormula {
   cellIndex: number
   formulaSlotId: number
@@ -256,6 +262,7 @@ export interface RuntimeFormula {
   rangeDependencies: Uint32Array
   runtimeProgram: Uint32Array
   constants: Float64Array
+  structuralSourceTransform: RuntimeStructuralFormulaSourceTransform | undefined
   programOffset: number
   programLength: number
   constNumberOffset: number

@@ -16,6 +16,7 @@ import { normalizeRange } from '../../engine-range-utils.js'
 import { emptyValue } from '../../engine-value-utils.js'
 import { WorkbookStore } from '../../workbook-store.js'
 import type { EngineRuntimeState } from '../runtime-state.js'
+import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import type { EngineRuntimeColumnStoreService } from './runtime-column-store-service.js'
 
 export interface EngineReadService {
@@ -63,7 +64,8 @@ export function createEngineReadService(args: {
     const col = position?.col ?? args.state.workbook.cellStore.cols[cellIndex]!
     const address = args.state.workbook.getAddress(cellIndex)
     const sheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-    const formula = args.state.formulas.get(cellIndex)?.source
+    const runtimeFormula = args.state.formulas.get(cellIndex)
+    const formula = runtimeFormula ? getRuntimeFormulaSource(runtimeFormula) : undefined
     const snapshot: CellSnapshot = {
       sheetName,
       address,

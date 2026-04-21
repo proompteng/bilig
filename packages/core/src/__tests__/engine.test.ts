@@ -4977,6 +4977,12 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 5 })
     expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 10 })
 
+    const restoredAfterInsert = new SpreadsheetEngine({ workbookName: 'structural-simple-columns-restored' })
+    await restoredAfterInsert.ready()
+    restoredAfterInsert.importSnapshot(engine.exportSnapshot())
+    expect(restoredAfterInsert.getCell('Sheet1', 'D1').formula).toBe('A1+C1')
+    expect(restoredAfterInsert.getCell('Sheet1', 'E1').formula).toBe('D1*2')
+
     engine.deleteColumns('Sheet1', 1, 1)
 
     expect(engine.getCell('Sheet1', 'C1').formula).toBe('A1+B1')
@@ -5017,7 +5023,9 @@ describe('SpreadsheetEngine', () => {
       directScalarsBeforeInsert.set(`D${row}`, readRuntimeDirectScalar(engine, dIndex!))
     }
 
+    engine.resetPerformanceCounters()
     engine.insertColumns('Sheet1', 1, 1)
+    expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
 
     for (let row = 1; row <= 4; row += 1) {
       expect(engine.getCell('Sheet1', `D${row}`).formula).toBe(`A${row}+C${row}`)

@@ -22,8 +22,9 @@ import {
   type StructurallyRewrittenTemplate,
 } from '../../formula/structural-retargeting.js'
 import type { RuntimeFormula } from '../runtime-state.js'
+import { getRuntimeFormulaSource, getRuntimeFormulaStructuralCompiled } from '../runtime-formula-source.js'
 import { EngineStructureError } from '../errors.js'
-import { makeCellKey, normalizeDefinedName, type WorkbookPivotRecord, type WorkbookStore } from '../../workbook-store.js'
+import { normalizeDefinedName, type WorkbookPivotRecord, type WorkbookStore } from '../../workbook-store.js'
 import type { RangeRegistry } from '../../range-registry.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
@@ -52,6 +53,11 @@ interface StructuralFormulaRebindInput {
   readonly templateId?: number
   readonly preservesBinding?: boolean
   readonly preservesValue?: boolean
+}
+
+interface StructuralFormulaRebindResolution {
+  readonly inputs: StructuralFormulaRebindInput[]
+  readonly preservedCellIndices: readonly number[]
 }
 
 function dependencyTouchesSheet(dependency: string, sheetName: string): boolean {
@@ -263,6 +269,8 @@ export function createEngineStructureService(args: {
   readonly collectFormulaCellsForDefinedNames: (names: readonly string[]) => readonly number[]
   readonly collectFormulaCellsForTables: (tableNames: readonly string[]) => readonly number[]
 }): EngineStructureService {
+  let hasDeferredStructuralFormulaSources = false
+
   const shouldCaptureStoredCell = (cellIndex: number): boolean => {
     const value = args.state.workbook.cellStore.getValue(cellIndex, () => '')
     const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
@@ -486,6 +494,51 @@ export function createEngineStructureService(args: {
     transform: StructuralAxisTransform,
   ): string => rewriteFormulaForStructuralTransform(source, ownerSheetName, sheetName, transform)
 
+  const canDeferStructuralDirectCellInsert = (formula: RuntimeFormula): boolean =>
+    formula.structuralSourceTransform === undefined &&
+    formula.directLookup === undefined &&
+    formula.directAggregate === undefined &&
+    formula.directCriteria === undefined &&
+    formula.rangeDependencies.length === 0 &&
+    formula.dependencyIndices.length > 0 &&
+    formula.compiled.symbolicNames.length === 0 &&
+    formula.compiled.symbolicTables.length === 0 &&
+    formula.compiled.symbolicSpills.length === 0 &&
+    formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
+    isStructurallyStableSimpleFormulaNode(formula.compiled.optimizedAst)
+
+  const structuralRewritePreservesDirectCellDependencies = (
+    formula: RuntimeFormula,
+    rewritten: { compiled: CompiledFormula },
+    ownerSheetName: string,
+  ): boolean => {
+    if (
+      formula.directLookup !== undefined ||
+      formula.directAggregate !== undefined ||
+      formula.directCriteria !== undefined ||
+      formula.rangeDependencies.length !== 0 ||
+      formula.dependencyIndices.length === 0
+    ) {
+      return false
+    }
+    const parsedDeps = rewritten.compiled.parsedDeps
+    if (!parsedDeps || parsedDeps.length !== formula.dependencyIndices.length) {
+      return false
+    }
+    for (let index = 0; index < parsedDeps.length; index += 1) {
+      const dependency = parsedDeps[index]!
+      if (dependency.kind !== 'cell') {
+        return false
+      }
+      const dependencySheetName = dependency.sheetName ?? ownerSheetName
+      const dependencyCellIndex = args.state.workbook.getCellIndex(dependencySheetName, dependency.address)
+      if (dependencyCellIndex === undefined || dependencyCellIndex !== formula.dependencyIndices[index]) {
+        return false
+      }
+    }
+    return true
+  }
+
   const rewriteFormulaFromTemplate = (
     cache: Map<string, StructurallyRewrittenTemplate | null>,
     formula: RuntimeFormula,
@@ -551,8 +604,9 @@ export function createEngineStructureService(args: {
     readonly changedDefinedNames: ReadonlySet<string>
     readonly changedTableNames: ReadonlySet<string>
     readonly ownerPositions: ReadonlyMap<number, { sheetName: string; row: number; col: number }>
-  }): StructuralFormulaRebindInput[] => {
+  }): StructuralFormulaRebindResolution => {
     const inputs: StructuralFormulaRebindInput[] = []
+    const preservedCellIndices: number[] = []
     const templateRewriteCache = new Map<string, StructurallyRewrittenTemplate | null>()
     const remappedCellsByIndex = new Map(argsForResolve.transaction.remappedCells.map((entry) => [entry.cellIndex, entry] as const))
     argsForResolve.formulaCellIndices.forEach((cellIndex) => {
@@ -587,6 +641,22 @@ export function createEngineStructureService(args: {
           ? mapStructuralAxisIndex(previousOwnerCol, argsForResolve.transform)
           : previousOwnerCol)
       if (ownerRow === undefined || ownerCol === undefined) {
+        return
+      }
+      if (
+        !touchesChangedName &&
+        !touchesChangedTable &&
+        !shouldBypassTemplateStructuralRewrite &&
+        argsForResolve.transform.kind === 'insert' &&
+        canDeferStructuralDirectCellInsert(formula)
+      ) {
+        formula.structuralSourceTransform = {
+          ownerSheetName,
+          targetSheetName: argsForResolve.sheetName,
+          transform: argsForResolve.transform,
+        }
+        hasDeferredStructuralFormulaSources = true
+        preservedCellIndices.push(cellIndex)
         return
       }
       const templateRewrite =
@@ -656,11 +726,16 @@ export function createEngineStructureService(args: {
         })
         return
       }
-      const preservesBinding = structuralRewritePreservesBinding(
-        formula,
-        rewritten,
-        formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
-      )
+      const preservesDirectCellDependencies = structuralRewritePreservesDirectCellDependencies(formula, rewritten, ownerSheetName)
+      const preservesBinding =
+        structuralRewritePreservesBinding(
+          formula,
+          rewritten,
+          formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
+        ) || preservesDirectCellDependencies
+      const preservesValue =
+        structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
+        structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform)
       const hasOnlyPlaceholderDirectDependencies =
         formula.dependencyIndices.length > 0 &&
         !formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex))
@@ -678,12 +753,10 @@ export function createEngineStructureService(args: {
         compiled: rewritten.compiled,
         ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
         preservesBinding: preservesBinding && !rewrittenPlaceholderDependencyNeedsRebind,
-        preservesValue:
-          structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
-          structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform),
+        preservesValue,
       })
     })
-    return inputs
+    return { inputs, preservedCellIndices }
   }
 
   const collectStructuralRangeDependencies = (argsForCollect: { readonly formulaCellIndices: readonly number[] }): number[] => {
@@ -994,7 +1067,11 @@ export function createEngineStructureService(args: {
     if (sheetId === undefined || !position || !Number.isFinite(position.row) || !Number.isFinite(position.col)) {
       return false
     }
-    return args.state.workbook.cellKeyToIndex.get(makeCellKey(sheetId, position.row, position.col)) === cellIndex
+    const sheet = args.state.workbook.getSheetById(sheetId)
+    return (
+      (sheet?.structureVersion === 1 ? sheet.grid.getPhysical(position.row, position.col) : sheet?.grid.get(position.row, position.col)) ===
+      cellIndex
+    )
   }
 
   const structuralAxisIndexAffected = (axisIndex: number, transform: StructuralAxisTransform): boolean => {
@@ -1011,10 +1088,12 @@ export function createEngineStructureService(args: {
   }): {
     formulaCellIndices: number[]
     rebindCellIndices: number[]
+    preservedCellIndices: number[]
     ownerPositions: Map<number, { sheetName: string; row: number; col: number }>
   } => {
     const formulaCellIndices = new Set<number>()
     const rebindCellIndices = new Set<number>()
+    const preservedCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
     args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
@@ -1046,6 +1125,16 @@ export function createEngineStructureService(args: {
       }
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       if (!ownerSheetName) {
+        return
+      }
+      if (argsForImpact.transform.kind === 'insert' && canDeferStructuralDirectCellInsert(formula)) {
+        formula.structuralSourceTransform = {
+          ownerSheetName,
+          targetSheetName: argsForImpact.sheetName,
+          transform: argsForImpact.transform,
+        }
+        hasDeferredStructuralFormulaSources = true
+        preservedCellIndices.add(cellIndex)
         return
       }
       const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
@@ -1128,8 +1217,64 @@ export function createEngineStructureService(args: {
     return {
       formulaCellIndices: [...formulaCellIndices],
       rebindCellIndices: [...rebindCellIndices],
+      preservedCellIndices: [...preservedCellIndices],
       ownerPositions,
     }
+  }
+
+  const materializeDeferredStructuralFormulaSources = (): void => {
+    if (!hasDeferredStructuralFormulaSources) {
+      return
+    }
+    const inputs: StructuralFormulaRebindInput[] = []
+    args.state.formulas.forEach((formula, cellIndex) => {
+      if (
+        formula.structuralSourceTransform === undefined ||
+        formula.directLookup !== undefined ||
+        formula.directAggregate !== undefined ||
+        formula.directCriteria !== undefined ||
+        formula.rangeDependencies.length !== 0 ||
+        !isCellIndexMapped(cellIndex)
+      ) {
+        return
+      }
+      const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      if (sheetId === undefined || !ownerPosition) {
+        return
+      }
+      const ownerSheetName = args.state.workbook.getSheetNameById(sheetId)
+      if (!ownerSheetName) {
+        return
+      }
+      const source = getRuntimeFormulaSource(formula)
+      const compiled = getRuntimeFormulaStructuralCompiled(formula)
+      inputs.push({
+        cellIndex,
+        ownerSheetName,
+        ownerRow: ownerPosition.row,
+        ownerCol: ownerPosition.col,
+        source,
+        ...(compiled
+          ? {
+              compiled,
+              ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
+              preservesBinding: true,
+              preservesValue: true,
+            }
+          : {}),
+      })
+    })
+    if (inputs.length > 0) {
+      args.rebindFormulaCells(inputs)
+    }
+    inputs.forEach(({ cellIndex }) => {
+      const formula = args.state.formulas.get(cellIndex)
+      if (formula) {
+        formula.structuralSourceTransform = undefined
+      }
+    })
+    hasDeferredStructuralFormulaSources = false
   }
 
   return {
@@ -1166,6 +1311,7 @@ export function createEngineStructureService(args: {
     applyStructuralAxisOp(op) {
       return Effect.try({
         try: () => {
+          materializeDeferredStructuralFormulaSources()
           const transform = structuralTransformForOp(op)
           const sheetName = op.sheetName
           const targetSheetId = args.state.workbook.getSheet(sheetName)?.id
@@ -1238,7 +1384,7 @@ export function createEngineStructureService(args: {
 
           clearSpillMetadataForSheet(sheetName)
           args.retargetRangeDependencies(transaction, structuralRangeDependencies)
-          const rebindInputs = resolveStructuralFormulaRebindInputs({
+          const rebindResolution = resolveStructuralFormulaRebindInputs({
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex)),
             sheetName,
             transform,
@@ -1247,6 +1393,7 @@ export function createEngineStructureService(args: {
             changedTableNames,
             ownerPositions: impactedFormulas.ownerPositions,
           })
+          const rebindInputs = rebindResolution.inputs
           if (args.state.counters && rebindInputs.length > 0) {
             addEngineCounter(args.state.counters, 'structuralFormulaRebindInputs', rebindInputs.length)
           }
@@ -1256,7 +1403,11 @@ export function createEngineStructureService(args: {
             formulaCellIndices.every((cellIndex) => args.state.formulas.get(cellIndex)?.directAggregate !== undefined)
           args.rebindFormulaCells(rebindInputs)
           const reboundFormulaCellIndices = new Set(rebindInputs.map((input) => input.cellIndex))
-          const preservedFormulaCellIndices = new Set(rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex))
+          const preservedFormulaCellIndices = new Set([
+            ...impactedFormulas.preservedCellIndices,
+            ...rebindResolution.preservedCellIndices,
+            ...rebindInputs.filter((input) => input.preservesValue).map((input) => input.cellIndex),
+          ])
           const lostSurvivingFormulaCells = impactedFormulas.formulaCellIndices.some(
             (cellIndex) =>
               !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex) && !removedFormulaCellIndexSet.has(cellIndex),

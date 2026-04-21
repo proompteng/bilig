@@ -44,6 +44,7 @@ import { createEngineSelectionService, type EngineSelectionService } from './ser
 import { createEngineSnapshotService, type EngineSnapshotService } from './services/snapshot-service.js'
 import { createEngineStructureService, type EngineStructureService } from './services/structure-service.js'
 import { createEngineTraversalService, type EngineTraversalService } from './services/traversal-service.js'
+import { getRuntimeFormulaSource } from './runtime-formula-source.js'
 
 export interface EngineServiceRuntime {
   readonly cellState: EngineCellStateService
@@ -721,7 +722,7 @@ export function createEngineServiceRuntime(args: {
             sheetName,
             row: position.row,
             col: position.col,
-            source: formula?.source ?? record.source,
+            source: formula ? getRuntimeFormulaSource(formula) : record.source,
             ...(formula?.templateId !== undefined
               ? { templateId: formula.templateId }
               : record.templateId !== undefined

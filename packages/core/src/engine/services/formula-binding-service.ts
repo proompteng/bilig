@@ -1472,6 +1472,7 @@ export function createEngineFormulaBindingService(args: {
     args.compiledPlans.release(prepared.plan.id)
     untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     existing.source = source
+    existing.structuralSourceTransform = undefined
     existing.planId = plan.id
     existing.templateId = prepared.templateId
     existing.compiled = plan.compiled
@@ -1564,6 +1565,7 @@ export function createEngineFormulaBindingService(args: {
     }
     const hadDirectRegions = existing.directAggregate !== undefined || existing.directCriteria !== undefined
     existing.source = source
+    existing.structuralSourceTransform = undefined
     existing.planId = plan.id
     existing.templateId = nextTemplateId
     existing.compiled = plan.compiled
@@ -1630,6 +1632,7 @@ export function createEngineFormulaBindingService(args: {
     const nextTemplateId = templateId ?? existing.templateId
     const plan = args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
     existing.source = source
+    existing.structuralSourceTransform = undefined
     existing.planId = plan.id
     existing.templateId = nextTemplateId
     existing.compiled = plan.compiled
@@ -2136,6 +2139,7 @@ export function createEngineFormulaBindingService(args: {
     if (existing && !topologyChanged) {
       args.compiledPlans.release(existing.planId)
       existing.source = source
+      existing.structuralSourceTransform = undefined
       existing.planId = prepared.plan.id
       existing.templateId = prepared.templateId
       existing.compiled = prepared.plan.compiled
@@ -2227,6 +2231,7 @@ export function createEngineFormulaBindingService(args: {
       rangeDependencies: prepared.dependencies.rangeDependencies,
       runtimeProgram: prepared.runtimeProgram,
       constants: prepared.compiled.constants,
+      structuralSourceTransform: undefined,
       programOffset: 0,
       programLength: prepared.runtimeProgram.length,
       constNumberOffset: 0,
