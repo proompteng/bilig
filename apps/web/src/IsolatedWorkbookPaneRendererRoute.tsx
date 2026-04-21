@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
-import { WorkbookPaneRenderer } from '@bilig/grid'
+import { WorkbookPaneRendererV2 } from '@bilig/grid'
 
 const ROW_MARKER_WIDTH = 46
 const HEADER_HEIGHT = 24
@@ -17,8 +17,8 @@ const TEXT_PRIMARY = '#1f2933'
 const TEXT_MUTED = '#52606d'
 const TEXT_ACCENT = '#163f29'
 
-type RendererPane = ComponentProps<typeof WorkbookPaneRenderer>['panes'][number]
-type RendererPanes = ComponentProps<typeof WorkbookPaneRenderer>['panes']
+type RendererPane = ComponentProps<typeof WorkbookPaneRendererV2>['panes'][number]
+type RendererPanes = ComponentProps<typeof WorkbookPaneRendererV2>['panes']
 type RendererGpuScene = RendererPane['gpuScene']
 type RendererGpuRect = RendererGpuScene['fillRects'][number]
 type RendererTextScene = RendererPane['textScene']
@@ -67,7 +67,7 @@ export function IsolatedWorkbookPaneRendererRoute() {
   return (
     <div className="h-dvh w-screen overflow-hidden bg-(--wb-surface)">
       <div className="relative h-full w-full" data-testid="isolated-pane-renderer-route" ref={setHost}>
-        {host ? <WorkbookPaneRenderer active host={host} panes={panes} /> : null}
+        {host ? <WorkbookPaneRendererV2 active geometry={null} host={host} panes={panes} /> : null}
       </div>
     </div>
   )

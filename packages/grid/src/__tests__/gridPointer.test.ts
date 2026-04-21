@@ -52,6 +52,61 @@ describe('gridPointer', () => {
     expect(cell).toEqual([4, 11])
   })
 
+  test('maps pointer coordinates through fractional scroll offsets', () => {
+    const scrolledRegion: VisibleRegionState = {
+      range: { x: 3, y: 5, width: 12, height: 24 },
+      tx: 50,
+      ty: 10,
+      freezeRows: 0,
+      freezeCols: 0,
+    }
+    const geometry = createPointerGeometry({ left: 0, top: 0, right: 1068, bottom: 868 }, scrolledRegion, {}, {}, gridMetrics)
+    const cell = resolvePointerCell({
+      clientX: gridMetrics.rowMarkerWidth + (PRODUCT_COLUMN_WIDTH - scrolledRegion.tx) + 1,
+      clientY: gridMetrics.headerHeight + (PRODUCT_ROW_HEIGHT - scrolledRegion.ty) + 1,
+      region: scrolledRegion,
+      geometry,
+      columnWidths: {},
+      rowHeights: {},
+      gridMetrics,
+      selectedCell: [3, 5],
+      selectedCellBounds: null,
+      selectionRange: { x: 3, y: 5, width: 1, height: 1 },
+      hasColumnSelection: false,
+      hasRowSelection: false,
+    })
+
+    expect(cell).toEqual([4, 6])
+    expect(
+      resolveHeaderSelection(
+        gridMetrics.rowMarkerWidth + PRODUCT_COLUMN_WIDTH - scrolledRegion.tx + 1,
+        10,
+        scrolledRegion,
+        geometry,
+        {},
+        {},
+        gridMetrics,
+      ),
+    ).toEqual({
+      kind: 'column',
+      index: 4,
+    })
+    expect(
+      resolveHeaderSelection(
+        20,
+        gridMetrics.headerHeight + PRODUCT_ROW_HEIGHT - scrolledRegion.ty + 1,
+        scrolledRegion,
+        geometry,
+        {},
+        {},
+        gridMetrics,
+      ),
+    ).toEqual({
+      kind: 'row',
+      index: 6,
+    })
+  })
+
   test('keeps the active single-cell selection when clicking its visible top border', () => {
     const geometry = buildGeometry()
     const cell = resolvePointerCell({
@@ -140,5 +195,50 @@ describe('gridPointer', () => {
       kind: 'column',
       index: 2,
     })
+  })
+
+  test('keeps frozen pane hit testing fixed while the body uses fractional scroll', () => {
+    const frozenScrolledRegion: VisibleRegionState = {
+      range: { x: 2, y: 3, width: 12, height: 24 },
+      tx: 39,
+      ty: 7,
+      freezeRows: 1,
+      freezeCols: 1,
+    }
+    const geometry = createPointerGeometry({ left: 0, top: 33, right: 1068, bottom: 868 }, frozenScrolledRegion, {}, {}, gridMetrics)
+
+    expect(
+      resolvePointerCell({
+        clientX: 46 + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+        clientY: 57 + 4,
+        region: frozenScrolledRegion,
+        geometry,
+        columnWidths: {},
+        rowHeights: {},
+        gridMetrics,
+        selectedCell: [0, 0],
+        selectedCellBounds: null,
+        selectionRange: { x: 0, y: 0, width: 1, height: 1 },
+        hasColumnSelection: false,
+        hasRowSelection: false,
+      }),
+    ).toEqual([0, 0])
+
+    expect(
+      resolvePointerCell({
+        clientX: 46 + PRODUCT_COLUMN_WIDTH + (PRODUCT_COLUMN_WIDTH - frozenScrolledRegion.tx) + 1,
+        clientY: 57 + PRODUCT_ROW_HEIGHT + (PRODUCT_ROW_HEIGHT - frozenScrolledRegion.ty) + 1,
+        region: frozenScrolledRegion,
+        geometry,
+        columnWidths: {},
+        rowHeights: {},
+        gridMetrics,
+        selectedCell: [0, 0],
+        selectedCellBounds: null,
+        selectionRange: { x: 0, y: 0, width: 1, height: 1 },
+        hasColumnSelection: false,
+        hasRowSelection: false,
+      }),
+    ).toEqual([3, 4])
   })
 })
