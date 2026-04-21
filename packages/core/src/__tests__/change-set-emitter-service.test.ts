@@ -305,4 +305,68 @@ describe('EngineChangeSetEmitterService', () => {
       },
     ])
   })
+
+  it('uses typed invalidation patches instead of redundant cells for full invalidations', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-full-invalidations' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    expect(a1).toBeDefined()
+
+    const patches = emitter.captureChangedPatches([a1!], {
+      invalidation: 'full',
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [{ sheetName: 'Sheet1', startIndex: 0, endIndex: 1 }],
+    })
+
+    expect(patches).toEqual([
+      {
+        kind: 'column-invalidation',
+        sheetName: 'Sheet1',
+        startIndex: 0,
+        endIndex: 1,
+      },
+    ])
+  })
+
+  it('uses typed invalidation patches instead of oversized changed cell patch lists', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'change-set-emitter-large-invalidations' })
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 520; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+
+    const emitter = createEngineChangeSetEmitterService({
+      state: {
+        workbook: engine.workbook,
+        strings: engine.strings,
+      },
+    })
+
+    const cellIndices = Array.from({ length: 520 }, (_entry, index) => engine.workbook.getCellIndex('Sheet1', `A${index + 1}`)!)
+    const patches = emitter.captureChangedPatches(cellIndices, {
+      invalidation: 'cells',
+      invalidatedRanges: [],
+      invalidatedRows: [],
+      invalidatedColumns: [{ sheetName: 'Sheet1', startIndex: 0, endIndex: 0 }],
+    })
+
+    expect(patches).toEqual([
+      {
+        kind: 'column-invalidation',
+        sheetName: 'Sheet1',
+        startIndex: 0,
+        endIndex: 0,
+      },
+    ])
+  })
 })

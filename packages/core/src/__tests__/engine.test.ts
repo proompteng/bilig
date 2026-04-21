@@ -6180,6 +6180,41 @@ describe('SpreadsheetEngine', () => {
     unsubscribe()
   })
 
+  it('emits large structural column invalidations without flooding changed cell payloads for deletes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structural-delete-column-event' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 260; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+    }
+
+    const events: Array<{
+      invalidation: 'cells' | 'full'
+      changedCellIndices: number[]
+      changedCells: number
+      invalidatedColumns: readonly { sheetName: string; startIndex: number; endIndex: number }[]
+    }> = []
+    const unsubscribe = engine.subscribe((event) => {
+      events.push({
+        invalidation: event.invalidation,
+        changedCellIndices: Array.from(event.changedCellIndices),
+        changedCells: event.changedCells.length,
+        invalidatedColumns: event.invalidatedColumns,
+      })
+    })
+
+    engine.deleteColumns('Sheet1', 1, 1)
+
+    expect(events.at(-1)?.invalidation).toBe('cells')
+    expect(events.at(-1)?.changedCellIndices.length).toBeGreaterThan(512)
+    expect(events.at(-1)?.changedCells).toBe(0)
+    expect(events.at(-1)?.invalidatedColumns).toEqual([{ sheetName: 'Sheet1', startIndex: 1, endIndex: 1 }])
+    unsubscribe()
+  })
+
   it('merges advanced style fields including borders and font weight', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()

@@ -1989,7 +1989,11 @@ export function createEngineOperationService(args: {
     const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
     const hasWatchedCellListeners = args.state.events.hasCellListeners()
     const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
-    const changed: U32 = isRestore || !requiresChangedSet ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
+    const invalidation = isRestore || sheetDeleted || structuralInvalidation ? 'full' : 'cells'
+    const changed: U32 =
+      isRestore || invalidation === 'full' || !requiresChangedSet
+        ? new Uint32Array()
+        : args.composeEventChanges(recalculated, explicitChangedCount)
     const lastMetrics = {
       ...args.state.getLastMetrics(),
       batchId: args.state.getLastMetrics().batchId + 1,
@@ -1997,13 +2001,17 @@ export function createEngineOperationService(args: {
       compileMs,
     }
     args.state.setLastMetrics(lastMetrics)
-    const invalidation = isRestore || sheetDeleted || structuralInvalidation ? 'full' : 'cells'
     if (hasGeneralEventListeners || hasWatchedCellListeners) {
+      const shouldMaterializeChangedCells =
+        hasGeneralEventListeners &&
+        invalidation !== 'full' &&
+        (changed.length <= TRACKED_CELL_PATCH_LIMIT ||
+          (invalidatedRanges.length === 0 && invalidatedRows.length === 0 && invalidatedColumns.length === 0))
       const event: EngineEvent & { explicitChangedCount: number } = {
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
-        changedCells: hasGeneralEventListeners ? args.captureChangedCells(changed) : [],
+        changedCells: shouldMaterializeChangedCells ? args.captureChangedCells(changed) : [],
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,

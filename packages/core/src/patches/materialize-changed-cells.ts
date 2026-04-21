@@ -11,6 +11,8 @@ import type {
   EngineRowInvalidationPatch,
 } from './patch-types.js'
 
+const INVALIDATION_CELL_PATCH_LIMIT = 512
+
 export interface MaterializeChangedCellsArgs {
   readonly workbook: WorkbookStore
   readonly strings: StringPool
@@ -152,13 +154,16 @@ function materializeColumnInvalidationPatches(
 }
 
 export function materializeEnginePatches(args: MaterializeChangedCellsArgs, request: EnginePatchCaptureRequest): readonly EnginePatch[] {
-  const cellPatches = materializeChangedCellPatches(args, request.changedCellIndices)
   const rangePatches = materializeRangeInvalidationPatches(request.invalidatedRanges ?? [])
   const rowPatches = materializeRowInvalidationPatches(request.invalidatedRows)
   const columnPatches = materializeColumnInvalidationPatches(request.invalidatedColumns)
   if (rangePatches.length === 0 && rowPatches.length === 0 && columnPatches.length === 0) {
-    return cellPatches
+    return materializeChangedCellPatches(args, request.changedCellIndices)
   }
+  if (request.invalidation === 'full' || request.changedCellIndices.length > INVALIDATION_CELL_PATCH_LIMIT) {
+    return [...rangePatches, ...rowPatches, ...columnPatches]
+  }
+  const cellPatches = materializeChangedCellPatches(args, request.changedCellIndices)
   return [...cellPatches, ...rangePatches, ...rowPatches, ...columnPatches]
 }
 
