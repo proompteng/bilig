@@ -489,65 +489,62 @@ export function createEngineStructureService(args: {
     transform: StructuralAxisTransform,
   ): string => rewriteFormulaForStructuralTransform(source, ownerSheetName, sheetName, transform)
 
-  const rewriteFormulaFromTemplate = (() => {
-    const cache = new Map<string, StructurallyRewrittenTemplate | null>()
-
-    return (
-      formula: RuntimeFormula,
-      representative: {
-        readonly templateId: number
-        readonly ownerSheetName: string
-        readonly targetSheetName: string
-        readonly representativeRow: number
-        readonly representativeCol: number
-        readonly ownerRow: number
-        readonly ownerCol: number
-      },
-      targetSheetName: string,
-      transform: StructuralAxisTransform,
-    ): { source: string; compiled: CompiledFormula; reusedProgram: boolean } | undefined => {
-      if (formula.directAggregate !== undefined || formula.directCriteria !== undefined) {
-        return undefined
-      }
-      const cacheKey =
-        `${representative.templateId}:${representative.ownerSheetName}:${targetSheetName}:${transform.kind}:${transform.axis}:${transform.start}:${transform.count}:` +
-        `${transform.kind === 'move' ? transform.target : ''}`
-      let rewrittenTemplate = cache.get(cacheKey)
-      if (rewrittenTemplate === undefined) {
-        if (formula.compiled.astMatchesSource === false) {
-          return undefined
-        }
-        rewrittenTemplate =
-          rewriteTemplateForStructuralTransform({
-            template: {
-              id: representative.templateId,
-              templateKey: `runtime-template-${representative.templateId}`,
-              baseSource: formula.source,
-              baseRow: representative.representativeRow,
-              baseCol: representative.representativeCol,
-              compiled: formula.compiled,
-            },
-            ownerSheetName: representative.ownerSheetName,
-            targetSheetName,
-            transform,
-          }) ?? null
-        cache.set(cacheKey, rewrittenTemplate)
-      }
-      if (rewrittenTemplate === null) {
-        return undefined
-      }
-
-      try {
-        return retargetStructurallyRewrittenTemplateInstance({
-          rewrittenTemplate,
-          ownerRow: representative.ownerRow,
-          ownerCol: representative.ownerCol,
-        })
-      } catch {
-        return undefined
-      }
+  const rewriteFormulaFromTemplate = (
+    cache: Map<string, StructurallyRewrittenTemplate | null>,
+    formula: RuntimeFormula,
+    representative: {
+      readonly templateId: number
+      readonly ownerSheetName: string
+      readonly targetSheetName: string
+      readonly representativeRow: number
+      readonly representativeCol: number
+      readonly ownerRow: number
+      readonly ownerCol: number
+    },
+    targetSheetName: string,
+    transform: StructuralAxisTransform,
+  ): { source: string; compiled: CompiledFormula; reusedProgram: boolean } | undefined => {
+    if (formula.directAggregate !== undefined || formula.directCriteria !== undefined) {
+      return undefined
     }
-  })()
+    const cacheKey =
+      `${representative.templateId}:${representative.ownerSheetName}:${targetSheetName}:${transform.kind}:${transform.axis}:${transform.start}:${transform.count}:` +
+      `${transform.kind === 'move' ? transform.target : ''}`
+    let rewrittenTemplate = cache.get(cacheKey)
+    if (rewrittenTemplate === undefined) {
+      if (formula.compiled.astMatchesSource === false) {
+        return undefined
+      }
+      rewrittenTemplate =
+        rewriteTemplateForStructuralTransform({
+          template: {
+            id: representative.templateId,
+            templateKey: `runtime-template-${representative.templateId}`,
+            baseSource: formula.source,
+            baseRow: representative.representativeRow,
+            baseCol: representative.representativeCol,
+            compiled: formula.compiled,
+          },
+          ownerSheetName: representative.ownerSheetName,
+          targetSheetName,
+          transform,
+        }) ?? null
+      cache.set(cacheKey, rewrittenTemplate)
+    }
+    if (rewrittenTemplate === null) {
+      return undefined
+    }
+
+    try {
+      return retargetStructurallyRewrittenTemplateInstance({
+        rewrittenTemplate,
+        ownerRow: representative.ownerRow,
+        ownerCol: representative.ownerCol,
+      })
+    } catch {
+      return undefined
+    }
+  }
 
   const resolveStructuralFormulaRebindInputs = (argsForResolve: {
     readonly formulaCellIndices: readonly number[]
@@ -558,6 +555,7 @@ export function createEngineStructureService(args: {
     readonly changedTableNames: ReadonlySet<string>
   }): StructuralFormulaRebindInput[] => {
     const inputs: StructuralFormulaRebindInput[] = []
+    const templateRewriteCache = new Map<string, StructurallyRewrittenTemplate | null>()
     const remappedCellsByIndex = new Map(argsForResolve.transaction.remappedCells.map((entry) => [entry.cellIndex, entry] as const))
     argsForResolve.formulaCellIndices.forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
@@ -601,6 +599,7 @@ export function createEngineStructureService(args: {
         previousOwnerRow !== undefined &&
         previousOwnerCol !== undefined
           ? rewriteFormulaFromTemplate(
+              templateRewriteCache,
               formula,
               {
                 templateId: formula.templateId,

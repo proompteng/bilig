@@ -800,6 +800,16 @@ export function createEngineOperationService(args: {
     return sheetName ? args.hasRegionFormulaSubscriptionsForColumn(sheetName, col) : false
   }
 
+  const cellTouchesPivotSource = (sheetName: string, row: number, col: number): boolean =>
+    args.state.workbook.listPivots().some((pivot) => {
+      if (pivot.source.sheetName !== sheetName) {
+        return false
+      }
+      const start = parseCellAddress(pivot.source.startAddress, pivot.source.sheetName)
+      const end = parseCellAddress(pivot.source.endAddress, pivot.source.sheetName)
+      return row >= start.row && row <= end.row && col >= start.col && col <= end.col
+    })
+
   const markAffectedExactLookupDependents = (
     request: {
       sheetName: string
@@ -1555,6 +1565,9 @@ export function createEngineOperationService(args: {
             const hasExactLookupDependents = sheetId !== undefined ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col) : false
             const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
             const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
+            if (!isRestore && cellTouchesPivotSource(op.sheetName, parsedAddress.row, parsedAddress.col)) {
+              refreshAllPivots = true
+            }
             const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
             const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
             if (!isRestore) {
@@ -1644,6 +1657,9 @@ export function createEngineOperationService(args: {
           }
           case 'setCellFormula': {
             const parsedAddress = parseCellAddress(op.address, op.sheetName)
+            if (!isRestore && cellTouchesPivotSource(op.sheetName, parsedAddress.row, parsedAddress.col)) {
+              refreshAllPivots = true
+            }
             args.invalidateExactLookupColumn({ sheetName: op.sheetName, col: parsedAddress.col })
             args.invalidateSortedLookupColumn({ sheetName: op.sheetName, col: parsedAddress.col })
             if (!isRestore) {

@@ -250,6 +250,9 @@ export function createEngineSnapshotService(args: {
               args.state.workbook.listPivots().forEach((pivot) => {
                 args.materializePivot!(pivot)
               })
+              snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
+                args.state.workbook.setPivot(pivot)
+              })
             }
             return
           }
