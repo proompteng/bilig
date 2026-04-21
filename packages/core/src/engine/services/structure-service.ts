@@ -298,9 +298,7 @@ export function createEngineStructureService(args: {
     sourceAddress?: string,
   ): EngineOp[] => args.captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress)
 
-  const canDeferSimpleStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
-    transform.kind !== 'delete' &&
-    transform.axis === 'column' &&
+  const isSimpleStructuralFormulaSourceDeferrable = (formula: RuntimeFormula): boolean =>
     formula.rangeDependencies.length === 0 &&
     formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
     !formula.compiled.volatile &&
@@ -311,6 +309,31 @@ export function createEngineStructureService(args: {
     formula.directAggregate === undefined &&
     formula.directCriteria === undefined &&
     isStructurallyStableSimpleFormulaNode(formula.compiled.ast)
+
+  const canDeferSimpleStructuralFormulaSource = (formula: RuntimeFormula, transform: StructuralAxisTransform): boolean =>
+    transform.kind !== 'delete' && transform.axis === 'column' && isSimpleStructuralFormulaSourceDeferrable(formula)
+
+  const canDeferSimpleDeleteStructuralFormulaSource = (
+    formula: RuntimeFormula,
+    targetSheetId: number | undefined,
+    transform: StructuralAxisTransform,
+  ): boolean => {
+    if (
+      transform.kind !== 'delete' ||
+      transform.axis !== 'column' ||
+      targetSheetId === undefined ||
+      !isSimpleStructuralFormulaSourceDeferrable(formula)
+    ) {
+      return false
+    }
+    return formula.dependencyIndices.every((dependencyCellIndex) => {
+      if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== targetSheetId) {
+        return true
+      }
+      const dependencyPosition = args.state.workbook.getCellPosition(dependencyCellIndex)
+      return dependencyPosition !== undefined && mapStructuralAxisIndex(dependencyPosition.col, transform) !== undefined
+    })
+  }
 
   const captureAxisRangeCellState = (sheetName: string, axis: 'row' | 'column', start: number, count: number): EngineOp[] => {
     const sheet = args.state.workbook.getSheet(sheetName)
@@ -1100,17 +1123,33 @@ export function createEngineStructureService(args: {
         return false
       }
       const formula = args.state.formulas.get(cellIndex)
-      if (!formula || !canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
+      if (!formula) {
+        return false
+      }
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      if (
+        !ownerPosition ||
+        mapStructuralAxisIndex(argsForImpact.transform.axis === 'row' ? ownerPosition.row : ownerPosition.col, argsForImpact.transform) ===
+          undefined
+      ) {
+        return false
+      }
+      const preservesValue = canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)
+      if (!preservesValue && !canDeferSimpleDeleteStructuralFormulaSource(formula, argsForImpact.targetSheetId, argsForImpact.transform)) {
         return false
       }
       formula.structuralSourceTransform = {
         ownerSheetName: argsForImpact.sheetName,
         targetSheetName: argsForImpact.sheetName,
         transform: argsForImpact.transform,
-        preservesValue: true,
+        preservesValue,
       }
       hasDeferredStructuralFormulaSources = true
-      preservedCellIndices.add(cellIndex)
+      if (preservesValue) {
+        preservedCellIndices.add(cellIndex)
+      } else {
+        formulaCellIndices.add(cellIndex)
+      }
       return true
     }
     args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
