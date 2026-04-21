@@ -28,6 +28,7 @@ import { EngineMutationError } from '../errors.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
+const TRACKED_CELL_PATCH_LIMIT = 512
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -362,6 +363,21 @@ export function createEngineOperationService(args: {
       listener(batch)
     })
   }
+
+  const shouldCaptureTrackedPatches = (
+    changed: readonly number[] | U32,
+    request: {
+      readonly invalidation: 'cells' | 'full'
+      readonly invalidatedRanges: readonly CellRangeRef[]
+      readonly invalidatedRows: readonly { readonly sheetName: string; readonly startIndex: number; readonly endIndex: number }[]
+      readonly invalidatedColumns: readonly { readonly sheetName: string; readonly startIndex: number; readonly endIndex: number }[]
+    },
+  ): boolean =>
+    changed.length <= TRACKED_CELL_PATCH_LIMIT ||
+    request.invalidation !== 'cells' ||
+    request.invalidatedRanges.length > 0 ||
+    request.invalidatedRows.length > 0 ||
+    request.invalidatedColumns.length > 0
   const entityVersions: VersionStore = args.state.trackReplicaVersions ? args.state.entityVersions : noopVersionStore
   const sheetDeleteVersions: VersionStore = args.state.trackReplicaVersions ? args.state.sheetDeleteVersions : noopVersionStore
   const setEntityVersionForOp = (op: EngineOp, order: OpOrder): void => {
@@ -1997,16 +2013,18 @@ export function createEngineOperationService(args: {
       }
     }
     if (hasTrackedEventListeners) {
+      const patchRequest = {
+        invalidation,
+        invalidatedRanges,
+        invalidatedRows,
+        invalidatedColumns,
+      } satisfies Parameters<typeof args.captureChangedPatches>[1]
+      const patches = shouldCaptureTrackedPatches(changed, patchRequest) ? args.captureChangedPatches(changed, patchRequest) : undefined
       args.state.events.emitTracked({
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
-        patches: args.captureChangedPatches(changed, {
-          invalidation,
-          invalidatedRanges,
-          invalidatedRows,
-          invalidatedColumns,
-        }),
+        ...(patches ? { patches } : {}),
         invalidatedRanges,
         invalidatedRows,
         invalidatedColumns,
@@ -2563,16 +2581,18 @@ export function createEngineOperationService(args: {
       return
     }
     if (hasTrackedEventListeners) {
+      const patchRequest = {
+        invalidation,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      } satisfies Parameters<typeof args.captureChangedPatches>[1]
+      const patches = shouldCaptureTrackedPatches(changed, patchRequest) ? args.captureChangedPatches(changed, patchRequest) : undefined
       args.state.events.emitTracked({
         kind: 'batch',
         invalidation,
         changedCellIndices: changed,
-        patches: args.captureChangedPatches(changed, {
-          invalidation,
-          invalidatedRanges: [],
-          invalidatedRows: [],
-          invalidatedColumns: [],
-        }),
+        ...(patches ? { patches } : {}),
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],

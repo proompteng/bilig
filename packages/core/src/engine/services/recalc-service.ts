@@ -19,6 +19,8 @@ import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
 import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-scheduler-service.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 
+const TRACKED_CELL_PATCH_LIMIT = 512
+
 export interface DirtyRegion {
   readonly sheetName: string
   readonly rowStart: number
@@ -138,6 +140,16 @@ export function createEngineRecalcService(args: {
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[]
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[]
 }): EngineRecalcService {
+  const captureTrackedPatchesForCells = (changed: readonly number[] | U32): readonly EnginePatch[] | undefined =>
+    changed.length <= TRACKED_CELL_PATCH_LIMIT
+      ? args.captureChangedPatches(changed, {
+          invalidation: 'cells',
+          invalidatedRanges: [],
+          invalidatedRows: [],
+          invalidatedColumns: [],
+        })
+      : undefined
+
   const shouldRefreshPivot = (pivot: WorkbookPivotRecord, changed: readonly number[] | U32): boolean => {
     const ownerSheet = args.state.workbook.getSheet(pivot.source.sheetName)
     if (!ownerSheet) {
@@ -604,16 +616,12 @@ export function createEngineRecalcService(args: {
           }
           args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
           if (args.state.events.hasTrackedListeners()) {
+            const patches = captureTrackedPatchesForCells(changed)
             args.state.events.emitTracked({
               kind: 'batch',
               invalidation: 'cells',
               changedCellIndices: changed,
-              patches: args.captureChangedPatches(changed, {
-                invalidation: 'cells',
-                invalidatedRanges: [],
-                invalidatedRows: [],
-                invalidatedColumns: [],
-              }),
+              ...(patches ? { patches } : {}),
               invalidatedRanges: [],
               invalidatedRows: [],
               invalidatedColumns: [],
@@ -676,16 +684,12 @@ export function createEngineRecalcService(args: {
           }
           args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
           if (args.state.events.hasTrackedListeners()) {
+            const patches = captureTrackedPatchesForCells(changed)
             args.state.events.emitTracked({
               kind: 'batch',
               invalidation: 'cells',
               changedCellIndices: changed,
-              patches: args.captureChangedPatches(changed, {
-                invalidation: 'cells',
-                invalidatedRanges: [],
-                invalidatedRows: [],
-                invalidatedColumns: [],
-              }),
+              ...(patches ? { patches } : {}),
               invalidatedRanges: [],
               invalidatedRows: [],
               invalidatedColumns: [],
