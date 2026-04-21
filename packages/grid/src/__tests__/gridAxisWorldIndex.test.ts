@@ -47,6 +47,28 @@ describe('gridAxisWorldIndex', () => {
     expect(axis.hitTest(10)).toBe(2)
   })
 
+  test('derives distinct revision versions from axis geometry when none is provided', () => {
+    const base = createGridAxisWorldIndexFromRecords({
+      axisLength: 6,
+      defaultSize: 10,
+      sizes: { 3: 25 },
+    })
+    const resized = createGridAxisWorldIndexFromRecords({
+      axisLength: 6,
+      defaultSize: 10,
+      sizes: { 3: 26 },
+    })
+    const hidden = createGridAxisWorldIndexFromRecords({
+      axisLength: 6,
+      defaultSize: 10,
+      hidden: { 3: true },
+      sizes: { 3: 25 },
+    })
+
+    expect(resized.version).not.toBe(base.version)
+    expect(hidden.version).not.toBe(base.version)
+  })
+
   test('returns visible ranges and counts without including hidden entries', () => {
     const axis = createGridAxisWorldIndex({
       axisLength: 8,

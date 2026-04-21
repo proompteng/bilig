@@ -48,8 +48,8 @@ export function createGridAxisWorldIndex(input: {
 }): GridAxisWorldIndex {
   const axisLength = Math.max(1, Math.floor(input.axisLength))
   const defaultSize = Math.max(0, input.defaultSize)
-  const version = Math.max(0, Math.floor(input.version ?? 0))
   const overrides = normalizeOverrides(axisLength, defaultSize, input.overrides ?? [])
+  const version = Math.max(0, Math.floor(input.version ?? hashAxisSnapshot(axisLength, defaultSize, overrides)))
   const totalSize = offsetOf(axisLength, axisLength, defaultSize, overrides)
 
   return {
@@ -190,6 +190,22 @@ function normalizeOverrides(
       deltaPrefix += value.size - defaultSize
       return entry
     })
+}
+
+function hashAxisSnapshot(axisLength: number, defaultSize: number, overrides: readonly NormalizedAxisOverride[]): number {
+  let hash = 2_166_136_261
+  hash = mixHash(hash, axisLength)
+  hash = mixHash(hash, Math.round(defaultSize * 1_000))
+  for (const override of overrides) {
+    hash = mixHash(hash, override.index)
+    hash = mixHash(hash, Math.round(override.size * 1_000))
+    hash = mixHash(hash, override.hidden ? 1 : 0)
+  }
+  return hash
+}
+
+function mixHash(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
 }
 
 function offsetOf(index: number, axisLength: number, defaultSize: number, overrides: readonly NormalizedAxisOverride[]): number {
