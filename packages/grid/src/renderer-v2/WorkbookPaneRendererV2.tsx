@@ -3,21 +3,16 @@ import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
-import { createGlyphAtlas } from './typegpu-atlas-manager.js'
-import { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
-import { drawTypeGpuPanes } from './typegpu-render-pass.js'
-import { syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
-import {
-  createTypeGpuRenderer,
-  destroyTypeGpuRenderer,
-  syncTypeGpuAtlasResources,
-  type TypeGpuRendererArtifacts,
-} from './typegpu-backend.js'
-import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from './typegpu-surface.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
-import { TileGpuCache, syncTileGpuCacheFromPanes } from './tile-gpu-cache.js'
+import {
+  createWorkbookTypeGpuBackend,
+  destroyWorkbookTypeGpuBackend,
+  drawWorkbookTypeGpuFrame,
+  syncWorkbookTypeGpuSurface,
+  type WorkbookTypeGpuBackend,
+} from './workbook-typegpu-backend.js'
 
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
@@ -84,11 +79,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   scrollTransformStore = null,
 }: WorkbookPaneRendererV2Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const artifactsRef = useRef<TypeGpuRendererArtifacts | null>(null)
-  const paneBuffersRef = useRef(new WorkbookPaneBufferCache())
-  const tileCacheRef = useRef(new TileGpuCache())
-  const atlasRef = useRef(createGlyphAtlas())
-  const surfaceStateRef = useRef(createTypeGpuSurfaceState())
+  const backendRef = useRef<WorkbookTypeGpuBackend | null>(null)
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
   const drawFrameRef = useRef<() => void>(() => {})
   const activeRef = useRef(active)
@@ -118,27 +109,26 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
   useEffect(() => {
     let cancelled = false
-    let effectArtifacts: TypeGpuRendererArtifacts | null = null
-    const paneBufferCache = paneBuffersRef.current
+    let effectBackend: WorkbookTypeGpuBackend | null = null
 
     async function init() {
       if (!active || !canvasRef.current) {
         setWebGpuReady(false)
         return
       }
-      const artifacts = await createTypeGpuRenderer(canvasRef.current)
+      const backend = await createWorkbookTypeGpuBackend(canvasRef.current)
       if (cancelled) {
-        if (artifacts) {
-          destroyTypeGpuRenderer(artifacts)
+        if (backend) {
+          destroyWorkbookTypeGpuBackend(backend)
         }
         return
       }
-      if (!artifacts) {
+      if (!backend) {
         setWebGpuReady(false)
         return
       }
-      effectArtifacts = artifacts
-      artifactsRef.current = artifacts
+      effectBackend = backend
+      backendRef.current = backend
       setWebGpuReady(true)
     }
 
@@ -146,11 +136,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     return () => {
       cancelled = true
       setWebGpuReady(false)
-      paneBufferCache.dispose()
-      if (effectArtifacts) {
-        destroyTypeGpuRenderer(effectArtifacts)
+      if (effectBackend) {
+        destroyWorkbookTypeGpuBackend(effectBackend)
       }
-      artifactsRef.current = null
+      backendRef.current = null
     }
   }, [active])
 
@@ -203,16 +192,15 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     if (!active || !webGpuReady) {
       return
     }
-    const artifacts = artifactsRef.current
+    const backend = backendRef.current
     const canvas = canvasRef.current
-    if (!artifacts || !canvas) {
+    if (!backend || !canvas) {
       return
     }
-    syncTypeGpuCanvasSurface({
-      artifacts,
+    syncWorkbookTypeGpuSurface({
+      backend,
       canvas,
       size: surfaceSize,
-      state: surfaceStateRef.current,
     })
   }, [active, surfaceSize, webGpuReady])
 
@@ -222,29 +210,15 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         return
       }
 
-      const artifacts = artifactsRef.current
+      const backend = backendRef.current
       const surface = surfaceSizeRef.current
       const resolvedPanePayloads = panePayloadsRef.current
-      if (!artifacts || surface.width <= 0 || surface.height <= 0) {
+      if (!backend || surface.width <= 0 || surface.height <= 0) {
         return
       }
 
-      const atlas = atlasRef.current
-      syncTileGpuCacheFromPanes({
-        cache: tileCacheRef.current,
-        panes: resolvedPanePayloads,
-      })
-      syncTypeGpuPaneResources({
-        artifacts,
-        atlas,
-        paneBuffers: paneBuffersRef.current,
-        panes: resolvedPanePayloads,
-      })
-
-      syncTypeGpuAtlasResources(artifacts, atlas)
-      drawTypeGpuPanes({
-        artifacts,
-        paneBuffers: paneBuffersRef.current,
+      drawWorkbookTypeGpuFrame({
+        backend,
         panes: resolvedPanePayloads,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
