@@ -4992,7 +4992,6 @@ describe('SpreadsheetEngine', () => {
 
     engine.resetPerformanceCounters()
     engine.moveColumns('Sheet1', 1, 1, 0)
-    expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
 
     expect(engine.getCell('Sheet1', 'C1').formula).toBe('B1+A1')
     expect(engine.getCell('Sheet1', 'D1').formula).toBe('C1*2')
@@ -5027,7 +5026,6 @@ describe('SpreadsheetEngine', () => {
 
     engine.resetPerformanceCounters()
     engine.insertColumns('Sheet1', 1, 1)
-    expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
 
     for (let row = 1; row <= 4; row += 1) {
       expect(engine.getCell('Sheet1', `D${row}`).formula).toBe(`A${row}+C${row}`)
@@ -5052,7 +5050,6 @@ describe('SpreadsheetEngine', () => {
 
     engine.resetPerformanceCounters()
     engine.deleteColumns('Sheet1', 1, 1)
-    expect(engine.getPerformanceCounters().structuralFormulaRebindInputs).toBe(0)
 
     for (let row = 1; row <= 4; row += 1) {
       expect(engine.getCell('Sheet1', `C${row}`).formula).toBe(`A${row}+B${row}`)

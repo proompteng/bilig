@@ -494,21 +494,6 @@ export function createEngineStructureService(args: {
     transform: StructuralAxisTransform,
   ): string => rewriteFormulaForStructuralTransform(source, ownerSheetName, sheetName, transform)
 
-  const canDeferStructuralDirectCellTransform = (formula: RuntimeFormula): boolean =>
-    formula.structuralSourceTransform === undefined &&
-    formula.directLookup === undefined &&
-    formula.directAggregate === undefined &&
-    formula.directCriteria === undefined &&
-    formula.rangeDependencies.length === 0 &&
-    formula.dependencyIndices.length > 0 &&
-    formula.compiled.symbolicNames.length === 0 &&
-    formula.compiled.symbolicTables.length === 0 &&
-    formula.compiled.symbolicSpills.length === 0 &&
-    formula.dependencyIndices.every((dependencyCellIndex) => shouldCaptureStoredCell(dependencyCellIndex)) &&
-    !formula.source.includes('#REF!') &&
-    formula.compiled.deps.every((dependency) => !dependency.includes('#REF!')) &&
-    isStructurallyStableSimpleFormulaNode(formula.compiled.optimizedAst)
-
   const structuralRewritePreservesDirectCellDependencies = (
     formula: RuntimeFormula,
     rewritten: { compiled: CompiledFormula },
@@ -643,40 +628,6 @@ export function createEngineStructureService(args: {
           ? mapStructuralAxisIndex(previousOwnerCol, argsForResolve.transform)
           : previousOwnerCol)
       if (ownerRow === undefined || ownerCol === undefined) {
-        return
-      }
-      if (
-        !touchesChangedName &&
-        !touchesChangedTable &&
-        !shouldBypassTemplateStructuralRewrite &&
-        argsForResolve.transform.kind !== 'delete' &&
-        canDeferStructuralDirectCellTransform(formula)
-      ) {
-        formula.structuralSourceTransform = {
-          ownerSheetName,
-          targetSheetName: argsForResolve.sheetName,
-          transform: argsForResolve.transform,
-          preservesValue: true,
-        }
-        hasDeferredStructuralFormulaSources = true
-        preservedCellIndices.push(cellIndex)
-        return
-      }
-      if (
-        !touchesChangedName &&
-        !touchesChangedTable &&
-        !shouldBypassTemplateStructuralRewrite &&
-        argsForResolve.transform.kind === 'delete' &&
-        canDeferStructuralDirectCellTransform(formula) &&
-        formula.dependencyIndices.every((dependencyCellIndex) => isCellIndexMapped(dependencyCellIndex))
-      ) {
-        formula.structuralSourceTransform = {
-          ownerSheetName,
-          targetSheetName: argsForResolve.sheetName,
-          transform: argsForResolve.transform,
-          preservesValue: false,
-        }
-        hasDeferredStructuralFormulaSources = true
         return
       }
       const templateRewrite =
@@ -1145,17 +1096,6 @@ export function createEngineStructureService(args: {
       }
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       if (!ownerSheetName) {
-        return
-      }
-      if (argsForImpact.transform.kind !== 'delete' && canDeferStructuralDirectCellTransform(formula)) {
-        formula.structuralSourceTransform = {
-          ownerSheetName,
-          targetSheetName: argsForImpact.sheetName,
-          transform: argsForImpact.transform,
-          preservesValue: true,
-        }
-        hasDeferredStructuralFormulaSources = true
-        preservedCellIndices.add(cellIndex)
         return
       }
       const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
