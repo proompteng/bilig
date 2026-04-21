@@ -108,6 +108,7 @@ import type {
   SerializedWorkPaperNamedExpression,
 } from './work-paper-types.js'
 import { captureTrackedEngineEvent, type TrackedEngineEvent, type TrackedPatch } from './tracked-engine-event-refs.js'
+import { materializeTrackedIndexChanges } from './tracked-cell-index-changes.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
 
@@ -186,6 +187,11 @@ type TrackedCellLike = {
   readonly sheetName: string
   readonly a1: string
   readonly newValue: CellValue
+}
+
+interface MaterializedTrackedEventChanges {
+  readonly changes: readonly TrackedCellLike[]
+  readonly canReusePublicChanges: boolean
 }
 
 type QueuedEvent = Extract<
@@ -3109,50 +3115,37 @@ export class WorkPaper {
     return orderWorkPaperCellChanges(cellChanges, this.listSheetRecords())
   }
 
-  private readTrackedCellChange(cellIndex: number): WorkPaperCellChange | undefined {
-    const sheetId = this.engine.workbook.cellStore.sheetIds[cellIndex]
-    const row = this.engine.workbook.cellStore.rows[cellIndex]
-    const col = this.engine.workbook.cellStore.cols[cellIndex]
-    if (sheetId === undefined || row === undefined || col === undefined) {
-      return undefined
-    }
-    const sheetName = this.engine.workbook.getSheetNameById(sheetId)
-    if (sheetName === undefined) {
-      return undefined
-    }
-    return {
-      kind: 'cell',
-      address: { sheet: sheetId, row, col },
-      sheetName,
-      a1: formatAddress(row, col),
-      newValue: this.engine.workbook.cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id)),
-    }
-  }
-
-  private materializeTrackedEventChanges(event: TrackedEngineEvent): readonly TrackedCellLike[] {
+  private materializeTrackedEventChanges(event: TrackedEngineEvent): MaterializedTrackedEventChanges {
     if (event.patches && event.patches.length > 0) {
       const cellPatches = event.patches.filter((patch): patch is Extract<TrackedPatch, { kind: 'cell' }> => patch.kind === 'cell')
-      return cellPatches
+      return { changes: cellPatches, canReusePublicChanges: false }
     }
-    const changes: TrackedCellLike[] = []
-    for (let index = 0; index < event.changedCellIndices.length; index += 1) {
-      const change = this.readTrackedCellChange(event.changedCellIndices[index]!)
-      if (change) {
-        changes.push(change)
-      }
+    return {
+      changes: materializeTrackedIndexChanges(this.engine, event.changedCellIndices),
+      canReusePublicChanges: true,
     }
-    return changes
   }
 
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
+    updateVisibility = true,
   ): { changes: WorkPaperChange[]; nextVisibility: VisibilitySnapshot } | null {
     if (events.some((event) => event.invalidation === 'full')) {
       return null
     }
 
     const nextVisibility = beforeVisibility
+    const sheetOrders = new Map<number, number>()
+    const sheetOrderFor = (sheetId: number): number => {
+      const existing = sheetOrders.get(sheetId)
+      if (existing !== undefined) {
+        return existing
+      }
+      const order = this.sheetRecord(sheetId).order
+      sheetOrders.set(sheetId, order)
+      return order
+    }
     const ensureMutableSheet = (sheetId: number, sheetName: string): SheetStateSnapshot => {
       const existing = nextVisibility.get(sheetId)
       if (existing) {
@@ -3169,10 +3162,11 @@ export class WorkPaper {
     }
     if (events.length === 1) {
       const event = events[0]!
-      const eventChanges = this.materializeTrackedEventChanges(event)
+      const materializedEventChanges = this.materializeTrackedEventChanges(event)
+      const eventChanges = materializedEventChanges.changes
       const directChanges: WorkPaperCellChange[] = []
-      const seenCellKeys = eventChanges.length > 4 ? new Set<number>() : undefined
-      const smallCellKeys: number[] | undefined = seenCellKeys === undefined && eventChanges.length > 1 ? [] : undefined
+      const seenCellKeys = eventChanges.length > 4 && eventChanges.length <= 64 ? new Set<number>() : undefined
+      const smallCellKeys: number[] | undefined = eventChanges.length > 1 && eventChanges.length <= 4 ? [] : undefined
       let hasDuplicateCellKey = false
       let alreadySorted = true
       let previousSheetOrder = -1
@@ -3187,9 +3181,9 @@ export class WorkPaper {
             break
           }
           seenCellKeys.add(cellKey)
-        } else {
+        } else if (smallCellKeys) {
           for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-            if (smallCellKeys![priorIndex] === cellKey) {
+            if (smallCellKeys[priorIndex] === cellKey) {
               hasDuplicateCellKey = true
               break
             }
@@ -3197,31 +3191,34 @@ export class WorkPaper {
           if (hasDuplicateCellKey) {
             break
           }
-          if (smallCellKeys) {
-            smallCellKeys[index] = cellKey
-          }
+          smallCellKeys[index] = cellKey
         }
-        const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
+        const sheet = updateVisibility ? ensureMutableSheet(change.address.sheet, change.sheetName) : undefined
+        const sheetOrder = sheet?.order ?? sheetOrderFor(change.address.sheet)
         if (
-          sheet.order < previousSheetOrder ||
-          (sheet.order === previousSheetOrder &&
+          sheetOrder < previousSheetOrder ||
+          (sheetOrder === previousSheetOrder &&
             (change.address.row < previousRow || (change.address.row === previousRow && change.address.col < previousCol)))
         ) {
           alreadySorted = false
         }
-        if (change.newValue.tag === ValueTag.Empty) {
-          sheet.cells.delete(cellKey)
-        } else {
-          sheet.cells.set(cellKey, change.newValue)
+        if (sheet) {
+          if (change.newValue.tag === ValueTag.Empty) {
+            sheet.cells.delete(cellKey)
+          } else {
+            sheet.cells.set(cellKey, change.newValue)
+          }
         }
-        directChanges[index] = {
-          kind: 'cell',
-          address: change.address,
-          sheetName: change.sheetName,
-          a1: change.a1,
-          newValue: change.newValue,
-        }
-        previousSheetOrder = sheet.order
+        directChanges[index] = materializedEventChanges.canReusePublicChanges
+          ? (change as WorkPaperCellChange)
+          : {
+              kind: 'cell',
+              address: change.address,
+              sheetName: change.sheetName,
+              a1: change.a1,
+              newValue: change.newValue,
+            }
+        previousSheetOrder = sheetOrder
         previousRow = change.address.row
         previousCol = change.address.col
       }
@@ -3236,7 +3233,7 @@ export class WorkPaper {
     }
     const latestChangesByKey = new Map<number, WorkPaperCellChange>()
     for (const event of events) {
-      const eventChanges = this.materializeTrackedEventChanges(event)
+      const eventChanges = this.materializeTrackedEventChanges(event).changes
       for (let index = 0; index < eventChanges.length; index += 1) {
         const change = eventChanges[index]!
         const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
@@ -3250,13 +3247,15 @@ export class WorkPaper {
         })
       }
     }
-    for (const change of latestChangesByKey.values()) {
-      const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
-      const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
-      if (change.newValue.tag === ValueTag.Empty) {
-        sheet.cells.delete(cellKey)
-      } else {
-        sheet.cells.set(cellKey, change.newValue)
+    if (updateVisibility) {
+      for (const change of latestChangesByKey.values()) {
+        const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+        const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
+        if (change.newValue.tag === ValueTag.Empty) {
+          sheet.cells.delete(cellKey)
+        } else {
+          sheet.cells.set(cellKey, change.newValue)
+        }
       }
     }
     const directChanges = [...latestChangesByKey.values()]
@@ -3308,7 +3307,7 @@ export class WorkPaper {
   }
 
   private computeTrackedChangesWithoutVisibilityCache(events: readonly TrackedEngineEvent[]): WorkPaperChange[] {
-    const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events)
+    const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events, false)
     if (!fastPath) {
       throw new WorkPaperOperationError('Mutation emitted an unsupported invalidation pattern for tracked changes')
     }

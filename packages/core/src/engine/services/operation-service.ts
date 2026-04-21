@@ -29,7 +29,7 @@ import type { EnginePatch } from '../../patches/patch-types.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
-const TRACKED_CELL_PATCH_LIMIT = 2_048
+const TRACKED_CELL_PATCH_LIMIT = 64
 
 type StructuralAxisOp = Extract<
   EngineOp,

@@ -14,10 +14,6 @@ function hasCaptureVisibilitySnapshot(value: unknown): value is WorkPaper & { ca
   return typeof Reflect.get(value, 'captureVisibilitySnapshot') === 'function'
 }
 
-function hasReadTrackedCellChange(value: unknown): value is WorkPaper & { readTrackedCellChange: (cellIndex: number) => unknown } {
-  return typeof Reflect.get(value, 'readTrackedCellChange') === 'function'
-}
-
 function readUndoStack(value: unknown): unknown[] | null {
   const engine = Reflect.get(value, 'engine')
   if (!engine || typeof engine !== 'object') {
@@ -145,45 +141,31 @@ describe('WorkPaper', () => {
     captureVisibilitySnapshot.mockRestore()
   })
 
-  it('uses tracked patch payloads without rereading changed cells from the engine', () => {
+  it('uses tracked patch payloads without exposing internal cell indices', () => {
     const workbook = WorkPaper.buildFromSheets({
       Bench: [[1, '=A1*2']],
     })
     const sheetId = workbook.getSheetId('Bench')!
-    expect(hasReadTrackedCellChange(workbook)).toBe(true)
-    if (!hasReadTrackedCellChange(workbook)) {
-      throw new Error('Expected work paper runtime to expose readTrackedCellChange in tests')
-    }
-    const runtime = workbook
-    const readTrackedCellChange = vi.spyOn(runtime, 'readTrackedCellChange').mockImplementation(() => {
-      throw new Error('tracked patches should bypass readTrackedCellChange')
-    })
+    workbook.resetPerformanceCounters()
 
     const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
 
     expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
     expect(changes.every((change) => change.kind !== 'cell' || !('cellIndex' in change))).toBe(true)
+    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(2)
     expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
       tag: ValueTag.Number,
       value: 18,
     })
-    expect(readTrackedCellChange).not.toHaveBeenCalled()
-    readTrackedCellChange.mockRestore()
   })
 
-  it('uses typed tracked patches for large literal batches without rereading changed cells', () => {
+  it('uses bulk tracked indices for large literal batches without core patch payloads', () => {
     const rowCount = 600
     const workbook = WorkPaper.buildFromSheets({
       Bench: Array.from({ length: rowCount }, (_, row) => [row + 1, `=A${row + 1}*2`]),
     })
     const sheetId = workbook.getSheetId('Bench')!
-    expect(hasReadTrackedCellChange(workbook)).toBe(true)
-    if (!hasReadTrackedCellChange(workbook)) {
-      throw new Error('Expected work paper runtime to expose readTrackedCellChange in tests')
-    }
-    const readTrackedCellChange = vi.spyOn(workbook, 'readTrackedCellChange').mockImplementation(() => {
-      throw new Error('large tracked batches should use typed patches')
-    })
+    workbook.resetPerformanceCounters()
 
     const changes = workbook.batch(() => {
       for (let row = 0; row < rowCount; row += 1) {
@@ -197,8 +179,7 @@ describe('WorkPaper', () => {
       tag: ValueTag.Number,
       value: (rowCount - 1) * 6,
     })
-    expect(readTrackedCellChange).not.toHaveBeenCalled()
-    readTrackedCellChange.mockRestore()
+    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
   })
 
   it('supports sheet-scoped named expressions and restores public formulas', () => {
@@ -300,6 +281,20 @@ describe('WorkPaper', () => {
       value: 20,
     })
     captureVisibilitySnapshot.mockRestore()
+  })
+
+  it('coalesces repeated tracked batch writes to the same cell', () => {
+    const workbook = WorkPaper.buildFromArray([[1, '=A1*2']])
+    const sheetId = workbook.getSheetId('Sheet1')!
+
+    const changes = workbook.batch(() => {
+      workbook.setCellContents(cell(sheetId, 0, 0), 2)
+      workbook.setCellContents(cell(sheetId, 0, 0), 3)
+    })
+
+    expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Sheet1!A1', 'Sheet1!B1'])
+    expect(workbook.getCellValue(cell(sheetId, 0, 0))).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 6 })
   })
 
   it('keeps merged literal-only batch history on typed cell-mutation records', () => {
