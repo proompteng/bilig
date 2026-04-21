@@ -1134,6 +1134,23 @@ export function createEngineStructureService(args: {
         ownerSheetName === argsForImpact.sheetName &&
         axisIndex !== undefined &&
         structuralAxisIndexAffected(axisIndex, argsForImpact.transform)
+      const touchesChangedName =
+        argsForImpact.changedDefinedNames.size > 0 &&
+        formula.compiled.symbolicNames.some((name) => argsForImpact.changedDefinedNames.has(normalizeDefinedName(name)))
+      const touchesChangedTable =
+        argsForImpact.changedTableNames.size > 0 &&
+        formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
+      if (!touchesChangedName && !touchesChangedTable && canDeferSimpleInsertStructuralFormulaSource(formula, argsForImpact.transform)) {
+        formula.structuralSourceTransform = {
+          ownerSheetName,
+          targetSheetName: argsForImpact.sheetName,
+          transform: argsForImpact.transform,
+          preservesValue: true,
+        }
+        hasDeferredStructuralFormulaSources = true
+        preservedCellIndices.add(cellIndex)
+        return
+      }
       const dependencyPositionAffected =
         !ownerPositionAffected &&
         argsForImpact.targetSheetId !== undefined &&
@@ -1187,12 +1204,6 @@ export function createEngineStructureService(args: {
         !ownerPositionAffected &&
         !dependencyPositionAffected &&
         formula.compiled.deps.some((dependency) => dependencyTouchesSheet(dependency, argsForImpact.sheetName))
-      const touchesChangedName =
-        argsForImpact.changedDefinedNames.size > 0 &&
-        formula.compiled.symbolicNames.some((name) => argsForImpact.changedDefinedNames.has(normalizeDefinedName(name)))
-      const touchesChangedTable =
-        argsForImpact.changedTableNames.size > 0 &&
-        formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
       if (!ownerPositionAffected && !dependencyPositionAffected && !touchesSheetDependency && !touchesChangedName && !touchesChangedTable) {
         return
       }
