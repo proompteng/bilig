@@ -431,6 +431,9 @@ export class WorkbookStore {
       return undefined
     }
     const sheet = this.getSheetById(sheetId)
+    if (sheet?.structureVersion === 1) {
+      return { sheetId, row: this.cellStore.rows[index]!, col: this.cellStore.cols[index]! }
+    }
     const logicalPosition = sheet?.logical.getCellVisiblePosition(index)
     if (logicalPosition) {
       return { sheetId, row: logicalPosition.row, col: logicalPosition.col }
