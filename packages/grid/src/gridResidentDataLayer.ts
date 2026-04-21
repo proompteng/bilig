@@ -390,8 +390,6 @@ export function resolveResidentDataPaneRenderState(input: {
   frozenColumnWidth: number
   frozenRowHeight: number
 }): WorkbookPaneRenderState[] {
-  const { panes, residentViewport, visibleViewport, visibleRegion, gridMetrics, sortedColumnWidthOverrides, sortedRowHeightOverrides } =
-    input
   const layout = resolvePaneLayout({
     hostWidth: input.hostWidth,
     hostHeight: input.hostHeight,
@@ -400,26 +398,8 @@ export function resolveResidentDataPaneRenderState(input: {
     frozenColumnWidth: input.frozenColumnWidth,
     frozenRowHeight: input.frozenRowHeight,
   })
-  const bodyOffsetX = -(
-    resolveColumnOffset(visibleViewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
-    resolveColumnOffset(residentViewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) +
-    visibleRegion.tx
-  )
-  const bodyOffsetY = -(
-    resolveRowOffset(visibleViewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight) -
-    resolveRowOffset(residentViewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight) +
-    visibleRegion.ty
-  )
-  return panes.map((pane) => {
+  return input.panes.map((pane) => {
     const frame = getPaneFrame(layout, pane.paneId)
-    const contentOffset =
-      pane.paneId === 'body'
-        ? { x: bodyOffsetX, y: bodyOffsetY }
-        : pane.paneId === 'top'
-          ? { x: bodyOffsetX, y: 0 }
-          : pane.paneId === 'left'
-            ? { x: 0, y: bodyOffsetY }
-            : { x: 0, y: 0 }
     const next: WorkbookPaneRenderState = {
       generation: pane.generation,
       paneId: pane.paneId,
@@ -428,7 +408,7 @@ export function resolveResidentDataPaneRenderState(input: {
       surfaceSize: pane.surfaceSize,
       gpuScene: pane.gpuScene,
       textScene: pane.textScene,
-      contentOffset,
+      contentOffset: { x: 0, y: 0 },
     }
     return pane.packedScene ? Object.assign(next, { packedScene: pane.packedScene }) : next
   })

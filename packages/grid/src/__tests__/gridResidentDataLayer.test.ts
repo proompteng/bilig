@@ -68,7 +68,7 @@ describe('gridResidentDataLayer', () => {
     expect(panes[3]?.surfaceSize).toEqual({ width: 208, height: 44 })
   })
 
-  it('derives pane offsets from the visible viewport inside a resident window', () => {
+  it('leaves retained resident panes at zero offset for the live camera uniform', () => {
     const gridMetrics = getGridMetrics()
     const panes = buildResidentDataPaneScenes({
       residentViewport: { rowStart: 10, rowEnd: 25, colStart: 8, colEnd: 23 },
@@ -111,9 +111,9 @@ describe('gridResidentDataLayer', () => {
       frozenRowHeight: 44,
     })
 
-    expect(rendered.find((pane) => pane.paneId === 'body')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: -(2 * 22 + 9) })
-    expect(rendered.find((pane) => pane.paneId === 'top')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: 0 })
-    expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: -(2 * 22 + 9) })
+    expect(rendered.find((pane) => pane.paneId === 'body')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'top')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: 0 })
     expect(rendered.find((pane) => pane.paneId === 'corner')?.contentOffset).toEqual({ x: 0, y: 0 })
   })
 
