@@ -5,7 +5,7 @@ import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
 import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
 import { createGridCameraSnapshot } from './gridCamera.js'
-import { resolveGridTileResidency, type GridTileKey } from './gridTileResidency.js'
+import { resolveGridTileResidencyV2, type GridTileKey } from './gridTileResidencyV2.js'
 import {
   EMPTY_COLUMN_WIDTHS,
   EMPTY_ROW_HEIGHTS,
@@ -359,7 +359,7 @@ export function useWorkbookGridRenderState(input: {
   const residentViewport = residentViewportRef.current
   const warmResidentViewports = useMemo(() => {
     const camera = gridCameraRef.current
-    return resolveGridTileResidency({
+    return resolveGridTileResidencyV2({
       velocityX: camera?.velocityX ?? 0,
       velocityY: camera?.velocityY ?? 0,
       visibleViewport: viewport,

@@ -15,7 +15,7 @@ export interface GridTileResidencyPlan {
   readonly all: readonly GridTileKey[]
 }
 
-export function resolveGridTileResidency(input: {
+export function resolveGridTileResidencyV2(input: {
   readonly visibleViewport: Viewport
   readonly velocityX?: number
   readonly velocityY?: number
@@ -24,27 +24,54 @@ export function resolveGridTileResidency(input: {
   const visible = viewportToTileKey(resolveResidentViewport(input.visibleViewport))
   const warmNeighbors = Math.max(0, input.warmNeighbors ?? 1)
   const warm: GridTileKey[] = []
-  const colDirection = Math.sign(input.velocityX ?? 0)
   const rowDirection = Math.sign(input.velocityY ?? 0)
+  const colDirection = Math.sign(input.velocityX ?? 0)
 
-  for (let step = 1; step <= warmNeighbors; step += 1) {
-    if (colDirection !== 0) {
-      warm.push(offsetTile(visible, 0, colDirection * step))
-    }
-    if (rowDirection !== 0) {
-      warm.push(offsetTile(visible, rowDirection * step, 0))
-    }
-    if (colDirection !== 0 && rowDirection !== 0) {
-      warm.push(offsetTile(visible, rowDirection * step, colDirection * step))
+  for (let radius = 1; radius <= warmNeighbors; radius += 1) {
+    const offsets = prioritizeOffsets(createNeighborOffsets(radius), rowDirection, colDirection)
+    for (const [rowStep, colStep] of offsets) {
+      warm.push(offsetTile(visible, rowStep, colStep))
     }
   }
 
-  const uniqueWarm = dedupeTiles(warm.filter(isNonEmptyTile))
+  const uniqueWarm = dedupeTiles(warm.filter((tile) => isNonEmptyTile(tile) && !sameTile(tile, visible)))
   return {
-    all: dedupeTiles([visible, ...uniqueWarm]),
+    all: [visible, ...uniqueWarm],
     visible,
     warm: uniqueWarm,
   }
+}
+
+function createNeighborOffsets(radius: number): readonly (readonly [number, number])[] {
+  const offsets: Array<readonly [number, number]> = []
+  for (let row = -radius; row <= radius; row += 1) {
+    for (let col = -radius; col <= radius; col += 1) {
+      if (row === 0 && col === 0) {
+        continue
+      }
+      if (Math.max(Math.abs(row), Math.abs(col)) === radius) {
+        offsets.push([row, col])
+      }
+    }
+  }
+  return offsets
+}
+
+function prioritizeOffsets(
+  offsets: readonly (readonly [number, number])[],
+  rowDirection: number,
+  colDirection: number,
+): readonly (readonly [number, number])[] {
+  if (rowDirection === 0 && colDirection === 0) {
+    return offsets
+  }
+  return [...offsets].toSorted(
+    (left, right) => scoreOffset(right, rowDirection, colDirection) - scoreOffset(left, rowDirection, colDirection),
+  )
+}
+
+function scoreOffset(offset: readonly [number, number], rowDirection: number, colDirection: number): number {
+  return offset[0] * rowDirection + offset[1] * colDirection
 }
 
 function viewportToTileKey(viewport: Viewport): GridTileKey {
@@ -69,6 +96,12 @@ function offsetTile(tile: GridTileKey, rowSteps: number, colSteps: number): Grid
 
 function clampStart(value: number, axisMax: number): number {
   return Math.max(0, Math.min(axisMax - 1, value))
+}
+
+function sameTile(left: GridTileKey, right: GridTileKey): boolean {
+  return (
+    left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
+  )
 }
 
 function isNonEmptyTile(tile: GridTileKey): boolean {
