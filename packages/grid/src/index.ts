@@ -27,11 +27,9 @@ export type {
   TextOverflowMode,
   TextVerticalAlign,
 } from './text/gridTextPacket.js'
-export * from './renderer/glyph-atlas.js'
 export * from './renderer/pane-layout.js'
 export * from './renderer-v2/pane-buffer-cache.js'
 export * from './renderer/pane-scene-types.js'
-export * from './renderer/text-quad-buffer.js'
 export * from './renderer-v2/index.js'
 export * from './useCell.js'
 export * from './useMetrics.js'

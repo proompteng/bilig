@@ -1,4 +1,4 @@
-import type { GlyphAtlasEntry } from './glyph-atlas.js'
+import type { GlyphAtlasEntry } from './typegpu-atlas-manager.js'
 
 export interface TextLayoutRun {
   readonly text: string

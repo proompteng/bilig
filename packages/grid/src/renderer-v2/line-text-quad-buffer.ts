@@ -7,7 +7,7 @@ import {
   resolveTextDecorationRects,
   resolveTextLineLayouts,
   type GlyphAtlasLike,
-} from './gridTextLayout.js'
+} from './line-text-layout.js'
 
 export interface TextQuadRun {
   readonly text: string

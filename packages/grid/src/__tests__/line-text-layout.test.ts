@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { resolveTextClipRect, resolveTextDecorationRects, resolveTextLineLayouts } from '../renderer/gridTextLayout.js'
-import type { GlyphAtlasEntry } from '../renderer/glyph-atlas.js'
+import { resolveTextClipRect, resolveTextDecorationRects, resolveTextLineLayouts } from '../renderer-v2/line-text-layout.js'
+import type { GlyphAtlasEntry } from '../renderer-v2/typegpu-atlas-manager.js'
 
 const atlas = {
   intern(font: string, glyph: string): GlyphAtlasEntry {

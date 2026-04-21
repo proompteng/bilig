@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { createGlyphAtlas } from '../renderer/glyph-atlas.js'
+import { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
 
 describe('glyph-atlas', () => {
   it('returns stable glyph keys for repeated runs', () => {
