@@ -98,13 +98,13 @@ test('isolated workbook pane renderer draws grid content through typegpu', async
   await saveReadbackArtifact(page, testInfo, 'isolated-pane-renderer-readback.png', 'isolated-pane-renderer-readback')
 })
 
-test('main workbook shell mounts typegpu-v2 behind the hard migration flag', async ({ page }) => {
+test('main workbook shell mounts typegpu-v2 as the only grid renderer', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 720 })
-  await gotoWorkbookShell(page, '/?workbookRenderer=typegpu-v2')
+  await gotoWorkbookShell(page)
   await waitForWorkbookReady(page)
 
-  await expect(page.getByTestId('grid-pane-renderer-v2')).toHaveAttribute('data-renderer-mode', 'typegpu-v2')
-  await expect(page.getByTestId('grid-pane-renderer')).toHaveCount(0)
+  await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v2')
+  await expect(page.locator('[data-pane-renderer="workbook-pane-renderer"]')).toHaveCount(0)
 })
 
 test('main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {

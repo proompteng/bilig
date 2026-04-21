@@ -16,7 +16,7 @@ describe('WorkbookPaneRendererV2', () => {
       root.render(<WorkbookPaneRendererV2 active host={rendererHost} geometry={null} />)
     })
 
-    const canvas = host.querySelector('[data-testid="grid-pane-renderer-v2"]')
+    const canvas = host.querySelector('[data-testid="grid-pane-renderer"]')
     expect(canvas).toBeInstanceOf(HTMLCanvasElement)
     expect(canvas?.getAttribute('data-pane-renderer')).toBe('workbook-pane-renderer-v2')
 

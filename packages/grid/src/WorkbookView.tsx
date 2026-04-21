@@ -13,7 +13,6 @@ import {
   type WorkbookGridPreviewRange,
   type SheetGridViewportSubscription,
 } from './WorkbookGridSurface.js'
-import type { WorkbookRendererMode } from './workbookRendererMode.js'
 
 interface WorkbookViewProps {
   engine: GridEngineLike
@@ -77,7 +76,6 @@ interface WorkbookViewProps {
         readonly viewport: Viewport
       }
     | undefined
-  rendererMode?: WorkbookRendererMode | undefined
 }
 
 const MIN_SIDE_PANEL_WIDTH = 280
@@ -210,7 +208,6 @@ export function WorkbookView({
   onVisibleViewportChange,
   previewRanges,
   restoreViewportTarget,
-  rendererMode,
 }: WorkbookViewProps) {
   const resizeStateRef = useRef<{
     pointerId: number
@@ -325,7 +322,6 @@ export function WorkbookView({
               onVisibleViewportChange={onVisibleViewportChange}
               previewRanges={previewRanges}
               restoreViewportTarget={restoreViewportTarget}
-              rendererMode={rendererMode}
               resolvedValue={resolvedValue}
               selectedAddr={selectedAddr}
               selectedCellSnapshot={selectedCellSnapshot}
