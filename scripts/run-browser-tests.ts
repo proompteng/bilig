@@ -188,6 +188,9 @@ if (normalizedBrowserStack === 'compose' && !compose && !isCi) {
 const composeFile = process.env['BILIG_E2E_COMPOSE_FILE'] ?? 'compose.yaml'
 const composeProject = process.env['BILIG_E2E_COMPOSE_PROJECT'] ?? `bilig-e2e-${Date.now()}`
 const composeStartupTimeoutMs = resolveTimeoutMs(process.env['BILIG_E2E_STARTUP_TIMEOUT_MS'], isCi ? 300_000 : 120_000)
+const LOCAL_STACK_STARTUP_ATTEMPTS = 3
+const LOCAL_STACK_STABILITY_GRACE_MS = 1_000
+const LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS = 2
 
 const DEFAULT_PREVIEW_PORTS = [4179, 4180] as const
 
@@ -641,7 +644,15 @@ async function isLocalPlaywrightStackReady(child: BrowserStackProcess): Promise<
   }
 }
 
-async function startLocalPlaywrightStack(): Promise<BrowserStackProcess> {
+async function waitForLocalPlaywrightStackStable(child: BrowserStackProcess): Promise<void> {
+  await waitForLocalPlaywrightStack(child)
+  await Bun.sleep(LOCAL_STACK_STABILITY_GRACE_MS)
+  if (!(await isLocalPlaywrightStackReady(child))) {
+    throw new Error('local browser stack exited immediately after reporting ready')
+  }
+}
+
+async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProcess> {
   terminatePreviewServers()
   const child = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
     stdin: 'ignore',
@@ -661,8 +672,19 @@ async function startLocalPlaywrightStack(): Promise<BrowserStackProcess> {
       BILIG_E2E_REMOTE_SYNC: '0',
     },
   })
-  await waitForLocalPlaywrightStack(child)
-  return child
+  try {
+    await waitForLocalPlaywrightStackStable(child)
+    return child
+  } catch (error) {
+    await stopAndReapLocalPlaywrightStack(child)
+    if (attempt >= LOCAL_STACK_STARTUP_ATTEMPTS) {
+      throw error
+    }
+    console.warn(
+      `local browser stack was not stable after startup; restarting (${String(attempt + 1)}/${String(LOCAL_STACK_STARTUP_ATTEMPTS)})`,
+    )
+    return startLocalPlaywrightStack(attempt + 1)
+  }
 }
 
 async function stopAndReapLocalPlaywrightStack(child: BrowserStackProcess | null): Promise<void> {
@@ -683,13 +705,29 @@ async function ensureLocalPlaywrightStack(child: BrowserStackProcess | null): Pr
   return startLocalPlaywrightStack()
 }
 
+async function runLocalPlaywrightPhase(args: string[], child: BrowserStackProcess | null, attempt = 1): Promise<BrowserStackProcess> {
+  const currentChild = await ensureLocalPlaywrightStack(child)
+  try {
+    runPlaywright(args)
+    return currentChild
+  } catch (error) {
+    if ((await isLocalPlaywrightStackReady(currentChild)) || attempt >= LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS) {
+      throw error
+    }
+    console.warn(
+      `local browser stack exited during Playwright phase "${args.join(' ')}"; restarting (${String(attempt + 1)}/${String(LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS)})`,
+    )
+    await stopAndReapLocalPlaywrightStack(currentChild)
+    return runLocalPlaywrightPhase(args, null, attempt + 1)
+  }
+}
+
 async function runLocalPlaywright(): Promise<void> {
   let child: BrowserStackProcess | null = null
   try {
     for (const args of configuredPlaywrightArgSets()) {
       // oxlint-disable-next-line eslint(no-await-in-loop)
-      child = await ensureLocalPlaywrightStack(child)
-      runPlaywright(args)
+      child = await runLocalPlaywrightPhase(args, child)
     }
   } finally {
     await stopAndReapLocalPlaywrightStack(child)
