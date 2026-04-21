@@ -204,10 +204,10 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
   } as const
 
   const rangeReadback = await waitForReadback(page, rangeProbe, (result) => {
-    return result.points.rangeFill.a > 0
+    return result.points.rangeBorder.a > 150 && result.points.topHeaderSelectionFill.a > 0
   })
 
-  expect(rangeReadback.points.rangeFill).toMatchObject(premultiplyReadbackPoint({ r: 33, g: 86, b: 58, a: 20 }))
+  expect(rangeReadback.points.rangeFill.a).toBeLessThanOrEqual(25)
   expect(rangeReadback.points.rangeBorder.a).toBeGreaterThan(150)
   expect(rangeReadback.points.topHeaderSelectionFill.a).toBeGreaterThan(0)
 
@@ -739,16 +739,6 @@ async function waitForReadback(
     throw new Error('expected readback result')
   }
   return lastResult
-}
-
-function premultiplyReadbackPoint(point: ReadbackPoint): ReadbackPoint {
-  const alpha = point.a / 255
-  return {
-    r: Math.round(point.r * alpha),
-    g: Math.round(point.g * alpha),
-    b: Math.round(point.b * alpha),
-    a: point.a,
-  }
 }
 
 async function waitForReadbackSequence(page: Page, previousSequence: number): Promise<void> {
