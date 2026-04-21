@@ -524,7 +524,10 @@ export function createEngineStructureService(args: {
       }
     }
     const rewritten = rewriteCompiledFormulaForStructuralTransform(formula.compiled, ownerSheetName, sheetName, transform)
-    return rewritten.source === formula.source ? undefined : rewritten
+    if (rewritten.source === formula.source) {
+      return undefined
+    }
+    return rewritten
   }
 
   const rewriteFormulaSourceFallback = (
@@ -1159,6 +1162,10 @@ export function createEngineStructureService(args: {
       candidateCellIndices.add(cellIndex)
     })
     args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
+      const formula = args.state.formulas.get(cellIndex)
+      if (formula?.structuralSourceTransform !== undefined) {
+        return
+      }
       candidateCellIndices.add(cellIndex)
     })
     if (argsForImpact.changedDefinedNames.size > 0) {
@@ -1177,6 +1184,9 @@ export function createEngineStructureService(args: {
     candidateCellIndices.forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
       if (!formula) {
+        return
+      }
+      if (formula.structuralSourceTransform !== undefined) {
         return
       }
       if (!isCellIndexMapped(cellIndex)) {
@@ -1484,9 +1494,11 @@ export function createEngineStructureService(args: {
               !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex) && !removedFormulaCellIndexSet.has(cellIndex),
           )
           const hasNonPreservedRebind = rebindInputs.some((input) => input.preservesBinding !== true)
+          const deleteOnlyAcyclicRebind =
+            transform.kind === 'delete' && !hadCycleFormulas && changedDefinedNames.size === 0 && changedTableNames.size === 0
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
           const graphRefreshRequired =
-            ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells) ||
+            ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells && !deleteOnlyAcyclicRebind) ||
             (removedFormulaCellIndices.length > 0 && hadCycleFormulas)
           return {
             transaction,

@@ -1397,7 +1397,12 @@ export function createEngineMutationService(args: {
       if (!ownerPositionAffected && !dependencyPositionAffected && !metadataSensitive) {
         return
       }
-      captured.push(...args.captureStoredCellOps(cellIndex, ownerSheetName, args.state.workbook.getAddress(cellIndex)))
+      captured.push({
+        kind: 'setCellFormula',
+        sheetName: ownerSheetName,
+        address: args.state.workbook.getAddress(cellIndex),
+        formula: getRuntimeFormulaSource(formula),
+      })
     })
     return captured
   }
