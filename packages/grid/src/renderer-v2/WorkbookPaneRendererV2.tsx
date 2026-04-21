@@ -24,10 +24,12 @@ export interface WorkbookPaneRendererV2Props {
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
   readonly panes: readonly WorkbookRenderPaneState[]
-  readonly overlay?: {
-    readonly gpuScene: GridGpuScene
-    readonly textScene: GridTextScene
-  }
+  readonly overlay?:
+    | {
+        readonly gpuScene: GridGpuScene
+        readonly textScene: GridTextScene
+      }
+    | undefined
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 

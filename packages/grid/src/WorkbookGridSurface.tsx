@@ -4,7 +4,8 @@ import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { createGridGeometrySnapshot } from './gridGeometry.js'
-import { WorkbookPaneRendererV2 } from './renderer-v2/index.js'
+import { WorkbookPaneRendererV2, buildDynamicGridOverlayPacket } from './renderer-v2/index.js'
+import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -109,6 +110,45 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       renderState.scrollViewportRef,
     ],
   )
+  const dynamicOverlay = useMemo(
+    () =>
+      v2Geometry
+        ? buildDynamicGridOverlayPacket({
+            geometry: v2Geometry,
+            selectionRange: renderState.selectionRange,
+            showFillHandle:
+              renderState.hostElement !== null &&
+              Boolean(renderState.selectionRange) &&
+              renderState.gridSelection.columns.length === 0 &&
+              renderState.gridSelection.rows.length === 0 &&
+              !renderState.fillPreviewRange &&
+              !renderState.isRangeMoveDragging,
+            resizeGuideColumn: resolveResizeGuideColumn({
+              activeResizeColumn: renderState.activeResizeColumn,
+              cursor: renderState.hoverState.cursor,
+              header: renderState.hoverState.header,
+            }),
+            resizeGuideRow: resolveResizeGuideRow({
+              activeResizeRow: renderState.activeResizeRow,
+              cursor: renderState.hoverState.cursor,
+              header: renderState.hoverState.header,
+            }),
+          })
+        : undefined,
+    [
+      renderState.activeResizeColumn,
+      renderState.activeResizeRow,
+      renderState.fillPreviewRange,
+      renderState.gridSelection.columns.length,
+      renderState.gridSelection.rows.length,
+      renderState.hostElement,
+      renderState.hoverState.cursor,
+      renderState.hoverState.header,
+      renderState.isRangeMoveDragging,
+      renderState.selectionRange,
+      v2Geometry,
+    ],
+  )
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])
       .filter((range) => range.sheetName === props.sheetName)
@@ -187,6 +227,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           cameraStore={renderState.gridCameraStore}
           geometry={v2Geometry}
           host={renderState.hostElement}
+          overlay={dynamicOverlay}
           panes={renderState.renderPanes}
           scrollTransformStore={renderState.scrollTransformStore}
         />

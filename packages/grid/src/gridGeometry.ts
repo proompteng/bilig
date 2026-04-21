@@ -55,6 +55,8 @@ export interface GridGeometrySnapshot {
   readonly rows: GridAxisWorldIndex
   cellWorldRect(col: number, row: number): Rectangle | null
   cellScreenRect(col: number, row: number): Rectangle | null
+  rangeScreenRects(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): readonly Rectangle[]
+  fillHandleScreenRect(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): Rectangle | null
   columnHeaderScreenRect(col: number): Rectangle | null
   rowHeaderScreenRect(row: number): Rectangle | null
   hitTestScreenPoint(point: { readonly x: number; readonly y: number }): { readonly col: number; readonly row: number } | null
@@ -177,7 +179,9 @@ export function createGridGeometrySnapshotFromAxes(input: {
     cellScreenRect: (col, row) => resolveCellScreenRect({ camera, col, columns: input.columns, row, rows: input.rows }),
     cellWorldRect: (col, row) => resolveCellWorldRect({ col, columns: input.columns, row, rows: input.rows }),
     columnHeaderScreenRect: (col) => resolveColumnHeaderScreenRect({ camera, col, columns: input.columns }),
+    fillHandleScreenRect: (range) => resolveFillHandleScreenRect({ camera, columns: input.columns, range, rows: input.rows }),
     hitTestScreenPoint: (point) => hitTestScreenPoint({ camera, columns: input.columns, point, rows: input.rows }),
+    rangeScreenRects: (range) => resolveRangeScreenRects({ camera, columns: input.columns, range, rows: input.rows }),
     rowHeaderScreenRect: (row) => resolveRowHeaderScreenRect({ camera, row, rows: input.rows }),
   }
 }
@@ -273,6 +277,91 @@ function resolveCellScreenRect(input: {
   return rect(x, y, world.width, world.height)
 }
 
+function resolveRangeScreenRects(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+}): readonly Rectangle[] {
+  const colStart = Math.max(0, Math.min(MAX_COLS - 1, input.range.x))
+  const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.range.y))
+  const colEnd = Math.max(colStart, Math.min(MAX_COLS - 1, input.range.x + input.range.width - 1))
+  const rowEnd = Math.max(rowStart, Math.min(MAX_ROWS - 1, input.range.y + input.range.height - 1))
+  const colSegments = splitAxisRange(colStart, colEnd, input.camera.frozenColumnCount)
+  const rowSegments = splitAxisRange(rowStart, rowEnd, input.camera.frozenRowCount)
+  const rects: Rectangle[] = []
+  for (const colSegment of colSegments) {
+    for (const rowSegment of rowSegments) {
+      const width = input.columns.span(colSegment.start, colSegment.end + 1)
+      const height = input.rows.span(rowSegment.start, rowSegment.end + 1)
+      if (width <= 0 || height <= 0) {
+        continue
+      }
+      const worldX = input.columns.offsetOf(colSegment.start)
+      const worldY = input.rows.offsetOf(rowSegment.start)
+      const x = colSegment.frozen
+        ? getBodyPaneX(input.camera) - input.camera.frozenWidth + worldX
+        : getBodyPaneX(input.camera) + worldX - input.camera.bodyWorldX
+      const y = rowSegment.frozen
+        ? getBodyPaneY(input.camera) - input.camera.frozenHeight + worldY
+        : getBodyPaneY(input.camera) + worldY - input.camera.bodyWorldY
+      const clipped = clipRect(rect(x, y, width, height), resolvePaneClip(input.camera, colSegment.frozen, rowSegment.frozen))
+      if (clipped) {
+        rects.push(clipped)
+      }
+    }
+  }
+  return rects
+}
+
+function resolveFillHandleScreenRect(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+}): Rectangle | null {
+  const rects = resolveRangeScreenRects(input)
+  const anchor = rects.toSorted(
+    (left, right) => right.y + right.height - (left.y + left.height) || right.x + right.width - (left.x + left.width),
+  )[0]
+  if (!anchor) {
+    return null
+  }
+  const size = 8
+  const handle = rect(anchor.x + anchor.width - size / 2, anchor.y + anchor.height - size / 2, size, size)
+  return clipRect(handle, rect(0, 0, getHostWidth(input.camera), getHostHeight(input.camera)))
+}
+
+function splitAxisRange(
+  start: number,
+  end: number,
+  frozenCount: number,
+): readonly { readonly start: number; readonly end: number; readonly frozen: boolean }[] {
+  const segments: Array<{ readonly start: number; readonly end: number; readonly frozen: boolean }> = []
+  if (start < frozenCount) {
+    segments.push({ start, end: Math.min(end, frozenCount - 1), frozen: true })
+  }
+  if (end >= frozenCount) {
+    segments.push({ start: Math.max(start, frozenCount), end, frozen: false })
+  }
+  return segments
+}
+
+function resolvePaneClip(camera: GridCameraSnapshotV2, frozenCols: boolean, frozenRows: boolean): Rectangle {
+  const bodyX = getBodyPaneX(camera)
+  const bodyY = getBodyPaneY(camera)
+  if (frozenCols && frozenRows) {
+    return rect(bodyX - camera.frozenWidth, bodyY - camera.frozenHeight, camera.frozenWidth, camera.frozenHeight)
+  }
+  if (frozenCols) {
+    return rect(bodyX - camera.frozenWidth, bodyY, camera.frozenWidth, camera.bodyViewportHeight)
+  }
+  if (frozenRows) {
+    return rect(bodyX, bodyY - camera.frozenHeight, camera.bodyViewportWidth, camera.frozenHeight)
+  }
+  return rect(bodyX, bodyY, camera.bodyViewportWidth, camera.bodyViewportHeight)
+}
+
 function resolveColumnHeaderScreenRect(input: {
   readonly camera: GridCameraSnapshotV2
   readonly columns: GridAxisWorldIndex
@@ -337,8 +426,27 @@ function getBodyPaneY(camera: GridCameraSnapshotV2): number {
   return bodyPane?.frame.y ?? camera.frozenHeight
 }
 
+function getHostWidth(camera: GridCameraSnapshotV2): number {
+  return camera.panes.reduce((max, pane) => Math.max(max, pane.frame.x + pane.frame.width), 0)
+}
+
+function getHostHeight(camera: GridCameraSnapshotV2): number {
+  return camera.panes.reduce((max, pane) => Math.max(max, pane.frame.y + pane.frame.height), 0)
+}
+
 function rect(x: number, y: number, width: number, height: number): Rectangle {
   return { height: Math.max(0, height), width: Math.max(0, width), x, y }
+}
+
+function clipRect(target: Rectangle, clip: Rectangle): Rectangle | null {
+  const x0 = Math.max(target.x, clip.x)
+  const y0 = Math.max(target.y, clip.y)
+  const x1 = Math.min(target.x + target.width, clip.x + clip.width)
+  const y1 = Math.min(target.y + target.height, clip.y + clip.height)
+  if (x1 <= x0 || y1 <= y0) {
+    return null
+  }
+  return rect(x0, y0, x1 - x0, y1 - y0)
 }
 
 function clamp(value: number, min: number, max: number): number {
