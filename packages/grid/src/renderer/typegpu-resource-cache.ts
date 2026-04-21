@@ -29,20 +29,39 @@ export function syncTypeGpuPaneResources(input: {
 
   input.panes.forEach((pane) => {
     const paneCache = input.paneBuffers.get(pane.paneId)
-    const textSceneChanged = paneCache.textScene !== pane.textScene
+    const textSignature =
+      paneCache.textScene === pane.textScene && paneCache.textSignature !== null
+        ? paneCache.textSignature
+        : resolveGridTextSceneSignature(pane.textScene)
+    const textSceneChanged = paneCache.textSignature !== textSignature
     if (textSceneChanged) {
       syncTextResource({
         artifacts: input.artifacts,
         atlas: input.atlas,
         pane,
         paneCache,
+        textSignature,
       })
     }
-    if (paneCache.rectScene !== pane.gpuScene || textSceneChanged) {
+    const rectSignature =
+      paneCache.rectScene === pane.gpuScene && !textSceneChanged
+        ? (paneCache.rectSignature ??
+          resolveGridRectSceneSignature({
+            decorationRects: paneCache.decorationRects ?? [],
+            frame: pane.frame,
+            scene: pane.gpuScene,
+          }))
+        : resolveGridRectSceneSignature({
+            decorationRects: paneCache.decorationRects ?? [],
+            frame: pane.frame,
+            scene: pane.gpuScene,
+          })
+    if (paneCache.rectSignature !== rectSignature) {
       syncRectResource({
         artifacts: input.artifacts,
         pane,
         paneCache,
+        rectSignature,
       })
     }
   })
@@ -73,6 +92,7 @@ function syncTextResource(input: {
   readonly atlas: ReturnType<typeof createGlyphAtlas>
   readonly pane: WorkbookRenderPaneState
   readonly paneCache: WorkbookPaneBufferEntry
+  readonly textSignature: string
 }): void {
   input.paneCache.decorationRects = buildTextDecorationRectsFromScene(input.pane.textScene.items, input.atlas)
   const textPayload = buildTextInstanceData({
@@ -91,12 +111,14 @@ function syncTextResource(input: {
   input.paneCache.textCount = textPayload.quadCount
   writeTypeGpuVertexBuffer(input.paneCache.textBuffer, textPayload.floats)
   input.paneCache.textScene = input.pane.textScene
+  input.paneCache.textSignature = input.textSignature
 }
 
 function syncRectResource(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly pane: WorkbookRenderPaneState
   readonly paneCache: WorkbookPaneBufferEntry
+  readonly rectSignature: string
 }): void {
   const decorationRects = input.paneCache.decorationRects ?? []
   const rectFloats = buildRectInstanceData({
@@ -116,6 +138,90 @@ function syncRectResource(input: {
   input.paneCache.rectCount = input.pane.gpuScene.fillRects.length + input.pane.gpuScene.borderRects.length + decorationRects.length
   writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectFloats)
   input.paneCache.rectScene = input.pane.gpuScene
+  input.paneCache.rectSignature = input.rectSignature
+}
+
+export function resolveGridTextSceneSignature(scene: GridTextScene): string {
+  let hash = createHash()
+  hash = mixNumber(hash, scene.items.length)
+  for (const item of scene.items) {
+    hash = mixNumber(hash, item.x)
+    hash = mixNumber(hash, item.y)
+    hash = mixNumber(hash, item.width)
+    hash = mixNumber(hash, item.height)
+    hash = mixNumber(hash, item.clipInsetTop)
+    hash = mixNumber(hash, item.clipInsetRight)
+    hash = mixNumber(hash, item.clipInsetBottom)
+    hash = mixNumber(hash, item.clipInsetLeft)
+    hash = mixString(hash, item.text)
+    hash = mixString(hash, item.align)
+    hash = mixString(hash, item.color)
+    hash = mixString(hash, item.font)
+    hash = mixNumber(hash, item.fontSize)
+    hash = mixNumber(hash, item.wrap ? 1 : 0)
+    hash = mixNumber(hash, item.underline ? 1 : 0)
+    hash = mixNumber(hash, item.strike ? 1 : 0)
+  }
+  return hash.toString(36)
+}
+
+export function resolveGridRectSceneSignature(input: {
+  readonly frame: Rectangle
+  readonly scene: GridGpuScene
+  readonly decorationRects?: readonly TextDecorationRect[] | undefined
+}): string {
+  let hash = createHash()
+  hash = mixNumber(hash, input.frame.width)
+  hash = mixNumber(hash, input.frame.height)
+  hash = mixNumber(hash, input.scene.fillRects.length)
+  hash = mixNumber(hash, input.scene.borderRects.length)
+  for (const rect of input.scene.fillRects) {
+    hash = mixGpuRect(hash, rect)
+  }
+  for (const rect of input.scene.borderRects) {
+    hash = mixGpuRect(hash, rect)
+  }
+  const decorationRects = input.decorationRects ?? []
+  hash = mixNumber(hash, decorationRects.length)
+  for (const rect of decorationRects) {
+    hash = mixNumber(hash, rect.x)
+    hash = mixNumber(hash, rect.y)
+    hash = mixNumber(hash, rect.width)
+    hash = mixNumber(hash, rect.height)
+    hash = mixString(hash, rect.color)
+  }
+  return hash.toString(36)
+}
+
+function createHash(): number {
+  return 2_166_136_261
+}
+
+function mixGpuRect(hash: number, rect: GridGpuScene['fillRects'][number]): number {
+  hash = mixNumber(hash, rect.x)
+  hash = mixNumber(hash, rect.y)
+  hash = mixNumber(hash, rect.width)
+  hash = mixNumber(hash, rect.height)
+  hash = mixNumber(hash, rect.color.r)
+  hash = mixNumber(hash, rect.color.g)
+  hash = mixNumber(hash, rect.color.b)
+  return mixNumber(hash, rect.color.a)
+}
+
+function mixString(hash: number, value: string): number {
+  let next = hash
+  for (let index = 0; index < value.length; index += 1) {
+    next = mixInteger(next, value.charCodeAt(index))
+  }
+  return next
+}
+
+function mixNumber(hash: number, value: number): number {
+  return mixInteger(hash, Math.round(value * 1_000))
+}
+
+function mixInteger(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
 }
 
 function buildTextInstanceData(input: { textScene: GridTextScene; atlas: ReturnType<typeof createGlyphAtlas> }): {
