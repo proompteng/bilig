@@ -672,7 +672,10 @@ export function createEngineFormulaEvaluationService(args: {
     // SUM/AVERAGE ranges should reuse any compatible lower-start prefix to
     // avoid rescanning shifted windows, while still allowing narrower anchors
     // when no compatible reusable prefix exists.
-    const sharedPrefixStart = directAggregate.aggregateKind === 'count' ? 0 : directAggregate.rowStart
+    const sharedPrefixStart =
+      directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average' || directAggregate.aggregateKind === 'count'
+        ? 0
+        : directAggregate.rowStart
     const prefix = args.aggregateCache.getOrBuildPrefix(
       {
         sheetName: directAggregate.sheetName,
