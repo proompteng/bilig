@@ -639,6 +639,8 @@ async function runLocalPlaywright(): Promise<void> {
   } finally {
     await stopLocalPlaywrightStack(child)
     terminatePreviewServers()
+    await Bun.sleep(1_000)
+    terminatePreviewServers()
   }
 }
 
