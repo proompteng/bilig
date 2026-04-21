@@ -157,6 +157,41 @@ describe('createEngineRuntimeColumnStoreService', () => {
     ])
   })
 
+  it('uses column slices for large range matrices beyond the direct row-major threshold', () => {
+    const workbook = new WorkbookStore('runtime-column-store-large-read')
+    const strings = new StringPool()
+    const counters = createEngineCounters()
+    workbook.createSheet('Sheet1')
+
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A1', { tag: ValueTag.Number, value: 11 })
+    setStoredCellValue(workbook, strings, 'Sheet1', 'B1', { tag: ValueTag.String, value: 'wide' })
+    setStoredCellValue(workbook, strings, 'Sheet1', 'C1', { tag: ValueTag.Boolean, value: true })
+    const errorIndex = workbook.ensureCell('Sheet1', 'D1')
+    workbook.cellStore.tags[errorIndex] = ValueTag.Error
+    workbook.cellStore.errors[errorIndex] = 42
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings, counters },
+    })
+
+    const values = runtimeColumnStore.readRangeValueMatrix({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 128,
+      colStart: 0,
+      colEnd: 127,
+    })
+
+    expect(values[0]?.slice(0, 4)).toEqual([
+      { tag: ValueTag.Number, value: 11 },
+      { tag: ValueTag.String, value: 'wide', stringId: expect.any(Number) },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.Error, code: 42 },
+    ])
+    expect(values[128]?.[127]).toEqual({ tag: ValueTag.Empty })
+    expect(counters.columnSliceBuilds).toBeGreaterThan(0)
+  })
+
   it('invalidates cached column slices after structural row remaps', () => {
     const workbook = new WorkbookStore('runtime-column-store-structural')
     const strings = new StringPool()
