@@ -4,6 +4,7 @@ import { ISOLATED_WORKBOOK_PANE_RENDERER_PATH } from '../../apps/web/src/root-ro
 import {
   clickProductCell,
   gotoWorkbookShell,
+  pickToolbarPresetColor,
   PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
@@ -547,6 +548,62 @@ test('main workbook shell keeps DOM editor overlay aligned to typegpu geometry w
   expect(readback.points.activeCellLeftBorder.a).toBeGreaterThan(150)
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-editor-overlay-readback.png', 'main-workbook-grid-editor-overlay-readback')
+})
+
+test('main workbook shell refreshes typegpu resident packets after style-only changes', async ({ page }, testInfo) => {
+  const fillPoint = {
+    x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+    y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+  }
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, `/?document=typegpu-style-refresh-${Date.now()}`)
+  await waitForWorkbookReady(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const initialReadback = await waitForReadback(
+    page,
+    {
+      points: [{ name: 'cellFill', ...fillPoint }],
+      regions: [],
+    },
+    (result) => result.points.cellFill.a === 0,
+  )
+
+  await clickProductCell(page, 1, 1)
+  await pickToolbarPresetColor(page, 'Fill color', 'light cornflower blue 3')
+  await waitForReadbackSequence(page, initialReadback.sequence)
+  await clickProductCell(page, 2, 2)
+
+  const styledReadback = await waitForReadback(
+    page,
+    {
+      points: [{ name: 'cellFill', ...fillPoint }],
+      regions: [],
+    },
+    (result) => result.points.cellFill.a > 200,
+  )
+
+  expect(styledReadback.points.cellFill.a).toBe(255)
+  expect(styledReadback.points.cellFill.r).toBeGreaterThan(170)
+  expect(styledReadback.points.cellFill.r).toBeLessThan(215)
+  expect(styledReadback.points.cellFill.g).toBeGreaterThan(190)
+  expect(styledReadback.points.cellFill.g).toBeLessThan(230)
+  expect(styledReadback.points.cellFill.b).toBeGreaterThan(220)
+  expect(styledReadback.points.cellFill.b).toBeLessThan(255)
+  expect(styledReadback.points.cellFill.b).toBeGreaterThan(styledReadback.points.cellFill.g)
+  expect(styledReadback.points.cellFill.g).toBeGreaterThan(styledReadback.points.cellFill.r)
+
+  await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-style-refresh-readback.png', 'main-workbook-grid-style-refresh-readback')
 })
 
 test('main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {

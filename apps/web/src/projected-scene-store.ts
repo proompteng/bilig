@@ -179,11 +179,7 @@ export class ProjectedSceneStore {
       entry.refreshQueued = false
       void this.refreshEntry(entry)
     }
-    if (typeof window === 'undefined') {
-      setTimeout(flush, 0)
-      return
-    }
-    window.requestAnimationFrame(flush)
+    queueMicrotask(flush)
   }
 
   private async refreshEntry(entry: SceneEntry): Promise<void> {

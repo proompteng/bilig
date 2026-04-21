@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
@@ -10,20 +10,6 @@ import {
 import { ProjectedSceneStore } from '../projected-scene-store.js'
 
 describe('ProjectedSceneStore', () => {
-  const originalRequestAnimationFrame = window.requestAnimationFrame
-  const originalCancelAnimationFrame = window.cancelAnimationFrame
-
-  beforeEach(() => {
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-      window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame
-    window.cancelAnimationFrame = ((handle: number) => window.clearTimeout(handle)) as typeof window.cancelAnimationFrame
-  })
-
-  afterEach(() => {
-    window.requestAnimationFrame = originalRequestAnimationFrame
-    window.cancelAnimationFrame = originalCancelAnimationFrame
-  })
-
   it('fetches resident pane scenes on first subscription and exposes them via peek', async () => {
     const request = {
       sheetName: 'Sheet1',
@@ -159,6 +145,128 @@ describe('ProjectedSceneStore', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 10))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+  })
+
+  it('refreshes resident pane scenes for style-only patches that intersect the request', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+      selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: null,
+    } as const
+    const client = {
+      invoke: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            generation: 1,
+            paneId: 'body',
+            viewport: request.residentViewport,
+            surfaceSize: { width: 400, height: 200 },
+            gpuScene: { fillRects: [], borderRects: [] },
+            textScene: { items: [] },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            generation: 2,
+            paneId: 'body',
+            viewport: request.residentViewport,
+            surfaceSize: { width: 400, height: 200 },
+            gpuScene: { fillRects: [], borderRects: [] },
+            textScene: { items: [] },
+          },
+        ]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    store.noteViewportPatch({
+      version: 2,
+      full: false,
+      viewport: { sheetName: 'Sheet1', rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [{ id: 'style-fill', fill: { backgroundColor: '#a4c2f4' } }],
+      cells: [],
+      columns: [],
+      rows: [],
+    })
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+  })
+
+  it('ignores style-only patches outside the resident pane request', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+      selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: null,
+    } as const
+    const client = {
+      invoke: vi.fn().mockResolvedValue([
+        {
+          generation: 1,
+          paneId: 'body',
+          viewport: request.residentViewport,
+          surfaceSize: { width: 400, height: 200 },
+          gpuScene: { fillRects: [], borderRects: [] },
+          textScene: { items: [] },
+        },
+      ]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    store.noteViewportPatch({
+      version: 2,
+      full: false,
+      viewport: { sheetName: 'Sheet1', rowStart: 50, rowEnd: 50, colStart: 50, colEnd: 50 },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [{ id: 'style-fill', fill: { backgroundColor: '#a4c2f4' } }],
+      cells: [],
+      columns: [],
+      rows: [],
+    })
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
 
     unsubscribe()
   })
