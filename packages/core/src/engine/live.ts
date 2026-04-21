@@ -603,6 +603,7 @@ export function createEngineServiceRuntime(args: {
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
       binding.rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
+    materializeDeferredStructuralFormulaSources: () => runEngineEffect(structure.materializeDeferredStructuralFormulaSources()),
     removeSheetRuntime: (sheetName, explicitChangedCount) => support.removeSheetRuntimeNow(sheetName, explicitChangedCount),
     applyStructuralAxisOp: (op) => runEngineEffect(structure.applyStructuralAxisOp(op)),
     clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),

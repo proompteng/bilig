@@ -240,6 +240,7 @@ export interface EngineStructureService {
   readonly captureSheetCellState: (sheetName: string) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => Effect.Effect<EngineOp[], EngineStructureError>
   readonly captureColumnRangeCellState: (sheetName: string, start: number, count: number) => Effect.Effect<EngineOp[], EngineStructureError>
+  readonly materializeDeferredStructuralFormulaSources: () => Effect.Effect<void, EngineStructureError>
   readonly applyStructuralAxisOp: (op: StructuralAxisOp) => Effect.Effect<
     {
       transaction: StructuralTransaction
@@ -1325,6 +1326,16 @@ export function createEngineStructureService(args: {
         catch: (cause) =>
           new EngineStructureError({
             message: `Failed to capture column state for ${sheetName}`,
+            cause,
+          }),
+      })
+    },
+    materializeDeferredStructuralFormulaSources() {
+      return Effect.try({
+        try: () => materializeDeferredStructuralFormulaSources(),
+        catch: (cause) =>
+          new EngineStructureError({
+            message: 'Failed to materialize deferred structural formula sources',
             cause,
           }),
       })

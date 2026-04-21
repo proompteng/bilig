@@ -396,6 +396,9 @@ export class SpreadsheetEngine {
         refreshRangeDependencies: () => {
           return
         },
+        materializeDeferredStructuralFormulaSources: () => {
+          return
+        },
         getChangedFormulaBuffer: () => new Uint32Array(),
         repairTopoRanks: () => false,
         getEntityDependents: () => new Uint32Array(),

@@ -37,6 +37,17 @@ type StructuralAxisOp = Extract<
   }
 >
 
+function isStructuralAxisOp(op: EngineOp): op is StructuralAxisOp {
+  return (
+    op.kind === 'insertRows' ||
+    op.kind === 'deleteRows' ||
+    op.kind === 'moveRows' ||
+    op.kind === 'insertColumns' ||
+    op.kind === 'deleteColumns' ||
+    op.kind === 'moveColumns'
+  )
+}
+
 type DerivedOp = Extract<EngineOp, { kind: 'upsertSpillRange' | 'deleteSpillRange' | 'upsertPivotTable' | 'deletePivotTable' }>
 
 export interface EngineOperationService {
@@ -271,6 +282,7 @@ export function createEngineOperationService(args: {
   readonly rebindFormulaCells: (candidates: readonly number[], formulaChangedCount: number) => number
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
   readonly rebindFormulasForSheet: (sheetName: string, formulaChangedCount: number, candidates?: readonly number[] | U32) => number
+  readonly materializeDeferredStructuralFormulaSources: () => void
   readonly removeSheetRuntime: (
     sheetName: string,
     explicitChangedCount: number,
@@ -1342,6 +1354,9 @@ export function createEngineOperationService(args: {
         if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
           return
         }
+        if (!isStructuralAxisOp(op)) {
+          args.materializeDeferredStructuralFormulaSources()
+        }
 
         switch (op.kind) {
           case 'upsertWorkbook':
@@ -2059,6 +2074,7 @@ export function createEngineOperationService(args: {
     potentialNewCells?: number,
   ): void => {
     const isRestore = source === 'restore'
+    args.materializeDeferredStructuralFormulaSources()
     args.beginMutationCollection()
     let changedInputCount = 0
     let formulaChangedCount = 0
