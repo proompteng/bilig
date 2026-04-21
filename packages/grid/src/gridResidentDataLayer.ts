@@ -9,6 +9,7 @@ import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
 import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
 import { getPaneFrame, resolvePaneLayout } from './renderer/pane-layout.js'
+import { packGridScenePacketV2 } from './renderer-v2/scene-packet-v2.js'
 
 function resolveViewportWidth(
   viewport: Viewport,
@@ -111,77 +112,88 @@ function buildPaneScene(input: {
     width: resolveViewportWidth(viewport, gridMetrics, sortedColumnWidthOverrides),
     height: resolveViewportHeight(viewport, gridMetrics, sortedRowHeightOverrides),
   }
+  const gpuScene = buildGridGpuScene({
+    contentMode: 'data',
+    engine,
+    sheetName,
+    visibleItems,
+    visibleRegion: {
+      range: {
+        x: viewport.colStart,
+        y: viewport.rowStart,
+        width: viewport.colEnd - viewport.colStart + 1,
+        height: viewport.rowEnd - viewport.rowStart + 1,
+      },
+      tx: 0,
+      ty: 0,
+      freezeRows: 0,
+      freezeCols: 0,
+    },
+    gridMetrics,
+    columnWidths,
+    rowHeights,
+    hostBounds: { left: 0, top: 0 },
+    getCellBounds,
+    gridSelection,
+    selectedCell,
+    selectionRange,
+    hoveredCell,
+    hoveredHeader,
+    resizeGuideColumn,
+    resizeGuideRow,
+    activeHeaderDrag,
+  })
+  const textScene = buildGridTextScene({
+    contentMode: 'data',
+    engine,
+    sheetName,
+    visibleItems,
+    visibleRegion: {
+      range: {
+        x: viewport.colStart,
+        y: viewport.rowStart,
+        width: viewport.colEnd - viewport.colStart + 1,
+        height: viewport.rowEnd - viewport.rowStart + 1,
+      },
+      tx: 0,
+      ty: 0,
+      freezeRows: 0,
+      freezeCols: 0,
+    },
+    gridMetrics,
+    columnWidths,
+    rowHeights,
+    editingCell,
+    selectedCell,
+    selectedCellSnapshot,
+    selectionRange,
+    hoveredHeader,
+    activeHeaderDrag,
+    resizeGuideColumn,
+    hostBounds: {
+      left: 0,
+      top: 0,
+      width: surfaceSize.width,
+      height: surfaceSize.height,
+    },
+    getCellBounds,
+  })
   return {
     generation: 0,
     paneId: id,
     viewport,
     surfaceSize,
-    gpuScene: buildGridGpuScene({
-      contentMode: 'data',
-      engine,
+    gpuScene,
+    packedScene: packGridScenePacketV2({
+      generation: 0,
+      gpuScene,
+      paneId: id,
       sheetName,
-      visibleItems,
-      visibleRegion: {
-        range: {
-          x: viewport.colStart,
-          y: viewport.rowStart,
-          width: viewport.colEnd - viewport.colStart + 1,
-          height: viewport.rowEnd - viewport.rowStart + 1,
-        },
-        tx: 0,
-        ty: 0,
-        freezeRows: 0,
-        freezeCols: 0,
-      },
-      gridMetrics,
-      columnWidths,
-      rowHeights,
-      hostBounds: { left: 0, top: 0 },
-      getCellBounds,
-      gridSelection,
-      selectedCell,
-      selectionRange,
-      hoveredCell,
-      hoveredHeader,
-      resizeGuideColumn,
-      resizeGuideRow,
-      activeHeaderDrag,
+      surfaceSize,
+      textScene,
+      viewport,
     }),
-    textScene: buildGridTextScene({
-      contentMode: 'data',
-      engine,
-      sheetName,
-      visibleItems,
-      visibleRegion: {
-        range: {
-          x: viewport.colStart,
-          y: viewport.rowStart,
-          width: viewport.colEnd - viewport.colStart + 1,
-          height: viewport.rowEnd - viewport.rowStart + 1,
-        },
-        tx: 0,
-        ty: 0,
-        freezeRows: 0,
-        freezeCols: 0,
-      },
-      gridMetrics,
-      columnWidths,
-      rowHeights,
-      editingCell,
-      selectedCell,
-      selectedCellSnapshot,
-      selectionRange,
-      hoveredHeader,
-      activeHeaderDrag,
-      resizeGuideColumn,
-      hostBounds: {
-        left: 0,
-        top: 0,
-        width: surfaceSize.width,
-        height: surfaceSize.height,
-      },
-      getCellBounds,
-    }),
+    textScene,
   }
 }
 
@@ -408,7 +420,7 @@ export function resolveResidentDataPaneRenderState(input: {
           : pane.paneId === 'left'
             ? { x: 0, y: bodyOffsetY }
             : { x: 0, y: 0 }
-    return {
+    const next: WorkbookPaneRenderState = {
       generation: pane.generation,
       paneId: pane.paneId,
       viewport: pane.viewport,
@@ -418,5 +430,6 @@ export function resolveResidentDataPaneRenderState(input: {
       textScene: pane.textScene,
       contentOffset,
     }
+    return pane.packedScene ? Object.assign(next, { packedScene: pane.packedScene }) : next
   })
 }

@@ -1,7 +1,9 @@
+import type { Viewport } from '@bilig/protocol'
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { GridTextItem, GridTextScene } from './gridTextScene.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { WorkbookRenderPaneState } from './renderer/pane-scene-types.js'
+import { packGridScenePacketV2, type GridScenePacketPaneId } from './renderer-v2/scene-packet-v2.js'
 
 export interface GridHeaderPaneState extends WorkbookRenderPaneState {
   readonly paneId: 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body'
@@ -73,6 +75,10 @@ function clipTextScene(scene: GridTextScene, clip: ClipRect): GridTextScene {
 }
 
 export function buildHeaderPaneStates(input: {
+  readonly sheetName?: string | undefined
+  readonly residentViewport?: Viewport | undefined
+  readonly freezeRows?: number | undefined
+  readonly freezeCols?: number | undefined
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
   readonly hostWidth: number
@@ -94,6 +100,10 @@ export function buildHeaderPaneStates(input: {
     residentBodyWidth,
     residentBodyHeight,
   } = input
+  const sheetName = input.sheetName ?? 'Sheet1'
+  const residentViewport = input.residentViewport ?? { colEnd: 0, colStart: 0, rowEnd: 0, rowStart: 0 }
+  const freezeRows = Math.max(0, input.freezeRows ?? 0)
+  const freezeCols = Math.max(0, input.freezeCols ?? 0)
   const bodyFrameWidth = Math.max(0, hostWidth - gridMetrics.rowMarkerWidth - frozenColumnWidth)
   const bodyFrameHeight = Math.max(0, hostHeight - gridMetrics.headerHeight - frozenRowHeight)
   const panes: GridHeaderPaneState[] = []
@@ -122,6 +132,15 @@ export function buildHeaderPaneStates(input: {
       scrollAxes: { x: false, y: false },
       gpuScene: clipGpuScene(gpuScene, clip),
       textScene: clipTextScene(textScene, clip),
+      packedScene: packHeaderScenePacket({
+        clip,
+        generation: 0,
+        gpuScene,
+        paneId: 'top-frozen',
+        sheetName,
+        textScene,
+        viewport: { colEnd: Math.max(0, freezeCols - 1), colStart: 0, rowEnd: 0, rowStart: 0 },
+      }),
     })
   }
 
@@ -149,6 +168,15 @@ export function buildHeaderPaneStates(input: {
       scrollAxes: { x: true, y: false },
       gpuScene: clipGpuScene(gpuScene, clip),
       textScene: clipTextScene(textScene, clip),
+      packedScene: packHeaderScenePacket({
+        clip,
+        generation: 0,
+        gpuScene,
+        paneId: 'top-body',
+        sheetName,
+        textScene,
+        viewport: { ...residentViewport, rowEnd: 0, rowStart: 0 },
+      }),
     })
   }
 
@@ -176,6 +204,15 @@ export function buildHeaderPaneStates(input: {
       scrollAxes: { x: false, y: false },
       gpuScene: clipGpuScene(gpuScene, clip),
       textScene: clipTextScene(textScene, clip),
+      packedScene: packHeaderScenePacket({
+        clip,
+        generation: 0,
+        gpuScene,
+        paneId: 'left-frozen',
+        sheetName,
+        textScene,
+        viewport: { colEnd: 0, colStart: 0, rowEnd: Math.max(0, freezeRows - 1), rowStart: 0 },
+      }),
     })
   }
 
@@ -203,8 +240,50 @@ export function buildHeaderPaneStates(input: {
       scrollAxes: { x: false, y: true },
       gpuScene: clipGpuScene(gpuScene, clip),
       textScene: clipTextScene(textScene, clip),
+      packedScene: packHeaderScenePacket({
+        clip,
+        generation: 0,
+        gpuScene,
+        paneId: 'left-body',
+        sheetName,
+        textScene,
+        viewport: { ...residentViewport, colEnd: 0, colStart: 0 },
+      }),
     })
   }
 
   return panes
+}
+
+function packHeaderScenePacket(input: {
+  readonly generation: number
+  readonly sheetName: string
+  readonly paneId: GridScenePacketPaneId
+  readonly viewport: Viewport
+  readonly clip: ClipRect
+  readonly gpuScene: GridGpuScene
+  readonly textScene: GridTextScene
+}) {
+  const gpuScene = clipGpuScene(input.gpuScene, input.clip)
+  const textScene = clipTextScene(input.textScene, input.clip)
+  return packGridScenePacketV2({
+    generation: input.generation,
+    gpuScene,
+    paneId: input.paneId,
+    sheetName: input.sheetName,
+    surfaceSize: { height: input.clip.height, width: input.clip.width },
+    textScene,
+    viewport: normalizeViewport(input.viewport),
+  })
+}
+
+function normalizeViewport(viewport: Viewport): Viewport {
+  const rowStart = Math.max(0, Math.min(viewport.rowStart, viewport.rowEnd))
+  const colStart = Math.max(0, Math.min(viewport.colStart, viewport.colEnd))
+  return {
+    colEnd: Math.max(colStart, viewport.colEnd),
+    colStart,
+    rowEnd: Math.max(rowStart, viewport.rowEnd),
+    rowStart,
+  }
 }

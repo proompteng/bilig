@@ -921,6 +921,10 @@ export function useWorkbookGridRenderState(input: {
     return buildHeaderPaneStates({
       gpuScene: headerGpuScene,
       textScene: headerTextScene,
+      sheetName,
+      residentViewport,
+      freezeCols,
+      freezeRows,
       hostWidth: hostClientWidth,
       hostHeight: hostClientHeight,
       gridMetrics,
@@ -937,6 +941,10 @@ export function useWorkbookGridRenderState(input: {
     headerTextScene,
     hostClientHeight,
     hostClientWidth,
+    sheetName,
+    residentViewport,
+    freezeCols,
+    freezeRows,
     residentBodyPane?.surfaceSize.height,
     residentBodyPane?.surfaceSize.width,
   ])

@@ -50,6 +50,7 @@ describe('gridResidentDataLayer', () => {
     })
 
     expect(panes.map((pane) => pane.paneId)).toEqual(['body', 'top', 'left', 'corner'])
+    expect(panes.every((pane) => pane.packedScene?.paneId === pane.paneId)).toBe(true)
     expect(panes[0]?.viewport).toMatchObject({
       rowStart: 10,
       rowEnd: 25,

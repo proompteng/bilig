@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import type { DynamicGridOverlayPacket } from './dynamic-overlay-packet.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
 import {
@@ -20,6 +21,7 @@ export interface WorkbookPaneRendererV2Props {
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayPacket | null | undefined) | undefined
   readonly overlay?:
     | {
         readonly gpuScene: GridGpuScene
@@ -75,6 +77,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   geometry,
   host,
   overlay,
+  overlayBuilder,
   panes,
   scrollTransformStore = null,
 }: WorkbookPaneRendererV2Props) {
@@ -86,6 +89,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const webGpuReadyRef = useRef(false)
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
+  const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
+  const overlayRef = useRef<typeof overlay>(overlay)
   const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
   const cameraStoreRef = useRef<GridCameraStore | null>(cameraStore)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore | null>(scrollTransformStore)
@@ -143,23 +148,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     }
   }, [active])
 
-  const panePayloads = useMemo<readonly WorkbookRenderPaneState[]>(() => {
-    const next: WorkbookRenderPaneState[] = [...panes]
-    if (overlay) {
-      next.push({
-        contentOffset: { x: 0, y: 0 },
-        frame: { x: 0, y: 0, width: surfaceSize.width, height: surfaceSize.height },
-        generation: -1,
-        gpuScene: overlay.gpuScene,
-        paneId: 'overlay',
-        scrollAxes: { x: false, y: false },
-        surfaceSize: { width: surfaceSize.width, height: surfaceSize.height },
-        textScene: overlay.textScene,
-      })
-    }
-    return next
-  }, [overlay, panes, surfaceSize.height, surfaceSize.width])
-
   useEffect(() => {
     activeRef.current = active
   }, [active])
@@ -181,8 +169,16 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [cameraStore])
 
   useEffect(() => {
-    panePayloadsRef.current = panePayloads
-  }, [panePayloads])
+    panePayloadsRef.current = panes
+  }, [panes])
+
+  useEffect(() => {
+    overlayBuilderRef.current = overlayBuilder
+  }, [overlayBuilder])
+
+  useEffect(() => {
+    overlayRef.current = overlay
+  }, [overlay])
 
   useEffect(() => {
     scrollTransformStoreRef.current = scrollTransformStore
@@ -212,17 +208,34 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
       const backend = backendRef.current
       const surface = surfaceSizeRef.current
-      const resolvedPanePayloads = panePayloadsRef.current
+      const basePanePayloads = panePayloadsRef.current
       if (!backend || surface.width <= 0 || surface.height <= 0) {
         return
       }
+      const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
+      const overlayPacket = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
+      const resolvedPanePayloads = overlayPacket
+        ? [
+            ...basePanePayloads,
+            {
+              contentOffset: { x: 0, y: 0 },
+              frame: { x: 0, y: 0, width: surface.width, height: surface.height },
+              generation: -1,
+              gpuScene: overlayPacket.gpuScene,
+              paneId: 'overlay',
+              scrollAxes: { x: false, y: false },
+              surfaceSize: { width: surface.width, height: surface.height },
+              textScene: overlayPacket.textScene,
+            },
+          ]
+        : basePanePayloads
 
       drawWorkbookTypeGpuFrame({
         backend,
         panes: resolvedPanePayloads,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
-          geometry: cameraStoreRef.current?.getSnapshot() ?? geometryRef.current,
+          geometry: latestGeometry,
           panes: resolvedPanePayloads,
         }),
         surface,
@@ -230,7 +243,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     }
 
     drawFrameRef.current()
-  }, [active, panePayloads, surfaceSize, webGpuReady])
+  }, [active, overlay, overlayBuilder, panes, surfaceSize, webGpuReady])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {

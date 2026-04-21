@@ -42,12 +42,12 @@ describe('text-quad-buffer', () => {
     expect(quads[0]).toMatchObject({
       atlasKey: 'atlas:AB',
       x: 18,
-      y: 22.5,
+      y: 24.4,
       width: 16,
       height: 12,
-      clipX: 10,
-      clipY: 20,
-      clipWidth: 32,
+      clipX: 18,
+      clipY: 23,
+      clipWidth: 16,
       clipHeight: 16,
     })
     expect(quads[0]?.glyph).toBe('AB')
@@ -61,7 +61,7 @@ describe('text-quad-buffer', () => {
           x: 0,
           y: 10,
           width: 40,
-          height: 28,
+          height: 40,
           wrap: true,
           align: 'center',
           font: '400 10px Geist',
@@ -72,8 +72,8 @@ describe('text-quad-buffer', () => {
     )
 
     expect(quads).toHaveLength(2)
-    expect(quads[0]).toMatchObject({ x: 8, y: 14 })
-    expect(quads[1]).toMatchObject({ x: 8, y: 26 })
+    expect(quads[0]).toMatchObject({ x: 8, y: 13 })
+    expect(quads[1]).toMatchObject({ x: 8, y: 25 })
   })
 
   it('packs clipped scene items into gpu text instance buffers', () => {
@@ -102,12 +102,12 @@ describe('text-quad-buffer', () => {
     )
 
     expect(quadCount).toBe(1)
-    expect(floats[0]).toBe(18)
-    expect(floats[1]).toBe(6)
+    expect(floats[0]).toBe(8)
+    expect(floats[1]).toBe(4)
     expect(floats[12]).toBe(10)
-    expect(floats[13]).toBe(2)
-    expect(floats[14]).toBe(34)
-    expect(floats[15]).toBe(20)
+    expect(floats[13]).toBe(3)
+    expect(floats[14]).toBe(32)
+    expect(floats[15]).toBe(17)
     expect(floats[8]).toBeCloseTo(0x11 / 255)
     expect(floats[9]).toBeCloseTo(0x22 / 255)
     expect(floats[10]).toBeCloseTo(0x33 / 255)
@@ -140,9 +140,9 @@ describe('text-quad-buffer', () => {
     )
 
     expect(rects).toHaveLength(2)
-    expect(rects[0]).toMatchObject({ x: 18, width: 16, height: 1, color: '#112233' })
-    expect(rects[0]?.y).toBeCloseTo(9.6)
-    expect(rects[1]).toMatchObject({ x: 18, width: 16, height: 1, color: '#112233' })
-    expect(rects[1]?.y).toBeCloseTo(4.2)
+    expect(rects[0]).toMatchObject({ x: 10, width: 14, height: 1, color: '#112233' })
+    expect(rects[0]?.y).toBeCloseTo(14.7)
+    expect(rects[1]).toMatchObject({ x: 10, width: 14, height: 1, color: '#112233' })
+    expect(rects[1]?.y).toBeCloseTo(10.5)
   })
 })

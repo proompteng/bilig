@@ -130,7 +130,7 @@ const rectFragment = typegpuCore.fragmentFn({
   ) {
     discard;
   }
-  return in.color;
+  return vec4f(in.color.rgb * in.color.a, in.color.a);
 }`
 
 const textVertex = typegpuCore.vertexFn({
@@ -152,9 +152,7 @@ const textVertex = typegpuCore.vertexFn({
   },
 })`{
   let clipSpacePixel = in.rectOrigin + in.quad * in.rectSize;
-  let paneOrigin = in.rectOrigin + surface.scrollOffset;
-  let snappedPaneOrigin = round(paneOrigin * surface.dpr) / surface.dpr;
-  let panePixel = snappedPaneOrigin + in.quad * in.rectSize;
+  let panePixel = in.rectOrigin + surface.scrollOffset + in.quad * in.rectSize;
   let screenPixel = surface.origin + panePixel;
   let ndc = vec2f(
     (screenPixel.x / surface.viewportSize.x) * 2.0 - 1.0,
@@ -194,7 +192,8 @@ const textFragment = typegpuCore.fragmentFn({
   }
 
   let sampled = textureSample(atlasTexture, atlasSampler, in.uv);
-  return vec4f(in.color.rgb, in.color.a * sampled.a);
+  let alpha = in.color.a * sampled.a;
+  return vec4f(in.color.rgb * alpha, alpha);
 }`.$uses({
   atlasSampler: textBindGroupLayout.bound.atlasSampler,
   atlasTexture: textBindGroupLayout.bound.atlasTexture,
@@ -284,7 +283,7 @@ export async function createTypeGpuRenderer(canvas: HTMLCanvasElement): Promise<
         color: {
           dstFactor: 'one-minus-src-alpha',
           operation: 'add',
-          srcFactor: 'src-alpha',
+          srcFactor: 'one',
         },
       },
       format,
@@ -314,7 +313,7 @@ export async function createTypeGpuRenderer(canvas: HTMLCanvasElement): Promise<
         color: {
           dstFactor: 'one-minus-src-alpha',
           operation: 'add',
-          srcFactor: 'src-alpha',
+          srcFactor: 'one',
         },
       },
       format,

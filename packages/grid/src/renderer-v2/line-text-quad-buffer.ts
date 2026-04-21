@@ -1,11 +1,14 @@
 import type { GridTextItem } from '../gridTextScene.js'
+import type { Rectangle } from '../gridTypes.js'
+import { resolveCellTextLayoutV2 } from '../text/gridTextLayoutV2.js'
+import { fontKeyToCssFont, type GridTextMetricsProvider } from '../text/gridTextMetrics.js'
+import { CELL_TEXT_PADDING_X, CELL_TEXT_PADDING_Y, type FontKey, type ResolvedCellTextLayout } from '../text/gridTextPacket.js'
 import {
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_FONT,
+  DEFAULT_TEXT_HEIGHT,
   parseTextCssColor,
-  resolveTextClipRect,
-  resolveTextDecorationRects,
-  resolveTextLineLayouts,
+  parseTextFontSize,
   type GlyphAtlasLike,
 } from './line-text-layout.js'
 
@@ -63,14 +66,15 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
       continue
     }
 
-    const font = run.font ?? DEFAULT_TEXT_FONT
-    const lineLayouts = resolveTextLineLayouts(run, atlas)
-    const clipRect = resolveTextClipRect(run, lineLayouts)
+    const fontKey = resolveRunFontKey(run)
+    const font = fontKeyToCssFont(fontKey)
+    const layout = resolveRunTextLayout(run, atlas, fontKey)
+    const clipRect = resolveRunClipRect(run, layout.textClipWorldRect)
     if (clipRect.width <= 0 || clipRect.height <= 0) {
       continue
     }
 
-    for (const line of lineLayouts) {
+    for (const line of layout.lines) {
       if (line.text.length === 0) {
         continue
       }
@@ -79,8 +83,8 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
       quads.push({
         atlasKey: entry.key,
         glyph: line.text,
-        x: line.x - entry.originOffsetX,
-        y: line.y,
+        x: line.worldX - entry.originOffsetX,
+        y: line.baselineWorldY - entry.baseline,
         width: entry.width,
         height: entry.height,
         u0: entry.u0,
@@ -137,10 +141,10 @@ export function buildTextQuadsFromScene(
   const quads = buildTextQuads(
     items.map((item) => ({
       text: item.text,
-      x: item.x + item.clipInsetLeft,
-      y: item.y + item.clipInsetTop,
-      width: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
-      height: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height,
       clipX: item.x + item.clipInsetLeft,
       clipY: item.y + item.clipInsetTop,
       clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
@@ -162,7 +166,28 @@ export function buildTextQuadsFromScene(
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {
   const rects: TextDecorationRect[] = []
   for (const run of runs) {
-    rects.push(...resolveTextDecorationRects(run, atlas))
+    if (!run.underline && !run.strike) {
+      continue
+    }
+    const layout = resolveRunTextLayout(run, atlas, resolveRunFontKey(run))
+    const clipRect = resolveRunClipRect(run, layout.textClipWorldRect)
+    const clipRight = clipRect.x + clipRect.width
+    const clipBottom = clipRect.y + clipRect.height
+    for (const decoration of layout.decorations) {
+      const left = Math.max(decoration.x, clipRect.x)
+      const right = Math.min(decoration.x + decoration.width, clipRight)
+      const visibleWidth = right - left
+      if (visibleWidth <= 0 || decoration.y < clipRect.y || decoration.y > clipBottom) {
+        continue
+      }
+      rects.push({
+        x: left,
+        y: decoration.y,
+        width: visibleWidth,
+        height: decoration.height,
+        color: run.color ?? DEFAULT_TEXT_COLOR,
+      })
+    }
   }
 
   return rects
@@ -172,10 +197,10 @@ export function buildTextDecorationRectsFromScene(items: readonly GridTextItem[]
   return buildTextDecorationRects(
     items.map((item) => ({
       text: item.text,
-      x: item.x + item.clipInsetLeft,
-      y: item.y + item.clipInsetTop,
-      width: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
-      height: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height,
       clipX: item.x + item.clipInsetLeft,
       clipY: item.y + item.clipInsetTop,
       clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
@@ -190,4 +215,104 @@ export function buildTextDecorationRectsFromScene(items: readonly GridTextItem[]
     })),
     atlas,
   )
+}
+
+function resolveRunTextLayout(run: TextQuadRun, atlas: GlyphAtlasLike, fontKey: FontKey): ResolvedCellTextLayout {
+  return resolveCellTextLayoutV2({
+    cell: { col: -1, row: -1 },
+    cellWorldRect: resolveRunCellWorldRect(run, atlas),
+    color: run.color,
+    fontKey,
+    horizontalAlign: run.align,
+    metrics: createAtlasTextMetricsProvider(atlas),
+    overflow: run.wrap ? 'clip' : run.align === 'left' || run.align === undefined ? 'overflow' : 'clip',
+    strike: run.strike,
+    text: run.text,
+    underline: run.underline,
+    verticalAlign: run.wrap ? 'top' : 'middle',
+    wrap: run.wrap,
+  })
+}
+
+function resolveRunCellWorldRect(run: TextQuadRun, atlas: GlyphAtlasLike): Rectangle {
+  const font = run.font ?? DEFAULT_TEXT_FONT
+  const measuredAdvance = run.text.length === 0 ? 0 : atlas.intern(font, run.text).advance
+  return {
+    x: run.x,
+    y: run.y,
+    width: Math.max(0, run.width ?? run.clipWidth ?? measuredAdvance + CELL_TEXT_PADDING_X * 2),
+    height: Math.max(0, run.height ?? run.clipHeight ?? DEFAULT_TEXT_HEIGHT + CELL_TEXT_PADDING_Y * 2),
+  }
+}
+
+function resolveRunClipRect(run: TextQuadRun, layoutClip: Rectangle): Rectangle {
+  const explicitClip =
+    run.clipX === undefined || run.clipY === undefined || run.clipWidth === undefined || run.clipHeight === undefined
+      ? null
+      : {
+          x: run.clipX,
+          y: run.clipY,
+          width: Math.max(0, run.clipWidth),
+          height: Math.max(0, run.clipHeight),
+        }
+  if (!explicitClip) {
+    return layoutClip
+  }
+  const x0 = Math.max(layoutClip.x, explicitClip.x)
+  const y0 = Math.max(layoutClip.y, explicitClip.y)
+  const x1 = Math.min(layoutClip.x + layoutClip.width, explicitClip.x + explicitClip.width)
+  const y1 = Math.min(layoutClip.y + layoutClip.height, explicitClip.y + explicitClip.height)
+  return {
+    x: x0,
+    y: y0,
+    width: Math.max(0, x1 - x0),
+    height: Math.max(0, y1 - y0),
+  }
+}
+
+function resolveRunFontKey(run: TextQuadRun): FontKey {
+  const font = run.font ?? DEFAULT_TEXT_FONT
+  const sizeCssPx = Math.max(1, run.fontSize ?? parseTextFontSize(font))
+  const style = /\bitalic\b/i.test(font) ? 'italic' : 'normal'
+  const weightMatch = font.match(/\b([1-9]00|normal|bold)\b/i)
+  const rawWeight = weightMatch?.[1]?.toLowerCase()
+  const weight = rawWeight === 'bold' ? 700 : rawWeight === 'normal' || rawWeight === undefined ? 400 : Number(rawWeight)
+  const sizeMatch = font.match(/\b\d+(?:\.\d+)?px\s+(.+)$/i)
+  const family = sizeMatch?.[1]?.trim() || 'sans-serif'
+  return {
+    dprBucket: 1,
+    family,
+    fontEpoch: 0,
+    sizeCssPx,
+    style,
+    weight,
+  }
+}
+
+function createAtlasTextMetricsProvider(atlas: GlyphAtlasLike): GridTextMetricsProvider {
+  return {
+    measure(text, fontKey) {
+      const font = fontKeyToCssFont(fontKey)
+      if (text.length === 0) {
+        const sample = atlas.intern(font, 'Mg')
+        const ascent = Math.max(1, sample.baseline)
+        const descent = Math.max(1, sample.height - ascent)
+        return {
+          advance: 0,
+          ascent,
+          descent,
+          lineHeight: Math.max(fontKey.sizeCssPx * 1.2, ascent + descent),
+        }
+      }
+      const entry = atlas.intern(font, text)
+      const ascent = Math.max(1, entry.baseline)
+      const descent = Math.max(1, entry.height - ascent)
+      return {
+        advance: entry.advance,
+        ascent,
+        descent,
+        lineHeight: Math.max(fontKey.sizeCssPx * 1.2, ascent + descent),
+      }
+    },
+  }
 }
