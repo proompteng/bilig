@@ -16,6 +16,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isOptionalPackedScene(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  return isRecord(value) && value['rects'] instanceof Float32Array && value['textMetrics'] instanceof Float32Array
+}
+
 function isDisposedWorkerClientError(error: unknown): boolean {
   return error instanceof Error && error.message === 'Worker engine client disposed'
 }
@@ -31,7 +38,8 @@ function isResidentPaneScenePacketArray(value: unknown): value is readonly Workb
         isRecord(entry['viewport']) &&
         isRecord(entry['surfaceSize']) &&
         isRecord(entry['gpuScene']) &&
-        isRecord(entry['textScene']),
+        isRecord(entry['textScene']) &&
+        isOptionalPackedScene(entry['packedScene']),
     )
   )
 }

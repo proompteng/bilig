@@ -42,7 +42,7 @@ type EventMessage =
 type TransportMessage = RequestMessage | ResponseMessage | SubscribeMessage | UnsubscribeMessage | EventMessage
 
 export interface MessagePortLike {
-  postMessage(message: TransportMessage): void
+  postMessage(message: TransportMessage, transfer?: Transferable[]): void
   addEventListener?(type: 'message', listener: (event: MessageEvent<TransportMessage>) => void): void
   removeEventListener?(type: 'message', listener: (event: MessageEvent<TransportMessage>) => void): void
   on?(type: 'message', listener: (message: TransportMessage) => void): void
@@ -116,12 +116,15 @@ async function handleRequest(engine: WorkerTransportEngine, port: MessagePortLik
       throw new Error(`Unknown worker engine method: ${message.method}`)
     }
     const value = await Reflect.apply(method, engine, message.args)
-    port.postMessage({
-      kind: 'response',
-      id: message.id,
-      ok: true,
-      value,
-    })
+    port.postMessage(
+      {
+        kind: 'response',
+        id: message.id,
+        ok: true,
+        value,
+      },
+      collectTransferables(value),
+    )
   } catch (error) {
     port.postMessage({
       kind: 'response',
@@ -179,14 +182,45 @@ function createChannelSubscription(engine: WorkerTransportEngine, port: MessageP
       })
     case 'viewportPatches':
       return subscribeViewportPatchChannel(engine, message.args[0], (payload: Uint8Array) => {
-        port.postMessage({
-          kind: 'event',
-          subscriptionId: message.id,
-          channel: 'viewportPatches',
-          payload,
-        })
+        port.postMessage(
+          {
+            kind: 'event',
+            subscriptionId: message.id,
+            channel: 'viewportPatches',
+            payload,
+          },
+          [payload.buffer],
+        )
       })
   }
+}
+
+function collectTransferables(value: unknown): Transferable[] {
+  const transferables: Transferable[] = []
+  const seen = new Set<unknown>()
+  const visit = (current: unknown): void => {
+    if (!current || seen.has(current)) {
+      return
+    }
+    seen.add(current)
+    if (current instanceof ArrayBuffer) {
+      transferables.push(current)
+      return
+    }
+    if (ArrayBuffer.isView(current)) {
+      transferables.push(current.buffer)
+      return
+    }
+    if (Array.isArray(current)) {
+      current.forEach(visit)
+      return
+    }
+    if (typeof current === 'object') {
+      Object.values(current).forEach(visit)
+    }
+  }
+  visit(value)
+  return [...new Set(transferables)]
 }
 
 export function createWorkerEngineClient(options: { port: MessagePortLike }): WorkerEngineClient {

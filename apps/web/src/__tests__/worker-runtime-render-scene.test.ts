@@ -50,6 +50,8 @@ describe('worker-runtime-render-scene', () => {
 
     expect(scenes.map((scene) => scene.paneId)).toEqual(['body', 'top', 'left', 'corner'])
     expect(new Set(scenes.map((scene) => scene.generation))).toEqual(new Set([7]))
+    expect(scenes.every((scene) => scene.packedScene?.rects instanceof Float32Array)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene?.textMetrics instanceof Float32Array)).toBe(true)
   })
 
   it('keys the cache by viewport, freeze state, selection, and editing cell', () => {

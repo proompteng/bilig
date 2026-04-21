@@ -30,6 +30,14 @@ export interface ResolvedTextClipRect {
   readonly height: number
 }
 
+export interface ResolvedTextDecorationRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly color: string
+}
+
 export interface GlyphAtlasLike {
   intern(font: string, glyph: string): GlyphAtlasEntry
 }
@@ -108,6 +116,64 @@ export function resolveTextClipRect(run: TextLayoutRun, lineLayouts: readonly Re
     x: run.clipX ?? run.x,
     y: run.clipY ?? run.y,
   }
+}
+
+export function resolveTextDecorationRects(
+  run: TextLayoutRun & {
+    readonly color?: string
+    readonly underline?: boolean
+    readonly strike?: boolean
+  },
+  atlas: GlyphAtlasLike,
+): ResolvedTextDecorationRect[] {
+  if (!run.underline && !run.strike) {
+    return []
+  }
+
+  const font = run.font ?? DEFAULT_TEXT_FONT
+  const fontSize = run.fontSize ?? parseTextFontSize(font)
+  const color = run.color ?? DEFAULT_TEXT_COLOR
+  const lineThickness = Math.max(1, Math.round(fontSize / 14))
+  const lineLayouts = resolveTextLineLayouts(run, atlas)
+  const clipRect = resolveTextClipRect(run, lineLayouts)
+  const clipRight = clipRect.x + clipRect.width
+  const clipBottom = clipRect.y + clipRect.height
+  const rects: ResolvedTextDecorationRect[] = []
+
+  for (const line of lineLayouts) {
+    const left = Math.max(line.x, clipRect.x)
+    const right = Math.min(line.x + line.width, clipRight)
+    const visibleWidth = right - left
+    if (visibleWidth <= 0) {
+      continue
+    }
+    if (run.underline) {
+      const underlineY = line.y + Math.max(1, fontSize * 0.36)
+      if (underlineY >= clipRect.y && underlineY <= clipBottom) {
+        rects.push({
+          x: left,
+          y: underlineY,
+          width: visibleWidth,
+          height: lineThickness,
+          color,
+        })
+      }
+    }
+    if (run.strike) {
+      const strikeY = line.y - Math.max(1, fontSize * 0.18)
+      if (strikeY >= clipRect.y && strikeY <= clipBottom) {
+        rects.push({
+          x: left,
+          y: strikeY,
+          width: visibleWidth,
+          height: lineThickness,
+          color,
+        })
+      }
+    }
+  }
+
+  return rects
 }
 
 function measureTextWidth(text: string, font: string, atlas: GlyphAtlasLike): number {

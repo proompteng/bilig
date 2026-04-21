@@ -3,8 +3,8 @@ import {
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_FONT,
   parseTextCssColor,
-  parseTextFontSize,
   resolveTextClipRect,
+  resolveTextDecorationRects,
   resolveTextLineLayouts,
   type GlyphAtlasLike,
 } from './gridTextLayout.js'
@@ -162,51 +162,7 @@ export function buildTextQuadsFromScene(
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {
   const rects: TextDecorationRect[] = []
   for (const run of runs) {
-    if (!run.underline && !run.strike) {
-      continue
-    }
-
-    const font = run.font ?? DEFAULT_TEXT_FONT
-    const fontSize = run.fontSize ?? parseTextFontSize(font)
-    const color = run.color ?? DEFAULT_TEXT_COLOR
-    const lineThickness = Math.max(1, Math.round(fontSize / 14))
-    const lineLayouts = resolveTextLineLayouts(run, atlas)
-    const clipRect = resolveTextClipRect(run, lineLayouts)
-    const clipRight = clipRect.x + clipRect.width
-    const clipBottom = clipRect.y + clipRect.height
-
-    for (const line of lineLayouts) {
-      const left = Math.max(line.x, clipRect.x)
-      const right = Math.min(line.x + line.width, clipRight)
-      const visibleWidth = right - left
-      if (visibleWidth <= 0) {
-        continue
-      }
-      if (run.underline) {
-        const underlineY = line.y + Math.max(1, fontSize * 0.36)
-        if (underlineY >= clipRect.y && underlineY <= clipBottom) {
-          rects.push({
-            x: left,
-            y: underlineY,
-            width: visibleWidth,
-            height: lineThickness,
-            color,
-          })
-        }
-      }
-      if (run.strike) {
-        const strikeY = line.y - Math.max(1, fontSize * 0.18)
-        if (strikeY >= clipRect.y && strikeY <= clipBottom) {
-          rects.push({
-            x: left,
-            y: strikeY,
-            width: visibleWidth,
-            height: lineThickness,
-            color,
-          })
-        }
-      }
-    }
+    rects.push(...resolveTextDecorationRects(run, atlas))
   }
 
   return rects

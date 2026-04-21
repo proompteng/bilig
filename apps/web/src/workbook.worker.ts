@@ -11,8 +11,8 @@ type PortListener = Parameters<NonNullable<MessagePortLike['addEventListener']>>
 const listenerMap = new Map<PortListener, EventListener>()
 
 createWorkerEngineHost(runtime, {
-  postMessage(message: unknown) {
-    scope.postMessage(message, [])
+  postMessage(message: unknown, transfer: Transferable[] = []) {
+    scope.postMessage(message, transfer)
   },
   addEventListener(_type: 'message', listener: PortListener) {
     const wrapped: EventListener = (event) => {

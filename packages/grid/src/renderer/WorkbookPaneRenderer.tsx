@@ -1,32 +1,20 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { parseGpuColor, type GridGpuScene } from '../gridGpuScene.js'
+import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
-import type { Rectangle } from '../gridTypes.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
-import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from './pane-buffer-cache.js'
+import { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import { createGlyphAtlas } from './glyph-atlas.js'
-import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDecorationRect } from './text-quad-buffer.js'
 import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import {
-  WORKBOOK_RECT_INSTANCE_LAYOUT,
-  WORKBOOK_TEXT_INSTANCE_LAYOUT,
-  WORKBOOK_UNIT_QUAD_LAYOUT,
-  createTypeGpuSurfaceBindGroup,
-  createTypeGpuSurfaceUniform,
-  createTypeGpuTextBindGroup,
   createTypeGpuRenderer,
   destroyTypeGpuRenderer,
-  ensureTypeGpuVertexBuffer,
   syncTypeGpuAtlasResources,
   type TypeGpuRendererArtifacts,
-  updateTypeGpuSurfaceUniform,
-  writeTypeGpuVertexBuffer,
 } from './typegpu-renderer.js'
-import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
+import { drawTypeGpuPanes } from './typegpu-draw-pass.js'
 import { GridRenderScheduler } from './grid-render-scheduler.js'
+import { syncTypeGpuPaneResources } from './typegpu-resource-cache.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface } from './typegpu-surface-manager.js'
-
-const RECT_INSTANCE_FLOAT_COUNT = 20
 
 interface WorkbookPaneRendererProps {
   readonly active: boolean
@@ -48,16 +36,6 @@ interface SurfaceSize {
   readonly dpr: number
 }
 
-function resolveClampedScissorRect(frame: Rectangle, surface: SurfaceSize): { x: number; y: number; width: number; height: number } | null {
-  const dpr = surface.dpr
-  const x0 = Math.max(0, Math.min(surface.pixelWidth, Math.floor(frame.x * dpr)))
-  const y0 = Math.max(0, Math.min(surface.pixelHeight, Math.floor(frame.y * dpr)))
-  const x1 = Math.max(x0, Math.min(surface.pixelWidth, Math.ceil((frame.x + frame.width) * dpr)))
-  const y1 = Math.max(y0, Math.min(surface.pixelHeight, Math.ceil((frame.y + frame.height) * dpr)))
-  if (x0 >= x1 || y0 >= y1) return null
-  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
-}
-
 function resolveSurfaceSize(host: HTMLElement): SurfaceSize {
   const width = Math.max(0, Math.floor(host.clientWidth))
   const height = Math.max(0, Math.floor(host.clientHeight))
@@ -68,142 +46,6 @@ function resolveSurfaceSize(host: HTMLElement): SurfaceSize {
     pixelWidth: Math.max(1, Math.floor(width * dpr)),
     pixelHeight: Math.max(1, Math.floor(height * dpr)),
     dpr,
-  }
-}
-
-function buildRectInstanceData(input: {
-  frame: Rectangle
-  scene: GridGpuScene
-  decorationRects?: readonly TextDecorationRect[]
-}): Float32Array {
-  const rects = input.scene.fillRects
-  const borders = input.scene.borderRects
-  const decorationRects = input.decorationRects ?? []
-  const total = rects.length + borders.length + decorationRects.length
-  const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
-
-  const clipX = 0
-  const clipY = 0
-  const clipX1 = input.frame.width
-  const clipY1 = input.frame.height
-
-  let offset = 0
-  for (const rect of rects) {
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = rect.color.r
-    floats[offset + 5] = rect.color.g
-    floats[offset + 6] = rect.color.b
-    floats[offset + 7] = rect.color.a
-    floats[offset + 8] = 0
-    floats[offset + 9] = 0
-    floats[offset + 10] = 0
-    floats[offset + 11] = 0
-    floats[offset + 12] = rect.color.a < 0.2 ? 2 : 0
-    floats[offset + 13] = 0
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
-  for (const rect of borders) {
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = 0
-    floats[offset + 5] = 0
-    floats[offset + 6] = 0
-    floats[offset + 7] = 0
-    floats[offset + 8] = rect.color.r
-    floats[offset + 9] = rect.color.g
-    floats[offset + 10] = rect.color.b
-    floats[offset + 11] = rect.color.a
-    floats[offset + 12] = 0
-    floats[offset + 13] = 1
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
-
-  for (const rect of decorationRects) {
-    const color = parseGpuColor(rect.color)
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = color.r
-    floats[offset + 5] = color.g
-    floats[offset + 6] = color.b
-    floats[offset + 7] = color.a
-    floats[offset + 8] = 0
-    floats[offset + 9] = 0
-    floats[offset + 10] = 0
-    floats[offset + 11] = 0
-    floats[offset + 12] = 0
-    floats[offset + 13] = 0
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
-
-  return floats
-}
-
-function buildTextInstanceData(input: { textScene: GridTextScene; atlas: ReturnType<typeof createGlyphAtlas> }): {
-  floats: Float32Array
-  quadCount: number
-} {
-  return buildTextQuadsFromScene(input.textScene.items, input.atlas)
-}
-
-function resolvePaneOrigin(pane: WorkbookRenderPaneState): { x: number; y: number } {
-  return {
-    x: pane.frame.x,
-    y: pane.frame.y,
-  }
-}
-
-function resolvePaneRenderOffset(
-  pane: WorkbookRenderPaneState,
-  scrollSnapshot: { readonly tx: number; readonly ty: number },
-): { x: number; y: number } {
-  return {
-    x: pane.contentOffset.x - (pane.scrollAxes.x ? scrollSnapshot.tx : 0),
-    y: pane.contentOffset.y - (pane.scrollAxes.y ? scrollSnapshot.ty : 0),
-  }
-}
-
-function ensurePaneSurfaceBindings(artifacts: TypeGpuRendererArtifacts, paneCache: WorkbookPaneBufferEntry): void {
-  if (!paneCache.surfaceUniform) {
-    paneCache.surfaceUniform = createTypeGpuSurfaceUniform(artifacts.root)
-  }
-  if (!paneCache.surfaceBindGroup) {
-    paneCache.surfaceBindGroup = createTypeGpuSurfaceBindGroup(artifacts.root, paneCache.surfaceUniform)
-  }
-
-  if (!artifacts.atlasTexture) {
-    paneCache.textBindGroup = null
-    paneCache.textBindGroupAtlasVersion = -1
-    return
-  }
-
-  if (!paneCache.textBindGroup || paneCache.textBindGroupAtlasVersion !== artifacts.atlasVersion) {
-    paneCache.textBindGroup = createTypeGpuTextBindGroup(artifacts, paneCache.surfaceUniform)
-    paneCache.textBindGroupAtlasVersion = artifacts.atlasVersion
   }
 }
 
@@ -353,108 +195,22 @@ export const WorkbookPaneRenderer = memo(function WorkbookPaneRenderer({
       }
 
       const atlas = atlasRef.current
-      paneBuffersRef.current.pruneExcept(new Set(resolvedPanePayloads.map((pane) => pane.paneId)))
-
-      resolvedPanePayloads.forEach((pane) => {
-        const paneCache = paneBuffersRef.current.get(pane.paneId)
-        const textSceneChanged = paneCache.textScene !== pane.textScene
-        if (textSceneChanged) {
-          paneCache.decorationRects = buildTextDecorationRectsFromScene(pane.textScene.items, atlas)
-          const textPayload = buildTextInstanceData({
-            textScene: pane.textScene,
-            atlas,
-          })
-          const textBuffer = ensureTypeGpuVertexBuffer(
-            artifacts.root,
-            WORKBOOK_TEXT_INSTANCE_LAYOUT,
-            paneCache.textBuffer,
-            paneCache.textCapacity,
-            textPayload.quadCount,
-          )
-          paneCache.textBuffer = textBuffer.buffer
-          paneCache.textCapacity = textBuffer.capacity
-          paneCache.textCount = textPayload.quadCount
-          writeTypeGpuVertexBuffer(paneCache.textBuffer, textPayload.floats)
-          paneCache.textScene = pane.textScene
-        }
-
-        if (paneCache.rectScene !== pane.gpuScene || textSceneChanged) {
-          const decorationRects = paneCache.decorationRects ?? []
-          const rectFloats = buildRectInstanceData({
-            frame: pane.frame,
-            scene: pane.gpuScene,
-            ...(decorationRects.length > 0 ? { decorationRects } : {}),
-          })
-          const rectBuffer = ensureTypeGpuVertexBuffer(
-            artifacts.root,
-            WORKBOOK_RECT_INSTANCE_LAYOUT,
-            paneCache.rectBuffer,
-            paneCache.rectCapacity,
-            pane.gpuScene.fillRects.length + pane.gpuScene.borderRects.length + decorationRects.length,
-          )
-          paneCache.rectBuffer = rectBuffer.buffer
-          paneCache.rectCapacity = rectBuffer.capacity
-          paneCache.rectCount = pane.gpuScene.fillRects.length + pane.gpuScene.borderRects.length + decorationRects.length
-          writeTypeGpuVertexBuffer(paneCache.rectBuffer, rectFloats)
-          paneCache.rectScene = pane.gpuScene
-        }
+      syncTypeGpuPaneResources({
+        artifacts,
+        atlas,
+        paneBuffers: paneBuffersRef.current,
+        panes: resolvedPanePayloads,
       })
 
       syncTypeGpuAtlasResources(artifacts, atlas)
       const scrollSnapshot = scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 }
-
-      const commandEncoder = artifacts.device.createCommandEncoder()
-      const pass = commandEncoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: artifacts.context.getCurrentTexture().createView(),
-            clearValue: { r: 0, g: 0, b: 0, a: 0 },
-            loadOp: 'clear',
-            storeOp: 'store',
-          },
-        ],
+      drawTypeGpuPanes({
+        artifacts,
+        paneBuffers: paneBuffersRef.current,
+        panes: resolvedPanePayloads,
+        scrollSnapshot,
+        surface,
       })
-
-      resolvedPanePayloads.forEach((pane) => {
-        const paneCache = paneBuffersRef.current.get(pane.paneId)
-        const scissorRect = resolveClampedScissorRect(pane.frame, surface)
-        if (!scissorRect) {
-          return
-        }
-
-        pass.setScissorRect(scissorRect.x, scissorRect.y, scissorRect.width, scissorRect.height)
-        const paneOrigin = resolvePaneOrigin(pane)
-        const paneRenderOffset = resolvePaneRenderOffset(pane, scrollSnapshot)
-
-        if (paneCache.rectCount > 0 || paneCache.textCount > 0) {
-          ensurePaneSurfaceBindings(artifacts, paneCache)
-          updateTypeGpuSurfaceUniform(paneCache.surfaceUniform!, surface, paneOrigin, paneRenderOffset)
-        }
-
-        if (paneCache.rectCount > 0 && paneCache.rectBuffer && paneCache.surfaceBindGroup) {
-          const rectRenderer = artifacts.rectPipeline.with(pass).with(paneCache.surfaceBindGroup)
-          rectRenderer
-            .with(WORKBOOK_UNIT_QUAD_LAYOUT, artifacts.quadBuffer)
-            .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectBuffer)
-            .draw(6, paneCache.rectCount)
-          noteTypeGpuDrawCall(1)
-        }
-
-        if (paneCache.textCount > 0 && paneCache.textBuffer && paneCache.textBindGroup) {
-          const textRenderer = artifacts.textPipeline.with(pass).with(paneCache.textBindGroup)
-          textRenderer
-            .with(WORKBOOK_UNIT_QUAD_LAYOUT, artifacts.quadBuffer)
-            .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textBuffer)
-            .draw(6, paneCache.textCount)
-          noteTypeGpuDrawCall(1)
-        }
-        noteTypeGpuPaneDraw(1)
-      })
-
-      pass.end()
-      artifacts.device.queue.submit([commandEncoder.finish()])
-      noteTypeGpuSubmit()
-      noteGridDrawFrame(performance.now())
     }
 
     drawFrameRef.current()

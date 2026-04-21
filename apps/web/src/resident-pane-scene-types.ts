@@ -1,4 +1,5 @@
 import type { Viewport } from '@bilig/protocol'
+import type { WorkerPackedGridScenePacket } from './worker-runtime-render-packet.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
 
@@ -57,6 +58,7 @@ export interface WorkbookPaneScenePacket {
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
+  readonly packedScene?: WorkerPackedGridScenePacket
 }
 
 export interface WorkbookPaneSceneRequest {

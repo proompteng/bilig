@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GridTextScene } from './gridTextScene.js'
+import { resolveTextClipRect, resolveTextDecorationRects, resolveTextLineLayouts, type GlyphAtlasLike } from './renderer/gridTextLayout.js'
+import type { GlyphAtlasEntry } from './renderer/glyph-atlas.js'
 
 interface GridTextOverlayProps {
   readonly active: boolean
@@ -13,10 +15,6 @@ interface SurfaceSize {
   readonly pixelWidth: number
   readonly pixelHeight: number
 }
-
-const HORIZONTAL_PADDING = 8
-const WRAP_TOP_PADDING = 4
-const WRAP_LINE_HEIGHT = 1.2
 
 function noteCanvasSurfaceMount(kind: 'canvas' | 'dom'): void {
   if (typeof window === 'undefined') {
@@ -161,153 +159,85 @@ function drawTextItem(context: CanvasRenderingContext2D, item: GridTextScene['it
     return
   }
 
+  const atlas = createCanvasTextAtlas(context)
+  const run = {
+    align: item.align,
+    clipHeight,
+    clipWidth,
+    clipX,
+    clipY,
+    color: item.color,
+    font: item.font,
+    fontSize: item.fontSize,
+    height: clipHeight,
+    strike: item.strike,
+    text: item.text,
+    underline: item.underline,
+    width: clipWidth,
+    wrap: item.wrap,
+    x: clipX,
+    y: clipY,
+  }
+  const lineLayouts = resolveTextLineLayouts(run, atlas)
+  const clipRect = resolveTextClipRect(run, lineLayouts)
+  const decorationRects = resolveTextDecorationRects(run, atlas)
+
   context.save()
   context.beginPath()
-  context.rect(clipX, clipY, clipWidth, clipHeight)
+  context.rect(clipRect.x, clipRect.y, clipRect.width, clipRect.height)
   context.clip()
   context.font = item.font
   context.fillStyle = item.color
-  context.textAlign = item.align
+  context.textAlign = 'left'
+  context.textBaseline = 'alphabetic'
 
-  if (item.wrap) {
-    context.textBaseline = 'top'
-    drawWrappedText(context, item, clipX, clipY, clipWidth)
-  } else {
-    context.textBaseline = 'middle'
-    drawSingleLineText(context, item, clipX, clipY, clipWidth, clipHeight)
+  for (const line of lineLayouts) {
+    if (line.text.length === 0) {
+      continue
+    }
+    const entry = atlas.intern(item.font, line.text)
+    context.fillText(line.text, line.x, line.y + entry.baseline)
+  }
+
+  context.fillStyle = item.color
+  for (const rect of decorationRects) {
+    context.fillRect(rect.x, rect.y, rect.width, rect.height)
   }
 
   context.restore()
 }
 
-function drawSingleLineText(
-  context: CanvasRenderingContext2D,
-  item: GridTextScene['items'][number],
-  clipX: number,
-  clipY: number,
-  clipWidth: number,
-  clipHeight: number,
-): void {
-  const textX =
-    item.align === 'right'
-      ? clipX + clipWidth - HORIZONTAL_PADDING
-      : item.align === 'center'
-        ? clipX + clipWidth / 2
-        : clipX + HORIZONTAL_PADDING
-  const textY = clipY + clipHeight / 2
-  context.fillText(item.text, textX, textY)
-  drawTextDecorations(context, item, textX, textY, item.text)
-}
-
-function drawWrappedText(
-  context: CanvasRenderingContext2D,
-  item: GridTextScene['items'][number],
-  clipX: number,
-  clipY: number,
-  clipWidth: number,
-): void {
-  const availableWidth = Math.max(0, clipWidth - HORIZONTAL_PADDING * 2)
-  if (availableWidth <= 0) {
-    return
-  }
-  const lines = wrapText(context, item.text, availableWidth)
-  const lineHeight = Math.ceil(item.fontSize * WRAP_LINE_HEIGHT)
-  const textX =
-    item.align === 'right'
-      ? clipX + clipWidth - HORIZONTAL_PADDING
-      : item.align === 'center'
-        ? clipX + clipWidth / 2
-        : clipX + HORIZONTAL_PADDING
-  let textY = clipY + WRAP_TOP_PADDING
-  for (const line of lines) {
-    context.fillText(line, textX, textY)
-    drawTextDecorations(context, item, textX, textY + item.fontSize / 2, line)
-    textY += lineHeight
+function createCanvasTextAtlas(context: CanvasRenderingContext2D): GlyphAtlasLike {
+  return {
+    intern(font: string, glyph: string): GlyphAtlasEntry {
+      context.font = font
+      const metrics = context.measureText(glyph)
+      const fontSize = parseCanvasFontSize(font)
+      const originOffsetX = metrics.actualBoundingBoxLeft || 0
+      const bboxWidth = originOffsetX + (metrics.actualBoundingBoxRight || 0)
+      const width = Math.max(1, Math.ceil(Math.max(bboxWidth, metrics.width || 0)))
+      const height = Math.max(1, Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent || fontSize * 1.2))
+      return {
+        advance: Math.max(1, metrics.width || width),
+        baseline: Math.max(1, Math.ceil(metrics.actualBoundingBoxAscent || fontSize)),
+        font,
+        glyph,
+        height,
+        key: `${font}:${glyph}`,
+        originOffsetX,
+        u0: 0,
+        u1: 1,
+        v0: 0,
+        v1: 1,
+        width,
+        x: 0,
+        y: 0,
+      }
+    },
   }
 }
 
-function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const paragraphs = text.split('\n')
-  const lines: string[] = []
-  for (const paragraph of paragraphs) {
-    if (paragraph.length === 0) {
-      lines.push('')
-      continue
-    }
-    const words = paragraph.split(/(\s+)/).filter((part) => part.length > 0)
-    let current = ''
-    for (const word of words) {
-      const candidate = current.length === 0 ? word : `${current}${word}`
-      if (context.measureText(candidate).width <= maxWidth) {
-        current = candidate
-        continue
-      }
-      if (current.length > 0) {
-        lines.push(current.trimEnd())
-      }
-      current = ''
-      if (context.measureText(word).width <= maxWidth) {
-        current = word.trimStart()
-        continue
-      }
-      for (const segment of breakWord(context, word, maxWidth)) {
-        lines.push(segment)
-      }
-    }
-    if (current.length > 0) {
-      lines.push(current.trimEnd())
-    }
-  }
-  return lines
-}
-
-function breakWord(context: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
-  const segments: string[] = []
-  let current = ''
-  for (const char of word) {
-    const candidate = `${current}${char}`
-    if (current.length > 0 && context.measureText(candidate).width > maxWidth) {
-      segments.push(current)
-      current = char
-      continue
-    }
-    current = candidate
-  }
-  if (current.length > 0) {
-    segments.push(current)
-  }
-  return segments
-}
-
-function drawTextDecorations(
-  context: CanvasRenderingContext2D,
-  item: GridTextScene['items'][number],
-  textX: number,
-  textY: number,
-  text: string,
-): void {
-  if (!item.underline && !item.strike) {
-    return
-  }
-  const metrics = context.measureText(text)
-  const left = item.align === 'right' ? textX - metrics.width : item.align === 'center' ? textX - metrics.width / 2 : textX
-  const right = left + metrics.width
-  context.save()
-  context.strokeStyle = item.color
-  context.lineWidth = 1
-  if (item.underline) {
-    const underlineY = textY + item.fontSize * 0.32
-    context.beginPath()
-    context.moveTo(left, underlineY)
-    context.lineTo(right, underlineY)
-    context.stroke()
-  }
-  if (item.strike) {
-    const strikeY = textY - item.fontSize * 0.18
-    context.beginPath()
-    context.moveTo(left, strikeY)
-    context.lineTo(right, strikeY)
-    context.stroke()
-  }
-  context.restore()
+function parseCanvasFontSize(font: string): number {
+  const match = font.match(/(\d+(?:\.\d+)?)px/)
+  return match ? Number(match[1]) : 12
 }

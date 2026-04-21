@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { resolveTextClipRect, resolveTextLineLayouts } from '../renderer/gridTextLayout.js'
+import { resolveTextClipRect, resolveTextDecorationRects, resolveTextLineLayouts } from '../renderer/gridTextLayout.js'
 import type { GlyphAtlasEntry } from '../renderer/glyph-atlas.js'
 
 const atlas = {
@@ -70,5 +70,23 @@ describe('gridTextLayout', () => {
     )
 
     expect(lines.map((line) => line.text)).toEqual(['alpha', 'beta'])
+  })
+
+  test('resolves decorations from the same line layout model', () => {
+    expect(
+      resolveTextDecorationRects(
+        {
+          color: '#123456',
+          font: '400 10px sans-serif',
+          height: 20,
+          text: 'abc',
+          underline: true,
+          width: 100,
+          x: 10,
+          y: 5,
+        },
+        atlas,
+      ),
+    ).toEqual([{ color: '#123456', height: 1, width: 30, x: 18, y: 13.6 }])
   })
 })

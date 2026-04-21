@@ -2,7 +2,7 @@
 
 Date: `2026-04-20`
 
-Status: `ready for implementation`
+Status: `implemented`
 
 Grounding:
 
@@ -774,21 +774,20 @@ pnpm run ci
 
 ## Execution Checklist
 
-- [ ] Add renderer contract and counters.
-- [ ] Extend scroll perf collector with TypeGPU counters.
-- [ ] Add `AxisIndex` and replace linear scroll anchor scans.
-- [ ] Add `GridCamera`.
-- [ ] Replace two-stage RAF scroll path with one render scheduler.
-- [ ] Move TypeGPU configure and resize work out of draw.
-- [ ] Add persistent TypeGPU resource cache.
-- [ ] Promote worker scene packets to primary render input.
-- [ ] Convert scene packets to transferable typed arrays.
-- [ ] Add tile residency with warm neighbors and hysteresis.
-- [ ] Unify text layout for TypeGPU and canvas fallback.
-- [ ] Declare explicit render layer order.
-- [ ] Split large render state hook into focused modules.
-- [ ] Add vertical, horizontal, diagonal, inertial, frozen-pane, tile-boundary, and resize perf gates.
-- [ ] Add TypeGPU readback accuracy tests.
-- [ ] Run targeted tests.
-- [ ] Run full `pnpm run ci`.
-
+- [x] Add renderer contract and counters.
+- [x] Extend scroll perf collector with TypeGPU counters.
+- [x] Add `AxisIndex` and replace linear scroll anchor scans.
+- [x] Add `GridCamera`.
+- [x] Replace two-stage RAF scroll path with one render scheduler.
+- [x] Move TypeGPU configure and resize work out of draw.
+- [x] Add persistent TypeGPU resource cache.
+- [x] Promote worker scene packets to primary render input.
+- [x] Convert scene packets to transferable typed arrays.
+- [x] Add tile residency with warm neighbors and hysteresis.
+- [x] Unify text layout for TypeGPU and canvas fallback.
+- [x] Declare explicit render layer order.
+- [x] Split large render state hook into focused modules.
+- [x] Add vertical, horizontal, diagonal, inertial, frozen-pane, tile-boundary, and resize perf gates.
+- [x] Add TypeGPU readback accuracy tests.
+- [x] Run targeted tests.
+- [x] Run full `pnpm run ci`.

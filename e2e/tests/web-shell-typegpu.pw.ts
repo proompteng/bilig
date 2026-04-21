@@ -263,6 +263,74 @@ test('main workbook shell keeps header labels and body text visible while scroll
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
+test('main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 900, height: 680 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
+  await waitForWorkbookReady(page)
+  await waitForBenchmarkCorpus(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const initialSequence = await page.evaluate(() => {
+    return (
+      (
+        window as Window & { __biligGpuReadbackInspector?: { readonly getSequence: () => number } }
+      ).__biligGpuReadbackInspector?.getSequence() ?? 0
+    )
+  })
+
+  await page.getByTestId('grid-scroll-viewport').evaluate(
+    (viewport, scrollTarget) => {
+      if (!(viewport instanceof HTMLDivElement)) {
+        throw new Error('grid scroll viewport is not a div')
+      }
+      viewport.scrollLeft = scrollTarget.left
+      viewport.scrollTop = scrollTarget.top
+      viewport.dispatchEvent(new Event('scroll'))
+    },
+    { left: PRODUCT_COLUMN_WIDTH * 130, top: PRODUCT_ROW_HEIGHT * 34 },
+  )
+  await waitForReadbackSequence(page, initialSequence)
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await waitForReadbackSequence(page, initialSequence + 1)
+
+  const readback = await waitForReadback(
+    page,
+    {
+      points: [{ name: 'blankBody', x: PRODUCT_ROW_MARKER_WIDTH + 20, y: PRODUCT_HEADER_HEIGHT + 40 }],
+      regions: [
+        { name: 'canvasDark', x0: 0, y0: 0, x1: 960, y1: 720, threshold: 220 },
+        { name: 'columnHeaderText', x0: PRODUCT_ROW_MARKER_WIDTH, y0: 0, x1: 960, y1: PRODUCT_HEADER_HEIGHT },
+        { name: 'rowHeaderText', x0: 0, y0: PRODUCT_HEADER_HEIGHT, x1: PRODUCT_ROW_MARKER_WIDTH, y1: 720 },
+        { name: 'bodyText', x0: PRODUCT_ROW_MARKER_WIDTH, y0: PRODUCT_HEADER_HEIGHT, x1: 960, y1: 720 },
+      ],
+    },
+    (result) => result.darkPixelCounts.canvasDark > 200,
+  )
+
+  expect(readback.darkPixelCounts.canvasDark).toBeGreaterThan(200)
+  expect(
+    readback.darkPixelCounts.columnHeaderText + readback.darkPixelCounts.rowHeaderText + readback.darkPixelCounts.bodyText,
+  ).toBeGreaterThan(20)
+  expect(readback.points.blankBody.a).toBeGreaterThanOrEqual(0)
+
+  await saveReadbackArtifact(
+    page,
+    testInfo,
+    'main-workbook-grid-tile-boundary-resize-readback.png',
+    'main-workbook-grid-tile-boundary-resize-readback',
+  )
+})
+
 async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const globalWindow = window as Window & {

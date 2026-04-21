@@ -153,7 +153,17 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount + 1)
+    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount + 2)
+    expect(subscribeViewport).toHaveBeenCalledWith(
+      'Sheet1',
+      expect.objectContaining({
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 256,
+        colEnd: 383,
+      }),
+      expect.any(Function),
+    )
     expect(subscribeViewport).toHaveBeenLastCalledWith(
       'Sheet1',
       expect.objectContaining({

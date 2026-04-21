@@ -35,6 +35,15 @@ describe('ProjectedSceneStore', () => {
         surfaceSize: { width: 400, height: 200 },
         gpuScene: { fillRects: [], borderRects: [] },
         textScene: { items: [] },
+        packedScene: {
+          generation: 1,
+          paneId: 'body',
+          viewport: request.residentViewport,
+          rects: new Float32Array(8),
+          rectCount: 0,
+          textMetrics: new Float32Array(8),
+          textCount: 0,
+        },
       },
     ] as const
     const client = {

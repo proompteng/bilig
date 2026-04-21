@@ -213,6 +213,64 @@ test.describe('@browser-perf web app scroll performance', () => {
     await expectTypeGpuSteadyScroll(page, report)
   })
 
+  test('keeps tile-boundary browse bounded without blanking the typegpu renderer', async ({ page }, testInfo) => {
+    await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
+    await waitForWorkbookReady(page)
+    const benchmarkState = await waitForBenchmarkCorpus(page)
+
+    expect(benchmarkState.fixture?.id).toBe('wide-mixed-250k')
+
+    await settleWorkbookScrollPerf(page, 80)
+    await warmStartWorkbookScrollPerf(page, 'wide-250k-tile-boundary')
+    await performDiagonalGridBrowse(page, { deltaX: 13_520, deltaY: 760, steps: 180 })
+    const report = await stopWorkbookScrollPerf(page)
+
+    if (!report) {
+      throw new Error('scroll performance report was not available')
+    }
+
+    await writeFile(testInfo.outputPath('scroll-perf-wide-250k-tile-boundary.json'), JSON.stringify(report, null, 2), 'utf8')
+
+    expect(report.fixture?.id).toBe('wide-mixed-250k')
+    expect(report.samples.frameMs.length).toBeGreaterThan(120)
+    expect(report.summary.frameMs.p95).toBeLessThan(24)
+    expect(report.summary.longTasksMs.max).toBeLessThan(60)
+    expect(report.counters.typeGpuTileMisses).toBe(0)
+    expect(report.counters.scenePacketRefreshes).toBeLessThanOrEqual(8)
+    expect(report.counters.viewportSubscriptions).toBeLessThanOrEqual(12)
+  })
+
+  test('keeps resized and editing-overlay scroll inside frame budgets', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 840, height: 620 })
+    await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
+    await waitForWorkbookReady(page)
+    const benchmarkState = await waitForBenchmarkCorpus(page)
+
+    expect(benchmarkState.fixture?.id).toBe('wide-mixed-250k')
+
+    await clickProductCell(page, 1, 1)
+    await page.keyboard.press('F2')
+    await expect(page.getByTestId('cell-editor-input')).toBeVisible()
+    await page.setViewportSize({ width: 920, height: 680 })
+    await settleWorkbookScrollPerf(page, 40)
+    await warmStartWorkbookScrollPerf(page, 'wide-250k-editing-resize-scroll')
+    await performDiagonalGridBrowse(page, { deltaX: 1_536, deltaY: 330, steps: 140 })
+    const report = await stopWorkbookScrollPerf(page)
+
+    if (!report) {
+      throw new Error('scroll performance report was not available')
+    }
+
+    await writeFile(testInfo.outputPath('scroll-perf-wide-250k-editing-resize.json'), JSON.stringify(report, null, 2), 'utf8')
+
+    expect(report.fixture?.id).toBe('wide-mixed-250k')
+    expect(report.samples.frameMs.length).toBeGreaterThan(100)
+    expect(report.summary.frameMs.p95).toBeLessThan(24)
+    expect(report.summary.longTasksMs.max).toBeLessThan(60)
+    expect(report.counters.typeGpuConfigures).toBe(0)
+    expect(report.counters.typeGpuSubmits).toBeGreaterThan(0)
+  })
+
   test('keeps shell surfaces quiet and coalesces visible collaborator patch churn while browsing', async ({ page }, testInfo) => {
     test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
     const documentId = `playwright-zero-scroll-patches-${Date.now()}`

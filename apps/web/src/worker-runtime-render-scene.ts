@@ -5,6 +5,7 @@ import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { createGridSelection } from '../../../packages/grid/src/gridSelection.js'
 import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packages/grid/src/workbookGridViewport.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
+import { packWorkerGridScenePacket } from './worker-runtime-render-packet.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
 
 interface ResidentPaneSceneEngineLike {
@@ -95,6 +96,13 @@ export function buildWorkerResidentPaneScenes(input: {
     (scene): WorkbookPaneScenePacket => ({
       generation,
       paneId: scene.paneId,
+      packedScene: packWorkerGridScenePacket({
+        generation,
+        gpuScene: scene.gpuScene,
+        paneId: scene.paneId,
+        textScene: scene.textScene,
+        viewport: scene.viewport,
+      }),
       viewport: scene.viewport,
       surfaceSize: scene.surfaceSize,
       gpuScene: scene.gpuScene,
