@@ -671,10 +671,11 @@ async function primeWorkbookGridScrollRenderer(page: Page) {
   })
 }
 
-export async function warmStartWorkbookScrollPerf(page: Page, workload: string, warmupFrames = 12, maxAttempts = 4) {
+export async function warmStartWorkbookScrollPerf(page: Page, workload: string, warmupFrames = 12, maxAttempts = 8) {
+  const quietFrames = Math.max(warmupFrames, 96)
   const runWarmup = async (attempt: number): Promise<void> => {
-    await startWorkbookScrollPerf(page, `${workload}:warmup:${String(attempt)}`)
-    await settleWorkbookScrollPerf(page, warmupFrames + 2)
+    await startWorkbookScrollPerf(page, `${workload}:warmup:${String(attempt)}`, { primeRenderer: attempt === 1 })
+    await settleWorkbookScrollPerf(page, warmupFrames + quietFrames + 2)
     const warmupReport = await stopWorkbookScrollPerf(page)
     if (!warmupReport) {
       throw new Error('warmup performance report was not available')

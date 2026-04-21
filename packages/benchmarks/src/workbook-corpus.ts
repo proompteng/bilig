@@ -497,9 +497,48 @@ export function getWorkbookBenchmarkCorpusDefinition(corpusId: WorkbookBenchmark
   return toCorpusDefinition(workbookBenchmarkCorpusDescriptors[corpusId])
 }
 
+function applyWorkbookBenchmarkPresentation(
+  snapshot: WorkbookSnapshot,
+  presentation: WorkbookBenchmarkCorpusDefinition['presentation'],
+  primaryViewport: WorkbookBenchmarkCorpusViewport,
+): WorkbookSnapshot {
+  if (!presentation) {
+    return snapshot
+  }
+  const sheets = snapshot.sheets.map((sheet) => {
+    if (sheet.name !== primaryViewport.sheetName) {
+      return sheet
+    }
+    const metadata = { ...sheet.metadata }
+    if (presentation.freezeRows || presentation.freezeCols) {
+      metadata.freezePane = {
+        cols: presentation.freezeCols ?? 0,
+        rows: presentation.freezeRows ?? 0,
+      }
+    }
+    if (presentation.columnWidths && presentation.columnWidths.length > 0) {
+      metadata.columnMetadata = [
+        ...(metadata.columnMetadata ?? []),
+        ...presentation.columnWidths.map((column) => ({
+          count: 1,
+          size: column.size,
+          start: column.index,
+        })),
+      ]
+    }
+    return { ...sheet, metadata }
+  })
+  return { ...snapshot, sheets }
+}
+
 export function buildWorkbookBenchmarkCorpus(corpusId: WorkbookBenchmarkCorpusId): WorkbookBenchmarkCorpusCase {
   const descriptor = workbookBenchmarkCorpusDescriptors[corpusId]
-  const snapshot = descriptor.buildSnapshot(descriptor.materializedCellCount, `benchmark-${descriptor.id}`)
+  const presentation = 'presentation' in descriptor ? descriptor.presentation : undefined
+  const snapshot = applyWorkbookBenchmarkPresentation(
+    descriptor.buildSnapshot(descriptor.materializedCellCount, `benchmark-${descriptor.id}`),
+    presentation,
+    descriptor.primaryViewport,
+  )
   const actualCellCount = countWorkbookSnapshotCells(snapshot)
   if (actualCellCount !== descriptor.materializedCellCount) {
     throw new Error(
