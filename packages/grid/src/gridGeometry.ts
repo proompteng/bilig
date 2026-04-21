@@ -1,5 +1,5 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import type { GridMetrics } from './gridMetrics.js'
+import { COLUMN_RESIZE_HANDLE_THRESHOLD, type GridMetrics } from './gridMetrics.js'
 import type { Rectangle } from './gridTypes.js'
 import { createGridAxisWorldIndexFromRecords, type GridAxisAnchor, type GridAxisWorldIndex } from './gridAxisWorldIndex.js'
 
@@ -61,12 +61,16 @@ export interface GridGeometrySnapshot {
   fillHandleScreenRect(range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): Rectangle | null
   editorScreenRect(col: number, row: number): Rectangle | null
   resizeGuideScreenRect(input: GridResizeGuideState): Rectangle | null
+  hitTestHeaderScreenPoint(point: { readonly x: number; readonly y: number }): GridHeaderHit | null
+  hitTestHeaderDragScreenPoint(kind: GridHeaderHit['kind'], point: { readonly x: number; readonly y: number }): GridHeaderHit | null
+  hitTestResizeHandleScreenPoint(point: { readonly x: number; readonly y: number }, tolerance?: number): GridResizeGuideState | null
   columnHeaderScreenRect(col: number): Rectangle | null
   rowHeaderScreenRect(row: number): Rectangle | null
   hitTestScreenPoint(point: { readonly x: number; readonly y: number }): { readonly col: number; readonly row: number } | null
 }
 
 export type GridResizeGuideState = { readonly kind: 'column'; readonly index: number } | { readonly kind: 'row'; readonly index: number }
+export type GridHeaderHit = GridResizeGuideState
 
 export function createGridGeometrySnapshot(input: {
   readonly seq?: number
@@ -189,6 +193,11 @@ export function createGridGeometrySnapshotFromAxes(input: {
     columnHeaderScreenRect: (col) => resolveColumnHeaderScreenRect({ camera, col, columns: input.columns }),
     editorScreenRect: (col, row) => resolveEditorScreenRect({ camera, col, columns: input.columns, row, rows: input.rows }),
     fillHandleScreenRect: (range) => resolveFillHandleScreenRect({ camera, columns: input.columns, range, rows: input.rows }),
+    hitTestHeaderDragScreenPoint: (kind, point) =>
+      hitTestHeaderDragScreenPoint({ camera, columns: input.columns, kind, point, rows: input.rows }),
+    hitTestHeaderScreenPoint: (point) => hitTestHeaderScreenPoint({ camera, columns: input.columns, point, rows: input.rows }),
+    hitTestResizeHandleScreenPoint: (point, tolerance) =>
+      hitTestResizeHandleScreenPoint({ camera, columns: input.columns, point, rows: input.rows, tolerance }),
     hitTestScreenPoint: (point) => hitTestScreenPoint({ camera, columns: input.columns, point, rows: input.rows }),
     rangeWorldRects: (range) => resolveRangeWorldRects({ columns: input.columns, range, rows: input.rows }),
     rangeScreenRects: (range) => resolveRangeScreenRects({ camera, columns: input.columns, range, rows: input.rows }),
@@ -444,6 +453,157 @@ function resolveFillHandleScreenRect(input: {
   const size = 8
   const handle = rect(anchor.x + anchor.width - size / 2, anchor.y + anchor.height - size / 2, size, size)
   return clipRect(handle, rect(0, 0, getHostWidth(input.camera), getHostHeight(input.camera)))
+}
+
+function hitTestHeaderScreenPoint(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly point: { readonly x: number; readonly y: number }
+}): GridHeaderHit | null {
+  const rowHeaderWidth = getBodyPaneX(input.camera) - input.camera.frozenWidth
+  const columnHeaderHeight = getBodyPaneY(input.camera) - input.camera.frozenHeight
+  if (
+    input.point.y >= 0 &&
+    input.point.y < columnHeaderHeight &&
+    input.point.x >= rowHeaderWidth &&
+    input.point.x < getHostWidth(input.camera)
+  ) {
+    const col = resolveColumnAtScreenX(input.camera, input.columns, input.point.x)
+    return col === null ? null : { kind: 'column', index: col }
+  }
+  if (
+    input.point.x >= 0 &&
+    input.point.x < rowHeaderWidth &&
+    input.point.y >= columnHeaderHeight &&
+    input.point.y < getHostHeight(input.camera)
+  ) {
+    const row = resolveRowAtScreenY(input.camera, input.rows, input.point.y)
+    return row === null ? null : { kind: 'row', index: row }
+  }
+  return null
+}
+
+function hitTestHeaderDragScreenPoint(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly kind: GridHeaderHit['kind']
+  readonly point: { readonly x: number; readonly y: number }
+}): GridHeaderHit | null {
+  const rowHeaderWidth = getBodyPaneX(input.camera) - input.camera.frozenWidth
+  const columnHeaderHeight = getBodyPaneY(input.camera) - input.camera.frozenHeight
+  if (input.kind === 'column') {
+    if (
+      input.point.x < rowHeaderWidth ||
+      input.point.x >= getHostWidth(input.camera) ||
+      input.point.y < 0 ||
+      input.point.y >= getHostHeight(input.camera)
+    ) {
+      return null
+    }
+    const col = resolveColumnAtScreenX(input.camera, input.columns, input.point.x)
+    return col === null ? null : { kind: 'column', index: col }
+  }
+  if (
+    input.point.y < columnHeaderHeight ||
+    input.point.y >= getHostHeight(input.camera) ||
+    input.point.x < 0 ||
+    input.point.x >= getHostWidth(input.camera)
+  ) {
+    return null
+  }
+  const row = resolveRowAtScreenY(input.camera, input.rows, input.point.y)
+  return row === null ? null : { kind: 'row', index: row }
+}
+
+function hitTestResizeHandleScreenPoint(input: {
+  readonly camera: GridCameraSnapshotV2
+  readonly columns: GridAxisWorldIndex
+  readonly rows: GridAxisWorldIndex
+  readonly point: { readonly x: number; readonly y: number }
+  readonly tolerance?: number | undefined
+}): GridResizeGuideState | null {
+  const rowHeaderWidth = getBodyPaneX(input.camera) - input.camera.frozenWidth
+  const columnHeaderHeight = getBodyPaneY(input.camera) - input.camera.frozenHeight
+  const tolerance = input.tolerance ?? COLUMN_RESIZE_HANDLE_THRESHOLD
+  if (input.point.y >= 0 && input.point.y < columnHeaderHeight) {
+    for (const index of visibleColumnIndexes(input.camera, input.columns)) {
+      if (index >= MAX_COLS - 1) {
+        continue
+      }
+      const headerRect = resolveColumnHeaderScreenRect({ camera: input.camera, col: index, columns: input.columns })
+      if (headerRect && Math.abs(input.point.x - (headerRect.x + headerRect.width - 1)) <= tolerance) {
+        return { kind: 'column', index }
+      }
+    }
+  }
+  if (input.point.x >= 0 && input.point.x < rowHeaderWidth) {
+    for (const index of visibleRowIndexes(input.camera, input.rows)) {
+      if (index >= MAX_ROWS - 1) {
+        continue
+      }
+      const headerRect = resolveRowHeaderScreenRect({ camera: input.camera, row: index, rows: input.rows })
+      if (headerRect && Math.abs(input.point.y - (headerRect.y + headerRect.height - 1)) <= tolerance) {
+        return { kind: 'row', index }
+      }
+    }
+  }
+  return null
+}
+
+function resolveColumnAtScreenX(camera: GridCameraSnapshotV2, columns: GridAxisWorldIndex, x: number): number | null {
+  const rowHeaderWidth = getBodyPaneX(camera) - camera.frozenWidth
+  if (x >= rowHeaderWidth && x < getBodyPaneX(camera)) {
+    return columns.hitTest(x - rowHeaderWidth)
+  }
+  if (x >= getBodyPaneX(camera) && x < getHostWidth(camera)) {
+    return columns.hitTest(camera.bodyWorldX + x - getBodyPaneX(camera))
+  }
+  return null
+}
+
+function resolveRowAtScreenY(camera: GridCameraSnapshotV2, rows: GridAxisWorldIndex, y: number): number | null {
+  const columnHeaderHeight = getBodyPaneY(camera) - camera.frozenHeight
+  if (y >= columnHeaderHeight && y < getBodyPaneY(camera)) {
+    return rows.hitTest(y - columnHeaderHeight)
+  }
+  if (y >= getBodyPaneY(camera) && y < getHostHeight(camera)) {
+    return rows.hitTest(camera.bodyWorldY + y - getBodyPaneY(camera))
+  }
+  return null
+}
+
+function visibleColumnIndexes(camera: GridCameraSnapshotV2, columns: GridAxisWorldIndex): readonly number[] {
+  const indexes = new Set<number>()
+  for (let index = 0; index < camera.frozenColumnCount; index += 1) {
+    if (!columns.isHidden(index) && columns.sizeOf(index) > 0) {
+      indexes.add(index)
+    }
+  }
+  const bodyRange = columns.visibleRangeForWorldRect(camera.bodyWorldX, camera.bodyViewportWidth)
+  for (let index = bodyRange.startIndex; index < bodyRange.endIndexExclusive; index += 1) {
+    if (!columns.isHidden(index) && columns.sizeOf(index) > 0) {
+      indexes.add(index)
+    }
+  }
+  return [...indexes].toSorted((left, right) => left - right)
+}
+
+function visibleRowIndexes(camera: GridCameraSnapshotV2, rows: GridAxisWorldIndex): readonly number[] {
+  const indexes = new Set<number>()
+  for (let index = 0; index < camera.frozenRowCount; index += 1) {
+    if (!rows.isHidden(index) && rows.sizeOf(index) > 0) {
+      indexes.add(index)
+    }
+  }
+  const bodyRange = rows.visibleRangeForWorldRect(camera.bodyWorldY, camera.bodyViewportHeight)
+  for (let index = bodyRange.startIndex; index < bodyRange.endIndexExclusive; index += 1) {
+    if (!rows.isHidden(index) && rows.sizeOf(index) > 0) {
+      indexes.add(index)
+    }
+  }
+  return [...indexes].toSorted((left, right) => left - right)
 }
 
 function splitAxisRange(

@@ -74,7 +74,11 @@ describe('gridGeometry', () => {
       defaultSize: 100,
       overrides: [{ hidden: true, index: 2 }],
     })
-    const rows = createGridAxisWorldIndex({ axisLength: 20, defaultSize: 20 })
+    const rows = createGridAxisWorldIndex({
+      axisLength: 20,
+      defaultSize: 20,
+      overrides: [{ hidden: true, index: 3 }],
+    })
     const geometry = createGridGeometrySnapshotFromAxes({
       columns,
       dpr: 1,
@@ -91,7 +95,13 @@ describe('gridGeometry', () => {
     })
 
     expect(geometry.hitTestScreenPoint({ x: metrics.rowMarkerWidth + 10, y: metrics.headerHeight + 5 })).toEqual({ col: 0, row: 0 })
-    expect(geometry.hitTestScreenPoint({ x: 205, y: 80 })).toEqual({ col: 3, row: 3 })
+    expect(geometry.hitTestScreenPoint({ x: 205, y: 80 })).toEqual({ col: 3, row: 4 })
+    expect(geometry.hitTestHeaderScreenPoint({ x: 205, y: 12 })).toEqual({ kind: 'column', index: 3 })
+    expect(geometry.hitTestHeaderScreenPoint({ x: 20, y: 80 })).toEqual({ kind: 'row', index: 4 })
+    expect(geometry.hitTestHeaderDragScreenPoint('column', { x: 205, y: 120 })).toEqual({ kind: 'column', index: 3 })
+    expect(geometry.hitTestHeaderDragScreenPoint('row', { x: 205, y: 80 })).toEqual({ kind: 'row', index: 4 })
+    expect(geometry.hitTestResizeHandleScreenPoint({ x: 295, y: 12 })).toEqual({ kind: 'column', index: 3 })
+    expect(geometry.hitTestResizeHandleScreenPoint({ x: 20, y: 93 })).toEqual({ kind: 'row', index: 4 })
   })
 
   test('resolves range and fill-handle geometry through frozen/body panes', () => {

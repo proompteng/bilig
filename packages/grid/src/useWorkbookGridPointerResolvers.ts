@@ -1,8 +1,8 @@
 import { useCallback, type MutableRefObject } from 'react'
 import {
   createPointerGeometry,
-  resolveColumnResizeTarget,
-  resolveRowResizeTarget,
+  resolveColumnResizeTarget as resolveLegacyColumnResizeTarget,
+  resolveRowResizeTarget as resolveLegacyRowResizeTarget,
   resolveHeaderSelection as resolveHeaderSelectionFromGeometry,
   resolveHeaderSelectionForDrag as resolveHeaderSelectionForDragFromGeometry,
   resolvePointerCell as resolvePointerCellFromGeometry,
@@ -119,6 +119,60 @@ export function useWorkbookGridPointerResolvers(input: {
     ],
   )
 
+  const resolveColumnResizeTarget = useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      region: VisibleRegionState = getVisibleRegion(),
+      geometry?: PointerGeometry | null,
+      inputColumnWidths: Readonly<Record<number, number>> = columnWidths,
+      defaultWidth: number = gridMetrics.columnWidth,
+    ): number | null => {
+      const geometrySnapshot = getGeometrySnapshot?.()
+      const hostBounds = hostRef.current?.getBoundingClientRect()
+      if (geometrySnapshot && hostBounds) {
+        const hit = geometrySnapshot.hitTestResizeHandleScreenPoint({
+          x: clientX - hostBounds.left,
+          y: clientY - hostBounds.top,
+        })
+        if (hit?.kind === 'column') {
+          return hit.index
+        }
+      }
+      const activeGeometry = geometry ?? resolvePointerGeometry(region)
+      return activeGeometry
+        ? resolveLegacyColumnResizeTarget(clientX, clientY, region, activeGeometry, inputColumnWidths, defaultWidth)
+        : null
+    },
+    [columnWidths, getGeometrySnapshot, getVisibleRegion, gridMetrics.columnWidth, hostRef, resolvePointerGeometry],
+  )
+
+  const resolveRowResizeTarget = useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      region: VisibleRegionState = getVisibleRegion(),
+      geometry?: PointerGeometry | null,
+      inputRowHeights: Readonly<Record<number, number>> = rowHeights,
+      defaultHeight: number = gridMetrics.rowHeight,
+    ): number | null => {
+      const geometrySnapshot = getGeometrySnapshot?.()
+      const hostBounds = hostRef.current?.getBoundingClientRect()
+      if (geometrySnapshot && hostBounds) {
+        const hit = geometrySnapshot.hitTestResizeHandleScreenPoint({
+          x: clientX - hostBounds.left,
+          y: clientY - hostBounds.top,
+        })
+        if (hit?.kind === 'row') {
+          return hit.index
+        }
+      }
+      const activeGeometry = geometry ?? resolvePointerGeometry(region)
+      return activeGeometry ? resolveLegacyRowResizeTarget(clientX, clientY, region, activeGeometry, inputRowHeights, defaultHeight) : null
+    },
+    [getGeometrySnapshot, getVisibleRegion, gridMetrics.rowHeight, hostRef, resolvePointerGeometry, rowHeights],
+  )
+
   const resolveHeaderSelectionAtPointer = useCallback(
     (
       clientX: number,
@@ -126,13 +180,24 @@ export function useWorkbookGridPointerResolvers(input: {
       region: VisibleRegionState = getVisibleRegion(),
       geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
+      const geometrySnapshot = getGeometrySnapshot?.()
+      const hostBounds = hostRef.current?.getBoundingClientRect()
+      if (geometrySnapshot && hostBounds) {
+        const hit = geometrySnapshot.hitTestHeaderScreenPoint({
+          x: clientX - hostBounds.left,
+          y: clientY - hostBounds.top,
+        })
+        if (hit) {
+          return hit
+        }
+      }
       const activeGeometry = geometry ?? resolvePointerGeometry(region)
       if (!activeGeometry) {
         return null
       }
       return resolveHeaderSelectionFromGeometry(clientX, clientY, region, activeGeometry, columnWidths, rowHeights, gridMetrics)
     },
-    [columnWidths, getVisibleRegion, gridMetrics, resolvePointerGeometry, rowHeights],
+    [columnWidths, getGeometrySnapshot, getVisibleRegion, gridMetrics, hostRef, resolvePointerGeometry, rowHeights],
   )
 
   const resolveHeaderSelectionForPointerDrag = useCallback(
@@ -143,6 +208,17 @@ export function useWorkbookGridPointerResolvers(input: {
       region: VisibleRegionState = getVisibleRegion(),
       geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
+      const geometrySnapshot = getGeometrySnapshot?.()
+      const hostBounds = hostRef.current?.getBoundingClientRect()
+      if (geometrySnapshot && hostBounds) {
+        const hit = geometrySnapshot.hitTestHeaderDragScreenPoint(kind, {
+          x: clientX - hostBounds.left,
+          y: clientY - hostBounds.top,
+        })
+        if (hit) {
+          return hit
+        }
+      }
       const activeGeometry = geometry ?? resolvePointerGeometry(region)
       if (!activeGeometry) {
         return null
@@ -158,7 +234,7 @@ export function useWorkbookGridPointerResolvers(input: {
         gridMetrics,
       )
     },
-    [columnWidths, getVisibleRegion, gridMetrics, resolvePointerGeometry, rowHeights],
+    [columnWidths, getGeometrySnapshot, getVisibleRegion, gridMetrics, hostRef, resolvePointerGeometry, rowHeights],
   )
 
   return {
