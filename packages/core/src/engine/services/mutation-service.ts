@@ -18,6 +18,7 @@ import { sheetMetadataToOps } from '../../engine-snapshot-utils.js'
 import { parseCsv, parseCsvCellInput } from '../../csv.js'
 import { createBatch } from '../../replica-state.js'
 import { WorkbookStore } from '../../workbook-store.js'
+import { addEngineCounter } from '../../perf/engine-counters.js'
 import {
   cellMutationRefToEngineOp,
   cloneCellMutationRef,
@@ -187,6 +188,36 @@ interface StructuralFormulaUndoRecord {
   readonly formula: string
 }
 
+type StructuralDeletedCellUndoRecord =
+  | {
+      readonly kind: 'formula'
+      readonly sheetName: string
+      readonly row: number
+      readonly col: number
+      readonly formula: string
+    }
+  | {
+      readonly kind: 'value'
+      readonly sheetName: string
+      readonly row: number
+      readonly col: number
+      readonly value: number | boolean
+    }
+  | {
+      readonly kind: 'snapshot'
+      readonly sheetName: string
+      readonly row: number
+      readonly col: number
+      readonly snapshot: CellSnapshot
+    }
+  | {
+      readonly kind: 'blank'
+      readonly sheetName: string
+      readonly row: number
+      readonly col: number
+      readonly restoreExplicitBlank: boolean
+    }
+
 function translateFormulaForTarget(
   formula: string,
   sourceSheetName: string,
@@ -329,6 +360,7 @@ export function createEngineMutationService(args: {
     | 'formulas'
     | 'undoStack'
     | 'redoStack'
+    | 'counters'
     | 'trackReplicaVersions'
     | 'getSyncClientConnection'
     | 'getTransactionReplayDepth'
@@ -1388,15 +1420,113 @@ export function createEngineMutationService(args: {
   const captureFormulaCellStateForStructuralUndo = (sheetName: string, axis: 'row' | 'column', start: number, count: number): EngineOp[] =>
     captureFormulaCellRecordsForStructuralUndo(sheetName, axis, start, count).map(structuralFormulaUndoRecordToOp)
 
+  const captureDeletedCellUndoRecord = (
+    cellIndex: number,
+    sheetName: string,
+    row: number,
+    col: number,
+  ): StructuralDeletedCellUndoRecord | undefined => {
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0
+    if ((flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
+      return undefined
+    }
+    const formula = args.state.formulas.get(cellIndex)
+    if (formula) {
+      return { kind: 'formula', sheetName, row, col, formula: getRuntimeFormulaSource(formula) }
+    }
+    const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
+    const tag: ValueTag = (args.state.workbook.cellStore.tags[cellIndex] ?? ValueTag.Empty) as ValueTag
+    if (explicitFormat === undefined && (flags & CellFlags.AuthoredBlank) === 0 && (tag === ValueTag.Empty || tag === ValueTag.Error)) {
+      return undefined
+    }
+    switch (tag) {
+      case ValueTag.Number:
+        return { kind: 'value', sheetName, row, col, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 }
+      case ValueTag.Boolean:
+        return { kind: 'value', sheetName, row, col, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 }
+      case ValueTag.String:
+        return { kind: 'snapshot', sheetName, row, col, snapshot: args.getCellByIndex(cellIndex) }
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        return {
+          kind: 'blank',
+          sheetName,
+          row,
+          col,
+          restoreExplicitBlank: (args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0 || (flags & CellFlags.AuthoredBlank) !== 0,
+        }
+    }
+    return undefined
+  }
+
+  const captureDeletedCellUndoRecordsForStructuralUndo = (
+    sheetName: string,
+    axis: 'row' | 'column',
+    start: number,
+    count: number,
+  ): StructuralDeletedCellUndoRecord[] => {
+    const sheet = args.state.workbook.getSheet(sheetName)
+    if (!sheet) {
+      return []
+    }
+    const axisIds = sheet.logicalAxisMap.snapshot(axis, start, count).map((entry) => entry.id)
+    const records: StructuralDeletedCellUndoRecord[] = []
+    sheet.logical.listResidentCellIndicesUnordered(axis, axisIds).forEach((cellIndex) => {
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      if (!position) {
+        return
+      }
+      const axisIndex = axis === 'row' ? position.row : position.col
+      if (axisIndex < start || axisIndex >= start + count) {
+        return
+      }
+      const record = captureDeletedCellUndoRecord(cellIndex, sheetName, position.row, position.col)
+      if (record) {
+        records.push(record)
+      }
+    })
+    return records.toSorted((left, right) => left.row - right.row || left.col - right.col)
+  }
+
+  const structuralDeletedCellUndoRecordToOps = (record: StructuralDeletedCellUndoRecord): EngineOp[] => {
+    const address = formatAddress(record.row, record.col)
+    switch (record.kind) {
+      case 'formula':
+        return [{ kind: 'setCellFormula', sheetName: record.sheetName, address, formula: record.formula }]
+      case 'value':
+        return [{ kind: 'setCellValue', sheetName: record.sheetName, address, value: record.value }]
+      case 'snapshot':
+        return args.toCellStateOps(record.sheetName, address, record.snapshot)
+      case 'blank':
+        return [
+          record.restoreExplicitBlank
+            ? { kind: 'setCellValue', sheetName: record.sheetName, address, value: null }
+            : { kind: 'clearCell', sheetName: record.sheetName, address },
+        ]
+    }
+  }
+
   const createLazyStructuralDeleteInverseRecord = (
-    prefixOps: readonly EngineOp[],
+    prefixOpsBeforeDeletedCells: readonly EngineOp[],
+    deletedCellRecords: readonly StructuralDeletedCellUndoRecord[],
+    prefixOpsAfterDeletedCells: readonly EngineOp[],
     formulaRecords: readonly StructuralFormulaUndoRecord[],
     potentialNewCells: number,
   ): TransactionRecord => {
     const record: { kind: 'ops'; ops: EngineOp[]; potentialNewCells?: number } = {
       kind: 'ops',
       get ops() {
-        cachedOps ??= [...prefixOps, ...formulaRecords.map(structuralFormulaUndoRecordToOp)]
+        if (cachedOps === undefined) {
+          if (deletedCellRecords.length > 0) {
+            addEngineCounter(args.state.counters, 'structuralUndoCapturedCells', deletedCellRecords.length)
+          }
+          cachedOps = [
+            ...prefixOpsBeforeDeletedCells,
+            ...deletedCellRecords.flatMap(structuralDeletedCellUndoRecordToOps),
+            ...prefixOpsAfterDeletedCells,
+            ...formulaRecords.map(structuralFormulaUndoRecordToOp),
+          ]
+        }
         return cachedOps
       },
       potentialNewCells,
@@ -1412,7 +1542,7 @@ export function createEngineMutationService(args: {
         ? args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count)
         : args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count)
     const transform = structuralTransformForOp(op)
-    const prefixOps: EngineOp[] = [
+    const prefixOpsBeforeDeletedCells: EngineOp[] = [
       ...clearStructuralSheetMetadataOps(op.sheetName, transform),
       axis === 'row'
         ? {
@@ -1430,13 +1560,13 @@ export function createEngineMutationService(args: {
             entries,
           },
       ...sheetMetadataToOps(args.state.workbook, op.sheetName, { includeAxisEntries: false }),
-      ...(axis === 'row'
-        ? args.captureRowRangeCellState(op.sheetName, op.start, op.count)
-        : args.captureColumnRangeCellState(op.sheetName, op.start, op.count)),
-      ...captureStructuralWorkbookMetadataOps(),
     ]
+    const deletedCellRecords = captureDeletedCellUndoRecordsForStructuralUndo(op.sheetName, axis, op.start, op.count)
+    const prefixOpsAfterDeletedCells = captureStructuralWorkbookMetadataOps()
     return createLazyStructuralDeleteInverseRecord(
-      prefixOps,
+      prefixOpsBeforeDeletedCells,
+      deletedCellRecords,
+      prefixOpsAfterDeletedCells,
       captureFormulaCellRecordsForStructuralUndo(op.sheetName, axis, op.start, op.count),
       1,
     )

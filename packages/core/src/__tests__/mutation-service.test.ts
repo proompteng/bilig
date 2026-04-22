@@ -818,6 +818,26 @@ describe('EngineMutationService', () => {
     })
   })
 
+  it('defers structural delete cell undo op materialization until undo replay', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'undo-columns-lazy-cell-ops' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 2)
+    engine.setCellValue('Sheet1', 'C1', 3)
+
+    engine.resetPerformanceCounters()
+    engine.deleteColumns('Sheet1', 1, 1)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getPerformanceCounters().structuralUndoCapturedCells).toBe(0)
+
+    expect(engine.undo()).toBe(true)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getPerformanceCounters().structuralUndoCapturedCells).toBe(1)
+  })
+
   it('does not snapshot unaffected cross-sheet formulas left of a deleted column span', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'undo-columns-formula-narrow' })
     await engine.ready()
