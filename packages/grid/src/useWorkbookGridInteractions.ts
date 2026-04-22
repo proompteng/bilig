@@ -53,6 +53,8 @@ import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
 
+const RESIZE_HANDLE_DOUBLE_CLICK_MS = 700
+
 export function useWorkbookGridInteractions(
   input: Pick<
     WorkbookGridSurfaceProps,
@@ -917,7 +919,7 @@ export function useWorkbookGridInteractions(
         const isResizeDoubleClick =
           lastResizeHandleActivation !== null &&
           lastResizeHandleActivation.columnIndex === resizeTarget &&
-          now - lastResizeHandleActivation.at <= 350
+          now - lastResizeHandleActivation.at <= RESIZE_HANDLE_DOUBLE_CLICK_MS
         lastResizeHandleActivationRef.current = { columnIndex: resizeTarget, at: now }
         if (isResizeDoubleClick) {
           lastResizeHandleActivationRef.current = null
