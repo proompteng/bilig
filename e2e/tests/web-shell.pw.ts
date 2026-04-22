@@ -494,7 +494,7 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
 })
 
 test('web app supports fill-handle propagation', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=fill-handle-propagation-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -510,6 +510,7 @@ test('web app supports fill-handle propagation', async ({ page }) => {
 
   await nameBox.fill('F8')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F8')
   await expect(formulaInput).toHaveValue('7')
   await expect(resolvedValue).toHaveText('7')
 })
@@ -639,7 +640,7 @@ test('web app clears redo after a fresh edit branches history', async ({ page })
 })
 
 test('web app previews and fills rightward autofill like Sheets', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=rightward-autofill-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -667,6 +668,7 @@ test('web app previews and fills rightward autofill like Sheets', async ({ page 
 
   await nameBox.fill('H6')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!H6')
   await expect(formulaInput).toHaveValue('7')
   await expect(resolvedValue).toHaveText('7')
 })
@@ -836,7 +838,7 @@ test('web app commits in-cell string edits when clicking away', async ({ page })
 })
 
 test('web app drags a selected range by its border with a grab cursor', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=range-border-drag-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -861,11 +863,13 @@ test('web app drags a selected range by its border with a grab cursor', async ({
 
   await nameBox.fill('B2')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
   await expect(formulaInput).toHaveValue('')
   await expect(resolvedValue).toHaveText('∅')
 
   await nameBox.fill('C2')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
   await expect(formulaInput).toHaveValue('')
   await expect(resolvedValue).toHaveText('∅')
 

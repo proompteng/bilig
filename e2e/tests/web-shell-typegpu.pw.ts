@@ -74,12 +74,16 @@ function expectNear(actual: number, expected: number, tolerance: number): void {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance)
 }
 
+async function waitForTypeGpuRenderer(page: Page): Promise<void> {
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { state: 'attached', timeout: 15_000 })
+}
+
 test('isolated workbook pane renderer draws grid content through typegpu', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 640, height: 480 })
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page, ISOLATED_WORKBOOK_PANE_RENDERER_PATH)
   await page.waitForSelector('[data-testid="isolated-pane-renderer-route"]', { timeout: 15_000 })
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () => Boolean((window as Window & { __biligGpuReadback?: { readonly ready: boolean } }).__biligGpuReadback?.ready),
     undefined,
@@ -134,7 +138,7 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page, `/?document=typegpu-grid-updates-${Date.now()}`)
   await waitForWorkbookReady(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -238,7 +242,7 @@ test('main workbook shell keeps resident typegpu content visible while selection
   await gotoWorkbookShell(page, `/?document=typegpu-selection-no-flash-${Date.now()}&benchmarkCorpus=wide-mixed-250k`)
   await waitForWorkbookReady(page)
   await waitForBenchmarkCorpus(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -305,7 +309,7 @@ test('main workbook shell keeps header labels and body text visible while scroll
   await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
   await waitForWorkbookReady(page)
   await waitForBenchmarkCorpus(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -377,7 +381,7 @@ test('main workbook shell keeps typegpu grid lines exactly aligned after diagona
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page)
   await waitForWorkbookReady(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -448,7 +452,7 @@ test('main workbook shell draws typegpu resize guides at exact geometry position
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page)
   await waitForWorkbookReady(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -526,7 +530,7 @@ test('main workbook shell keeps DOM editor overlay aligned to typegpu geometry w
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page)
   await waitForWorkbookReady(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -630,7 +634,7 @@ test('main workbook shell refreshes typegpu resident packets after style-only ch
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page, `/?document=typegpu-style-refresh-${Date.now()}`)
   await waitForWorkbookReady(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -691,7 +695,7 @@ test('main workbook shell keeps typegpu content visible after hover-driven scrol
   await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
   await waitForWorkbookReady(page)
   await waitForBenchmarkCorpus(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(
@@ -752,7 +756,7 @@ test('main workbook shell keeps typegpu text visible across tile boundary scroll
   await gotoWorkbookShell(page, '/?benchmarkCorpus=wide-mixed-250k')
   await waitForWorkbookReady(page)
   await waitForBenchmarkCorpus(page)
-  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
     () =>
       Boolean(

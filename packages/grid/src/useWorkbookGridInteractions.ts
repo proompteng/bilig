@@ -917,9 +917,10 @@ export function useWorkbookGridInteractions(
         const now = window.performance.now()
         const lastResizeHandleActivation = lastResizeHandleActivationRef.current
         const isResizeDoubleClick =
-          lastResizeHandleActivation !== null &&
-          lastResizeHandleActivation.columnIndex === resizeTarget &&
-          now - lastResizeHandleActivation.at <= RESIZE_HANDLE_DOUBLE_CLICK_MS
+          event.detail >= 2 ||
+          (lastResizeHandleActivation !== null &&
+            lastResizeHandleActivation.columnIndex === resizeTarget &&
+            now - lastResizeHandleActivation.at <= RESIZE_HANDLE_DOUBLE_CLICK_MS)
         lastResizeHandleActivationRef.current = { columnIndex: resizeTarget, at: now }
         if (isResizeDoubleClick) {
           lastResizeHandleActivationRef.current = null
