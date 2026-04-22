@@ -1193,6 +1193,32 @@ export function createEngineStructureService(args: {
     const precomputedChangedInputCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
+    const canSkipOwnedDirectAggregateCandidate = (cellIndex: number): boolean => {
+      if (argsForImpact.changedDefinedNames.size > 0 || argsForImpact.changedTableNames.size > 0) {
+        return false
+      }
+      if (argsForImpact.targetSheetId === undefined) {
+        return false
+      }
+      const formula = args.state.formulas.get(cellIndex)
+      if (!formula?.directAggregate) {
+        return false
+      }
+      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+      if (!ownerPosition) {
+        return false
+      }
+      const ownerAxisIndex = argsForImpact.transform.axis === 'row' ? ownerPosition.row : ownerPosition.col
+      if (structuralAxisIndexAffected(ownerAxisIndex, argsForImpact.transform)) {
+        return false
+      }
+      return !runtimeDirectRangeAxisAffected(
+        argsForImpact.targetSheetId,
+        argsForImpact.sheetName,
+        argsForImpact.transform,
+        formula.directAggregate,
+      )
+    }
     const tryDeferOwnedSimpleFormula = (cellIndex: number): boolean => {
       if (argsForImpact.changedDefinedNames.size > 0 || argsForImpact.changedTableNames.size > 0) {
         return false
@@ -1250,6 +1276,9 @@ export function createEngineStructureService(args: {
     }
     args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
       if (tryDeferOwnedSimpleFormula(cellIndex)) {
+        return
+      }
+      if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
         return
       }
       candidateCellIndices.add(cellIndex)

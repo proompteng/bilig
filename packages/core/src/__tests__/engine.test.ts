@@ -5119,10 +5119,11 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getPerformanceCounters()).toMatchObject({
       structuralFormulaImpactCandidates: 0,
       structuralFormulaRebindInputs: 0,
-      structuralUndoCapturedCells: 3,
+      structuralUndoCapturedCells: 0,
     })
 
     expect(engine.undo()).toBe(true)
+    expect(engine.getPerformanceCounters().structuralUndoCapturedCells).toBe(3)
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 3 })
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Boolean, value: true })
     expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.String, value: 'restore-me', stringId: expect.any(Number) })

@@ -297,6 +297,29 @@ describe('EngineStructureService', () => {
     expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A1:A3)')
   })
 
+  it('does not inspect unaffected prefix aggregate formulas above a deleted row', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-row-prefix-aggregates' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 6; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    engine.resetPerformanceCounters()
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'deleteRows',
+        sheetName: 'Sheet1',
+        start: 3,
+        count: 1,
+      }),
+    )
+
+    expect(result.graphRefreshRequired).toBe(false)
+    expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(3)
+  })
+
   it('keeps graph refresh enabled when deleting formulas from an active cycle', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-cycle' })
     await engine.ready()
