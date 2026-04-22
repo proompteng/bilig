@@ -1189,6 +1189,7 @@ export function createEngineFormulaBindingService(args: {
   readonly compiledPlans: EngineCompiledPlanService
   readonly formulaInstances: FormulaInstanceTable
   readonly formulaFamilies: FormulaFamilyStore
+  readonly volatileFormulaCells?: Set<number>
   readonly resolveTemplateForCell: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'primeColumnIndex' | 'prepareVectorLookup'>
@@ -1234,6 +1235,17 @@ export function createEngineFormulaBindingService(args: {
   const formulaColumnCounts = new Map<number, number>()
   const formulaOwnerSheetCells = new Map<string, Set<number>>()
   const formulaReferencedSheetCells = new Map<string, Set<number>>()
+
+  const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void => {
+    if (!args.volatileFormulaCells) {
+      return
+    }
+    if (formula?.compiled.volatile) {
+      args.volatileFormulaCells.add(cellIndex)
+      return
+    }
+    args.volatileFormulaCells.delete(cellIndex)
+  }
 
   const referencedSheetsForCompiled = (compiled: Pick<CompiledFormula, 'deps'>): string[] => {
     const sheets = new Set<string>()
@@ -1493,6 +1505,7 @@ export function createEngineFormulaBindingService(args: {
     existing.directAggregate = undefined
     existing.directScalar = prepared.directScalar
     existing.directCriteria = undefined
+    updateVolatileFormulaIndex(cellIndex, existing)
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
     if (existing.compiled.mode === FormulaMode.JsOnly) {
@@ -1581,6 +1594,7 @@ export function createEngineFormulaBindingService(args: {
     existing.constNumberLength = compiled.constants.length
     existing.directAggregate = nextDirectAggregate
     existing.directScalar = nextDirectScalar
+    updateVolatileFormulaIndex(cellIndex, existing)
     if (previousDirectAggregate || nextDirectAggregate) {
       const previousSheet = previousDirectAggregate ? args.state.workbook.getSheet(previousDirectAggregate.sheetName) : undefined
       if (previousDirectAggregate && previousSheet) {
@@ -1646,6 +1660,7 @@ export function createEngineFormulaBindingService(args: {
     existing.constants = compiled.constants
     existing.programLength = existing.runtimeProgram.length
     existing.constNumberLength = compiled.constants.length
+    updateVolatileFormulaIndex(cellIndex, existing)
     if (!args.formulaInstances.get(cellIndex)) {
       recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
     }
@@ -2162,6 +2177,7 @@ export function createEngineFormulaBindingService(args: {
     }
     args.formulaInstances.delete(cellIndex)
     args.formulaFamilies.unregisterFormula(cellIndex)
+    updateVolatileFormulaIndex(cellIndex, undefined)
     args.state.formulas.delete(cellIndex)
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
@@ -2205,6 +2221,7 @@ export function createEngineFormulaBindingService(args: {
       existing.directAggregate = prepared.directAggregate
       existing.directScalar = prepared.directScalar
       existing.directCriteria = prepared.directCriteria
+      updateVolatileFormulaIndex(cellIndex, existing)
       args.state.workbook.cellStore.flags[cellIndex] =
         ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
       if (existing.compiled.mode === FormulaMode.JsOnly) {
@@ -2297,6 +2314,7 @@ export function createEngineFormulaBindingService(args: {
     }
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula)
     runtimeFormula.formulaSlotId = formulaSlotId
+    updateVolatileFormulaIndex(cellIndex, runtimeFormula)
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
     const col = args.state.workbook.getCellPosition(cellIndex)?.col
     if (sheetId !== undefined && col !== undefined) {

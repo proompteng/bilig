@@ -284,6 +284,7 @@ export function createEngineServiceRuntime(args: {
   const formulaTemplates = createEngineFormulaTemplateNormalizationService({ counters: args.state.counters })
   const formulaInstances = createFormulaInstanceTable()
   const formulaFamilies = createFormulaFamilyStore()
+  const volatileFormulaCells = new Set<number>()
   const criterionCache = createCriterionRangeCacheService({ runtimeColumnStore, regionGraph, depPatternStore })
   const aggregateCache = createRangeAggregateCacheService({
     regionGraph,
@@ -312,6 +313,7 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(requireService(binding, 'binding').rebindFormulasForSheet(sheetName, formulaChangedCount, candidates)),
     applyDerivedOp: (op) => runEngineEffect(requireService(operations, 'operations').applyDerivedOp(op)),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
+    getVolatileFormulaCellIndices: () => volatileFormulaCells,
     ensureRecalcScratchCapacity: (size) => runEngineEffect(scratch.ensureRecalcCapacity(size)),
     getChangedInputEpoch: () => scratch.getChangedInputEpochNow(),
     setChangedInputEpoch: (next) => {
@@ -405,6 +407,7 @@ export function createEngineServiceRuntime(args: {
     compiledPlans,
     formulaInstances,
     formulaFamilies,
+    volatileFormulaCells,
     resolveTemplateForCell: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     exactLookup,
     sortedLookup,
@@ -511,6 +514,7 @@ export function createEngineServiceRuntime(args: {
       formulaTemplates.reset()
       formulaInstances.clear()
       formulaFamilies.clear()
+      volatileFormulaCells.clear()
     },
     resetWasmState: () => {
       args.state.wasm.resetStoreState()
@@ -635,6 +639,7 @@ export function createEngineServiceRuntime(args: {
     markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
     markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
     markVolatileFormulasChanged: (count) => support.markVolatileFormulasChangedNow(count),
+    hasVolatileFormulas: () => volatileFormulaCells.size > 0,
     markSpillRootsChanged: (cellIndices, count) => support.markSpillRootsChangedNow(cellIndices, count),
     markPivotRootsChanged: (cellIndices, count) => support.markPivotRootsChangedNow(cellIndices, count),
     markExplicitChanged: (cellIndex, count) => support.markExplicitChangedNow(cellIndex, count),

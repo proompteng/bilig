@@ -325,6 +325,7 @@ export function createEngineOperationService(args: {
   readonly markInputChanged: (cellIndex: number, count: number) => number
   readonly markFormulaChanged: (cellIndex: number, count: number) => number
   readonly markVolatileFormulasChanged: (count: number) => number
+  readonly hasVolatileFormulas?: () => boolean
   readonly markSpillRootsChanged: (cellIndices: readonly number[], count: number) => number
   readonly markPivotRootsChanged: (cellIndices: readonly number[], count: number) => number
   readonly markExplicitChanged: (cellIndex: number, count: number) => number
@@ -2056,8 +2057,15 @@ export function createEngineOperationService(args: {
     args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
+    const hasRecalcWork =
+      changedInputCount > 0 ||
+      formulaChangedCount > 0 ||
+      precomputedKernelSyncCellIndices.length > 0 ||
+      postRecalcDirectFormulaIndices.size > 0
+    const hasVolatileFormulaWork = hasActiveFormulas && (args.hasVolatileFormulas ? args.hasVolatileFormulas() : true)
+    const shouldRefreshPivots = refreshAllPivots && hasActivePivots
     let recalculated: U32 = new Uint32Array()
-    if (hasActiveFormulas || hasActivePivots || refreshAllPivots) {
+    if ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork) || shouldRefreshPivots) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
       const canUseKernelSyncOnlyRecalc =
@@ -2090,7 +2098,7 @@ export function createEngineOperationService(args: {
         })
         recalculated = mergeChangedCellIndices(recalculated, postRecalcChanged)
       }
-      recalculated = args.reconcilePivotOutputs(recalculated, refreshAllPivots)
+      recalculated = args.reconcilePivotOutputs(recalculated, shouldRefreshPivots)
     }
     const hasGeneralEventListeners = args.state.events.hasListeners()
     const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
@@ -2663,8 +2671,10 @@ export function createEngineOperationService(args: {
     args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
+    const hasRecalcWork = changedInputCount > 0 || formulaChangedCount > 0 || postRecalcDirectFormulaIndices.size > 0
+    const hasVolatileFormulaWork = hasActiveFormulas && (args.hasVolatileFormulas ? args.hasVolatileFormulas() : true)
     let recalculated: U32 = new Uint32Array()
-    if (hasActiveFormulas || hasActivePivots) {
+    if ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork)) {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
       const canUseKernelSyncOnlyRecalc =

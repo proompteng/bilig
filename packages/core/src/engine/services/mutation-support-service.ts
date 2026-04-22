@@ -96,6 +96,7 @@ export function createEngineMutationSupportService(args: {
   readonly scheduleWasmProgramSync: () => void
   readonly ensureRecalcScratchCapacity: (size: number) => void
   readonly collectFormulaDependents: (entityId: number) => Uint32Array
+  readonly getVolatileFormulaCellIndices?: () => Iterable<number>
   readonly getChangedInputEpoch: () => number
   readonly setChangedInputEpoch: (next: number) => void
   readonly getChangedInputSeen: () => U32
@@ -448,6 +449,25 @@ export function createEngineMutationSupportService(args: {
     return args.getMutationRoots().subarray(0, total)
   }
 
+  const markVolatileFormulasChangedNow = (count: number): number => {
+    const volatileFormulaCellIndices = args.getVolatileFormulaCellIndices?.()
+    if (volatileFormulaCellIndices) {
+      for (const cellIndex of volatileFormulaCellIndices) {
+        const formula = args.state.formulas.get(cellIndex)
+        if (formula?.compiled.volatile) {
+          count = markFormulaChangedNow(cellIndex, count)
+        }
+      }
+      return count
+    }
+    args.state.formulas.forEach((formula, cellIndex) => {
+      if (formula.compiled.volatile) {
+        count = markFormulaChangedNow(cellIndex, count)
+      }
+    })
+    return count
+  }
+
   return {
     beginMutationCollection() {
       return Effect.try({
@@ -483,15 +503,7 @@ export function createEngineMutationSupportService(args: {
     },
     markVolatileFormulasChanged(count) {
       return Effect.try({
-        try: () => {
-          args.state.formulas.forEach((formula, cellIndex) => {
-            if (!formula.compiled.volatile) {
-              return
-            }
-            count = markFormulaChangedNow(cellIndex, count)
-          })
-          return count
-        },
+        try: () => markVolatileFormulasChangedNow(count),
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to mark volatile formulas as changed', cause),
@@ -727,15 +739,7 @@ export function createEngineMutationSupportService(args: {
     beginMutationCollectionNow,
     markInputChangedNow,
     markFormulaChangedNow,
-    markVolatileFormulasChangedNow(count) {
-      args.state.formulas.forEach((formula, cellIndex) => {
-        if (!formula.compiled.volatile) {
-          return
-        }
-        count = markFormulaChangedNow(cellIndex, count)
-      })
-      return count
-    },
+    markVolatileFormulasChangedNow,
     markSpillRootsChangedNow(cellIndices, count) {
       for (let index = 0; index < cellIndices.length; index += 1) {
         count = markInputChangedNow(cellIndices[index]!, count)
