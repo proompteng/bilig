@@ -1027,19 +1027,21 @@ function buildDirectScalarOperand(args: {
   readonly ownerSheetName: string
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
+  readonly nextTranslatedCellRef?: () => { readonly sheetName: string | undefined; readonly address: string } | undefined
 }): RuntimeDirectScalarOperand | undefined {
   if (args.node.kind === 'NumberLiteral') {
     return { kind: 'literal-number', value: args.node.value }
   }
   if (args.node.kind === 'CellRef') {
-    const sheetName = args.node.sheetName ?? args.ownerSheetName
+    const translated = args.nextTranslatedCellRef?.()
+    const sheetName = translated?.sheetName ?? args.node.sheetName ?? args.ownerSheetName
     if (!args.workbook.getSheet(sheetName)) {
       return {
         kind: 'error',
         code: ErrorCode.Ref,
       }
     }
-    const parsed = parseCellAddress(args.node.ref, sheetName)
+    const parsed = parseCellAddress(translated?.address ?? args.node.ref, sheetName)
     return {
       kind: 'cell',
       cellIndex: args.ensureCellTracked(parsed.sheetName ?? sheetName, parsed.text),
@@ -1054,12 +1056,19 @@ function buildDirectScalarDescriptor(args: {
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
 }): RuntimeDirectScalarDescriptor | undefined {
-  if (args.compiled.astMatchesSource === false) {
-    return undefined
-  }
   if (args.compiled.symbolicNames.length > 0 || args.compiled.symbolicTables.length > 0 || args.compiled.symbolicSpills.length > 0) {
     return undefined
   }
+  let translatedCellRefIndex = 0
+  const nextTranslatedCellRef =
+    args.compiled.astMatchesSource === false
+      ? (): { readonly sheetName: string | undefined; readonly address: string } | undefined => {
+          const parsed = args.compiled.parsedSymbolicRefs?.[translatedCellRefIndex]
+          const address = parsed?.address ?? args.compiled.symbolicRefs[translatedCellRefIndex]
+          translatedCellRefIndex += 1
+          return address ? { sheetName: parsed?.sheetName, address } : undefined
+        }
+      : undefined
   const node = args.compiled.optimizedAst
   if (node.kind === 'BinaryExpr' && (node.operator === '+' || node.operator === '-' || node.operator === '*' || node.operator === '/')) {
     const left = buildDirectScalarOperand({
@@ -1067,12 +1076,14 @@ function buildDirectScalarDescriptor(args: {
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     const right = buildDirectScalarOperand({
       node: node.right,
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     if (left && right) {
       return {
@@ -1089,6 +1100,7 @@ function buildDirectScalarDescriptor(args: {
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     if (operand) {
       return {

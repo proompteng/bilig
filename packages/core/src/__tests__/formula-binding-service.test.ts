@@ -64,6 +64,11 @@ function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): nu
   return typeof templateId === 'number' ? templateId : undefined
 }
 
+function readRuntimeDirectScalar(engine: SpreadsheetEngine, cellIndex: number): unknown {
+  const formula = readRuntimeFormula(engine, cellIndex)
+  return typeof formula === 'object' && formula !== null ? Reflect.get(formula, 'directScalar') : undefined
+}
+
 function isRuntimeFormulaWithDirectCriteria(value: unknown): value is {
   directCriteria: {
     aggregateKind: string
@@ -184,15 +189,59 @@ describe('EngineFormulaBindingService', () => {
     }
 
     expect(getBindingService(engine).getFormulaFamilyStatsNow()).toEqual({
-      familyCount: 4,
-      runCount: 4,
+      familyCount: 2,
+      runCount: 2,
       memberCount: 200,
     })
     expect(
       getFormulaFamilyStore(engine)
         .listFamilies()
         .flatMap((family) => family.runs.map((run) => run.cellIndices.length)),
-    ).toEqual([1, 99, 1, 99])
+    ).toEqual([100, 100])
+  })
+
+  it('preserves direct scalar descriptors on translated template family members', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-direct-scalar-family' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= 64; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `A${row}*2`)
+    }
+
+    for (let row = 1; row <= 64; row += 1) {
+      const formulaCellIndex = engine.workbook.getCellIndex('Sheet1', `B${row}`)
+      expect(formulaCellIndex).toBeDefined()
+      expect(readRuntimeDirectScalar(engine, formulaCellIndex!)).toMatchObject({
+        kind: 'binary',
+        operator: '*',
+      })
+    }
+
+    const sheetId = engine.workbook.getSheet('Sheet1')?.id
+    expect(sheetId).toBeDefined()
+    engine.resetPerformanceCounters()
+    engine.applyCellMutationsAtWithOptions(
+      Array.from({ length: 64 }, (_entry, row) => ({
+        sheetId: sheetId!,
+        mutation: { kind: 'setCellValue' as const, row, col: 0, value: row * 3 },
+      })),
+      {
+        captureUndo: true,
+        potentialNewCells: 0,
+        source: 'local',
+        returnUndoOps: false,
+        reuseRefs: true,
+      },
+    )
+
+    expect(engine.getCellValue('Sheet1', 'B64')).toEqual({ tag: ValueTag.Number, value: 378 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    })
   })
 
   it('runs tracked rebinding wrappers through the service surface', async () => {
