@@ -29,6 +29,7 @@ export interface WorkbookPaneRendererV2Props {
   readonly overlay?:
     | {
         readonly gpuScene: GridGpuScene
+        readonly packedScene?: DynamicGridOverlayPacket['packedScene'] | undefined
         readonly textScene: GridTextScene
       }
     | undefined
@@ -268,10 +269,12 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
               frame: { x: 0, y: 0, width: surface.width, height: surface.height },
               generation: -1,
               gpuScene: overlayPacket.gpuScene,
+              packedScene: overlayPacket.packedScene,
               paneId: 'overlay',
               scrollAxes: { x: false, y: false },
               surfaceSize: { width: surface.width, height: surface.height },
               textScene: overlayPacket.textScene,
+              viewport: overlayPacket.packedScene?.viewport,
             },
           ]
         : basePanePayloads

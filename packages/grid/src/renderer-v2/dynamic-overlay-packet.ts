@@ -4,10 +4,12 @@ import { parseGpuColor, type GridGpuRect, type GridGpuScene } from '../gridGpuSc
 import type { HeaderSelection } from '../gridPointer.js'
 import type { CompactSelectionState, GridSelection, Item, Rectangle } from '../gridTypes.js'
 import { workbookThemeColors } from '../workbookTheme.js'
+import { packGridScenePacketV2, type GridScenePacketV2 } from './scene-packet-v2.js'
 
 export interface DynamicGridOverlayPacket {
   readonly gpuScene: GridGpuScene
   readonly textScene: { readonly items: readonly [] }
+  readonly packedScene: GridScenePacketV2
 }
 
 export function buildDynamicGridOverlayPacket(input: {
@@ -59,13 +61,38 @@ export function buildDynamicGridOverlayPacket(input: {
     gridSelection: input.gridSelection ?? null,
   })
   appendFrozenSeparators({ borderRects, geometry: input.geometry })
-  return {
-    gpuScene: {
-      borderRects,
-      fillRects,
-    },
-    textScene: { items: [] },
+  const gpuScene = {
+    borderRects,
+    fillRects,
   }
+  const textScene = { items: [] } as const
+  const surfaceSize = resolveOverlaySurfaceSize(input.geometry)
+  return {
+    gpuScene,
+    packedScene: packGridScenePacketV2({
+      cameraSeq: input.geometry.camera.seq,
+      generatedAt: input.geometry.camera.updatedAt,
+      generation: input.geometry.camera.seq,
+      gpuScene,
+      paneId: 'overlay',
+      requestSeq: input.geometry.camera.seq,
+      sheetName: input.geometry.camera.sheetName,
+      surfaceSize,
+      textScene,
+      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
+    }),
+    textScene,
+  }
+}
+
+function resolveOverlaySurfaceSize(geometry: GridGeometrySnapshot): { readonly width: number; readonly height: number } {
+  return geometry.camera.panes.reduce(
+    (size, pane) => ({
+      height: Math.max(size.height, pane.frame.y + pane.frame.height),
+      width: Math.max(size.width, pane.frame.x + pane.frame.width),
+    }),
+    { height: 0, width: 0 },
+  )
 }
 
 function appendHoverOverlay(input: {

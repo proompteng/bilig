@@ -33,6 +33,10 @@ describe('dynamic overlay packet', () => {
     })
 
     expect(overlay.textScene.items).toEqual([])
+    expect(overlay.packedScene.paneId).toBe('overlay')
+    expect(overlay.packedScene.key.paneKind).toBe('dynamicOverlay')
+    expect(overlay.packedScene.rectCount).toBe(overlay.gpuScene.fillRects.length + overlay.gpuScene.borderRects.length)
+    expect(overlay.packedScene.surfaceSize).toEqual({ height: 220, width: 520 })
     expect(overlay.gpuScene.fillRects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 146, y: 44, width: 150, height: 30 }),
