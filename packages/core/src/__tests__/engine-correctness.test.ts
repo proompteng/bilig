@@ -716,6 +716,23 @@ describe('engine correctness', () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot)
   })
 
+  it('does not make inherited range formats explicit while undoing row deletes', async () => {
+    const initialSnapshot = await createBaselineSnapshot('correctness-structural-delete-inherited-format')
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-structural-delete-inherited-format',
+      replicaId: 'correctness-structural-delete-inherited-format',
+    })
+    await engine.ready()
+    engine.importSnapshot(initialSnapshot)
+
+    engine.setRangeValues({ sheetName, startAddress: 'E5', endAddress: 'E6' }, [[0], ['north']])
+    engine.setRangeNumberFormat({ sheetName, startAddress: 'D5', endAddress: 'E6' }, '0.00')
+    engine.deleteRows(sheetName, 4, 2)
+
+    expect(undoAll(engine, 8)).toBeGreaterThan(0)
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot)
+  })
+
   it('coalesces adjacent style ranges before structural insert replay', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'correctness-style-range-coalesce',

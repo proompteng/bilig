@@ -202,6 +202,7 @@ type StructuralDeletedCellUndoRecord =
       readonly row: number
       readonly col: number
       readonly value: number | boolean
+      readonly explicitFormat?: string
     }
   | {
       readonly kind: 'snapshot'
@@ -216,6 +217,7 @@ type StructuralDeletedCellUndoRecord =
       readonly row: number
       readonly col: number
       readonly restoreExplicitBlank: boolean
+      readonly explicitFormat?: string
     }
 
 function translateFormulaForTarget(
@@ -1441,11 +1443,33 @@ export function createEngineMutationService(args: {
     }
     switch (tag) {
       case ValueTag.Number:
-        return { kind: 'value', sheetName, row, col, value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0 }
+        return {
+          kind: 'value',
+          sheetName,
+          row,
+          col,
+          value: args.state.workbook.cellStore.numbers[cellIndex] ?? 0,
+          ...(explicitFormat === undefined ? {} : { explicitFormat }),
+        }
       case ValueTag.Boolean:
-        return { kind: 'value', sheetName, row, col, value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0 }
-      case ValueTag.String:
-        return { kind: 'snapshot', sheetName, row, col, snapshot: args.getCellByIndex(cellIndex) }
+        return {
+          kind: 'value',
+          sheetName,
+          row,
+          col,
+          value: (args.state.workbook.cellStore.numbers[cellIndex] ?? 0) !== 0,
+          ...(explicitFormat === undefined ? {} : { explicitFormat }),
+        }
+      case ValueTag.String: {
+        const snapshot = args.getCellByIndex(cellIndex)
+        if (explicitFormat === undefined) {
+          delete snapshot.format
+          delete snapshot.numberFormatId
+        } else {
+          snapshot.format = explicitFormat
+        }
+        return { kind: 'snapshot', sheetName, row, col, snapshot }
+      }
       case ValueTag.Empty:
       case ValueTag.Error:
         return {
@@ -1454,6 +1478,7 @@ export function createEngineMutationService(args: {
           row,
           col,
           restoreExplicitBlank: (args.state.workbook.cellStore.versions[cellIndex] ?? 0) !== 0 || (flags & CellFlags.AuthoredBlank) !== 0,
+          ...(explicitFormat === undefined ? {} : { explicitFormat }),
         }
     }
     return undefined
@@ -1494,7 +1519,12 @@ export function createEngineMutationService(args: {
       case 'formula':
         return [{ kind: 'setCellFormula', sheetName: record.sheetName, address, formula: record.formula }]
       case 'value':
-        return [{ kind: 'setCellValue', sheetName: record.sheetName, address, value: record.value }]
+        return [
+          { kind: 'setCellValue', sheetName: record.sheetName, address, value: record.value },
+          ...(record.explicitFormat === undefined
+            ? []
+            : [{ kind: 'setCellFormat' as const, sheetName: record.sheetName, address, format: record.explicitFormat }]),
+        ]
       case 'snapshot':
         return args.toCellStateOps(record.sheetName, address, record.snapshot)
       case 'blank':
@@ -1502,6 +1532,9 @@ export function createEngineMutationService(args: {
           record.restoreExplicitBlank
             ? { kind: 'setCellValue', sheetName: record.sheetName, address, value: null }
             : { kind: 'clearCell', sheetName: record.sheetName, address },
+          ...(record.explicitFormat === undefined
+            ? []
+            : [{ kind: 'setCellFormat' as const, sheetName: record.sheetName, address, format: record.explicitFormat }]),
         ]
     }
   }
