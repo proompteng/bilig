@@ -40,9 +40,11 @@ describe('worker-runtime-render-scene', () => {
       request: {
         sheetName: 'Sheet1',
         residentViewport: { rowStart: 10, rowEnd: 20, colStart: 8, colEnd: 16 },
+        cameraSeq: 12,
         dprBucket: 2,
         freezeRows: 2,
         freezeCols: 2,
+        requestSeq: 11,
         selectedCell: { col: 8, row: 10 },
         selectedCellSnapshot: null,
         selectionRange: null,
@@ -54,6 +56,9 @@ describe('worker-runtime-render-scene', () => {
     expect(new Set(scenes.map((scene) => scene.generation))).toEqual(new Set([7]))
     expect(scenes.every((scene) => scene.packedScene?.rects instanceof Float32Array)).toBe(true)
     expect(scenes.every((scene) => scene.packedScene?.textMetrics instanceof Float32Array)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene?.requestSeq === 11)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene?.cameraSeq === 12)).toBe(true)
+    expect(scenes.every((scene) => Number.isFinite(scene.packedScene?.generatedAt))).toBe(true)
     expect(scenes.find((scene) => scene.paneId === 'body')?.packedScene?.key).toMatchObject({
       dprBucket: 2,
       freezeVersion: expect.any(Number),

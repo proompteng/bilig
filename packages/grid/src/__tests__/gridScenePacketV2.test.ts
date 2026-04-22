@@ -16,14 +16,17 @@ function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePack
   const viewport = { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 }
   return {
     generation: 1,
+    cameraSeq: 11,
     borderRectCount: 0,
     fillRectCount: 1,
+    generatedAt: 1234,
     key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 1,
     rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
     rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
+    requestSeq: 10,
     sheetName: 'Sheet1',
     surfaceSize: { height: 220, width: 480 },
     textCount: 1,
@@ -60,6 +63,18 @@ describe('grid scene packet v2', () => {
     expect(validateGridScenePacketV2(createPacket({ rects: new Float32Array([0, 0, Number.NaN, 22, 1, 1, 1, 1]) }))).toEqual({
       ok: false,
       reason: 'bad rect size',
+    })
+    expect(validateGridScenePacketV2(createPacket({ requestSeq: -1 }))).toEqual({
+      ok: false,
+      reason: 'bad request sequence',
+    })
+    expect(validateGridScenePacketV2(createPacket({ cameraSeq: -1 }))).toEqual({
+      ok: false,
+      reason: 'bad camera sequence',
+    })
+    expect(validateGridScenePacketV2(createPacket({ generatedAt: Number.NaN }))).toEqual({
+      ok: false,
+      reason: 'bad generated timestamp',
     })
   })
 

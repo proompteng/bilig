@@ -75,6 +75,7 @@ export function buildWorkerResidentPaneScenes(input: {
   generation: number
 }): WorkbookPaneScenePacket[] {
   const { engine, request, generation } = input
+  const generatedAt = Date.now()
   const gridMetrics = getGridMetrics()
   const selectedAddress = formatAddress(request.selectedCell.row, request.selectedCell.col)
   const selectedCellSnapshot =
@@ -121,8 +122,11 @@ export function buildWorkerResidentPaneScenes(input: {
   }).map((scene): WorkbookPaneScenePacket => {
     const packedScene = packWorkerGridScenePacket({
       generation,
+      cameraSeq: request.cameraSeq ?? request.requestSeq ?? 0,
+      generatedAt,
       gpuScene: scene.gpuScene,
       paneId: scene.paneId,
+      requestSeq: request.requestSeq ?? 0,
       key: createGridTileKeyV2({
         axisVersionX: columnAxisVersion,
         axisVersionY: rowAxisVersion,

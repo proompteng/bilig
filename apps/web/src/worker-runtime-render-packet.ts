@@ -15,6 +15,9 @@ export type WorkerPackedGridScenePacket = GridScenePacketV2
 
 export function packWorkerGridScenePacket(input: {
   readonly generation: number
+  readonly requestSeq?: number | undefined
+  readonly cameraSeq?: number | undefined
+  readonly generatedAt?: number | undefined
   readonly sheetName: string
   readonly paneId: WorkbookPaneId
   readonly viewport: Viewport
@@ -25,14 +28,17 @@ export function packWorkerGridScenePacket(input: {
 }): WorkerPackedGridScenePacket {
   return {
     generation: input.generation,
+    cameraSeq: input.cameraSeq ?? input.requestSeq ?? 0,
     borderRectCount: input.gpuScene.borderRects.length,
     fillRectCount: input.gpuScene.fillRects.length,
+    generatedAt: input.generatedAt ?? 0,
     key: input.key ?? createGridTileKeyV2({ paneId: input.paneId, sheetName: input.sheetName, viewport: input.viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
     rectInstances: packRectInstances(input.gpuScene, input.surfaceSize),
     rects: packRects(input.gpuScene),
+    requestSeq: input.requestSeq ?? 0,
     sheetName: input.sheetName,
     surfaceSize: input.surfaceSize,
     textCount: input.textScene.items.length,

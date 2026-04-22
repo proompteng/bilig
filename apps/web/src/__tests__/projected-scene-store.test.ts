@@ -7,8 +7,58 @@ import {
   GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_VERSION,
   createGridTileKeyV2,
+  type GridScenePacketV2,
 } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedSceneStore } from '../projected-scene-store.js'
+
+interface TestSceneRequest {
+  readonly sheetName: string
+  readonly residentViewport: {
+    readonly rowStart: number
+    readonly rowEnd: number
+    readonly colStart: number
+    readonly colEnd: number
+  }
+}
+
+function createResidentScene(
+  request: TestSceneRequest,
+  generation: number,
+  requestSeq = generation,
+  packetOverrides: Partial<GridScenePacketV2> = {},
+) {
+  const viewport = request.residentViewport
+  const surfaceSize = { width: 400, height: 200 }
+  return {
+    generation,
+    paneId: 'body' as const,
+    viewport,
+    surfaceSize,
+    gpuScene: { fillRects: [], borderRects: [] },
+    textScene: { items: [] },
+    packedScene: {
+      borderRectCount: 0,
+      cameraSeq: requestSeq,
+      fillRectCount: 0,
+      generatedAt: 1_000 + requestSeq,
+      generation,
+      key: createGridTileKeyV2({ paneId: 'body', sheetName: request.sheetName, viewport }),
+      magic: GRID_SCENE_PACKET_V2_MAGIC,
+      paneId: 'body' as const,
+      rectCount: 0,
+      rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
+      rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
+      requestSeq,
+      sheetName: request.sheetName,
+      surfaceSize,
+      textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
+      textCount: 0,
+      version: GRID_SCENE_PACKET_V2_VERSION,
+      viewport,
+      ...packetOverrides,
+    },
+  }
+}
 
 describe('ProjectedSceneStore', () => {
   it('fetches resident pane scenes on first subscription and exposes them via peek', async () => {
@@ -22,33 +72,7 @@ describe('ProjectedSceneStore', () => {
       selectionRange: null,
       editingCell: null,
     } as const
-    const scenes = [
-      {
-        generation: 1,
-        paneId: 'body',
-        viewport: request.residentViewport,
-        surfaceSize: { width: 400, height: 200 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
-        packedScene: {
-          borderRectCount: 0,
-          fillRectCount: 0,
-          generation: 1,
-          key: createGridTileKeyV2({ paneId: 'body', sheetName: request.sheetName, viewport: request.residentViewport }),
-          magic: GRID_SCENE_PACKET_V2_MAGIC,
-          paneId: 'body',
-          rectCount: 0,
-          rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
-          rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
-          sheetName: request.sheetName,
-          surfaceSize: { width: 400, height: 200 },
-          textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
-          textCount: 0,
-          version: GRID_SCENE_PACKET_V2_VERSION,
-          viewport: request.residentViewport,
-        },
-      },
-    ] as const
+    const scenes = [createResidentScene(request, 1)] as const
     const client = {
       invoke: vi.fn(async (_method: string, _request: unknown) => scenes),
     }
@@ -88,16 +112,7 @@ describe('ProjectedSceneStore', () => {
       selectionRange: null,
       editingCell: null,
     }
-    const scenes = [
-      {
-        generation: 1,
-        paneId: 'body',
-        viewport: request.residentViewport,
-        surfaceSize: { width: 400, height: 200 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
-      },
-    ] as const
+    const scenes = [createResidentScene(request, 1, 1, { cameraSeq: 7 })] as const
     const client = {
       invoke: vi.fn(async (_method: string, _request: unknown) => scenes),
     }
@@ -120,6 +135,47 @@ describe('ProjectedSceneStore', () => {
     unsubscribe()
   })
 
+  it('rejects stale or packetless worker scene responses before publishing', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+      selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: null,
+    } as const
+    const staleClient = {
+      invoke: vi.fn(async () => [createResidentScene(request, 1, 0)]),
+    }
+    const staleStore = new ProjectedSceneStore(staleClient)
+    const staleListener = vi.fn()
+
+    const unsubscribeStale = staleStore.subscribeResidentPaneScenes(request, staleListener)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(staleListener).not.toHaveBeenCalled()
+    expect(staleStore.peekResidentPaneScenes(request)).toBeNull()
+    expect(staleStore.getLastRejectedPacketReason()).toBe('request-sequence-stale')
+
+    const packetlessClient = {
+      invoke: vi.fn(async () => [{ ...createResidentScene(request, 1, 1), packedScene: undefined }]),
+    }
+    const packetlessStore = new ProjectedSceneStore(packetlessClient)
+    const packetlessListener = vi.fn()
+
+    const unsubscribePacketless = packetlessStore.subscribeResidentPaneScenes(request, packetlessListener)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(packetlessListener).not.toHaveBeenCalled()
+    expect(packetlessStore.peekResidentPaneScenes(request)).toBeNull()
+    expect(packetlessStore.getLastRejectedPacketReason()).toBe('missing-packed-scene')
+
+    unsubscribePacketless()
+    unsubscribeStale()
+  })
+
   it('lets a visible request supersede an older prefetch request for the same tile before dispatch', async () => {
     const prefetchRequest = {
       sheetName: 'Sheet1',
@@ -140,16 +196,7 @@ describe('ProjectedSceneStore', () => {
       priority: 0,
       reason: 'visible' as const,
     }
-    const scenes = [
-      {
-        generation: 1,
-        paneId: 'body',
-        viewport: prefetchRequest.residentViewport,
-        surfaceSize: { width: 400, height: 200 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
-      },
-    ] as const
+    const scenes = [createResidentScene(visibleRequest, 1, 1, { cameraSeq: 4 })] as const
     const client = {
       invoke: vi.fn(async (_method: string, _request: unknown) => scenes),
     }
@@ -188,26 +235,8 @@ describe('ProjectedSceneStore', () => {
     const client = {
       invoke: vi
         .fn()
-        .mockResolvedValueOnce([
-          {
-            generation: 1,
-            paneId: 'body',
-            viewport: request.residentViewport,
-            surfaceSize: { width: 400, height: 200 },
-            gpuScene: { fillRects: [], borderRects: [] },
-            textScene: { items: [] },
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            generation: 2,
-            paneId: 'body',
-            viewport: request.residentViewport,
-            surfaceSize: { width: 400, height: 200 },
-            gpuScene: { fillRects: [], borderRects: [] },
-            textScene: { items: [] },
-          },
-        ]),
+        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+        .mockResolvedValueOnce([createResidentScene(request, 2, 2)]),
     }
     const store = new ProjectedSceneStore(client)
 
@@ -275,16 +304,7 @@ describe('ProjectedSceneStore', () => {
     const first = new Promise<readonly unknown[]>((resolve) => {
       resolveFirst = resolve
     })
-    const second = [
-      {
-        generation: 2,
-        paneId: 'body',
-        viewport: request.residentViewport,
-        surfaceSize: { width: 400, height: 200 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
-      },
-    ] as const
+    const second = [createResidentScene(request, 2, 2)] as const
     const client = {
       invoke: vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce(second),
     }
@@ -313,16 +333,7 @@ describe('ProjectedSceneStore', () => {
       columns: [],
       rows: [],
     })
-    resolveFirst?.([
-      {
-        generation: 1,
-        paneId: 'body',
-        viewport: request.residentViewport,
-        surfaceSize: { width: 400, height: 200 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
-      },
-    ])
+    resolveFirst?.([createResidentScene(request, 1, 1)])
     await new Promise((resolve) => window.setTimeout(resolve, 10))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
@@ -346,26 +357,8 @@ describe('ProjectedSceneStore', () => {
     const client = {
       invoke: vi
         .fn()
-        .mockResolvedValueOnce([
-          {
-            generation: 1,
-            paneId: 'body',
-            viewport: request.residentViewport,
-            surfaceSize: { width: 400, height: 200 },
-            gpuScene: { fillRects: [], borderRects: [] },
-            textScene: { items: [] },
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            generation: 2,
-            paneId: 'body',
-            viewport: request.residentViewport,
-            surfaceSize: { width: 400, height: 200 },
-            gpuScene: { fillRects: [], borderRects: [] },
-            textScene: { items: [] },
-          },
-        ]),
+        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+        .mockResolvedValueOnce([createResidentScene(request, 2, 2)]),
     }
     const store = new ProjectedSceneStore(client)
 
@@ -411,16 +404,7 @@ describe('ProjectedSceneStore', () => {
       editingCell: null,
     } as const
     const client = {
-      invoke: vi.fn().mockResolvedValue([
-        {
-          generation: 1,
-          paneId: 'body',
-          viewport: request.residentViewport,
-          surfaceSize: { width: 400, height: 200 },
-          gpuScene: { fillRects: [], borderRects: [] },
-          textScene: { items: [] },
-        },
-      ]),
+      invoke: vi.fn().mockResolvedValue([createResidentScene(request, 1, 1)]),
     }
     const store = new ProjectedSceneStore(client)
 

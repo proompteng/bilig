@@ -72,7 +72,9 @@ describe('typegpu resource cache signatures', () => {
     const viewport = { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 }
     const basePacket = {
       borderRectCount: 0,
+      cameraSeq: 1,
       fillRectCount: 1,
+      generatedAt: 1,
       generation: 1,
       key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
       magic: GRID_SCENE_PACKET_V2_MAGIC,
@@ -80,6 +82,7 @@ describe('typegpu resource cache signatures', () => {
       rectCount: 1,
       rectInstances: new Float32Array([0, 0, 10, 10, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 100]),
       rects: new Float32Array([0, 0, 10, 10, 1, 0, 0, 1]),
+      requestSeq: 1,
       sheetName: 'Sheet1',
       surfaceSize: { height: 100, width: 100 },
       textCount: 0,

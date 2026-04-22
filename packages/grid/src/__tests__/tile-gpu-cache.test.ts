@@ -14,14 +14,17 @@ function createPacket(generation: number, colStart = 0): GridScenePacketV2 {
   const viewport = { colEnd: colStart + 127, colStart, rowEnd: 31, rowStart: 0 }
   return {
     generation,
+    cameraSeq: generation,
     borderRectCount: 0,
     fillRectCount: 0,
+    generatedAt: generation,
     key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: 'body',
     rectCount: 0,
     rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
     rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
+    requestSeq: generation,
     sheetName: 'Sheet1',
     surfaceSize: { height: 200, width: 400 },
     textCount: 0,

@@ -27,6 +27,15 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   if (!Number.isInteger(packet.generation) || packet.generation < 0) {
     return invalid('bad generation')
   }
+  if (!Number.isInteger(packet.requestSeq) || packet.requestSeq < 0) {
+    return invalid('bad request sequence')
+  }
+  if (!Number.isInteger(packet.cameraSeq) || packet.cameraSeq < 0) {
+    return invalid('bad camera sequence')
+  }
+  if (!isFiniteNonNegative(packet.generatedAt)) {
+    return invalid('bad generated timestamp')
+  }
   const keyValidation = validateGridTileKeyV2(packet.key)
   if (!keyValidation.ok) {
     return keyValidation

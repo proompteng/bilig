@@ -73,6 +73,9 @@ function isGridScenePacketV2(value: unknown): value is GridScenePacketV2 {
     value['magic'] === GRID_SCENE_PACKET_V2_MAGIC &&
     value['version'] === GRID_SCENE_PACKET_V2_VERSION &&
     typeof value['generation'] === 'number' &&
+    typeof value['requestSeq'] === 'number' &&
+    typeof value['cameraSeq'] === 'number' &&
+    typeof value['generatedAt'] === 'number' &&
     isGridTileKeyV2(value['key']) &&
     typeof value['sheetName'] === 'string' &&
     typeof value['paneId'] === 'string' &&
@@ -107,6 +110,33 @@ function isResidentPaneScenePacketArray(value: unknown): value is readonly Workb
         isOptionalPackedScene(entry['packedScene']),
     )
   )
+}
+
+function validateScenePacketResponseForRequest(
+  scenes: readonly WorkbookPaneScenePacket[],
+  request: WorkbookPaneSceneRequest,
+): string | null {
+  const expectedRequestSeq = request.requestSeq ?? 0
+  const expectedCameraSeq = request.cameraSeq ?? expectedRequestSeq
+  for (const scene of scenes) {
+    const packet = scene.packedScene
+    if (!packet) {
+      return 'missing-packed-scene'
+    }
+    if (packet.requestSeq < expectedRequestSeq) {
+      return 'request-sequence-stale'
+    }
+    if (packet.requestSeq !== expectedRequestSeq) {
+      return 'request-sequence-mismatch'
+    }
+    if (packet.cameraSeq < expectedCameraSeq) {
+      return 'camera-sequence-stale'
+    }
+    if (packet.sheetName !== request.sheetName) {
+      return 'sheet-mismatch'
+    }
+  }
+  return null
 }
 
 function buildRequestKey(request: WorkbookPaneSceneRequest): string {
@@ -165,8 +195,13 @@ function withRequestMetadata(request: WorkbookPaneSceneRequest, requestSeq: numb
 export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
   private nextRequestSeq = 0
+  private lastRejectedPacketReason: string | null = null
 
   constructor(private readonly client?: Pick<WorkerEngineClient, 'invoke'>) {}
+
+  getLastRejectedPacketReason(): string | null {
+    return this.lastRejectedPacketReason
+  }
 
   peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
     return this.entries.get(buildRequestKey(request))?.scenes ?? null
@@ -257,12 +292,18 @@ export class ProjectedSceneStore {
       try {
         const requestSeq = ++this.nextRequestSeq
         entry.activeRequestSeq = requestSeq
+        const request = withRequestMetadata(entry.request, requestSeq)
         const isIncrementalRefresh = entry.scenes !== null
-        const next = await client.invoke('getResidentPaneScenes', withRequestMetadata(entry.request, requestSeq))
+        const next = await client.invoke('getResidentPaneScenes', request)
         if (!isResidentPaneScenePacketArray(next)) {
           throw new Error('Worker returned an unexpected resident pane scene payload')
         }
         if (entry.activeRequestSeq !== requestSeq || entry.refreshQueued || entry.listeners.size === 0) {
+          return
+        }
+        const packetRejectionReason = validateScenePacketResponseForRequest(next, request)
+        if (packetRejectionReason !== null) {
+          this.noteScenePacketRejected(packetRejectionReason)
           return
         }
         entry.scenes = next
@@ -284,5 +325,10 @@ export class ProjectedSceneStore {
         this.scheduleRefresh(entry)
       }
     }
+  }
+
+  private noteScenePacketRejected(reason: string): void {
+    this.lastRejectedPacketReason = reason
+    getWorkbookScrollPerfCollector()?.noteScenePacketRejected(reason)
   }
 }

@@ -42,6 +42,9 @@ export interface GridScenePacketV2 {
   readonly magic: typeof GRID_SCENE_PACKET_V2_MAGIC
   readonly version: typeof GRID_SCENE_PACKET_V2_VERSION
   readonly generation: number
+  readonly requestSeq: number
+  readonly cameraSeq: number
+  readonly generatedAt: number
   readonly key: GridTileKeyV2
   readonly sheetName: string
   readonly paneId: GridScenePacketPaneId
@@ -61,6 +64,9 @@ export interface GridScenePacketV2 {
 
 export function packGridScenePacketV2(input: {
   readonly generation: number
+  readonly requestSeq?: number | undefined
+  readonly cameraSeq?: number | undefined
+  readonly generatedAt?: number | undefined
   readonly sheetName: string
   readonly paneId: GridScenePacketPaneId
   readonly viewport: Viewport
@@ -78,14 +84,17 @@ export function packGridScenePacketV2(input: {
     })
   return {
     generation: input.generation,
+    cameraSeq: input.cameraSeq ?? input.requestSeq ?? 0,
     borderRectCount: input.gpuScene.borderRects.length,
     fillRectCount: input.gpuScene.fillRects.length,
+    generatedAt: input.generatedAt ?? 0,
     key,
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
     rectInstances: packRectInstances(input.gpuScene, input.surfaceSize),
     rects: packRects(input.gpuScene),
+    requestSeq: input.requestSeq ?? 0,
     sheetName: input.sheetName,
     surfaceSize: input.surfaceSize,
     textCount: input.textScene.items.length,

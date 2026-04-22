@@ -6,7 +6,10 @@ describe('worker-runtime-render-packet', () => {
   it('packs worker scene data into transferable typed arrays', () => {
     const packet = packWorkerGridScenePacket({
       generation: 3,
+      cameraSeq: 13,
+      generatedAt: 12345,
       paneId: 'body',
+      requestSeq: 12,
       sheetName: 'Sheet1',
       surfaceSize: { width: 400, height: 200 },
       viewport: { rowStart: 0, rowEnd: 1, colStart: 0, colEnd: 1 },
@@ -42,6 +45,9 @@ describe('worker-runtime-render-packet', () => {
     expect(packet.rects).toBeInstanceOf(Float32Array)
     expect(packet.magic).toBe('bilig.grid.scene.v2')
     expect(packet.version).toBe(GRID_SCENE_PACKET_V2_VERSION)
+    expect(packet.requestSeq).toBe(12)
+    expect(packet.cameraSeq).toBe(13)
+    expect(packet.generatedAt).toBe(12345)
     expect(packet.sheetName).toBe('Sheet1')
     expect(packet.key).toMatchObject({
       axisVersionX: 0,

@@ -11,6 +11,7 @@ interface WorkbookScrollPerfCounters {
   damageCells: number
   scenePacketRefreshes: number
   scenePacketPanes: number
+  scenePacketRejected: number
   visibleWindowChanges: number
   headerPaneBuilds: number
   reactCommits: number
@@ -56,6 +57,9 @@ export interface WorkbookScrollPerfReport {
     readonly longTasksMs: WorkbookScrollPerfSummary
   }
   readonly counters: WorkbookScrollPerfCounters
+  readonly diagnostics: {
+    readonly lastScenePacketRejectReason: string | null
+  }
 }
 
 type BenchmarkState = 'idle' | 'loading' | 'ready' | 'error'
@@ -69,6 +73,7 @@ class WorkbookScrollPerfCollector {
     damageCells: 0,
     scenePacketRefreshes: 0,
     scenePacketPanes: 0,
+    scenePacketRejected: 0,
     visibleWindowChanges: 0,
     headerPaneBuilds: 0,
     reactCommits: 0,
@@ -101,6 +106,7 @@ class WorkbookScrollPerfCollector {
   private lastFrameAt: number | null = null
   private lastScrollInputAt: number | null = null
   private lastAnyScrollInputAt: number | null = null
+  private lastScenePacketRejectReason: string | null = null
   private observer: PerformanceObserver | null = null
   private warmupFramesRemaining = 0
 
@@ -139,6 +145,11 @@ class WorkbookScrollPerfCollector {
   noteScenePacketRefresh(paneCount: number): void {
     this.totalCounters.scenePacketRefreshes += 1
     this.totalCounters.scenePacketPanes += paneCount
+  }
+
+  noteScenePacketRejected(reason: string): void {
+    this.totalCounters.scenePacketRejected += 1
+    this.lastScenePacketRejectReason = reason
   }
 
   noteVisibleWindowChange(): void {
@@ -240,6 +251,7 @@ class WorkbookScrollPerfCollector {
     this.baselineCounters = null
     this.lastFrameAt = null
     this.lastScrollInputAt = null
+    this.lastScenePacketRejectReason = null
     this.warmupFramesRemaining = WARMUP_FRAME_COUNT
     this.installLongTaskObserver()
     this.scheduleFrame()
@@ -269,6 +281,9 @@ class WorkbookScrollPerfCollector {
         longTasksMs: summarizeNumbers(this.longTaskSamples),
       },
       counters: subtractCounters(this.totalCounters, this.baselineCounters),
+      diagnostics: {
+        lastScenePacketRejectReason: this.lastScenePacketRejectReason,
+      },
     }
     this.baselineCounters = null
     this.frameSamples = []
@@ -337,6 +352,7 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     damageCells: counters.damageCells - baseline.damageCells,
     scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,
     scenePacketPanes: counters.scenePacketPanes - baseline.scenePacketPanes,
+    scenePacketRejected: counters.scenePacketRejected - baseline.scenePacketRejected,
     visibleWindowChanges: counters.visibleWindowChanges - baseline.visibleWindowChanges,
     headerPaneBuilds: counters.headerPaneBuilds - baseline.headerPaneBuilds,
     reactCommits: counters.reactCommits - baseline.reactCommits,

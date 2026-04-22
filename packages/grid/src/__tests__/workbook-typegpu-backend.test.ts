@@ -17,7 +17,9 @@ function createPacket(valueVersion: number): GridScenePacketV2 {
   const viewport = { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 }
   return {
     borderRectCount: 0,
+    cameraSeq: valueVersion,
     fillRectCount: 0,
+    generatedAt: valueVersion,
     generation: valueVersion,
     key: createGridTileKeyV2({
       paneId: 'body',
@@ -31,6 +33,7 @@ function createPacket(valueVersion: number): GridScenePacketV2 {
     rectCount: 0,
     rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
     rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
+    requestSeq: valueVersion,
     sheetName: 'Sheet1',
     surfaceSize: { height: 220, width: 480 },
     textCount: 0,
