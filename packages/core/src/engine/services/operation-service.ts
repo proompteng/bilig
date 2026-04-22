@@ -1108,7 +1108,10 @@ export function createEngineOperationService(args: {
       canUsePostRecalc &&
       directFormulaDeltas !== undefined &&
       contributionDelta !== undefined &&
-      dependents.every((formulaCellIndex) => args.state.formulas.get(formulaCellIndex)?.directAggregate?.aggregateKind === 'sum')
+      dependents.every((formulaCellIndex) => {
+        const formula = args.state.formulas.get(formulaCellIndex)
+        return formula?.directAggregate?.aggregateKind === 'sum' && formula.dependencyIndices.length === 0
+      })
     for (let index = 0; index < dependents.length; index += 1) {
       const formulaCellIndex = dependents[index]!
       if (canUsePostRecalc) {

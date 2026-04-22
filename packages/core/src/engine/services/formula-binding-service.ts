@@ -1412,6 +1412,9 @@ export function createEngineFormulaBindingService(args: {
       refreshed.add(rangeIndex)
       syncRangeDependencyEdges(rangeIndex, args.state.ranges.refresh(rangeIndex, materializer))
     })
+    if (refreshed.size > 0) {
+      args.scheduleWasmProgramSync()
+    }
   }
 
   const retargetRangeDependenciesNow = (transaction: StructuralTransaction, rangeIndices: readonly number[]): void => {
@@ -1424,6 +1427,9 @@ export function createEngineFormulaBindingService(args: {
     touched.forEach(({ rangeIndex, oldDependencySources, newDependencySources }) => {
       syncRangeDependencyEdges(rangeIndex, { oldDependencySources, newDependencySources })
     })
+    if (touched.length > 0) {
+      args.scheduleWasmProgramSync()
+    }
   }
 
   const syncRangeDependencyEdges = (
@@ -2116,6 +2122,7 @@ export function createEngineFormulaBindingService(args: {
 
   const clearFormulaNow = (cellIndex: number): boolean => {
     const existing = args.state.formulas.get(cellIndex)
+    const needsWasmProgramSync = existing !== undefined && existing.directAggregate === undefined
     if (existing) {
       args.regionGraph.clearFormulaSubscriptions(cellIndex)
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
@@ -2206,7 +2213,9 @@ export function createEngineFormulaBindingService(args: {
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
       ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
-    args.scheduleWasmProgramSync()
+    if (needsWasmProgramSync) {
+      args.scheduleWasmProgramSync()
+    }
     return existing !== undefined
   }
 

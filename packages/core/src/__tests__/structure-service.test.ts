@@ -283,6 +283,7 @@ describe('EngineStructureService', () => {
       engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
     }
 
+    engine.resetPerformanceCounters()
     const result = Effect.runSync(
       getStructureService(engine).applyStructuralAxisOp({
         kind: 'deleteRows',
@@ -294,7 +295,10 @@ describe('EngineStructureService', () => {
 
     expect(result.topologyChanged).toBe(true)
     expect(result.graphRefreshRequired).toBe(false)
+    expect(result.formulaCellIndices).toEqual([])
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 8 })
     expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A1:A3)')
+    expect(engine.getPerformanceCounters().cycleFormulaScans).toBe(0)
   })
 
   it('does not inspect unaffected prefix aggregate formulas above a deleted row', async () => {
@@ -317,7 +321,28 @@ describe('EngineStructureService', () => {
     )
 
     expect(result.graphRefreshRequired).toBe(false)
-    expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(3)
+    expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(0)
+    expect(result.formulaCellIndices).toEqual([])
+    expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Number, value: 17 })
+  })
+
+  it('deletes direct aggregate rows without forcing a full wasm program upload', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-row-aggregate-runtime-patch' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 6; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.deleteRows('Sheet1', 2, 1)
+
+    expect(engine.getCell('Sheet1', 'B5').formula).toBe('SUM(A1:A5)')
+    expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Number, value: 18 })
+    expect(engine.getPerformanceCounters().wasmFullUploads).toBe(0)
+    expect(engine.getPerformanceCounters().calcChainFullScans).toBe(0)
+    expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(0)
   })
 
   it('does not scan cycle state for literal-only structural deletes', async () => {
@@ -374,6 +399,7 @@ describe('EngineStructureService', () => {
       engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
     }
 
+    engine.resetPerformanceCounters()
     const result = Effect.runSync(
       getStructureService(engine).applyStructuralAxisOp({
         kind: 'moveRows',
@@ -390,7 +416,12 @@ describe('EngineStructureService', () => {
     expect(engine.getCell('Sheet1', 'B2').formula).toBe('SUM(A2:A2)')
     expect(engine.getCell('Sheet1', 'B3').formula).toBe('SUM(A2:A3)')
     expect(engine.getCell('Sheet1', 'B4').formula).toBe('SUM(A1:A4)')
-    expect(result.formulaCellIndices).toHaveLength(4)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B4')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(result.formulaCellIndices).toEqual([])
+    expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(0)
   })
 
   it('keeps repeated simple column families off the topology and dirty-formula path for inserts', async () => {

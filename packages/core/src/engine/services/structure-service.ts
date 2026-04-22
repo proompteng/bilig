@@ -13,7 +13,12 @@ import {
 import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
-import { mapStructuralAxisIndex, mapStructuralBoundary, structuralTransformForOp } from '../../engine-structural-utils.js'
+import {
+  mapStructuralAxisIndex,
+  mapStructuralAxisInterval,
+  mapStructuralBoundary,
+  structuralTransformForOp,
+} from '../../engine-structural-utils.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { FormulaTable } from '../../formula-table.js'
 import {
@@ -225,7 +230,7 @@ function structuralDirectAggregateRewritePreservesValue(
   transform: StructuralAxisTransform,
 ): boolean {
   return (
-    transform.kind === 'insert' &&
+    (transform.kind === 'insert' || transform.kind === 'move') &&
     formula.directAggregate !== undefined &&
     rewritten.reusedProgram &&
     !rewritten.compiled.volatile &&
@@ -716,11 +721,13 @@ export function createEngineStructureService(args: {
     readonly changedDefinedNames: ReadonlySet<string>
     readonly changedTableNames: ReadonlySet<string>
     readonly ownerPositions: ReadonlyMap<number, { sheetName: string; row: number; col: number }>
+    readonly precomputedDirectAggregateValueCellIndices: readonly number[]
   }): StructuralFormulaRebindResolution => {
     const inputs: StructuralFormulaRebindInput[] = []
     const preservedCellIndices: number[] = []
     const templateRewriteCache = new Map<string, StructurallyRewrittenTemplate | null>()
     const remappedCellsByIndex = new Map(argsForResolve.transaction.remappedCells.map((entry) => [entry.cellIndex, entry] as const))
+    const precomputedDirectAggregateValueCellIndices = new Set(argsForResolve.precomputedDirectAggregateValueCellIndices)
     argsForResolve.formulaCellIndices.forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
       if (!formula) {
@@ -841,6 +848,7 @@ export function createEngineStructureService(args: {
           formula.rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0),
         ) || preservesDirectCellDependencies
       const preservesValue =
+        precomputedDirectAggregateValueCellIndices.has(cellIndex) ||
         structuralRewritePreservesValue(formula, rewritten, argsForResolve.transform) ||
         structuralDirectAggregateRewritePreservesValue(formula, rewritten, argsForResolve.transform)
       const hasOnlyPlaceholderDirectDependencies =
@@ -1217,6 +1225,8 @@ export function createEngineStructureService(args: {
     preservedCellIndices: number[]
     precomputedChangedInputCellIndices: number[]
     ownerPositions: Map<number, { sheetName: string; row: number; col: number }>
+    precomputedDirectAggregateValueCellIndices: number[]
+    directAggregateRetargetCellIndices: number[]
   } => {
     const formulaCellIndices = new Set<number>()
     const rebindCellIndices = new Set<number>()
@@ -1224,6 +1234,8 @@ export function createEngineStructureService(args: {
     const precomputedChangedInputCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
+    const precomputedDirectAggregateValueCellIndices = new Set<number>()
+    const directAggregateRetargetCellIndices = new Set<number>()
     let sharedOwnedPreservingSourceTransform: RuntimeFormula['structuralSourceTransform']
     const ownedPreservingSourceTransform = (): NonNullable<RuntimeFormula['structuralSourceTransform']> =>
       (sharedOwnedPreservingSourceTransform ??= {
@@ -1300,6 +1312,107 @@ export function createEngineStructureService(args: {
         formula.directAggregate,
       )
     }
+    const tryPrecomputeDeletedDirectAggregateValue = (
+      cellIndex: number,
+      formula: RuntimeFormula,
+      ownerPosition: { row: number; col: number },
+    ): boolean => {
+      if (
+        argsForImpact.changedDefinedNames.size > 0 ||
+        argsForImpact.changedTableNames.size > 0 ||
+        argsForImpact.transform.kind !== 'delete' ||
+        argsForImpact.transform.axis !== 'row' ||
+        argsForImpact.targetSheetId === undefined
+      ) {
+        return false
+      }
+      const directAggregate = formula.directAggregate
+      if (!directAggregate || directAggregate.sheetName !== argsForImpact.sheetName || directAggregate.aggregateKind !== 'sum') {
+        return false
+      }
+      if (mapStructuralAxisIndex(ownerPosition.row, argsForImpact.transform) === undefined) {
+        return false
+      }
+      const overlapStart = Math.max(directAggregate.rowStart, argsForImpact.transform.start)
+      const overlapEnd = Math.min(directAggregate.rowEnd, argsForImpact.transform.start + argsForImpact.transform.count - 1)
+      if (overlapStart > overlapEnd) {
+        return false
+      }
+      const aggregateSheet = args.state.workbook.getSheet(argsForImpact.sheetName)
+      if (!aggregateSheet) {
+        return false
+      }
+      const currentValue = args.state.workbook.cellStore.getValue(cellIndex, () => '')
+      if (currentValue.tag !== ValueTag.Number) {
+        return false
+      }
+      let deletedContribution = 0
+      for (let row = overlapStart; row <= overlapEnd; row += 1) {
+        const memberCellIndex =
+          aggregateSheet.structureVersion === 1
+            ? aggregateSheet.grid.getPhysical(row, directAggregate.col)
+            : aggregateSheet.grid.get(row, directAggregate.col)
+        if (memberCellIndex === -1) {
+          continue
+        }
+        const memberValue = args.state.workbook.cellStore.getValue(memberCellIndex, () => '')
+        switch (memberValue.tag) {
+          case ValueTag.Number:
+            deletedContribution += memberValue.value
+            break
+          case ValueTag.Boolean:
+            deletedContribution += memberValue.value ? 1 : 0
+            break
+          case ValueTag.Empty:
+          case ValueTag.String:
+            break
+          case ValueTag.Error:
+            return false
+        }
+      }
+      args.state.workbook.cellStore.setValue(cellIndex, {
+        tag: ValueTag.Number,
+        value: currentValue.value - deletedContribution,
+      })
+      precomputedChangedInputCellIndices.add(cellIndex)
+      precomputedDirectAggregateValueCellIndices.add(cellIndex)
+      return true
+    }
+    const canRetargetDirectAggregateWithoutFormulaRewrite = (
+      formula: RuntimeFormula,
+      ownerPosition: { row: number; col: number },
+    ): boolean => {
+      if (
+        argsForImpact.changedDefinedNames.size > 0 ||
+        argsForImpact.changedTableNames.size > 0 ||
+        argsForImpact.targetSheetId === undefined ||
+        argsForImpact.transform.axis !== 'row'
+      ) {
+        return false
+      }
+      const directAggregate = formula.directAggregate
+      if (!directAggregate || directAggregate.sheetName !== argsForImpact.sheetName) {
+        return false
+      }
+      if (mapStructuralAxisIndex(ownerPosition.row, argsForImpact.transform) === undefined) {
+        return false
+      }
+      return mapStructuralAxisInterval(directAggregate.rowStart, directAggregate.rowEnd, argsForImpact.transform) !== undefined
+    }
+    const tryQueueDirectAggregateStructuralRetarget = (
+      cellIndex: number,
+      formula: RuntimeFormula,
+      ownerPosition: { row: number; col: number },
+    ): boolean => {
+      if (!canRetargetDirectAggregateWithoutFormulaRewrite(formula, ownerPosition)) {
+        return false
+      }
+      if (argsForImpact.transform.kind === 'delete' && !tryPrecomputeDeletedDirectAggregateValue(cellIndex, formula, ownerPosition)) {
+        return false
+      }
+      directAggregateRetargetCellIndices.add(cellIndex)
+      return true
+    }
     const tryDeferOwnedSimpleFormula = (cellIndex: number): boolean => {
       if (argsForImpact.changedDefinedNames.size > 0 || argsForImpact.changedTableNames.size > 0) {
         return false
@@ -1355,6 +1468,20 @@ export function createEngineStructureService(args: {
         if (tryDeferOwnedSimpleFormula(cellIndex)) {
           return
         }
+        const formula = args.state.formulas.get(cellIndex)
+        const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+        if (
+          ownerPosition &&
+          mapStructuralAxisIndex(
+            argsForImpact.transform.axis === 'row' ? ownerPosition.row : ownerPosition.col,
+            argsForImpact.transform,
+          ) === undefined
+        ) {
+          return
+        }
+        if (formula && ownerPosition && tryQueueDirectAggregateStructuralRetarget(cellIndex, formula, ownerPosition)) {
+          return
+        }
         if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
           return
         }
@@ -1362,6 +1489,9 @@ export function createEngineStructureService(args: {
       })
     }
     args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
+      if (directAggregateRetargetCellIndices.has(cellIndex)) {
+        return
+      }
       const formula = args.state.formulas.get(cellIndex)
       if (formula?.structuralSourceTransform !== undefined) {
         return
@@ -1400,7 +1530,11 @@ export function createEngineStructureService(args: {
       if (!ownerPosition) {
         return
       }
+      if (tryQueueDirectAggregateStructuralRetarget(cellIndex, formula, ownerPosition)) {
+        return
+      }
       ownerPositions.set(cellIndex, { sheetName: ownerSheetName, row: ownerPosition.row, col: ownerPosition.col })
+      const formulaValuePrecomputed = tryPrecomputeDeletedDirectAggregateValue(cellIndex, formula, ownerPosition)
       const axisIndex = argsForImpact.transform.axis === 'row' ? ownerPosition?.row : ownerPosition?.col
       const ownerPositionAffected =
         ownerSheetName === argsForImpact.sheetName &&
@@ -1486,6 +1620,9 @@ export function createEngineStructureService(args: {
       if (ownerPositionAffected || dependencyPositionAffected || touchesSheetDependency || touchesChangedName || touchesChangedTable) {
         rebindCellIndices.add(cellIndex)
       }
+      if (formulaValuePrecomputed) {
+        rebindCellIndices.add(cellIndex)
+      }
     })
     return {
       formulaCellIndices: [...formulaCellIndices],
@@ -1493,6 +1630,8 @@ export function createEngineStructureService(args: {
       preservedCellIndices: [...preservedCellIndices],
       precomputedChangedInputCellIndices: [...precomputedChangedInputCellIndices],
       ownerPositions,
+      precomputedDirectAggregateValueCellIndices: [...precomputedDirectAggregateValueCellIndices],
+      directAggregateRetargetCellIndices: [...directAggregateRetargetCellIndices],
     }
   }
 
@@ -1681,15 +1820,41 @@ export function createEngineStructureService(args: {
           }
           const removedFormulaCellIndices = transaction.removedCellIndices.filter((cellIndex) => args.state.formulas.has(cellIndex))
           const removedFormulaCellIndexSet = new Set<number>(removedFormulaCellIndices)
-          if (removedFormulaCellIndices.length > 0) {
-            hasCycleFormulas()
-          }
+          const removedCycleFormulaCount = removedFormulaCellIndices.filter(
+            (cellIndex) => ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0,
+          ).length
           transaction.removedCellIndices.forEach((cellIndex) => {
             clearRemovedCellRuntimeState(cellIndex)
           })
 
           clearSpillMetadataForSheet(sheetName)
           args.retargetRangeDependencies(transaction, structuralRangeDependencies)
+          const directRetargetedFormulaCellIndices: number[] = []
+          const directRetargetedPreservedFormulaCellIndices: number[] = []
+          const precomputedDirectAggregateValueCellIndices = new Set(impactedFormulas.precomputedDirectAggregateValueCellIndices)
+          impactedFormulas.directAggregateRetargetCellIndices.forEach((cellIndex) => {
+            if (!isCellIndexMapped(cellIndex)) {
+              return
+            }
+            const retargeted = args.retargetDirectAggregateFormulaForStructuralTransform(
+              {
+                cellIndex,
+                ownerSheetName: sheetName,
+                ownerRow: 0,
+                ownerCol: 0,
+                source: '',
+                preservesValue: true,
+              },
+              sheetName,
+              transform,
+            )
+            if (!retargeted) {
+              return
+            }
+            directRetargetedFormulaCellIndices.push(cellIndex)
+            directRetargetedPreservedFormulaCellIndices.push(cellIndex)
+            hasDeferredStructuralFormulaSources = true
+          })
           const rebindResolution = resolveStructuralFormulaRebindInputs({
             formulaCellIndices: impactedFormulas.rebindCellIndices.filter((cellIndex) => isCellIndexMapped(cellIndex)),
             sheetName,
@@ -1698,10 +1863,9 @@ export function createEngineStructureService(args: {
             changedDefinedNames,
             changedTableNames,
             ownerPositions: impactedFormulas.ownerPositions,
+            precomputedDirectAggregateValueCellIndices: [...precomputedDirectAggregateValueCellIndices],
           })
           const rebindInputs = rebindResolution.inputs
-          const directRetargetedFormulaCellIndices: number[] = []
-          const directRetargetedPreservedFormulaCellIndices: number[] = []
           const remainingRebindInputs: StructuralFormulaRebindInput[] = []
           rebindInputs.forEach((input) => {
             const formula = args.state.formulas.get(input.cellIndex)
@@ -1759,7 +1923,7 @@ export function createEngineStructureService(args: {
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
           const graphRefreshRequired =
             ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells && !deleteOnlyAcyclicRebind) ||
-            (removedFormulaCellIndices.length > 0 && hasCycleFormulas())
+            removedCycleFormulaCount > 0
           return {
             transaction,
             changedCellIndices: [...transaction.removedCellIndices],
