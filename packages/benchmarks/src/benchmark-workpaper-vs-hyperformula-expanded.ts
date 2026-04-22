@@ -1031,6 +1031,7 @@ function summarizeEngineCounters(samples: readonly BenchmarkSample[]): EngineCou
     columnOwnerBuilds: zeroSummary,
     lookupOwnerBuilds: zeroSummary,
     calcChainFullScans: zeroSummary,
+    cycleFormulaScans: zeroSummary,
     topoRepairs: zeroSummary,
     topoRepairFailures: zeroSummary,
     topoRepairAffectedFormulas: zeroSummary,

@@ -25,6 +25,7 @@ const oracleStructuralCounterKeys = [
   'columnOwnerBuilds',
   'lookupOwnerBuilds',
   'calcChainFullScans',
+  'cycleFormulaScans',
   'topoRepairs',
   'topoRepairFailures',
   'topoRepairAffectedFormulas',

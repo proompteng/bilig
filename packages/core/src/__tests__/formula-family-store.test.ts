@@ -68,4 +68,25 @@ describe('FormulaFamilyStore', () => {
     expect(store.getMembership(100)).toBeDefined()
     expect(store.getStats()).toEqual({ familyCount: 2, runCount: 3, memberCount: 5 })
   })
+
+  it('tracks sheet member counts and consumes family-level source transforms', () => {
+    const store = createFormulaFamilyStore()
+    store.upsertFormula({ cellIndex: 1, sheetId: 1, row: 0, col: 2, templateId: 1, shapeKey: 'a' })
+    store.upsertFormula({ cellIndex: 2, sheetId: 1, row: 1, col: 2, templateId: 1, shapeKey: 'a' })
+
+    const family = store.listFamilies()[0]
+    expect(family).toBeDefined()
+    const transform = {
+      ownerSheetName: 'Sheet1',
+      targetSheetName: 'Sheet1',
+      transform: { kind: 'insert', axis: 'column', start: 1, count: 1 } as const,
+      preservesValue: true,
+    }
+    store.setStructuralSourceTransform(family.id, transform)
+
+    expect(store.countSheetMembers(1)).toBe(2)
+    expect(store.getStructuralSourceTransform(1)).toBe(transform)
+    expect(store.consumeStructuralSourceTransforms()).toEqual([{ cellIndices: [1, 2], transform }])
+    expect(store.getStructuralSourceTransform(1)).toBeUndefined()
+  })
 })

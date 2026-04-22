@@ -1,3 +1,5 @@
+import type { StructuralAxisTransform } from '@bilig/formula'
+
 export type FormulaFamilyId = number
 export type FormulaFamilyRunId = number
 
@@ -43,10 +45,27 @@ export interface FormulaFamilyStats {
   readonly memberCount: number
 }
 
+export interface FormulaFamilyStructuralSourceTransform {
+  readonly ownerSheetName: string
+  readonly targetSheetName: string
+  readonly transform: StructuralAxisTransform
+  readonly preservesValue: boolean
+}
+
+export interface FormulaFamilyStructuralSourceTransformEntry {
+  readonly cellIndices: readonly number[]
+  readonly transform: FormulaFamilyStructuralSourceTransform
+}
+
 export interface FormulaFamilyStore {
   readonly upsertFormula: (args: FormulaFamilyKey & FormulaFamilyMember) => FormulaFamilyMembership
   readonly unregisterFormula: (cellIndex: number) => boolean
   readonly getMembership: (cellIndex: number) => FormulaFamilyMembership | undefined
+  readonly countSheetMembers: (sheetId: number) => number
+  readonly forEachFamily: (fn: (family: FormulaFamily) => void) => void
+  readonly setStructuralSourceTransform: (familyId: FormulaFamilyId, transform: FormulaFamilyStructuralSourceTransform) => void
+  readonly getStructuralSourceTransform: (cellIndex: number) => FormulaFamilyStructuralSourceTransform | undefined
+  readonly consumeStructuralSourceTransforms: () => FormulaFamilyStructuralSourceTransformEntry[]
   readonly getStats: () => FormulaFamilyStats
   readonly listFamilies: () => FormulaFamily[]
   readonly invalidateSheet: (sheetId: number) => void
@@ -88,6 +107,8 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
   const familyIdByKey = new Map<string, FormulaFamilyId>()
   const cellRecords = new Map<number, FormulaFamilyCellRecord>()
   const memberships = new Map<number, FormulaFamilyMembership>()
+  const sheetMemberCounts = new Map<number, number>()
+  const structuralSourceTransforms = new Map<FormulaFamilyId, FormulaFamilyStructuralSourceTransform>()
   let nextFamilyId = 1
   let nextRunId = 1
 
@@ -196,6 +217,12 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     }
     memberships.delete(cellIndex)
     cellRecords.delete(cellIndex)
+    const sheetMemberCount = sheetMemberCounts.get(record.sheetId) ?? 0
+    if (sheetMemberCount <= 1) {
+      sheetMemberCounts.delete(record.sheetId)
+    } else {
+      sheetMemberCounts.set(record.sheetId, sheetMemberCount - 1)
+    }
     const family = familiesById.get(membership.familyId)
     if (!family) {
       return true
@@ -205,6 +232,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     if (family.runs.length === 0) {
       familiesById.delete(family.id)
       familyIdByKey.delete(family.key)
+      structuralSourceTransforms.delete(family.id)
     }
     return true
   }
@@ -215,6 +243,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       const family = getOrCreateFamily(args)
       const member: FormulaFamilyMember = { cellIndex: args.cellIndex, row: args.row, col: args.col }
       cellRecords.set(args.cellIndex, { ...args })
+      sheetMemberCounts.set(args.sheetId, (sheetMemberCounts.get(args.sheetId) ?? 0) + 1)
 
       for (let runIndex = 0; runIndex < family.runs.length; runIndex += 1) {
         const run = family.runs[runIndex]!
@@ -233,6 +262,44 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     unregisterFormula,
     getMembership(cellIndex) {
       return memberships.get(cellIndex)
+    },
+    countSheetMembers(sheetId) {
+      return sheetMemberCounts.get(sheetId) ?? 0
+    },
+    forEachFamily(fn) {
+      familiesById.forEach((family) => {
+        fn({
+          id: family.id,
+          sheetId: family.sheetId,
+          templateId: family.templateId,
+          shapeKey: family.shapeKey,
+          runs: family.runs,
+        })
+      })
+    },
+    setStructuralSourceTransform(familyId, transform) {
+      if (familiesById.has(familyId)) {
+        structuralSourceTransforms.set(familyId, transform)
+      }
+    },
+    getStructuralSourceTransform(cellIndex) {
+      const membership = memberships.get(cellIndex)
+      return membership ? structuralSourceTransforms.get(membership.familyId) : undefined
+    },
+    consumeStructuralSourceTransforms() {
+      const entries: FormulaFamilyStructuralSourceTransformEntry[] = []
+      structuralSourceTransforms.forEach((transform, familyId) => {
+        const family = familiesById.get(familyId)
+        if (!family) {
+          return
+        }
+        entries.push({
+          cellIndices: family.runs.flatMap((run) => run.cellIndices),
+          transform,
+        })
+      })
+      structuralSourceTransforms.clear()
+      return entries
     },
     getStats() {
       let runCount = 0
@@ -281,6 +348,8 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       familyIdByKey.clear()
       cellRecords.clear()
       memberships.clear()
+      sheetMemberCounts.clear()
+      structuralSourceTransforms.clear()
     },
   }
 }

@@ -121,6 +121,7 @@ describe('SpreadsheetEngine formula initialization', () => {
     expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 9 })
     expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Number, value: 11 })
     expect(engine.getPerformanceCounters().topoRebuilds).toBe(0)
+    expect(engine.getPerformanceCounters().cycleFormulaScans).toBe(0)
     expect(engine.getLastMetrics()).toMatchObject({
       dirtyFormulaCount: 4,
       wasmFormulaCount: 4,

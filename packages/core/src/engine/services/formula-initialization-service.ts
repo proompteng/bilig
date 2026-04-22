@@ -4,6 +4,7 @@ import type { CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
+import { addEngineCounter } from '../../perf/engine-counters.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 
@@ -46,7 +47,7 @@ export interface HydratedPreparedFormulaInitializationRef extends PreparedFormul
 }
 
 export function createEngineFormulaInitializationService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'getLastMetrics' | 'setLastMetrics'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas' | 'counters' | 'getLastMetrics' | 'setLastMetrics'>
   readonly beginMutationCollection: () => void
   readonly ensureRecalcScratchCapacity: (size: number) => void
   readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
@@ -89,6 +90,7 @@ export function createEngineFormulaInitializationService(args: {
 }): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
   const hasCycleMembersNow = (): boolean => {
+    addEngineCounter(args.state.counters, 'cycleFormulaScans')
     let found = false
     args.state.formulas.forEach((_formula, cellIndex) => {
       if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
@@ -130,7 +132,8 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     args.beginMutationCollection()
-    const hadCycleMembersBefore = hasCycleMembersNow()
+    let hadCycleMembersBefore: boolean | undefined
+    const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
     let changedInputCount = 0
     let formulaChangedCount = 0
     let topologyChanged = false
@@ -191,7 +194,7 @@ export function createEngineFormulaInitializationService(args: {
 
     if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
       const repaired =
-        !hadCycleMembersBefore &&
+        !hadCycleMembersBeforeNow() &&
         formulaChangedCount > 0 &&
         args.repairTopoRanks(args.getChangedFormulaBuffer().subarray(0, formulaChangedCount))
       if (!repaired) {
@@ -274,7 +277,8 @@ export function createEngineFormulaInitializationService(args: {
     }
 
     args.beginMutationCollection()
-    const hadCycleMembersBefore = hasCycleMembersNow()
+    let hadCycleMembersBefore: boolean | undefined
+    const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
     let topologyChanged = false
     let compileMs = 0
     const reservedNewCells = Math.max(potentialNewCells ?? refs.length, refs.length)
@@ -322,7 +326,7 @@ export function createEngineFormulaInitializationService(args: {
 
     if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
       const repaired =
-        !hadCycleMembersBefore &&
+        !hadCycleMembersBeforeNow() &&
         refs.length > 0 &&
         args.repairTopoRanks(
           Uint32Array.from(

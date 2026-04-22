@@ -33,7 +33,13 @@ import { growUint32 } from '../../engine-buffer-utils.js'
 import { resolveMetadataReferencesInAst, spillDependencyKeyFromRef, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
 import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js'
-import type { FormulaFamilyStats, FormulaFamilyStore } from '../../formula/formula-family-store.js'
+import type {
+  FormulaFamily,
+  FormulaFamilyStats,
+  FormulaFamilyStore,
+  FormulaFamilyStructuralSourceTransform,
+  FormulaFamilyStructuralSourceTransformEntry,
+} from '../../formula/formula-family-store.js'
 import type { FormulaInstanceTable } from '../../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { mapStructuralAxisInterval } from '../../engine-structural-utils.js'
@@ -124,6 +130,12 @@ export interface EngineFormulaBindingService {
   readonly rebindDefinedNameDependentsNow: (names: readonly string[], formulaChangedCount: number) => number
   readonly rebindTableDependentsNow: (tableNames: readonly string[], formulaChangedCount: number) => number
   readonly rebindFormulasForSheetNow: (sheetName: string, formulaChangedCount: number, candidates?: readonly number[] | U32) => number
+  readonly forEachFormulaCellOwnedBySheetNow: (sheetName: string, fn: (cellIndex: number) => void) => void
+  readonly countFormulaFamilySheetMembersNow: (sheetId: number) => number
+  readonly forEachFormulaFamilyNow: (fn: (family: FormulaFamily) => void) => void
+  readonly setFormulaFamilyStructuralSourceTransformNow: (familyId: number, transform: FormulaFamilyStructuralSourceTransform) => void
+  readonly getFormulaFamilyStructuralSourceTransformNow: (cellIndex: number) => FormulaFamilyStructuralSourceTransform | undefined
+  readonly consumeFormulaFamilyStructuralSourceTransformsNow: () => FormulaFamilyStructuralSourceTransformEntry[]
   readonly collectFormulaCellsOwnedBySheetNow: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsReferencingSheetNow: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsForDefinedNamesNow: (names: readonly string[]) => readonly number[]
@@ -2801,6 +2813,24 @@ export function createEngineFormulaBindingService(args: {
       return rebindFormulaCellsNow(collectTrackedDependents(args.reverseState.reverseTableEdges, normalized), formulaChangedCount)
     },
     rebindFormulasForSheetNow,
+    forEachFormulaCellOwnedBySheetNow(sheetName, fn) {
+      formulaOwnerSheetCells.get(sheetName)?.forEach(fn)
+    },
+    countFormulaFamilySheetMembersNow(sheetId) {
+      return args.formulaFamilies.countSheetMembers(sheetId)
+    },
+    forEachFormulaFamilyNow(fn) {
+      args.formulaFamilies.forEachFamily(fn)
+    },
+    setFormulaFamilyStructuralSourceTransformNow(familyId, transform) {
+      args.formulaFamilies.setStructuralSourceTransform(familyId, transform)
+    },
+    getFormulaFamilyStructuralSourceTransformNow(cellIndex) {
+      return args.formulaFamilies.getStructuralSourceTransform(cellIndex)
+    },
+    consumeFormulaFamilyStructuralSourceTransformsNow() {
+      return args.formulaFamilies.consumeStructuralSourceTransforms()
+    },
     collectFormulaCellsOwnedBySheetNow(sheetName) {
       return [...(formulaOwnerSheetCells.get(sheetName) ?? [])]
     },

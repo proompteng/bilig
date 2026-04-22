@@ -15,7 +15,7 @@ import { entityPayload, isExactLookupColumnEntity, isRangeEntity, isSortedLookup
 import { normalizeRange } from '../../engine-range-utils.js'
 import { emptyValue } from '../../engine-value-utils.js'
 import { WorkbookStore } from '../../workbook-store.js'
-import type { EngineRuntimeState } from '../runtime-state.js'
+import type { EngineRuntimeState, RuntimeStructuralFormulaSourceTransform } from '../runtime-state.js'
 import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import type { EngineRuntimeColumnStoreService } from './runtime-column-store-service.js'
 
@@ -33,6 +33,7 @@ export interface EngineReadService {
 export function createEngineReadService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
+  readonly getFormulaFamilyStructuralSourceTransform: (cellIndex: number) => RuntimeStructuralFormulaSourceTransform | undefined
   readonly forEachFormulaDependencyCell: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void
   readonly getEntityDependents: (entityId: number) => Uint32Array
   readonly cellToCsvValue: (cell: CellSnapshot) => string
@@ -77,7 +78,9 @@ export function createEngineReadService(args: {
     const address = args.state.workbook.getAddress(cellIndex)
     const sheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
     const runtimeFormula = args.state.formulas.get(cellIndex)
-    const formula = runtimeFormula ? getRuntimeFormulaSource(runtimeFormula) : undefined
+    const formula = runtimeFormula
+      ? getRuntimeFormulaSource(runtimeFormula, args.getFormulaFamilyStructuralSourceTransform(cellIndex))
+      : undefined
     const snapshot: CellSnapshot = {
       sheetName,
       address,

@@ -809,6 +809,7 @@ describe('EngineMutationService', () => {
     engine.setCellValue('Sheet1', 'B1', 2)
     engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
 
+    engine.resetPerformanceCounters()
     engine.insertColumns('Sheet1', 1, 1)
 
     const undoStack = Reflect.get(engine, 'undoStack')
@@ -823,6 +824,7 @@ describe('EngineMutationService', () => {
     expect(latest?.forward.op?.entries).toHaveLength(1)
     expect(latest?.inverse.kind).toBe('single-op')
     expect(latest?.inverse.op).toMatchObject({ kind: 'deleteColumns', sheetName: 'Sheet1', start: 1, count: 1 })
+    expect(engine.getPerformanceCounters().cycleFormulaScans).toBe(0)
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 3 })
 
     expect(engine.undo()).toBe(true)

@@ -1,16 +1,22 @@
 import { rewriteCompiledFormulaForStructuralTransform, rewriteFormulaForStructuralTransform, type CompiledFormula } from '@bilig/formula'
-import type { RuntimeFormula } from './runtime-state.js'
+import type { RuntimeFormula, RuntimeStructuralFormulaSourceTransform } from './runtime-state.js'
 
-export function getRuntimeFormulaSource(formula: RuntimeFormula): string {
-  const deferred = formula.structuralSourceTransform
+export function getRuntimeFormulaSource(
+  formula: RuntimeFormula,
+  inheritedStructuralSourceTransform?: RuntimeStructuralFormulaSourceTransform,
+): string {
+  const deferred = formula.structuralSourceTransform ?? inheritedStructuralSourceTransform
   if (!deferred) {
     return formula.source
   }
   return rewriteFormulaForStructuralTransform(formula.source, deferred.ownerSheetName, deferred.targetSheetName, deferred.transform)
 }
 
-export function getRuntimeFormulaStructuralCompiled(formula: RuntimeFormula): CompiledFormula | undefined {
-  const deferred = formula.structuralSourceTransform
+export function getRuntimeFormulaStructuralCompiled(
+  formula: RuntimeFormula,
+  inheritedStructuralSourceTransform?: RuntimeStructuralFormulaSourceTransform,
+): CompiledFormula | undefined {
+  const deferred = formula.structuralSourceTransform ?? inheritedStructuralSourceTransform
   if (!deferred) {
     return undefined
   }

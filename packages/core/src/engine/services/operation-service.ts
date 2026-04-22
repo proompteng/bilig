@@ -26,6 +26,7 @@ import type {
 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
+import { addEngineCounter } from '../../perf/engine-counters.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
@@ -292,6 +293,7 @@ export function createEngineOperationService(args: {
     | 'strings'
     | 'events'
     | 'formulas'
+    | 'counters'
     | 'replicaState'
     | 'entityVersions'
     | 'sheetDeleteVersions'
@@ -845,6 +847,7 @@ export function createEngineOperationService(args: {
   }
 
   const hasCycleMembersNow = (): boolean => {
+    addEngineCounter(args.state.counters, 'cycleFormulaScans')
     let found = false
     args.state.formulas.forEach((_formula, cellIndex) => {
       if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
@@ -1463,7 +1466,8 @@ export function createEngineOperationService(args: {
     let refreshAllPivots = false
     let appliedOps = 0
     const canSkipOrderChecks = source !== 'remote'
-    const hadCycleMembersBefore = hasCycleMembersNow()
+    let hadCycleMembersBefore: boolean | undefined
+    const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
     const exactLookupImpactCaches: ExactLookupImpactCaches = new Map()
     const clearLookupImpactCaches = (): void => {
       exactLookupImpactCaches.clear()
@@ -2152,7 +2156,7 @@ export function createEngineOperationService(args: {
 
     if (topologyChanged) {
       const repaired =
-        !hadCycleMembersBefore &&
+        !hadCycleMembersBeforeNow() &&
         !sheetDeleted &&
         !structuralInvalidation &&
         formulaChangedCount > 0 &&
@@ -2316,7 +2320,8 @@ export function createEngineOperationService(args: {
     const hasWatchedCellListeners = args.state.events.hasCellListeners()
     const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
     const trackExplicitChanges = !isRestore && requiresChangedSet
-    const hadCycleMembersBefore = hasCycleMembersNow()
+    let hadCycleMembersBefore: boolean | undefined
+    const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
@@ -2798,7 +2803,7 @@ export function createEngineOperationService(args: {
 
     if (topologyChanged) {
       const repaired =
-        !hadCycleMembersBefore &&
+        !hadCycleMembersBeforeNow() &&
         formulaChangedCount > 0 &&
         args.repairTopoRanks(args.getChangedFormulaBuffer().subarray(0, formulaChangedCount))
       if (!repaired) {

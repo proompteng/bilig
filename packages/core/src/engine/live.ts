@@ -423,6 +423,7 @@ export function createEngineServiceRuntime(args: {
   const read = createEngineReadService({
     state: args.state,
     runtimeColumnStore,
+    getFormulaFamilyStructuralSourceTransform: (cellIndex) => binding.getFormulaFamilyStructuralSourceTransformNow(cellIndex),
     forEachFormulaDependencyCell: (cellIndex, fn) => traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
     cellToCsvValue: args.cellToCsvValue,
@@ -448,6 +449,12 @@ export function createEngineServiceRuntime(args: {
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
     collectFormulaCellsOwnedBySheet: (sheetName) => binding.collectFormulaCellsOwnedBySheetNow(sheetName),
+    forEachFormulaCellOwnedBySheet: (sheetName, fn) => binding.forEachFormulaCellOwnedBySheetNow(sheetName, fn),
+    countFormulaFamilySheetMembers: (sheetId) => binding.countFormulaFamilySheetMembersNow(sheetId),
+    forEachFormulaFamily: (fn) => binding.forEachFormulaFamilyNow(fn),
+    setFormulaFamilyStructuralSourceTransform: (familyId, transform) =>
+      binding.setFormulaFamilyStructuralSourceTransformNow(familyId, transform),
+    consumeFormulaFamilyStructuralSourceTransforms: () => binding.consumeFormulaFamilyStructuralSourceTransformsNow(),
     collectFormulaCellsReferencingSheet: (sheetName) => binding.collectFormulaCellsReferencingSheetNow(sheetName),
     collectFormulaCellsForDefinedNames: (names) => binding.collectFormulaCellsForDefinedNamesNow(names),
     collectFormulaCellsForTables: (tableNames) => binding.collectFormulaCellsForTablesNow(tableNames),
@@ -746,7 +753,9 @@ export function createEngineServiceRuntime(args: {
             sheetName,
             row: position.row,
             col: position.col,
-            source: formula ? getRuntimeFormulaSource(formula) : record.source,
+            source: formula
+              ? getRuntimeFormulaSource(formula, formulaFamilies.getStructuralSourceTransform(record.cellIndex))
+              : record.source,
             ...(formula?.templateId !== undefined
               ? { templateId: formula.templateId }
               : record.templateId !== undefined

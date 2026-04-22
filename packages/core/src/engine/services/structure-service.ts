@@ -21,6 +21,7 @@ import {
   retargetStructurallyRewrittenTemplateInstance,
   type StructurallyRewrittenTemplate,
 } from '../../formula/structural-retargeting.js'
+import type { FormulaFamily } from '../../formula/formula-family-store.js'
 import type { RuntimeFormula } from '../runtime-state.js'
 import { getRuntimeFormulaSource, getRuntimeFormulaStructuralCompiled } from '../runtime-formula-source.js'
 import { EngineStructureError } from '../errors.js'
@@ -275,6 +276,17 @@ export function createEngineStructureService(args: {
   ) => boolean
   readonly rewriteFormulaCompiledPreservingBinding: (input: StructuralFormulaRebindInput) => boolean
   readonly collectFormulaCellsOwnedBySheet: (sheetName: string) => readonly number[]
+  readonly forEachFormulaCellOwnedBySheet: (sheetName: string, fn: (cellIndex: number) => void) => void
+  readonly countFormulaFamilySheetMembers: (sheetId: number) => number
+  readonly forEachFormulaFamily: (fn: (family: FormulaFamily) => void) => void
+  readonly setFormulaFamilyStructuralSourceTransform: (
+    familyId: number,
+    transform: NonNullable<RuntimeFormula['structuralSourceTransform']>,
+  ) => void
+  readonly consumeFormulaFamilyStructuralSourceTransforms: () => readonly {
+    readonly cellIndices: readonly number[]
+    readonly transform: NonNullable<RuntimeFormula['structuralSourceTransform']>
+  }[]
   readonly collectFormulaCellsReferencingSheet: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsForDefinedNames: (names: readonly string[]) => readonly number[]
   readonly collectFormulaCellsForTables: (tableNames: readonly string[]) => readonly number[]
@@ -1193,6 +1205,56 @@ export function createEngineStructureService(args: {
     const precomputedChangedInputCellIndices = new Set<number>()
     const candidateCellIndices = new Set<number>()
     const ownerPositions = new Map<number, { sheetName: string; row: number; col: number }>()
+    let sharedOwnedPreservingSourceTransform: RuntimeFormula['structuralSourceTransform']
+    const ownedPreservingSourceTransform = (): NonNullable<RuntimeFormula['structuralSourceTransform']> =>
+      (sharedOwnedPreservingSourceTransform ??= {
+        ownerSheetName: argsForImpact.sheetName,
+        targetSheetName: argsForImpact.sheetName,
+        transform: argsForImpact.transform,
+        preservesValue: true,
+      })
+    const tryDeferOwnedFormulaFamilies = (): boolean => {
+      if (
+        argsForImpact.targetSheetId === undefined ||
+        argsForImpact.changedDefinedNames.size > 0 ||
+        argsForImpact.changedTableNames.size > 0 ||
+        argsForImpact.transform.kind === 'delete' ||
+        argsForImpact.transform.axis !== 'column'
+      ) {
+        return false
+      }
+      const ownedFormulaCount = args.countFormulaFamilySheetMembers(argsForImpact.targetSheetId)
+      if (ownedFormulaCount === 0) {
+        return false
+      }
+      const familyIds: number[] = []
+      let familyMemberCount = 0
+      let canDeferFamilies = true
+      args.forEachFormulaFamily((family) => {
+        if (!canDeferFamilies || family.sheetId !== argsForImpact.targetSheetId) {
+          return
+        }
+        const representativeCellIndex = family.runs.find((run) => run.cellIndices.length > 0)?.cellIndices[0]
+        const representative = representativeCellIndex === undefined ? undefined : args.state.formulas.get(representativeCellIndex)
+        if (!representative || !canDeferSimpleStructuralFormulaSource(representative, argsForImpact.transform)) {
+          canDeferFamilies = false
+          return
+        }
+        familyIds.push(family.id)
+        family.runs.forEach((run) => {
+          familyMemberCount += run.cellIndices.length
+        })
+      })
+      if (!canDeferFamilies || familyIds.length === 0 || familyMemberCount !== ownedFormulaCount) {
+        return false
+      }
+      const transform = ownedPreservingSourceTransform()
+      familyIds.forEach((familyId) => {
+        args.setFormulaFamilyStructuralSourceTransform(familyId, transform)
+      })
+      hasDeferredStructuralFormulaSources = true
+      return true
+    }
     const canSkipOwnedDirectAggregateCandidate = (cellIndex: number): boolean => {
       if (argsForImpact.changedDefinedNames.size > 0 || argsForImpact.changedTableNames.size > 0) {
         return false
@@ -1228,12 +1290,7 @@ export function createEngineStructureService(args: {
         return false
       }
       if (canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
-        formula.structuralSourceTransform = {
-          ownerSheetName: argsForImpact.sheetName,
-          targetSheetName: argsForImpact.sheetName,
-          transform: argsForImpact.transform,
-          preservesValue: true,
-        }
+        formula.structuralSourceTransform = ownedPreservingSourceTransform()
         hasDeferredStructuralFormulaSources = true
         preservedCellIndices.add(cellIndex)
         return true
@@ -1274,15 +1331,17 @@ export function createEngineStructureService(args: {
       }
       return true
     }
-    args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).forEach((cellIndex) => {
-      if (tryDeferOwnedSimpleFormula(cellIndex)) {
-        return
-      }
-      if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
-        return
-      }
-      candidateCellIndices.add(cellIndex)
-    })
+    if (!tryDeferOwnedFormulaFamilies()) {
+      args.forEachFormulaCellOwnedBySheet(argsForImpact.sheetName, (cellIndex) => {
+        if (tryDeferOwnedSimpleFormula(cellIndex)) {
+          return
+        }
+        if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
+          return
+        }
+        candidateCellIndices.add(cellIndex)
+      })
+    }
     args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
       const formula = args.state.formulas.get(cellIndex)
       if (formula?.structuralSourceTransform !== undefined) {
@@ -1335,12 +1394,15 @@ export function createEngineStructureService(args: {
         argsForImpact.changedTableNames.size > 0 &&
         formula.compiled.symbolicTables.some((name) => argsForImpact.changedTableNames.has(name))
       if (!touchesChangedName && !touchesChangedTable && canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)) {
-        formula.structuralSourceTransform = {
-          ownerSheetName,
-          targetSheetName: argsForImpact.sheetName,
-          transform: argsForImpact.transform,
-          preservesValue: true,
-        }
+        formula.structuralSourceTransform =
+          ownerSheetName === argsForImpact.sheetName
+            ? ownedPreservingSourceTransform()
+            : {
+                ownerSheetName,
+                targetSheetName: argsForImpact.sheetName,
+                transform: argsForImpact.transform,
+                preservesValue: true,
+              }
         hasDeferredStructuralFormulaSources = true
         preservedCellIndices.add(cellIndex)
         return
@@ -1420,9 +1482,12 @@ export function createEngineStructureService(args: {
       return
     }
     const inputs: StructuralFormulaRebindInput[] = []
-    args.state.formulas.forEach((formula, cellIndex) => {
+    const enqueueMaterializedFormulaSource = (
+      formula: RuntimeFormula,
+      cellIndex: number,
+      structuralSourceTransform: NonNullable<RuntimeFormula['structuralSourceTransform']>,
+    ): void => {
       if (
-        formula.structuralSourceTransform === undefined ||
         formula.directLookup !== undefined ||
         formula.directCriteria !== undefined ||
         (formula.directAggregate === undefined && formula.rangeDependencies.length !== 0) ||
@@ -1439,9 +1504,9 @@ export function createEngineStructureService(args: {
       if (!ownerSheetName) {
         return
       }
-      const source = getRuntimeFormulaSource(formula)
-      const compiled = getRuntimeFormulaStructuralCompiled(formula)
-      const preservesValue = formula.structuralSourceTransform.preservesValue
+      const source = getRuntimeFormulaSource(formula, structuralSourceTransform)
+      const compiled = getRuntimeFormulaStructuralCompiled(formula, structuralSourceTransform)
+      const preservesValue = structuralSourceTransform.preservesValue
       inputs.push({
         cellIndex,
         ownerSheetName,
@@ -1457,6 +1522,21 @@ export function createEngineStructureService(args: {
             }
           : {}),
       })
+    }
+    args.consumeFormulaFamilyStructuralSourceTransforms().forEach((entry) => {
+      entry.cellIndices.forEach((cellIndex) => {
+        const formula = args.state.formulas.get(cellIndex)
+        if (!formula || formula.structuralSourceTransform !== undefined) {
+          return
+        }
+        enqueueMaterializedFormulaSource(formula, cellIndex, entry.transform)
+      })
+    })
+    args.state.formulas.forEach((formula, cellIndex) => {
+      if (formula.structuralSourceTransform === undefined) {
+        return
+      }
+      enqueueMaterializedFormulaSource(formula, cellIndex, formula.structuralSourceTransform)
     })
     if (inputs.length > 0) {
       args.rebindFormulaCells(inputs)
@@ -1563,17 +1643,28 @@ export function createEngineStructureService(args: {
             formulaCellIndices: impactedFormulas.formulaCellIndices,
           })
 
-          const hadCycleFormulas = (() => {
+          let hadCycleFormulas: boolean | undefined
+          const hasCycleFormulas = (): boolean => {
+            if (hadCycleFormulas !== undefined) {
+              return hadCycleFormulas
+            }
+            if (args.state.counters) {
+              addEngineCounter(args.state.counters, 'cycleFormulaScans')
+            }
             let found = false
             args.state.formulas.forEach((_formula, cellIndex) => {
               if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
                 found = true
               }
             })
+            hadCycleFormulas = found
             return found
-          })()
+          }
           const removedFormulaCellIndices = transaction.removedCellIndices.filter((cellIndex) => args.state.formulas.has(cellIndex))
           const removedFormulaCellIndexSet = new Set<number>(removedFormulaCellIndices)
+          if (removedFormulaCellIndices.length > 0) {
+            hasCycleFormulas()
+          }
           transaction.removedCellIndices.forEach((cellIndex) => {
             clearDerivedCellArtifacts(cellIndex)
             args.removeFormula(cellIndex)
@@ -1648,11 +1739,11 @@ export function createEngineStructureService(args: {
           )
           const hasNonPreservedRebind = remainingRebindInputs.some((input) => input.preservesBinding !== true)
           const deleteOnlyAcyclicRebind =
-            transform.kind === 'delete' && !hadCycleFormulas && changedDefinedNames.size === 0 && changedTableNames.size === 0
+            transform.kind === 'delete' && !hasCycleFormulas() && changedDefinedNames.size === 0 && changedTableNames.size === 0
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
           const graphRefreshRequired =
             ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells && !deleteOnlyAcyclicRebind) ||
-            (removedFormulaCellIndices.length > 0 && hadCycleFormulas)
+            (removedFormulaCellIndices.length > 0 && hasCycleFormulas())
           return {
             transaction,
             changedCellIndices: [...transaction.removedCellIndices],
