@@ -58,7 +58,7 @@ describe('worker-runtime-render-scene', () => {
       dprBucket: 2,
       freezeVersion: expect.any(Number),
       styleVersion: 3,
-      textEpoch: 3,
+      textEpoch: 0,
       valueVersion: 3,
     })
   })

@@ -55,6 +55,10 @@ export class WorkbookPaneBufferCache {
     return next
   }
 
+  peek(paneId: string): WorkbookPaneBufferEntry | null {
+    return this.entries.get(paneId) ?? null
+  }
+
   delete(paneId: string): void {
     const entry = this.entries.get(paneId)
     if (!entry) {

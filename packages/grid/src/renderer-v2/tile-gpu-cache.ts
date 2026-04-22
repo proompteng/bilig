@@ -36,9 +36,9 @@ export class TileGpuCache {
     return entry
   }
 
-  findStaleValid(desiredKey: GridTileKeyV2): TileGpuCacheEntry | null {
+  findStaleValid(desiredKey: GridTileKeyV2, options?: { readonly excludeKey?: string | undefined }): TileGpuCacheEntry | null {
     const match = [...this.entries.values()]
-      .filter((entry) => isStaleValidGridTileKeyV2(entry.packet.key, desiredKey))
+      .filter((entry) => entry.key !== options?.excludeKey && isStaleValidGridTileKeyV2(entry.packet.key, desiredKey))
       .toSorted((left, right) => right.lastUsedSeq - left.lastUsedSeq)[0]
     if (!match) {
       return null

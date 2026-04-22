@@ -132,7 +132,6 @@ export function buildWorkerResidentPaneScenes(input: {
         selectionIndependentVersion: batchVersion,
         sheetName: request.sheetName,
         styleVersion: batchVersion,
-        textEpoch: batchVersion,
         valueVersion: batchVersion,
         viewport: scene.viewport,
       }),
