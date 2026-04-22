@@ -37,8 +37,16 @@ export interface AggregateStateStore {
   readonly invalidateColumn: (sheetName: string, col: number) => void
 }
 
-function columnKey(sheetName: string, col: number): string {
+function columnKeyPrefix(sheetName: string, col: number): string {
   return `${sheetName}\t${col}`
+}
+
+function cacheKey(sheetName: string, col: number, rowStart: number): string {
+  return `${columnKeyPrefix(sheetName, col)}\t${rowStart}`
+}
+
+function prefixAnchorForRegion(regionRowStart: number, aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max'): number {
+  return aggregateKind === 'count' ? 0 : regionRowStart
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
@@ -247,7 +255,8 @@ export function createAggregateStateStore(args: {
       if (!region) {
         throw new Error(`Unknown region id: ${regionId}`)
       }
-      const key = columnKey(region.sheetName, region.col)
+      const rowStart = prefixAnchorForRegion(region.rowStart, aggregateKind)
+      const key = cacheKey(region.sheetName, region.col, rowStart)
       const currentVersions = getCurrentVersions(region.sheetName, region.col)
       const existing = cache.get(key)
       if (
@@ -262,59 +271,65 @@ export function createAggregateStateStore(args: {
         regionId,
         sheetName: region.sheetName,
         col: region.col,
-        rowStart: 0,
-        rowEnd: -1,
+        rowStart,
+        rowEnd: rowStart - 1,
         columnVersion: currentVersions.columnVersion,
         structureVersion: currentVersions.structureVersion,
         extremaValid: true,
-        prefixSums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
-        prefixCount: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd + 1, 16)),
-        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd + 1, 16)),
-        prefixMinimums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
-        prefixMaximums: new Float64Array(Math.max(region.rowEnd + 1, 16)),
+        prefixSums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixMinimums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixMaximums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
       }
       cache.set(key, next)
       return extendEntry(next, region.rowEnd)
     },
     noteLiteralWrite({ sheetName, row, col, oldValue, newValue }) {
-      const key = columnKey(sheetName, col)
-      const entry = cache.get(key)
-      if (!entry) {
-        return
-      }
+      const prefix = columnKeyPrefix(sheetName, col)
       const currentVersions = getCurrentVersions(sheetName, col)
-      if (entry.structureVersion !== currentVersions.structureVersion) {
-        cache.delete(key)
-        return
+      for (const [key, entry] of cache) {
+        if (!key.startsWith(`${prefix}\t`)) {
+          continue
+        }
+        if (entry.structureVersion !== currentVersions.structureVersion) {
+          cache.delete(key)
+          continue
+        }
+        entry.columnVersion = currentVersions.columnVersion
+        entry.structureVersion = currentVersions.structureVersion
+        if (row < entry.rowStart || row > entry.rowEnd) {
+          continue
+        }
+        if (isErrorTag(oldValue) || isErrorTag(newValue) || (entry.prefixErrorCounts[entry.rowEnd - entry.rowStart] ?? 0) > 0) {
+          cache.delete(key)
+          continue
+        }
+        const sumDelta = numericContribution(newValue) - numericContribution(oldValue)
+        const countDelta = countContribution(newValue) - countContribution(oldValue)
+        const averageDelta = averageCountContribution(newValue) - averageCountContribution(oldValue)
+        if (sumDelta === 0 && countDelta === 0 && averageDelta === 0) {
+          continue
+        }
+        const offset = row - entry.rowStart
+        const length = entry.rowEnd - entry.rowStart + 1
+        for (let index = offset; index < length; index += 1) {
+          entry.prefixSums[index] = (entry.prefixSums[index] ?? 0) + sumDelta
+          entry.prefixCount[index] = (entry.prefixCount[index] ?? 0) + countDelta
+          entry.prefixAverageCount[index] = (entry.prefixAverageCount[index] ?? 0) + averageDelta
+        }
+        entry.extremaValid = false
       }
-      entry.columnVersion = currentVersions.columnVersion
-      entry.structureVersion = currentVersions.structureVersion
-      if (row < entry.rowStart || row > entry.rowEnd) {
-        return
-      }
-      if (isErrorTag(oldValue) || isErrorTag(newValue) || (entry.prefixErrorCounts[entry.rowEnd - entry.rowStart] ?? 0) > 0) {
-        cache.delete(key)
-        return
-      }
-      const sumDelta = numericContribution(newValue) - numericContribution(oldValue)
-      const countDelta = countContribution(newValue) - countContribution(oldValue)
-      const averageDelta = averageCountContribution(newValue) - averageCountContribution(oldValue)
-      if (sumDelta === 0 && countDelta === 0 && averageDelta === 0) {
-        return
-      }
-      const offset = row - entry.rowStart
-      const length = entry.rowEnd - entry.rowStart + 1
-      for (let index = offset; index < length; index += 1) {
-        entry.prefixSums[index] = (entry.prefixSums[index] ?? 0) + sumDelta
-        entry.prefixCount[index] = (entry.prefixCount[index] ?? 0) + countDelta
-        entry.prefixAverageCount[index] = (entry.prefixAverageCount[index] ?? 0) + averageDelta
-      }
-      entry.extremaValid = false
     },
     invalidateColumn(sheetName, col) {
-      cache.delete(columnKey(sheetName, col))
+      const prefix = columnKeyPrefix(sheetName, col)
+      for (const key of cache.keys()) {
+        if (key.startsWith(`${prefix}\t`)) {
+          cache.delete(key)
+        }
+      }
     },
   }
 }

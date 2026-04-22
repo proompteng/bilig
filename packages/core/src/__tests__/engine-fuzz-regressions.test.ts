@@ -244,4 +244,26 @@ describe('engine fuzz regressions', () => {
       code: ErrorCode.Cycle,
     })
   })
+
+  it('preserves shifted range sum precision after CSV roundtrip import', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'csv-shifted-sum-precision-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellFormula('Sheet1', 'A1', 'SUM(A5:A5)')
+    engine.setCellFormula('Sheet1', 'A2', 'A5*A5')
+    engine.setCellFormula('Sheet1', 'A3', 'IF(A5>0,"text:yes","text:no")')
+    engine.setCellFormula('Sheet1', 'A4', 'IF(A5>0,"text:yes","text:no")')
+    engine.setCellValue('Sheet1', 'A5', 1429783918)
+
+    const restored = new SpreadsheetEngine({ workbookName: 'csv-shifted-sum-precision-regression-restored' })
+    await restored.ready()
+    restored.createSheet('Sheet1')
+    restored.importSheetCsv('Sheet1', engine.exportSheetCsv('Sheet1'))
+
+    expect(restored.getCell('Sheet1', 'A1').value).toEqual({
+      tag: ValueTag.Number,
+      value: 1429783918,
+    })
+  })
 })
