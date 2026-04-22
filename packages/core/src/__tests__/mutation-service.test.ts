@@ -32,6 +32,27 @@ function getMutationService(engine: SpreadsheetEngine): EngineMutationService {
   return mutation
 }
 
+interface StructuralInsertHistoryEntry {
+  forward: { kind: string; op?: { kind: string; entries?: unknown[] } }
+  inverse: { kind: string; op?: { kind: string } }
+}
+
+function isStructuralInsertHistoryEntry(value: unknown): value is StructuralInsertHistoryEntry {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const forward = Reflect.get(value, 'forward')
+  const inverse = Reflect.get(value, 'inverse')
+  return (
+    typeof forward === 'object' &&
+    forward !== null &&
+    typeof Reflect.get(forward, 'kind') === 'string' &&
+    typeof inverse === 'object' &&
+    inverse !== null &&
+    typeof Reflect.get(inverse, 'kind') === 'string'
+  )
+}
+
 const EMPTY_CELL_SNAPSHOT: CellSnapshot = {
   sheetName: 'Sheet1',
   address: 'A1',
@@ -778,6 +799,37 @@ describe('EngineMutationService', () => {
     ])
     expect(state.undoStack[0]?.forward.kind === 'cell-mutations' ? state.undoStack[0]?.forward.potentialNewCells : undefined).toBe(2)
     expect(state.undoStack[0]?.inverse.kind === 'cell-mutations' ? state.undoStack[0]?.inverse.potentialNewCells : undefined).toBe(0)
+  })
+
+  it('fast-paths structural insert history while preserving undo and redo', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'fast-structural-insert-history' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 2)
+    engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
+
+    engine.insertColumns('Sheet1', 1, 1)
+
+    const undoStack = Reflect.get(engine, 'undoStack')
+    expect(Array.isArray(undoStack)).toBe(true)
+    const latest = Array.isArray(undoStack) ? undoStack.at(-1) : undefined
+    expect(isStructuralInsertHistoryEntry(latest)).toBe(true)
+    if (!isStructuralInsertHistoryEntry(latest)) {
+      throw new Error('Expected structural insert history entry')
+    }
+    expect(latest?.forward.kind).toBe('single-op')
+    expect(latest?.forward.op).toMatchObject({ kind: 'insertColumns', sheetName: 'Sheet1', start: 1, count: 1 })
+    expect(latest?.forward.op?.entries).toHaveLength(1)
+    expect(latest?.inverse.kind).toBe('single-op')
+    expect(latest?.inverse.op).toMatchObject({ kind: 'deleteColumns', sheetName: 'Sheet1', start: 1, count: 1 })
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    expect(engine.redo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 3 })
   })
 
   it('does not synthesize blank column identities in delete undo ops', async () => {

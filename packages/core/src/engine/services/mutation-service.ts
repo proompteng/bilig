@@ -55,6 +55,18 @@ function createLazyCellMutationTransactionRecord(refs: readonly EngineCellMutati
   return potentialNewCells === undefined ? { kind: 'cell-mutations', refs } : { kind: 'cell-mutations', refs, potentialNewCells }
 }
 
+function isStructuralInsertOp(op: EngineOp): op is Extract<EngineOp, { kind: 'insertRows' | 'insertColumns' }> {
+  return op.kind === 'insertRows' || op.kind === 'insertColumns'
+}
+
+function inverseStructuralInsertOp(
+  op: Extract<EngineOp, { kind: 'insertRows' | 'insertColumns' }>,
+): Extract<EngineOp, { kind: 'deleteRows' | 'deleteColumns' }> {
+  return op.kind === 'insertRows'
+    ? { kind: 'deleteRows', sheetName: op.sheetName, start: op.start, count: op.count }
+    : { kind: 'deleteColumns', sheetName: op.sheetName, start: op.start, count: op.count }
+}
+
 interface RenderCommitCellMutation {
   readonly sheetName: string
   readonly mutation: EngineCellMutationAt
@@ -1635,6 +1647,21 @@ export function createEngineMutationService(args: {
       return structuredClone(op)
     })
 
+  const canonicalizeStructuralInsertForwardOp = (
+    op: Extract<EngineOp, { kind: 'insertRows' | 'insertColumns' }>,
+  ): Extract<EngineOp, { kind: 'insertRows' | 'insertColumns' }> => {
+    if (op.kind === 'insertRows') {
+      return {
+        ...op,
+        entries: args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count),
+      }
+    }
+    return {
+      ...op,
+      entries: args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count),
+    }
+  }
+
   const executeTransactionNow = (record: TransactionRecord, source: 'local' | 'restore' | 'undo' | 'redo'): void => {
     if ((record.kind === 'ops' && record.ops.length === 0) || (record.kind === 'cell-mutations' && record.refs.length === 0)) {
       return
@@ -1664,6 +1691,23 @@ export function createEngineMutationService(args: {
     } = {},
   ): readonly EngineOp[] | null => {
     if (ops.length === 0) {
+      return null
+    }
+    if (
+      options.returnUndoOps === false &&
+      ops.length === 1 &&
+      options.preparedCellAddressesByOpIndex === undefined &&
+      isStructuralInsertOp(ops[0]!)
+    ) {
+      const op = ops[0]
+      applyForward(potentialNewCells === undefined ? { kind: 'single-op', op } : { kind: 'single-op', op, potentialNewCells })
+      if (args.state.getTransactionReplayDepth() === 0) {
+        args.state.undoStack.push({
+          forward: createLazySingleOpTransactionRecord(canonicalizeStructuralInsertForwardOp(op), potentialNewCells),
+          inverse: createLazySingleOpTransactionRecord(inverseStructuralInsertOp(op)),
+        })
+        args.state.redoStack.length = 0
+      }
       return null
     }
     const forward: TransactionRecord =
