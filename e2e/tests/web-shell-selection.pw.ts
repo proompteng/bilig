@@ -132,17 +132,27 @@ test('web app supports column edge double-click autofit', async ({ page }) => {
 
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
+  const longValue = 'supercalifragilisticexpialidocious'
 
   await nameBox.fill('A1')
   await nameBox.press('Enter')
-  await formulaInput.fill('supercalifragilisticexpialidocious')
+  await formulaInput.fill(longValue)
   await formulaInput.press('Enter')
+
+  await clickProductCell(page, 0, 0)
+  await expect(formulaInput).toHaveValue(longValue)
 
   await clickProductBodyOffset(page, 126, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B1')
 
+  await clickProductCell(page, 0, 0)
+  await expect(formulaInput).toHaveValue(longValue)
   await doubleClickProductColumnResizeHandle(page, 0)
+  await expect.poll(async () => await getProductColumnWidth(page, 0)).toBeGreaterThan(126)
+  const autofitWidth = await getProductColumnWidth(page, 0)
 
+  await clickProductBodyOffset(page, autofitWidth + 8, 0)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B1')
   await clickProductBodyOffset(page, 126, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
 })

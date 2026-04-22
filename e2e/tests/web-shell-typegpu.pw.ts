@@ -957,7 +957,8 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
         let lastFallbackTexture: GPUTexture | null = null
         let lastFallbackWidth = 0
         let lastFallbackHeight = 0
-        let readbackPending = false
+        let readbackSerial = 0
+        let committedReadbackSerial = 0
 
         const originalGetCurrentTexture = Object.getOwnPropertyDescriptor(GPUCanvasContext.prototype, 'getCurrentTexture')?.value
         if (!isCanvasContextGetCurrentTexture(originalGetCurrentTexture)) {
@@ -988,8 +989,9 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
           const targetTexture = lastTexture ?? lastFallbackTexture
           const targetWidth = lastTexture ? lastWidth : lastFallbackWidth
           const targetHeight = lastTexture ? lastHeight : lastFallbackHeight
-          if (!readbackPending && targetTexture && targetWidth > 0 && targetHeight > 0) {
-            readbackPending = true
+          if (targetTexture && targetWidth > 0 && targetHeight > 0) {
+            readbackSerial += 1
+            const serial = readbackSerial
             const bytesPerRow = Math.ceil((targetWidth * 4) / 256) * 256
             const buffer = device.createBuffer({
               size: bytesPerRow * targetHeight,
@@ -1006,7 +1008,11 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
               .mapAsync(GPUMapMode.READ)
               .then(() => {
                 const mapped = new Uint8Array(buffer.getMappedRange())
+                if (serial <= committedReadbackSerial) {
+                  return mapped
+                }
                 const bgra = new Uint8Array(mapped)
+                committedReadbackSerial = serial
                 readbackState.bgra = bgra
                 readbackState.bytesPerRow = bytesPerRow
                 readbackState.hasGpu = true
@@ -1030,7 +1036,6 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
                   buffer.unmap()
                 } catch {}
                 buffer.destroy()
-                readbackPending = false
               })
             return result
           }
@@ -1196,15 +1201,21 @@ async function waitForReadback(
   predicate: (result: DynamicReadbackResult) => boolean,
 ): Promise<DynamicReadbackResult> {
   let lastResult: DynamicReadbackResult | null = null
-  await expect
-    .poll(
-      async () => {
-        lastResult = await inspectGpuReadback(page, input)
-        return lastResult.ready && lastResult.hasGpu && predicate(lastResult)
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true)
+  try {
+    await expect
+      .poll(
+        async () => {
+          lastResult = await inspectGpuReadback(page, input)
+          return lastResult.ready && lastResult.hasGpu && predicate(lastResult)
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true)
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nLast readback: ${JSON.stringify(lastResult)}`, {
+      cause: error,
+    })
+  }
   if (!lastResult) {
     throw new Error('expected readback result')
   }

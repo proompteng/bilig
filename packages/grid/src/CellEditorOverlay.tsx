@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
 
 function normalizeNumpadKey(key: string, code: string): string | null {
@@ -62,11 +62,19 @@ export function CellEditorOverlay({
   onCancel,
   style,
 }: CellEditorOverlayProps) {
+  const overlayRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
   const targetSelectionRef = useRef(targetSelection)
+  const [isCompleting, setIsCompleting] = useState(false)
   const MAX_EDITOR_HEIGHT = 220
+
+  const beginCompletion = (nextState: 'commit' | 'cancel') => {
+    completionRef.current = nextState
+    setIsCompleting(true)
+    overlayRef.current?.style.setProperty('pointer-events', 'none')
+  }
 
   useLayoutEffect(() => {
     blurArmedRef.current = false
@@ -101,7 +109,7 @@ export function CellEditorOverlay({
     if (completionRef.current !== 'idle') {
       return
     }
-    completionRef.current = 'commit'
+    beginCompletion('commit')
     onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
   }
 
@@ -109,15 +117,17 @@ export function CellEditorOverlay({
     if (completionRef.current !== 'idle') {
       return
     }
-    completionRef.current = 'cancel'
+    beginCompletion('cancel')
     onCancel()
   }
 
   return (
     <div
       className="cell-editor-overlay box-border overflow-hidden border border-[var(--wb-accent)] bg-[var(--wb-surface)]"
+      data-completing={isCompleting ? 'true' : undefined}
       data-testid="cell-editor-overlay"
-      style={{ ...style, backgroundColor }}
+      ref={overlayRef}
+      style={isCompleting ? { ...style, backgroundColor, pointerEvents: 'none' } : { ...style, backgroundColor }}
     >
       <textarea
         aria-label={`${label} editor`}

@@ -684,25 +684,21 @@ test.describe('@clipboard-global web app clipboard flows', () => {
     const formulaInput = page.getByTestId('formula-input')
     const resolvedValue = page.getByTestId('formula-resolved-value')
 
-    await nameBox.fill('B2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('11')
-    await formulaInput.press('Enter')
+    const writeFormulaBarCell = async (address: string, value: string) => {
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await formulaInput.fill(value)
+      await formulaInput.press('Enter')
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await expect(formulaInput).toHaveValue(value)
+      await expect(resolvedValue).toHaveText(value)
+    }
 
-    await nameBox.fill('C2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('12')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('B3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('13')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('14')
-    await formulaInput.press('Enter')
+    await writeFormulaBarCell('B2', '11')
+    await writeFormulaBarCell('C2', '12')
+    await writeFormulaBarCell('B3', '13')
+    await writeFormulaBarCell('C3', '14')
 
     await dragProductBodySelection(page, 1, 1, 2, 2)
     await grid.press(`${PRIMARY_MODIFIER}+C`)
@@ -745,25 +741,21 @@ test.describe('@clipboard-global web app clipboard flows', () => {
     const formulaInput = page.getByTestId('formula-input')
     const resolvedValue = page.getByTestId('formula-resolved-value')
 
-    await nameBox.fill('B2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('3')
-    await formulaInput.press('Enter')
+    const writeFormulaBarCell = async (address: string, value: string, resolved = value) => {
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await formulaInput.fill(value)
+      await formulaInput.press('Enter')
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await expect(formulaInput).toHaveValue(value)
+      await expect(resolvedValue).toHaveText(resolved)
+    }
 
-    await nameBox.fill('B3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('4')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('=B2*2')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('=B3*2')
-    await formulaInput.press('Enter')
+    await writeFormulaBarCell('B2', '3')
+    await writeFormulaBarCell('B3', '4')
+    await writeFormulaBarCell('C2', '=B2*2', '6')
+    await writeFormulaBarCell('C3', '=B3*2', '8')
 
     await dragProductBodySelection(page, 1, 1, 2, 2)
     await grid.press(`${PRIMARY_MODIFIER}+C`)
