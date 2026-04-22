@@ -108,7 +108,7 @@ import type {
   SerializedWorkPaperNamedExpression,
 } from './work-paper-types.js'
 import { captureTrackedEngineEvent, type TrackedEngineEvent, type TrackedPatch } from './tracked-engine-event-refs.js'
-import { materializeTrackedIndexChanges } from './tracked-cell-index-changes.js'
+import { materializeTrackedIndexChangesWithMetadata } from './tracked-cell-index-changes.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
 
@@ -177,21 +177,10 @@ interface ClipboardPayload {
   values: CellValue[][]
 }
 
-type TrackedCellLike = {
-  readonly kind: 'cell'
-  readonly address: {
-    readonly sheet: number
-    readonly row: number
-    readonly col: number
-  }
-  readonly sheetName: string
-  readonly a1: string
-  readonly newValue: CellValue
-}
-
 interface MaterializedTrackedEventChanges {
-  readonly changes: readonly TrackedCellLike[]
+  readonly changes: readonly WorkPaperCellChange[]
   readonly canReusePublicChanges: boolean
+  readonly ordered: boolean
 }
 
 type QueuedEvent = Extract<
@@ -3118,11 +3107,15 @@ export class WorkPaper {
   private materializeTrackedEventChanges(event: TrackedEngineEvent): MaterializedTrackedEventChanges {
     if (event.patches && event.patches.length > 0) {
       const cellPatches = event.patches.filter((patch): patch is Extract<TrackedPatch, { kind: 'cell' }> => patch.kind === 'cell')
-      return { changes: cellPatches, canReusePublicChanges: false }
+      return { changes: cellPatches, canReusePublicChanges: false, ordered: false }
     }
+    const materialized = materializeTrackedIndexChangesWithMetadata(this.engine, event.changedCellIndices, {
+      explicitChangedCount: event.explicitChangedCount,
+    })
     return {
-      changes: materializeTrackedIndexChanges(this.engine, event.changedCellIndices, { explicitChangedCount: event.explicitChangedCount }),
+      changes: materialized.changes,
       canReusePublicChanges: true,
+      ordered: materialized.ordered,
     }
   }
 
@@ -3164,6 +3157,12 @@ export class WorkPaper {
       const event = events[0]!
       const materializedEventChanges = this.materializeTrackedEventChanges(event)
       const eventChanges = materializedEventChanges.changes
+      if (!updateVisibility && materializedEventChanges.canReusePublicChanges && materializedEventChanges.ordered) {
+        return {
+          changes: [...eventChanges],
+          nextVisibility,
+        }
+      }
       const directChanges: WorkPaperCellChange[] = []
       const seenCellKeys = eventChanges.length > 4 && eventChanges.length <= 64 ? new Set<number>() : undefined
       const smallCellKeys: number[] | undefined = eventChanges.length > 1 && eventChanges.length <= 4 ? [] : undefined
@@ -3210,7 +3209,7 @@ export class WorkPaper {
           }
         }
         directChanges[index] = materializedEventChanges.canReusePublicChanges
-          ? (change as WorkPaperCellChange)
+          ? change
           : {
               kind: 'cell',
               address: change.address,

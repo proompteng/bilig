@@ -1,19 +1,23 @@
 import { indexToColumn } from '@bilig/formula'
 import type { SpreadsheetEngine } from '@bilig/core'
-import type { CellValue } from '@bilig/protocol'
+import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkPaperCellChange } from './work-paper-types.js'
 
-export function materializeTrackedIndexChanges(
+export interface MaterializedTrackedIndexChanges {
+  readonly changes: readonly WorkPaperCellChange[]
+  readonly ordered: boolean
+}
+
+export function materializeTrackedIndexChangesWithMetadata(
   engine: SpreadsheetEngine,
   changedCellIndices: readonly number[] | Uint32Array,
   options: { readonly explicitChangedCount?: number } = {},
-): readonly WorkPaperCellChange[] {
+): MaterializedTrackedIndexChanges {
   if (changedCellIndices.length === 0) {
-    return []
+    return { changes: [], ordered: true }
   }
   const workbook = engine.workbook
   const cellStore = workbook.cellStore
-  const readValue = (cellIndex: number): CellValue => cellStore.getValue(cellIndex, (id) => engine.strings.get(id))
   const columnLabels: string[] = []
   const formatAddressCached = (row: number, col: number): string => {
     let label = columnLabels[col]
@@ -32,7 +36,7 @@ export function materializeTrackedIndexChanges(
     }
   }
   if (firstSheetId === undefined) {
-    return []
+    return { changes: [], ordered: true }
   }
   let isSingleSheetChangeSet = true
   for (let index = 0; index < changedCellIndices.length; index += 1) {
@@ -62,13 +66,11 @@ export function materializeTrackedIndexChanges(
         const explicitCellIndex = changedCellIndices[explicitIndex]!
         const recalculatedCellIndex = changedCellIndices[recalculatedIndex]!
         if (compareTrackedPhysicalCellIndices(cellStore, explicitCellIndex, recalculatedCellIndex) <= 0) {
-          changes.push(
-            readPhysicalTrackedIndexChange(explicitCellIndex, firstSheetId, sheetName, cellStore, readValue, formatAddressCached),
-          )
+          changes.push(readPhysicalTrackedIndexChange(explicitCellIndex, firstSheetId, sheetName, cellStore, engine, formatAddressCached))
           explicitIndex += 1
         } else {
           changes.push(
-            readPhysicalTrackedIndexChange(recalculatedCellIndex, firstSheetId, sheetName, cellStore, readValue, formatAddressCached),
+            readPhysicalTrackedIndexChange(recalculatedCellIndex, firstSheetId, sheetName, cellStore, engine, formatAddressCached),
           )
           recalculatedIndex += 1
         }
@@ -80,7 +82,7 @@ export function materializeTrackedIndexChanges(
             firstSheetId,
             sheetName,
             cellStore,
-            readValue,
+            engine,
             formatAddressCached,
           ),
         )
@@ -93,14 +95,17 @@ export function materializeTrackedIndexChanges(
             firstSheetId,
             sheetName,
             cellStore,
-            readValue,
+            engine,
             formatAddressCached,
           ),
         )
         recalculatedIndex += 1
       }
-      return changes
+      return { changes, ordered: true }
     }
+    let ordered = true
+    let previousRow = -1
+    let previousCol = -1
     for (let index = 0; index < changedCellIndices.length; index += 1) {
       const cellIndex = changedCellIndices[index]!
       if (cellStore.sheetIds[cellIndex] !== firstSheetId) {
@@ -120,19 +125,28 @@ export function materializeTrackedIndexChanges(
         row = position.row
         col = position.col
       }
+      if (row < previousRow || (row === previousRow && col < previousCol)) {
+        ordered = false
+      }
       changes.push({
         kind: 'cell',
         address: { sheet: firstSheetId, row, col },
         sheetName,
         a1: formatAddressCached(row, col),
-        newValue: readValue(cellIndex),
+        newValue: readTrackedCellValue(cellStore, cellIndex, engine),
       })
+      previousRow = row
+      previousCol = col
     }
-    return changes
+    return { changes, ordered }
   }
 
   const sheetNames = new Map<number, string>()
   const physicalSheetIds = new Set<number>()
+  let ordered = true
+  let previousSheetOrder = -1
+  let previousRow = -1
+  let previousCol = -1
   for (let index = 0; index < changedCellIndices.length; index += 1) {
     const cellIndex = changedCellIndices[index]!
     const sheetId = cellStore.sheetIds[cellIndex]
@@ -140,13 +154,17 @@ export function materializeTrackedIndexChanges(
       continue
     }
     let sheetName = sheetNames.get(sheetId)
+    let sheetOrder = 0
     if (sheetName === undefined) {
       const sheet = workbook.getSheetById(sheetId)
       sheetName = sheet?.name ?? workbook.getSheetNameById(sheetId)
+      sheetOrder = sheet?.order ?? 0
       sheetNames.set(sheetId, sheetName)
       if (!sheet || sheet.structureVersion === 1) {
         physicalSheetIds.add(sheetId)
       }
+    } else {
+      sheetOrder = workbook.getSheetById(sheetId)?.order ?? 0
     }
     let row: number
     let col: number
@@ -162,15 +180,49 @@ export function materializeTrackedIndexChanges(
       row = position.row
       col = position.col
     }
+    if (
+      sheetOrder < previousSheetOrder ||
+      (sheetOrder === previousSheetOrder && (row < previousRow || (row === previousRow && col < previousCol)))
+    ) {
+      ordered = false
+    }
     changes.push({
       kind: 'cell',
       address: { sheet: sheetId, row, col },
       sheetName,
       a1: formatAddressCached(row, col),
-      newValue: readValue(cellIndex),
+      newValue: readTrackedCellValue(cellStore, cellIndex, engine),
     })
+    previousSheetOrder = sheetOrder
+    previousRow = row
+    previousCol = col
   }
-  return changes
+  return { changes, ordered }
+}
+
+export function materializeTrackedIndexChanges(
+  engine: SpreadsheetEngine,
+  changedCellIndices: readonly number[] | Uint32Array,
+  options: { readonly explicitChangedCount?: number } = {},
+): readonly WorkPaperCellChange[] {
+  return materializeTrackedIndexChangesWithMetadata(engine, changedCellIndices, options).changes
+}
+
+function readTrackedCellValue(cellStore: TrackedCellStore, cellIndex: number, engine: SpreadsheetEngine): CellValue {
+  const tag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+  switch (tag) {
+    case ValueTag.Number:
+      return { tag: ValueTag.Number, value: cellStore.numbers[cellIndex] ?? 0 }
+    case ValueTag.Boolean:
+      return { tag: ValueTag.Boolean, value: (cellStore.numbers[cellIndex] ?? 0) !== 0 }
+    case ValueTag.String:
+      return cellStore.getValue(cellIndex, (stringId) => engine.strings.get(stringId))
+    case ValueTag.Error:
+      return { tag: ValueTag.Error, code: cellStore.errors[cellIndex]! }
+    case ValueTag.Empty:
+    default:
+      return { tag: ValueTag.Empty }
+  }
 }
 
 type TrackedCellStore = SpreadsheetEngine['workbook']['cellStore']
@@ -201,7 +253,7 @@ function readPhysicalTrackedIndexChange(
   sheetId: number,
   sheetName: string,
   cellStore: TrackedCellStore,
-  readValue: (cellIndex: number) => CellValue,
+  engine: SpreadsheetEngine,
   formatAddressCached: (row: number, col: number) => string,
 ): WorkPaperCellChange {
   const row = cellStore.rows[cellIndex]!
@@ -211,6 +263,6 @@ function readPhysicalTrackedIndexChange(
     address: { sheet: sheetId, row, col },
     sheetName,
     a1: formatAddressCached(row, col),
-    newValue: readValue(cellIndex),
+    newValue: readTrackedCellValue(cellStore, cellIndex, engine),
   }
 }
