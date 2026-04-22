@@ -69,7 +69,7 @@ function buildPaneScene(input: {
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
   gridSelection: GridSelection
   selectedCell: Item
-  selectedCellSnapshot: CellSnapshot
+  selectedCellSnapshot: CellSnapshot | null
   selectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   editingCell?: Item | null
   hoveredCell?: Item | null
@@ -212,7 +212,7 @@ export function buildResidentDataPaneScenes(input: {
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
   gridSelection: GridSelection
   selectedCell: Item
-  selectedCellSnapshot: CellSnapshot
+  selectedCellSnapshot: CellSnapshot | null
   selectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   editingCell?: Item | null
   hoveredCell?: Item | null

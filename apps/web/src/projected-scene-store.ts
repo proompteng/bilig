@@ -18,6 +18,7 @@ interface SceneEntry {
   inFlight: Promise<void> | null
   refreshQueued: boolean
   activeRequestSeq: number
+  sceneRevision: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -163,6 +164,21 @@ function buildRequestKey(request: WorkbookPaneSceneRequest): string {
   ].join(':')
 }
 
+function buildRetainedRequestKey(request: WorkbookPaneSceneRequest): string {
+  return [
+    request.sheetName,
+    request.residentViewport.rowStart,
+    request.residentViewport.rowEnd,
+    request.residentViewport.colStart,
+    request.residentViewport.colEnd,
+    request.freezeRows,
+    request.freezeCols,
+    request.dprBucket ?? 1,
+    request.editingCell?.col ?? -1,
+    request.editingCell?.row ?? -1,
+  ].join(':')
+}
+
 function resolveSceneRequestPriority(request: WorkbookPaneSceneRequest): number {
   if (Number.isInteger(request.priority) && request.priority !== undefined && request.priority >= 0) {
     return request.priority
@@ -182,18 +198,20 @@ function preferSceneRequest(current: WorkbookPaneSceneRequest, next: WorkbookPan
   return current
 }
 
-function withRequestMetadata(request: WorkbookPaneSceneRequest, requestSeq: number): WorkbookPaneSceneRequest {
+function withRequestMetadata(request: WorkbookPaneSceneRequest, requestSeq: number, sceneRevision: number): WorkbookPaneSceneRequest {
   return {
     ...request,
     cameraSeq: request.cameraSeq ?? requestSeq,
     priority: resolveSceneRequestPriority(request),
     reason: request.reason ?? 'visible',
     requestSeq,
+    sceneRevision,
   }
 }
 
 export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
+  private readonly retainedScenes = new Map<string, readonly WorkbookPaneScenePacket[]>()
   private nextRequestSeq = 0
   private lastRejectedPacketReason: string | null = null
 
@@ -204,7 +222,7 @@ export class ProjectedSceneStore {
   }
 
   peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
-    return this.entries.get(buildRequestKey(request))?.scenes ?? null
+    return this.entries.get(buildRequestKey(request))?.scenes ?? this.retainedScenes.get(buildRetainedRequestKey(request)) ?? null
   }
 
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
@@ -223,6 +241,7 @@ export class ProjectedSceneStore {
         inFlight: null,
         refreshQueued: false,
         activeRequestSeq: 0,
+        sceneRevision: 0,
       } satisfies SceneEntry)
     if (existing) {
       entry.request = preferSceneRequest(existing.request, request)
@@ -247,6 +266,11 @@ export class ProjectedSceneStore {
         this.entries.delete(key)
       }
     }
+    for (const [key, scenes] of this.retainedScenes) {
+      if (scenes.some((scene) => removed.has(scene.packedScene?.sheetName ?? ''))) {
+        this.retainedScenes.delete(key)
+      }
+    }
   }
 
   noteViewportPatch(patch: ViewportPatch): void {
@@ -254,6 +278,7 @@ export class ProjectedSceneStore {
       if (!residentPaneSceneRequestNeedsRefresh(entry.request, patch)) {
         continue
       }
+      entry.sceneRevision += 1
       this.queueRefresh(entry)
     }
   }
@@ -292,7 +317,7 @@ export class ProjectedSceneStore {
       try {
         const requestSeq = ++this.nextRequestSeq
         entry.activeRequestSeq = requestSeq
-        const request = withRequestMetadata(entry.request, requestSeq)
+        const request = withRequestMetadata(entry.request, requestSeq, entry.sceneRevision)
         const isIncrementalRefresh = entry.scenes !== null
         const next = await client.invoke('getResidentPaneScenes', request)
         if (!isResidentPaneScenePacketArray(next)) {
@@ -307,6 +332,7 @@ export class ProjectedSceneStore {
           return
         }
         entry.scenes = next
+        this.retainedScenes.set(buildRetainedRequestKey(entry.request), next)
         if (isIncrementalRefresh) {
           getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
         }

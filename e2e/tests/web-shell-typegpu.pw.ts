@@ -232,6 +232,73 @@ test('main workbook shell grid renders and updates through typegpu', async ({ pa
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')
 })
 
+test('main workbook shell keeps resident typegpu content visible while selection moves', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, `/?document=typegpu-selection-no-flash-${Date.now()}&benchmarkCorpus=wide-mixed-250k`)
+  await waitForWorkbookReady(page)
+  await waitForBenchmarkCorpus(page)
+  await page.waitForSelector('[data-testid="grid-pane-renderer"]', { timeout: 15_000 })
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const probe = {
+    points: [],
+    regions: [
+      { name: 'columnHeaderText', x0: 60, y0: 4, x1: 220, y1: 18 },
+      { name: 'rowHeaderText', x0: 6, y0: 48, x1: 36, y1: 140 },
+      { name: 'bodyText', x0: 70, y0: 48, x1: 360, y1: 150 },
+    ],
+  } as const
+
+  const initialReadback = await waitForReadback(page, probe, (result) => {
+    return result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20
+  })
+
+  const selectionTargets = [
+    { col: 2, row: 3, address: '!C4' },
+    { col: 5, row: 6, address: '!F7' },
+    { col: 1, row: 8, address: '!B9' },
+    { col: 3, row: 4, address: '!D5' },
+  ] as const
+  const sampleSelectionTarget = async (
+    targetIndex: number,
+    lastSequence: number,
+    frames: readonly DynamicReadbackResult[],
+  ): Promise<readonly DynamicReadbackResult[]> => {
+    const target = selectionTargets[targetIndex]
+    if (!target) {
+      return frames
+    }
+    await clickProductCell(page, target.col, target.row)
+    await expect(page.getByTestId('status-selection')).toContainText(target.address)
+    await page.waitForTimeout(50)
+    const frame = await inspectGpuReadback(page, probe)
+    return await sampleSelectionTarget(targetIndex + 1, Math.max(lastSequence, frame.sequence), [...frames, frame])
+  }
+  const selectionFrames = await sampleSelectionTarget(0, initialReadback.sequence, [])
+
+  expect(selectionFrames.length).toBe(4)
+  for (const frame of selectionFrames) {
+    expect(frame.darkPixelCounts.columnHeaderText).toBeGreaterThan(10)
+    expect(frame.darkPixelCounts.rowHeaderText).toBeGreaterThan(5)
+    expect(frame.darkPixelCounts.bodyText).toBeGreaterThan(20)
+  }
+
+  await saveReadbackArtifact(
+    page,
+    testInfo,
+    'main-workbook-grid-selection-no-flash-readback.png',
+    'main-workbook-grid-selection-no-flash-readback',
+  )
+})
+
 test('main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -583,9 +650,18 @@ test('main workbook shell refreshes typegpu resident packets after style-only ch
   )
 
   await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toContainText('!B2')
   await pickToolbarPresetColor(page, 'Fill color', 'light cornflower blue 3')
   await waitForReadbackSequence(page, initialReadback.sequence)
+  const afterStyleSequence = await page.evaluate(() => {
+    return (
+      (
+        window as Window & { __biligGpuReadbackInspector?: { readonly getSequence: () => number } }
+      ).__biligGpuReadbackInspector?.getSequence() ?? 0
+    )
+  })
   await clickProductCell(page, 2, 2)
+  await waitForReadbackSequence(page, afterStyleSequence)
 
   const styledReadback = await waitForReadback(
     page,

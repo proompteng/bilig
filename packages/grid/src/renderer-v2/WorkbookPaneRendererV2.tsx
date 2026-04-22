@@ -292,6 +292,8 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     }
 
     drawFrameRef.current()
+    renderLoopRef.current ??= new GridRenderLoop()
+    renderLoopRef.current.requestDraw(drawFrameRef.current)
   }, [active, overlay, overlayBuilder, panes, preloadPanes, surfaceSize, webGpuReady])
 
   useEffect(() => {

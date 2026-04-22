@@ -69,6 +69,7 @@ export interface WorkbookPaneSceneRequest {
   readonly dprBucket?: number | undefined
   readonly requestSeq?: number | undefined
   readonly cameraSeq?: number | undefined
+  readonly sceneRevision?: number | undefined
   readonly priority?: number | undefined
   readonly reason?: 'visible' | 'prefetch' | 'edit' | 'resize' | 'sheet-switch' | undefined
   readonly selectedCell: {

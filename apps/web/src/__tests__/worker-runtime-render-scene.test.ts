@@ -113,7 +113,7 @@ describe('worker-runtime-render-scene', () => {
     expect(second[0]?.packedScene?.key.styleVersion).toBe(4)
   })
 
-  it('keys the cache by viewport, freeze state, selection, and editing cell', () => {
+  it('keys the worker scene cache by viewport, freeze state, selection snapshot, and editing cell', () => {
     const baseKey = buildResidentPaneSceneCacheKey({
       sheetName: 'Sheet1',
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
@@ -124,7 +124,7 @@ describe('worker-runtime-render-scene', () => {
       selectionRange: null,
       editingCell: null,
     })
-    const changedKey = buildResidentPaneSceneCacheKey({
+    const selectionOnlyKey = buildResidentPaneSceneCacheKey({
       sheetName: 'Sheet1',
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 1,
@@ -134,8 +134,19 @@ describe('worker-runtime-render-scene', () => {
       selectionRange: null,
       editingCell: null,
     })
+    const editingKey = buildResidentPaneSceneCacheKey({
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+      selectedCell: { col: 1, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: { col: 1, row: 0 },
+    })
 
-    expect(changedKey).not.toBe(baseKey)
+    expect(selectionOnlyKey).not.toBe(baseKey)
+    expect(editingKey).not.toBe(baseKey)
   })
 
   it('uses the selected cell snapshot when worker projection has not caught up', () => {

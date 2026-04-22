@@ -4,6 +4,7 @@ import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { createGridGeometrySnapshot } from './gridGeometry.js'
+import { createGridSelection } from './gridSelection.js'
 import { WorkbookPaneRendererV2, buildDynamicGridOverlayPacket } from './renderer-v2/index.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
@@ -78,6 +79,22 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   })
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
+  const committedCellSelection = useMemo(() => {
+    const selectedCell = parseCellAddress(props.selectedAddr, props.sheetName)
+    return createGridSelection(selectedCell.col, selectedCell.row)
+  }, [props.selectedAddr, props.sheetName])
+  const renderSelectionIsSingleCell =
+    renderState.gridSelection.columns.length === 0 &&
+    renderState.gridSelection.rows.length === 0 &&
+    renderState.selectionRange?.width === 1 &&
+    renderState.selectionRange.height === 1
+  const displayGridSelection =
+    renderState.isFillHandleDragging || renderState.isRangeMoveDragging || renderState.activeHeaderDrag
+      ? renderState.gridSelection
+      : renderSelectionIsSingleCell
+        ? committedCellSelection
+        : renderState.gridSelection
+  const displaySelectionRange = displayGridSelection.current?.range ?? null
   const v2Geometry = useMemo(
     () =>
       renderState.hostElement
@@ -115,14 +132,14 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       buildDynamicGridOverlayPacket({
         geometry,
         activeHeaderDrag: renderState.activeHeaderDrag,
-        gridSelection: renderState.gridSelection,
+        gridSelection: displayGridSelection,
         hoveredCell: renderState.hoverState.cell,
         selectedCell: [renderState.selectedCell.col, renderState.selectedCell.row],
-        selectionRange: renderState.selectionRange,
+        selectionRange: displaySelectionRange,
         showFillHandle:
-          renderState.selectionRange !== null &&
-          renderState.gridSelection.columns.length === 0 &&
-          renderState.gridSelection.rows.length === 0 &&
+          displaySelectionRange !== null &&
+          displayGridSelection.columns.length === 0 &&
+          displayGridSelection.rows.length === 0 &&
           renderState.fillPreviewRange === null &&
           !renderState.isRangeMoveDragging,
         resizeGuideColumn: resolveResizeGuideColumn({
@@ -144,11 +161,11 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       renderState.hoverState.cursor,
       renderState.hoverState.header,
       renderState.fillPreviewRange,
-      renderState.gridSelection,
+      displayGridSelection,
+      displaySelectionRange,
       renderState.isRangeMoveDragging,
       renderState.selectedCell.col,
       renderState.selectedCell.row,
-      renderState.selectionRange,
     ],
   )
   const previewRects = useMemo(() => {
@@ -260,9 +277,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           getCellBounds={renderState.getCellLocalBounds}
           hidden={
             renderState.hostElement === null ||
-            !renderState.selectionRange ||
-            renderState.gridSelection.columns.length > 0 ||
-            renderState.gridSelection.rows.length > 0 ||
+            !displaySelectionRange ||
+            displayGridSelection.columns.length > 0 ||
+            displayGridSelection.rows.length > 0 ||
             Boolean(renderState.fillPreviewRange) ||
             renderState.isRangeMoveDragging
           }
@@ -272,7 +289,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           minY={renderState.gridMetrics.headerHeight}
           onPointerDown={interactions.handleFillHandlePointerDown}
           scrollTransformStore={renderState.scrollTransformStore}
-          selectionRange={renderState.selectionRange}
+          selectionRange={displaySelectionRange}
         />
         {renderState.fillPreviewBounds ? (
           <div

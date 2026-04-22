@@ -54,6 +54,7 @@ import { collectViewportSubscriptions } from './useGridViewportSubscriptions.js'
 
 const BASE_HEADER_SELECTED_CELL: Item = [-1, -1]
 const BASE_HEADER_GRID_SELECTION: GridSelection = createGridSelection(-1, -1)
+const BASE_RESIDENT_GRID_SELECTION: GridSelection = createGridSelection(0, 0)
 
 function noteViewportSubscription(): void {
   if (typeof window === 'undefined') {
@@ -206,6 +207,22 @@ export function useWorkbookGridRenderState(input: {
   } | null>(null)
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row))
+  useLayoutEffect(() => {
+    setGridSelection((current) => {
+      if (
+        current.columns.length > 0 ||
+        current.rows.length > 0 ||
+        current.current?.range.width !== 1 ||
+        current.current.range.height !== 1
+      ) {
+        return current
+      }
+      if (current.current.cell[0] === selectedCell.col && current.current.cell[1] === selectedCell.row) {
+        return current
+      }
+      return createGridSelection(selectedCell.col, selectedCell.row)
+    })
+  }, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const gridTheme = useMemo(() => getGridTheme(), [])
@@ -649,6 +666,20 @@ export function useWorkbookGridRenderState(input: {
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
   }, [engine, invalidateScene, sheetName, subscribeViewport, visibleAddresses])
 
+  const residentEditingCell = useMemo(
+    () =>
+      isEditingCell
+        ? {
+            col: selectedCell.col,
+            row: selectedCell.row,
+          }
+        : null,
+    [isEditingCell, selectedCell.col, selectedCell.row],
+  )
+  const residentEditingCellItem = useMemo<Item | null>(
+    () => (isEditingCell ? [selectedCell.col, selectedCell.row] : null),
+    [isEditingCell, selectedCell.col, selectedCell.row],
+  )
   const residentPaneSceneRequest = useMemo<WorkbookPaneSceneRequest | null>(
     () => ({
       sheetName,
@@ -664,25 +695,19 @@ export function useWorkbookGridRenderState(input: {
         row: selectedCell.row,
       },
       selectedCellSnapshot,
-      selectionRange,
-      editingCell: isEditingCell
-        ? {
-            col: selectedCell.col,
-            row: selectedCell.row,
-          }
-        : null,
+      selectionRange: null,
+      editingCell: residentEditingCell,
     }),
     [
       freezeCols,
       freezeRows,
       dprBucket,
       gridCameraStore,
-      isEditingCell,
+      residentEditingCell,
       residentViewport,
       selectedCell.col,
       selectedCell.row,
       selectedCellSnapshot,
-      selectionRange,
       sheetName,
     ],
   )
@@ -703,25 +728,19 @@ export function useWorkbookGridRenderState(input: {
           row: selectedCell.row,
         },
         selectedCellSnapshot,
-        selectionRange,
-        editingCell: isEditingCell
-          ? {
-              col: selectedCell.col,
-              row: selectedCell.row,
-            }
-          : null,
+        selectionRange: null,
+        editingCell: residentEditingCell,
       }))
   }, [
     freezeCols,
     freezeRows,
     dprBucket,
     gridCameraStore,
-    isEditingCell,
+    residentEditingCell,
     residentViewport,
     selectedCell.col,
     selectedCell.row,
     selectedCellSnapshot,
-    selectionRange,
     sheetName,
     warmResidentViewports,
   ])
@@ -799,11 +818,11 @@ export function useWorkbookGridRenderState(input: {
       gridMetrics,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
-      gridSelection,
+      gridSelection: BASE_RESIDENT_GRID_SELECTION,
       selectedCell: [selectedCell.col, selectedCell.row],
       selectedCellSnapshot,
       selectionRange: null,
-      editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
+      editingCell: residentEditingCellItem,
       hoveredCell: null,
       hoveredHeader: null,
       resizeGuideColumn: null,
@@ -819,9 +838,8 @@ export function useWorkbookGridRenderState(input: {
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
-    gridSelection,
     hostElement,
-    isEditingCell,
+    residentEditingCellItem,
     residentViewport,
     rowHeights,
     sceneRevision,

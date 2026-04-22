@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
+import { ValueTag } from '@bilig/protocol'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
@@ -130,7 +131,29 @@ describe('ProjectedSceneStore', () => {
         requestSeq: 1,
       }),
     )
-    expect(store.peekResidentPaneScenes({ ...request, cameraSeq: 99, priority: 0, reason: 'visible' })).toEqual(scenes)
+    expect(
+      store.peekResidentPaneScenes({
+        ...request,
+        cameraSeq: 99,
+        priority: 0,
+        reason: 'visible',
+        selectedCell: { col: 4, row: 6 },
+        selectedCellSnapshot: null,
+      }),
+    ).toEqual(scenes)
+    expect(
+      store.peekResidentPaneScenes({
+        ...request,
+        selectedCell: { col: 4, row: 6 },
+        selectedCellSnapshot: {
+          address: 'E7',
+          flags: 0,
+          sheetName: 'Sheet1',
+          value: { tag: ValueTag.Empty },
+          version: 12,
+        },
+      }),
+    ).toEqual(scenes)
 
     unsubscribe()
   })

@@ -92,6 +92,7 @@ export function buildWorkerResidentPaneScenes(input: {
   const freezeRows = request.freezeRows
   const freezeCols = request.freezeCols
   const freezeVersion = buildFreezeVersion(freezeRows, freezeCols)
+  const sceneVersion = batchVersion + resolveRevision(request.sceneRevision)
 
   return buildResidentDataPaneScenes({
     residentViewport: request.residentViewport,
@@ -133,10 +134,10 @@ export function buildWorkerResidentPaneScenes(input: {
         dprBucket: request.dprBucket ?? 1,
         freezeVersion,
         paneId: scene.paneId,
-        selectionIndependentVersion: batchVersion,
+        selectionIndependentVersion: sceneVersion,
         sheetName: request.sheetName,
-        styleVersion: batchVersion,
-        valueVersion: batchVersion,
+        styleVersion: sceneVersion,
+        valueVersion: sceneVersion,
         viewport: scene.viewport,
       }),
       sheetName: request.sheetName,
@@ -171,6 +172,7 @@ export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest
     request.freezeRows,
     request.freezeCols,
     request.dprBucket ?? 1,
+    request.sceneRevision ?? 0,
     request.selectedCell.col,
     request.selectedCell.row,
     selectedSnapshot?.address ?? '',
