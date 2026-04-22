@@ -11,6 +11,7 @@ import {
   resolvePreferredZeroPort,
   resolveRequestedOrAvailablePort,
 } from './dev-web-local-ports.js'
+import { ensureWasmKernelArtifact } from './ensure-wasm-kernel.js'
 
 const composeFiles = ['compose.yaml', 'compose.dev-local.yaml'] as const
 const composeProject = process.env['BILIG_DEV_COMPOSE_PROJECT'] ?? 'bilig-dev-local'
@@ -498,6 +499,7 @@ function spawnWebDev(webPort: number, publicServerUrl: string): DevChildProcess 
 }
 
 function buildWebPreview(publicServerUrl: string): void {
+  ensureWasmKernelArtifact()
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     BILIG_SYNC_SERVER_PORT: new URL(publicServerUrl).port,
