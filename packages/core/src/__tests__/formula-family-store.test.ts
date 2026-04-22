@@ -38,6 +38,110 @@ describe('FormulaFamilyStore', () => {
     expect(store.getStats()).toEqual({ familyCount: 3, runCount: 3, memberCount: 3 })
   })
 
+  it('groups periodically copied row formulas into strided family runs', () => {
+    const store = createFormulaFamilyStore()
+
+    for (let row = 1; row < 10; row += 3) {
+      store.upsertFormula({
+        cellIndex: row + 100,
+        sheetId: 1,
+        row,
+        col: 5,
+        templateId: 7,
+        shapeKey: 'mixed-template',
+      })
+    }
+
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 1, memberCount: 3 })
+    expect(store.listFamilies()[0]?.runs).toEqual([
+      expect.objectContaining({
+        axis: 'row',
+        fixedIndex: 5,
+        start: 1,
+        end: 7,
+        step: 3,
+        cellIndices: [101, 104, 107],
+      }),
+    ])
+  })
+
+  it('reshapes a sparse two-member run when the missing midpoint arrives later', () => {
+    const store = createFormulaFamilyStore()
+
+    store.upsertFormula({ cellIndex: 101, sheetId: 1, row: 1, col: 5, templateId: 7, shapeKey: 'mixed-template' })
+    store.upsertFormula({ cellIndex: 107, sheetId: 1, row: 7, col: 5, templateId: 7, shapeKey: 'mixed-template' })
+    store.upsertFormula({ cellIndex: 104, sheetId: 1, row: 4, col: 5, templateId: 7, shapeKey: 'mixed-template' })
+
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 1, memberCount: 3 })
+    expect(store.listFamilies()[0]?.runs).toEqual([
+      expect.objectContaining({
+        axis: 'row',
+        fixedIndex: 5,
+        start: 1,
+        end: 7,
+        step: 3,
+        cellIndices: [101, 104, 107],
+      }),
+    ])
+  })
+
+  it('keeps column-oriented singleton merges available through the run index', () => {
+    const store = createFormulaFamilyStore()
+
+    store.upsertFormula({ cellIndex: 201, sheetId: 1, row: 2, col: 1, templateId: 7, shapeKey: 'horizontal-template' })
+    store.upsertFormula({ cellIndex: 204, sheetId: 1, row: 2, col: 4, templateId: 7, shapeKey: 'horizontal-template' })
+    store.upsertFormula({ cellIndex: 207, sheetId: 1, row: 2, col: 7, templateId: 7, shapeKey: 'horizontal-template' })
+
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 1, memberCount: 3 })
+    expect(store.listFamilies()[0]?.runs).toEqual([
+      expect.objectContaining({
+        axis: 'column',
+        fixedIndex: 2,
+        start: 1,
+        end: 7,
+        step: 3,
+        cellIndices: [201, 204, 207],
+      }),
+    ])
+  })
+
+  it('preserves a strided run shape when a local edit removes a middle member', () => {
+    const store = createFormulaFamilyStore()
+
+    for (let row = 1; row <= 10; row += 3) {
+      store.upsertFormula({
+        cellIndex: row + 100,
+        sheetId: 1,
+        row,
+        col: 5,
+        templateId: 7,
+        shapeKey: 'mixed-template',
+      })
+    }
+
+    expect(store.unregisterFormula(107)).toBe(true)
+
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 2, memberCount: 3 })
+    expect(store.listFamilies()[0]?.runs).toEqual([
+      expect.objectContaining({
+        axis: 'row',
+        fixedIndex: 5,
+        start: 1,
+        end: 4,
+        step: 3,
+        cellIndices: [101, 104],
+      }),
+      expect.objectContaining({
+        axis: 'row',
+        fixedIndex: 5,
+        start: 10,
+        end: 10,
+        step: 1,
+        cellIndices: [110],
+      }),
+    ])
+  })
+
   it('splits a family run when a local edit removes a middle member', () => {
     const store = createFormulaFamilyStore()
     for (let row = 0; row < 5; row += 1) {
