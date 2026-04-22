@@ -854,10 +854,53 @@ export function createEngineOperationService(args: {
     return found
   }
 
-  const canSkipDirtyTraversalForChangedInputs = (changedInputCellIndices: U32, changedInputCount: number): boolean => {
+  const canUseDirectFormulaPostRecalc = (formulaCellIndex: number): boolean => {
+    const formula = args.state.formulas.get(formulaCellIndex)
+    return (
+      formula !== undefined &&
+      (formula.directLookup !== undefined ||
+        formula.directAggregate !== undefined ||
+        formula.directScalar !== undefined ||
+        formula.directCriteria !== undefined) &&
+      args.getEntityDependents(makeCellEntity(formulaCellIndex)).length === 0
+    )
+  }
+
+  const markPostRecalcDirectFormulaDependents = (cellIndex: number, postRecalcDirectFormulaIndices: Set<number>): void => {
+    const dependents = args.getEntityDependents(makeCellEntity(cellIndex))
+    if (dependents.length === 0) {
+      return
+    }
+    for (let index = 0; index < dependents.length; index += 1) {
+      if (!canUseDirectFormulaPostRecalc(dependents[index]!)) {
+        return
+      }
+    }
+    for (let index = 0; index < dependents.length; index += 1) {
+      postRecalcDirectFormulaIndices.add(dependents[index]!)
+    }
+  }
+
+  const canSkipDirtyTraversalForChangedInputs = (
+    changedInputCellIndices: U32,
+    changedInputCount: number,
+    postRecalcDirectFormulaIndices?: ReadonlySet<number>,
+  ): boolean => {
+    const dependentsArePostRecalcDirect = (dependents: U32): boolean => {
+      if (postRecalcDirectFormulaIndices === undefined) {
+        return false
+      }
+      for (let dependentIndex = 0; dependentIndex < dependents.length; dependentIndex += 1) {
+        if (!postRecalcDirectFormulaIndices.has(dependents[dependentIndex]!)) {
+          return false
+        }
+      }
+      return true
+    }
     for (let index = 0; index < changedInputCount; index += 1) {
       const cellIndex = changedInputCellIndices[index]!
-      if (args.getEntityDependents(makeCellEntity(cellIndex)).length > 0) {
+      const dependents = args.getEntityDependents(makeCellEntity(cellIndex))
+      if (dependents.length > 0 && !dependentsArePostRecalcDirect(dependents)) {
         return false
       }
     }
@@ -1770,6 +1813,9 @@ export function createEngineOperationService(args: {
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
             }
             args.state.workbook.notifyCellValueWritten(cellIndex)
+            if (!isRestore) {
+              markPostRecalcDirectFormulaDependents(cellIndex, postRecalcDirectFormulaIndices)
+            }
             if (needsLookupValueRead) {
               const newValue = literalToValue(op.value, args.state.strings)
               const newStringId = typeof op.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
@@ -2137,7 +2183,7 @@ export function createEngineOperationService(args: {
         changedInputCount > 0 &&
         precomputedKernelSyncCellIndices.length === 0 &&
         !refreshAllPivots &&
-        canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount)
+        canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)
       const canSkipKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size > 0
       if (!canSkipKernelSyncOnlyRecalc) {
         const changedRoots = canUseKernelSyncOnlyRecalc
@@ -2357,6 +2403,9 @@ export function createEngineOperationService(args: {
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 writeLiteralToCellStore(args.state.workbook.cellStore, existingIndex, mutation.value, args.state.strings)
                 args.state.workbook.notifyCellValueWritten(existingIndex)
+                if (!isRestore) {
+                  markPostRecalcDirectFormulaDependents(existingIndex, postRecalcDirectFormulaIndices)
+                }
                 if (needsLookupValueRead) {
                   const newValue = literalToValue(mutation.value, args.state.strings)
                   const newStringId =
@@ -2435,6 +2484,9 @@ export function createEngineOperationService(args: {
               }
               writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, mutation.value, args.state.strings)
               args.state.workbook.notifyCellValueWritten(cellIndex)
+              if (!isRestore) {
+                markPostRecalcDirectFormulaDependents(cellIndex, postRecalcDirectFormulaIndices)
+              }
               if (needsLookupValueRead) {
                 const newValue = literalToValue(mutation.value, args.state.strings)
                 const newStringId = typeof mutation.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
@@ -2766,7 +2818,9 @@ export function createEngineOperationService(args: {
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
       const canUseKernelSyncOnlyRecalc =
-        formulaChangedCount === 0 && changedInputCount > 0 && canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount)
+        formulaChangedCount === 0 &&
+        changedInputCount > 0 &&
+        canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)
       const canSkipKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size > 0
       if (!canSkipKernelSyncOnlyRecalc) {
         const changedRoots = canUseKernelSyncOnlyRecalc

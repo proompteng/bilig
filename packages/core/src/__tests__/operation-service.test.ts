@@ -368,6 +368,20 @@ describe('EngineOperationService', () => {
     expect(engine.getCellValue('Sheet1', 'F1')).toEqual({ tag: ValueTag.Number, value: 2 })
   })
 
+  it('updates standalone direct lookup operands without dirty traversal', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-direct-lookup-post-recalc' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A3' }, [[1], [2], [3]])
+    engine.setCellValue('Sheet1', 'D1', 2.5)
+    engine.setCellFormula('Sheet1', 'E1', 'MATCH(D1,A1:A3,1)')
+
+    engine.setCellValue('Sheet1', 'D1', 3.5)
+
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+  })
+
   it('keeps aggregate formulas current through generic batch clears', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'operation-batch-aggregate-clear' })
     await engine.ready()
