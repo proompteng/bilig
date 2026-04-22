@@ -320,6 +320,31 @@ describe('EngineStructureService', () => {
     expect(engine.getPerformanceCounters().structuralFormulaImpactCandidates).toBe(3)
   })
 
+  it('does not scan cycle state for literal-only structural deletes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-literal-column' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 8; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+    }
+
+    engine.resetPerformanceCounters()
+    const result = Effect.runSync(
+      getStructureService(engine).applyStructuralAxisOp({
+        kind: 'deleteColumns',
+        sheetName: 'Sheet1',
+        start: 1,
+        count: 1,
+      }),
+    )
+
+    expect(result.graphRefreshRequired).toBe(false)
+    expect(engine.getPerformanceCounters().cycleFormulaScans).toBe(0)
+  })
+
   it('keeps graph refresh enabled when deleting formulas from an active cycle', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-cycle' })
     await engine.ready()

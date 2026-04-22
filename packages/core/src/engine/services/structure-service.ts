@@ -902,6 +902,25 @@ export function createEngineStructureService(args: {
     args.state.pivotOutputOwners.delete(cellIndex)
   }
 
+  const clearRemovedCellRuntimeState = (cellIndex: number): void => {
+    const flags = args.state.workbook.cellStore.flags[cellIndex] ?? 0
+    const hasDerivedState =
+      (flags & (CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0 ||
+      args.state.workbook.getCellFormat(cellIndex) !== undefined ||
+      args.state.pivotOutputOwners.has(cellIndex)
+    if (!hasDerivedState) {
+      args.state.workbook.cellStore.flags[cellIndex] = flags & ~CellFlags.Materialized
+      return
+    }
+    clearDerivedCellArtifacts(cellIndex)
+    args.removeFormula(cellIndex)
+    args.state.workbook.setCellFormat(cellIndex, null)
+    args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
+    args.state.workbook.cellStore.flags[cellIndex] =
+      flags &
+      ~(CellFlags.Materialized | CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
+  }
+
   const rewriteWorkbookMetadataForStructuralTransform = (
     sheetName: string,
     transform: StructuralAxisTransform,
@@ -1666,14 +1685,7 @@ export function createEngineStructureService(args: {
             hasCycleFormulas()
           }
           transaction.removedCellIndices.forEach((cellIndex) => {
-            clearDerivedCellArtifacts(cellIndex)
-            args.removeFormula(cellIndex)
-            args.state.workbook.setCellFormat(cellIndex, null)
-            args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
-            args.state.workbook.cellStore.flags[cellIndex] =
-              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
-            args.state.workbook.detachCellIndex(cellIndex)
+            clearRemovedCellRuntimeState(cellIndex)
           })
 
           clearSpillMetadataForSheet(sheetName)
@@ -1738,8 +1750,12 @@ export function createEngineStructureService(args: {
               !reboundFormulaCellIndices.has(cellIndex) && !isCellIndexMapped(cellIndex) && !removedFormulaCellIndexSet.has(cellIndex),
           )
           const hasNonPreservedRebind = remainingRebindInputs.some((input) => input.preservesBinding !== true)
-          const deleteOnlyAcyclicRebind =
-            transform.kind === 'delete' && !hasCycleFormulas() && changedDefinedNames.size === 0 && changedTableNames.size === 0
+          const needsDeleteAcyclicRebindCheck =
+            transform.kind === 'delete' &&
+            changedDefinedNames.size === 0 &&
+            changedTableNames.size === 0 &&
+            (hasNonPreservedRebind || lostSurvivingFormulaCells)
+          const deleteOnlyAcyclicRebind = needsDeleteAcyclicRebindCheck && !hasCycleFormulas()
           const topologyChanged = removedFormulaCellIndices.length > 0 || hasNonPreservedRebind || lostSurvivingFormulaCells
           const graphRefreshRequired =
             ((hasNonPreservedRebind || lostSurvivingFormulaCells) && !onlyDirectAggregateFormulaCells && !deleteOnlyAcyclicRebind) ||
