@@ -67,6 +67,10 @@ export interface WorkbookPaneSceneRequest {
   readonly freezeRows: number
   readonly freezeCols: number
   readonly dprBucket?: number | undefined
+  readonly requestSeq?: number | undefined
+  readonly cameraSeq?: number | undefined
+  readonly priority?: number | undefined
+  readonly reason?: 'visible' | 'prefetch' | 'edit' | 'resize' | 'sheet-switch' | undefined
   readonly selectedCell: {
     readonly col: number
     readonly row: number

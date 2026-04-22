@@ -12,11 +12,12 @@ import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './reside
 
 interface SceneEntry {
   readonly key: string
-  readonly request: WorkbookPaneSceneRequest
+  request: WorkbookPaneSceneRequest
   listeners: Set<() => void>
   scenes: readonly WorkbookPaneScenePacket[] | null
   inFlight: Promise<void> | null
   refreshQueued: boolean
+  activeRequestSeq: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -132,8 +133,38 @@ function buildRequestKey(request: WorkbookPaneSceneRequest): string {
   ].join(':')
 }
 
+function resolveSceneRequestPriority(request: WorkbookPaneSceneRequest): number {
+  if (Number.isInteger(request.priority) && request.priority !== undefined && request.priority >= 0) {
+    return request.priority
+  }
+  return request.reason === 'prefetch' ? 4 : 0
+}
+
+function preferSceneRequest(current: WorkbookPaneSceneRequest, next: WorkbookPaneSceneRequest): WorkbookPaneSceneRequest {
+  const currentPriority = resolveSceneRequestPriority(current)
+  const nextPriority = resolveSceneRequestPriority(next)
+  if (nextPriority < currentPriority) {
+    return next
+  }
+  if (nextPriority === currentPriority && (next.cameraSeq ?? 0) > (current.cameraSeq ?? 0)) {
+    return next
+  }
+  return current
+}
+
+function withRequestMetadata(request: WorkbookPaneSceneRequest, requestSeq: number): WorkbookPaneSceneRequest {
+  return {
+    ...request,
+    cameraSeq: request.cameraSeq ?? requestSeq,
+    priority: resolveSceneRequestPriority(request),
+    reason: request.reason ?? 'visible',
+    requestSeq,
+  }
+}
+
 export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
+  private nextRequestSeq = 0
 
   constructor(private readonly client?: Pick<WorkerEngineClient, 'invoke'>) {}
 
@@ -146,13 +177,20 @@ export class ProjectedSceneStore {
       throw new Error('Worker resident pane scene subscriptions require a worker engine client')
     }
     const key = buildRequestKey(request)
-    const entry = this.entries.get(key) ?? {
-      key,
-      request,
-      listeners: new Set<() => void>(),
-      scenes: null,
-      inFlight: null,
-      refreshQueued: false,
+    const existing = this.entries.get(key)
+    const entry =
+      existing ??
+      ({
+        key,
+        request,
+        listeners: new Set<() => void>(),
+        scenes: null,
+        inFlight: null,
+        refreshQueued: false,
+        activeRequestSeq: 0,
+      } satisfies SceneEntry)
+    if (existing) {
+      entry.request = preferSceneRequest(existing.request, request)
     }
     entry.listeners.add(listener)
     this.entries.set(key, entry)
@@ -217,10 +255,15 @@ export class ProjectedSceneStore {
     }
     entry.inFlight = (async (): Promise<void> => {
       try {
+        const requestSeq = ++this.nextRequestSeq
+        entry.activeRequestSeq = requestSeq
         const isIncrementalRefresh = entry.scenes !== null
-        const next = await client.invoke('getResidentPaneScenes', entry.request)
+        const next = await client.invoke('getResidentPaneScenes', withRequestMetadata(entry.request, requestSeq))
         if (!isResidentPaneScenePacketArray(next)) {
           throw new Error('Worker returned an unexpected resident pane scene payload')
+        }
+        if (entry.activeRequestSeq !== requestSeq || entry.refreshQueued || entry.listeners.size === 0) {
+          return
         }
         entry.scenes = next
         if (isIncrementalRefresh) {
