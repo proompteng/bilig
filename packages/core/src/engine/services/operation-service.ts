@@ -13,7 +13,7 @@ import {
 } from '../../entity-ids.js'
 import { batchOpOrder, compareOpOrder, createBatch, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
-import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
+import { areCellValuesEqual, emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { spillDependencyKey, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
@@ -65,6 +65,7 @@ interface ExactLookupImpactCache {
 }
 
 type ExactLookupImpactCaches = Map<string, ExactLookupImpactCache>
+type DirectFormulaDeltaMap = Map<number, number>
 
 export interface EngineOperationService {
   readonly applyBatch: (
@@ -105,6 +106,20 @@ function mutationErrorMessage(message: string, cause: unknown): string {
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`)
+}
+
+function directAggregateNumericContribution(value: CellValue): number | undefined {
+  switch (value.tag) {
+    case ValueTag.Number:
+      return value.value
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0
+    case ValueTag.Empty:
+    case ValueTag.String:
+      return 0
+    case ValueTag.Error:
+      return undefined
+  }
 }
 
 function collectTrackedDependents(registry: Map<string | number, Set<number>>, keys: readonly (string | number)[]): number[] {
@@ -1021,11 +1036,17 @@ export function createEngineOperationService(args: {
       sheetName: string
       row: number
       col: number
+      oldValue?: CellValue
+      newValue?: CellValue
     },
     formulaChangedCount: number,
     postRecalcDirectFormulaIndices?: Set<number>,
+    directFormulaDeltas?: DirectFormulaDeltaMap,
   ): number => {
     const dependents = collectAffectedDirectRangeDependents(request)
+    const oldContribution = request.oldValue ? directAggregateNumericContribution(request.oldValue) : undefined
+    const newContribution = request.newValue ? directAggregateNumericContribution(request.newValue) : undefined
+    const contributionDelta = oldContribution === undefined || newContribution === undefined ? undefined : newContribution - oldContribution
     const canUsePostRecalc =
       postRecalcDirectFormulaIndices !== undefined &&
       dependents.length > 0 &&
@@ -1037,10 +1058,18 @@ export function createEngineOperationService(args: {
           args.getEntityDependents(makeCellEntity(formulaCellIndex)).length === 0
         )
       })
+    const canUseDeltaPostRecalc =
+      canUsePostRecalc &&
+      directFormulaDeltas !== undefined &&
+      contributionDelta !== undefined &&
+      dependents.every((formulaCellIndex) => args.state.formulas.get(formulaCellIndex)?.directAggregate?.aggregateKind === 'sum')
     for (let index = 0; index < dependents.length; index += 1) {
       const formulaCellIndex = dependents[index]!
       if (canUsePostRecalc) {
         postRecalcDirectFormulaIndices.add(formulaCellIndex)
+        if (canUseDeltaPostRecalc) {
+          directFormulaDeltas.set(formulaCellIndex, (directFormulaDeltas.get(formulaCellIndex) ?? 0) + contributionDelta)
+        }
         continue
       }
       if (postRecalcDirectFormulaIndices && (args.state.formulas.get(formulaCellIndex)?.dependencyIndices.length ?? 0) > 0) {
@@ -1049,6 +1078,21 @@ export function createEngineOperationService(args: {
       formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount)
     }
     return formulaChangedCount
+  }
+
+  const applyDirectFormulaNumericDelta = (cellIndex: number, delta: number): boolean => {
+    const beforeValue = args.state.workbook.cellStore.getValue(cellIndex, (id) => (id === 0 ? '' : args.state.strings.get(id)))
+    if (beforeValue.tag !== ValueTag.Number) {
+      return false
+    }
+    const nextValue: CellValue = { tag: ValueTag.Number, value: beforeValue.value + delta }
+    args.state.workbook.cellStore.flags[cellIndex] =
+      (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+    args.state.workbook.cellStore.setValue(cellIndex, nextValue)
+    if (!areCellValuesEqual(beforeValue, nextValue)) {
+      args.state.workbook.notifyCellValueWritten(cellIndex)
+    }
+    return true
   }
 
   const refreshDependentRangesAndRebindFormulaDependents = (cellIndex: number, formulaChangedCount: number): number => {
@@ -1371,6 +1415,7 @@ export function createEngineOperationService(args: {
     const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = []
     const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = []
     const postRecalcDirectFormulaIndices = new Set<number>()
+    const directFormulaDeltas: DirectFormulaDeltaMap = new Map()
     const precomputedKernelSyncCellIndices: number[] = []
     let refreshAllPivots = false
     let appliedOps = 0
@@ -1754,6 +1799,7 @@ export function createEngineOperationService(args: {
                     exactLookupRequest,
                     formulaChangedCount,
                     postRecalcDirectFormulaIndices,
+                    directFormulaDeltas,
                   )
                 }
               }
@@ -1935,6 +1981,7 @@ export function createEngineOperationService(args: {
                     exactLookupRequest,
                     formulaChangedCount,
                     postRecalcDirectFormulaIndices,
+                    directFormulaDeltas,
                   )
                 }
               }
@@ -2109,6 +2156,11 @@ export function createEngineOperationService(args: {
           if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
             return
           }
+          const delta = directFormulaDeltas.get(cellIndex)
+          if (delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+            postRecalcChanged.push(cellIndex)
+            return
+          }
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
           if (changedCellIndices) {
@@ -2212,6 +2264,7 @@ export function createEngineOperationService(args: {
     let topologyChanged = false
     let compileMs = 0
     const postRecalcDirectFormulaIndices = new Set<number>()
+    const directFormulaDeltas: DirectFormulaDeltaMap = new Map()
     const hasGeneralEventListeners = args.state.events.hasListeners()
     const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
     const hasWatchedCellListeners = args.state.events.hasCellListeners()
@@ -2338,6 +2391,7 @@ export function createEngineOperationService(args: {
                         exactLookupRequest,
                         formulaChangedCount,
                         postRecalcDirectFormulaIndices,
+                        directFormulaDeltas,
                       )
                     }
                   }
@@ -2414,6 +2468,7 @@ export function createEngineOperationService(args: {
                       exactLookupRequest,
                       formulaChangedCount,
                       postRecalcDirectFormulaIndices,
+                      directFormulaDeltas,
                     )
                   }
                 }
@@ -2547,6 +2602,7 @@ export function createEngineOperationService(args: {
                         exactLookupRequest,
                         formulaChangedCount,
                         postRecalcDirectFormulaIndices,
+                        directFormulaDeltas,
                       )
                     }
                   }
@@ -2623,6 +2679,7 @@ export function createEngineOperationService(args: {
                       exactLookupRequest,
                       formulaChangedCount,
                       postRecalcDirectFormulaIndices,
+                      directFormulaDeltas,
                     )
                   }
                 }
@@ -2722,6 +2779,11 @@ export function createEngineOperationService(args: {
         const postRecalcChanged: number[] = []
         postRecalcDirectFormulaIndices.forEach((cellIndex) => {
           if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+            return
+          }
+          const delta = directFormulaDeltas.get(cellIndex)
+          if (delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+            postRecalcChanged.push(cellIndex)
             return
           }
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)

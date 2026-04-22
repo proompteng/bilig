@@ -397,6 +397,26 @@ describe('EngineOperationService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 537 })
   })
 
+  it('accumulates direct aggregate deltas across generic batch literal writes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-direct-aggregate-batch-deltas' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 32; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
+
+    const batch = createBatch(getReplicaState(engine), [
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 10 },
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A2', value: 20 },
+    ])
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, 'local'))
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 555 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+  })
+
   it('replaces existing formulas with generic batch literal writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'operation-batch-literal-over-formula' })
     await engine.ready()
