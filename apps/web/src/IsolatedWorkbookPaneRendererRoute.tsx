@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
-import { WorkbookPaneRendererV2 } from '@bilig/grid'
+import { WorkbookPaneRendererV2, packGridScenePacketV2 } from '@bilig/grid'
 
 const ROW_MARKER_WIDTH = 46
 const HEADER_HEIGHT = 24
@@ -23,6 +23,7 @@ type RendererGpuScene = RendererPane['gpuScene']
 type RendererGpuRect = RendererGpuScene['fillRects'][number]
 type RendererTextScene = RendererPane['textScene']
 type RendererTextItem = RendererTextScene['items'][number]
+type RendererPaneId = 'corner' | 'top-body' | 'left-body' | 'body'
 
 interface HostSize {
   readonly width: number
@@ -78,13 +79,14 @@ function buildIsolatedRendererPanes(hostSize: HostSize): RendererPanes {
   const bodyHeight = Math.max(0, hostSize.height - HEADER_HEIGHT)
 
   return [
-    {
+    createRendererPane({
       generation: 1,
       paneId: 'corner',
       frame: { x: 0, y: 0, width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT },
       surfaceSize: { width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: false },
+      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
       gpuScene: {
         fillRects: [{ x: 0, y: 0, width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT, color: HEADER_FILL }],
         borderRects: [
@@ -93,38 +95,61 @@ function buildIsolatedRendererPanes(hostSize: HostSize): RendererPanes {
         ],
       },
       textScene: { items: [] },
-    },
-    {
+    }),
+    createRendererPane({
       generation: 1,
       paneId: 'top-body',
       frame: { x: ROW_MARKER_WIDTH, y: 0, width: bodyWidth, height: HEADER_HEIGHT },
       surfaceSize: { width: bodyWidth, height: HEADER_HEIGHT },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: true, y: false },
+      viewport: { colStart: 0, colEnd: Math.max(0, Math.ceil(bodyWidth / COLUMN_WIDTH) - 1), rowStart: 0, rowEnd: 0 },
       gpuScene: buildColumnHeaderGpuScene(bodyWidth),
       textScene: buildColumnHeaderTextScene(bodyWidth),
-    },
-    {
+    }),
+    createRendererPane({
       generation: 1,
       paneId: 'left-body',
       frame: { x: 0, y: HEADER_HEIGHT, width: ROW_MARKER_WIDTH, height: bodyHeight },
       surfaceSize: { width: ROW_MARKER_WIDTH, height: bodyHeight },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: true },
+      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: Math.max(0, Math.ceil(bodyHeight / ROW_HEIGHT) - 1) },
       gpuScene: buildRowHeaderGpuScene(bodyHeight),
       textScene: buildRowHeaderTextScene(bodyHeight),
-    },
-    {
+    }),
+    createRendererPane({
       generation: 1,
       paneId: 'body',
       frame: { x: ROW_MARKER_WIDTH, y: HEADER_HEIGHT, width: bodyWidth, height: bodyHeight },
       surfaceSize: { width: bodyWidth, height: bodyHeight },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: true, y: true },
+      viewport: {
+        colStart: 0,
+        colEnd: Math.max(0, Math.ceil(bodyWidth / COLUMN_WIDTH) - 1),
+        rowStart: 0,
+        rowEnd: Math.max(0, Math.ceil(bodyHeight / ROW_HEIGHT) - 1),
+      },
       gpuScene: buildBodyGpuScene(bodyWidth, bodyHeight),
       textScene: buildBodyTextScene(bodyWidth, bodyHeight),
-    },
+    }),
   ]
+}
+
+function createRendererPane(input: Omit<RendererPane, 'packedScene'> & { readonly paneId: RendererPaneId }): RendererPane {
+  return {
+    ...input,
+    packedScene: packGridScenePacketV2({
+      generation: input.generation,
+      gpuScene: input.gpuScene,
+      paneId: input.paneId,
+      sheetName: 'Sheet1',
+      surfaceSize: input.surfaceSize,
+      textScene: input.textScene,
+      viewport: input.viewport ?? { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
+    }),
+  }
 }
 
 function buildColumnHeaderGpuScene(width: number): RendererGpuScene {

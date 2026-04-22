@@ -83,14 +83,11 @@ export class TileGpuCache {
 
 export function syncTileGpuCacheFromPanes(input: {
   readonly cache: TileGpuCache
-  readonly panes: readonly { readonly packedScene?: GridScenePacketV2 | undefined }[]
+  readonly panes: readonly { readonly packedScene: GridScenePacketV2 }[]
   readonly maxEntries?: number | undefined
 }): void {
   const visibleKeys = new Set<string>()
   for (const pane of input.panes) {
-    if (!pane.packedScene) {
-      continue
-    }
     visibleKeys.add(input.cache.upsert(pane.packedScene).key)
   }
   input.cache.markVisible(visibleKeys)

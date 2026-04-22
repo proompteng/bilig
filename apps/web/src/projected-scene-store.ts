@@ -25,10 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isOptionalPackedScene(value: unknown): boolean {
-  if (value === undefined) {
-    return true
-  }
+function isPackedScene(value: unknown): boolean {
   return isGridScenePacketV2(value) && validateGridScenePacketV2(value).ok
 }
 
@@ -108,7 +105,7 @@ function isResidentPaneScenePacketArray(value: unknown): value is readonly Workb
         isRecord(entry['surfaceSize']) &&
         isRecord(entry['gpuScene']) &&
         isRecord(entry['textScene']) &&
-        isOptionalPackedScene(entry['packedScene']),
+        isPackedScene(entry['packedScene']),
     )
   )
 }
@@ -267,7 +264,7 @@ export class ProjectedSceneStore {
       }
     }
     for (const [key, scenes] of this.retainedScenes) {
-      if (scenes.some((scene) => removed.has(scene.packedScene?.sheetName ?? ''))) {
+      if (scenes.some((scene) => removed.has(scene.packedScene.sheetName))) {
         this.retainedScenes.delete(key)
       }
     }
@@ -321,7 +318,8 @@ export class ProjectedSceneStore {
         const isIncrementalRefresh = entry.scenes !== null
         const next = await client.invoke('getResidentPaneScenes', request)
         if (!isResidentPaneScenePacketArray(next)) {
-          throw new Error('Worker returned an unexpected resident pane scene payload')
+          this.noteScenePacketRejected('invalid-scene-payload')
+          return
         }
         if (entry.activeRequestSeq !== requestSeq || entry.refreshQueued || entry.listeners.size === 0) {
           return

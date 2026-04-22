@@ -158,7 +158,7 @@ describe('ProjectedSceneStore', () => {
     unsubscribe()
   })
 
-  it('rejects stale or packetless worker scene responses before publishing', async () => {
+  it('rejects stale or malformed worker scene responses before publishing', async () => {
     const request = {
       sheetName: 'Sheet1',
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
@@ -193,7 +193,7 @@ describe('ProjectedSceneStore', () => {
 
     expect(packetlessListener).not.toHaveBeenCalled()
     expect(packetlessStore.peekResidentPaneScenes(request)).toBeNull()
-    expect(packetlessStore.getLastRejectedPacketReason()).toBe('missing-packed-scene')
+    expect(packetlessStore.getLastRejectedPacketReason()).toBe('invalid-scene-payload')
 
     unsubscribePacketless()
     unsubscribeStale()

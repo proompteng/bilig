@@ -409,7 +409,8 @@ export function resolveResidentDataPaneRenderState(input: {
       gpuScene: pane.gpuScene,
       textScene: pane.textScene,
       contentOffset: { x: 0, y: 0 },
+      packedScene: pane.packedScene,
     }
-    return pane.packedScene ? Object.assign(next, { packedScene: pane.packedScene }) : next
+    return next
   })
 }

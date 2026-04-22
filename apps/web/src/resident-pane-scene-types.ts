@@ -58,7 +58,7 @@ export interface WorkbookPaneScenePacket {
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
-  readonly packedScene?: WorkerPackedGridScenePacket
+  readonly packedScene: WorkerPackedGridScenePacket
 }
 
 export interface WorkbookPaneSceneRequest {

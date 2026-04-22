@@ -12,6 +12,7 @@ import {
   resolveTypeGpuV2DrawScrollSnapshot,
   shouldDeferTypeGpuResourceUploads,
 } from '../renderer-v2/WorkbookPaneRendererV2.js'
+import { packGridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 
 describe('WorkbookPaneRendererV2', () => {
   const originalResizeObserver = globalThis.ResizeObserver
@@ -55,6 +56,9 @@ describe('WorkbookPaneRendererV2', () => {
     Object.defineProperty(rendererHost, 'clientWidth', { configurable: true, value: 640 })
     Object.defineProperty(rendererHost, 'clientHeight', { configurable: true, value: 360 })
     host.appendChild(rendererHost)
+    const emptyGpuScene = { borderRects: [], fillRects: [] }
+    const emptyTextScene = { items: [] }
+    const viewport = { colStart: 0, colEnd: 1, rowStart: 0, rowEnd: 1 }
 
     await act(async () => {
       root.render(
@@ -67,11 +71,21 @@ describe('WorkbookPaneRendererV2', () => {
               contentOffset: { x: 0, y: 0 },
               frame: { x: 46, y: 24, width: 594, height: 336 },
               generation: 1,
-              gpuScene: { borderRects: [], fillRects: [] },
+              gpuScene: emptyGpuScene,
+              packedScene: packGridScenePacketV2({
+                generation: 1,
+                gpuScene: emptyGpuScene,
+                paneId: 'body',
+                sheetName: 'Sheet1',
+                surfaceSize: { width: 640, height: 360 },
+                textScene: emptyTextScene,
+                viewport,
+              }),
               paneId: 'body',
               scrollAxes: { x: true, y: true },
               surfaceSize: { width: 640, height: 360 },
-              textScene: { items: [] },
+              textScene: emptyTextScene,
+              viewport,
             },
           ]}
         />,
@@ -106,6 +120,15 @@ describe('WorkbookPaneRendererV2', () => {
       generation: 1,
       gpuScene: { borderRects: [], fillRects: [] },
       paneId: 'body',
+      packedScene: packGridScenePacketV2({
+        generation: 1,
+        gpuScene: { borderRects: [], fillRects: [] },
+        paneId: 'body',
+        sheetName: 'Sheet1',
+        surfaceSize: { width: 1234, height: 696 },
+        textScene: { items: [] },
+        viewport: { colStart: 0, colEnd: 127, rowStart, rowEnd: rowStart + 31 },
+      }),
       scrollAxes: { x: true, y: true },
       surfaceSize: { width: 1234, height: 696 },
       textScene: { items: [] },

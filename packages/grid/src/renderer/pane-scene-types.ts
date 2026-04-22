@@ -18,7 +18,7 @@ export interface WorkbookPaneScenePacket {
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
-  readonly packedScene?: GridScenePacketV2
+  readonly packedScene: GridScenePacketV2
 }
 
 export interface WorkbookPaneSceneRequest {
@@ -60,7 +60,7 @@ export interface WorkbookRenderPaneState {
   readonly paneId: string
   readonly generation: number
   readonly viewport?: Viewport | undefined
-  readonly packedScene?: GridScenePacketV2 | undefined
+  readonly packedScene: GridScenePacketV2
   readonly frame: Rectangle
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly contentOffset: {

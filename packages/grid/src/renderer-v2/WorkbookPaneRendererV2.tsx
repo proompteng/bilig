@@ -1,7 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
-import type { GridGpuScene } from '../gridGpuScene.js'
-import type { GridTextScene } from '../gridTextScene.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
 import type { DynamicGridOverlayPacket } from './dynamic-overlay-packet.js'
@@ -26,13 +24,7 @@ export interface WorkbookPaneRendererV2Props {
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayPacket | null | undefined) | undefined
-  readonly overlay?:
-    | {
-        readonly gpuScene: GridGpuScene
-        readonly packedScene?: DynamicGridOverlayPacket['packedScene'] | undefined
-        readonly textScene: GridTextScene
-      }
-    | undefined
+  readonly overlay?: DynamicGridOverlayPacket | undefined
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 
@@ -274,7 +266,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
               scrollAxes: { x: false, y: false },
               surfaceSize: { width: surface.width, height: surface.height },
               textScene: overlayPacket.textScene,
-              viewport: overlayPacket.packedScene?.viewport,
+              viewport: overlayPacket.packedScene.viewport,
             },
           ]
         : basePanePayloads

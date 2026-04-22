@@ -54,12 +54,12 @@ describe('worker-runtime-render-scene', () => {
 
     expect(scenes.map((scene) => scene.paneId)).toEqual(['body', 'top', 'left', 'corner'])
     expect(new Set(scenes.map((scene) => scene.generation))).toEqual(new Set([7]))
-    expect(scenes.every((scene) => scene.packedScene?.rects instanceof Float32Array)).toBe(true)
-    expect(scenes.every((scene) => scene.packedScene?.textMetrics instanceof Float32Array)).toBe(true)
-    expect(scenes.every((scene) => scene.packedScene?.requestSeq === 11)).toBe(true)
-    expect(scenes.every((scene) => scene.packedScene?.cameraSeq === 12)).toBe(true)
-    expect(scenes.every((scene) => Number.isFinite(scene.packedScene?.generatedAt))).toBe(true)
-    expect(scenes.find((scene) => scene.paneId === 'body')?.packedScene?.key).toMatchObject({
+    expect(scenes.every((scene) => scene.packedScene.rects instanceof Float32Array)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene.textMetrics instanceof Float32Array)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene.requestSeq === 11)).toBe(true)
+    expect(scenes.every((scene) => scene.packedScene.cameraSeq === 12)).toBe(true)
+    expect(scenes.every((scene) => Number.isFinite(scene.packedScene.generatedAt))).toBe(true)
+    expect(scenes.find((scene) => scene.paneId === 'body')?.packedScene.key).toMatchObject({
       dprBucket: 2,
       freezeVersion: expect.any(Number),
       styleVersion: 3,
@@ -107,10 +107,10 @@ describe('worker-runtime-render-scene', () => {
       },
     })
 
-    expect(first[0]?.packedScene?.key.axisVersionX).not.toBe(second[0]?.packedScene?.key.axisVersionX)
-    expect(first[0]?.packedScene?.key.axisVersionY).toBe(second[0]?.packedScene?.key.axisVersionY)
-    expect(second[0]?.packedScene?.key.valueVersion).toBe(4)
-    expect(second[0]?.packedScene?.key.styleVersion).toBe(4)
+    expect(first[0]?.packedScene.key.axisVersionX).not.toBe(second[0]?.packedScene.key.axisVersionX)
+    expect(first[0]?.packedScene.key.axisVersionY).toBe(second[0]?.packedScene.key.axisVersionY)
+    expect(second[0]?.packedScene.key.valueVersion).toBe(4)
+    expect(second[0]?.packedScene.key.styleVersion).toBe(4)
   })
 
   it('keys the worker scene cache by viewport, freeze state, selection snapshot, and editing cell', () => {

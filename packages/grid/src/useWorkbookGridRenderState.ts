@@ -891,7 +891,7 @@ export function useWorkbookGridRenderState(input: {
     }
     void warmSceneRevision
     return warmResidentPaneSceneRequests.flatMap((request) => {
-      const warmScenes = residentSceneEngine.peekResidentPaneScenes(request)?.filter((pane) => pane.packedScene !== undefined) ?? []
+      const warmScenes = residentSceneEngine.peekResidentPaneScenes(request) ?? []
       if (warmScenes.length === 0) {
         return []
       }

@@ -45,30 +45,43 @@ describe('typegpu resource cache signatures', () => {
   })
 
   test('includes pane dimensions and decoration rects in rect signatures', () => {
-    const scene = {
-      borderRects: [],
-      fillRects: [{ color: { a: 1, b: 0, g: 0, r: 1 }, height: 22, width: 104, x: 0, y: 0 }],
+    const viewport = { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 }
+    const packet = {
+      borderRectCount: 0,
+      cameraSeq: 1,
+      fillRectCount: 1,
+      generatedAt: 1,
+      generation: 1,
+      key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
+      magic: GRID_SCENE_PACKET_V2_MAGIC,
+      paneId: 'body' as const,
+      rectCount: 1,
+      rectInstances: new Float32Array([0, 0, 104, 22, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 200, 100]),
+      rects: new Float32Array([0, 0, 104, 22, 1, 0, 0, 1]),
+      requestSeq: 1,
+      sheetName: 'Sheet1',
+      surfaceSize: { height: 100, width: 200 },
+      textCount: 0,
+      textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
+      version: GRID_SCENE_PACKET_V2_VERSION,
+      viewport,
     }
 
     expect(
       resolveGridRectSceneSignature({
         frame: { height: 100, width: 200, x: 0, y: 0 },
-        scene,
+        packedScene: packet,
       }),
     ).not.toBe(
       resolveGridRectSceneSignature({
         decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
         frame: { height: 100, width: 200, x: 0, y: 0 },
-        scene,
+        packedScene: packet,
       }),
     )
   })
 
   test('uses packed rect data in rect signatures', () => {
-    const scene = {
-      borderRects: [],
-      fillRects: [],
-    }
     const viewport = { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 }
     const basePacket = {
       borderRectCount: 0,
@@ -104,26 +117,22 @@ describe('typegpu resource cache signatures', () => {
       resolveGridRectSceneSignature({
         frame: { height: 100, width: 200, x: 0, y: 0 },
         packedScene: basePacket,
-        scene,
       }),
     ).not.toBe(
       resolveGridRectSceneSignature({
         frame: { height: 100, width: 200, x: 0, y: 0 },
         packedScene: changedPacket,
-        scene,
       }),
     )
     expect(
       resolveGridRectSceneSignature({
         frame: { height: 100, width: 200, x: 0, y: 0 },
         packedScene: basePacket,
-        scene,
       }),
     ).toBe(
       resolveGridRectSceneSignature({
         frame: { height: 100, width: 200, x: 0, y: 0 },
         packedScene: newerPacketWithSameRects,
-        scene,
       }),
     )
     expect(basePacket.rects.length).toBe(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
@@ -136,7 +145,6 @@ describe('typegpu resource cache signatures', () => {
         currentTextCount: 0,
         currentTextSignature: null,
         deferTextUploads: true,
-        hasPackedScene: true,
         hasTextBuffer: false,
         nextTextItemCount: 12,
       }),
@@ -149,7 +157,6 @@ describe('typegpu resource cache signatures', () => {
         currentTextCount: 12,
         currentTextSignature: 'resident-text',
         deferTextUploads: true,
-        hasPackedScene: true,
         hasTextBuffer: true,
         nextTextItemCount: 12,
       }),
@@ -160,21 +167,7 @@ describe('typegpu resource cache signatures', () => {
         currentTextCount: 0,
         currentTextSignature: 'empty-text',
         deferTextUploads: true,
-        hasPackedScene: true,
         hasTextBuffer: false,
-        nextTextItemCount: 12,
-      }),
-    ).toBe(false)
-  })
-
-  test('keeps non-packed panes on the immediate text upload path', () => {
-    expect(
-      shouldDeferPaneTextUpload({
-        currentTextCount: 12,
-        currentTextSignature: 'resident-text',
-        deferTextUploads: true,
-        hasPackedScene: false,
-        hasTextBuffer: true,
         nextTextItemCount: 12,
       }),
     ).toBe(false)

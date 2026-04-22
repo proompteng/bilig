@@ -101,7 +101,7 @@ export function drawWorkbookTypeGpuFrame(input: {
 }
 
 function markVisibleTilePanes(cache: TileGpuCache, panes: readonly WorkbookRenderPaneState[]): void {
-  cache.markVisible(new Set(panes.flatMap((pane) => (pane.packedScene ? [buildTileGpuCacheKey(pane.packedScene)] : []))))
+  cache.markVisible(new Set(panes.map((pane) => buildTileGpuCacheKey(pane.packedScene))))
 }
 
 export function resolveTypeGpuDrawPanes(input: {
@@ -112,9 +112,6 @@ export function resolveTypeGpuDrawPanes(input: {
 }): readonly WorkbookRenderPaneState[] {
   return input.panes.map((pane) => {
     const packedScene = pane.packedScene
-    if (!packedScene) {
-      return pane
-    }
     const exactKey = buildTileGpuCacheKey(packedScene)
     const exact = input.paneBuffers.peek(exactKey)
     if (exact && isPaneDrawReady(exact, pane)) {
@@ -134,9 +131,6 @@ export function resolveTypeGpuDrawPanes(input: {
 
 function isPaneDrawReady(entry: WorkbookPaneBufferEntry, pane: WorkbookRenderPaneState): boolean {
   const packedScene = pane.packedScene
-  if (!packedScene) {
-    return true
-  }
   const rectReady =
     packedScene.rectCount === 0 ? entry.rectSignature !== null : entry.rectBuffer !== null && entry.rectCount >= packedScene.rectCount
   const textReady =
@@ -153,7 +147,7 @@ function mergePaneLists(
   const result: WorkbookRenderPaneState[] = []
   const seen = new Set<string>()
   for (const pane of [...primary, ...secondary]) {
-    const key = pane.packedScene ? buildTileGpuCacheKey(pane.packedScene) : pane.paneId
+    const key = buildTileGpuCacheKey(pane.packedScene)
     if (seen.has(key)) {
       continue
     }

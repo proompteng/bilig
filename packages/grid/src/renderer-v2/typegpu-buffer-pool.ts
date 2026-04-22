@@ -1,4 +1,4 @@
-import { parseGpuColor, type GridGpuScene } from '../gridGpuScene.js'
+import { parseGpuColor } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
 import {
@@ -46,7 +46,6 @@ export function syncTypeGpuPaneResources(input: {
       currentTextCount: paneCache.textCount,
       currentTextSignature: paneCache.textSignature,
       deferTextUploads: input.deferTextUploads === true,
-      hasPackedScene: pane.packedScene !== undefined,
       hasTextBuffer: paneCache.textBuffer !== null,
       nextTextItemCount: pane.textScene.items.length,
     })
@@ -66,13 +65,11 @@ export function syncTypeGpuPaneResources(input: {
             decorationRects: paneCache.decorationRects ?? [],
             frame: pane.frame,
             packedScene: pane.packedScene,
-            scene: pane.gpuScene,
           }))
         : resolveGridRectSceneSignature({
             decorationRects: paneCache.decorationRects ?? [],
             frame: pane.frame,
             packedScene: pane.packedScene,
-            scene: pane.gpuScene,
           })
     if (paneCache.rectSignature !== rectSignature) {
       syncRectResource({
@@ -87,13 +84,12 @@ export function syncTypeGpuPaneResources(input: {
 
 export function shouldDeferPaneTextUpload(input: {
   readonly deferTextUploads: boolean
-  readonly hasPackedScene: boolean
   readonly currentTextSignature: string | null
   readonly hasTextBuffer: boolean
   readonly currentTextCount: number
   readonly nextTextItemCount: number
 }): boolean {
-  if (!input.deferTextUploads || !input.hasPackedScene) {
+  if (!input.deferTextUploads) {
     return false
   }
   if (input.currentTextSignature === null) {
@@ -106,7 +102,7 @@ export function shouldDeferPaneTextUpload(input: {
 }
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {
-  return pane.packedScene ? buildTileGpuCacheKey(pane.packedScene) : pane.paneId
+  return buildTileGpuCacheKey(pane.packedScene)
 }
 
 export function ensurePaneSurfaceBindings(artifacts: TypeGpuRendererArtifacts, paneCache: WorkbookPaneBufferEntry): void {
@@ -169,20 +165,11 @@ function syncRectResource(input: {
   readonly rectSignature: string
 }): void {
   const decorationRects = input.paneCache.decorationRects ?? []
-  const rectPayload = input.pane.packedScene
-    ? buildRectInstanceDataFromPacket({
-        decorationRects,
-        frame: input.pane.frame,
-        packet: input.pane.packedScene,
-      })
-    : {
-        count: input.pane.gpuScene.fillRects.length + input.pane.gpuScene.borderRects.length + decorationRects.length,
-        floats: buildRectInstanceData({
-          frame: input.pane.frame,
-          scene: input.pane.gpuScene,
-          ...(decorationRects.length > 0 ? { decorationRects } : {}),
-        }),
-      }
+  const rectPayload = buildRectInstanceDataFromPacket({
+    decorationRects,
+    frame: input.pane.frame,
+    packet: input.pane.packedScene,
+  })
   if (rectPayload.count === 0) {
     input.paneCache.rectCount = 0
     input.paneCache.rectScene = input.pane.gpuScene
@@ -230,29 +217,17 @@ export function resolveGridTextSceneSignature(scene: GridTextScene): string {
 
 export function resolveGridRectSceneSignature(input: {
   readonly frame: Rectangle
-  readonly scene: GridGpuScene
-  readonly packedScene?: GridScenePacketV2 | undefined
+  readonly packedScene: GridScenePacketV2
   readonly decorationRects?: readonly TextDecorationRect[] | undefined
 }): string {
   let hash = createHash()
   hash = mixNumber(hash, input.frame.width)
   hash = mixNumber(hash, input.frame.height)
-  if (input.packedScene) {
-    hash = mixNumber(hash, input.packedScene.rectCount)
-    hash = mixNumber(hash, input.packedScene.fillRectCount)
-    hash = mixNumber(hash, input.packedScene.borderRectCount)
-    for (let index = 0; index < input.packedScene.rectCount * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT; index += 1) {
-      hash = mixNumber(hash, input.packedScene.rects[index] ?? 0)
-    }
-  } else {
-    hash = mixNumber(hash, input.scene.fillRects.length)
-    hash = mixNumber(hash, input.scene.borderRects.length)
-    for (const rect of input.scene.fillRects) {
-      hash = mixGpuRect(hash, rect)
-    }
-    for (const rect of input.scene.borderRects) {
-      hash = mixGpuRect(hash, rect)
-    }
+  hash = mixNumber(hash, input.packedScene.rectCount)
+  hash = mixNumber(hash, input.packedScene.fillRectCount)
+  hash = mixNumber(hash, input.packedScene.borderRectCount)
+  for (let index = 0; index < input.packedScene.rectCount * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT; index += 1) {
+    hash = mixNumber(hash, input.packedScene.rects[index] ?? 0)
   }
   const decorationRects = input.decorationRects ?? []
   hash = mixNumber(hash, decorationRects.length)
@@ -268,17 +243,6 @@ export function resolveGridRectSceneSignature(input: {
 
 function createHash(): number {
   return 2_166_136_261
-}
-
-function mixGpuRect(hash: number, rect: GridGpuScene['fillRects'][number]): number {
-  hash = mixNumber(hash, rect.x)
-  hash = mixNumber(hash, rect.y)
-  hash = mixNumber(hash, rect.width)
-  hash = mixNumber(hash, rect.height)
-  hash = mixNumber(hash, rect.color.r)
-  hash = mixNumber(hash, rect.color.g)
-  hash = mixNumber(hash, rect.color.b)
-  return mixNumber(hash, rect.color.a)
 }
 
 function mixString(hash: number, value: string): number {
@@ -324,77 +288,6 @@ function buildRectInstanceDataFromPacket(input: {
   const offset = packedFloatCount
   writeDecorationRects(floats, offset, decorationRects, clipX, clipY, clipX1, clipY1)
   return { count: total, floats }
-}
-
-function buildRectInstanceData(input: {
-  frame: Rectangle
-  scene: GridGpuScene
-  decorationRects?: readonly TextDecorationRect[]
-}): Float32Array {
-  const rects = input.scene.fillRects
-  const borders = input.scene.borderRects
-  const decorationRects = input.decorationRects ?? []
-  const total = rects.length + borders.length + decorationRects.length
-  const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
-
-  const clipX = 0
-  const clipY = 0
-  const clipX1 = input.frame.width
-  const clipY1 = input.frame.height
-
-  let offset = 0
-  for (const rect of rects) {
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = rect.color.r
-    floats[offset + 5] = rect.color.g
-    floats[offset + 6] = rect.color.b
-    floats[offset + 7] = rect.color.a
-    floats[offset + 8] = 0
-    floats[offset + 9] = 0
-    floats[offset + 10] = 0
-    floats[offset + 11] = 0
-    floats[offset + 12] = rect.color.a < 0.2 ? 2 : 0
-    floats[offset + 13] = 0
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
-  for (const rect of borders) {
-    floats[offset + 0] = rect.x
-    floats[offset + 1] = rect.y
-    floats[offset + 2] = rect.width
-    floats[offset + 3] = rect.height
-    floats[offset + 4] = 0
-    floats[offset + 5] = 0
-    floats[offset + 6] = 0
-    floats[offset + 7] = 0
-    floats[offset + 8] = rect.color.r
-    floats[offset + 9] = rect.color.g
-    floats[offset + 10] = rect.color.b
-    floats[offset + 11] = rect.color.a
-    floats[offset + 12] = 0
-    floats[offset + 13] = 1
-    floats[offset + 14] = 0
-    floats[offset + 15] = 0
-    floats[offset + 16] = clipX
-    floats[offset + 17] = clipY
-    floats[offset + 18] = clipX1
-    floats[offset + 19] = clipY1
-    offset += RECT_INSTANCE_FLOAT_COUNT
-  }
-
-  for (const rect of decorationRects) {
-    offset = writeDecorationRect(floats, offset, rect, clipX, clipY, clipX1, clipY1)
-  }
-
-  return floats
 }
 
 function writeDecorationRects(
