@@ -49,6 +49,52 @@ describe('Codex app-server client', () => {
     expect(thread.preview).toBe('experimentalApi:true')
   })
 
+  it('passes explicit thread permission config to the app-server', async () => {
+    client = new CodexAppServerClient({
+      command: process.execPath,
+      args: [fixturePath],
+      env: {
+        BILIG_TEST_ECHO_THREAD_START: '1',
+      },
+      handleDynamicToolCall: async () => ({
+        success: true,
+        contentItems: [],
+      }),
+    })
+
+    const threadConfig = {
+      approval_policy: 'never',
+      sandbox_mode: 'danger-full-access',
+      network_access: true,
+      web_search: 'live',
+      tools: {
+        web_search: {
+          context_size: 'high',
+          allowed_domains: null,
+          location: null,
+        },
+        view_image: true,
+      },
+    } as const
+
+    const thread = await client.threadStart({
+      model: 'gpt-5.4',
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+      config: threadConfig,
+      baseInstructions: 'base',
+      developerInstructions: 'developer',
+      dynamicTools: [],
+    })
+
+    expect(JSON.parse(thread.preview)).toEqual({
+      experimentalApi: true,
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+      config: threadConfig,
+    })
+  })
+
   it('strips inherited OTEL exporter env before spawning the app-server', async () => {
     client = new CodexAppServerClient({
       command: process.execPath,

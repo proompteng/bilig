@@ -249,7 +249,37 @@ describe('workbook agent service', () => {
         body: {},
       })
 
-      expect(capturedOptions.current?.args).toEqual(['app-server', '-c', 'analytics.enabled=false'])
+      expect(capturedOptions.current?.args).toEqual([
+        'app-server',
+        '-c',
+        'analytics.enabled=false',
+        '-c',
+        'approval_policy="never"',
+        '-c',
+        'sandbox_mode="danger-full-access"',
+        '-c',
+        'network_access=true',
+        '-c',
+        'web_search="live"',
+      ])
+      expect(fakeCodex.lastThreadStartInput).toMatchObject({
+        approvalPolicy: 'never',
+        sandbox: 'danger-full-access',
+        config: {
+          approval_policy: 'never',
+          sandbox_mode: 'danger-full-access',
+          network_access: true,
+          web_search: 'live',
+          tools: {
+            web_search: {
+              context_size: 'high',
+              allowed_domains: null,
+              location: null,
+            },
+            view_image: true,
+          },
+        },
+      })
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
           'read_selection',
@@ -265,6 +295,9 @@ describe('workbook agent service', () => {
       )
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.every((tool) => /^[a-zA-Z0-9_-]+$/.test(tool.name))).toBe(true)
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain('Help with the active workbook only.')
+      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain(
+        'Use built-in search or network access when the workbook task needs external context.',
+      )
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).not.toContain('Tools:')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         'Use the workflow tool only for built-in multi-step or durable tasks.',
@@ -275,9 +308,13 @@ describe('workbook agent service', () => {
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         'Apply workbook changes directly when the session policy allows it.',
       )
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
+        'External search or network context can support an answer, but workbook state must come from workbook tools.',
+      )
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('review and apply it from the panel')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('stage one coherent change set per turn')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('summarizeWorkbook')
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('Do not use non-workbook tools')
     } finally {
       await service.close()
     }

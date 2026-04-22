@@ -26,13 +26,26 @@ export interface CodexAppServerClientOptions {
   handleDynamicToolCall: (request: CodexDynamicToolCallRequest) => Promise<CodexDynamicToolCallResult>
 }
 
+export type CodexAppServerJsonValue =
+  | boolean
+  | number
+  | string
+  | null
+  | CodexAppServerJsonValue[]
+  | { [key: string]: CodexAppServerJsonValue }
+
+export type CodexAppServerApprovalPolicy = 'never'
+export type CodexAppServerSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+export type CodexAppServerThreadConfig = { readonly [key: string]: CodexAppServerJsonValue }
+
 export interface CodexAppServerTransport {
   ensureReady(): Promise<CodexInitializeResponse>
   subscribe(listener: (notification: CodexServerNotification) => void): () => void
   threadStart(input: {
     model: string
-    approvalPolicy: 'never'
-    sandbox: 'read-only'
+    approvalPolicy: CodexAppServerApprovalPolicy
+    sandbox: CodexAppServerSandboxMode
+    config?: CodexAppServerThreadConfig
     baseInstructions: string
     developerInstructions: string
     dynamicTools: readonly CodexDynamicToolSpec[]
@@ -48,7 +61,7 @@ interface PendingResponse {
   readonly reject: (error: Error) => void
 }
 
-type ParsedJsonValue = boolean | number | string | null | ParsedJsonValue[] | { [key: string]: ParsedJsonValue }
+type ParsedJsonValue = CodexAppServerJsonValue
 
 type ParsedThreadItem =
   | {
@@ -617,8 +630,9 @@ export class CodexAppServerClient implements CodexAppServerTransport {
 
   async threadStart(input: {
     model: string
-    approvalPolicy: 'never'
-    sandbox: 'read-only'
+    approvalPolicy: CodexAppServerApprovalPolicy
+    sandbox: CodexAppServerSandboxMode
+    config?: CodexAppServerThreadConfig
     baseInstructions: string
     developerInstructions: string
     dynamicTools: readonly CodexDynamicToolSpec[]
@@ -629,6 +643,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
         model: input.model,
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox,
+        ...(input.config === undefined ? {} : { config: input.config }),
         baseInstructions: input.baseInstructions,
         developerInstructions: input.developerInstructions,
         dynamicTools: [...input.dynamicTools],

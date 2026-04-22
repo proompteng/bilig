@@ -67,12 +67,23 @@ reader.on('line', (line) => {
       })
       return
     }
+    const preview =
+      process.env.BILIG_TEST_ECHO_THREAD_START === '1'
+        ? JSON.stringify({
+            experimentalApi: state.capabilities?.experimentalApi === true,
+            approvalPolicy: message.params?.approvalPolicy ?? null,
+            sandbox: message.params?.sandbox ?? null,
+            config: message.params?.config ?? null,
+          })
+        : state.capabilities?.experimentalApi === true
+          ? 'experimentalApi:true'
+          : 'experimentalApi:false'
     write({
       id: message.id,
       result: {
         thread: {
           id: 'thr-fixture',
-          preview: state.capabilities?.experimentalApi === true ? 'experimentalApi:true' : 'experimentalApi:false',
+          preview,
           turns: [],
         },
       },
