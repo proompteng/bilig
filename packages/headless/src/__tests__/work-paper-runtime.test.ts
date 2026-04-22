@@ -152,11 +152,32 @@ describe('WorkPaper', () => {
 
     expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
     expect(changes.every((change) => change.kind !== 'cell' || !('cellIndex' in change))).toBe(true)
-    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(2)
+    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
     expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
       tag: ValueTag.Number,
       value: 18,
     })
+  })
+
+  it('uses a direct tracked payload for single literal edits without core materialization', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[1]],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    workbook.resetPerformanceCounters()
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
+
+    expect(changes).toEqual([
+      {
+        kind: 'cell',
+        address: cell(sheetId, 0, 0),
+        sheetName: 'Bench',
+        a1: 'A1',
+        newValue: { tag: ValueTag.Number, value: 9 },
+      },
+    ])
+    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
   })
 
   it('updates small sliding aggregate fanout without dirty traversal', () => {

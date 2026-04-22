@@ -3119,6 +3119,56 @@ export class WorkPaper {
     }
   }
 
+  private readSingleTrackedCellChange(cellIndex: number): WorkPaperCellChange | undefined {
+    const cellStore = this.engine.workbook.cellStore
+    const sheetId = cellStore.sheetIds[cellIndex]
+    if (sheetId === undefined) {
+      return undefined
+    }
+    const sheet = this.engine.workbook.getSheetById(sheetId)
+    const sheetName = sheet?.name ?? this.engine.workbook.getSheetNameById(sheetId)
+    let row: number
+    let col: number
+    if (!sheet || sheet.structureVersion === 1) {
+      row = cellStore.rows[cellIndex]!
+      col = cellStore.cols[cellIndex]!
+    } else {
+      const position = this.engine.workbook.getCellPosition(cellIndex)
+      if (!position) {
+        return undefined
+      }
+      row = position.row
+      col = position.col
+    }
+    const tag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+    let newValue: CellValue
+    switch (tag) {
+      case ValueTag.Number:
+        newValue = { tag: ValueTag.Number, value: cellStore.numbers[cellIndex] ?? 0 }
+        break
+      case ValueTag.Boolean:
+        newValue = { tag: ValueTag.Boolean, value: (cellStore.numbers[cellIndex] ?? 0) !== 0 }
+        break
+      case ValueTag.String:
+        newValue = cellStore.getValue(cellIndex, (stringId) => this.engine.strings.get(stringId))
+        break
+      case ValueTag.Error:
+        newValue = { tag: ValueTag.Error, code: cellStore.errors[cellIndex]! }
+        break
+      case ValueTag.Empty:
+      default:
+        newValue = { tag: ValueTag.Empty }
+        break
+    }
+    return {
+      kind: 'cell',
+      address: { sheet: sheetId, row, col },
+      sheetName,
+      a1: formatAddress(row, col),
+      newValue,
+    }
+  }
+
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
@@ -3155,6 +3205,30 @@ export class WorkPaper {
     }
     if (events.length === 1) {
       const event = events[0]!
+      if (
+        event.invalidation !== 'full' &&
+        event.patches === undefined &&
+        event.changedCellIndices.length === 1 &&
+        event.explicitChangedCount === 1 &&
+        event.changedInputCount === 1 &&
+        !event.hasInvalidatedRanges &&
+        !event.hasInvalidatedRows &&
+        !event.hasInvalidatedColumns
+      ) {
+        const change = this.readSingleTrackedCellChange(event.changedCellIndices[0]!)
+        if (change) {
+          if (updateVisibility) {
+            const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
+            const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+            if (change.newValue.tag === ValueTag.Empty) {
+              sheet.cells.delete(cellKey)
+            } else {
+              sheet.cells.set(cellKey, change.newValue)
+            }
+          }
+          return { changes: [change], nextVisibility }
+        }
+      }
       const materializedEventChanges = this.materializeTrackedEventChanges(event)
       const eventChanges = materializedEventChanges.changes
       if (!updateVisibility && materializedEventChanges.canReusePublicChanges && materializedEventChanges.ordered) {

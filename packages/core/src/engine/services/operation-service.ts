@@ -30,7 +30,6 @@ import { addEngineCounter } from '../../perf/engine-counters.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
-const TRACKED_CELL_PATCH_LIMIT = 64
 const DIRECT_RANGE_POST_RECALC_LIMIT = 64
 
 type StructuralAxisOp = Extract<
@@ -415,20 +414,6 @@ export function createEngineOperationService(args: {
     })
   }
 
-  const shouldCaptureTrackedPatches = (
-    changed: readonly number[] | U32,
-    request: {
-      readonly invalidation: 'cells' | 'full'
-      readonly invalidatedRanges: readonly CellRangeRef[]
-      readonly invalidatedRows: readonly { readonly sheetName: string; readonly startIndex: number; readonly endIndex: number }[]
-      readonly invalidatedColumns: readonly { readonly sheetName: string; readonly startIndex: number; readonly endIndex: number }[]
-    },
-  ): boolean =>
-    changed.length <= TRACKED_CELL_PATCH_LIMIT ||
-    request.invalidation !== 'cells' ||
-    request.invalidatedRanges.length > 0 ||
-    request.invalidatedRows.length > 0 ||
-    request.invalidatedColumns.length > 0
   const entityVersions: VersionStore = args.state.trackReplicaVersions ? args.state.entityVersions : noopVersionStore
   const sheetDeleteVersions: VersionStore = args.state.trackReplicaVersions ? args.state.sheetDeleteVersions : noopVersionStore
   const setEntityVersionForOp = (op: EngineOp, order: OpOrder): void => {
@@ -1053,6 +1038,45 @@ export function createEngineOperationService(args: {
       formulaChangedCount = args.markFormulaChanged(formulaCellIndex, formulaChangedCount)
     }
     return formulaChangedCount
+  }
+
+  const noteExactLookupLiteralWriteWhenDirty = (
+    request: {
+      sheetName: string
+      row: number
+      col: number
+      oldValue: CellValue
+      newValue: CellValue
+      oldStringId?: number
+      newStringId?: number
+    },
+    formulaChangedCount: number,
+    caches: ExactLookupImpactCaches,
+  ): number => {
+    const nextFormulaChangedCount = markAffectedExactLookupDependents(request, formulaChangedCount, caches)
+    if (nextFormulaChangedCount !== formulaChangedCount) {
+      args.noteExactLookupLiteralWrite(request)
+    }
+    return nextFormulaChangedCount
+  }
+
+  const noteSortedLookupLiteralWriteWhenDirty = (
+    request: {
+      sheetName: string
+      row: number
+      col: number
+      oldValue: CellValue
+      newValue: CellValue
+      oldStringId?: number
+      newStringId?: number
+    },
+    formulaChangedCount: number,
+  ): number => {
+    const nextFormulaChangedCount = markAffectedApproximateLookupDependents(request, formulaChangedCount)
+    if (nextFormulaChangedCount !== formulaChangedCount) {
+      args.noteSortedLookupLiteralWrite(request)
+    }
+    return nextFormulaChangedCount
   }
 
   const collectAffectedDirectRangeDependents = (request: { sheetName: string; row: number; col: number }): number[] => {
@@ -1837,8 +1861,11 @@ export function createEngineOperationService(args: {
                   newStringId,
                 })
                 if (hasExactLookupDependents) {
-                  args.noteExactLookupLiteralWrite(exactLookupRequest)
-                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount, exactLookupImpactCaches)
+                  formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                    exactLookupImpactCaches,
+                  )
                 }
                 if (hasAggregateDependents) {
                   args.noteAggregateLiteralWrite({
@@ -1866,8 +1893,7 @@ export function createEngineOperationService(args: {
                   oldStringId: prior.stringId,
                   newStringId,
                 })
-                args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
               }
             }
             args.state.workbook.cellStore.flags[cellIndex] =
@@ -2019,8 +2045,11 @@ export function createEngineOperationService(args: {
                   newStringId: undefined,
                 })
                 if (hasExactLookupDependents) {
-                  args.noteExactLookupLiteralWrite(exactLookupRequest)
-                  formulaChangedCount = markAffectedExactLookupDependents(exactLookupRequest, formulaChangedCount, exactLookupImpactCaches)
+                  formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
+                    exactLookupRequest,
+                    formulaChangedCount,
+                    exactLookupImpactCaches,
+                  )
                 }
                 if (hasAggregateDependents) {
                   args.noteAggregateLiteralWrite({
@@ -2048,8 +2077,7 @@ export function createEngineOperationService(args: {
                   oldStringId: prior.stringId,
                   newStringId: undefined,
                 })
-                args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
               }
             }
             args.state.workbook.cellStore.flags[cellIndex] =
@@ -2281,7 +2309,12 @@ export function createEngineOperationService(args: {
         invalidatedRows,
         invalidatedColumns,
       } satisfies Parameters<typeof args.captureChangedPatches>[1]
-      const patches = shouldCaptureTrackedPatches(changed, patchRequest) ? args.captureChangedPatches(changed, patchRequest) : undefined
+      const shouldCapturePatches =
+        patchRequest.invalidation !== 'cells' ||
+        patchRequest.invalidatedRanges.length > 0 ||
+        patchRequest.invalidatedRows.length > 0 ||
+        patchRequest.invalidatedColumns.length > 0
+      const patches = shouldCapturePatches ? args.captureChangedPatches(changed, patchRequest) : undefined
       args.state.events.emitTracked({
         kind: 'batch',
         invalidation,
@@ -2429,8 +2462,7 @@ export function createEngineOperationService(args: {
                       newStringId,
                     })
                     if (hasExactLookupDependents) {
-                      args.noteExactLookupLiteralWrite(exactLookupRequest)
-                      formulaChangedCount = markAffectedExactLookupDependents(
+                      formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
                         exactLookupRequest,
                         formulaChangedCount,
                         exactLookupImpactCaches,
@@ -2462,8 +2494,7 @@ export function createEngineOperationService(args: {
                       oldStringId: prior.stringId,
                       newStringId,
                     })
-                    args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                    formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                    formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
                   }
                 }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
@@ -2509,8 +2540,7 @@ export function createEngineOperationService(args: {
                     newStringId,
                   })
                   if (hasExactLookupDependents) {
-                    args.noteExactLookupLiteralWrite(exactLookupRequest)
-                    formulaChangedCount = markAffectedExactLookupDependents(
+                    formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
                       exactLookupRequest,
                       formulaChangedCount,
                       exactLookupImpactCaches,
@@ -2542,8 +2572,7 @@ export function createEngineOperationService(args: {
                     oldStringId: prior.stringId,
                     newStringId,
                   })
-                  args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                  formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                  formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
                 }
               }
               args.state.workbook.cellStore.flags[cellIndex] =
@@ -2643,8 +2672,7 @@ export function createEngineOperationService(args: {
                       newStringId: undefined,
                     })
                     if (hasExactLookupDependents) {
-                      args.noteExactLookupLiteralWrite(exactLookupRequest)
-                      formulaChangedCount = markAffectedExactLookupDependents(
+                      formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
                         exactLookupRequest,
                         formulaChangedCount,
                         exactLookupImpactCaches,
@@ -2676,8 +2704,7 @@ export function createEngineOperationService(args: {
                       oldStringId: prior.stringId,
                       newStringId: undefined,
                     })
-                    args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                    formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                    formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
                   }
                 }
                 changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
@@ -2720,8 +2747,7 @@ export function createEngineOperationService(args: {
                     newStringId: undefined,
                   })
                   if (hasExactLookupDependents) {
-                    args.noteExactLookupLiteralWrite(exactLookupRequest)
-                    formulaChangedCount = markAffectedExactLookupDependents(
+                    formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
                       exactLookupRequest,
                       formulaChangedCount,
                       exactLookupImpactCaches,
@@ -2753,8 +2779,7 @@ export function createEngineOperationService(args: {
                     oldStringId: prior.stringId,
                     newStringId: undefined,
                   })
-                  args.noteSortedLookupLiteralWrite(sortedLookupRequest)
-                  formulaChangedCount = markAffectedApproximateLookupDependents(sortedLookupRequest, formulaChangedCount)
+                  formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
                 }
               }
               args.state.workbook.cellStore.flags[existingIndex] =
@@ -2908,7 +2933,12 @@ export function createEngineOperationService(args: {
         invalidatedRows: [],
         invalidatedColumns: [],
       } satisfies Parameters<typeof args.captureChangedPatches>[1]
-      const patches = shouldCaptureTrackedPatches(changed, patchRequest) ? args.captureChangedPatches(changed, patchRequest) : undefined
+      const shouldCapturePatches =
+        patchRequest.invalidation !== 'cells' ||
+        patchRequest.invalidatedRanges.length > 0 ||
+        patchRequest.invalidatedRows.length > 0 ||
+        patchRequest.invalidatedColumns.length > 0
+      const patches = shouldCapturePatches ? args.captureChangedPatches(changed, patchRequest) : undefined
       args.state.events.emitTracked({
         kind: 'batch',
         invalidation,
