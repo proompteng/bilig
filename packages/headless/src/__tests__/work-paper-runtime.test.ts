@@ -159,6 +159,26 @@ describe('WorkPaper', () => {
     })
   })
 
+  it('updates small sliding aggregate fanout without dirty traversal', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: 64 }, (_, row) => {
+        const rowNumber = row + 1
+        const endRow = Math.min(64, rowNumber + 31)
+        return [rowNumber, `=SUM(A${rowNumber}:A${endRow})`]
+      }),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 10)
+
+    expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({
+      tag: ValueTag.Number,
+      value: 537,
+    })
+    expect(workbook.getStats().lastMetrics).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+  })
+
   it('uses bulk tracked indices for large literal batches without core patch payloads', () => {
     const rowCount = 600
     const workbook = WorkPaper.buildFromSheets({

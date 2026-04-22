@@ -383,6 +383,20 @@ describe('EngineOperationService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 2 })
   })
 
+  it('updates small direct aggregate fanout without dirty traversal', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-small-direct-aggregate-fanout' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 32; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
+
+    engine.setCellValue('Sheet1', 'A1', 10)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 537 })
+  })
+
   it('replaces existing formulas with generic batch literal writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'operation-batch-literal-over-formula' })
     await engine.ready()
