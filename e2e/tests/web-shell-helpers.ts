@@ -118,7 +118,8 @@ export async function doubleClickProductColumnResizeHandle(page: Page, columnInd
   const columnWidth = await getProductColumnWidth(page, columnIndex)
   const edgeX = grid.x + columnLeft + columnWidth - 1
   const headerY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-  await page.mouse.click(edgeX, headerY, { clickCount: 2 })
+  await page.mouse.move(edgeX, headerY)
+  await page.mouse.dblclick(edgeX, headerY)
 }
 
 export async function dragProductHeaderSelection(page: Page, axis: 'column' | 'row', startIndex: number, endIndex: number) {
