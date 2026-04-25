@@ -100,6 +100,42 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getPerformanceCounters().columnOwnerBuilds).toBe(0)
   })
 
+  it('keeps direct scalar arithmetic aligned with text coercion errors', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-scalar-text-errors' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 'text:value')
+    engine.setCellFormula('Sheet1', 'B1', 'A1+A1')
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+
+    engine.setCellValue('Sheet1', 'A1', 2)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 4 })
+  })
+
+  it('syncs wasm inputs after direct scalar literal update shortcuts', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-scalar-kernel-sync' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellFormula('Sheet1', 'A1', 'SUM(C2:C2)')
+    engine.setCellFormula('Sheet1', 'B1', 'IF(C3>0,"text:yes","text:no")')
+    engine.setCellFormula('Sheet1', 'C1', 'C2+C2')
+    engine.setCellFormula('Sheet1', 'A2', 'C2+C2')
+    engine.setCellFormula('Sheet1', 'B2', 'SUM(C2:C2)')
+    engine.setCellValue('Sheet1', 'C2', 'text:HWbL')
+    engine.setCellValue('Sheet1', 'A3', 'text:tK(p ')
+    engine.setCellFormula('Sheet1', 'B3', 'IF(C2>0,"text:yes","text:no")')
+
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
+  })
+
   it('re-evaluates JS indirection spills through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-indirect' })
     await engine.ready()

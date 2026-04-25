@@ -1,7 +1,15 @@
 import { Effect } from 'effect'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
-import { ValueTag, type CellRangeRef, type CellValue, type EngineChangedCell, type EngineEvent, type SelectionState } from '@bilig/protocol'
+import {
+  FormulaMode,
+  ValueTag,
+  type CellRangeRef,
+  type CellValue,
+  type EngineChangedCell,
+  type EngineEvent,
+  type SelectionState,
+} from '@bilig/protocol'
 import type { EdgeSlice } from '../../edge-arena.js'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import {
@@ -31,6 +39,11 @@ import { addEngineCounter } from '../../perf/engine-counters.js'
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
 const DIRECT_RANGE_POST_RECALC_LIMIT = 64
+
+interface DirectFormulaMetricCounts {
+  wasmFormulaCount: number
+  jsFormulaCount: number
+}
 
 type StructuralAxisOp = Extract<
   EngineOp,
@@ -267,7 +280,7 @@ function directCriteriaTouchesPoint(
   )
 }
 
-function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[]): U32 {
+function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[] | U32): U32 {
   if (extras.length === 0) {
     return base instanceof Uint32Array ? base : Uint32Array.from(base)
   }
@@ -1168,6 +1181,18 @@ export function createEngineOperationService(args: {
     return true
   }
 
+  const countPostRecalcDirectFormulaMetric = (cellIndex: number, counts: DirectFormulaMetricCounts): void => {
+    const formula = args.state.formulas.get(cellIndex)
+    if (!formula || (formula.directScalar === undefined && formula.directAggregate === undefined)) {
+      return
+    }
+    if (formula.compiled.mode === FormulaMode.WasmFastPath) {
+      counts.wasmFormulaCount += 1
+      return
+    }
+    counts.jsFormulaCount += 1
+  }
+
   const refreshDependentRangesAndRebindFormulaDependents = (cellIndex: number, formulaChangedCount: number): number => {
     const directDependents = args.getEntityDependents(makeCellEntity(cellIndex))
     const rangeIndices: number[] = []
@@ -1492,6 +1517,10 @@ export function createEngineOperationService(args: {
     const precomputedKernelSyncCellIndices: number[] = []
     let refreshAllPivots = false
     let appliedOps = 0
+    const postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts = {
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    }
     const canSkipOrderChecks = source !== 'remote'
     let hadCycleMembersBefore: boolean | undefined
     const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
@@ -2230,6 +2259,8 @@ export function createEngineOperationService(args: {
             : Uint32Array.from([...changedInputArray, ...precomputedKernelSyncCellIndices])
         recalculated = args.recalculate(changedRoots, kernelSyncRoots)
         didRunRecalc = true
+      } else {
+        args.recalculate(new Uint32Array(), changedInputArray)
       }
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
@@ -2242,6 +2273,7 @@ export function createEngineOperationService(args: {
             postRecalcChanged.push(cellIndex)
             return
           }
+          countPostRecalcDirectFormulaMetric(cellIndex, postRecalcDirectFormulaMetrics)
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
           if (changedCellIndices) {
@@ -2252,7 +2284,9 @@ export function createEngineOperationService(args: {
         })
         recalculated = mergeChangedCellIndices(recalculated, postRecalcChanged)
       }
-      recalculated = args.reconcilePivotOutputs(recalculated, shouldRefreshPivots)
+      const pivotRefreshRoots =
+        shouldRefreshPivots || changedInputArray.length === 0 ? recalculated : mergeChangedCellIndices(recalculated, changedInputArray)
+      recalculated = args.reconcilePivotOutputs(pivotRefreshRoots, shouldRefreshPivots)
     }
     const hasGeneralEventListeners = args.state.events.hasListeners()
     const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
@@ -2263,18 +2297,23 @@ export function createEngineOperationService(args: {
       isRestore || invalidation === 'full' || !requiresChangedSet
         ? new Uint32Array()
         : args.composeEventChanges(recalculated, explicitChangedCount)
+    const previousMetrics = args.state.getLastMetrics()
     const lastMetrics = {
-      ...args.state.getLastMetrics(),
-      ...(!didRunRecalc
+      ...previousMetrics,
+      ...(didRunRecalc
         ? {
+            dirtyFormulaCount: previousMetrics.dirtyFormulaCount,
+            wasmFormulaCount: previousMetrics.wasmFormulaCount + postRecalcDirectFormulaMetrics.wasmFormulaCount,
+            jsFormulaCount: previousMetrics.jsFormulaCount + postRecalcDirectFormulaMetrics.jsFormulaCount,
+          }
+        : {
             dirtyFormulaCount: 0,
-            wasmFormulaCount: 0,
-            jsFormulaCount: 0,
+            wasmFormulaCount: postRecalcDirectFormulaMetrics.wasmFormulaCount,
+            jsFormulaCount: postRecalcDirectFormulaMetrics.jsFormulaCount,
             rangeNodeVisits: 0,
             recalcMs: 0,
-          }
-        : {}),
-      batchId: args.state.getLastMetrics().batchId + 1,
+          }),
+      batchId: previousMetrics.batchId + 1,
       changedInputCount: changedInputCount + formulaChangedCount,
       compileMs,
     }
@@ -2351,6 +2390,10 @@ export function createEngineOperationService(args: {
     let compileMs = 0
     const postRecalcDirectFormulaIndices = new Set<number>()
     const directFormulaDeltas: DirectFormulaDeltaMap = new Map()
+    const postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts = {
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    }
     const hasGeneralEventListeners = args.state.events.hasListeners()
     const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
     const hasWatchedCellListeners = args.state.events.hasCellListeners()
@@ -2861,6 +2904,8 @@ export function createEngineOperationService(args: {
           : args.composeMutationRoots(changedInputCount, formulaChangedCount)
         recalculated = args.recalculate(changedRoots, changedInputArray)
         didRunRecalc = true
+      } else {
+        args.recalculate(new Uint32Array(), changedInputArray)
       }
       if (postRecalcDirectFormulaIndices.size > 0) {
         const postRecalcChanged: number[] = []
@@ -2873,6 +2918,7 @@ export function createEngineOperationService(args: {
             postRecalcChanged.push(cellIndex)
             return
           }
+          countPostRecalcDirectFormulaMetric(cellIndex, postRecalcDirectFormulaMetrics)
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
           if (changedCellIndices) {
@@ -2883,21 +2929,27 @@ export function createEngineOperationService(args: {
         })
         recalculated = mergeChangedCellIndices(recalculated, postRecalcChanged)
       }
-      recalculated = args.reconcilePivotOutputs(recalculated, false)
+      const pivotRefreshRoots = changedInputArray.length === 0 ? recalculated : mergeChangedCellIndices(recalculated, changedInputArray)
+      recalculated = args.reconcilePivotOutputs(pivotRefreshRoots, false)
     }
     const changed: U32 = isRestore || !requiresChangedSet ? new Uint32Array() : args.composeEventChanges(recalculated, explicitChangedCount)
+    const previousMetrics = args.state.getLastMetrics()
     const lastMetrics = {
-      ...args.state.getLastMetrics(),
-      ...(!didRunRecalc
+      ...previousMetrics,
+      ...(didRunRecalc
         ? {
+            dirtyFormulaCount: previousMetrics.dirtyFormulaCount,
+            wasmFormulaCount: previousMetrics.wasmFormulaCount + postRecalcDirectFormulaMetrics.wasmFormulaCount,
+            jsFormulaCount: previousMetrics.jsFormulaCount + postRecalcDirectFormulaMetrics.jsFormulaCount,
+          }
+        : {
             dirtyFormulaCount: 0,
-            wasmFormulaCount: 0,
-            jsFormulaCount: 0,
+            wasmFormulaCount: postRecalcDirectFormulaMetrics.wasmFormulaCount,
+            jsFormulaCount: postRecalcDirectFormulaMetrics.jsFormulaCount,
             rangeNodeVisits: 0,
             recalcMs: 0,
-          }
-        : {}),
-      batchId: args.state.getLastMetrics().batchId + 1,
+          }),
+      batchId: previousMetrics.batchId + 1,
       changedInputCount: changedInputCount + formulaChangedCount,
       compileMs,
     }

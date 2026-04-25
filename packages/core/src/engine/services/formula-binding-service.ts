@@ -1041,7 +1041,15 @@ function buildDirectScalarOperand(args: {
         code: ErrorCode.Ref,
       }
     }
-    const parsed = parseCellAddress(translated?.address ?? args.node.ref, sheetName)
+    let parsed: ReturnType<typeof parseCellAddress>
+    try {
+      parsed = parseCellAddress(translated?.address ?? args.node.ref, sheetName)
+    } catch {
+      return {
+        kind: 'error',
+        code: ErrorCode.Ref,
+      }
+    }
     return {
       kind: 'cell',
       cellIndex: args.ensureCellTracked(parsed.sheetName ?? sheetName, parsed.text),

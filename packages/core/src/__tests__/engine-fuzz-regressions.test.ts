@@ -66,6 +66,31 @@ describe('engine fuzz regressions', () => {
     expect(engine.getPivotTable('Pivot', 'B2')?.rows).toBe(3)
   })
 
+  it('keeps pivot dimensions aligned after copy, row delete, and undo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('pivot-analytics', 'pivot-copy-delete-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'pivot-copy-delete-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(seedSnapshot)
+
+    engine.copyRange(
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E1' },
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+    )
+    const pivotAfterCopy = engine.getPivotTable('Pivot', 'B2')
+    expect(pivotAfterCopy).toMatchObject({ rows: 1, cols: 1 })
+
+    engine.deleteRows('Sheet1', 0, 1)
+    expect(engine.undo()).toBe(true)
+
+    expect(engine.getPivotTable('Pivot', 'B2')).toMatchObject({
+      rows: pivotAfterCopy?.rows,
+      cols: pivotAfterCopy?.cols,
+    })
+  })
+
   it('treats structural deletes on blank sheets as history no-ops', async () => {
     const seed = new SpreadsheetEngine({ workbookName: 'blank-structural-noop-seed' })
     await seed.ready()

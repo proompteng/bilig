@@ -431,6 +431,21 @@ describe('EngineOperationService', () => {
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
   })
 
+  it('counts direct scalar generic batch updates without dirty traversal', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-direct-scalar-batch-metrics' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 2)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*3')
+
+    const batch = createBatch(getReplicaState(engine), [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 5 }])
+
+    Effect.runSync(getOperationService(engine).applyBatch(batch, 'local'))
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 15 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 1, jsFormulaCount: 0 })
+  })
+
   it('replaces existing formulas with generic batch literal writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'operation-batch-literal-over-formula' })
     await engine.ready()

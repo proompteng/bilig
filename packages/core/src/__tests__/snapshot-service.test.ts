@@ -1,6 +1,6 @@
 import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { ValueTag } from '@bilig/protocol'
+import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { FormulaTable } from '../formula-table.js'
 import { createReplicaState } from '../replica-state.js'
 import { createEngineSnapshotService } from '../engine/services/snapshot-service.js'
@@ -128,6 +128,33 @@ describe('EngineSnapshotService', () => {
     restored.importSnapshot(snapshot)
 
     expect(restored.exportSnapshot()).toEqual(snapshot)
+  })
+
+  it('restores structurally rewritten direct scalar refs as #REF errors', async () => {
+    const source = new SpreadsheetEngine({
+      workbookName: 'snapshot-direct-scalar-ref-rewrite-source',
+      replicaId: 'snapshot-direct-scalar-ref-rewrite-source',
+    })
+    await source.ready()
+    source.createSheet('Sheet1')
+    source.setCellValue('Sheet1', 'A1', 1)
+    source.setCellFormula('Sheet1', 'B2', 'A1*2')
+
+    source.deleteRows('Sheet1', 0, 1)
+
+    const snapshot = source.exportSnapshot()
+    const restored = new SpreadsheetEngine({
+      workbookName: 'snapshot-direct-scalar-ref-rewrite-restored',
+      replicaId: 'snapshot-direct-scalar-ref-rewrite-restored',
+    })
+    await restored.ready()
+    restored.importSnapshot(snapshot)
+
+    expect(restored.getCell('Sheet1', 'B1').formula).toBe('#REF!*2')
+    expect(restored.getCellValue('Sheet1', 'B1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
   })
 
   it('attaches a runtime image to exported snapshots and restores without replay when reused in-process', async () => {

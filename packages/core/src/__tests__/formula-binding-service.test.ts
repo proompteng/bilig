@@ -239,7 +239,7 @@ describe('EngineFormulaBindingService', () => {
     expect(engine.getCellValue('Sheet1', 'B64')).toEqual({ tag: ValueTag.Number, value: 378 })
     expect(engine.getLastMetrics()).toMatchObject({
       dirtyFormulaCount: 0,
-      wasmFormulaCount: 0,
+      wasmFormulaCount: 64,
       jsFormulaCount: 0,
     })
   })

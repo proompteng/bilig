@@ -955,7 +955,7 @@ export function createEngineFormulaEvaluationService(args: {
       case ValueTag.Error:
         return { kind: 'error', code: value.code }
       case ValueTag.String:
-        return undefined
+        return { kind: 'error', code: ErrorCode.Value }
       default:
         return undefined
     }
