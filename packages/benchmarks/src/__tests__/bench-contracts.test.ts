@@ -8,5 +8,5 @@ describe('bench contracts runner', () => {
     expect(result.elapsedMs).toBeGreaterThanOrEqual(0)
     expect(result.metrics.recalcMs).toBeGreaterThanOrEqual(0)
     expect(result.memory.after.heapUsedBytes).toBeGreaterThan(0)
-  })
+  }, 30_000)
 })

@@ -79,6 +79,7 @@ export function GridFillHandleOverlay(props: GridFillHandleOverlayProps) {
       onPointerDown={props.onPointerDown}
       style={{
         display: props.hidden || !props.selectionRange ? 'none' : undefined,
+        opacity: 0,
         touchAction: 'none',
       }}
       type="button"

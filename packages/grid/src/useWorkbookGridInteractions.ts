@@ -13,10 +13,11 @@ import {
 import { formatAddress } from '@bilig/formula'
 import { flushSync } from 'react-dom'
 import { createRectangleSelectionFromRange, rectangleToAddresses, selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
+import { resolveGridSelectionPendingSync } from './gridSelectionPendingSync.js'
 import { resolveFillHandlePreviewRange, resolveFillHandleSelectionRange } from './gridFillHandle.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
-import { resolveColumnResizeTarget, type HeaderSelection, type PointerGeometry, type VisibleRegionState } from './gridPointer.js'
-import { resolveGridHoverState, sameGridHoverState } from './gridHover.js'
+import type { HeaderSelection, PointerGeometry, VisibleRegionState } from './gridPointer.js'
+import { sameGridHoverState } from './gridHover.js'
 import type { InternalClipboardRange } from './gridInternalClipboard.js'
 import {
   finishGridResize,
@@ -27,6 +28,7 @@ import {
   startGridResize,
 } from './gridInteractionController.js'
 import { clearGridPendingPointerActivation, resetGridPointerInteraction } from './gridInteractionState.js'
+import { resolveGridInteractionHoverState } from './gridInteractionHoverState.js'
 import {
   applyGridClipboardValues,
   captureGridClipboardSelection,
@@ -51,15 +53,7 @@ import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
 
-function selectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelectionSnapshot): boolean {
-  return (
-    left.sheetName === right.sheetName &&
-    left.address === right.address &&
-    left.kind === right.kind &&
-    left.range.startAddress === right.range.startAddress &&
-    left.range.endAddress === right.range.endAddress
-  )
-}
+const RESIZE_HANDLE_DOUBLE_CLICK_MS = 700
 
 export function useWorkbookGridInteractions(
   input: Pick<
@@ -188,6 +182,7 @@ export function useWorkbookGridInteractions(
   const suppressNextNativePasteRef = useRef(false)
   const pendingTypeSeedRef = useRef<string | null>(null)
   const pendingLocalSelectionSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
+  const pendingLocalSelectionBaseSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
   const lastResizeHandleActivationRef = useRef<{ columnIndex: number; at: number } | null>(null)
   const fillPreviewRangeRef = useRef(fillPreviewRange)
   const fillHandleCleanupRef = useRef<(() => void) | null>(null)
@@ -211,6 +206,7 @@ export function useWorkbookGridInteractions(
     [columnResizeActiveRef],
   )
   const {
+    resolveColumnResizeTarget: resolveColumnResizeTargetAtPointer,
     resolveRowResizeTarget: resolveRowResizeTargetAtPointer,
     resolveHeaderSelectionAtPointer,
     resolveHeaderSelectionForPointerDrag,
@@ -225,6 +221,7 @@ export function useWorkbookGridInteractions(
     selectedCell: { col: activeSelectionCell[0], row: activeSelectionCell[1] },
     gridSelection,
     getCellScreenBounds,
+    getGeometrySnapshot: () => renderState.gridCameraStore.getSnapshot(),
   })
   useEffect(() => {
     fillPreviewRangeRef.current = fillPreviewRange
@@ -244,23 +241,16 @@ export function useWorkbookGridInteractions(
     activeSheetRef.current = sheetName
     setGridSelection((current) => {
       const currentSnapshot = selectionToSnapshot(current, selectionSnapshot.sheetName, selectionSnapshot.address)
-      const pendingLocalSelection = pendingLocalSelectionSnapshotRef.current
-      if (sheetChanged) {
-        pendingLocalSelectionSnapshotRef.current = null
-      } else if (pendingLocalSelection && selectionSnapshotsEqual(pendingLocalSelection, selectionSnapshot)) {
-        pendingLocalSelectionSnapshotRef.current = null
-        return current
-      } else if (pendingLocalSelection && selectionSnapshotsEqual(currentSnapshot, pendingLocalSelection)) {
-        return current
-      }
-      if (
-        !sheetChanged &&
-        currentSnapshot.sheetName === selectionSnapshot.sheetName &&
-        currentSnapshot.address === selectionSnapshot.address &&
-        currentSnapshot.kind === selectionSnapshot.kind &&
-        currentSnapshot.range.startAddress === selectionSnapshot.range.startAddress &&
-        currentSnapshot.range.endAddress === selectionSnapshot.range.endAddress
-      ) {
+      const sync = resolveGridSelectionPendingSync({
+        currentSnapshot,
+        externalSnapshot: selectionSnapshot,
+        pendingBaseSnapshot: pendingLocalSelectionBaseSnapshotRef.current,
+        pendingLocalSnapshot: pendingLocalSelectionSnapshotRef.current,
+        sheetChanged,
+      })
+      pendingLocalSelectionSnapshotRef.current = sync.pendingLocalSnapshot
+      pendingLocalSelectionBaseSnapshotRef.current = sync.pendingBaseSnapshot
+      if (sync.keepCurrentSelection) {
         return current
       }
       clearGridPendingPointerActivation(interactionState)
@@ -353,10 +343,11 @@ export function useWorkbookGridInteractions(
   const emitSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
       const nextSelectionSnapshot = selectionToSnapshot(nextSelection, sheetName, selectionSnapshot.address)
+      pendingLocalSelectionBaseSnapshotRef.current = selectionSnapshot
       pendingLocalSelectionSnapshotRef.current = nextSelectionSnapshot
       onSelectionChange(nextSelectionSnapshot)
     },
-    [onSelectionChange, selectionSnapshot.address, sheetName],
+    [onSelectionChange, selectionSnapshot, sheetName],
   )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
@@ -591,21 +582,18 @@ export function useWorkbookGridInteractions(
         )
         return
       }
-      const next = resolveGridHoverState({
+      const next = resolveGridInteractionHoverState({
         clientX,
         clientY,
-        region: visibleRegion,
-        geometry,
         columnWidths,
-        rowHeights,
-        defaultColumnWidth: gridMetrics.columnWidth,
-        defaultRowHeight: gridMetrics.rowHeight,
+        geometry,
         gridMetrics,
-        selectedCell: activeSelectionCell,
-        selectedCellBounds: getCellScreenBounds(activeSelectionCell[0], activeSelectionCell[1]) ?? null,
-        selectionRange,
-        hasColumnSelection: gridSelection.columns.length > 0,
-        hasRowSelection: gridSelection.rows.length > 0,
+        resolveColumnResizeTargetAtPointer,
+        resolveHeaderSelectionAtPointer,
+        resolvePointerCell,
+        resolveRowResizeTargetAtPointer,
+        rowHeights,
+        visibleRegion,
       })
       setHoverState((current) => (sameGridHoverState(current, next) ? current : next))
     },
@@ -614,13 +602,14 @@ export function useWorkbookGridInteractions(
       columnWidths,
       getCellScreenBounds,
       gridMetrics,
-      gridSelection.columns.length,
-      gridSelection.rows.length,
       isFillHandleDragging,
       isRangeMoveDragging,
+      resolveColumnResizeTargetAtPointer,
+      resolveHeaderSelectionAtPointer,
+      resolveRowResizeTargetAtPointer,
       rowHeights,
+      resolvePointerCell,
       resolvePointerGeometry,
-      activeSelectionCell,
       selectionRange,
       setHoverState,
       getVisibleRegion,
@@ -799,10 +788,14 @@ export function useWorkbookGridInteractions(
       }
       const visibleRegion = getVisibleRegion()
       const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget =
-        pointerGeometry === null
-          ? null
-          : resolveColumnResizeTarget(event.clientX, event.clientY, visibleRegion, pointerGeometry, columnWidths, gridMetrics.columnWidth)
+      const resizeTarget = resolveColumnResizeTargetAtPointer(
+        event.clientX,
+        event.clientY,
+        visibleRegion,
+        pointerGeometry,
+        columnWidths,
+        gridMetrics.columnWidth,
+      )
       if (resizeTarget === null) {
         return
       }
@@ -822,10 +815,14 @@ export function useWorkbookGridInteractions(
     handleHostDoubleClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
       const visibleRegion = getVisibleRegion()
       const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget =
-        pointerGeometry === null
-          ? null
-          : resolveColumnResizeTarget(event.clientX, event.clientY, visibleRegion, pointerGeometry, columnWidths, gridMetrics.columnWidth)
+      const resizeTarget = resolveColumnResizeTargetAtPointer(
+        event.clientX,
+        event.clientY,
+        visibleRegion,
+        pointerGeometry,
+        columnWidths,
+        gridMetrics.columnWidth,
+      )
       if (resizeTarget !== null) {
         event.preventDefault()
         event.stopPropagation()
@@ -893,14 +890,22 @@ export function useWorkbookGridInteractions(
       }
       const visibleRegion = getVisibleRegion()
       const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget =
-        pointerGeometry === null
-          ? null
-          : resolveColumnResizeTarget(event.clientX, event.clientY, visibleRegion, pointerGeometry, columnWidths, gridMetrics.columnWidth)
-      const rowResizeTarget =
-        pointerGeometry === null
-          ? null
-          : resolveRowResizeTargetAtPointer(event.clientX, event.clientY, visibleRegion, pointerGeometry, rowHeights, gridMetrics.rowHeight)
+      const resizeTarget = resolveColumnResizeTargetAtPointer(
+        event.clientX,
+        event.clientY,
+        visibleRegion,
+        pointerGeometry,
+        columnWidths,
+        gridMetrics.columnWidth,
+      )
+      const rowResizeTarget = resolveRowResizeTargetAtPointer(
+        event.clientX,
+        event.clientY,
+        visibleRegion,
+        pointerGeometry,
+        rowHeights,
+        gridMetrics.rowHeight,
+      )
       if (resizeTarget !== null) {
         event.preventDefault()
         event.stopPropagation()
@@ -912,9 +917,10 @@ export function useWorkbookGridInteractions(
         const now = window.performance.now()
         const lastResizeHandleActivation = lastResizeHandleActivationRef.current
         const isResizeDoubleClick =
-          lastResizeHandleActivation !== null &&
-          lastResizeHandleActivation.columnIndex === resizeTarget &&
-          now - lastResizeHandleActivation.at <= 350
+          event.detail >= 2 ||
+          (lastResizeHandleActivation !== null &&
+            lastResizeHandleActivation.columnIndex === resizeTarget &&
+            now - lastResizeHandleActivation.at <= RESIZE_HANDLE_DOUBLE_CLICK_MS)
         lastResizeHandleActivationRef.current = { columnIndex: resizeTarget, at: now }
         if (isResizeDoubleClick) {
           lastResizeHandleActivationRef.current = null
@@ -1003,7 +1009,7 @@ export function useWorkbookGridInteractions(
         isEditingCell,
         onCommitEdit: commitActiveEdit,
         onSelectionChange: emitSelectionChange,
-        resolveColumnResizeTargetAtPointer: resolveColumnResizeTarget,
+        resolveColumnResizeTargetAtPointer,
         resolveHeaderSelectionAtPointer,
         resolvePointerCell,
         resolvePointerGeometry,
@@ -1052,10 +1058,14 @@ export function useWorkbookGridInteractions(
       }
       const visibleRegion = getVisibleRegion()
       const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget =
-        pointerGeometry === null
-          ? null
-          : resolveColumnResizeTarget(event.clientX, event.clientY, visibleRegion, pointerGeometry, columnWidths, gridMetrics.columnWidth)
+      const resizeTarget = resolveColumnResizeTargetAtPointer(
+        event.clientX,
+        event.clientY,
+        visibleRegion,
+        pointerGeometry,
+        columnWidths,
+        gridMetrics.columnWidth,
+      )
       if (resizeTarget !== null && event.detail >= 2) {
         const autofitWidth = computeAutofitColumnWidth(resizeTarget)
         finishGridResize(interactionState)

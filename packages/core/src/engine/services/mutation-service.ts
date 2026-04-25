@@ -26,7 +26,14 @@ import {
   type EngineCellMutationAt,
   type EngineCellMutationRef,
 } from '../../cell-mutations-at.js'
-import type { CommitOp, EngineRuntimeState, PreparedCellAddress, TransactionRecord } from '../runtime-state.js'
+import type {
+  CommitOp,
+  EngineRuntimeState,
+  PreparedCellAddress,
+  RuntimeFormula,
+  RuntimeStructuralFormulaSourceTransform,
+  TransactionRecord,
+} from '../runtime-state.js'
 import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import { EngineMutationError } from '../errors.js'
 import { tryBuildFastMutationHistory, type FastMutationHistoryResult } from './mutation-history-fast-path.js'
@@ -388,6 +395,7 @@ export function createEngineMutationService(args: {
   readonly captureStoredCellOps: (cellIndex: number, sheetName: string, address: string) => EngineOp[]
   readonly restoreCellOps: (sheetName: string, address: string) => EngineOp[]
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
+  readonly getFormulaFamilyStructuralSourceTransform?: (cellIndex: number) => RuntimeStructuralFormulaSourceTransform | undefined
   readonly readRangeCells: (range: CellRangeRef) => CellSnapshot[][]
   readonly toCellStateOps: (
     sheetName: string,
@@ -416,6 +424,8 @@ export function createEngineMutationService(args: {
   const hasExternallyVisibleBatchRequirement = (): boolean =>
     args.hasExternallyVisibleLocalMutationObservers?.() ??
     ((args.state.batchListeners?.size ?? 0) > 0 || args.state.getSyncClientConnection?.() !== null)
+  const captureRuntimeFormulaSource = (cellIndex: number, formula: RuntimeFormula): string =>
+    getRuntimeFormulaSource(formula, args.getFormulaFamilyStructuralSourceTransform?.(cellIndex))
 
   const restoreCellOpFromRef = (ref: EngineCellMutationRef): EngineOp => {
     const sheet = args.state.workbook.getSheetById(ref.sheetId)
@@ -458,7 +468,7 @@ export function createEngineMutationService(args: {
         kind: 'setCellFormula',
         sheetName: sheet.name,
         address,
-        formula: getRuntimeFormulaSource(runtimeFormula),
+        formula: captureRuntimeFormulaSource(cellIndex, runtimeFormula),
       }
     }
     const snapshot = args.getCellByIndex(cellIndex)
@@ -1425,7 +1435,7 @@ export function createEngineMutationService(args: {
         sheetName: ownerSheetName,
         row: ownerPosition?.row ?? 0,
         col: ownerPosition?.col ?? 0,
-        formula: getRuntimeFormulaSource(formula),
+        formula: captureRuntimeFormulaSource(cellIndex, formula),
       })
     })
     return captured
@@ -1446,7 +1456,7 @@ export function createEngineMutationService(args: {
     }
     const formula = args.state.formulas.get(cellIndex)
     if (formula) {
-      return { kind: 'formula', sheetName, row, col, formula: getRuntimeFormulaSource(formula) }
+      return { kind: 'formula', sheetName, row, col, formula: captureRuntimeFormulaSource(cellIndex, formula) }
     }
     const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
     const tag: ValueTag = (args.state.workbook.cellStore.tags[cellIndex] ?? ValueTag.Empty) as ValueTag

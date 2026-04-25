@@ -238,8 +238,7 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(cellEditor).toBeHidden()
 
   await expect(nameBox).toHaveValue('A2')
-  await nameBox.fill('A1')
-  await nameBox.press('Enter')
+  await clickProductCell(page, 0, 0)
   await expect(formulaInput).toHaveValue('h')
 
   await clickProductCell(page, 0, 1)
@@ -251,8 +250,7 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(cellEditor).toBeHidden()
 
   await expect(nameBox).toHaveValue('B2')
-  await nameBox.fill('A2')
-  await nameBox.press('Enter')
+  await clickProductCell(page, 0, 1)
   await expect(formulaInput).toHaveValue('w')
 
   await grid.press('Enter')
@@ -496,7 +494,7 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
 })
 
 test('web app supports fill-handle propagation', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=fill-handle-propagation-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -512,6 +510,7 @@ test('web app supports fill-handle propagation', async ({ page }) => {
 
   await nameBox.fill('F8')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F8')
   await expect(formulaInput).toHaveValue('7')
   await expect(resolvedValue).toHaveText('7')
 })
@@ -641,7 +640,7 @@ test('web app clears redo after a fresh edit branches history', async ({ page })
 })
 
 test('web app previews and fills rightward autofill like Sheets', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=rightward-autofill-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -669,6 +668,7 @@ test('web app previews and fills rightward autofill like Sheets', async ({ page 
 
   await nameBox.fill('H6')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!H6')
   await expect(formulaInput).toHaveValue('7')
   await expect(resolvedValue).toHaveText('7')
 })
@@ -686,25 +686,21 @@ test.describe('@clipboard-global web app clipboard flows', () => {
     const formulaInput = page.getByTestId('formula-input')
     const resolvedValue = page.getByTestId('formula-resolved-value')
 
-    await nameBox.fill('B2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('11')
-    await formulaInput.press('Enter')
+    const writeFormulaBarCell = async (address: string, value: string) => {
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await formulaInput.fill(value)
+      await formulaInput.press('Enter')
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await expect(formulaInput).toHaveValue(value)
+      await expect(resolvedValue).toHaveText(value)
+    }
 
-    await nameBox.fill('C2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('12')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('B3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('13')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('14')
-    await formulaInput.press('Enter')
+    await writeFormulaBarCell('B2', '11')
+    await writeFormulaBarCell('C2', '12')
+    await writeFormulaBarCell('B3', '13')
+    await writeFormulaBarCell('C3', '14')
 
     await dragProductBodySelection(page, 1, 1, 2, 2)
     await grid.press(`${PRIMARY_MODIFIER}+C`)
@@ -747,25 +743,21 @@ test.describe('@clipboard-global web app clipboard flows', () => {
     const formulaInput = page.getByTestId('formula-input')
     const resolvedValue = page.getByTestId('formula-resolved-value')
 
-    await nameBox.fill('B2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('3')
-    await formulaInput.press('Enter')
+    const writeFormulaBarCell = async (address: string, value: string, resolved = value) => {
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await formulaInput.fill(value)
+      await formulaInput.press('Enter')
+      await nameBox.fill(address)
+      await nameBox.press('Enter')
+      await expect(formulaInput).toHaveValue(value)
+      await expect(resolvedValue).toHaveText(resolved)
+    }
 
-    await nameBox.fill('B3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('4')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C2')
-    await nameBox.press('Enter')
-    await formulaInput.fill('=B2*2')
-    await formulaInput.press('Enter')
-
-    await nameBox.fill('C3')
-    await nameBox.press('Enter')
-    await formulaInput.fill('=B3*2')
-    await formulaInput.press('Enter')
+    await writeFormulaBarCell('B2', '3')
+    await writeFormulaBarCell('B3', '4')
+    await writeFormulaBarCell('C2', '=B2*2', '6')
+    await writeFormulaBarCell('C3', '=B3*2', '8')
 
     await dragProductBodySelection(page, 1, 1, 2, 2)
     await grid.press(`${PRIMARY_MODIFIER}+C`)
@@ -846,7 +838,7 @@ test('web app commits in-cell string edits when clicking away', async ({ page })
 })
 
 test('web app drags a selected range by its border with a grab cursor', async ({ page }) => {
-  await page.goto('/')
+  await gotoWorkbookShell(page, `/?document=range-border-drag-${Date.now()}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -871,11 +863,13 @@ test('web app drags a selected range by its border with a grab cursor', async ({
 
   await nameBox.fill('B2')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
   await expect(formulaInput).toHaveValue('')
   await expect(resolvedValue).toHaveText('∅')
 
   await nameBox.fill('C2')
   await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
   await expect(formulaInput).toHaveValue('')
   await expect(resolvedValue).toHaveText('∅')
 

@@ -77,5 +77,6 @@ describe('buildHeaderPaneStates', () => {
     expect(panes.find((pane) => pane.paneId === 'left-body')?.surfaceSize.height).toBe(120)
     expect(panes.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 0, y: 0 })
     expect(panes.find((pane) => pane.paneId === 'left-body')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(panes.every((pane) => pane.packedScene.paneId === pane.paneId)).toBe(true)
   })
 })

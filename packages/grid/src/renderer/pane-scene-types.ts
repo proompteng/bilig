@@ -1,7 +1,8 @@
-import type { Viewport } from '@bilig/protocol'
+import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
+import type { GridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
 
@@ -17,6 +18,7 @@ export interface WorkbookPaneScenePacket {
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
+  readonly packedScene: GridScenePacketV2
 }
 
 export interface WorkbookPaneSceneRequest {
@@ -24,10 +26,16 @@ export interface WorkbookPaneSceneRequest {
   readonly residentViewport: Viewport
   readonly freezeRows: number
   readonly freezeCols: number
+  readonly dprBucket?: number | undefined
+  readonly requestSeq?: number | undefined
+  readonly cameraSeq?: number | undefined
+  readonly priority?: number | undefined
+  readonly reason?: 'visible' | 'prefetch' | 'edit' | 'resize' | 'sheet-switch' | undefined
   readonly selectedCell: {
     readonly col: number
     readonly row: number
   }
+  readonly selectedCellSnapshot: CellSnapshot | null
   readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   readonly editingCell: {
     readonly col: number
@@ -51,6 +59,8 @@ export interface WorkbookPaneScrollAxes {
 export interface WorkbookRenderPaneState {
   readonly paneId: string
   readonly generation: number
+  readonly viewport?: Viewport | undefined
+  readonly packedScene: GridScenePacketV2
   readonly frame: Rectangle
   readonly surfaceSize: WorkbookPaneSurfaceSize
   readonly contentOffset: {

@@ -33,6 +33,8 @@ export interface PointerGeometry {
   frozenTopHeight: number
   mainDataLeft: number
   mainDataTop: number
+  bodyOriginLeft: number
+  bodyOriginTop: number
 }
 
 export interface SelectedCellBounds {
@@ -76,22 +78,32 @@ export function createPointerGeometry(
   const frozenTopHeight = resolveFrozenRowHeight(freezeRows, rowHeights, gridMetrics.rowHeight)
   const mainDataLeft = dataLeft + frozenLeftWidth
   const mainDataTop = dataTop + frozenTopHeight
-  const visibleColumnBounds = getVisibleColumnBounds(region.range, mainDataLeft, MAX_COLS, columnWidths, gridMetrics.columnWidth)
-  const mainDataWidth = visibleColumnBounds.length === 0 ? region.range.width * cellWidth : visibleColumnBounds.at(-1)!.right - mainDataLeft
-  const visibleRowBounds = getVisibleRowBounds(region.range, mainDataTop, MAX_ROWS, rowHeights, gridMetrics.rowHeight)
-  const mainDataHeight = visibleRowBounds.length === 0 ? region.range.height * cellHeight : visibleRowBounds.at(-1)!.bottom - mainDataTop
+  const bodyOriginLeft = mainDataLeft - Math.max(0, region.tx)
+  const bodyOriginTop = mainDataTop - Math.max(0, region.ty)
+  const visibleColumnBounds = getVisibleColumnBounds(region.range, bodyOriginLeft, MAX_COLS, columnWidths, gridMetrics.columnWidth)
+  const visibleRowBounds = getVisibleRowBounds(region.range, bodyOriginTop, MAX_ROWS, rowHeights, gridMetrics.rowHeight)
+  const mainDataRight =
+    visibleColumnBounds.length === 0
+      ? mainDataLeft + Math.max(0, region.range.width * cellWidth - region.tx)
+      : visibleColumnBounds.at(-1)!.right
+  const mainDataBottom =
+    visibleRowBounds.length === 0
+      ? mainDataTop + Math.max(0, region.range.height * cellHeight - region.ty)
+      : visibleRowBounds.at(-1)!.bottom
   return {
     hostBounds,
     cellWidth,
     cellHeight,
     dataLeft,
     dataTop,
-    dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + frozenLeftWidth + mainDataWidth),
-    dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + frozenTopHeight + mainDataHeight),
+    dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, Math.max(mainDataLeft, mainDataRight)),
+    dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, Math.max(mainDataTop, mainDataBottom)),
     frozenLeftWidth,
     frozenTopHeight,
     mainDataLeft,
     mainDataTop,
+    bodyOriginLeft,
+    bodyOriginTop,
   }
 }
 
@@ -275,7 +287,7 @@ function getPointerVisibleColumns(
   const freezeCols = Math.max(0, Math.min(MAX_COLS, region.freezeCols ?? 0))
   const frozenColumns =
     freezeCols === 0 ? [] : getVisibleColumnBounds({ x: 0, width: freezeCols }, geometry.dataLeft, MAX_COLS, columnWidths, defaultWidth)
-  const mainColumns = getVisibleColumnBounds(region.range, geometry.mainDataLeft, MAX_COLS, columnWidths, defaultWidth)
+  const mainColumns = getVisibleColumnBounds(region.range, geometry.bodyOriginLeft, MAX_COLS, columnWidths, defaultWidth)
   return [...frozenColumns, ...mainColumns]
 }
 
@@ -288,7 +300,7 @@ function getPointerVisibleRows(
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, region.freezeRows ?? 0))
   const frozenRows =
     freezeRows === 0 ? [] : getVisibleRowBounds({ y: 0, height: freezeRows }, geometry.dataTop, MAX_ROWS, rowHeights, defaultHeight)
-  const mainRows = getVisibleRowBounds(region.range, geometry.mainDataTop, MAX_ROWS, rowHeights, defaultHeight)
+  const mainRows = getVisibleRowBounds(region.range, geometry.bodyOriginTop, MAX_ROWS, rowHeights, defaultHeight)
   return [...frozenRows, ...mainRows]
 }
 
@@ -303,7 +315,7 @@ function resolvePointerColumnIndex(
   if (freezeCols > 0 && clientX < geometry.mainDataLeft) {
     return resolveColumnAtClientX(clientX, { x: 0, width: freezeCols }, geometry.dataLeft, MAX_COLS, columnWidths, defaultWidth)
   }
-  return resolveColumnAtClientX(clientX, region.range, geometry.mainDataLeft, MAX_COLS, columnWidths, defaultWidth)
+  return resolveColumnAtClientX(clientX, region.range, geometry.bodyOriginLeft, MAX_COLS, columnWidths, defaultWidth)
 }
 
 function resolvePointerRowIndex(
@@ -317,5 +329,5 @@ function resolvePointerRowIndex(
   if (freezeRows > 0 && clientY < geometry.mainDataTop) {
     return resolveRowAtClientY(clientY, { y: 0, height: freezeRows }, geometry.dataTop, MAX_ROWS, rowHeights, defaultHeight)
   }
-  return resolveRowAtClientY(clientY, region.range, geometry.mainDataTop, MAX_ROWS, rowHeights, defaultHeight)
+  return resolveRowAtClientY(clientY, region.range, geometry.bodyOriginTop, MAX_ROWS, rowHeights, defaultHeight)
 }

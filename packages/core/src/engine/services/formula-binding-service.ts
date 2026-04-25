@@ -1058,6 +1058,22 @@ function buildDirectScalarOperand(args: {
   return undefined
 }
 
+function tryParseDependencyRangeAddress(address: string, currentSheetName?: string): ReturnType<typeof parseRangeAddress> | undefined {
+  try {
+    return parseRangeAddress(address, currentSheetName)
+  } catch {
+    return undefined
+  }
+}
+
+function tryParseDependencyCellAddress(address: string, currentSheetName?: string): ReturnType<typeof parseCellAddress> | undefined {
+  try {
+    return parseCellAddress(address, currentSheetName)
+  } catch {
+    return undefined
+  }
+}
+
 function buildDirectScalarDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
@@ -2003,8 +2019,14 @@ export function createEngineFormulaBindingService(args: {
           parsedDep?.kind === 'range' ? parsedDep : compiled.parsedSymbolicRanges?.find((range) => range.address === dep)
         const range =
           parsedRangeDep === undefined
-            ? parseRangeAddress(dep, currentSheetName)
-            : parseRangeAddress(`${parsedRangeDep.startAddress}:${parsedRangeDep.endAddress}`, parsedRangeDep.sheetName ?? currentSheetName)
+            ? tryParseDependencyRangeAddress(dep, currentSheetName)
+            : tryParseDependencyRangeAddress(
+                `${parsedRangeDep.startAddress}:${parsedRangeDep.endAddress}`,
+                parsedRangeDep.sheetName ?? currentSheetName,
+              )
+        if (!range) {
+          continue
+        }
         const sheetName = range.sheetName ?? currentSheetName
         const isDirectLookupColumn =
           directLookupBinding !== undefined &&
@@ -2103,7 +2125,10 @@ export function createEngineFormulaBindingService(args: {
         }
         continue
       }
-      const parsed = parseCellAddress(dep, currentSheetName)
+      const parsed = tryParseDependencyCellAddress(dep, currentSheetName)
+      if (!parsed) {
+        continue
+      }
       const sheetName = parsed.sheetName ?? currentSheetName
       if (parsed.sheetName && !args.state.workbook.getSheet(sheetName)) {
         continue
@@ -2524,7 +2549,11 @@ export function createEngineFormulaBindingService(args: {
       }
       const ref = compiled.symbolicRefs[index]!
       const [qualifiedSheetName, qualifiedAddress] = ref.includes('!') ? ref.split('!') : [undefined, ref]
-      const fallbackAddress = parseCellAddress(qualifiedAddress, qualifiedSheetName).text
+      const fallbackAddress = tryParseDependencyCellAddress(qualifiedAddress, qualifiedSheetName)?.text
+      if (fallbackAddress === undefined) {
+        args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND
+        continue
+      }
       const sheetName =
         parsedRef?.sheetName ??
         qualifiedSheetName ??

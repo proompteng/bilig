@@ -1,8 +1,13 @@
 import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type Viewport } from '@bilig/protocol'
+import { createAxisIndexFromRecord, createAxisIndexFromSortedOverrides } from './gridAxisIndex.js'
 import type { getGridMetrics } from './gridMetrics.js'
-import { MAX_COLUMN_WIDTH, MAX_ROW_HEIGHT, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
+import { MAX_COLUMN_WIDTH, MAX_ROW_HEIGHT, getResolvedColumnWidth, getResolvedRowHeight } from './gridMetrics.js'
+import { applyHiddenAxisSizes } from './gridScrollSurface.js'
 import type { Item } from './gridTypes.js'
 import type { VisibleRegionState } from './gridPointer.js'
+
+export const RESIDENT_VIEWPORT_COLUMN_COUNT = VIEWPORT_TILE_COLUMN_COUNT * 2
+export const RESIDENT_VIEWPORT_ROW_COUNT = VIEWPORT_TILE_ROW_COUNT * 3
 
 function resolveFrozenColumnOffset(freezeCols: number, columnWidths: Readonly<Record<number, number>>, defaultWidth: number): number {
   let width = 0
@@ -45,6 +50,8 @@ export function resolveVisibleRegionFromScroll(options: {
   freezeCols?: number
   columnWidths: Readonly<Record<number, number>>
   rowHeights: Readonly<Record<number, number>>
+  hiddenColumns?: Readonly<Record<number, true>> | undefined
+  hiddenRows?: Readonly<Record<number, true>> | undefined
   gridMetrics: ReturnType<typeof getGridMetrics>
 }): VisibleRegionState {
   const {
@@ -56,16 +63,28 @@ export function resolveVisibleRegionFromScroll(options: {
     freezeCols: requestedFreezeCols = 0,
     columnWidths,
     rowHeights,
+    hiddenColumns,
+    hiddenRows,
     gridMetrics,
   } = options
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
   const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols))
-  const frozenWidth = resolveFrozenColumnOffset(freezeCols, columnWidths, gridMetrics.columnWidth)
-  const frozenHeight = resolveFrozenRowOffset(freezeRows, rowHeights, gridMetrics.rowHeight)
+  const columnAxis = createAxisIndexFromRecord({
+    axisLength: MAX_COLS,
+    defaultSize: gridMetrics.columnWidth,
+    sizes: applyHiddenAxisSizes(columnWidths, hiddenColumns),
+  })
+  const rowAxis = createAxisIndexFromRecord({
+    axisLength: MAX_ROWS,
+    defaultSize: gridMetrics.rowHeight,
+    sizes: applyHiddenAxisSizes(rowHeights, hiddenRows),
+  })
+  const frozenWidth = columnAxis.resolveSpan(0, freezeCols)
+  const frozenHeight = rowAxis.resolveSpan(0, freezeRows)
   const bodyWidth = Math.max(0, viewportWidth - gridMetrics.rowMarkerWidth - frozenWidth)
   const bodyHeight = Math.max(0, viewportHeight - gridMetrics.headerHeight - frozenHeight)
-  const horizontalAnchor = resolveColumnAnchor(scrollLeft + frozenWidth, columnWidths, gridMetrics.columnWidth)
-  const verticalAnchor = resolveRowAnchor(scrollTop + frozenHeight, rowHeights, gridMetrics.rowHeight)
+  const horizontalAnchor = columnAxis.resolveAnchor(scrollLeft + frozenWidth)
+  const verticalAnchor = rowAxis.resolveAnchor(scrollTop + frozenHeight)
   const rangeX = Math.max(freezeCols, horizontalAnchor.index)
   const rangeY = Math.max(freezeRows, verticalAnchor.index)
 
@@ -74,16 +93,14 @@ export function resolveVisibleRegionFromScroll(options: {
       x: rangeX,
       y: rangeY,
       width: resolveVisibleColumnCount({
+        axis: columnAxis,
         startCol: rangeX,
         bodyWidth,
-        columnWidths,
-        defaultWidth: gridMetrics.columnWidth,
       }),
       height: resolveVisibleRowCount({
+        axis: rowAxis,
         startRow: rangeY,
         bodyHeight,
-        rowHeights,
-        defaultHeight: gridMetrics.rowHeight,
       }),
     },
     tx: horizontalAnchor.offset,
@@ -94,15 +111,13 @@ export function resolveVisibleRegionFromScroll(options: {
 }
 
 export function resolveResidentViewport(viewport: Viewport): Viewport {
-  const rowStart = clampAxisStart(viewport.rowStart, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
-  const rowEnd = clampAxisEnd(viewport.rowEnd, VIEWPORT_TILE_ROW_COUNT, MAX_ROWS)
-  const colStart = clampAxisStart(viewport.colStart, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
-  const colEnd = clampAxisEnd(viewport.colEnd, VIEWPORT_TILE_COLUMN_COUNT, MAX_COLS)
+  const rowWindow = resolveResidentAxisWindow(viewport.rowStart, viewport.rowEnd, RESIDENT_VIEWPORT_ROW_COUNT, MAX_ROWS)
+  const colWindow = resolveResidentAxisWindow(viewport.colStart, viewport.colEnd, RESIDENT_VIEWPORT_COLUMN_COUNT, MAX_COLS)
   return {
-    rowStart,
-    rowEnd,
-    colStart,
-    colEnd,
+    rowStart: rowWindow.start,
+    rowEnd: rowWindow.end,
+    colStart: colWindow.start,
+    colEnd: colWindow.end,
   }
 }
 
@@ -145,9 +160,19 @@ export function scrollCellIntoView(options: {
   } = options
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
   const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols))
-  const frozenWidth = resolveColumnOffset(freezeCols, sortedColumnWidthOverrides, gridMetrics.columnWidth)
-  const frozenHeight = resolveRowOffset(freezeRows, sortedRowHeightOverrides, gridMetrics.rowHeight)
-  const cellLeft = resolveColumnOffset(cell[0], sortedColumnWidthOverrides, gridMetrics.columnWidth)
+  const columnAxis = createAxisIndexFromSortedOverrides({
+    axisLength: MAX_COLS,
+    defaultSize: gridMetrics.columnWidth,
+    sortedOverrides: sortedColumnWidthOverrides,
+  })
+  const rowAxis = createAxisIndexFromSortedOverrides({
+    axisLength: MAX_ROWS,
+    defaultSize: gridMetrics.rowHeight,
+    sortedOverrides: sortedRowHeightOverrides,
+  })
+  const frozenWidth = columnAxis.resolveSpan(0, freezeCols)
+  const frozenHeight = rowAxis.resolveSpan(0, freezeRows)
+  const cellLeft = columnAxis.resolveOffset(cell[0])
   const cellWidth = getResolvedColumnWidth(columnWidths, cell[0], gridMetrics.columnWidth)
   const bodyWidth = Math.max(0, scrollViewport.clientWidth - gridMetrics.rowMarkerWidth - frozenWidth)
   if (cell[0] >= freezeCols) {
@@ -159,7 +184,7 @@ export function scrollCellIntoView(options: {
     }
   }
 
-  const cellTop = resolveRowOffset(cell[1], sortedRowHeightOverrides, gridMetrics.rowHeight)
+  const cellTop = rowAxis.resolveOffset(cell[1])
   const cellHeight = getResolvedRowHeight(rowHeights, cell[1], gridMetrics.rowHeight)
   const bodyHeight = Math.max(0, scrollViewport.clientHeight - gridMetrics.headerHeight - frozenHeight)
   if (cell[1] >= freezeRows) {
@@ -184,17 +209,21 @@ export function resolveViewportScrollPosition(options: {
   const rowStart = 'rowStart' in options.viewport ? options.viewport.rowStart : options.viewport.y
   const freezeCols = Math.max(0, Math.min(MAX_COLS, options.freezeCols ?? 0))
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, options.freezeRows ?? 0))
-  const frozenWidth = resolveColumnOffset(freezeCols, options.sortedColumnWidthOverrides, options.gridMetrics.columnWidth)
-  const frozenHeight = resolveRowOffset(freezeRows, options.sortedRowHeightOverrides, options.gridMetrics.rowHeight)
+  const columnAxis = createAxisIndexFromSortedOverrides({
+    axisLength: MAX_COLS,
+    defaultSize: options.gridMetrics.columnWidth,
+    sortedOverrides: options.sortedColumnWidthOverrides,
+  })
+  const rowAxis = createAxisIndexFromSortedOverrides({
+    axisLength: MAX_ROWS,
+    defaultSize: options.gridMetrics.rowHeight,
+    sortedOverrides: options.sortedRowHeightOverrides,
+  })
+  const frozenWidth = columnAxis.resolveSpan(0, freezeCols)
+  const frozenHeight = rowAxis.resolveSpan(0, freezeRows)
   return {
-    scrollLeft:
-      colStart <= freezeCols
-        ? 0
-        : Math.max(0, resolveColumnOffset(colStart, options.sortedColumnWidthOverrides, options.gridMetrics.columnWidth) - frozenWidth),
-    scrollTop:
-      rowStart <= freezeRows
-        ? 0
-        : Math.max(0, resolveRowOffset(rowStart, options.sortedRowHeightOverrides, options.gridMetrics.rowHeight) - frozenHeight),
+    scrollLeft: colStart <= freezeCols ? 0 : Math.max(0, columnAxis.resolveOffset(colStart) - frozenWidth),
+    scrollTop: rowStart <= freezeRows ? 0 : Math.max(0, rowAxis.resolveOffset(rowStart) - frozenHeight),
   }
 }
 
@@ -211,77 +240,36 @@ export function hasSelectionTargetChanged(
 }
 
 function resolveVisibleColumnCount(options: {
+  axis: ReturnType<typeof createAxisIndexFromRecord>
   startCol: number
   bodyWidth: number
-  columnWidths: Readonly<Record<number, number>>
-  defaultWidth: number
 }): number {
-  const { startCol, bodyWidth, columnWidths, defaultWidth } = options
-  const targetWidth = bodyWidth + MAX_COLUMN_WIDTH
-  let coveredWidth = 0
-  let count = 0
-  for (let col = startCol; col < MAX_COLS && coveredWidth < targetWidth; col += 1) {
-    coveredWidth += getResolvedColumnWidth(columnWidths, col, defaultWidth)
-    count += 1
-  }
-  return Math.max(1, count)
+  return options.axis.resolveVisibleCount(options.startCol, options.bodyWidth, MAX_COLUMN_WIDTH)
 }
 
 function resolveVisibleRowCount(options: {
+  axis: ReturnType<typeof createAxisIndexFromRecord>
   startRow: number
   bodyHeight: number
-  rowHeights: Readonly<Record<number, number>>
-  defaultHeight: number
 }): number {
-  const { startRow, bodyHeight, rowHeights, defaultHeight } = options
-  const targetHeight = bodyHeight + MAX_ROW_HEIGHT
-  let coveredHeight = 0
-  let count = 0
-  for (let row = startRow; row < MAX_ROWS && coveredHeight < targetHeight; row += 1) {
-    coveredHeight += getResolvedRowHeight(rowHeights, row, defaultHeight)
-    count += 1
+  return options.axis.resolveVisibleCount(options.startRow, options.bodyHeight, MAX_ROW_HEIGHT)
+}
+
+function resolveResidentAxisWindow(
+  visibleStart: number,
+  visibleEnd: number,
+  baseWindowSize: number,
+  axisMax: number,
+): { readonly start: number; readonly end: number } {
+  const clampedStart = Math.max(0, Math.min(axisMax - 1, visibleStart))
+  const clampedEnd = Math.max(clampedStart, Math.min(axisMax - 1, visibleEnd))
+  let windowSize = Math.max(baseWindowSize, Math.ceil((clampedEnd - clampedStart + 1) / baseWindowSize) * baseWindowSize)
+  const windowStart = Math.floor(clampedStart / windowSize) * windowSize
+  while (windowStart + windowSize - 1 < clampedEnd && windowSize < axisMax) {
+    windowSize += baseWindowSize
   }
-  return Math.max(1, count)
-}
-
-function resolveColumnAnchor(
-  scrollLeft: number,
-  columnWidths: Readonly<Record<number, number>>,
-  defaultWidth: number,
-): { index: number; offset: number } {
-  let consumed = 0
-  for (let col = 0; col < MAX_COLS; col += 1) {
-    const width = getResolvedColumnWidth(columnWidths, col, defaultWidth)
-    if (consumed + width > scrollLeft) {
-      return { index: col, offset: scrollLeft - consumed }
-    }
-    consumed += width
+  return {
+    end: Math.min(axisMax - 1, windowStart + windowSize - 1),
+    start: windowStart,
   }
-  return { index: MAX_COLS - 1, offset: 0 }
-}
-
-function clampAxisStart(value: number, tileSize: number, axisMax: number): number {
-  const clamped = Math.max(0, Math.min(axisMax - 1, value))
-  return Math.floor(clamped / tileSize) * tileSize
-}
-
-function clampAxisEnd(value: number, tileSize: number, axisMax: number): number {
-  const clamped = Math.max(0, Math.min(axisMax - 1, value))
-  return Math.min(axisMax - 1, Math.ceil((clamped + 1) / tileSize) * tileSize - 1)
-}
-
-function resolveRowAnchor(
-  scrollTop: number,
-  rowHeights: Readonly<Record<number, number>>,
-  defaultHeight: number,
-): { index: number; offset: number } {
-  let consumed = 0
-  for (let row = 0; row < MAX_ROWS; row += 1) {
-    const height = getResolvedRowHeight(rowHeights, row, defaultHeight)
-    if (consumed + height > scrollTop) {
-      return { index: row, offset: scrollTop - consumed }
-    }
-    consumed += height
-  }
-  return { index: MAX_ROWS - 1, offset: 0 }
 }

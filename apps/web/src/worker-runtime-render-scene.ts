@@ -4,7 +4,10 @@ import { buildResidentDataPaneScenes } from '../../../packages/grid/src/gridResi
 import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { createGridSelection } from '../../../packages/grid/src/gridSelection.js'
 import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packages/grid/src/workbookGridViewport.js'
+import { createGridTileKeyV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
+import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
+import { packWorkerGridScenePacket } from './worker-runtime-render-packet.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
 
 interface ResidentPaneSceneEngineLike {
@@ -13,6 +16,7 @@ interface ResidentPaneSceneEngineLike {
   getCellStyle: WorkerEngine['getCellStyle']
   getColumnAxisEntries: WorkerEngine['getColumnAxisEntries']
   getRowAxisEntries: WorkerEngine['getRowAxisEntries']
+  getLastMetrics: WorkerEngine['getLastMetrics']
   subscribeCells: (sheetName: string, addresses: readonly string[], listener: () => void) => () => void
 }
 
@@ -40,15 +44,29 @@ function buildRenderedAxisState(
   }
 }
 
-function normalizeSelectionRange(request: WorkbookPaneSceneRequest) {
-  return (
-    request.selectionRange ?? {
-      x: request.selectedCell.col,
-      y: request.selectedCell.row,
-      width: 1,
-      height: 1,
-    }
-  )
+function resolveRevision(value: number | undefined): number {
+  return Number.isInteger(value) && value !== undefined && value >= 0 ? value : 0
+}
+
+function hashAxisEntries(entries: readonly WorkbookAxisEntrySnapshot[]): number {
+  if (entries.length === 0) {
+    return 0
+  }
+  let hash = 2_166_136_261
+  for (const entry of [...entries].toSorted((left, right) => left.index - right.index)) {
+    hash = mixRevisionInteger(hash, entry.index)
+    hash = mixRevisionInteger(hash, Math.round((entry.size ?? -1) * 1_000))
+    hash = mixRevisionInteger(hash, entry.hidden ? 1 : 0)
+  }
+  return hash >>> 0
+}
+
+function mixRevisionInteger(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
+}
+
+function buildFreezeVersion(freezeRows: number, freezeCols: number): number {
+  return mixRevisionInteger(mixRevisionInteger(2_166_136_261, freezeRows), freezeCols)
 }
 
 export function buildWorkerResidentPaneScenes(input: {
@@ -57,13 +75,24 @@ export function buildWorkerResidentPaneScenes(input: {
   generation: number
 }): WorkbookPaneScenePacket[] {
   const { engine, request, generation } = input
+  const generatedAt = Date.now()
   const gridMetrics = getGridMetrics()
   const selectedAddress = formatAddress(request.selectedCell.row, request.selectedCell.col)
-  const selectedCellSnapshot = engine.getCell(request.sheetName, selectedAddress)
-  const columnAxis = buildRenderedAxisState(engine.getColumnAxisEntries(request.sheetName), gridMetrics.columnWidth)
-  const rowAxis = buildRenderedAxisState(engine.getRowAxisEntries(request.sheetName), gridMetrics.rowHeight)
+  const selectedCellSnapshot =
+    request.selectedCellSnapshot?.sheetName === request.sheetName && request.selectedCellSnapshot.address === selectedAddress
+      ? request.selectedCellSnapshot
+      : engine.getCell(request.sheetName, selectedAddress)
+  const columnAxisEntries = engine.getColumnAxisEntries(request.sheetName)
+  const rowAxisEntries = engine.getRowAxisEntries(request.sheetName)
+  const columnAxis = buildRenderedAxisState(columnAxisEntries, gridMetrics.columnWidth)
+  const rowAxis = buildRenderedAxisState(rowAxisEntries, gridMetrics.rowHeight)
+  const columnAxisVersion = hashAxisEntries(columnAxisEntries)
+  const rowAxisVersion = hashAxisEntries(rowAxisEntries)
+  const batchVersion = resolveRevision(engine.getLastMetrics().batchId)
   const freezeRows = request.freezeRows
   const freezeCols = request.freezeCols
+  const freezeVersion = buildFreezeVersion(freezeRows, freezeCols)
+  const sceneVersion = batchVersion + resolveRevision(request.sceneRevision)
 
   return buildResidentDataPaneScenes({
     residentViewport: request.residentViewport,
@@ -89,22 +118,51 @@ export function buildWorkerResidentPaneScenes(input: {
     gridSelection: createGridSelection(request.selectedCell.col, request.selectedCell.row),
     selectedCell: [request.selectedCell.col, request.selectedCell.row],
     selectedCellSnapshot,
-    selectionRange: normalizeSelectionRange(request),
+    selectionRange: null,
     editingCell: request.editingCell ? [request.editingCell.col, request.editingCell.row] : null,
-  }).map(
-    (scene): WorkbookPaneScenePacket => ({
+  }).map((scene): WorkbookPaneScenePacket => {
+    const packedScene = packWorkerGridScenePacket({
+      generation,
+      cameraSeq: request.cameraSeq ?? request.requestSeq ?? 0,
+      generatedAt,
+      gpuScene: scene.gpuScene,
+      paneId: scene.paneId,
+      requestSeq: request.requestSeq ?? 0,
+      key: createGridTileKeyV2({
+        axisVersionX: columnAxisVersion,
+        axisVersionY: rowAxisVersion,
+        dprBucket: request.dprBucket ?? 1,
+        freezeVersion,
+        paneId: scene.paneId,
+        selectionIndependentVersion: sceneVersion,
+        sheetName: request.sheetName,
+        styleVersion: sceneVersion,
+        valueVersion: sceneVersion,
+        viewport: scene.viewport,
+      }),
+      sheetName: request.sheetName,
+      surfaceSize: scene.surfaceSize,
+      textScene: scene.textScene,
+      viewport: scene.viewport,
+    })
+    const validation = validateGridScenePacketV2(packedScene)
+    if (!validation.ok) {
+      throw new Error(`Invalid worker grid scene packet: ${validation.reason}`)
+    }
+    return {
       generation,
       paneId: scene.paneId,
+      packedScene,
       viewport: scene.viewport,
       surfaceSize: scene.surfaceSize,
       gpuScene: scene.gpuScene,
       textScene: scene.textScene,
-    }),
-  )
+    }
+  })
 }
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {
-  const range = request.selectionRange
+  const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
     request.residentViewport.rowStart,
@@ -113,12 +171,16 @@ export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest
     request.residentViewport.colEnd,
     request.freezeRows,
     request.freezeCols,
+    request.dprBucket ?? 1,
+    request.sceneRevision ?? 0,
     request.selectedCell.col,
     request.selectedCell.row,
-    range?.x ?? -1,
-    range?.y ?? -1,
-    range?.width ?? -1,
-    range?.height ?? -1,
+    selectedSnapshot?.address ?? '',
+    selectedSnapshot?.version ?? -1,
+    selectedSnapshot?.styleId ?? '',
+    selectedSnapshot?.formula ?? '',
+    selectedSnapshot?.input ?? '',
+    selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
     request.editingCell?.col ?? -1,
     request.editingCell?.row ?? -1,
   ].join(':')

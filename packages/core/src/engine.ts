@@ -536,6 +536,9 @@ export class SpreadsheetEngine {
   }
 
   setCellFormula(sheetName: string, address: string, formula: string): CellValue {
+    if (this.getCell(sheetName, address).formula === formula) {
+      return this.getCellValue(sheetName, address)
+    }
     this.executeLocalTransaction([{ kind: 'setCellFormula', sheetName, address, formula }])
     return this.getCellValue(sheetName, address)
   }
@@ -546,6 +549,9 @@ export class SpreadsheetEngine {
       throw new Error(`Unknown sheet id: ${sheetId}`)
     }
     const address = formatAddress(row, col)
+    if (this.getCell(sheetName, address).formula === formula) {
+      return this.getCellValue(sheetName, address)
+    }
     this.runtime.mutation.executeLocalCellMutationsAtNow([{ sheetId, mutation: { kind: 'setCellFormula', row, col, formula } }], 1, {
       returnUndoOps: false,
     })

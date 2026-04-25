@@ -37,12 +37,16 @@ export interface AggregateStateStore {
   readonly invalidateColumn: (sheetName: string, col: number) => void
 }
 
-function columnKey(sheetName: string, col: number, rowStart: number): string {
-  return `${sheetName}\t${col}\t${rowStart}`
+function columnKeyPrefix(sheetName: string, col: number): string {
+  return `${sheetName}\t${col}`
 }
 
-function columnOnlyKey(sheetName: string, col: number): string {
-  return `${sheetName}\t${col}`
+function cacheKey(sheetName: string, col: number, rowStart: number): string {
+  return `${columnKeyPrefix(sheetName, col)}\t${rowStart}`
+}
+
+function prefixAnchorForRegion(regionRowStart: number, aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max'): number {
+  return aggregateKind === 'count' ? 0 : regionRowStart
 }
 
 function decodeValueTag(rawTag: number | undefined): ValueTag {
@@ -128,7 +132,7 @@ export function createAggregateStateStore(args: {
   const entriesByColumn = new Map<string, AggregateStateEntry[]>()
 
   const registerEntry = (entry: AggregateStateEntry): void => {
-    const key = columnOnlyKey(entry.sheetName, entry.col)
+    const key = columnKeyPrefix(entry.sheetName, entry.col)
     let entries = entriesByColumn.get(key)
     if (!entries) {
       entries = []
@@ -143,8 +147,8 @@ export function createAggregateStateStore(args: {
   }
 
   const deleteEntry = (entry: AggregateStateEntry): void => {
-    cache.delete(columnKey(entry.sheetName, entry.col, entry.rowStart))
-    const entries = entriesByColumn.get(columnOnlyKey(entry.sheetName, entry.col))
+    cache.delete(cacheKey(entry.sheetName, entry.col, entry.rowStart))
+    const entries = entriesByColumn.get(columnKeyPrefix(entry.sheetName, entry.col))
     if (!entries) {
       return
     }
@@ -153,7 +157,7 @@ export function createAggregateStateStore(args: {
       entries.splice(index, 1)
     }
     if (entries.length === 0) {
-      entriesByColumn.delete(columnOnlyKey(entry.sheetName, entry.col))
+      entriesByColumn.delete(columnKeyPrefix(entry.sheetName, entry.col))
     }
   }
 
@@ -282,7 +286,8 @@ export function createAggregateStateStore(args: {
       if (!region) {
         throw new Error(`Unknown region id: ${regionId}`)
       }
-      const key = columnKey(region.sheetName, region.col, region.rowStart)
+      const rowStart = prefixAnchorForRegion(region.rowStart, aggregateKind)
+      const key = cacheKey(region.sheetName, region.col, rowStart)
       const currentVersions = getCurrentVersions(region.sheetName, region.col)
       const existing = cache.get(key)
       if (
@@ -300,25 +305,25 @@ export function createAggregateStateStore(args: {
         regionId,
         sheetName: region.sheetName,
         col: region.col,
-        rowStart: region.rowStart,
-        rowEnd: region.rowStart - 1,
+        rowStart,
+        rowEnd: rowStart - 1,
         columnVersion: currentVersions.columnVersion,
         structureVersion: currentVersions.structureVersion,
         extremaValid: true,
-        prefixSums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixCount: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixMinimums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
-        prefixMaximums: new Float64Array(Math.max(region.rowEnd - region.rowStart + 1, 16)),
+        prefixSums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixMinimums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixMaximums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
       }
       cache.set(key, next)
       registerEntry(next)
       return extendEntry(next, region.rowEnd)
     },
     noteLiteralWrite({ sheetName, row, col, oldValue, newValue }) {
-      const entries = entriesByColumn.get(columnOnlyKey(sheetName, col))
+      const entries = entriesByColumn.get(columnKeyPrefix(sheetName, col))
       if (!entries) {
         return
       }
@@ -360,13 +365,13 @@ export function createAggregateStateStore(args: {
       }
     },
     invalidateColumn(sheetName, col) {
-      const key = columnOnlyKey(sheetName, col)
+      const key = columnKeyPrefix(sheetName, col)
       const entries = entriesByColumn.get(key)
       if (!entries) {
         return
       }
       entries.forEach((entry) => {
-        cache.delete(columnKey(entry.sheetName, entry.col, entry.rowStart))
+        cache.delete(cacheKey(entry.sheetName, entry.col, entry.rowStart))
       })
       entriesByColumn.delete(key)
     },

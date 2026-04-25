@@ -144,6 +144,11 @@ describe('EngineFormulaTemplateNormalizationService', () => {
         baseSource: 'A1+B1',
       }),
     ])
+    expect(service.getTemplateSnapshot(first.templateId)).toMatchObject({
+      id: first.templateId,
+      templateKey: first.templateKey,
+      baseSource: 'A1+B1',
+    })
 
     service.reset()
     service.hydrateTemplates([

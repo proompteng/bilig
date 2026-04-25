@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTextDecorationRectsFromScene, buildTextQuads, buildTextQuadsFromScene } from '../renderer/text-quad-buffer.js'
+import { buildTextDecorationRectsFromScene, buildTextQuads, buildTextQuadsFromScene } from '../renderer-v2/line-text-quad-buffer.js'
 
 const atlas = {
   intern(font: string, glyph: string) {
@@ -25,7 +25,14 @@ const atlas = {
 }
 
 describe('text-quad-buffer', () => {
-  it('builds one quad per resolved line with atlas uv coordinates', () => {
+  it('builds one quad per resolved glyph with atlas uv coordinates', () => {
+    const internedGlyphs: string[] = []
+    const recordingAtlas = {
+      intern(font: string, glyph: string) {
+        internedGlyphs.push(glyph)
+        return atlas.intern(font, glyph)
+      },
+    }
     const quads = buildTextQuads(
       [
         {
@@ -35,22 +42,24 @@ describe('text-quad-buffer', () => {
           font: '400 11px Geist',
         },
       ],
-      atlas,
+      recordingAtlas,
     )
 
-    expect(quads).toHaveLength(1)
+    expect(quads).toHaveLength(2)
     expect(quads[0]).toMatchObject({
-      atlasKey: 'atlas:AB',
+      atlasKey: 'atlas:A',
       x: 18,
-      y: 22.5,
-      width: 16,
+      y: 24.4,
+      width: 8,
       height: 12,
-      clipX: 10,
-      clipY: 20,
-      clipWidth: 32,
+      clipX: 18,
+      clipY: 23,
+      clipWidth: 16,
       clipHeight: 16,
     })
-    expect(quads[0]?.glyph).toBe('AB')
+    expect(quads[0]?.glyph).toBe('A')
+    expect(quads[1]).toMatchObject({ atlasKey: 'atlas:B', glyph: 'B', x: 26, y: 24.4 })
+    expect(internedGlyphs).not.toContain('AB')
   })
 
   it('wraps and centers lines inside the clipped layout box', () => {
@@ -61,7 +70,7 @@ describe('text-quad-buffer', () => {
           x: 0,
           y: 10,
           width: 40,
-          height: 28,
+          height: 40,
           wrap: true,
           align: 'center',
           font: '400 10px Geist',
@@ -71,9 +80,9 @@ describe('text-quad-buffer', () => {
       atlas,
     )
 
-    expect(quads).toHaveLength(2)
-    expect(quads[0]).toMatchObject({ x: 8, y: 14 })
-    expect(quads[1]).toMatchObject({ x: 8, y: 26 })
+    expect(quads).toHaveLength(6)
+    expect(quads[0]).toMatchObject({ x: 8, y: 13 })
+    expect(quads[3]).toMatchObject({ x: 8, y: 25 })
   })
 
   it('packs clipped scene items into gpu text instance buffers', () => {
@@ -101,13 +110,15 @@ describe('text-quad-buffer', () => {
       atlas,
     )
 
-    expect(quadCount).toBe(1)
-    expect(floats[0]).toBe(18)
-    expect(floats[1]).toBe(6)
+    expect(quadCount).toBe(2)
+    expect(floats[0]).toBe(8)
+    expect(floats[1]).toBe(4)
+    expect(floats[16]).toBe(16)
+    expect(floats[17]).toBe(4)
     expect(floats[12]).toBe(10)
-    expect(floats[13]).toBe(2)
-    expect(floats[14]).toBe(34)
-    expect(floats[15]).toBe(20)
+    expect(floats[13]).toBe(3)
+    expect(floats[14]).toBe(32)
+    expect(floats[15]).toBe(17)
     expect(floats[8]).toBeCloseTo(0x11 / 255)
     expect(floats[9]).toBeCloseTo(0x22 / 255)
     expect(floats[10]).toBeCloseTo(0x33 / 255)
@@ -140,9 +151,9 @@ describe('text-quad-buffer', () => {
     )
 
     expect(rects).toHaveLength(2)
-    expect(rects[0]).toMatchObject({ x: 18, width: 16, height: 1, color: '#112233' })
-    expect(rects[0]?.y).toBeCloseTo(9.6)
-    expect(rects[1]).toMatchObject({ x: 18, width: 16, height: 1, color: '#112233' })
-    expect(rects[1]?.y).toBeCloseTo(4.2)
+    expect(rects[0]).toMatchObject({ x: 10, width: 14, height: 1, color: '#112233' })
+    expect(rects[0]?.y).toBeCloseTo(14.7)
+    expect(rects[1]).toMatchObject({ x: 10, width: 14, height: 1, color: '#112233' })
+    expect(rects[1]?.y).toBeCloseTo(10.5)
   })
 })

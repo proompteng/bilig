@@ -77,6 +77,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const subscribeViewport = vi.fn(() => () => undefined)
+    let latestScrollTransformStore: ReturnType<typeof useWorkbookGridRenderState>['scrollTransformStore'] | null = null
     let hostElement: HTMLDivElement | null = null
     let scrollViewport: HTMLDivElement | null = null
 
@@ -90,6 +91,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         isEditingCell: false,
         subscribeViewport,
       })
+      latestScrollTransformStore = renderState.scrollTransformStore
 
       return (
         <div
@@ -132,9 +134,9 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       'Sheet1',
       expect.objectContaining({
         rowStart: 0,
-        rowEnd: 31,
+        rowEnd: 95,
         colStart: 0,
-        colEnd: 127,
+        colEnd: 255,
       }),
       expect.any(Function),
     )
@@ -146,21 +148,50 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
 
     expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+      renderTx: 64 * 104,
+      scrollLeft: 64 * 104,
+      tx: 0,
+    })
 
     await act(async () => {
-      scrollViewport!.scrollLeft = 128 * 104
+      scrollViewport!.scrollTop = 8 * 22
       scrollViewport!.dispatchEvent(new Event('scroll'))
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount + 1)
+    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+      renderTy: 8 * 22,
+      scrollTop: 8 * 22,
+      ty: 0,
+    })
+
+    await act(async () => {
+      scrollViewport!.scrollLeft = 256 * 104
+      scrollViewport!.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeViewport.mock.calls.length).toBeGreaterThan(initialSubscriptionCount)
+    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({ tx: 0 })
+    expect(subscribeViewport).toHaveBeenCalledWith(
+      'Sheet1',
+      expect.objectContaining({
+        rowStart: 0,
+        rowEnd: 95,
+        colStart: 512,
+        colEnd: 767,
+      }),
+      expect.any(Function),
+    )
     expect(subscribeViewport).toHaveBeenLastCalledWith(
       'Sheet1',
       expect.objectContaining({
         rowStart: 0,
-        rowEnd: 31,
-        colStart: 128,
-        colEnd: 255,
+        rowEnd: 95,
+        colStart: 256,
+        colEnd: 511,
       }),
       expect.any(Function),
     )

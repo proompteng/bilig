@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readlinkSync } from 'node:fs'
 import net from 'node:net'
 import { resolveBrowserLocalWebMode } from './browser-stack-config.js'
 
 const textDecoder = new TextDecoder()
+const repoRoot = process.cwd()
 const playwrightArgs = process.argv.slice(2)
 const CLIPBOARD_GLOBAL_GREP = '@clipboard-global'
 const BROWSER_PERF_GREP = '@browser-perf'
@@ -192,7 +193,8 @@ const LOCAL_STACK_STARTUP_ATTEMPTS = 3
 const LOCAL_STACK_STABILITY_GRACE_MS = 1_000
 const LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS = 2
 
-const DEFAULT_PREVIEW_PORTS = [4179, 4180] as const
+const PREVIEW_PORTS = [4179, 4180]
+const allocatedPreviewPorts = new Set<number>()
 
 function resolveTimeoutMs(value: string | undefined, fallbackMs: number): number {
   if (!value) {
@@ -294,19 +296,76 @@ function getListeningPids(port: number): number[] {
   return []
 }
 
+function commandForPid(pid: number): string {
+  const result = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='], {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'ignore',
+  })
+  if (result.exitCode !== 0) {
+    return ''
+  }
+  return textDecoder.decode(result.stdout).trim()
+}
+
+function cwdForPid(pid: number): string {
+  if (commandExists('lsof')) {
+    const result = Bun.spawnSync(['lsof', '-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    })
+    if (result.exitCode !== 0) {
+      return ''
+    }
+    return (
+      textDecoder
+        .decode(result.stdout)
+        .split('\n')
+        .find((line) => line.startsWith('n'))
+        ?.slice(1)
+        .trim() ?? ''
+    )
+  }
+
+  if (process.platform !== 'linux') {
+    return ''
+  }
+
+  try {
+    return readlinkSync(`/proc/${String(pid)}/cwd`)
+  } catch {
+    return ''
+  }
+}
+
+function isRepoOwnedListener(pid: number): boolean {
+  const command = commandForPid(pid)
+  if (command.includes(repoRoot)) {
+    return true
+  }
+  const cwd = cwdForPid(pid)
+  return cwd === repoRoot || cwd.startsWith(`${repoRoot}/`)
+}
+
 function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
 async function reservePort(port: number): Promise<number | null> {
+  if (port !== 0 && getListeningPids(port).length > 0) {
+    return null
+  }
   return await new Promise<number | null>((resolve) => {
-    const server = net.createServer()
+    const server = net.createServer((socket) => {
+      socket.destroy()
+    })
 
     server.unref()
     server.once('error', () => {
       resolve(null)
     })
-    server.listen(port, () => {
+    server.listen(port, '127.0.0.1', () => {
       const address = server.address()
       server.close(() => {
         if (address && typeof address === 'object') {
@@ -337,34 +396,56 @@ async function resolvePort(envValue: string | undefined, preferredPort: number):
   throw new Error(`Unable to allocate a free TCP port for browser tests near ${preferredPort}.`)
 }
 
-const e2eWebPort = await resolvePort(process.env['BILIG_E2E_WEB_PORT'], 4180)
-const e2eSyncServerPort = await resolvePort(process.env['BILIG_E2E_SYNC_SERVER_PORT'], 54422)
-const e2eZeroPort = await resolvePort(process.env['BILIG_E2E_ZERO_PORT'], 54849)
-const e2ePostgresPort = await resolvePort(process.env['BILIG_E2E_POSTGRES_PORT'], 55433)
+interface E2ePortAllocation {
+  readonly webPort: string
+  readonly syncServerPort: string
+  readonly zeroPort: string
+  readonly postgresPort: string
+}
+
+let e2ePortGeneration = 0
+
+async function resolveE2ePortAllocation(freshLocalBlock: boolean): Promise<E2ePortAllocation> {
+  const offset = freshLocalBlock ? (e2ePortGeneration += 1) * 50 : 0
+  const allocation = {
+    webPort: await resolvePort(process.env['BILIG_E2E_WEB_PORT'], 4180 + offset),
+    syncServerPort: await resolvePort(process.env['BILIG_E2E_SYNC_SERVER_PORT'], 54422 + offset),
+    zeroPort: await resolvePort(process.env['BILIG_E2E_ZERO_PORT'], 54849 + offset),
+    postgresPort: await resolvePort(process.env['BILIG_E2E_POSTGRES_PORT'], 55433 + offset),
+  }
+  allocatedPreviewPorts.add(Number.parseInt(allocation.webPort, 10))
+  allocatedPreviewPorts.add(Number.parseInt(allocation.syncServerPort, 10))
+  return allocation
+}
+
+let e2ePorts = await resolveE2ePortAllocation(false)
 const e2eHostCandidates = resolvePublishedServiceHosts()
 const configuredE2eBaseUrl = process.env['BILIG_E2E_BASE_URL']
 const configuredE2eSyncServerUrl = process.env['BILIG_E2E_SYNC_SERVER_URL']
 const configuredE2eZeroKeepaliveUrl = process.env['BILIG_E2E_ZERO_KEEPALIVE_URL']
 let e2eHost = e2eHostCandidates[0] ?? '127.0.0.1'
 
-function getE2eBaseUrl(): string {
-  return configuredE2eBaseUrl ?? `http://${e2eHost}:${e2eWebPort}`
+function getE2eBaseUrl(ports: E2ePortAllocation = e2ePorts): string {
+  return configuredE2eBaseUrl ?? `http://${e2eHost}:${ports.webPort}`
 }
 
-function getE2eSyncServerUrl(): string {
-  return configuredE2eSyncServerUrl ?? `http://${e2eHost}:${e2eSyncServerPort}`
+function getE2eSyncServerUrl(ports: E2ePortAllocation = e2ePorts): string {
+  return configuredE2eSyncServerUrl ?? `http://${e2eHost}:${ports.syncServerPort}`
 }
 
-function getE2eZeroKeepaliveUrl(): string {
-  return configuredE2eZeroKeepaliveUrl ?? `${getE2eBaseUrl()}/zero/keepalive`
+function getE2eZeroKeepaliveUrl(ports: E2ePortAllocation = e2ePorts): string {
+  return configuredE2eZeroKeepaliveUrl ?? `${getE2eBaseUrl(ports)}/zero/keepalive`
 }
 
 function terminatePreviewServers(): void {
-  const ports = [...DEFAULT_PREVIEW_PORTS, Number.parseInt(e2eWebPort, 10), Number.parseInt(e2eSyncServerPort, 10)].filter(
+  const activePorts = [e2ePorts.webPort, e2ePorts.syncServerPort]
+    .map((port) => Number.parseInt(port, 10))
+    .filter((port) => Number.isInteger(port) && port > 0)
+  const ports = Array.from(new Set(PREVIEW_PORTS.concat([...allocatedPreviewPorts], activePorts))).filter(
     (port) => Number.isInteger(port) && port > 0,
   )
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const pids = Array.from(new Set(ports.flatMap((port) => getListeningPids(port))))
+    const pids = Array.from(new Set(ports.flatMap((port) => getListeningPids(port)).filter(isRepoOwnedListener)))
     if (pids.length === 0) {
       return
     }
@@ -388,7 +469,8 @@ function terminatePreviewServers(): void {
   }
 }
 
-function runPlaywright(args: string[]): void {
+async function runPlaywright(args: string[]): Promise<void> {
+  const activePorts = e2ePorts
   const result = Bun.spawnSync(['pnpm', 'exec', 'playwright', 'test', ...args], {
     stdin: 'inherit',
     stdout: 'inherit',
@@ -398,14 +480,14 @@ function runPlaywright(args: string[]): void {
       BILIG_BROWSER_STACK: browserStack,
       BILIG_DEV_DISABLE_COMPOSE: browserStack === 'local' ? '1' : (process.env['BILIG_DEV_DISABLE_COMPOSE'] ?? '0'),
       BILIG_E2E_REMOTE_SYNC: browserStack === 'local' ? '0' : (process.env['BILIG_E2E_REMOTE_SYNC'] ?? '1'),
-      BILIG_E2E_WEB_PORT: e2eWebPort,
-      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
-      BILIG_E2E_ZERO_PORT: e2eZeroPort,
-      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
+      BILIG_E2E_WEB_PORT: activePorts.webPort,
+      BILIG_E2E_SYNC_SERVER_PORT: activePorts.syncServerPort,
+      BILIG_E2E_ZERO_PORT: activePorts.zeroPort,
+      BILIG_E2E_POSTGRES_PORT: activePorts.postgresPort,
       BILIG_E2E_HOST: e2eHost,
-      BILIG_E2E_BASE_URL: getE2eBaseUrl(),
-      BILIG_E2E_SYNC_SERVER_URL: getE2eSyncServerUrl(),
-      BILIG_E2E_ZERO_KEEPALIVE_URL: getE2eZeroKeepaliveUrl(),
+      BILIG_E2E_BASE_URL: getE2eBaseUrl(activePorts),
+      BILIG_E2E_SYNC_SERVER_URL: getE2eSyncServerUrl(activePorts),
+      BILIG_E2E_ZERO_KEEPALIVE_URL: getE2eZeroKeepaliveUrl(activePorts),
       ...(browserStack === 'local' ? { BILIG_E2E_MANAGED_STACK: '1' } : {}),
     },
   })
@@ -427,9 +509,10 @@ function configuredPlaywrightArgSets(): string[][] {
   ]
 }
 
-function runConfiguredPlaywrightSuites(): void {
+async function runConfiguredPlaywrightSuites(): Promise<void> {
   for (const args of configuredPlaywrightArgSets()) {
-    runPlaywright(args)
+    // oxlint-disable-next-line eslint(no-await-in-loop)
+    await runPlaywright(args)
   }
 }
 
@@ -438,7 +521,7 @@ async function pollHttp(url: string, deadline: number, lastError = 'unknown erro
     throw new Error(`Timed out waiting for ${url}: ${lastError}`)
   }
   try {
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(Math.max(250, Math.min(2_000, deadline - Date.now()))) })
     if (response.ok) {
       return
     }
@@ -548,10 +631,10 @@ function runDockerCompose(args: string[], env = process.env): void {
     stderr: 'inherit',
     env: {
       ...env,
-      BILIG_E2E_WEB_PORT: e2eWebPort,
-      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
-      BILIG_E2E_ZERO_PORT: e2eZeroPort,
-      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
+      BILIG_E2E_WEB_PORT: e2ePorts.webPort,
+      BILIG_E2E_SYNC_SERVER_PORT: e2ePorts.syncServerPort,
+      BILIG_E2E_ZERO_PORT: e2ePorts.zeroPort,
+      BILIG_E2E_POSTGRES_PORT: e2ePorts.postgresPort,
     },
   })
   if (result.exitCode !== 0) {
@@ -580,17 +663,17 @@ async function runComposePlaywright(): Promise<void> {
   runDockerCompose(['up', '-d', '--build', 'postgres', 'bilig-app', 'zero-cache'])
   try {
     console.log(
-      `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(',')}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
+      `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(',')}, web=${e2ePorts.webPort}, sync=${e2ePorts.syncServerPort}, zero=${e2ePorts.zeroPort}, postgres=${e2ePorts.postgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
     )
     if (!process.env['BILIG_E2E_HOST'] && !configuredE2eBaseUrl && !configuredE2eSyncServerUrl && !configuredE2eZeroKeepaliveUrl) {
-      e2eHost = await resolveReachableHttpHost(e2eHostCandidates, e2eWebPort, '/healthz', composeStartupTimeoutMs)
+      e2eHost = await resolveReachableHttpHost(e2eHostCandidates, e2ePorts.webPort, '/healthz', composeStartupTimeoutMs)
       console.log(`compose browser stack resolved host=${e2eHost}`)
     }
     await waitForHttp(`${getE2eBaseUrl()}/healthz`, composeStartupTimeoutMs)
     await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs)
-    await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs)
+    await waitForTcp(e2eHost, Number.parseInt(e2ePorts.zeroPort, 10), composeStartupTimeoutMs)
     await waitForHttp(getE2eZeroKeepaliveUrl(), composeStartupTimeoutMs)
-    runConfiguredPlaywrightSuites()
+    await runConfiguredPlaywrightSuites()
   } catch (error) {
     const logs = collectComposeLogs()
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
@@ -658,16 +741,17 @@ async function waitForLocalPlaywrightStackStable(child: BrowserStackProcess): Pr
 
 async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProcess> {
   terminatePreviewServers()
+  const activePorts = e2ePorts
   const child = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
     stdin: 'ignore',
     stdout: 'inherit',
     stderr: 'inherit',
     env: {
       ...process.env,
-      BILIG_WEB_DEV_PORT: e2eWebPort,
-      PORT: e2eSyncServerPort,
-      BILIG_DEV_POSTGRES_PORT: e2ePostgresPort,
-      BILIG_DEV_ZERO_PORT: e2eZeroPort,
+      BILIG_WEB_DEV_PORT: activePorts.webPort,
+      PORT: activePorts.syncServerPort,
+      BILIG_DEV_POSTGRES_PORT: activePorts.postgresPort,
+      BILIG_DEV_ZERO_PORT: activePorts.zeroPort,
       BILIG_DEV_WEB_SERVER_MODE: resolveBrowserLocalWebMode(process.env),
       BILIG_DEV_APP_SERVER_MODE: 'run',
       BILIG_DEV_COMPOSE_PROJECT: 'bilig-playwright-local',
@@ -687,6 +771,7 @@ async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProce
     console.warn(
       `local browser stack was not stable after startup; restarting (${String(attempt + 1)}/${String(LOCAL_STACK_STARTUP_ATTEMPTS)})`,
     )
+    e2ePorts = await resolveE2ePortAllocation(true)
     return startLocalPlaywrightStack(attempt + 1)
   }
 }
@@ -712,7 +797,7 @@ async function ensureLocalPlaywrightStack(child: BrowserStackProcess | null): Pr
 async function runLocalPlaywrightPhase(args: string[], child: BrowserStackProcess | null, attempt = 1): Promise<BrowserStackProcess> {
   const currentChild = await ensureLocalPlaywrightStack(child)
   try {
-    runPlaywright(args)
+    await runPlaywright(args)
     return currentChild
   } catch (error) {
     if ((await isLocalPlaywrightStackReady(currentChild)) || attempt >= LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS) {
@@ -722,19 +807,23 @@ async function runLocalPlaywrightPhase(args: string[], child: BrowserStackProces
       `local browser stack exited during Playwright phase "${args.join(' ')}"; restarting (${String(attempt + 1)}/${String(LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS)})`,
     )
     await stopAndReapLocalPlaywrightStack(currentChild)
+    e2ePorts = await resolveE2ePortAllocation(true)
     return runLocalPlaywrightPhase(args, null, attempt + 1)
   }
 }
 
 async function runLocalPlaywright(): Promise<void> {
-  let child: BrowserStackProcess | null = null
-  try {
-    for (const args of configuredPlaywrightArgSets()) {
+  for (const args of configuredPlaywrightArgSets()) {
+    // oxlint-disable-next-line eslint(no-await-in-loop)
+    e2ePorts = await resolveE2ePortAllocation(true)
+    let child: BrowserStackProcess | null = null
+    try {
       // oxlint-disable-next-line eslint(no-await-in-loop)
-      child = await runLocalPlaywrightPhase(args, child)
+      child = await runLocalPlaywrightPhase(args, null)
+    } finally {
+      // oxlint-disable-next-line eslint(no-await-in-loop)
+      await stopAndReapLocalPlaywrightStack(child)
     }
-  } finally {
-    await stopAndReapLocalPlaywrightStack(child)
   }
 }
 

@@ -8,9 +8,14 @@ import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
-import { readRuntimeImage } from '../snapshot/runtime-image-codec.js'
+import { readRuntimeImage, readRuntimeSnapshot } from '../snapshot/runtime-image-codec.js'
 
 describe('EngineSnapshotService', () => {
+  it('ignores missing runtime image carriers', () => {
+    expect(readRuntimeImage(undefined)).toBeUndefined()
+    expect(readRuntimeSnapshot(null)).toBeUndefined()
+  })
+
   it('normalizes thrown import failures into tagged snapshot errors', () => {
     const workbook = new WorkbookStore('book')
     const service = createEngineSnapshotService({

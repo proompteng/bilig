@@ -689,6 +689,7 @@ export function createEngineServiceRuntime(args: {
     captureStoredCellOps: (cellIndex, sheetName, address) => cellState.captureStoredCellOpsNow(cellIndex, sheetName, address),
     restoreCellOps: (sheetName, address) => cellState.restoreCellOpsNow(sheetName, address),
     getCellByIndex: args.getCellByIndex,
+    getFormulaFamilyStructuralSourceTransform: (cellIndex) => binding.getFormulaFamilyStructuralSourceTransformNow(cellIndex),
     readRangeCells: (range) => cellState.readRangeCellsNow(range),
     toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
       cellState.toCellStateOpsNow(sheetName, address, snapshot, sourceSheetName, sourceAddress),

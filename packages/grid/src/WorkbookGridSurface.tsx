@@ -1,9 +1,12 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
-import { WorkbookPaneRenderer } from './renderer/WorkbookPaneRenderer.js'
+import { createGridGeometrySnapshot } from './gridGeometry.js'
+import { createGridSelection } from './gridSelection.js'
+import { WorkbookPaneRendererV2, buildDynamicGridOverlayPacket } from './renderer-v2/index.js'
+import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -29,6 +32,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,
+    controlledHiddenColumns: props.hiddenColumns,
+    controlledHiddenRows: props.hiddenRows,
     getCellEditorSeed: props.getCellEditorSeed,
     freezeRows: props.freezeRows,
     freezeCols: props.freezeCols,
@@ -74,6 +79,95 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   })
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
+  const committedCellSelection = useMemo(() => {
+    const selectedCell = parseCellAddress(props.selectedAddr, props.sheetName)
+    return createGridSelection(selectedCell.col, selectedCell.row)
+  }, [props.selectedAddr, props.sheetName])
+  const renderSelectionIsSingleCell =
+    renderState.gridSelection.columns.length === 0 &&
+    renderState.gridSelection.rows.length === 0 &&
+    renderState.selectionRange?.width === 1 &&
+    renderState.selectionRange.height === 1
+  const displayGridSelection =
+    renderState.isFillHandleDragging || renderState.isRangeMoveDragging || renderState.activeHeaderDrag
+      ? renderState.gridSelection
+      : renderSelectionIsSingleCell
+        ? committedCellSelection
+        : renderState.gridSelection
+  const displaySelectionRange = displayGridSelection.current?.range ?? null
+  const v2Geometry = useMemo(
+    () =>
+      renderState.hostElement
+        ? createGridGeometrySnapshot({
+            columnWidths: renderState.columnWidths,
+            dpr: typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1),
+            freezeCols: props.freezeCols,
+            freezeRows: props.freezeRows,
+            gridMetrics: renderState.gridMetrics,
+            hiddenColumns: props.hiddenColumns,
+            hiddenRows: props.hiddenRows,
+            hostHeight: renderState.hostElement.clientHeight,
+            hostWidth: renderState.hostElement.clientWidth,
+            rowHeights: renderState.rowHeights,
+            scrollLeft: renderState.scrollViewportRef.current?.scrollLeft ?? 0,
+            scrollTop: renderState.scrollViewportRef.current?.scrollTop ?? 0,
+            sheetName: props.sheetName,
+          })
+        : null,
+    [
+      props.freezeCols,
+      props.freezeRows,
+      props.hiddenColumns,
+      props.hiddenRows,
+      props.sheetName,
+      renderState.columnWidths,
+      renderState.gridMetrics,
+      renderState.hostElement,
+      renderState.rowHeights,
+      renderState.scrollViewportRef,
+    ],
+  )
+  const dynamicOverlayBuilder = useCallback(
+    (geometry: NonNullable<typeof v2Geometry>) =>
+      buildDynamicGridOverlayPacket({
+        geometry,
+        activeHeaderDrag: renderState.activeHeaderDrag,
+        gridSelection: displayGridSelection,
+        hoveredCell: renderState.hoverState.cell,
+        selectedCell: [renderState.selectedCell.col, renderState.selectedCell.row],
+        selectionRange: displaySelectionRange,
+        showFillHandle:
+          displaySelectionRange !== null &&
+          displayGridSelection.columns.length === 0 &&
+          displayGridSelection.rows.length === 0 &&
+          renderState.fillPreviewRange === null &&
+          !renderState.isRangeMoveDragging,
+        resizeGuideColumn: resolveResizeGuideColumn({
+          activeResizeColumn: renderState.activeResizeColumn,
+          cursor: renderState.hoverState.cursor,
+          header: renderState.hoverState.header,
+        }),
+        resizeGuideRow: resolveResizeGuideRow({
+          activeResizeRow: renderState.activeResizeRow,
+          cursor: renderState.hoverState.cursor,
+          header: renderState.hoverState.header,
+        }),
+      }),
+    [
+      renderState.activeResizeColumn,
+      renderState.activeResizeRow,
+      renderState.activeHeaderDrag,
+      renderState.hoverState.cell,
+      renderState.hoverState.cursor,
+      renderState.hoverState.header,
+      renderState.fillPreviewRange,
+      displayGridSelection,
+      displaySelectionRange,
+      renderState.isRangeMoveDragging,
+      renderState.selectedCell.col,
+      renderState.selectedCell.row,
+    ],
+  )
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])
       .filter((range) => range.sheetName === props.sheetName)
@@ -147,10 +241,14 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        <WorkbookPaneRenderer
+        <WorkbookPaneRendererV2
           active={renderState.hostElement !== null}
+          cameraStore={renderState.gridCameraStore}
+          geometry={v2Geometry}
           host={renderState.hostElement}
+          overlayBuilder={dynamicOverlayBuilder}
           panes={renderState.renderPanes}
+          preloadPanes={renderState.preloadDataPanes}
           scrollTransformStore={renderState.scrollTransformStore}
         />
         <button
@@ -179,9 +277,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           getCellBounds={renderState.getCellLocalBounds}
           hidden={
             renderState.hostElement === null ||
-            !renderState.selectionRange ||
-            renderState.gridSelection.columns.length > 0 ||
-            renderState.gridSelection.rows.length > 0 ||
+            !displaySelectionRange ||
+            displayGridSelection.columns.length > 0 ||
+            displayGridSelection.rows.length > 0 ||
             Boolean(renderState.fillPreviewRange) ||
             renderState.isRangeMoveDragging
           }
@@ -191,7 +289,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           minY={renderState.gridMetrics.headerHeight}
           onPointerDown={interactions.handleFillHandlePointerDown}
           scrollTransformStore={renderState.scrollTransformStore}
-          selectionRange={renderState.selectionRange}
+          selectionRange={displaySelectionRange}
         />
         {renderState.fillPreviewBounds ? (
           <div

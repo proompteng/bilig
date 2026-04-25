@@ -2041,6 +2041,9 @@ export function createEngineOperationService(args: {
             const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
             const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
             const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
+            if (!isRestore && cellTouchesPivotSource(op.sheetName, parsedAddress.row, parsedAddress.col)) {
+              refreshAllPivots = true
+            }
             const prior = needsLookupValueRead ? readCellValueForLookup(cellIndex) : { value: emptyValue(), stringId: undefined }
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order)

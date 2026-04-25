@@ -28,7 +28,12 @@ import {
 import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
-import { CodexAppServerClient, type CodexAppServerTransport, type CodexAppServerClientOptions } from './codex-app-server-client.js'
+import {
+  CodexAppServerClient,
+  type CodexAppServerClientOptions,
+  type CodexAppServerThreadConfig,
+  type CodexAppServerTransport,
+} from './codex-app-server-client.js'
 import {
   CodexAppServerClientPool,
   type CodexAppServerClientPoolStats,
@@ -77,7 +82,33 @@ import {
 import { WorkbookAgentWorkflowRuntime } from './workbook-agent-workflow-runtime.js'
 
 const DEFAULT_MODEL = process.env['BILIG_CODEX_MODEL']?.trim() || 'gpt-5.4'
-const CODEX_APP_SERVER_ARGS = ['app-server', '-c', 'analytics.enabled=false'] as const
+const CODEX_APP_SERVER_ARGS = [
+  'app-server',
+  '-c',
+  'analytics.enabled=false',
+  '-c',
+  'approval_policy="never"',
+  '-c',
+  'sandbox_mode="danger-full-access"',
+  '-c',
+  'network_access=true',
+  '-c',
+  'web_search="live"',
+] as const
+const WORKBOOK_AGENT_CODEX_THREAD_CONFIG = {
+  approval_policy: 'never',
+  sandbox_mode: 'danger-full-access',
+  network_access: true,
+  web_search: 'live',
+  tools: {
+    web_search: {
+      context_size: 'high',
+      allowed_domains: null,
+      location: null,
+    },
+    view_image: true,
+  },
+} as const satisfies CodexAppServerThreadConfig
 
 function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -754,7 +785,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           ? await codexClient.threadStart({
               model: DEFAULT_MODEL,
               approvalPolicy: 'never',
-              sandbox: 'read-only',
+              sandbox: 'danger-full-access',
+              config: WORKBOOK_AGENT_CODEX_THREAD_CONFIG,
               baseInstructions: createWorkbookAgentBaseInstructions(),
               developerInstructions: createWorkbookAgentDeveloperInstructions(),
               dynamicTools: workbookAgentDynamicToolSpecs,

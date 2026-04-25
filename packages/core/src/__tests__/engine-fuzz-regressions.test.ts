@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ErrorCode, ValueTag } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type WorkbookConditionalFormatSnapshot } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineSeedSnapshot } from './engine-fuzz-helpers.js'
 
@@ -91,6 +91,32 @@ describe('engine fuzz regressions', () => {
     })
   })
 
+  it('keeps pivot source clears aligned across move undo and redo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('pivot-analytics', 'pivot-clear-move-redo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'pivot-clear-move-redo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.insertRows('Sheet1', 0, 1)
+    engine.moveRange(
+      { sheetName: 'Sheet1', startAddress: 'E3', endAddress: 'E4' },
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A2' },
+    )
+    const pivotAfterMove = engine.getPivotTable('Pivot', 'B2')
+
+    expect(pivotAfterMove).toMatchObject({ rows: 1, cols: 1 })
+    expect(engine.undo()).toBe(true)
+    expect(engine.getPivotTable('Pivot', 'B2')).toMatchObject({ rows: 3, cols: 2 })
+    expect(engine.redo()).toBe(true)
+    expect(engine.getPivotTable('Pivot', 'B2')).toMatchObject({
+      rows: pivotAfterMove?.rows,
+      cols: pivotAfterMove?.cols,
+    })
+  })
+
   it('treats structural deletes on blank sheets as history no-ops', async () => {
     const seed = new SpreadsheetEngine({ workbookName: 'blank-structural-noop-seed' })
     await seed.ready()
@@ -159,6 +185,58 @@ describe('engine fuzz regressions', () => {
     expect(engine.getCell('Sheet1', 'B1').formula).toBe('#REF!+E3')
   })
 
+  it('does not record history for duplicate formula writes', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('blank', 'duplicate-formula-history-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'duplicate-formula-history-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.setCellFormula('Sheet1', 'E3', 'F6/C3')
+    const afterFirstWrite = engine.exportSnapshot()
+
+    engine.setCellFormula('Sheet1', 'E3', 'F6/C3')
+    expect(engine.exportSnapshot()).toEqual(afterFirstWrite)
+
+    const sheetId = seedSnapshot.sheets[0]?.id
+    if (sheetId === undefined) {
+      throw new Error('Expected blank seed to include Sheet1 id')
+    }
+    engine.setCellFormulaAt(sheetId, 2, 4, 'F6/C3')
+    expect(engine.exportSnapshot()).toEqual(afterFirstWrite)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(false)
+  })
+
+  it('rejects coordinate formula writes for unknown sheet ids', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'unknown-sheet-id-write-regression' })
+    await engine.ready()
+
+    expect(() => engine.setCellFormulaAt(999_999, 0, 0, 'A1')).toThrow('Unknown sheet id: 999999')
+  })
+
+  it('does not record history for duplicate conditional format writes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'duplicate-conditional-format-history-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const format = {
+      id: 'duplicate-cf',
+      range: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B2' },
+      rule: { kind: 'cellIs', operator: 'greaterThan', values: [10] },
+      style: { fill: { backgroundColor: '#ff0000' } },
+      priority: 1,
+    } satisfies WorkbookConditionalFormatSnapshot
+
+    engine.setConditionalFormat(format)
+    const afterFirstWrite = engine.exportSnapshot()
+
+    engine.setConditionalFormat(format)
+    expect(engine.exportSnapshot()).toEqual(afterFirstWrite)
+  })
+
   it('restores formula graphs after undoing mixed row inserts and column deletes', async () => {
     const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'structural-formula-undo-regression')
     const engine = new SpreadsheetEngine({
@@ -176,6 +254,65 @@ describe('engine fuzz regressions', () => {
     expect(engine.undo()).toBe(true)
     expect(engine.undo()).toBe(true)
     expect(engine.exportSnapshot()).toEqual(seedSnapshot)
+  })
+
+  it('captures family-deferred formula sources before structural delete undo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('cross-sheet-graph', 'family-deferred-formula-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'family-deferred-formula-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.clearRange({ sheetName: 'Sheet1', startAddress: 'B3', endAddress: 'C3' })
+    engine.insertColumns('Sheet1', 0, 1)
+    expect(engine.getCell('Sheet1', 'D2').formula).toBe('C2*Summary!B2')
+
+    engine.deleteColumns('Sheet1', 0, 1)
+    expect(engine.getCell('Sheet1', 'C2').formula).toBe('B2*Summary!B2')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'D2').formula).toBe('C2*Summary!B2')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'C2').formula).toBe('B2*Summary!B2')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(seedSnapshot)
+  })
+
+  it('imports snapshots with structurally invalidated formula dependencies as ref errors', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'invalid-range-dependency-import-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'invalid-range-dependency-import-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.deleteColumns('Sheet1', 0, 1)
+    engine.setCellFormula('Sheet1', 'A1', 'A1+A1')
+    engine.deleteRows('Sheet1', 0, 1)
+    engine.copyRange(
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+    )
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, [['north']])
+    engine.insertRows('Sheet1', 0, 1)
+    engine.copyRange(
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+    )
+
+    const snapshot = engine.exportSnapshot()
+    const restored = new SpreadsheetEngine({
+      workbookName: snapshot.workbook.name,
+      replicaId: 'invalid-range-dependency-import-restored',
+    })
+    await restored.ready()
+
+    expect(() => restored.importSnapshot(structuredClone(snapshot))).not.toThrow()
   })
 
   it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {
@@ -267,6 +404,28 @@ describe('engine fuzz regressions', () => {
     expect(restored.getCell('Sheet1', 'A3').value).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Cycle,
+    })
+  })
+
+  it('preserves shifted range sum precision after CSV roundtrip import', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'csv-shifted-sum-precision-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellFormula('Sheet1', 'A1', 'SUM(A5:A5)')
+    engine.setCellFormula('Sheet1', 'A2', 'A5*A5')
+    engine.setCellFormula('Sheet1', 'A3', 'IF(A5>0,"text:yes","text:no")')
+    engine.setCellFormula('Sheet1', 'A4', 'IF(A5>0,"text:yes","text:no")')
+    engine.setCellValue('Sheet1', 'A5', 1429783918)
+
+    const restored = new SpreadsheetEngine({ workbookName: 'csv-shifted-sum-precision-regression-restored' })
+    await restored.ready()
+    restored.createSheet('Sheet1')
+    restored.importSheetCsv('Sheet1', engine.exportSheetCsv('Sheet1'))
+
+    expect(restored.getCell('Sheet1', 'A1').value).toEqual({
+      tag: ValueTag.Number,
+      value: 1429783918,
     })
   })
 })

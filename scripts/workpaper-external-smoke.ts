@@ -261,7 +261,7 @@ function runViteSmoke(
     ].join('\n'),
   )
 
-  installTarballs(projectDir, tarballPaths, ['vite@8.0.3', 'typescript@6.0.2', '@types/node@25.5.0'])
+  installTarballs(projectDir, tarballPaths, ['vite@8.0.9', 'typescript@6.0.2', '@types/node@25.5.0'])
   runCommand('npm', ['run', 'typecheck'], { cwd: projectDir })
   runCommand('npm', ['run', 'build'], { cwd: projectDir })
 

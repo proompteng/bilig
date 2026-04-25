@@ -4,6 +4,12 @@ import { SpreadsheetEngine } from '../engine.js'
 import { loadLiteralSheetIntoEmptySheet } from '../literal-sheet-loader.js'
 
 describe('loadLiteralSheetIntoEmptySheet', () => {
+  it('rejects unknown sheet ids before allocating cells', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'literal-load-unknown-sheet' })
+
+    expect(() => loadLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, 999_999, [[1]])).toThrow('Unknown sheet id: 999999')
+  })
+
   it('hydrates literal cells into a fresh sheet without mutation ops', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'literal-load' })
     engine.workbook.createSheet('Sheet1')

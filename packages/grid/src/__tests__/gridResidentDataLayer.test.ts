@@ -50,6 +50,7 @@ describe('gridResidentDataLayer', () => {
     })
 
     expect(panes.map((pane) => pane.paneId)).toEqual(['body', 'top', 'left', 'corner'])
+    expect(panes.every((pane) => pane.packedScene.paneId === pane.paneId)).toBe(true)
     expect(panes[0]?.viewport).toMatchObject({
       rowStart: 10,
       rowEnd: 25,
@@ -67,7 +68,7 @@ describe('gridResidentDataLayer', () => {
     expect(panes[3]?.surfaceSize).toEqual({ width: 208, height: 44 })
   })
 
-  it('derives pane offsets from the visible viewport inside a resident window', () => {
+  it('leaves retained resident panes at zero offset for the live camera uniform', () => {
     const gridMetrics = getGridMetrics()
     const panes = buildResidentDataPaneScenes({
       residentViewport: { rowStart: 10, rowEnd: 25, colStart: 8, colEnd: 23 },
@@ -110,13 +111,13 @@ describe('gridResidentDataLayer', () => {
       frozenRowHeight: 44,
     })
 
-    expect(rendered.find((pane) => pane.paneId === 'body')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: -(2 * 22 + 9) })
-    expect(rendered.find((pane) => pane.paneId === 'top')?.contentOffset).toEqual({ x: -(3 * 104 + 17), y: 0 })
-    expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: -(2 * 22 + 9) })
+    expect(rendered.find((pane) => pane.paneId === 'body')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'top')?.contentOffset).toEqual({ x: 0, y: 0 })
+    expect(rendered.find((pane) => pane.paneId === 'left')?.contentOffset).toEqual({ x: 0, y: 0 })
     expect(rendered.find((pane) => pane.paneId === 'corner')?.contentOffset).toEqual({ x: 0, y: 0 })
   })
 
-  it('keeps body scene coordinates local while clipping resident content to the visible pane window', () => {
+  it('keeps body scene coordinates local while retaining resident content beyond the visible pane window', () => {
     const gridMetrics = getGridMetrics()
     const panes = buildResidentDataPaneScenes({
       residentViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
@@ -173,7 +174,7 @@ describe('gridResidentDataLayer', () => {
         a: 0.08,
       },
     })
-    expect(body?.gpuScene.borderRects.every((rect) => rect.x < body.frame.width && rect.y < body.frame.height)).toBe(true)
+    expect(body?.gpuScene.borderRects.some((rect) => rect.x >= body.frame.width || rect.y >= body.frame.height)).toBe(true)
   })
 })
 

@@ -954,20 +954,6 @@ export function useWorkerWorkbookAppState(input: {
         mode: 'bootstrap',
       })
       await runtimeController.invoke('materializeProjectionEngine')
-      if (corpus.presentation?.freezeRows || corpus.presentation?.freezeCols) {
-        await invokeSetFreezePaneMutation(
-          corpus.primaryViewport.sheetName,
-          corpus.presentation.freezeRows ?? 0,
-          corpus.presentation.freezeCols ?? 0,
-        )
-      }
-      if (corpus.presentation?.columnWidths) {
-        await Promise.all(
-          corpus.presentation.columnWidths.map((column: { readonly index: number; readonly size: number }) =>
-            invokeColumnWidthMutation(corpus.primaryViewport.sheetName, column.index, column.size),
-          ),
-        )
-      }
       const selectionAddress = `${String.fromCharCode(65 + corpus.primaryViewport.colStart)}${String(corpus.primaryViewport.rowStart + 1)}`
       selectAddress(corpus.primaryViewport.sheetName, selectionAddress)
       getWorkbookScrollPerfCollector()?.setFixture({
@@ -976,7 +962,7 @@ export function useWorkerWorkbookAppState(input: {
         sheetName: corpus.primaryViewport.sheetName,
       })
     },
-    [invokeColumnWidthMutation, invokeSetFreezePaneMutation, runtimeController, selectAddress],
+    [runtimeController, selectAddress],
   )
 
   const retryFailedPendingMutation = useCallback(async (): Promise<void> => {

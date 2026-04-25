@@ -1,6 +1,6 @@
 import type { CellValue, LiteralInput, RecalcMetrics } from '@bilig/protocol'
 import type { EvaluationResult } from '@bilig/formula'
-import type { EngineCounters } from '../../core/src/perf/engine-counters.js'
+import type { EngineCounters } from '@bilig/core'
 
 export type RawCellContent = LiteralInput | string
 

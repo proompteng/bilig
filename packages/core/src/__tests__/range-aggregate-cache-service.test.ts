@@ -262,7 +262,7 @@ describe('RangeAggregateCacheService', () => {
     expect(extended.prefixAverageCount[23]).toBe(24)
   })
 
-  it('keeps shifted-window prefixes anchored at their requested row start', () => {
+  it('anchors non-count prefixes at shifted window starts to avoid subtractive precision loss', () => {
     const values: CellValue[] = [
       { tag: ValueTag.Number, value: 1 },
       { tag: ValueTag.Number, value: 2 },
@@ -298,11 +298,12 @@ describe('RangeAggregateCacheService', () => {
       aggregateStateStore,
     })
 
-    const anchored = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 })
-    const shifted = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 1, rowEnd: 3, col: 0 })
+    const anchored = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 }, 'sum')
+    const shifted = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 1, rowEnd: 3, col: 0 }, 'sum')
 
     expect(shifted).not.toBe(anchored)
     expect(anchored.prefixSums.subarray(0, 3)).toEqual(Float64Array.from([1, 3, 6]))
+    expect(shifted.rowStart).toBe(1)
     expect(shifted.prefixSums.subarray(0, 3)).toEqual(Float64Array.from([2, 5, 9]))
     expect(getColumnSlice).toHaveBeenCalledTimes(2)
     expect(getColumnSlice).toHaveBeenNthCalledWith(1, {
@@ -314,6 +315,55 @@ describe('RangeAggregateCacheService', () => {
     expect(getColumnSlice).toHaveBeenNthCalledWith(2, {
       sheetName: 'Sheet1',
       rowStart: 1,
+      rowEnd: 3,
+      col: 0,
+    })
+  })
+
+  it('still reuses zero-anchored count prefixes for shifted windows on the same column', () => {
+    const values: CellValue[] = [
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: 2 },
+      { tag: ValueTag.String, value: 'ignored', stringId: 1 },
+      { tag: ValueTag.Number, value: 4 },
+    ]
+    const getColumnSlice = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeSlice(values, request, 12, 5),
+    )
+    const workbook = new WorkbookStore('aggregate-cache-count-shifted')
+    workbook.createSheet('Sheet1')
+    const sheet = workbook.getSheet('Sheet1')
+    if (!sheet) {
+      throw new Error('expected Sheet1 to exist')
+    }
+    sheet.columnVersions = Uint32Array.of(12)
+    sheet.structureVersion = 5
+    const regionGraph = createRegionGraph({ workbook })
+    const aggregateStateStore = createAggregateStateStore({
+      workbook,
+      runtimeColumnStore: {
+        getColumnSlice,
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        readRangeValueMatrix: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+      regionGraph,
+    })
+    const service = createRangeAggregateCacheService({
+      regionGraph,
+      aggregateStateStore,
+    })
+
+    const anchored = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, col: 0 }, 'count')
+    const shifted = service.getOrBuildPrefix({ sheetName: 'Sheet1', rowStart: 1, rowEnd: 3, col: 0 }, 'count')
+
+    expect(shifted).toBe(anchored)
+    expect(getColumnSlice).toHaveBeenCalledTimes(2)
+    expect(getColumnSlice).toHaveBeenNthCalledWith(2, {
+      sheetName: 'Sheet1',
+      rowStart: 3,
       rowEnd: 3,
       col: 0,
     })

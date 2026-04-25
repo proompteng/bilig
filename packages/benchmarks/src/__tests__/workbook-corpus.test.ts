@@ -109,4 +109,20 @@ describe('workbook benchmark corpus', () => {
       { index: 3, size: 168 },
     ])
   })
+
+  it('materializes benchmark presentation into snapshot metadata', () => {
+    const frozen = buildWorkbookBenchmarkCorpus('wide-mixed-frozen-250k')
+    const variable = buildWorkbookBenchmarkCorpus('wide-mixed-variable-250k')
+
+    expect(frozen.snapshot.sheets[0]?.metadata?.freezePane).toEqual({
+      rows: 2,
+      cols: 2,
+    })
+    expect(variable.snapshot.sheets[0]?.metadata?.columnMetadata?.slice(0, 4)).toEqual([
+      { start: 0, count: 1, size: 120 },
+      { start: 1, count: 1, size: 224 },
+      { start: 2, count: 1, size: 96 },
+      { start: 3, count: 1, size: 168 },
+    ])
+  })
 })

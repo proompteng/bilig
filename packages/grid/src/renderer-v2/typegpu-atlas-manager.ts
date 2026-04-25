@@ -76,7 +76,7 @@ function createAtlasCanvas(width: number, height: number): AtlasCanvasLike | nul
 }
 
 function getAtlasContext(canvas: AtlasCanvasLike): AtlasContextLike | null {
-  const context = canvas.getContext('2d')
+  const context = canvas.getContext('2d') as AtlasContextLike | null
   if (!context || !('fillText' in context) || !('measureText' in context)) {
     return null
   }
@@ -141,7 +141,7 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
   let width = Math.max(512, (input.initialWidth ?? 1024) * scale)
   let height = Math.max(512, (input.initialHeight ?? 1024) * scale)
   const canvas = createAtlasCanvas(width, height)
-  let context = canvas?.getContext?.('2d') ?? null
+  let context = canvas ? getAtlasContext(canvas) : null
 
   if (context) {
     configureAtlasContext(context, scale, width / scale, height / scale)

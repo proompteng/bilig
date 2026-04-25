@@ -11,6 +11,8 @@ import {
   dragProductColumnResize,
   dragProductHeaderSelection,
   doubleClickProductColumnResizeHandle,
+  getProductColumnLeft,
+  getProductColumnWidth,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 
@@ -110,7 +112,8 @@ test('web app maps clicks in the upper half of a cell to that same visible cell'
 })
 
 test('web app supports column resize without breaking hit testing', async ({ page }) => {
-  await page.goto('/')
+  const documentId = `playwright-column-resize-hit-test-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
   await clickProductBodyOffset(page, 82, 0)
@@ -123,22 +126,75 @@ test('web app supports column resize without breaking hit testing', async ({ pag
 })
 
 test('web app supports column edge double-click autofit', async ({ page }) => {
-  await page.goto('/')
+  const documentId = `playwright-column-autofit-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
+  const longValue = 'supercalifragilisticexpialidocious'
 
   await nameBox.fill('A1')
   await nameBox.press('Enter')
-  await formulaInput.fill('supercalifragilisticexpialidocious')
+  await formulaInput.fill(longValue)
   await formulaInput.press('Enter')
+
+  await clickProductCell(page, 0, 0)
+  await expect(formulaInput).toHaveValue(longValue)
 
   await clickProductBodyOffset(page, 126, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B1')
 
+  await clickProductCell(page, 0, 0)
+  await expect(formulaInput).toHaveValue(longValue)
   await doubleClickProductColumnResizeHandle(page, 0)
+  await expect.poll(async () => await getProductColumnWidth(page, 0)).toBeGreaterThan(126)
+  const autofitWidth = await getProductColumnWidth(page, 0)
 
+  await clickProductBodyOffset(page, autofitWidth + 8, 0)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B1')
   await clickProductBodyOffset(page, 126, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
+})
+
+test('web app hit-tests typegpu geometry after hiding rows and columns', async ({ page }) => {
+  const documentId = `playwright-hidden-axis-hit-test-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  const gridLocator = page.getByTestId('sheet-grid')
+  await gridLocator.click({
+    button: 'right',
+    position: {
+      x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+    },
+  })
+  await page.getByTestId('grid-context-action-hide-column').click()
+  await expect.poll(() => getProductColumnWidth(page, 1)).toBe(0)
+
+  await clickProductCell(page, 2, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
+
+  await gridLocator.click({
+    button: 'right',
+    position: {
+      x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2),
+      y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+    },
+  })
+  await page.getByTestId('grid-context-action-hide-row').click()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+  const columnLeft = await getProductColumnLeft(page, 2)
+  const columnWidth = await getProductColumnWidth(page, 2)
+  await page.mouse.click(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+  )
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
 })

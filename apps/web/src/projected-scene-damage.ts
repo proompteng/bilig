@@ -18,6 +18,9 @@ export function residentPaneSceneRequestNeedsRefresh(request: WorkbookPaneSceneR
   if (patch.columns.length > 0 || patch.rows.length > 0) {
     return intersects(request.residentViewport, patch.viewport)
   }
+  if (patch.styles.length > 0) {
+    return intersects(request.residentViewport, patch.viewport)
+  }
   if (patch.cells.length > 0) {
     return intersects(request.residentViewport, patch.viewport)
   }
