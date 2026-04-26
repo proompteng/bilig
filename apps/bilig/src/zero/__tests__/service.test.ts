@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as storeModule from '../store.js'
 
 const deps = vi.hoisted(() => {
   const pool = {
@@ -13,6 +12,8 @@ const deps = vi.hoisted(() => {
     ensureWorkbookPresenceSchema: vi.fn(async () => undefined),
     ensureWorkbookChangeSchema: vi.fn(async () => undefined),
     ensureWorkbookAgentRunSchema: vi.fn(async () => undefined),
+    ensureWorkbookChatThreadSchema: vi.fn(async () => undefined),
+    ensureWorkbookWorkflowRunSchema: vi.fn(async () => undefined),
     ensureZeroPublication: vi.fn(async () => undefined),
     ensureZeroDataMigrationSchema: vi.fn(async () => undefined),
     runPendingZeroDataMigrations: vi.fn(async () => undefined),
@@ -45,7 +46,21 @@ vi.mock('../workbook-change-store.js', () => ({
 vi.mock('../workbook-agent-run-store.js', () => ({
   ensureWorkbookAgentRunSchema: deps.ensureWorkbookAgentRunSchema,
   appendWorkbookAgentRun: vi.fn(async () => undefined),
+  listWorkbookAgentThreadRuns: vi.fn(async () => []),
   listWorkbookAgentRuns: vi.fn(async () => []),
+}))
+
+vi.mock('../workbook-chat-thread-store.js', () => ({
+  ensureWorkbookChatThreadSchema: deps.ensureWorkbookChatThreadSchema,
+  listWorkbookAgentThreadSummaries: vi.fn(async () => []),
+  loadWorkbookAgentThreadState: vi.fn(async () => null),
+  saveWorkbookAgentThreadState: vi.fn(async () => undefined),
+}))
+
+vi.mock('../workbook-workflow-run-store.js', () => ({
+  ensureWorkbookWorkflowRunSchema: deps.ensureWorkbookWorkflowRunSchema,
+  listWorkbookThreadWorkflowRuns: vi.fn(async () => []),
+  upsertWorkbookWorkflowRun: vi.fn(async () => undefined),
 }))
 
 vi.mock('../publication-store.js', () => ({
@@ -84,13 +99,9 @@ vi.mock('../server-mutators.js', () => ({
   handleServerMutator: vi.fn(async () => undefined),
 }))
 
-vi.mock('../store.js', async () => {
-  const actual = await vi.importActual<typeof storeModule>('../store.js')
-  return {
-    ...actual,
-    loadWorkbookEventRecordsAfter: vi.fn(async () => []),
-  }
-})
+vi.mock('../store.js', () => ({
+  loadWorkbookEventRecordsAfter: vi.fn(async () => []),
+}))
 
 vi.mock('../workbook-mutation-store.js', () => ({
   persistWorkbookMutation: vi.fn(async () => {
@@ -129,6 +140,8 @@ describe('zero sync service startup', () => {
     expect(deps.ensureWorkbookPresenceSchema).toHaveBeenCalledWith(deps.pool)
     expect(deps.ensureWorkbookChangeSchema).toHaveBeenCalledWith(deps.pool)
     expect(deps.ensureWorkbookAgentRunSchema).toHaveBeenCalledWith(deps.pool)
+    expect(deps.ensureWorkbookChatThreadSchema).toHaveBeenCalledWith(deps.pool)
+    expect(deps.ensureWorkbookWorkflowRunSchema).toHaveBeenCalledWith(deps.pool)
     expect(deps.ensureZeroPublication).toHaveBeenCalledWith(deps.pool)
     expect(deps.ensureZeroDataMigrationSchema).toHaveBeenCalledWith(deps.pool)
     expect(deps.runPendingZeroDataMigrations).not.toHaveBeenCalled()
