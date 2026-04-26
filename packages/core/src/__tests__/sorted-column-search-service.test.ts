@@ -810,6 +810,32 @@ describe('createSortedColumnSearchService', () => {
       }),
     ).toEqual({ handled: true, position: 3 })
 
+    const ascendingBinaryPrepared: PreparedApproximateVectorLookup = {
+      ...ascendingNumericPrepared,
+      uniformStart: undefined,
+      uniformStep: undefined,
+    }
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: ascendingBinaryPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 })
+
+    const emptyUniformPrepared: PreparedApproximateVectorLookup = {
+      ...ascendingNumericPrepared,
+      length: 0,
+      numericValues: new Float64Array(),
+    }
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: emptyUniformPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined })
+
     const descendingUniformPrepared: PreparedApproximateVectorLookup = {
       ...ascendingNumericPrepared,
       comparableKind: 'numeric',
@@ -833,6 +859,13 @@ describe('createSortedColumnSearchService', () => {
         matchMode: -1,
       }),
     ).toEqual({ handled: true, position: 3 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 4 },
+        prepared: descendingUniformPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 1 })
 
     const descendingBinaryPrepared: PreparedApproximateVectorLookup = {
       ...ascendingNumericPrepared,
@@ -846,6 +879,19 @@ describe('createSortedColumnSearchService', () => {
       sorted.findPreparedVectorMatch({
         lookupValue: { tag: ValueTag.Number, value: 5 },
         prepared: descendingBinaryPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 1 })
+
+    const mismatchedUniformDirectionPrepared: PreparedApproximateVectorLookup = {
+      ...descendingBinaryPrepared,
+      uniformStart: 1,
+      uniformStep: 2,
+    }
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 5 },
+        prepared: mismatchedUniformDirectionPrepared,
         matchMode: -1,
       }),
     ).toEqual({ handled: true, position: 1 })
