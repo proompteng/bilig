@@ -189,6 +189,7 @@ async function createEngineFromCsvModel(workbookName: string, model: CsvSheetMod
   })
   await engine.ready()
   engine.createSheet(sheetName)
+  let hasFormula = false
   for (let row = 0; row < model.rowCount; row += 1) {
     for (let col = 0; col < model.colCount; col += 1) {
       const cell = model.cells[row]?.[col] ?? { kind: 'empty' }
@@ -197,8 +198,13 @@ async function createEngineFromCsvModel(workbookName: string, model: CsvSheetMod
         engine.setRangeValues({ sheetName, startAddress: address, endAddress: address }, [[cell.value]])
       } else if (cell.kind === 'formula') {
         engine.setCellFormula(sheetName, address, cell.formula)
+        hasFormula = true
       }
     }
+  }
+  if (hasFormula) {
+    engine.recalculateNow()
+    engine.recalculateNow()
   }
   return engine
 }
