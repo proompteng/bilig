@@ -1,6 +1,5 @@
 import { Effect } from 'effect'
-import type { EngineOp } from '@bilig/workbook-domain'
-import { ValueTag, type CellSnapshot, type WorkbookAxisEntrySnapshot, type WorkbookSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
@@ -10,10 +9,9 @@ import type { FormulaInstanceSnapshot } from '../../formula/formula-instance-tab
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../../formula/template-bank.js'
 import { exportReplicaSnapshot as exportReplicaStateSnapshot, hydrateReplicaState } from '../../replica-state.js'
 import { attachRuntimeImage, readRuntimeImage } from '../../snapshot/runtime-image-codec.js'
-import { restoreWorkbookFromRuntimeImage, type RuntimeImage } from '../../snapshot/runtime-image.js'
-import type { EngineRuntimeState, EngineReplicaSnapshot, TransactionRecord } from '../runtime-state.js'
+import { restoreWorkbookFromRuntimeImage, restoreWorkbookFromSnapshot, type RuntimeImage } from '../../snapshot/runtime-image.js'
+import type { EngineRuntimeState, EngineReplicaSnapshot } from '../runtime-state.js'
 import { EngineSnapshotError } from '../errors.js'
-import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
 
 export interface EngineSnapshotService {
@@ -24,26 +22,21 @@ export interface EngineSnapshotService {
 }
 
 export function createEngineSnapshotService(args: {
-  readonly state: Pick<
-    EngineRuntimeState,
-    'workbook' | 'strings' | 'formulas' | 'replicaState' | 'entityVersions' | 'sheetDeleteVersions'
-  > & {
-    counters?: EngineCounters
-  }
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'replicaState' | 'entityVersions' | 'sheetDeleteVersions'>
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot
   readonly resetWorkbook: (workbookName?: string) => void
-  readonly executeRestoreTransaction: (transaction: TransactionRecord) => void
   readonly exportTemplateBank?: () => readonly FormulaTemplateSnapshot[]
   readonly exportFormulaInstances?: () => readonly FormulaInstanceSnapshot[]
   readonly hydrateTemplateBank?: (templates: readonly FormulaTemplateSnapshot[]) => void
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
-  readonly initializeCellFormulasAt?: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
   readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
   readonly initializeHydratedPreparedCellFormulasAt?: (
     refs: readonly HydratedPreparedFormulaInitializationRef[],
     potentialNewCells?: number,
   ) => void
   readonly materializePivot?: (pivot: WorkbookPivotRecord) => number[]
+  readonly emitFullInvalidation?: (options: { readonly incrementMetrics: boolean }) => void
 }): EngineSnapshotService {
   return {
     exportWorkbook() {
@@ -230,9 +223,21 @@ export function createEngineSnapshotService(args: {
     importWorkbook(snapshot) {
       return Effect.try({
         try: () => {
+          const materializeImportedPivots = (): void => {
+            if (!args.materializePivot) {
+              return
+            }
+            args.state.workbook.listPivots().forEach((pivot) => {
+              args.materializePivot!(pivot)
+            })
+            snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
+              args.state.workbook.setPivot(pivot)
+            })
+          }
+
           const runtimeImage = readRuntimeImage(snapshot)
-          if (runtimeImage && args.hydrateTemplateBank && args.initializeCellFormulasAt) {
-            restoreWorkbookFromRuntimeImage({
+          if (runtimeImage && args.hydrateTemplateBank) {
+            const restoreResult = restoreWorkbookFromRuntimeImage({
               snapshot,
               runtimeImage,
               workbook: args.state.workbook,
@@ -246,262 +251,19 @@ export function createEngineSnapshotService(args: {
                 ? { initializeHydratedPreparedCellFormulasAt: args.initializeHydratedPreparedCellFormulasAt }
                 : {}),
             })
-            if (args.materializePivot) {
-              args.state.workbook.listPivots().forEach((pivot) => {
-                args.materializePivot!(pivot)
-              })
-              snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
-                args.state.workbook.setPivot(pivot)
-              })
-            }
+            materializeImportedPivots()
+            args.emitFullInvalidation?.({ incrementMetrics: restoreResult.formulaCount === 0 })
             return
           }
-          args.resetWorkbook()
-          const ops: EngineOp[] = [{ kind: 'upsertWorkbook', name: snapshot.workbook.name }]
-          snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {
-            ops.push({ kind: 'setWorkbookMetadata', key, value })
+          const restoreResult = restoreWorkbookFromSnapshot({
+            snapshot,
+            workbook: args.state.workbook,
+            strings: args.state.strings,
+            resetWorkbook: args.resetWorkbook,
+            initializeCellFormulasAt: args.initializeCellFormulasAt,
           })
-          if (snapshot.workbook.metadata?.calculationSettings) {
-            ops.push({
-              kind: 'setCalculationSettings',
-              settings: { ...snapshot.workbook.metadata.calculationSettings },
-            })
-          }
-          if (snapshot.workbook.metadata?.volatileContext) {
-            ops.push({
-              kind: 'setVolatileContext',
-              context: { ...snapshot.workbook.metadata.volatileContext },
-            })
-          }
-          snapshot.workbook.metadata?.styles?.forEach((style) => {
-            ops.push({ kind: 'upsertCellStyle', style: cloneCellStyleRecord(style) })
-          })
-          snapshot.workbook.metadata?.formats?.forEach((format) => {
-            ops.push({ kind: 'upsertCellNumberFormat', format: { ...format } })
-          })
-          snapshot.sheets.forEach((sheet) => {
-            ops.push({
-              kind: 'upsertSheet',
-              name: sheet.name,
-              order: sheet.order,
-              ...(typeof sheet.id === 'number' ? { id: sheet.id } : {}),
-            })
-          })
-          snapshot.sheets.forEach((sheet) => {
-            sheet.metadata?.rows?.forEach(({ index, id, size, hidden }) => {
-              const entry: WorkbookAxisEntrySnapshot = { index, id }
-              if (size !== undefined) {
-                entry.size = size
-              }
-              if (hidden !== undefined) {
-                entry.hidden = hidden
-              }
-              ops.push({
-                kind: 'insertRows',
-                sheetName: sheet.name,
-                start: index,
-                count: 1,
-                entries: [entry],
-              })
-            })
-            sheet.metadata?.columns?.forEach(({ index, id, size, hidden }) => {
-              const entry: WorkbookAxisEntrySnapshot = { index, id }
-              if (size !== undefined) {
-                entry.size = size
-              }
-              if (hidden !== undefined) {
-                entry.hidden = hidden
-              }
-              ops.push({
-                kind: 'insertColumns',
-                sheetName: sheet.name,
-                start: index,
-                count: 1,
-                entries: [entry],
-              })
-            })
-            sheet.metadata?.rowMetadata?.forEach(({ start, count, size, hidden }) => {
-              ops.push({
-                kind: 'updateRowMetadata',
-                sheetName: sheet.name,
-                start,
-                count,
-                size: size ?? null,
-                hidden: hidden ?? null,
-              })
-            })
-            sheet.metadata?.columnMetadata?.forEach(({ start, count, size, hidden }) => {
-              ops.push({
-                kind: 'updateColumnMetadata',
-                sheetName: sheet.name,
-                start,
-                count,
-                size: size ?? null,
-                hidden: hidden ?? null,
-              })
-            })
-            if (sheet.metadata?.freezePane) {
-              ops.push({
-                kind: 'setFreezePane',
-                sheetName: sheet.name,
-                rows: sheet.metadata.freezePane.rows,
-                cols: sheet.metadata.freezePane.cols,
-              })
-            }
-            sheet.metadata?.styleRanges?.forEach((styleRange) => {
-              ops.push({
-                kind: 'setStyleRange',
-                range: { ...styleRange.range },
-                styleId: styleRange.styleId,
-              })
-            })
-            sheet.metadata?.formatRanges?.forEach((formatRange) => {
-              ops.push({
-                kind: 'setFormatRange',
-                range: { ...formatRange.range },
-                formatId: formatRange.formatId,
-              })
-            })
-            if (sheet.metadata?.sheetProtection) {
-              ops.push({
-                kind: 'setSheetProtection',
-                protection: structuredClone(sheet.metadata.sheetProtection),
-              })
-            }
-            sheet.metadata?.filters?.forEach((range) => {
-              ops.push({ kind: 'setFilter', sheetName: sheet.name, range: { ...range } })
-            })
-            sheet.metadata?.sorts?.forEach((sort) => {
-              ops.push({
-                kind: 'setSort',
-                sheetName: sheet.name,
-                range: { ...sort.range },
-                keys: sort.keys.map((key) => Object.assign({}, key)),
-              })
-            })
-            sheet.metadata?.validations?.forEach((validation) => {
-              ops.push({
-                kind: 'setDataValidation',
-                validation: structuredClone(validation),
-              })
-            })
-            sheet.metadata?.conditionalFormats?.forEach((format) => {
-              ops.push({
-                kind: 'upsertConditionalFormat',
-                format: structuredClone(format),
-              })
-            })
-            sheet.metadata?.protectedRanges?.forEach((protection) => {
-              ops.push({
-                kind: 'upsertRangeProtection',
-                protection: structuredClone(protection),
-              })
-            })
-            sheet.metadata?.commentThreads?.forEach((thread) => {
-              ops.push({
-                kind: 'upsertCommentThread',
-                thread: structuredClone(thread),
-              })
-            })
-            sheet.metadata?.notes?.forEach((note) => {
-              ops.push({
-                kind: 'upsertNote',
-                note: structuredClone(note),
-              })
-            })
-          })
-          snapshot.sheets.forEach((sheet) => {
-            sheet.cells.forEach((cell) => {
-              if (cell.formula !== undefined) {
-                ops.push({
-                  kind: 'setCellFormula',
-                  sheetName: sheet.name,
-                  address: cell.address,
-                  formula: cell.formula,
-                })
-              } else {
-                ops.push({
-                  kind: 'setCellValue',
-                  sheetName: sheet.name,
-                  address: cell.address,
-                  value: cell.value ?? null,
-                })
-              }
-              if (cell.format !== undefined) {
-                ops.push({
-                  kind: 'setCellFormat',
-                  sheetName: sheet.name,
-                  address: cell.address,
-                  format: cell.format,
-                })
-              }
-            })
-          })
-          snapshot.workbook.metadata?.tables?.forEach((table) => {
-            ops.push({
-              kind: 'upsertTable',
-              table: {
-                name: table.name,
-                sheetName: table.sheetName,
-                startAddress: table.startAddress,
-                endAddress: table.endAddress,
-                columnNames: [...table.columnNames],
-                headerRow: table.headerRow,
-                totalsRow: table.totalsRow,
-              },
-            })
-          })
-          snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
-            ops.push({ kind: 'upsertDefinedName', name, value })
-          })
-          snapshot.workbook.metadata?.spills?.forEach((spill) => {
-            ops.push({
-              kind: 'upsertSpillRange',
-              sheetName: spill.sheetName,
-              address: spill.address,
-              rows: spill.rows,
-              cols: spill.cols,
-            })
-          })
-          snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
-            ops.push({
-              kind: 'upsertPivotTable',
-              name: pivot.name,
-              sheetName: pivot.sheetName,
-              address: pivot.address,
-              source: { ...pivot.source },
-              groupBy: [...pivot.groupBy],
-              values: pivot.values.map((value) => Object.assign({}, value)),
-              rows: pivot.rows,
-              cols: pivot.cols,
-            })
-          })
-          snapshot.workbook.metadata?.charts?.forEach((chart) => {
-            ops.push({
-              kind: 'upsertChart',
-              chart: structuredClone(chart),
-            })
-          })
-          snapshot.workbook.metadata?.images?.forEach((image) => {
-            ops.push({
-              kind: 'upsertImage',
-              image: structuredClone(image),
-            })
-          })
-          snapshot.workbook.metadata?.shapes?.forEach((shape) => {
-            ops.push({
-              kind: 'upsertShape',
-              shape: structuredClone(shape),
-            })
-          })
-          const potentialNewCells = snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0)
-          if (args.state.counters) {
-            addEngineCounter(args.state.counters, 'snapshotOpsReplayed', ops.length)
-          }
-          args.executeRestoreTransaction(potentialNewCells > 0 ? { kind: 'ops', ops, potentialNewCells } : { kind: 'ops', ops })
-          snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
-            args.state.workbook.setPivot(pivot)
-          })
+          materializeImportedPivots()
+          args.emitFullInvalidation?.({ incrementMetrics: restoreResult.formulaCount === 0 })
         },
         catch: (cause) =>
           new EngineSnapshotError({

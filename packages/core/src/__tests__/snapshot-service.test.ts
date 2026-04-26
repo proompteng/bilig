@@ -9,6 +9,7 @@ import { WorkbookStore } from '../workbook-store.js'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 import { readRuntimeImage, readRuntimeSnapshot } from '../snapshot/runtime-image-codec.js'
+import { CellFlags } from '../cell-store.js'
 
 describe('EngineSnapshotService', () => {
   it('ignores missing runtime image carriers', () => {
@@ -33,7 +34,9 @@ describe('EngineSnapshotService', () => {
       resetWorkbook: () => {
         throw new Error('broken')
       },
-      executeRestoreTransaction: () => {},
+      initializeCellFormulasAt: () => {
+        throw new Error('unused')
+      },
     })
 
     const exit = Effect.runSyncExit(
@@ -64,7 +67,9 @@ describe('EngineSnapshotService', () => {
         throw new Error('unused')
       },
       resetWorkbook: () => {},
-      executeRestoreTransaction: () => {},
+      initializeCellFormulasAt: () => {
+        throw new Error('unused')
+      },
     })
 
     const exported = Effect.runSync(service.exportReplica())
@@ -77,7 +82,7 @@ describe('EngineSnapshotService', () => {
     expect(state.sheetDeleteVersions.get('Sheet1')).toEqual(exported.sheetDeleteVersions[0]?.order)
   })
 
-  it('counts replayed restore ops during snapshot import', () => {
+  it('does not replay restore ops during raw snapshot import', () => {
     const workbook = new WorkbookStore('book')
     const counters = createEngineCounters()
     const state = {
@@ -94,8 +99,12 @@ describe('EngineSnapshotService', () => {
       getCellByIndex: () => {
         throw new Error('unused')
       },
-      resetWorkbook: () => {},
-      executeRestoreTransaction: () => {},
+      resetWorkbook: (workbookName) => {
+        workbook.reset(workbookName)
+      },
+      initializeCellFormulasAt: () => {
+        throw new Error('unexpected formula initialization for literal-only snapshot')
+      },
     })
 
     Effect.runSync(
@@ -106,7 +115,72 @@ describe('EngineSnapshotService', () => {
       }),
     )
 
-    expect(counters.snapshotOpsReplayed).toBeGreaterThan(0)
+    expect(counters.snapshotOpsReplayed).toBe(0)
+  })
+
+  it('restores raw snapshots directly when coordinate formula initialization is available', () => {
+    const workbook = new WorkbookStore('book')
+    const strings = new StringPool()
+    const counters = createEngineCounters()
+    const state = {
+      workbook,
+      strings,
+      formulas: new FormulaTable(workbook.cellStore),
+      replicaState: createReplicaState('replica'),
+      entityVersions: new Map(),
+      sheetDeleteVersions: new Map(),
+      counters,
+    }
+    const service = createEngineSnapshotService({
+      state,
+      getCellByIndex: () => {
+        throw new Error('unused')
+      },
+      resetWorkbook: (workbookName) => {
+        workbook.reset(workbookName)
+      },
+      initializeCellFormulasAt: () => {
+        throw new Error('unexpected formula initialization for literal-only snapshot')
+      },
+    })
+
+    Effect.runSync(
+      service.importWorkbook({
+        version: 1,
+        workbook: { name: 'direct-restore' },
+        sheets: [
+          {
+            id: 9,
+            name: 'Sheet1',
+            order: 0,
+            cells: [
+              { address: 'A1', value: 12 },
+              { address: 'B2', value: 'segment-1', format: '0.00' },
+              { address: 'C3', value: null },
+            ],
+          },
+        ],
+      }),
+    )
+
+    const sheetId = workbook.getSheet('Sheet1')?.id
+    expect(workbook.workbookName).toBe('direct-restore')
+    expect(sheetId).toBe(9)
+    const a1 = workbook.getCellIndexAt(sheetId!, 0, 0)
+    const b2 = workbook.getCellIndexAt(sheetId!, 1, 1)
+    const c3 = workbook.getCellIndexAt(sheetId!, 2, 2)
+    expect(a1).toBeDefined()
+    expect(b2).toBeDefined()
+    expect(c3).toBeDefined()
+    expect(workbook.cellStore.getValue(a1!, (id) => strings.get(id))).toEqual({ tag: ValueTag.Number, value: 12 })
+    expect(workbook.cellStore.getValue(b2!, (id) => strings.get(id))).toEqual({
+      tag: ValueTag.String,
+      value: 'segment-1',
+      stringId: 1,
+    })
+    expect(workbook.getCellFormat(b2!)).toBe('0.00')
+    expect(workbook.cellStore.flags[c3!] & CellFlags.AuthoredBlank).toBe(CellFlags.AuthoredBlank)
+    expect(counters.snapshotOpsReplayed).toBe(0)
   })
 
   it('preserves explicit authored blank cells through snapshot import', async () => {

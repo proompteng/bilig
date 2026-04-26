@@ -61,6 +61,18 @@ export interface RuntimeImageRestoreArgs {
   ) => void
 }
 
+export interface WorkbookRestoreResult {
+  readonly formulaCount: number
+}
+
+export interface WorkbookSnapshotRestoreArgs {
+  readonly snapshot: WorkbookSnapshot
+  readonly workbook: WorkbookStore
+  readonly strings: StringPool
+  readonly resetWorkbook: (workbookName?: string) => void
+  readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+}
+
 export interface PreparedRuntimeFormulaRef {
   readonly sheetId: number
   readonly row: number
@@ -248,7 +260,11 @@ function restoreVisualMetadata(args: {
   })
 }
 
-export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): void {
+function restoreWorkbookStructure(args: {
+  readonly snapshot: WorkbookSnapshot
+  readonly workbook: WorkbookStore
+  readonly resetWorkbook: (workbookName?: string) => void
+}): readonly WorkbookSnapshot['sheets'][number][] {
   args.resetWorkbook(args.snapshot.workbook.name)
   restoreWorkbookMetadata({
     workbook: args.workbook,
@@ -266,6 +282,76 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     workbook: args.workbook,
     workbookMetadata: args.snapshot.workbook.metadata,
   })
+  return orderedSheets
+}
+
+function restoreLiteralCell(args: {
+  readonly workbook: WorkbookStore
+  readonly strings: StringPool
+  readonly cellIndex: number
+  readonly value: LiteralInput
+}): void {
+  writeLiteralToCellStore(args.workbook.cellStore, args.cellIndex, args.value, args.strings)
+  if (args.value === null) {
+    args.workbook.cellStore.flags[args.cellIndex] = (args.workbook.cellStore.flags[args.cellIndex] ?? 0) | CellFlags.AuthoredBlank
+  }
+}
+
+export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): WorkbookRestoreResult {
+  const orderedSheets = restoreWorkbookStructure(args)
+  const potentialNewCells = orderedSheets.reduce((count, sheet) => count + sheet.cells.length, 0)
+  const formulaRefs: EngineCellMutationRef[] = []
+
+  args.workbook.cellStore.ensureCapacity(args.workbook.cellStore.size + potentialNewCells)
+  args.workbook.withBatchedColumnVersionUpdates(() => {
+    for (let sheetIndex = 0; sheetIndex < orderedSheets.length; sheetIndex += 1) {
+      const sheet = orderedSheets[sheetIndex]!
+      const sheetId = args.workbook.getSheet(sheet.name)?.id
+      if (sheetId === undefined) {
+        throw new Error(`Missing sheet during snapshot restore: ${sheet.name}`)
+      }
+      for (let cellIndex = 0; cellIndex < sheet.cells.length; cellIndex += 1) {
+        const cell = sheet.cells[cellIndex]!
+        const coords = parseCellAddress(cell.address, sheet.name)
+        const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
+        if (cell.formula !== undefined) {
+          formulaRefs.push({
+            sheetId,
+            mutation: {
+              kind: 'setCellFormula',
+              row: coords.row,
+              col: coords.col,
+              formula: cell.formula,
+            },
+          })
+        } else {
+          restoreLiteralCell({
+            workbook: args.workbook,
+            strings: args.strings,
+            cellIndex: ensured.cellIndex,
+            value: cell.value ?? null,
+          })
+        }
+        if (cell.format !== undefined) {
+          args.workbook.setCellFormat(ensured.cellIndex, cell.format)
+        }
+      }
+    }
+  })
+
+  if (formulaRefs.length > 0) {
+    args.initializeCellFormulasAt(formulaRefs, potentialNewCells)
+  }
+
+  restoreVisualMetadata({
+    workbook: args.workbook,
+    workbookMetadata: args.snapshot.workbook.metadata,
+  })
+  return { formulaCount: formulaRefs.length }
+}
+
+export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): WorkbookRestoreResult {
+  const orderedSheets = restoreWorkbookStructure(args)
 
   args.hydrateTemplateBank(args.runtimeImage.templateBank)
 
@@ -392,4 +478,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     workbook: args.workbook,
     workbookMetadata: args.snapshot.workbook.metadata,
   })
+  return {
+    formulaCount: hydratedPreparedFormulaRefs.length + preparedFormulaRefs.length + formulaRefs.length,
+  }
 }
