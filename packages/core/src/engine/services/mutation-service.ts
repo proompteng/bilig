@@ -214,6 +214,7 @@ type StructuralDeletedCellUndoRecord =
       readonly row: number
       readonly col: number
       readonly formula: string
+      readonly explicitFormat?: string
     }
   | {
       readonly kind: 'value'
@@ -1454,11 +1455,18 @@ export function createEngineMutationService(args: {
     if ((flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
       return undefined
     }
+    const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
     const formula = args.state.formulas.get(cellIndex)
     if (formula) {
-      return { kind: 'formula', sheetName, row, col, formula: captureRuntimeFormulaSource(cellIndex, formula) }
+      return {
+        kind: 'formula',
+        sheetName,
+        row,
+        col,
+        formula: captureRuntimeFormulaSource(cellIndex, formula),
+        ...(explicitFormat === undefined ? {} : { explicitFormat }),
+      }
     }
-    const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
     const tag: ValueTag = (args.state.workbook.cellStore.tags[cellIndex] ?? ValueTag.Empty) as ValueTag
     if (explicitFormat === undefined && (flags & CellFlags.AuthoredBlank) === 0 && (tag === ValueTag.Empty || tag === ValueTag.Error)) {
       return undefined
@@ -1539,7 +1547,12 @@ export function createEngineMutationService(args: {
     const address = formatAddress(record.row, record.col)
     switch (record.kind) {
       case 'formula':
-        return [{ kind: 'setCellFormula', sheetName: record.sheetName, address, formula: record.formula }]
+        return [
+          { kind: 'setCellFormula', sheetName: record.sheetName, address, formula: record.formula },
+          ...(record.explicitFormat === undefined
+            ? []
+            : [{ kind: 'setCellFormat' as const, sheetName: record.sheetName, address, format: record.explicitFormat }]),
+        ]
       case 'value':
         return [
           { kind: 'setCellValue', sheetName: record.sheetName, address, value: record.value },

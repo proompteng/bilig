@@ -372,6 +372,30 @@ describe('engine fuzz regressions', () => {
     expect(engine.getCell('Sheet1', 'A1').format).toBe('0.00')
   })
 
+  it('restores explicit formats on deleted formula cells during structural undo', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'delete-formula-format-undo-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setRangeNumberFormat({ sheetName: 'Sheet1', startAddress: 'B4', endAddress: 'C4' }, '0.00')
+    engine.fillRange(
+      { sheetName: 'Sheet1', startAddress: 'C3', endAddress: 'D4' },
+      { sheetName: 'Sheet1', startAddress: 'E4', endAddress: 'F5' },
+    )
+    engine.deleteRows('Sheet1', 0, 1)
+    engine.setCellFormula('Sheet1', 'E4', 'A1+A1')
+
+    expect(engine.getCell('Sheet1', 'E4').format).toBe('0.00')
+
+    engine.deleteRows('Sheet1', 2, 2)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'E4')).toMatchObject({
+      formula: 'A1+A1',
+      format: '0.00',
+    })
+  })
+
   it('propagates cycle errors to dependent formulas after direct formula writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'cycle-dependent-regression' })
     await engine.ready()
