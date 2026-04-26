@@ -159,13 +159,17 @@ export function applyProjectedViewportPatch(input: {
   const { state, patch, touchCellKey } = input
   state.knownSheets.add(patch.viewport.sheetName)
 
-  const nextFreezeRows = patch.freezeRows ?? 0
-  const nextFreezeCols = patch.freezeCols ?? 0
+  const currentFreezeRows = state.freezeRowsBySheet.get(patch.viewport.sheetName) ?? 0
+  const currentFreezeCols = state.freezeColsBySheet.get(patch.viewport.sheetName) ?? 0
+  const nextFreezeRows = patch.freezeRows ?? currentFreezeRows
+  const nextFreezeCols = patch.freezeCols ?? currentFreezeCols
   const freezeChanged =
-    state.freezeRowsBySheet.get(patch.viewport.sheetName) !== nextFreezeRows ||
-    state.freezeColsBySheet.get(patch.viewport.sheetName) !== nextFreezeCols
-  state.freezeRowsBySheet.set(patch.viewport.sheetName, nextFreezeRows)
-  state.freezeColsBySheet.set(patch.viewport.sheetName, nextFreezeCols)
+    (patch.freezeRows !== undefined || patch.freezeCols !== undefined) &&
+    (currentFreezeRows !== nextFreezeRows || currentFreezeCols !== nextFreezeCols)
+  if (patch.freezeRows !== undefined || patch.freezeCols !== undefined) {
+    state.freezeRowsBySheet.set(patch.viewport.sheetName, nextFreezeRows)
+    state.freezeColsBySheet.set(patch.viewport.sheetName, nextFreezeCols)
+  }
 
   const changedKeys = new Set<string>()
   const changedStyleIds = new Set<string>()

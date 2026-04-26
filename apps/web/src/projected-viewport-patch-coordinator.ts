@@ -10,6 +10,9 @@ export type ProjectedViewportPatchApplied = Pick<
   ProjectedViewportPatchApplicationResult,
   'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
 >
+interface ProjectedViewportSubscriptionOptions {
+  readonly invalidateResidentScenes: boolean
+}
 
 export class ProjectedViewportPatchCoordinator {
   constructor(
@@ -17,11 +20,18 @@ export class ProjectedViewportPatchCoordinator {
       client?: WorkerEngineClient
       cellCache: ProjectedViewportCellCache
       axisStore: ProjectedViewportAxisStore
-      onViewportPatchApplied?: ((patch: ViewportPatch, result: ProjectedViewportPatchApplied) => void) | undefined
+      onViewportPatchApplied?:
+        | ((patch: ViewportPatch, result: ProjectedViewportPatchApplied, options: ProjectedViewportSubscriptionOptions) => void)
+        | undefined
     },
   ) {}
 
-  subscribeViewport(sheetName: string, viewport: Viewport, listener: (damage?: readonly { cell: CellItem }[]) => void): () => void {
+  subscribeViewport(
+    sheetName: string,
+    viewport: Viewport,
+    listener: (damage?: readonly { cell: CellItem }[]) => void,
+    options: ProjectedViewportSubscriptionOptions = { invalidateResidentScenes: true },
+  ): () => void {
     if (!this.options.client) {
       throw new Error('Worker viewport subscriptions require a worker engine client')
     }
@@ -54,7 +64,7 @@ export class ProjectedViewportPatchCoordinator {
     const applyPatchBytes = (bytes: Uint8Array) => {
       const patch = decodeViewportPatch(bytes)
       const result = this.applyViewportPatchDetailed(patch)
-      this.options.onViewportPatchApplied?.(patch, result)
+      this.options.onViewportPatchApplied?.(patch, result, options)
       for (const entry of result.damage) {
         pendingDamage.set(`${entry.cell[0]}:${entry.cell[1]}`, entry)
       }

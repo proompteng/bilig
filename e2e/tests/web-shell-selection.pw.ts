@@ -13,6 +13,9 @@ import {
   doubleClickProductColumnResizeHandle,
   getProductColumnLeft,
   getProductColumnWidth,
+  settleWorkbookScrollPerf,
+  startWorkbookScrollPerf,
+  stopWorkbookScrollPerf,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 
@@ -147,6 +150,39 @@ test('web app keeps the active focus inside the sheet grid when clicking a cell'
 
   expect(activeElementState.insideSheetGrid).toBe(true)
   expect(activeElementState.testId).not.toBe('sheet-grid')
+})
+
+test('web app keeps normal cell selection out of resident scene invalidation', async ({ page }) => {
+  await page.goto(`/?document=normal-selection-no-resident-refresh-${Date.now()}`)
+  await waitForWorkbookReady(page)
+  await settleWorkbookScrollPerf(page, 80)
+  await startWorkbookScrollPerf(page, 'normal-selection-no-resident-refresh', { primeRenderer: false })
+  await settleWorkbookScrollPerf(page, 24)
+
+  const targets = [
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [5, 5],
+    [2, 6],
+    [6, 3],
+    [1, 4],
+  ] as const
+  await targets.reduce<Promise<void>>(async (previous, [col, row]) => {
+    await previous
+    await clickProductCell(page, col, row)
+    await expect(page.getByTestId('status-selection')).toContainText('!')
+  }, Promise.resolve())
+
+  await settleWorkbookScrollPerf(page, 24)
+  const report = await stopWorkbookScrollPerf(page)
+
+  expect(report).not.toBeNull()
+  expect(report?.counters.scenePacketRefreshes).toBe(0)
+  expect(report?.counters.typeGpuScenePacketsApplied).toBe(0)
+  expect(report?.counters.typeGpuBufferAllocations).toBe(0)
+  expect(report?.counters.typeGpuTileMisses).toBe(0)
 })
 
 test('web app maps clicks in the upper half of a cell to that same visible cell', async ({ page }) => {

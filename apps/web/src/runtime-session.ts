@@ -310,25 +310,20 @@ export async function createWorkerRuntimeSessionController(
 
   const updateSelectionViewport = (selection: WorkerRuntimeSelection): void => {
     selectionViewportCleanup()
-    selectionViewportCleanup = subscribeProjectedViewport(selection.sheetName, selectionViewport(selection), () => {})
+    selectionViewportCleanup = viewportStore.subscribeAuxiliaryViewport(selection.sheetName, selectionViewport(selection), () => {})
   }
 
   const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
     currentSelection = selection
     callbacks.onSelection(selection)
     const snapshot = await loadSelectionCellSnapshot(selection)
-    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection))
+    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection), { invalidateResidentScenes: false })
     updateSelectionViewport(selection)
     return snapshot ?? emptyCellSnapshot(selection)
   }
 
   const loadSelectionCellSnapshot = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot | null> => {
     return await invokeWorkerMethod(client, 'getCell', isCellSnapshot, selection.sheetName, selection.address)
-  }
-
-  const refreshSelectedCellSnapshot = async (selection: WorkerRuntimeSelection = currentSelection): Promise<void> => {
-    const snapshot = await loadSelectionCellSnapshot(selection)
-    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection))
   }
 
   const refreshRuntimeState = async (): Promise<void> => {
@@ -517,7 +512,6 @@ export async function createWorkerRuntimeSessionController(
     async setSelection(selection) {
       try {
         if (sameSelection(selection, currentSelection)) {
-          await refreshSelectedCellSnapshot(selection)
           return
         }
         await applySelection(selection)

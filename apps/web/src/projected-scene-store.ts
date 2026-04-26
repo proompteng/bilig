@@ -6,7 +6,7 @@ import {
   type GridTileKeyV2,
 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
-import { residentPaneSceneRequestNeedsRefresh } from './projected-scene-damage.js'
+import { residentPaneSceneRequestNeedsRefresh, type ResidentScenePatchDamage } from './projected-scene-damage.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 
@@ -278,8 +278,8 @@ export class ProjectedSceneStore {
     }
   }
 
-  noteViewportPatch(patch: ViewportPatch): void {
-    this.refreshMatchingEntries((request) => residentPaneSceneRequestNeedsRefresh(request, patch))
+  noteViewportPatch(patch: ViewportPatch, applied?: ResidentScenePatchDamage): void {
+    this.refreshMatchingEntries((request) => residentPaneSceneRequestNeedsRefresh(request, patch, applied))
   }
 
   noteCellDamage(sheetName: string, row: number, col: number): void {

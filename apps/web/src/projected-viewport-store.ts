@@ -12,6 +12,9 @@ import { buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze'
+interface SetCellSnapshotOptions {
+  readonly invalidateResidentScenes?: boolean
+}
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly cellCache = new ProjectedViewportCellCache({
@@ -44,7 +47,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       cellCache: this.cellCache,
       axisStore: this.axisStore,
       ...(client ? { client } : {}),
-      onViewportPatchApplied: (patch, result) => this.handleViewportPatchApplied(patch, result),
+      onViewportPatchApplied: (patch, result, options) => this.handleViewportPatchApplied(patch, result, options),
     })
   }
 
@@ -129,8 +132,11 @@ export class ProjectedViewportStore implements GridEngineLike {
     return { batchId: this.lastBatchId }
   }
 
-  setCellSnapshot(snapshot: CellSnapshot): void {
+  setCellSnapshot(snapshot: CellSnapshot, options: SetCellSnapshotOptions = {}): void {
     if (!this.cellCache.setCellSnapshot(snapshot)) {
+      return
+    }
+    if (options.invalidateResidentScenes === false) {
       return
     }
     const cell = parseCellAddress(snapshot.address, snapshot.sheetName)
@@ -206,6 +212,14 @@ export class ProjectedViewportStore implements GridEngineLike {
     return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener)
   }
 
+  subscribeAuxiliaryViewport(
+    sheetName: string,
+    viewport: Viewport,
+    listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+  ): () => void {
+    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener, { invalidateResidentScenes: false })
+  }
+
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
     return this.sceneStore.subscribeResidentPaneScenes(request, listener)
   }
@@ -216,16 +230,22 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
     const result = this.patchCoordinator.applyViewportPatchDetailed(patch)
-    this.handleViewportPatchApplied(patch, result)
+    this.handleViewportPatchApplied(patch, result, { invalidateResidentScenes: true })
     return result.damage
   }
 
-  private handleViewportPatchApplied(patch: ViewportPatch, result: ProjectedViewportPatchApplied): void {
+  private handleViewportPatchApplied(
+    patch: ViewportPatch,
+    result: ProjectedViewportPatchApplied,
+    options: { readonly invalidateResidentScenes: boolean },
+  ): void {
     const batchId = patch.metrics?.batchId
     if (Number.isInteger(batchId) && batchId >= 0) {
       this.lastBatchId = batchId
     }
-    this.sceneStore.noteViewportPatch(patch)
+    if (options.invalidateResidentScenes) {
+      this.sceneStore.noteViewportPatch(patch, result)
+    }
     const channels: SheetViewportChannel[] = []
     if (result.columnsChanged) {
       channels.push('columnWidths', 'hiddenColumns')

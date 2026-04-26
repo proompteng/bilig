@@ -157,6 +157,23 @@ describe('applyProjectedViewportPatch', () => {
     expect(state.rowHeightsBySheet.get('Sheet1')?.[0]).toBe(44)
   })
 
+  it('does not report a freeze change when a patch confirms the default unfrozen state', () => {
+    const state = createPatchState()
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        freezeRows: 0,
+        freezeCols: 0,
+      },
+    })
+
+    expect(result.freezeChanged).toBe(false)
+    expect(state.freezeRowsBySheet.get('Sheet1')).toBe(0)
+    expect(state.freezeColsBySheet.get('Sheet1')).toBe(0)
+  })
+
   it('accepts reset empty snapshots that clear stale cached cells', () => {
     const state = createPatchState()
     state.cellSnapshots.set('Sheet1!B2', {

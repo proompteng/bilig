@@ -363,6 +363,55 @@ describe('ProjectedSceneStore', () => {
     unsubscribe()
   })
 
+  it('ignores full viewport patches that apply without resident scene damage', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const client = {
+      invoke: vi.fn().mockResolvedValue([createResidentScene(request, 1, 1)]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    store.noteViewportPatch(
+      {
+        version: 2,
+        full: true,
+        viewport: { sheetName: 'Sheet1', rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+        metrics: {
+          batchId: 0,
+          changedInputCount: 0,
+          dirtyFormulaCount: 0,
+          wasmFormulaCount: 0,
+          jsFormulaCount: 0,
+          rangeNodeVisits: 0,
+          recalcMs: 0,
+          compileMs: 0,
+        },
+        styles: [],
+        cells: [],
+        columns: [],
+        rows: [],
+      },
+      {
+        axisChanged: false,
+        damage: [],
+        freezeChanged: false,
+      },
+    )
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+  })
+
   it('does not publish a stale in-flight scene response after a newer visible refresh is queued', async () => {
     const request = {
       sheetName: 'Sheet1',

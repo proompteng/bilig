@@ -426,6 +426,23 @@ describe('ProjectedViewportStore', () => {
     expect(cache.getFreezeCols('Sheet1')).toBe(1)
   })
 
+  it('does not notify freeze subscribers when a patch confirms the default unfrozen state', () => {
+    const cache = new ProjectedViewportStore()
+    const freezeListener = vi.fn()
+
+    const unsubscribeFreeze = cache.subscribeSheetChannel('Sheet1', 'freeze', freezeListener)
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      freezeRows: 0,
+      freezeCols: 0,
+    })
+
+    expect(freezeListener).not.toHaveBeenCalled()
+
+    unsubscribeFreeze()
+  })
+
   it('clears stale viewport cells on full patches without dropping cells outside the viewport', () => {
     const cache = new ProjectedViewportStore()
 
@@ -677,6 +694,82 @@ describe('ProjectedViewportStore', () => {
     expect(sceneListener).toHaveBeenCalledTimes(1)
 
     unsubscribeViewport()
+    unsubscribeScene()
+    vi.useRealTimers()
+  })
+
+  it('keeps auxiliary selection viewport patches out of resident scene invalidation', async () => {
+    vi.useFakeTimers()
+    const typedPatch: ViewportPatch = {
+      ...createPatch(),
+      full: true,
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: 'Sheet1',
+            address: 'D5',
+            value: { tag: ValueTag.String, value: 'selection hydration', stringId: 1 },
+            input: 'selection hydration',
+            flags: 0,
+            version: 1,
+          },
+          displayText: 'selection hydration',
+          copyText: 'selection hydration',
+          editorText: 'selection hydration',
+          formatId: 0,
+          styleId: 'style-0',
+        },
+      ],
+    }
+    const encodedPatch = new TextEncoder().encode(JSON.stringify(typedPatch))
+    const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
+      setTimeout(() => listener(encodedPatch), 0)
+      return () => undefined
+    })
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const pendingRefresh = new Promise<never>(() => undefined)
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+      .mockReturnValueOnce(pendingRefresh)
+    const cache = new ProjectedViewportStore({
+      invoke,
+      ready: async () => undefined,
+      subscribe: () => () => undefined,
+      subscribeBatches: () => () => undefined,
+      subscribeViewportPatches,
+      dispose: () => undefined,
+    })
+    const sceneListener = vi.fn()
+    const cellListener = vi.fn()
+
+    const unsubscribeScene = cache.subscribeResidentPaneScenes(request, sceneListener)
+    const unsubscribeCell = cache.subscribeCell('Sheet1', 'D5', cellListener)
+    await vi.runAllTimersAsync()
+    sceneListener.mockClear()
+
+    const unsubscribeViewport = cache.subscribeAuxiliaryViewport(
+      'Sheet1',
+      { rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+      () => undefined,
+    )
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(cache.getCell('Sheet1', 'D5').input).toBe('selection hydration')
+    expect(cellListener).toHaveBeenCalledTimes(1)
+    expect(cache.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(sceneListener).not.toHaveBeenCalled()
+
+    unsubscribeViewport()
+    unsubscribeCell()
     unsubscribeScene()
     vi.useRealTimers()
   })

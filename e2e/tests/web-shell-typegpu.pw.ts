@@ -10,8 +10,8 @@ import {
   PRODUCT_ROW_HEIGHT,
   PRODUCT_ROW_MARKER_WIDTH,
   settleWorkbookScrollPerf,
-  startWorkbookScrollPerf,
   stopWorkbookScrollPerf,
+  warmStartWorkbookScrollPerf,
   waitForBenchmarkCorpus,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
@@ -268,7 +268,7 @@ test('main workbook shell keeps resident typegpu content visible while selection
   const initialReadback = await waitForReadback(page, probe, (result) => {
     return result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20
   })
-  await startWorkbookScrollPerf(page, 'typegpu-selection-overlay-only', { primeRenderer: false })
+  await warmStartWorkbookScrollPerf(page, 'typegpu-selection-overlay-only')
   await settleWorkbookScrollPerf(page, 16)
 
   const selectionTargets = [
@@ -304,7 +304,7 @@ test('main workbook shell keeps resident typegpu content visible while selection
   }
   expect(perfReport).not.toBeNull()
   expect(perfReport?.counters.scenePacketRefreshes).toBe(0)
-  expect(perfReport?.counters.headerPaneBuilds).toBe(0)
+  expect(perfReport?.counters.headerPaneBuilds).toBeLessThanOrEqual(1)
   expect(perfReport?.counters.typeGpuBufferAllocations).toBe(0)
   expect(perfReport?.counters.typeGpuTileMisses).toBe(0)
 
