@@ -1,9 +1,7 @@
-import { formatAddress } from '@bilig/formula'
-import type { CellSnapshot, RecalcMetrics, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
+import type { RecalcMetrics, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '@bilig/grid'
 import { buildResidentDataPaneScenes } from '../../../packages/grid/src/gridResidentDataLayer.js'
 import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
-import { createGridSelection } from '../../../packages/grid/src/gridSelection.js'
 import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packages/grid/src/workbookGridViewport.js'
 import { createGridTileKeyV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
@@ -65,23 +63,6 @@ function buildFreezeVersion(freezeRows: number, freezeCols: number): number {
   return mixRevisionInteger(mixRevisionInteger(2_166_136_261, freezeRows), freezeCols)
 }
 
-function resolveSelectedCellSceneSnapshot(input: {
-  engine: ResidentPaneSceneEngineLike
-  request: WorkbookPaneSceneRequest
-  selectedAddress: string
-}): CellSnapshot {
-  const engineSnapshot = input.engine.getCell(input.request.sheetName, input.selectedAddress)
-  const requestSnapshot = input.request.selectedCellSnapshot
-  if (
-    requestSnapshot?.sheetName === input.request.sheetName &&
-    requestSnapshot.address === input.selectedAddress &&
-    requestSnapshot.version >= engineSnapshot.version
-  ) {
-    return requestSnapshot
-  }
-  return engineSnapshot
-}
-
 export function buildWorkerResidentPaneScenes(input: {
   engine: ResidentPaneSceneEngineLike
   request: WorkbookPaneSceneRequest
@@ -90,12 +71,6 @@ export function buildWorkerResidentPaneScenes(input: {
   const { engine, request, generation } = input
   const generatedAt = Date.now()
   const gridMetrics = getGridMetrics()
-  const selectedAddress = formatAddress(request.selectedCell.row, request.selectedCell.col)
-  const selectedCellSnapshot = resolveSelectedCellSceneSnapshot({
-    engine,
-    request,
-    selectedAddress,
-  })
   const columnAxisEntries = engine.getColumnAxisEntries(request.sheetName)
   const rowAxisEntries = engine.getRowAxisEntries(request.sheetName)
   const columnAxis = buildRenderedAxisState(columnAxisEntries, gridMetrics.columnWidth)
@@ -129,11 +104,6 @@ export function buildWorkerResidentPaneScenes(input: {
     gridMetrics,
     sortedColumnWidthOverrides: columnAxis.sortedOverrides,
     sortedRowHeightOverrides: rowAxis.sortedOverrides,
-    gridSelection: createGridSelection(request.selectedCell.col, request.selectedCell.row),
-    selectedCell: [request.selectedCell.col, request.selectedCell.row],
-    selectedCellSnapshot,
-    selectionRange: null,
-    editingCell: request.editingCell ? [request.editingCell.col, request.editingCell.row] : null,
   }).map((scene): WorkbookPaneScenePacket => {
     const packedScene = packWorkerGridScenePacket({
       generation,
@@ -176,7 +146,6 @@ export function buildWorkerResidentPaneScenes(input: {
 }
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {
-  const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
     request.residentViewport.rowStart,
@@ -187,15 +156,5 @@ export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest
     request.freezeCols,
     request.dprBucket ?? 1,
     request.sceneRevision ?? 0,
-    request.selectedCell.col,
-    request.selectedCell.row,
-    selectedSnapshot?.address ?? '',
-    selectedSnapshot?.version ?? -1,
-    selectedSnapshot?.styleId ?? '',
-    selectedSnapshot?.formula ?? '',
-    selectedSnapshot?.input ?? '',
-    selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
-    request.editingCell?.col ?? -1,
-    request.editingCell?.row ?? -1,
   ].join(':')
 }

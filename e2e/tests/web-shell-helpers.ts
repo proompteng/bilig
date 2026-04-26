@@ -736,6 +736,11 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 fullPatches: number
                 damagePatches: number
                 damageCells: number
+                scenePacketRefreshes: number
+                scenePacketPanes: number
+                scenePacketRejected: number
+                visibleWindowChanges: number
+                headerPaneBuilds: number
                 reactCommits: number
                 canvasSurfaceMounts: number
                 domSurfaceMounts: number

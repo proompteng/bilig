@@ -30,7 +30,7 @@ import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyle } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import type { GridSelection, Item, Rectangle } from './gridTypes.js'
+import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
@@ -109,6 +109,12 @@ function supportsResidentPaneScenes(engine: GridEngineLike): engine is ResidentP
 }
 
 const EMPTY_PANE_SCENES: readonly WorkbookPaneScenePacket[] = Object.freeze([])
+const STATIC_SCENE_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
+const STATIC_SCENE_GRID_SELECTION: GridSelection = Object.freeze({
+  columns: CompactSelection.empty(),
+  current: undefined,
+  rows: CompactSelection.empty(),
+})
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -662,20 +668,6 @@ export function useWorkbookGridRenderState(input: {
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
   }, [engine, invalidateScene, sheetName, subscribeViewport, visibleAddresses])
 
-  const residentEditingCell = useMemo(
-    () =>
-      isEditingCell
-        ? {
-            col: selectedCell.col,
-            row: selectedCell.row,
-          }
-        : null,
-    [isEditingCell, selectedCell.col, selectedCell.row],
-  )
-  const residentEditingCellItem = useMemo<Item | null>(
-    () => (isEditingCell ? [selectedCell.col, selectedCell.row] : null),
-    [isEditingCell, selectedCell.col, selectedCell.row],
-  )
   const residentPaneSceneRequest = useMemo<WorkbookPaneSceneRequest | null>(
     () => ({
       sheetName,
@@ -686,26 +678,8 @@ export function useWorkbookGridRenderState(input: {
       cameraSeq: gridCameraStore.getSnapshot()?.camera.seq ?? 0,
       priority: 0,
       reason: 'visible',
-      selectedCell: {
-        col: selectedCell.col,
-        row: selectedCell.row,
-      },
-      selectedCellSnapshot,
-      selectionRange: null,
-      editingCell: residentEditingCell,
     }),
-    [
-      freezeCols,
-      freezeRows,
-      dprBucket,
-      gridCameraStore,
-      residentEditingCell,
-      residentViewport,
-      selectedCell.col,
-      selectedCell.row,
-      selectedCellSnapshot,
-      sheetName,
-    ],
+    [freezeCols, freezeRows, dprBucket, gridCameraStore, residentViewport, sheetName],
   )
   const warmResidentPaneSceneRequests = useMemo<readonly WorkbookPaneSceneRequest[]>(() => {
     return warmResidentViewports
@@ -719,27 +693,8 @@ export function useWorkbookGridRenderState(input: {
         cameraSeq: gridCameraStore.getSnapshot()?.camera.seq ?? 0,
         priority: 4,
         reason: 'prefetch',
-        selectedCell: {
-          col: selectedCell.col,
-          row: selectedCell.row,
-        },
-        selectedCellSnapshot,
-        selectionRange: null,
-        editingCell: residentEditingCell,
       }))
-  }, [
-    freezeCols,
-    freezeRows,
-    dprBucket,
-    gridCameraStore,
-    residentEditingCell,
-    residentViewport,
-    selectedCell.col,
-    selectedCell.row,
-    selectedCellSnapshot,
-    sheetName,
-    warmResidentViewports,
-  ])
+  }, [freezeCols, freezeRows, dprBucket, gridCameraStore, residentViewport, sheetName, warmResidentViewports])
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
   const [warmSceneRevision, setWarmSceneRevision] = useState(0)
   useEffect(() => {
@@ -814,16 +769,6 @@ export function useWorkbookGridRenderState(input: {
       gridMetrics,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
-      gridSelection,
-      selectedCell: [selectedCell.col, selectedCell.row],
-      selectedCellSnapshot,
-      selectionRange: null,
-      editingCell: residentEditingCellItem,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      activeHeaderDrag: null,
     })
   }, [
     canUseWorkerResidentPaneScenesResult,
@@ -834,15 +779,10 @@ export function useWorkbookGridRenderState(input: {
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
-    gridSelection,
     hostElement,
-    residentEditingCellItem,
     residentViewport,
     rowHeights,
     sceneRevision,
-    selectedCell.col,
-    selectedCell.row,
-    selectedCellSnapshot,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
@@ -936,21 +876,20 @@ export function useWorkbookGridRenderState(input: {
     if (!hostElement) {
       return emptyGpuScene
     }
-    void sceneRevision
     return buildGridGpuScene({
       contentMode: 'headers',
       engine,
       columnWidths,
       rowHeights,
       gridMetrics,
-      gridSelection,
+      gridSelection: STATIC_SCENE_GRID_SELECTION,
       activeHeaderDrag: null,
       hoveredCell: null,
       hoveredHeader: null,
       resizeGuideColumn: null,
       resizeGuideRow: null,
-      selectedCell: [selectedCell.col, selectedCell.row],
-      selectionRange,
+      selectedCell: STATIC_SCENE_SELECTED_CELL,
+      selectionRange: null,
       sheetName,
       visibleItems: residentHeaderItems,
       visibleRegion: residentHeaderRegion,
@@ -965,14 +904,9 @@ export function useWorkbookGridRenderState(input: {
     emptyGpuScene,
     engine,
     getHeaderCellLocalBounds,
-    gridSelection,
     gridMetrics,
     hostElement,
     rowHeights,
-    sceneRevision,
-    selectedCell.col,
-    selectedCell.row,
-    selectionRange,
     sheetName,
     residentHeaderItems,
     residentHeaderRegion,
@@ -982,20 +916,19 @@ export function useWorkbookGridRenderState(input: {
     if (!hostElement) {
       return emptyTextScene
     }
-    void sceneRevision
     return buildGridTextScene({
       contentMode: 'headers',
       engine,
       columnWidths,
       rowHeights,
-      editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
+      editingCell: null,
       gridMetrics,
       activeHeaderDrag: null,
       hoveredHeader: null,
       resizeGuideColumn: null,
-      selectedCell: [selectedCell.col, selectedCell.row],
-      selectedCellSnapshot,
-      selectionRange,
+      selectedCell: STATIC_SCENE_SELECTED_CELL,
+      selectedCellSnapshot: null,
+      selectionRange: null,
       sheetName,
       visibleItems: residentHeaderItems,
       visibleRegion: residentHeaderRegion,
@@ -1016,13 +949,7 @@ export function useWorkbookGridRenderState(input: {
     hostElement,
     hostClientHeight,
     hostClientWidth,
-    isEditingCell,
     rowHeights,
-    sceneRevision,
-    selectedCellSnapshot,
-    selectedCell.col,
-    selectedCell.row,
-    selectionRange,
     sheetName,
     residentHeaderItems,
     residentHeaderRegion,

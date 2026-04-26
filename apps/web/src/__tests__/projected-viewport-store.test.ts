@@ -645,16 +645,6 @@ describe('ProjectedViewportStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 3, row: 4 },
-      selectedCellSnapshot: {
-        sheetName: 'Sheet1',
-        address: 'D5',
-        value: { tag: ValueTag.Empty },
-        flags: 0,
-        version: 0,
-      },
-      selectionRange: null,
-      editingCell: null,
     } as const
     const pendingRefresh = new Promise<never>(() => undefined)
     const invoke = vi
@@ -687,6 +677,52 @@ describe('ProjectedViewportStore', () => {
     expect(sceneListener).toHaveBeenCalledTimes(1)
 
     unsubscribeViewport()
+    unsubscribeScene()
+    vi.useRealTimers()
+  })
+
+  it('publishes immediate resident scenes for local cell snapshots', async () => {
+    vi.useFakeTimers()
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const pendingRefresh = new Promise<never>(() => undefined)
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+      .mockReturnValueOnce(pendingRefresh)
+    const cache = new ProjectedViewportStore({
+      invoke,
+      ready: async () => undefined,
+      subscribe: () => () => undefined,
+      subscribeBatches: () => () => undefined,
+      subscribeViewportPatches: () => () => undefined,
+      dispose: () => undefined,
+    })
+    const sceneListener = vi.fn()
+
+    const unsubscribeScene = cache.subscribeResidentPaneScenes(request, sceneListener)
+    await vi.runAllTimersAsync()
+    sceneListener.mockClear()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'D5',
+      value: { tag: ValueTag.String, value: 'local typed', stringId: 1 },
+      input: 'local typed',
+      flags: 0,
+      version: 1,
+    })
+
+    const immediateScene = cache.peekResidentPaneScenes(request)
+    expect(immediateScene?.[0]?.generation).toBe(2)
+    expect(immediateScene?.[0]?.textScene.items.some((item) => item.text === 'local typed')).toBe(true)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(sceneListener).toHaveBeenCalledTimes(1)
+
     unsubscribeScene()
     vi.useRealTimers()
   })

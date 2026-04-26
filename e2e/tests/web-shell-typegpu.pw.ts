@@ -9,6 +9,9 @@ import {
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
   PRODUCT_ROW_MARKER_WIDTH,
+  settleWorkbookScrollPerf,
+  startWorkbookScrollPerf,
+  stopWorkbookScrollPerf,
   waitForBenchmarkCorpus,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
@@ -265,6 +268,8 @@ test('main workbook shell keeps resident typegpu content visible while selection
   const initialReadback = await waitForReadback(page, probe, (result) => {
     return result.darkPixelCounts.columnHeaderText > 10 && result.darkPixelCounts.rowHeaderText > 5 && result.darkPixelCounts.bodyText > 20
   })
+  await startWorkbookScrollPerf(page, 'typegpu-selection-overlay-only', { primeRenderer: false })
+  await settleWorkbookScrollPerf(page, 16)
 
   const selectionTargets = [
     { col: 2, row: 3, address: '!C4' },
@@ -288,6 +293,8 @@ test('main workbook shell keeps resident typegpu content visible while selection
     return await sampleSelectionTarget(targetIndex + 1, Math.max(lastSequence, frame.sequence), [...frames, frame])
   }
   const selectionFrames = await sampleSelectionTarget(0, initialReadback.sequence, [])
+  await settleWorkbookScrollPerf(page, 4)
+  const perfReport = await stopWorkbookScrollPerf(page)
 
   expect(selectionFrames.length).toBe(4)
   for (const frame of selectionFrames) {
@@ -295,6 +302,11 @@ test('main workbook shell keeps resident typegpu content visible while selection
     expect(frame.darkPixelCounts.rowHeaderText).toBeGreaterThan(5)
     expect(frame.darkPixelCounts.bodyText).toBeGreaterThan(20)
   }
+  expect(perfReport).not.toBeNull()
+  expect(perfReport?.counters.scenePacketRefreshes).toBe(0)
+  expect(perfReport?.counters.headerPaneBuilds).toBe(0)
+  expect(perfReport?.counters.typeGpuBufferAllocations).toBe(0)
+  expect(perfReport?.counters.typeGpuTileMisses).toBe(0)
 
   await saveReadbackArtifact(
     page,

@@ -1,4 +1,4 @@
-import type { CellSnapshot, Viewport } from '@bilig/protocol'
+import type { Viewport } from '@bilig/protocol'
 import type { WorkerPackedGridScenePacket } from './worker-runtime-render-packet.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
@@ -72,19 +72,4 @@ export interface WorkbookPaneSceneRequest {
   readonly sceneRevision?: number | undefined
   readonly priority?: number | undefined
   readonly reason?: 'visible' | 'prefetch' | 'edit' | 'resize' | 'sheet-switch' | undefined
-  readonly selectedCell: {
-    readonly col: number
-    readonly row: number
-  }
-  readonly selectedCellSnapshot: CellSnapshot | null
-  readonly selectionRange: {
-    readonly x: number
-    readonly y: number
-    readonly width: number
-    readonly height: number
-  } | null
-  readonly editingCell: {
-    readonly col: number
-    readonly row: number
-  } | null
 }

@@ -256,10 +256,10 @@ describe('useWorkbookGridRenderState viewport residency', () => {
           rowStart: 0,
           colStart: 0,
         }),
-        selectedCell: { col: 0, row: 0 },
       }),
       expect.any(Function),
     )
+    expect(subscribeResidentPaneScenes.mock.calls[0]?.[0]).not.toHaveProperty('selectedCell')
     expect(peekResidentPaneScenes).toHaveBeenCalled()
 
     await act(async () => {

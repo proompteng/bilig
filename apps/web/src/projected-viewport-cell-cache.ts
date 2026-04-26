@@ -108,15 +108,15 @@ export class ProjectedViewportCellCache {
     return this.cellStyles.get(styleId) ?? this.cellStyles.get(DEFAULT_STYLE_ID)
   }
 
-  setCellSnapshot(snapshot: CellSnapshot): void {
+  setCellSnapshot(snapshot: CellSnapshot): boolean {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
     if (current) {
       if (shouldKeepCurrentSnapshot(current, snapshot, { allowResetEmptyOverride: false })) {
-        return
+        return false
       }
       if (cellSnapshotSignature(current) === cellSnapshotSignature(snapshot)) {
-        return
+        return false
       }
     }
     this.knownSheets.add(snapshot.sheetName)
@@ -125,6 +125,7 @@ export class ProjectedViewportCellCache {
     this.sheetCellKeys(snapshot.sheetName).add(key)
     this.notifyCellSubscriptions(new Set([key]))
     this.emitChange()
+    return true
   }
 
   markSheetKnown(sheetName: string): void {

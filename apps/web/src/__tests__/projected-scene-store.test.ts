@@ -68,10 +68,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 1,
       freezeCols: 1,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const scenes = [createResidentScene(request, 1)] as const
     const client = {
@@ -108,10 +104,6 @@ describe('ProjectedSceneStore', () => {
       cameraSeq: 7,
       priority: 4,
       reason: 'prefetch' as const,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     }
     const scenes = [createResidentScene(request, 1, 1, { cameraSeq: 7 })] as const
     const client = {
@@ -139,15 +131,6 @@ describe('ProjectedSceneStore', () => {
         reason: 'visible',
       }),
     ).toEqual(scenes)
-    expect(
-      store.peekResidentPaneScenes({
-        ...request,
-        cameraSeq: 99,
-        priority: 0,
-        reason: 'visible',
-        selectedCell: { col: 4, row: 6 },
-      }),
-    ).toEqual(scenes)
 
     unsubscribe()
   })
@@ -158,10 +141,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const staleClient = {
       invoke: vi.fn(async () => [createResidentScene(request, 1, 0)]),
@@ -202,10 +181,6 @@ describe('ProjectedSceneStore', () => {
       cameraSeq: 3,
       priority: 4,
       reason: 'prefetch' as const,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     }
     const visibleRequest = {
       ...prefetchRequest,
@@ -238,36 +213,34 @@ describe('ProjectedSceneStore', () => {
     cleanupPrefetch()
   })
 
-  it('keeps resident scene requests stable across range selection changes', async () => {
-    const cellRequest = {
+  it('publishes immediate scenes from local cell damage', async () => {
+    const request = {
       sheetName: 'Sheet1',
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 1, row: 1 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
-    }
-    const rangeRequest = {
-      ...cellRequest,
-      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
     }
     const client = {
-      invoke: vi.fn().mockResolvedValueOnce([createResidentScene(cellRequest, 1, 1)]),
+      invoke: vi.fn().mockResolvedValueOnce([createResidentScene(request, 1, 1)]),
     }
-    const store = new ProjectedSceneStore(client)
+    const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+    ])
+    const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
+    const listener = vi.fn()
 
-    const cleanupCell = store.subscribeResidentPaneScenes(cellRequest, () => undefined)
+    const cleanup = store.subscribeResidentPaneScenes(request, listener)
     await new Promise((resolve) => window.setTimeout(resolve, 10))
-    const cleanupRange = store.subscribeResidentPaneScenes(rangeRequest, () => undefined)
-    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    listener.mockClear()
 
+    store.noteCellDamage('Sheet1', 4, 3)
+
+    expect(buildImmediateResidentPaneScenes).toHaveBeenCalledWith(expect.objectContaining({ sceneRevision: 1 }), 2)
     expect(client.invoke).toHaveBeenCalledTimes(1)
-    expect(store.peekResidentPaneScenes(rangeRequest)?.[0]?.generation).toBe(1)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+    expect(listener).toHaveBeenCalledTimes(1)
 
-    cleanupRange()
-    cleanupCell()
+    cleanup()
   })
 
   it('coalesces intersecting viewport patches into a refresh', async () => {
@@ -276,10 +249,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 1,
       freezeCols: 1,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const client = {
       invoke: vi
@@ -344,10 +313,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 1,
       freezeCols: 1,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const client = {
       invoke: vi
@@ -404,10 +369,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     let resolveFirst: ((value: readonly unknown[]) => void) | null = null
     const first = new Promise<readonly unknown[]>((resolve) => {
@@ -458,10 +419,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const client = {
       invoke: vi
@@ -507,10 +464,6 @@ describe('ProjectedSceneStore', () => {
       residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
       freezeRows: 0,
       freezeCols: 0,
-      selectedCell: { col: 0, row: 0 },
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      editingCell: null,
     } as const
     const client = {
       invoke: vi.fn().mockResolvedValue([createResidentScene(request, 1, 1)]),

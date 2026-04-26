@@ -1,4 +1,5 @@
 import type { GridEngineLike } from '@bilig/grid'
+import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
@@ -129,7 +130,11 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
-    this.cellCache.setCellSnapshot(snapshot)
+    if (!this.cellCache.setCellSnapshot(snapshot)) {
+      return
+    }
+    const cell = parseCellAddress(snapshot.address, snapshot.sheetName)
+    this.sceneStore.noteCellDamage(snapshot.sheetName, cell.row, cell.col)
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {

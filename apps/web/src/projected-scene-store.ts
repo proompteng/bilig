@@ -149,7 +149,6 @@ function validateScenePacketResponseForRequest(
 }
 
 function buildRequestKey(request: WorkbookPaneSceneRequest): string {
-  const selectedSnapshot = request.selectedCellSnapshot
   return [
     request.sheetName,
     request.residentViewport.rowStart,
@@ -159,16 +158,6 @@ function buildRequestKey(request: WorkbookPaneSceneRequest): string {
     request.freezeRows,
     request.freezeCols,
     request.dprBucket ?? 1,
-    request.selectedCell.col,
-    request.selectedCell.row,
-    selectedSnapshot?.address ?? '',
-    selectedSnapshot?.version ?? -1,
-    selectedSnapshot?.styleId ?? '',
-    selectedSnapshot?.formula ?? '',
-    selectedSnapshot?.input ?? '',
-    selectedSnapshot ? JSON.stringify(selectedSnapshot.value) : '',
-    request.editingCell?.col ?? -1,
-    request.editingCell?.row ?? -1,
   ].join(':')
 }
 
@@ -182,8 +171,6 @@ function buildRetainedRequestKey(request: WorkbookPaneSceneRequest): string {
     request.freezeRows,
     request.freezeCols,
     request.dprBucket ?? 1,
-    request.editingCell?.col ?? -1,
-    request.editingCell?.row ?? -1,
   ].join(':')
 }
 
@@ -292,8 +279,23 @@ export class ProjectedSceneStore {
   }
 
   noteViewportPatch(patch: ViewportPatch): void {
+    this.refreshMatchingEntries((request) => residentPaneSceneRequestNeedsRefresh(request, patch))
+  }
+
+  noteCellDamage(sheetName: string, row: number, col: number): void {
+    this.refreshMatchingEntries(
+      (request) =>
+        request.sheetName === sheetName &&
+        row >= request.residentViewport.rowStart &&
+        row <= request.residentViewport.rowEnd &&
+        col >= request.residentViewport.colStart &&
+        col <= request.residentViewport.colEnd,
+    )
+  }
+
+  private refreshMatchingEntries(matches: (request: WorkbookPaneSceneRequest) => boolean): void {
     for (const entry of this.entries.values()) {
-      if (!residentPaneSceneRequestNeedsRefresh(entry.request, patch)) {
+      if (!matches(entry.request)) {
         continue
       }
       entry.sceneRevision += 1

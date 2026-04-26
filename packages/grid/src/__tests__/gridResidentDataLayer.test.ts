@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { CellSnapshot } from '@bilig/protocol'
 import { ValueTag } from '@bilig/protocol'
-import { createGridSelection } from '../gridSelection.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from '../gridResidentDataLayer.js'
 
-const emptyCell: CellSnapshot = {
+const emptyCell = {
   sheetName: 'Sheet1',
   address: 'A1',
   value: { tag: ValueTag.Empty },
   flags: 0,
   version: 0,
-}
+} as const
 
 const engine = {
   workbook: {
@@ -37,16 +35,6 @@ describe('gridResidentDataLayer', () => {
       gridMetrics,
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
-      gridSelection: createGridSelection(8, 10),
-      selectedCell: [8, 10],
-      selectedCellSnapshot: emptyCell,
-      selectionRange: null,
-      editingCell: null,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      activeHeaderDrag: null,
     })
 
     expect(panes.map((pane) => pane.paneId)).toEqual(['body', 'top', 'left', 'corner'])
@@ -83,16 +71,6 @@ describe('gridResidentDataLayer', () => {
       gridMetrics,
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
-      gridSelection: createGridSelection(8, 10),
-      selectedCell: [8, 10],
-      selectedCellSnapshot: emptyCell,
-      selectionRange: null,
-      editingCell: null,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      activeHeaderDrag: null,
     })
 
     const rendered = resolveResidentDataPaneRenderState({
@@ -132,16 +110,6 @@ describe('gridResidentDataLayer', () => {
       gridMetrics,
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
-      gridSelection: createGridSelection(1, 1),
-      selectedCell: [1, 1],
-      selectedCellSnapshot: emptyCell,
-      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
-      editingCell: null,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      activeHeaderDrag: null,
     })
 
     const rendered = resolveResidentDataPaneRenderState({
@@ -162,18 +130,7 @@ describe('gridResidentDataLayer', () => {
 
     const body = rendered.find((pane) => pane.paneId === 'body')
     expect(body).toBeDefined()
-    expect(body?.gpuScene.fillRects).toContainEqual({
-      x: 105,
-      y: 23,
-      width: 206,
-      height: 42,
-      color: {
-        r: 0.12941176470588237,
-        g: 0.33725490196078434,
-        b: 0.22745098039215686,
-        a: 0.08,
-      },
-    })
+    expect(body?.gpuScene.fillRects).toEqual([])
     expect(body?.gpuScene.borderRects.some((rect) => rect.x >= body.frame.width || rect.y >= body.frame.height)).toBe(true)
   })
 })

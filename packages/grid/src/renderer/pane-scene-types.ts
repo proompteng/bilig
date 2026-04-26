@@ -1,4 +1,4 @@
-import type { CellSnapshot, Viewport } from '@bilig/protocol'
+import type { Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
@@ -31,16 +31,6 @@ export interface WorkbookPaneSceneRequest {
   readonly cameraSeq?: number | undefined
   readonly priority?: number | undefined
   readonly reason?: 'visible' | 'prefetch' | 'edit' | 'resize' | 'sheet-switch' | undefined
-  readonly selectedCell: {
-    readonly col: number
-    readonly row: number
-  }
-  readonly selectedCellSnapshot: CellSnapshot | null
-  readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
-  readonly editingCell: {
-    readonly col: number
-    readonly row: number
-  } | null
 }
 
 export interface WorkbookPaneRenderState extends WorkbookPaneScenePacket {

@@ -1,15 +1,22 @@
-import type { CellSnapshot, Viewport } from '@bilig/protocol'
+import type { Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import { buildGridGpuScene } from './gridGpuScene.js'
 import { getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset, type GridMetrics } from './gridMetrics.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildGridTextScene } from './gridTextScene.js'
-import type { HeaderSelection } from './gridPointer.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
+import { CompactSelection } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
 import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
 import { getPaneFrame, resolvePaneLayout } from './renderer/pane-layout.js'
 import { packGridScenePacketV2 } from './renderer-v2/scene-packet-v2.js'
+
+const STATIC_RESIDENT_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
+const STATIC_RESIDENT_GRID_SELECTION: GridSelection = Object.freeze({
+  columns: CompactSelection.empty(),
+  current: undefined,
+  rows: CompactSelection.empty(),
+})
 
 function resolveViewportWidth(
   viewport: Viewport,
@@ -67,38 +74,9 @@ function buildPaneScene(input: {
   gridMetrics: GridMetrics
   sortedColumnWidthOverrides: readonly (readonly [number, number])[]
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
-  gridSelection: GridSelection
-  selectedCell: Item
-  selectedCellSnapshot: CellSnapshot | null
-  selectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
-  editingCell?: Item | null
-  hoveredCell?: Item | null
-  hoveredHeader?: HeaderSelection | null
-  resizeGuideColumn?: number | null
-  resizeGuideRow?: number | null
-  activeHeaderDrag?: HeaderSelection | null
 }): WorkbookPaneScenePacket {
-  const {
-    id,
-    viewport,
-    engine,
-    sheetName,
-    columnWidths,
-    rowHeights,
-    gridMetrics,
-    sortedColumnWidthOverrides,
-    sortedRowHeightOverrides,
-    gridSelection,
-    selectedCell,
-    selectedCellSnapshot,
-    selectionRange = null,
-    editingCell = null,
-    hoveredCell = null,
-    hoveredHeader = null,
-    resizeGuideColumn = null,
-    resizeGuideRow = null,
-    activeHeaderDrag = null,
-  } = input
+  const { id, viewport, engine, sheetName, columnWidths, rowHeights, gridMetrics, sortedColumnWidthOverrides, sortedRowHeightOverrides } =
+    input
   const getCellBounds = createPaneCellBoundsResolver({
     viewport,
     columnWidths,
@@ -134,14 +112,14 @@ function buildPaneScene(input: {
     rowHeights,
     hostBounds: { left: 0, top: 0 },
     getCellBounds,
-    gridSelection,
-    selectedCell,
-    selectionRange,
-    hoveredCell,
-    hoveredHeader,
-    resizeGuideColumn,
-    resizeGuideRow,
-    activeHeaderDrag,
+    gridSelection: STATIC_RESIDENT_GRID_SELECTION,
+    selectedCell: STATIC_RESIDENT_SELECTED_CELL,
+    selectionRange: null,
+    hoveredCell: null,
+    hoveredHeader: null,
+    resizeGuideColumn: null,
+    resizeGuideRow: null,
+    activeHeaderDrag: null,
   })
   const textScene = buildGridTextScene({
     contentMode: 'data',
@@ -163,13 +141,13 @@ function buildPaneScene(input: {
     gridMetrics,
     columnWidths,
     rowHeights,
-    editingCell,
-    selectedCell,
-    selectedCellSnapshot,
-    selectionRange,
-    hoveredHeader,
-    activeHeaderDrag,
-    resizeGuideColumn,
+    editingCell: null,
+    selectedCell: STATIC_RESIDENT_SELECTED_CELL,
+    selectedCellSnapshot: null,
+    selectionRange: null,
+    hoveredHeader: null,
+    activeHeaderDrag: null,
+    resizeGuideColumn: null,
     hostBounds: {
       left: 0,
       top: 0,
@@ -210,16 +188,6 @@ export function buildResidentDataPaneScenes(input: {
   gridMetrics: GridMetrics
   sortedColumnWidthOverrides: readonly (readonly [number, number])[]
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
-  gridSelection: GridSelection
-  selectedCell: Item
-  selectedCellSnapshot: CellSnapshot | null
-  selectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
-  editingCell?: Item | null
-  hoveredCell?: Item | null
-  hoveredHeader?: HeaderSelection | null
-  resizeGuideColumn?: number | null
-  resizeGuideRow?: number | null
-  activeHeaderDrag?: HeaderSelection | null
 }): WorkbookPaneScenePacket[] {
   const {
     residentViewport,
@@ -234,16 +202,6 @@ export function buildResidentDataPaneScenes(input: {
     gridMetrics,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    gridSelection,
-    selectedCell,
-    selectedCellSnapshot,
-    selectionRange = null,
-    editingCell = null,
-    hoveredCell = null,
-    hoveredHeader = null,
-    resizeGuideColumn = null,
-    resizeGuideRow = null,
-    activeHeaderDrag = null,
   } = input
 
   const bodyViewportWidth = resolveViewportWidth(residentViewport, gridMetrics, sortedColumnWidthOverrides)
@@ -262,16 +220,6 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
-        gridSelection,
-        selectedCell,
-        selectedCellSnapshot,
-        selectionRange,
-        editingCell,
-        hoveredCell,
-        hoveredHeader,
-        resizeGuideColumn,
-        resizeGuideRow,
-        activeHeaderDrag,
       }),
     )
   }
@@ -293,16 +241,6 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
-        gridSelection,
-        selectedCell,
-        selectedCellSnapshot,
-        selectionRange,
-        editingCell,
-        hoveredCell,
-        hoveredHeader,
-        resizeGuideColumn,
-        resizeGuideRow,
-        activeHeaderDrag,
       }),
     )
   }
@@ -324,16 +262,6 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
-        gridSelection,
-        selectedCell,
-        selectedCellSnapshot,
-        selectionRange,
-        editingCell,
-        hoveredCell,
-        hoveredHeader,
-        resizeGuideColumn,
-        resizeGuideRow,
-        activeHeaderDrag,
       }),
     )
   }
@@ -355,16 +283,6 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
-        gridSelection,
-        selectedCell,
-        selectedCellSnapshot,
-        selectionRange,
-        editingCell,
-        hoveredCell,
-        hoveredHeader,
-        resizeGuideColumn,
-        resizeGuideRow,
-        activeHeaderDrag,
       }),
     )
   }
