@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_GRID_GPU_COUNTERS } from '../renderer/grid-render-counters.js'
+import { EMPTY_GRID_GPU_COUNTERS } from '../renderer-v2/grid-render-counters.js'
 import { formatRenderDebugHud, isRenderDebugSnapshotInsideBudget } from '../renderer-v2/render-debug-hud.js'
 
 describe('render-debug-hud', () => {

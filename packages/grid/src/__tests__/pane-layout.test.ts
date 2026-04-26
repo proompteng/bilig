@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPaneFrame, resolvePaneLayout } from '../renderer/pane-layout.js'
+import { getPaneFrame, resolvePaneLayout } from '../renderer-v2/pane-layout.js'
 
 describe('pane-layout', () => {
   it('returns body top left and corner frames for frozen panes', () => {

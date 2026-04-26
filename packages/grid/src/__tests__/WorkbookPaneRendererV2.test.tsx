@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
-import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import type { WorkbookRenderPaneState } from '../renderer-v2/pane-scene-types.js'
 import {
   TYPEGPU_ACTIVE_RESOURCE_DEFER_MS,
   WorkbookPaneRendererV2,

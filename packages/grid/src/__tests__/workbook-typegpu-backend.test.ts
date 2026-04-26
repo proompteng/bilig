@@ -11,7 +11,7 @@ import {
 import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from '../renderer-v2/pane-buffer-cache.js'
 import { TileGpuCache, buildTileGpuCacheKey } from '../renderer-v2/tile-gpu-cache.js'
 import { resolveTypeGpuDrawPanes } from '../renderer-v2/workbook-typegpu-backend.js'
-import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import type { WorkbookRenderPaneState } from '../renderer-v2/pane-scene-types.js'
 
 function createPacket(valueVersion: number): GridScenePacketV2 {
   const viewport = { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 }

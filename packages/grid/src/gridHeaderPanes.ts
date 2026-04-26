@@ -2,7 +2,7 @@ import type { Viewport } from '@bilig/protocol'
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { GridTextItem, GridTextScene } from './gridTextScene.js'
 import type { GridMetrics } from './gridMetrics.js'
-import type { WorkbookRenderPaneState } from './renderer/pane-scene-types.js'
+import type { WorkbookRenderPaneState } from './renderer-v2/pane-scene-types.js'
 import { packGridScenePacketV2, type GridScenePacketPaneId } from './renderer-v2/scene-packet-v2.js'
 
 export interface GridHeaderPaneState extends WorkbookRenderPaneState {

@@ -1,6 +1,6 @@
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
-import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
-import { noteTypeGpuTileMiss } from '../renderer/grid-render-counters.js'
+import type { WorkbookRenderPaneState } from './pane-scene-types.js'
+import { noteTypeGpuTileMiss } from './grid-render-counters.js'
 import { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from './pane-buffer-cache.js'
 import {

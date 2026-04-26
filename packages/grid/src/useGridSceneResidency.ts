@@ -1,5 +1,5 @@
-import type { WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
-import { noteTypeGpuScenePacketApplied } from './renderer/grid-render-counters.js'
+import type { WorkbookPaneScenePacket } from './renderer-v2/pane-scene-types.js'
+import { noteTypeGpuScenePacketApplied } from './renderer-v2/grid-render-counters.js'
 
 export function canUseWorkerResidentPaneScenes(input: {
   readonly workerResidentPaneScenes: readonly WorkbookPaneScenePacket[]

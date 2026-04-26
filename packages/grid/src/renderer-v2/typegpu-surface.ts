@@ -1,5 +1,5 @@
 import type { TypeGpuRendererArtifacts } from './typegpu-backend.js'
-import { noteTypeGpuConfigure, noteTypeGpuSurfaceResize } from '../renderer/grid-render-counters.js'
+import { noteTypeGpuConfigure, noteTypeGpuSurfaceResize } from './grid-render-counters.js'
 
 export interface TypeGpuSurfaceSize {
   readonly width: number

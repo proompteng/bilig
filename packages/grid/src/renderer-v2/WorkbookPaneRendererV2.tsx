@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
-import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import type { DynamicGridOverlayPacket } from './dynamic-overlay-packet.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'

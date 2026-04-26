@@ -34,8 +34,8 @@ import { CompactSelection, type GridSelection, type Item, type Rectangle } from 
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import { buildResidentDataPaneScenes, resolveResidentDataPaneRenderState } from './gridResidentDataLayer.js'
-import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest, WorkbookRenderPaneState } from './renderer/pane-scene-types.js'
-import type { GridCameraSnapshot } from './renderer/grid-render-contract.js'
+import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest, WorkbookRenderPaneState } from './renderer-v2/pane-scene-types.js'
+import type { GridCameraSnapshot } from './renderer-v2/grid-render-contract.js'
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
@@ -44,7 +44,7 @@ import {
   scrollCellIntoView,
 } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
-import { noteGridScrollInput } from './renderer/grid-render-counters.js'
+import { noteGridScrollInput } from './renderer-v2/grid-render-counters.js'
 import { GridCameraStore } from './renderer-v2/gridCameraStore.js'
 import { visibleRegionFromCamera, viewportFromVisibleRegion } from './useGridCameraState.js'
 import { sameBounds } from './useGridOverlayState.js'

@@ -1,6 +1,6 @@
 import type { Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import type { GridCameraSnapshot } from './renderer/grid-render-contract.js'
+import type { GridCameraSnapshot } from './renderer-v2/grid-render-contract.js'
 import type { VisibleRegionState } from './gridPointer.js'
 
 export function visibleRegionFromCamera(input: {

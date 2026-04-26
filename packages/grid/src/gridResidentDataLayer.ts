@@ -7,8 +7,8 @@ import { buildGridTextScene } from './gridTextScene.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import { CompactSelection } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
-import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer/pane-scene-types.js'
-import { getPaneFrame, resolvePaneLayout } from './renderer/pane-layout.js'
+import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer-v2/pane-scene-types.js'
+import { getPaneFrame, resolvePaneLayout } from './renderer-v2/pane-layout.js'
 import { packGridScenePacketV2 } from './renderer-v2/scene-packet-v2.js'
 
 const STATIC_RESIDENT_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)

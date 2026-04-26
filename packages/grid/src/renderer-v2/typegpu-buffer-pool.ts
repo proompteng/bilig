@@ -14,7 +14,7 @@ import {
 import { buildTextDecorationRectsFromScene, buildTextQuadsFromScene, type TextDecorationRect } from './line-text-quad-buffer.js'
 import type { WorkbookPaneBufferEntry, WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
-import type { WorkbookRenderPaneState } from '../renderer/pane-scene-types.js'
+import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import {
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
   GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,

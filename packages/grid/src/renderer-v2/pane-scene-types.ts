@@ -2,7 +2,7 @@ import type { Viewport } from '@bilig/protocol'
 import type { GridGpuScene } from '../gridGpuScene.js'
 import type { GridTextScene } from '../gridTextScene.js'
 import type { Rectangle } from '../gridTypes.js'
-import type { GridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
+import type { GridScenePacketV2 } from './scene-packet-v2.js'
 
 export type WorkbookPaneId = 'body' | 'top' | 'left' | 'corner'
 

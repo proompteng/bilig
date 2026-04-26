@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { resolveGridRenderLayerIndex } from '../renderer/grid-render-layers.js'
+import { resolveGridRenderLayerIndex } from '../renderer-v2/grid-render-layers.js'
 
 describe('grid render layers', () => {
   test('keeps text above selection fill and below active cell border', () => {

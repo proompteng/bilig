@@ -1,4 +1,4 @@
-import type { GridGpuCounters } from '../renderer/grid-render-contract.js'
+import type { GridGpuCounters } from './grid-render-contract.js'
 
 export interface GridRenderDebugSnapshot {
   readonly frameMs: number
