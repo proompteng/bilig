@@ -5,6 +5,7 @@ import { WorkbookStore } from '../workbook-store.js'
 import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup } from '../engine/runtime-state.js'
 import { createSortedColumnSearchService } from '../engine/services/sorted-column-search-service.js'
+import { isLookupColumnOwner } from '../engine/services/lookup-column-owner.js'
 import { createEngineRuntimeColumnStoreService } from '../engine/services/runtime-column-store-service.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 import type {
@@ -285,6 +286,87 @@ describe('createSortedColumnSearchService', () => {
         matchMode: 1,
       }),
     ).toEqual({ handled: true, position: 2 })
+  })
+
+  it('uses owner-backed uniform approximate summaries before probing owner numeric arrays', () => {
+    const workbook = new WorkbookStore('sorted-index-owner-uniform-fast-path')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[10, 20, 30, 40].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `A${index + 1}`, value)
+    })
+    ;[40, 30, 20, 10].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `B${index + 1}`, value)
+    })
+
+    const sorted = createSorted(workbook, strings)
+
+    const ascendingPrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 0,
+    })
+    expect(ascendingPrepared.internalOwner).toBeDefined()
+    expect(ascendingPrepared.uniformStart).toBe(10)
+    expect(ascendingPrepared.uniformStep).toBe(10)
+
+    const ascendingOwner = ascendingPrepared.internalOwner
+    if (!isLookupColumnOwner(ascendingOwner)) {
+      throw new Error('expected ascending prepared lookup to use an owner')
+    }
+    Object.defineProperty(ascendingOwner, 'numericValues', {
+      value: new Float64Array([Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+    })
+
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 25 },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 2 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Empty, value: null },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: undefined })
+
+    const descendingPrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 3,
+      col: 1,
+    })
+    expect(descendingPrepared.internalOwner).toBeDefined()
+    expect(descendingPrepared.uniformStart).toBe(40)
+    expect(descendingPrepared.uniformStep).toBe(-10)
+
+    const descendingOwner = descendingPrepared.internalOwner
+    if (!isLookupColumnOwner(descendingOwner)) {
+      throw new Error('expected descending prepared lookup to use an owner')
+    }
+    Object.defineProperty(descendingOwner, 'numericValues', {
+      value: new Float64Array([Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+    })
+
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 25 },
+        prepared: descendingPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 2 })
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Boolean, value: true },
+        prepared: descendingPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 4 })
   })
 
   it('covers fallback approximate indices when owner coverage is unavailable and invalidates on type-changing writes', () => {

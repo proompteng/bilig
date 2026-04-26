@@ -5,14 +5,7 @@ import type { ExactVectorMatchResult } from './exact-column-index-service.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
-import {
-  isLookupColumnOwner,
-  sliceOffsetBounds,
-  summarizeApproximateRange,
-  supportsNumericApproximateRange,
-  supportsTextApproximateRange,
-  type LookupColumnOwner,
-} from './lookup-column-owner.js'
+import { isLookupColumnOwner, sliceOffsetBounds, summarizeApproximateRange, type LookupColumnOwner } from './lookup-column-owner.js'
 
 export interface ApproximateVectorMatchRequest {
   lookupValue: CellValue
@@ -71,6 +64,12 @@ interface ApproximateColumnIndexEntry {
 }
 
 type ApproximateComparable = { kind: 'empty' } | { kind: 'numeric'; value: number } | { kind: 'text'; value: string } | { kind: 'invalid' }
+type UniformNumericApproximateMatchResult =
+  | { handled: false }
+  | {
+      handled: true
+      position: number | undefined
+    }
 
 interface SingleColumnBounds {
   rowStart: number
@@ -112,6 +111,48 @@ function compareApproximateText(left: string, right: string): number {
     return 0
   }
   return left < right ? -1 : 1
+}
+
+function findUniformNumericApproximatePosition(args: {
+  lookupValue: number
+  length: number
+  matchMode: 1 | -1
+  uniformStart: number | undefined
+  uniformStep: number | undefined
+}): UniformNumericApproximateMatchResult {
+  if (args.uniformStart === undefined || args.uniformStep === undefined) {
+    return { handled: false }
+  }
+  if (args.length <= 0) {
+    return { handled: true, position: undefined }
+  }
+  const { lookupValue, length, matchMode, uniformStart, uniformStep } = args
+  const lastValue = uniformStart + uniformStep * (length - 1)
+  if (matchMode === 1 && uniformStep > 0) {
+    if (lookupValue < uniformStart) {
+      return { handled: true, position: undefined }
+    }
+    if (lookupValue >= lastValue) {
+      return { handled: true, position: length }
+    }
+    const position = Math.floor((lookupValue - uniformStart) / uniformStep) + 1
+    return { handled: true, position: Math.min(length, Math.max(1, position)) }
+  }
+  if (matchMode === -1 && uniformStep < 0) {
+    if (lookupValue > uniformStart) {
+      return { handled: true, position: undefined }
+    }
+    if (lookupValue <= lastValue) {
+      return { handled: true, position: length }
+    }
+    const position = Math.floor((uniformStart - lookupValue) / -uniformStep) + 1
+    return { handled: true, position: Math.min(length, Math.max(1, position)) }
+  }
+  return { handled: false }
+}
+
+function supportsPreparedApproximateKind(prepared: PreparedApproximateVectorLookup, kind: 'numeric' | 'text', matchMode: 1 | -1): boolean {
+  return prepared.comparableKind === kind && (matchMode === 1 ? prepared.sortedAscending : prepared.sortedDescending)
 }
 
 function detectUniformNumericStep(values: Float64Array): { start: number; step: number } | undefined {
@@ -560,7 +601,17 @@ export function createSortedColumnSearchService(args: {
         return { handled: false }
       }
       if (request.lookupValue.tag === ValueTag.Empty) {
-        if (supportsNumericApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+        if (supportsPreparedApproximateKind(prepared, 'numeric', request.matchMode)) {
+          const uniformResult = findUniformNumericApproximatePosition({
+            lookupValue: 0,
+            length: bounds.end - bounds.start + 1,
+            matchMode: request.matchMode,
+            uniformStart: prepared.uniformStart,
+            uniformStep: prepared.uniformStep,
+          })
+          if (uniformResult.handled) {
+            return uniformResult
+          }
           let low = bounds.start
           let high = bounds.end
           let best = -1
@@ -583,7 +634,7 @@ export function createSortedColumnSearchService(args: {
           }
           return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
         }
-        if (!supportsTextApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+        if (!supportsPreparedApproximateKind(prepared, 'text', request.matchMode)) {
           return { handled: false }
         }
         let low = bounds.start
@@ -609,7 +660,7 @@ export function createSortedColumnSearchService(args: {
         return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
       }
       if (request.lookupValue.tag === ValueTag.Number || request.lookupValue.tag === ValueTag.Boolean) {
-        if (!supportsNumericApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+        if (!supportsPreparedApproximateKind(prepared, 'numeric', request.matchMode)) {
           return { handled: false }
         }
         let lookupValue: number
@@ -622,6 +673,16 @@ export function createSortedColumnSearchService(args: {
             break
           default:
             return { handled: false }
+        }
+        const uniformResult = findUniformNumericApproximatePosition({
+          lookupValue,
+          length: bounds.end - bounds.start + 1,
+          matchMode: request.matchMode,
+          uniformStart: prepared.uniformStart,
+          uniformStep: prepared.uniformStep,
+        })
+        if (uniformResult.handled) {
+          return uniformResult
         }
         let low = bounds.start
         let high = bounds.end
@@ -646,7 +707,7 @@ export function createSortedColumnSearchService(args: {
         return { handled: true, position: best === -1 ? undefined : best - bounds.start + 1 }
       }
       if (request.lookupValue.tag === ValueTag.String) {
-        if (!supportsTextApproximateRange(owner, prepared.rowStart, prepared.rowEnd, request.matchMode)) {
+        if (!supportsPreparedApproximateKind(prepared, 'text', request.matchMode)) {
           return { handled: false }
         }
         const lookupValue = args.runtimeColumnStore.normalizeLookupText(request.lookupValue)
@@ -704,29 +765,15 @@ export function createSortedColumnSearchService(args: {
       if (!values) {
         return { handled: false }
       }
-      if (prepared.uniformStart !== undefined && prepared.uniformStep !== undefined) {
-        const { uniformStart, uniformStep } = prepared
-        const lastValue = uniformStart + uniformStep * (values.length - 1)
-        if (request.matchMode === 1 && uniformStep > 0) {
-          if (lookupValue < uniformStart) {
-            return { handled: true, position: undefined }
-          }
-          if (lookupValue >= lastValue) {
-            return { handled: true, position: values.length }
-          }
-          const position = Math.floor((lookupValue - uniformStart) / uniformStep) + 1
-          return { handled: true, position: Math.min(values.length, Math.max(1, position)) }
-        }
-        if (request.matchMode === -1 && uniformStep < 0) {
-          if (lookupValue > uniformStart) {
-            return { handled: true, position: undefined }
-          }
-          if (lookupValue <= lastValue) {
-            return { handled: true, position: values.length }
-          }
-          const position = Math.floor((uniformStart - lookupValue) / -uniformStep) + 1
-          return { handled: true, position: Math.min(values.length, Math.max(1, position)) }
-        }
+      const uniformResult = findUniformNumericApproximatePosition({
+        lookupValue,
+        length: values.length,
+        matchMode: request.matchMode,
+        uniformStart: prepared.uniformStart,
+        uniformStep: prepared.uniformStep,
+      })
+      if (uniformResult.handled) {
+        return uniformResult
       }
       let low = 0
       let high = values.length - 1
