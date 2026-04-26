@@ -3,6 +3,10 @@ export const BROWSER_PERF_GREP = '@browser-perf'
 export const BROWSER_DEEP_GREP = '@browser-deep'
 export const BROWSER_SERIAL_GREP = '@browser-serial'
 export const BROWSER_FUZZ_GREP = '@fuzz-browser'
+export const BROWSER_WEBGPU_GREP = '@browser-webgpu'
+const WEBGPU_BROWSER_ENV = { BILIG_BROWSER_WEBGPU: '1' } as const
+const WEBGPU_PERF_GREP = `${BROWSER_WEBGPU_GREP}.*${BROWSER_PERF_GREP}|${BROWSER_PERF_GREP}.*${BROWSER_WEBGPU_GREP}`
+const WEBGPU_DEEP_GREP = `${BROWSER_WEBGPU_GREP}.*${BROWSER_DEEP_GREP}|${BROWSER_DEEP_GREP}.*${BROWSER_WEBGPU_GREP}`
 
 export interface BrowserTestPhase {
   readonly label: string
@@ -38,32 +42,58 @@ export function resolveBrowserTestPhases(input: {
   const includePerf = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_PERF)
   const includeDeep = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_DEEP)
   const includeFuzz = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_FUZZ)
-  const defaultExcludedGreps = [CLIPBOARD_GLOBAL_GREP, BROWSER_SERIAL_GREP, BROWSER_FUZZ_GREP, BROWSER_PERF_GREP, BROWSER_DEEP_GREP]
+  const defaultExcludedGreps = [
+    CLIPBOARD_GLOBAL_GREP,
+    BROWSER_SERIAL_GREP,
+    BROWSER_FUZZ_GREP,
+    BROWSER_PERF_GREP,
+    BROWSER_DEEP_GREP,
+    BROWSER_WEBGPU_GREP,
+  ]
   const phases: BrowserTestPhase[] = [
     {
       label: 'parallel browser tests',
       args: ['--grep-invert', defaultExcludedGreps.join('|')],
     },
+    {
+      label: 'browser webgpu tests',
+      args: ['--workers=1', '--grep', BROWSER_WEBGPU_GREP, '--grep-invert', [BROWSER_PERF_GREP, BROWSER_DEEP_GREP].join('|')],
+      env: WEBGPU_BROWSER_ENV,
+    },
   ]
 
   if (includePerf) {
-    phases.push({
-      label: 'browser perf tests',
-      args: ['--workers=1', '--grep', BROWSER_PERF_GREP],
-    })
+    phases.push(
+      {
+        label: 'browser perf tests',
+        args: ['--workers=1', '--grep', BROWSER_PERF_GREP, '--grep-invert', BROWSER_WEBGPU_GREP],
+      },
+      {
+        label: 'browser webgpu perf tests',
+        args: ['--workers=1', '--grep', WEBGPU_PERF_GREP],
+        env: WEBGPU_BROWSER_ENV,
+      },
+    )
   }
 
   if (includeDeep) {
-    phases.push({
-      label: 'browser deep tests',
-      args: ['--workers=1', '--grep', BROWSER_DEEP_GREP],
-    })
+    phases.push(
+      {
+        label: 'browser deep tests',
+        args: ['--workers=1', '--grep', BROWSER_DEEP_GREP, '--grep-invert', BROWSER_WEBGPU_GREP],
+      },
+      {
+        label: 'browser webgpu deep tests',
+        args: ['--workers=1', '--grep', WEBGPU_DEEP_GREP],
+        env: WEBGPU_BROWSER_ENV,
+      },
+    )
   }
 
   phases.push(
     {
       label: 'browser serial tests',
-      args: ['--workers=1', '--grep', BROWSER_SERIAL_GREP],
+      args: ['--workers=1', '--grep', BROWSER_SERIAL_GREP, '--grep-invert', BROWSER_WEBGPU_GREP],
     },
     {
       label: 'clipboard global tests',

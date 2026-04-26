@@ -81,7 +81,7 @@ async function waitForTypeGpuRenderer(page: Page): Promise<void> {
   await page.waitForSelector('[data-testid="grid-pane-renderer"]', { state: 'attached', timeout: 15_000 })
 }
 
-test('isolated workbook pane renderer draws grid content through typegpu', async ({ page }, testInfo) => {
+test('@browser-webgpu isolated workbook pane renderer draws grid content through typegpu', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 640, height: 480 })
   await installTypeGpuReadbackHarness(page)
   await gotoWorkbookShell(page, ISOLATED_WORKBOOK_PANE_RENDERER_PATH)
@@ -123,7 +123,7 @@ test('main workbook shell mounts typegpu-v2 as the only grid renderer', async ({
   await expect(page.locator('[data-pane-renderer="workbook-pane-renderer"]')).toHaveCount(0)
 })
 
-test('@browser-serial main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-serial main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {
   const rangeFillPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 2 + 24,
     y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 2 + Math.floor(PRODUCT_ROW_HEIGHT / 2),
@@ -239,7 +239,9 @@ test('@browser-serial main workbook shell grid renders and updates through typeg
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')
 })
 
-test('@browser-perf main workbook shell keeps resident typegpu content visible while selection moves', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-perf main workbook shell keeps resident typegpu content visible while selection moves', async ({
+  page,
+}, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -316,7 +318,7 @@ test('@browser-perf main workbook shell keeps resident typegpu content visible w
   )
 })
 
-test('@browser-perf main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({
+test('@browser-webgpu @browser-perf main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({
   page,
 }, testInfo) => {
   test.slow()
@@ -381,7 +383,9 @@ test('@browser-perf main workbook shell keeps header labels and body text visibl
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
-test('@browser-deep main workbook shell keeps typegpu grid lines exactly aligned after diagonal scroll', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-deep main workbook shell keeps typegpu grid lines exactly aligned after diagonal scroll', async ({
+  page,
+}, testInfo) => {
   const scrollLeft = PRODUCT_COLUMN_WIDTH * 4 + 17
   const scrollTop = PRODUCT_ROW_HEIGHT * 5 + 9
   const visibleStartCol = Math.floor(scrollLeft / PRODUCT_COLUMN_WIDTH)
@@ -460,7 +464,9 @@ test('@browser-deep main workbook shell keeps typegpu grid lines exactly aligned
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-exact-scroll-readback.png', 'main-workbook-grid-exact-scroll-readback')
 })
 
-test('@browser-deep main workbook shell draws typegpu resize guides at exact geometry positions', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-deep main workbook shell draws typegpu resize guides at exact geometry positions', async ({
+  page,
+}, testInfo) => {
   const columnGuideX = PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH - 1
   const rowGuideY = PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT - 1
 
@@ -534,7 +540,7 @@ test('@browser-deep main workbook shell draws typegpu resize guides at exact geo
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-resize-guide-readback.png', 'main-workbook-grid-resize-guide-readback')
 })
 
-test('@browser-deep main workbook shell keeps DOM editor overlay aligned to typegpu geometry while scrolling', async ({
+test('@browser-webgpu @browser-deep main workbook shell keeps DOM editor overlay aligned to typegpu geometry while scrolling', async ({
   page,
 }, testInfo) => {
   const targetCol = 3
@@ -642,7 +648,9 @@ test('@browser-deep main workbook shell keeps DOM editor overlay aligned to type
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-editor-overlay-readback.png', 'main-workbook-grid-editor-overlay-readback')
 })
 
-test('@browser-deep main workbook shell refreshes typegpu resident packets after style-only changes', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-deep main workbook shell refreshes typegpu resident packets after style-only changes', async ({
+  page,
+}, testInfo) => {
   const fillPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
     y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
@@ -707,7 +715,9 @@ test('@browser-deep main workbook shell refreshes typegpu resident packets after
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-style-refresh-readback.png', 'main-workbook-grid-style-refresh-readback')
 })
 
-test('@browser-perf main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-perf main workbook shell keeps typegpu content visible after hover-driven scroll', async ({
+  page,
+}, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -769,7 +779,9 @@ test('@browser-perf main workbook shell keeps typegpu content visible after hove
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-hover-scroll-readback.png', 'main-workbook-grid-hover-scroll-readback')
 })
 
-test('@browser-perf main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({ page }, testInfo) => {
+test('@browser-webgpu @browser-perf main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({
+  page,
+}, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 900, height: 680 })
   await installTypeGpuReadbackHarness(page)

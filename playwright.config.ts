@@ -5,6 +5,7 @@ const browserStack = process.env['BILIG_BROWSER_STACK']
 const useComposeBrowserStack = browserStack === 'compose'
 const useManagedBrowserStack = process.env['BILIG_E2E_MANAGED_STACK'] === '1'
 const fuzzBrowserMode = process.env['BILIG_FUZZ_BROWSER'] === '1'
+const webGpuBrowserMode = process.env['BILIG_BROWSER_WEBGPU'] === '1'
 const localNoCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
 const remoteSyncEnabled = process.env['BILIG_E2E_REMOTE_SYNC'] !== '0'
 const ciContainerMode = process.platform === 'linux' && (process.env['CI'] === '1' || process.env['CI'] === 'true')
@@ -25,8 +26,22 @@ const browserLocalStackCommand = buildBrowserLocalStackCommand({
   remoteSyncEnabled,
   webMode: resolveBrowserLocalWebMode(process.env),
 })
-const webGpuLaunchArgs = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist']
-const chromiumLaunchArgs = ciContainerMode ? ['--no-sandbox', '--disable-dev-shm-usage', ...webGpuLaunchArgs] : webGpuLaunchArgs
+const localWebGpuLaunchArgs = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist']
+const ciBaseLaunchArgs = ['--no-sandbox', '--disable-dev-shm-usage']
+const ciWebGpuLaunchArgs = [
+  ...ciBaseLaunchArgs,
+  '--headless=new',
+  '--enable-unsafe-webgpu',
+  '--ignore-gpu-blocklist',
+  '--use-angle=vulkan',
+  '--enable-features=Vulkan',
+  '--disable-vulkan-surface',
+]
+const chromiumLaunchArgs = ciContainerMode
+  ? webGpuBrowserMode
+    ? ciWebGpuLaunchArgs
+    : [...ciBaseLaunchArgs, '--disable-gpu']
+  : localWebGpuLaunchArgs
 
 export default defineConfig({
   testDir: './e2e/tests',
