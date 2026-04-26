@@ -164,6 +164,7 @@ Files:
 - new `packages/grid/src/runtime/gridCameraRuntime.ts`
 - new `packages/grid/src/renderer-v3/overlay-layer.ts`
 - new `packages/grid/src/runtime/gridOverlayRuntime.ts`
+- new `packages/grid/src/renderer-v3/gpu-buffer-arena.ts`
 
 Implement:
 
@@ -178,6 +179,7 @@ Implement:
 - runtime-owned axis query primitive for offsets, spans, tile origins, visible ranges, and monotonic axis revisions.
 - runtime-owned camera primitive for visible region computation and fixed visible tile-key derivation.
 - dynamic overlay runtime and packed instance-buffer contract independent from data scene packets.
+- backend-agnostic GPU buffer arena primitive with capacity-class free lists and explicit trim destruction.
 
 ### Phase 7: text atlas service
 
@@ -252,6 +254,7 @@ Completed in the first implementation tranche:
 - `packages/grid/src/runtime/gridAxisRuntime.ts` starts the axis runtime split with update-owned prefix indexes and tile-origin queries outside React render state.
 - `packages/grid/src/runtime/gridCameraRuntime.ts` starts the camera runtime split with scroll-to-visible-region math and content tile-interest key derivation outside React render state.
 - `packages/grid/src/renderer-v3/overlay-layer.ts` and `packages/grid/src/runtime/gridOverlayRuntime.ts` add small packed overlay batches for selection/resize/hover/presence-style visuals without data tile invalidation.
+- `packages/grid/src/renderer-v3/gpu-buffer-arena.ts` adds a reusable buffer arena contract for V3 GPU resources so normal eviction can release to free lists instead of destroying buffers.
 
 Remaining work from this design:
 
