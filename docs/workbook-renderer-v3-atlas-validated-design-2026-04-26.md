@@ -165,6 +165,8 @@ Files:
 - new `packages/grid/src/renderer-v3/overlay-layer.ts`
 - new `packages/grid/src/runtime/gridOverlayRuntime.ts`
 - new `packages/grid/src/renderer-v3/gpu-buffer-arena.ts`
+- new `packages/grid/src/renderer-v3/tile-packet-v3.ts`
+- new `packages/grid/src/renderer-v3/draw-command-buffer.ts`
 - new `packages/grid/src/runtime/gridRuntimeHost.ts`
 - new `packages/grid/src/runtime/gridTileCoordinator.ts`
 - new `apps/web/src/projected-damage-bus.ts`
@@ -184,6 +186,8 @@ Implement:
 - runtime-owned camera primitive for visible region computation and fixed visible tile-key derivation.
 - dynamic overlay runtime and packed instance-buffer contract independent from data scene packets.
 - backend-agnostic GPU buffer arena primitive with capacity-class free lists and explicit trim destruction.
+- fixed content tile packet contract with revision-tuple validation fields and byte accounting.
+- pane-placement draw command buffer that separates content tile identity from body/frozen-pane placement.
 - imperative runtime host that composes axis, camera, overlay, and visible tile-key state for the future React shell adapter.
 - tile coordinator that emits V3 tile-interest batches, consumes visible dirty tile damage, and classifies exact/stale/miss readiness against the V3 residency cache.
 - dirty tile index application of V3 workbook delta batches, including bounded axis dirty ranges that are consumed per visible tile.
@@ -264,6 +268,8 @@ Completed in the first implementation tranche:
 - `packages/grid/src/runtime/gridCameraRuntime.ts` starts the camera runtime split with scroll-to-visible-region math and content tile-interest key derivation outside React render state.
 - `packages/grid/src/renderer-v3/overlay-layer.ts` and `packages/grid/src/runtime/gridOverlayRuntime.ts` add small packed overlay batches for selection/resize/hover/presence-style visuals without data tile invalidation.
 - `packages/grid/src/renderer-v3/gpu-buffer-arena.ts` adds a reusable buffer arena contract for V3 GPU resources so normal eviction can release to free lists instead of destroying buffers.
+- `packages/grid/src/renderer-v3/tile-packet-v3.ts` defines fixed content tile packets keyed by `TileKey53`, with bounds derived from protocol tile dimensions and validation by revision tuple rather than scene hashing.
+- `packages/grid/src/renderer-v3/draw-command-buffer.ts` introduces pane placement commands so body and frozen panes can draw the same content tile under different clips/transforms.
 - `packages/grid/src/runtime/gridRuntimeHost.ts` composes the first V3 runtimes behind an imperative host API that React can eventually mount and dispose instead of coordinating renderer internals.
 - `packages/grid/src/runtime/gridTileCoordinator.ts` gives the host a concrete tile-interest and readiness coordinator over `TileResidencyV3` and `DirtyTileIndexV3`.
 - `packages/grid/src/renderer-v3/tile-damage-index.ts` now applies sheet-level V3 dirty range batches to fixed tile damage and keeps axis dirty ranges bounded by tile rows/columns instead of expanding them over the full sheet.
