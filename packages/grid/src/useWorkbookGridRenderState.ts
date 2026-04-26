@@ -216,6 +216,7 @@ export function useWorkbookGridRenderState(input: {
   }, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
+  const shouldUseRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
   const gridTheme = useMemo(() => getGridTheme(), [])
   const columnResizePreviewRef = useRef<{
     sheetName: string
@@ -387,6 +388,9 @@ export function useWorkbookGridRenderState(input: {
     [freezeCols, freezeRows, residentViewport.colEnd, residentViewport.colStart, residentViewport.rowEnd, residentViewport.rowStart],
   )
   const warmResidentViewports = useMemo(() => {
+    if (shouldUseRenderTileSource) {
+      return []
+    }
     const camera = gridCameraRef.current
     return resolveGridTileResidencyV2({
       velocityX: camera?.velocityX ?? 0,
@@ -394,7 +398,7 @@ export function useWorkbookGridRenderState(input: {
       visibleViewport: viewport,
       warmNeighbors: 1,
     }).warm.map(tileKeyToViewport)
-  }, [viewport])
+  }, [shouldUseRenderTileSource, viewport])
   const getHeaderCellLocalBounds = useCallback(
     (col: number, row: number): Rectangle | undefined => {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
@@ -698,7 +702,6 @@ export function useWorkbookGridRenderState(input: {
         reason: 'prefetch',
       }))
   }, [freezeCols, freezeRows, dprBucket, gridCameraStore, residentViewport, sheetName, warmResidentViewports])
-  const shouldUseRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
   const residentSceneEngine = shouldUseRenderTileSource ? null : supportsResidentPaneScenes(engine) ? engine : null
   const shouldUseDamageOnlyViewportSubscription = residentSceneEngine !== null
   const [warmSceneRevision, setWarmSceneRevision] = useState(0)
