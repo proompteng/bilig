@@ -25,6 +25,7 @@ import {
 } from '../report-competitive-families.js'
 
 const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
+  'build-from-sheets',
   'build-dense-literals',
   'build-mixed-content',
   'build-parser-cache-row-templates',
@@ -33,10 +34,12 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'rebuild-and-recalculate',
   'rebuild-config-toggle',
   'rebuild-runtime-from-snapshot',
+  'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
   'partial-recompute-mixed-frontier',
   'single-formula-edit-recalc',
+  'batch-edit-recalc',
   'batch-edit-single-column',
   'batch-edit-multi-column',
   'batch-edit-single-column-with-undo',
@@ -48,6 +51,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'structural-insert-columns',
   'structural-delete-columns',
   'structural-move-columns',
+  'range-read',
   'range-read-dense',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
@@ -64,7 +68,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
 ]
 
 const benchmarkDir = dirname(fileURLToPath(import.meta.url))
-const expandedBaselinePath = join(benchmarkDir, '..', '..', 'baselines', 'workpaper-vs-hyperformula-expanded.json')
+const expandedBaselinePath = join(benchmarkDir, '..', '..', 'baselines', 'workpaper-vs-hyperformula.json')
 
 function familyEligibility(family: ExpandedCompetitiveFamily): { scorecardEligible: boolean; exclusionReason: string | null } {
   switch (family) {
@@ -146,7 +150,7 @@ describe('expanded comparative benchmark workloads', () => {
     const parsed: unknown = JSON.parse(formatExpandedCompetitiveFamilyReport([]))
 
     expect(parsed).toEqual({
-      suite: 'workpaper-vs-hyperformula-expanded',
+      suite: 'workpaper-vs-hyperformula',
       families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
         family,
         workloads: EXPANDED_COMPARATIVE_FAMILY_GROUPS[family],
@@ -170,7 +174,7 @@ describe('expanded comparative benchmark workloads', () => {
 
   it('builds an expanded benchmark report with attached family summaries', () => {
     expect(buildExpandedComparativeBenchmarkReport([])).toEqual({
-      suite: 'workpaper-vs-hyperformula-expanded',
+      suite: 'workpaper-vs-hyperformula',
       results: [],
       families: EXPANDED_COMPARATIVE_FAMILY_ORDER.map((family) => ({
         family,

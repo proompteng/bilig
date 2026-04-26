@@ -140,7 +140,7 @@ Initial runtime-affecting path set:
 - `scripts/gen-workpaper-hyperformula-audit.ts`
 - `scripts/gen-workpaper-benchmark-baseline.ts`
 - `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
-- `scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts`
+- `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
 - `scripts/workpaper-external-smoke.ts`
 - `.github/workflows/headless-package.yml`
 

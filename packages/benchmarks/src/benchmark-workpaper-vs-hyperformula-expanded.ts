@@ -134,7 +134,7 @@ export type EngineCounterNumericSummary = Record<keyof EngineCounters, NumericSu
 export type ExpandedComparativeBenchmarkResult = ExpandedComparativeComparableResult | ExpandedComparativeLeadershipResult
 
 export interface ExpandedComparativeBenchmarkReport {
-  suite: 'workpaper-vs-hyperformula-expanded'
+  suite: 'workpaper-vs-hyperformula'
   results: readonly ExpandedComparativeBenchmarkResult[]
   families: readonly ExpandedCompetitiveFamilySummary[]
   scorecard: ReturnType<typeof buildExpandedCompetitiveFamilyReport>['scorecard']
@@ -157,6 +157,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
 ): ExpandedComparativeBenchmarkResult[] {
   const runtimeOptions = resolveSuiteOptions(options)
   return [
+    runComparableScenario(
+      'build-from-sheets',
+      { cols: 24, rows: 160, materializedCells: 160 * 24 },
+      runtimeOptions,
+      () => measureWorkPaperDenseBuildSample(160, 24),
+      () => measureHyperFormulaDenseBuildSample(160, 24),
+    ),
     runComparableScenario(
       'build-dense-literals',
       { cols: 24, rows: 160, materializedCells: 160 * 24 },
@@ -214,6 +221,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaRebuildRuntimeFromSnapshotSample(1_500),
     ),
     runComparableScenario(
+      'single-edit-recalc',
+      { downstreamCount: 2_000 },
+      runtimeOptions,
+      () => measureWorkPaperLegacySingleEditSample(2_000),
+      () => measureHyperFormulaLegacySingleEditSample(2_000),
+    ),
+    runComparableScenario(
       'single-edit-chain',
       { downstreamCount: 2_000 },
       runtimeOptions,
@@ -240,6 +254,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperFormulaEditSample(1_500),
       () => measureHyperFormulaFormulaEditSample(1_500),
+    ),
+    runComparableScenario(
+      'batch-edit-recalc',
+      { editCount: 500 },
+      runtimeOptions,
+      () => measureWorkPaperLegacyBatchEditSample(500),
+      () => measureHyperFormulaLegacyBatchEditSample(500),
     ),
     runComparableScenario(
       'batch-edit-single-column',
@@ -317,6 +338,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperStructuralMoveColumnsSample(1_500),
       () => measureHyperFormulaStructuralMoveColumnsSample(1_500),
+    ),
+    runComparableScenario(
+      'range-read',
+      { cols: 24, rows: 240, materializedCells: 240 * 24 },
+      runtimeOptions,
+      () => measureWorkPaperRangeReadSample(240, 24),
+      () => measureHyperFormulaRangeReadSample(240, 24),
     ),
     runComparableScenario(
       'range-read-dense',
@@ -583,6 +611,37 @@ function measureHyperFormulaManySheetsBuildSample(sheetCount: number, rows: numb
   })
 }
 
+function measureWorkPaperLegacySingleEditSample(downstreamCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaChainRow(downstreamCount)] })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    (changes) => ({
+      changeCount: Array.isArray(changes) ? changes.length : 0,
+      terminalFormula: workbook.getCellFormula(address(sheetId, 0, downstreamCount)) ?? null,
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, downstreamCount))),
+    }),
+  )
+}
+
+function measureHyperFormulaLegacySingleEditSample(downstreamCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet([buildFormulaChainRow(downstreamCount)]) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    (changes) => ({
+      changeCount: Array.isArray(changes) ? changes.length : 0,
+      terminalFormula: workbook.getCellFormula(address(sheetId, 0, downstreamCount)) ?? null,
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, downstreamCount))),
+    }),
+  )
+}
+
 function measureWorkPaperSingleChainEditSample(downstreamCount: number): BenchmarkSample {
   const workbook = WorkPaper.buildFromSheets({ Bench: [buildFormulaChainRow(downstreamCount)] })
   const sheetId = workbook.getSheetId('Bench')!
@@ -668,6 +727,45 @@ function measureHyperFormulaFormulaEditSample(downstreamCount: number): Benchmar
     () => ({
       editedFormula: workbook.getCellFormula(address(sheetId, 0, 2)) ?? null,
       terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, downstreamCount + 2))),
+    }),
+  )
+}
+
+function measureWorkPaperLegacyBatchEditSample(editCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildValueFormulaRows(editCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () =>
+      workbook.batch(() => {
+        for (let row = 0; row < editCount; row += 1) {
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
+        }
+      }),
+    (changes) => ({
+      changeCount: Array.isArray(changes) ? changes.length : 0,
+      sampleFormulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, editCount - 1, 1))),
+    }),
+  )
+}
+
+function measureHyperFormulaLegacyBatchEditSample(editCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildValueFormulaRows(editCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () =>
+      workbook.batch(() => {
+        for (let row = 0; row < editCount; row += 1) {
+          workbook.setCellContents(address(sheetId, row, 0), row * 3)
+        }
+      }),
+    (changes) => ({
+      changeCount: Array.isArray(changes) ? changes.length : 0,
+      sampleFormulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, editCount - 1, 1))),
     }),
   )
 }

@@ -61,14 +61,11 @@ The target claim is narrower and stricter than “faster in general”:
    publishable OSS packaging
 4. every claimed win is backed by a checked-in artifact, not by anecdotal profiling
 
-The repo now tracks two benchmark artifacts on purpose:
+The repo now tracks one unified competitive benchmark artifact:
 
-- `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
-  This is the default competitive matrix. It expands the proof surface across more build,
-  mutation, and lookup shapes.
 - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
-  This is the narrow control suite. It stays small and stable so regression signals are easy to
-  trust.
+  This is the default competitive matrix. It includes the former control workloads and expands the
+  proof surface across more build, mutation, and lookup shapes.
 
 ## Source Corpus
 
@@ -94,11 +91,11 @@ Reviewed current `bilig` implementation:
 - `/Users/gregkonush/github.com/bilig/packages/formula/src/js-evaluator.ts`
 - `/Users/gregkonush/github.com/bilig/packages/formula/src/builtins/lookup.ts`
 - `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
-- `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
+- `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 
 ## Current Measured Gap
 
-Current control-suite direct-comparison results from
+Current legacy control-workload direct-comparison results from
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`:
 
 | Workload | `WorkPaper` mean | HyperFormula mean | Current result |
@@ -121,7 +118,7 @@ This is the important reading:
   - persistent indexed search is still slower than HyperFormula’s core search subsystem
   - non-indexed exact lookup still needs a dedicated fast path
 
-The broader matrix now makes the remaining risk clearer:
+The unified matrix now makes the remaining risk clearer:
 
 - `WorkPaper` leads `7/13` directly comparable expanded workloads
 - HyperFormula still leads `6/13`
@@ -531,8 +528,6 @@ Required commands:
 
 - `pnpm workpaper:bench:competitive:generate`
 - `pnpm workpaper:bench:competitive:check`
-- `pnpm workpaper:bench:competitive:control:generate`
-- `pnpm workpaper:bench:competitive:control:check`
 - targeted `vitest` suites for lookup, engine, and headless paths
 
 ## Risks

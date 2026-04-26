@@ -7,11 +7,14 @@ import { dirname, join, resolve } from 'node:path'
 import {
   DEFAULT_COMPETITIVE_SAMPLE_COUNT,
   DEFAULT_COMPETITIVE_WARMUP_COUNT,
-  runWorkPaperVsHyperFormulaBenchmarkSuite,
-  type ComparativeBenchmarkResult,
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula.ts'
+import {
+  EXPANDED_COMPARATIVE_WORKLOADS,
+  runWorkPaperVsHyperFormulaExpandedBenchmarkSuite,
+  type ExpandedComparativeBenchmarkResult,
+} from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts'
 
-interface CompetitiveBenchmarkArtifact {
+interface ExpandedCompetitiveBenchmarkArtifact {
   schemaVersion: 1
   suite: 'workpaper-vs-hyperformula'
   generatedAt: string
@@ -39,10 +42,10 @@ interface CompetitiveBenchmarkArtifact {
       version: string
     }
   }
-  results: ComparativeBenchmarkResult[]
+  results: ExpandedComparativeBenchmarkResult[]
 }
 
-interface CompetitiveBenchmarkArtifactShapeInput {
+interface ArtifactShapeInput {
   schemaVersion: 1
   suite: 'workpaper-vs-hyperformula'
   results: Array<{
@@ -69,28 +72,28 @@ const warmupCount = DEFAULT_COMPETITIVE_WARMUP_COUNT
 
 if (isCheckMode) {
   if (!existsSync(outputPath)) {
-    throw new Error(`WorkPaper competitive benchmark artifact is missing. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts`)
+    throw new Error('WorkPaper competitive benchmark artifact is missing. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts')
   }
 
   const existing = parseArtifactForShape(readFileSync(outputPath, 'utf8'))
   const actualShape = normalizeArtifactShape(existing)
+  const actualWorkloads = actualShape.workloads.map((workload) => workload.workload)
+  if (JSON.stringify(actualWorkloads) !== JSON.stringify([...EXPANDED_COMPARATIVE_WORKLOADS])) {
+    throw new Error(
+      'WorkPaper competitive benchmark artifact workload coverage is out of date. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts',
+    )
+  }
   const expectedShape = normalizeArtifactShape({
     schemaVersion: 1,
     suite: 'workpaper-vs-hyperformula',
-    results: [
-      comparableShape('build-from-sheets', ['cols', 'materializedCells', 'rows'], ['dimensions', 'terminalValue']),
-      comparableShape('single-edit-recalc', ['downstreamCount'], ['changeCount', 'terminalFormula', 'terminalValue']),
-      comparableShape('batch-edit-recalc', ['editCount'], ['changeCount', 'sampleFormulaValue']),
-      comparableShape('range-read', ['cols', 'materializedCells', 'rows'], ['readCols', 'readRows', 'terminalValue', 'topLeftValue']),
-      comparableShape('lookup-no-column-index', ['rowCount', 'useColumnIndex'], ['changeCount', 'formulaValue']),
-      comparableShape('lookup-with-column-index', ['rowCount', 'useColumnIndex'], ['changeCount', 'formulaValue']),
-      leadershipShape('dynamic-array-filter', ['formula', 'rowCount'], ['changeCount', 'spillHeight', 'spillIsArray', 'spillValue']),
-    ],
+    results: [...EXPANDED_COMPARATIVE_WORKLOADS].map((workload) =>
+      workload === 'dynamic-array-filter' ? leadershipShape(workload, [], []) : comparableShape(workload, [], []),
+    ),
   })
 
   if (JSON.stringify(actualShape) !== JSON.stringify(expectedShape)) {
     throw new Error(
-      `WorkPaper competitive benchmark artifact shape is out of date. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts`,
+      'WorkPaper competitive benchmark artifact shape is out of date. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts',
     )
   }
 
@@ -111,7 +114,7 @@ if (isCheckMode) {
 const workpaperVersion = readPackageVersion(join(rootDir, 'packages', 'headless', 'package.json'))
 const hyperformulaMetadata = readHyperFormulaMetadata(localHyperFormulaRoot)
 
-const artifact: CompetitiveBenchmarkArtifact = {
+const artifact: ExpandedCompetitiveBenchmarkArtifact = {
   schemaVersion: 1,
   suite: 'workpaper-vs-hyperformula',
   generatedAt: new Date().toISOString(),
@@ -132,7 +135,7 @@ const artifact: CompetitiveBenchmarkArtifact = {
     },
     hyperformula: hyperformulaMetadata,
   },
-  results: runWorkPaperVsHyperFormulaBenchmarkSuite({
+  results: runWorkPaperVsHyperFormulaExpandedBenchmarkSuite({
     sampleCount,
     warmupCount,
   }),
@@ -152,11 +155,7 @@ console.log(
   ),
 )
 
-function comparableShape(
-  workload: string,
-  fixtureKeys: string[],
-  verificationKeys: string[],
-): CompetitiveBenchmarkArtifactShapeInput['results'][number] {
+function comparableShape(workload: string, fixtureKeys: string[], verificationKeys: string[]): ArtifactShapeInput['results'][number] {
   return {
     workload,
     category: 'directly-comparable',
@@ -174,11 +173,7 @@ function comparableShape(
   }
 }
 
-function leadershipShape(
-  workload: string,
-  fixtureKeys: string[],
-  verificationKeys: string[],
-): CompetitiveBenchmarkArtifactShapeInput['results'][number] {
+function leadershipShape(workload: string, fixtureKeys: string[], verificationKeys: string[]): ArtifactShapeInput['results'][number] {
   return {
     workload,
     category: 'leadership',
@@ -208,215 +203,116 @@ function measuredEngineShape(verificationKeys: string[]): Record<string, unknown
       samples: [],
     },
     memoryDeltaBytes: {
-      arrayBuffersBytes: {
-        max: 0,
-        mean: 0,
-        median: 0,
-        min: 0,
-        p95: 0,
-        samples: [],
-      },
-      externalBytes: {
-        max: 0,
-        mean: 0,
-        median: 0,
-        min: 0,
-        p95: 0,
-        samples: [],
-      },
-      heapTotalBytes: {
-        max: 0,
-        mean: 0,
-        median: 0,
-        min: 0,
-        p95: 0,
-        samples: [],
-      },
-      heapUsedBytes: {
-        max: 0,
-        mean: 0,
-        median: 0,
-        min: 0,
-        p95: 0,
-        samples: [],
-      },
-      rssBytes: {
-        max: 0,
-        mean: 0,
-        median: 0,
-        min: 0,
-        p95: 0,
-        samples: [],
-      },
+      arrayBuffersBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
+      externalBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
+      heapTotalBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
+      heapUsedBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
+      rssBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
     },
     verification: Object.fromEntries(verificationKeys.map((key) => [key, 'placeholder'])),
   }
 }
 
-function parseArtifactForShape(serialized: string): CompetitiveBenchmarkArtifactShapeInput {
-  const candidate = toRecord(JSON.parse(serialized), `competitive benchmark artifact ${outputPath}`)
-  if (candidate.schemaVersion !== 1 || candidate.suite !== 'workpaper-vs-hyperformula') {
-    throw new Error(`Unexpected competitive benchmark artifact header: ${outputPath}`)
-  }
-
-  const results = candidate.results
-  if (!Array.isArray(results)) {
-    throw new Error(`Competitive benchmark artifact is missing results: ${outputPath}`)
-  }
-
+function normalizeArtifactShape(input: ArtifactShapeInput) {
   return {
-    schemaVersion: 1,
-    suite: 'workpaper-vs-hyperformula',
-    results: results.map((result, index) => {
-      const record = toRecord(result, `competitive benchmark result ${index}`)
-      return {
-        workload: requireString(record.workload, `competitive benchmark result ${index} workload`),
-        category: requireString(record.category, `competitive benchmark result ${index} category`),
-        comparable: requireBoolean(record.comparable, `competitive benchmark result ${index} comparable`),
-        fixture: toRecord(record.fixture, `competitive benchmark result ${index} fixture`),
-        comparison:
-          record.comparison === undefined ? undefined : toRecord(record.comparison, `competitive benchmark result ${index} comparison`),
-        note: record.note === undefined ? undefined : requireString(record.note, `competitive benchmark result ${index} note`),
-        engines: {
-          workpaper: toRecord(
-            toRecord(record.engines, `competitive benchmark result ${index} engines`).workpaper,
-            `competitive benchmark result ${index} workpaper engine`,
-          ),
-          hyperformula: toRecord(
-            toRecord(record.engines, `competitive benchmark result ${index} engines`).hyperformula,
-            `competitive benchmark result ${index} hyperformula engine`,
-          ),
-        },
-      }
-    }),
-  }
-}
-
-function normalizeArtifactShape(input: CompetitiveBenchmarkArtifactShapeInput): {
-  schemaVersion: 1
-  suite: 'workpaper-vs-hyperformula'
-  workloads: Array<{
-    category: string
-    comparable: boolean
-    comparisonKeys: string[]
-    fixtureKeys: string[]
-    hyperformulaStatus: string
-    hyperformulaVerificationKeys: string[]
-    notePresent: boolean
-    workpaperStatus: string
-    workpaperVerificationKeys: string[]
-    workload: string
-  }>
-} {
-  return {
-    schemaVersion: 1,
-    suite: 'workpaper-vs-hyperformula',
+    schemaVersion: input.schemaVersion,
+    suite: input.suite,
     workloads: input.results.map((result) => ({
       workload: result.workload,
       category: result.category,
       comparable: result.comparable,
-      fixtureKeys: Object.keys(result.fixture).toSorted(),
-      comparisonKeys: result.comparison ? Object.keys(result.comparison).toSorted() : [],
-      workpaperStatus: requireString(result.engines.workpaper.status, `${result.workload} workpaper status`),
-      workpaperVerificationKeys: extractVerificationKeys(result.engines.workpaper),
-      hyperformulaStatus: requireString(result.engines.hyperformula.status, `${result.workload} hyperformula status`),
-      hyperformulaVerificationKeys: extractVerificationKeys(result.engines.hyperformula),
-      notePresent: result.note !== undefined,
+      hasComparison: result.comparison !== undefined,
+      hasNote: result.note !== undefined,
+      hyperformulaStatus: result.engines.hyperformula.status,
     })),
   }
 }
 
-function extractVerificationKeys(engine: Record<string, unknown>): string[] {
-  const verification = engine.verification
-  if (verification === undefined) {
-    return []
+function parseArtifactForShape(json: string): ArtifactShapeInput {
+  const parsed = parseJsonRecord(json)
+  if (!isArtifactShapeInput(parsed)) {
+    throw new Error('Competitive benchmark artifact has an unexpected format')
   }
-  return Object.keys(toRecord(verification, 'engine verification')).toSorted()
+  return parsed
 }
 
-function readHyperFormulaMetadata(root: string): CompetitiveBenchmarkArtifact['engines']['hyperformula'] {
-  const fallback = {
-    commit: '6de904b8876f920f287b63a95934c479acf78307',
-    metadataSource: 'fallback' as const,
-    packageName: 'hyperformula' as const,
-    sourcePath: root,
-    version: '3.2.0',
-    licenseKey: 'gpl-v3',
+function readPackageVersion(packagePath: string): string {
+  const pkg = parseJsonRecord(readFileSync(packagePath, 'utf8'))
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0) {
+    throw new Error(`Unable to read package version from ${packagePath}`)
   }
-  if (!existsSync(root)) {
+  return pkg.version
+}
+
+function readHyperFormulaMetadata(localRoot: string): ExpandedCompetitiveBenchmarkArtifact['engines']['hyperformula'] {
+  const fallback = {
+    packageName: 'hyperformula' as const,
+    version: '3.2.0',
+    sourcePath: localRoot,
+    licenseKey: 'gpl-v3',
+    metadataSource: 'fallback' as const,
+    commit: 'unknown',
+  }
+
+  if (!existsSync(localRoot)) {
     return fallback
   }
 
-  const packagePath = join(root, 'package.json')
-  const version = existsSync(packagePath) ? readPackageVersion(packagePath) : fallback.version
-  let commit = fallback.commit
+  const packageJsonPath = join(localRoot, 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    return fallback
+  }
+
+  const pkg = parseJsonRecord(readFileSync(packageJsonPath, 'utf8'))
+  const version = typeof pkg.version === 'string' && pkg.version.length > 0 ? pkg.version : fallback.version
+  const commit = readGitCommit(localRoot)
+  return {
+    ...fallback,
+    version,
+    commit,
+    metadataSource: 'local-checkout',
+  }
+}
+
+function readGitCommit(cwd: string): string {
   try {
-    commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
   } catch {
-    commit = fallback.commit
-  }
-
-  return {
-    commit,
-    licenseKey: 'gpl-v3',
-    metadataSource: 'local-checkout',
-    packageName: 'hyperformula',
-    sourcePath: root,
-    version,
+    return 'unknown'
   }
 }
 
-function readPackageVersion(packagePath: string): string {
-  const candidate = toRecord(JSON.parse(readFileSync(packagePath, 'utf8')), packagePath)
-  return requireString(candidate.version, `${packagePath} version`)
+function parseJsonRecord(json: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(json)
+  if (!isRecord(parsed)) {
+    throw new Error('Expected JSON object')
+  }
+  return parsed
 }
 
-function requireString(value: unknown, context: string): string {
-  if (typeof value !== 'string') {
-    throw new Error(`Expected ${context} to be a string`)
-  }
-  return value
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function requireBoolean(value: unknown, context: string): boolean {
-  if (typeof value !== 'boolean') {
-    throw new Error(`Expected ${context} to be a boolean`)
-  }
-  return value
+function isArtifactShapeInput(value: Record<string, unknown>): value is ArtifactShapeInput {
+  return value.schemaVersion === 1 && value.suite === 'workpaper-vs-hyperformula' && Array.isArray(value.results)
 }
 
-function toRecord(value: unknown, context: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`Expected ${context} to be an object`)
+function formatJsonForRepo(content: string): string {
+  const tempDir = mkdtempSync(join(tmpdir(), 'bilig-competitive-benchmark-'))
+  const tempFile = join(tempDir, 'artifact.json')
+  writeFileSync(tempFile, content)
+  try {
+    execFileSync('pnpm', ['exec', 'oxfmt', '--write', tempFile], {
+      cwd: rootDir,
+      stdio: 'ignore',
+    })
+    return readFileSync(tempFile, 'utf8')
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true })
   }
-  const record: Record<string, unknown> = {}
-  for (const [key, entryValue] of Object.entries(value)) {
-    record[key] = entryValue
-  }
-  return record
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'workpaper-competitive-bench-'))
-  const tempFilePath = join(tempDir, 'artifact.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    const stderr = new TextDecoder().decode(formatResult.stderr).trim()
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated competitive benchmark artifact: ${stderr}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }

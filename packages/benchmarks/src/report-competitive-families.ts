@@ -71,6 +71,7 @@ const EXPANDED_COMPARATIVE_FAMILY_METADATA = {
 
 export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   build: [
+    'build-from-sheets',
     'build-dense-literals',
     'build-mixed-content',
     'build-parser-cache-row-templates',
@@ -80,8 +81,15 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   rebuild: ['rebuild-and-recalculate'],
   'runtime-restore': ['rebuild-runtime-from-snapshot'],
   'config-toggle': ['rebuild-config-toggle'],
-  'dirty-execution': ['single-edit-chain', 'single-edit-fanout', 'partial-recompute-mixed-frontier', 'single-formula-edit-recalc'],
+  'dirty-execution': [
+    'single-edit-recalc',
+    'single-edit-chain',
+    'single-edit-fanout',
+    'partial-recompute-mixed-frontier',
+    'single-formula-edit-recalc',
+  ],
   'batch-edit': [
+    'batch-edit-recalc',
     'batch-edit-single-column',
     'batch-edit-multi-column',
     'batch-edit-single-column-with-undo',
@@ -90,7 +98,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   ],
   'structural-rows': ['structural-insert-rows', 'structural-delete-rows', 'structural-move-rows'],
   'structural-columns': ['structural-insert-columns', 'structural-delete-columns', 'structural-move-columns'],
-  'range-read': ['range-read-dense'],
+  'range-read': ['range-read', 'range-read-dense'],
   'overlapping-aggregate': ['aggregate-overlapping-ranges'],
   'sliding-window-aggregate': ['aggregate-overlapping-sliding-window'],
   'conditional-aggregation': ['conditional-aggregation-reused-ranges', 'conditional-aggregation-criteria-cell-edit'],
@@ -126,7 +134,7 @@ export interface ExpandedCompetitiveScorecardSummary {
 }
 
 export interface ExpandedCompetitiveFamilyReport {
-  suite: 'workpaper-vs-hyperformula-expanded'
+  suite: 'workpaper-vs-hyperformula'
   families: readonly ExpandedCompetitiveFamilySummary[]
   scorecard: ExpandedCompetitiveScorecardSummary
 }
@@ -194,7 +202,7 @@ export function buildExpandedCompetitiveFamilyReport(
   const families = summarizeExpandedCompetitiveFamilies(results)
   const scorecardFamilies = families.filter((family) => family.scorecardEligible)
   return {
-    suite: 'workpaper-vs-hyperformula-expanded',
+    suite: 'workpaper-vs-hyperformula',
     families,
     scorecard: {
       eligibleFamilies: scorecardFamilies.map((family) => family.family),

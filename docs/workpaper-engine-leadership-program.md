@@ -111,7 +111,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth | Unified inventory breadth | `525/525` unified tracked functions = `100%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | control suite `4/6` wins and expanded matrix `7/13` wins | HyperFormula still leads several important workloads on current host | `WorkPaper` now leads both the narrow control suite and the broader matrix, but mixed-content build, formula edits, chain edits, batch edits, and indexed lookup remain red | convert the remaining red workloads into majority `bilig` wins across both the control suite and the expanded matrix |
+| Performance dominance | Directly comparable benchmark workloads | unified benchmark includes the former control workloads and the broader matrix | HyperFormula still leads several important workloads on current host | `WorkPaper` now has one competitive artifact, but mixed-content build, formula edits, chain edits, batch edits, and indexed lookup remain red | convert the remaining red workloads into majority `bilig` wins across the unified matrix |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -135,15 +135,15 @@ Current measured values from local repo artifacts and docs:
   - `350/515` Excel functions = `68%`
 - `bilig` canonical formula production closure:
   - `300/300` rows = `100%`
-  - directly comparable control-suite benchmark record:
+  - directly comparable legacy control-workload benchmark record:
   - `WorkPaper` wins: `4/6`
   - HyperFormula wins: `2/6`
-  - current `WorkPaper` control-suite wins on this host:
+  - current `WorkPaper` legacy control-workload wins on this host:
     - build-from-sheets at `4.68x` faster
     - single-edit recalculation at `1.61x` faster
     - range-read at `1.01x` faster
     - lookup without column indexing at `1.51x` faster
-  - HyperFormula current control-suite win range on this host: `1.21x` to `1.70x`
+  - HyperFormula current legacy control-workload win range on this host: `1.21x` to `1.70x`
   - directly comparable expanded-matrix benchmark record:
   - `WorkPaper` wins: `7/13`
   - HyperFormula wins: `6/13`
@@ -183,14 +183,11 @@ Surface parity:
 Competitive performance:
 
 - artifact:
-  - `packages/benchmarks/baselines/workpaper-vs-hyperformula-expanded.json`
   - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 - source generator:
-  - `scripts/gen-workpaper-vs-hyperformula-expanded-benchmark.ts`
   - `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
 - check command:
   - `pnpm workpaper:bench:competitive:check`
-  - `pnpm workpaper:bench:competitive:control:check`
 
 Internal regression baseline:
 

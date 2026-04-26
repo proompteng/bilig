@@ -5,7 +5,6 @@ import { runRenderCommitBenchmark } from './benchmark-renderer.js'
 import { runTopologyEditBenchmark } from './benchmark-topology-edit.js'
 import { runWorkPaperVsHyperFormulaExpandedBenchmarkSuite } from './benchmark-workpaper-vs-hyperformula-expanded.js'
 import { runWorkPaperBenchmarkSuite } from './benchmark-workpaper.js'
-import { runWorkPaperVsHyperFormulaBenchmarkSuite } from './benchmark-workpaper-vs-hyperformula.js'
 
 export * from './benchmark-edit.js'
 export * from './benchmark-load.js'
@@ -37,7 +36,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   results.push(await runRenderCommitBenchmark(1_000))
   results.push(await runRenderCommitBenchmark(10_000))
   results.push(...(await runWorkPaperBenchmarkSuite()))
-  results.push(...runWorkPaperVsHyperFormulaBenchmarkSuite())
   results.push(...runWorkPaperVsHyperFormulaExpandedBenchmarkSuite())
 
   console.log(JSON.stringify(results, null, 2))

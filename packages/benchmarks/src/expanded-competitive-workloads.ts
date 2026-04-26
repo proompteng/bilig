@@ -1,4 +1,5 @@
 export type ExpandedComparativeBenchmarkWorkload =
+  | 'build-from-sheets'
   | 'build-dense-literals'
   | 'build-mixed-content'
   | 'build-parser-cache-row-templates'
@@ -7,10 +8,12 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'rebuild-and-recalculate'
   | 'rebuild-config-toggle'
   | 'rebuild-runtime-from-snapshot'
+  | 'single-edit-recalc'
   | 'single-edit-chain'
   | 'single-edit-fanout'
   | 'partial-recompute-mixed-frontier'
   | 'single-formula-edit-recalc'
+  | 'batch-edit-recalc'
   | 'batch-edit-single-column'
   | 'batch-edit-multi-column'
   | 'batch-edit-single-column-with-undo'
@@ -22,6 +25,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'structural-insert-columns'
   | 'structural-delete-columns'
   | 'structural-move-columns'
+  | 'range-read'
   | 'range-read-dense'
   | 'aggregate-overlapping-ranges'
   | 'aggregate-overlapping-sliding-window'
@@ -37,6 +41,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'dynamic-array-filter'
 
 export const EXPANDED_COMPARATIVE_WORKLOADS = [
+  'build-from-sheets',
   'build-dense-literals',
   'build-mixed-content',
   'build-parser-cache-row-templates',
@@ -45,10 +50,12 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'rebuild-and-recalculate',
   'rebuild-config-toggle',
   'rebuild-runtime-from-snapshot',
+  'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
   'partial-recompute-mixed-frontier',
   'single-formula-edit-recalc',
+  'batch-edit-recalc',
   'batch-edit-single-column',
   'batch-edit-multi-column',
   'batch-edit-single-column-with-undo',
@@ -60,6 +67,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'structural-insert-columns',
   'structural-delete-columns',
   'structural-move-columns',
+  'range-read',
   'range-read-dense',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
