@@ -44,7 +44,7 @@
     "test": "bun scripts/run-vitest.ts --run",
     "coverage": "bun scripts/run-vitest.ts --run --coverage --exclude '**/*.fuzz.test.ts'",
     "test:browser": "bun scripts/run-browser-tests.ts",
-    "test:browser:full": "BILIG_BROWSER_INCLUDE_PERF=1 BILIG_BROWSER_INCLUDE_FUZZ=1 BILIG_FUZZ_PROFILE=main BILIG_FUZZ_CAPTURE=1 bun scripts/run-browser-tests.ts",
+    "test:browser:full": "BILIG_BROWSER_INCLUDE_PERF=1 BILIG_BROWSER_INCLUDE_DEEP=1 BILIG_BROWSER_INCLUDE_FUZZ=1 BILIG_FUZZ_PROFILE=main BILIG_FUZZ_CAPTURE=1 bun scripts/run-browser-tests.ts",
     "test:browser:prod": "pnpm exec playwright test -c playwright.prod.config.ts e2e/tests/prod-smoke.pw.ts",
     "test:fuzz": "bun scripts/run-fuzz.ts default",
     "test:fuzz:main": "bun scripts/run-fuzz.ts main",

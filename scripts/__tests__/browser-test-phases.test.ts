@@ -6,15 +6,16 @@ describe('browser test phases', () => {
     const phases = resolveBrowserTestPhases({ playwrightArgs: [], env: {} })
 
     expect(phases.map((phase) => phase.label)).toEqual(['parallel browser tests', 'browser serial tests', 'clipboard global tests'])
-    expect(phases[0]?.args).toEqual(['--grep-invert', '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf'])
+    expect(phases[0]?.args).toEqual(['--grep-invert', '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf|@browser-deep'])
   })
 
-  it('adds perf and fuzz only for the deep browser profile', () => {
+  it('adds perf, deep, and fuzz only for the deep browser profile', () => {
     const phases = resolveBrowserTestPhases({
       playwrightArgs: [],
       env: {
         BILIG_BROWSER_INCLUDE_FUZZ: '1',
         BILIG_BROWSER_INCLUDE_PERF: '1',
+        BILIG_BROWSER_INCLUDE_DEEP: '1',
         BILIG_FUZZ_PROFILE: 'nightly',
       },
     })
@@ -22,6 +23,7 @@ describe('browser test phases', () => {
     expect(phases.map((phase) => phase.label)).toEqual([
       'parallel browser tests',
       'browser perf tests',
+      'browser deep tests',
       'browser serial tests',
       'clipboard global tests',
       'browser fuzz tests',

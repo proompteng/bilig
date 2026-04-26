@@ -1,5 +1,6 @@
 export const CLIPBOARD_GLOBAL_GREP = '@clipboard-global'
 export const BROWSER_PERF_GREP = '@browser-perf'
+export const BROWSER_DEEP_GREP = '@browser-deep'
 export const BROWSER_SERIAL_GREP = '@browser-serial'
 export const BROWSER_FUZZ_GREP = '@fuzz-browser'
 
@@ -11,6 +12,7 @@ export interface BrowserTestPhase {
 
 export interface BrowserTestPhaseEnv {
   readonly BILIG_BROWSER_INCLUDE_PERF?: string | undefined
+  readonly BILIG_BROWSER_INCLUDE_DEEP?: string | undefined
   readonly BILIG_BROWSER_INCLUDE_FUZZ?: string | undefined
   readonly BILIG_FUZZ_PROFILE?: string | undefined
   readonly BILIG_FUZZ_CAPTURE?: string | undefined
@@ -34,8 +36,9 @@ export function resolveBrowserTestPhases(input: {
   }
 
   const includePerf = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_PERF)
+  const includeDeep = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_DEEP)
   const includeFuzz = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_FUZZ)
-  const defaultExcludedGreps = [CLIPBOARD_GLOBAL_GREP, BROWSER_SERIAL_GREP, BROWSER_FUZZ_GREP, BROWSER_PERF_GREP]
+  const defaultExcludedGreps = [CLIPBOARD_GLOBAL_GREP, BROWSER_SERIAL_GREP, BROWSER_FUZZ_GREP, BROWSER_PERF_GREP, BROWSER_DEEP_GREP]
   const phases: BrowserTestPhase[] = [
     {
       label: 'parallel browser tests',
@@ -47,6 +50,13 @@ export function resolveBrowserTestPhases(input: {
     phases.push({
       label: 'browser perf tests',
       args: ['--workers=1', '--grep', BROWSER_PERF_GREP],
+    })
+  }
+
+  if (includeDeep) {
+    phases.push({
+      label: 'browser deep tests',
+      args: ['--workers=1', '--grep', BROWSER_DEEP_GREP],
     })
   }
 

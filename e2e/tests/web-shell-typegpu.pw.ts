@@ -381,7 +381,7 @@ test('@browser-perf main workbook shell keeps header labels and body text visibl
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-scrolled-readback.png', 'main-workbook-grid-scrolled-readback')
 })
 
-test('main workbook shell keeps typegpu grid lines exactly aligned after diagonal scroll', async ({ page }, testInfo) => {
+test('@browser-deep main workbook shell keeps typegpu grid lines exactly aligned after diagonal scroll', async ({ page }, testInfo) => {
   const scrollLeft = PRODUCT_COLUMN_WIDTH * 4 + 17
   const scrollTop = PRODUCT_ROW_HEIGHT * 5 + 9
   const visibleStartCol = Math.floor(scrollLeft / PRODUCT_COLUMN_WIDTH)
@@ -460,7 +460,7 @@ test('main workbook shell keeps typegpu grid lines exactly aligned after diagona
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-exact-scroll-readback.png', 'main-workbook-grid-exact-scroll-readback')
 })
 
-test('main workbook shell draws typegpu resize guides at exact geometry positions', async ({ page }, testInfo) => {
+test('@browser-deep main workbook shell draws typegpu resize guides at exact geometry positions', async ({ page }, testInfo) => {
   const columnGuideX = PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH - 1
   const rowGuideY = PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT - 1
 
@@ -534,7 +534,9 @@ test('main workbook shell draws typegpu resize guides at exact geometry position
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-resize-guide-readback.png', 'main-workbook-grid-resize-guide-readback')
 })
 
-test('main workbook shell keeps DOM editor overlay aligned to typegpu geometry while scrolling', async ({ page }, testInfo) => {
+test('@browser-deep main workbook shell keeps DOM editor overlay aligned to typegpu geometry while scrolling', async ({
+  page,
+}, testInfo) => {
   const targetCol = 3
   const targetRow = 7
   const scrollLeft = 37
@@ -640,7 +642,7 @@ test('main workbook shell keeps DOM editor overlay aligned to typegpu geometry w
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-editor-overlay-readback.png', 'main-workbook-grid-editor-overlay-readback')
 })
 
-test('main workbook shell refreshes typegpu resident packets after style-only changes', async ({ page }, testInfo) => {
+test('@browser-deep main workbook shell refreshes typegpu resident packets after style-only changes', async ({ page }, testInfo) => {
   const fillPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
     y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),

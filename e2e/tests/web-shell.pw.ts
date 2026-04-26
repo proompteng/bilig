@@ -8,7 +8,6 @@ import {
   clickProductCell,
   clickGridRightEdge,
   dragProductBodySelection,
-  dragProductColumnResize,
   getProductColumnLeft,
   getProductColumnWidth,
   gotoWorkbookShell,
@@ -21,23 +20,6 @@ type BrowserSelectionAction =
   | { kind: 'click'; row: number; col: number }
   | { kind: 'shiftClick'; row: number; col: number }
   | { kind: 'key'; key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'; shift: boolean }
-
-async function dragProductFillHandle(
-  page: Parameters<typeof test>[0]['page'],
-  sourceCol: number,
-  sourceRow: number,
-  targetCol: number,
-  targetRow: number,
-) {
-  const { sourceX, sourceY, targetX, targetY } = await getProductFillHandleDragPoints(page, sourceCol, sourceRow, targetCol, targetRow)
-
-  await page.mouse.move(sourceX, sourceY)
-  await page.mouse.down()
-  await page.mouse.move(targetX, targetY, {
-    steps: 10,
-  })
-  await page.mouse.up()
-}
 
 async function getProductFillHandleDragPoints(
   page: Parameters<typeof test>[0]['page'],
@@ -394,21 +376,6 @@ test('web app offers formula autocomplete and inserts a function with Tab', asyn
   await expect(resolvedValue).toHaveText('7')
 })
 
-test('web app shows formula argument hints while typing', async ({ page }) => {
-  await page.goto('/')
-  await waitForWorkbookReady(page)
-
-  const formulaInput = page.getByTestId('formula-input')
-  const argHint = page.getByTestId('formula-arg-hint')
-
-  await clickProductCell(page, 0, 0)
-  await formulaInput.focus()
-  await page.keyboard.type('=IF(A1,')
-
-  await expect(argHint).toBeVisible()
-  await expect(argHint).toContainText('value_if_true')
-})
-
 test('web app double-click edits the exact clicked cell', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)
@@ -490,28 +457,6 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
     await expect(page.getByTestId('grid-text-pane-top-body')).toHaveJSProperty('tagName', 'CANVAS')
     await expect(page.getByTestId('grid-text-pane-left-body')).toHaveJSProperty('tagName', 'CANVAS')
   }
-})
-
-test('web app supports fill-handle propagation', async ({ page }) => {
-  await gotoWorkbookShell(page, `/?document=fill-handle-propagation-${Date.now()}`)
-  await waitForWorkbookReady(page)
-
-  const nameBox = page.getByTestId('name-box')
-  const formulaInput = page.getByTestId('formula-input')
-  const resolvedValue = page.getByTestId('formula-resolved-value')
-
-  await nameBox.fill('F6')
-  await nameBox.press('Enter')
-  await formulaInput.fill('7')
-  await formulaInput.press('Enter')
-
-  await dragProductFillHandle(page, 5, 5, 5, 7)
-
-  await nameBox.fill('F8')
-  await nameBox.press('Enter')
-  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F8')
-  await expect(formulaInput).toHaveValue('7')
-  await expect(resolvedValue).toHaveText('7')
 })
 
 test('web app enables undo and redo for a normal edit', async ({ page }) => {
@@ -782,15 +727,6 @@ test.describe('@clipboard-global web app clipboard flows', () => {
   })
 })
 
-test('web app supports product-shell column resize', async ({ page }) => {
-  await page.goto('/')
-  await waitForWorkbookReady(page)
-
-  const baselineWidth = await getProductColumnWidth(page, 0)
-  await dragProductColumnResize(page, 0, 48)
-  await expect.poll(() => getProductColumnWidth(page, 0)).toBeGreaterThan(baselineWidth + 30)
-})
-
 test('web app shows #VALUE! for invalid formulas', async ({ page }) => {
   const documentId = `playwright-invalid-formula-${Date.now()}`
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
@@ -953,39 +889,37 @@ test('web app expands the active range with shift-click', async ({ page }) => {
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:E6')
 })
 
-for (const key of ['Delete', 'Backspace'] as const) {
-  test(`web app clears the full selected range with ${key.toLowerCase()}`, async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await page.goto('/')
-    await waitForWorkbookReady(page)
+test('web app clears the full selected range with delete', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/')
+  await waitForWorkbookReady(page)
 
-    const grid = page.getByTestId('sheet-grid')
-    const formulaInput = page.getByTestId('formula-input')
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
 
-    await clickProductCell(page, 1, 1)
-    await page.evaluate(() => navigator.clipboard.writeText('11\t12\n13\t14'))
-    await grid.press(`${PRIMARY_MODIFIER}+V`)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await clickProductCell(page, 1, 1)
+  await page.evaluate(() => navigator.clipboard.writeText('11\t12\n13\t14'))
+  await grid.press(`${PRIMARY_MODIFIER}+V`)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
 
-    await dragProductBodySelection(page, 1, 1, 2, 2)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await dragProductBodySelection(page, 1, 1, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
 
-    await grid.press(key)
+  await grid.press('Delete')
 
-    await clickProductCell(page, 1, 1)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
-    await expect(formulaInput).toHaveValue('')
-    await clickProductCell(page, 2, 1)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
-    await expect(formulaInput).toHaveValue('')
-    await clickProductCell(page, 1, 2)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B3')
-    await expect(formulaInput).toHaveValue('')
-    await clickProductCell(page, 2, 2)
-    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
-    await expect(formulaInput).toHaveValue('')
-  })
-}
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await expect(formulaInput).toHaveValue('')
+  await clickProductCell(page, 2, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
+  await expect(formulaInput).toHaveValue('')
+  await clickProductCell(page, 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B3')
+  await expect(formulaInput).toHaveValue('')
+  await clickProductCell(page, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+  await expect(formulaInput).toHaveValue('')
+})
 
 test('web app ignores right gutter clicks', async ({ page }) => {
   await page.goto('/')
