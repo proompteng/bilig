@@ -70,6 +70,10 @@ function WorkerWorkbookAppInner({
   const { installBenchmarkCorpus, runtimeReady } = app
 
   useEffect(() => {
+    getWorkbookScrollPerfCollector()
+  }, [])
+
+  useEffect(() => {
     if (!benchmarkCorpus || !runtimeReady) {
       return
     }

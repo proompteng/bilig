@@ -15,6 +15,7 @@ interface SceneEntry {
   request: WorkbookPaneSceneRequest
   listeners: Set<() => void>
   scenes: readonly WorkbookPaneScenePacket[] | null
+  coverageScenes: readonly WorkbookPaneScenePacket[] | null
   inFlight: Promise<void> | null
   refreshQueued: boolean
   refreshDelayMs: number
@@ -26,6 +27,7 @@ interface SceneEntry {
 interface RetainedSceneEntry {
   readonly request: WorkbookPaneSceneRequest
   readonly scenes: readonly WorkbookPaneScenePacket[]
+  readonly source: 'immediate' | 'worker'
   readonly lastUsedSeq: number
 }
 
@@ -242,6 +244,65 @@ function residentScenesCoverViewportPatch(
   })
 }
 
+function sameViewport(
+  left: Pick<GridScenePacketV2['viewport'], 'rowStart' | 'rowEnd' | 'colStart' | 'colEnd'>,
+  right: Pick<GridScenePacketV2['viewport'], 'rowStart' | 'rowEnd' | 'colStart' | 'colEnd'>,
+): boolean {
+  return (
+    left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
+  )
+}
+
+function sameSurfaceSize(left: GridScenePacketV2['surfaceSize'], right: GridScenePacketV2['surfaceSize']): boolean {
+  return left.width === right.width && left.height === right.height
+}
+
+function sameResidentScenePacketDrawSemantics(left: WorkbookPaneScenePacket, right: WorkbookPaneScenePacket): boolean {
+  const leftPacket = left.packedScene
+  const rightPacket = right.packedScene
+  return (
+    left.paneId === right.paneId &&
+    leftPacket.sheetName === rightPacket.sheetName &&
+    leftPacket.paneId === rightPacket.paneId &&
+    leftPacket.key.sheetName === rightPacket.key.sheetName &&
+    leftPacket.key.paneKind === rightPacket.key.paneKind &&
+    leftPacket.key.rowStart === rightPacket.key.rowStart &&
+    leftPacket.key.rowEnd === rightPacket.key.rowEnd &&
+    leftPacket.key.colStart === rightPacket.key.colStart &&
+    leftPacket.key.colEnd === rightPacket.key.colEnd &&
+    leftPacket.key.rowTile === rightPacket.key.rowTile &&
+    leftPacket.key.colTile === rightPacket.key.colTile &&
+    leftPacket.key.dprBucket === rightPacket.key.dprBucket &&
+    sameViewport(left.viewport, right.viewport) &&
+    sameSurfaceSize(left.surfaceSize, right.surfaceSize) &&
+    leftPacket.rectSignature === rightPacket.rectSignature &&
+    leftPacket.textSignature === rightPacket.textSignature &&
+    leftPacket.rectCount === rightPacket.rectCount &&
+    leftPacket.fillRectCount === rightPacket.fillRectCount &&
+    leftPacket.borderRectCount === rightPacket.borderRectCount &&
+    leftPacket.textCount === rightPacket.textCount &&
+    sameViewport(leftPacket.viewport, rightPacket.viewport) &&
+    sameSurfaceSize(leftPacket.surfaceSize, rightPacket.surfaceSize)
+  )
+}
+
+function sameResidentSceneDrawSemantics(
+  left: readonly WorkbookPaneScenePacket[] | null,
+  right: readonly WorkbookPaneScenePacket[],
+): boolean {
+  if (!left || left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftScene = left[index]
+    const rightScene = right[index]
+    if (!leftScene || !rightScene || !sameResidentScenePacketDrawSemantics(leftScene, rightScene)) {
+      return false
+    }
+  }
+  return true
+}
+
 export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
   private readonly retainedScenes = new Map<string, RetainedSceneEntry>()
@@ -264,7 +325,7 @@ export class ProjectedSceneStore {
     if (entry) {
       return entry.scenes
     }
-    return this.peekRetainedScenes(request)
+    return this.peekRetainedScenes(request)?.scenes ?? this.buildAndRetainImmediateScenes(request)
   }
 
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
@@ -273,13 +334,18 @@ export class ProjectedSceneStore {
     }
     const key = buildRequestKey(request)
     const existing = this.entries.get(key)
+    let retained = existing ? null : this.peekRetainedScenes(request)
+    if (!existing && !retained) {
+      retained = this.buildAndRetainImmediateSceneEntry(request)
+    }
     const entry =
       existing ??
       ({
         key,
         request,
         listeners: new Set<() => void>(),
-        scenes: this.peekRetainedScenes(request),
+        scenes: retained?.scenes ?? null,
+        coverageScenes: retained?.scenes ?? null,
         inFlight: null,
         refreshQueued: false,
         refreshDelayMs: 0,
@@ -293,6 +359,9 @@ export class ProjectedSceneStore {
     entry.listeners.add(listener)
     this.entries.set(key, entry)
     if (entry.scenes === null) {
+      this.publishImmediateScenes(entry, { countRefresh: false })
+      this.queueRefresh(entry)
+    } else if (!existing && retained?.source === 'immediate') {
       this.queueRefresh(entry)
     }
     return () => {
@@ -349,7 +418,7 @@ export class ProjectedSceneStore {
       if (!matches(entry.request)) {
         continue
       }
-      if (!shouldRefresh(entry.scenes)) {
+      if (!shouldRefresh(entry.coverageScenes ?? entry.scenes)) {
         continue
       }
       entry.sceneRevision += 1
@@ -360,7 +429,7 @@ export class ProjectedSceneStore {
     }
   }
 
-  private publishImmediateScenes(entry: SceneEntry): boolean {
+  private publishImmediateScenes(entry: SceneEntry, options: { readonly countRefresh?: boolean } = {}): boolean {
     const buildImmediateResidentPaneScenes = this.options.buildImmediateResidentPaneScenes
     if (!buildImmediateResidentPaneScenes || entry.listeners.size === 0) {
       return false
@@ -386,9 +455,17 @@ export class ProjectedSceneStore {
       return false
     }
 
+    const sameDrawSemantics = sameResidentSceneDrawSemantics(entry.scenes, next)
+    this.retainScenes(entry.request, next, 'immediate')
+    if (sameDrawSemantics) {
+      entry.coverageScenes = next
+      return true
+    }
     entry.scenes = next
-    this.retainScenes(entry.request, next)
-    getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+    entry.coverageScenes = next
+    if (options.countRefresh ?? true) {
+      getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+    }
     entry.listeners.forEach((listener) => listener())
     return true
   }
@@ -460,8 +537,14 @@ export class ProjectedSceneStore {
           this.noteScenePacketRejected(packetRejectionReason)
           return
         }
+        if (sameResidentSceneDrawSemantics(entry.scenes, next)) {
+          entry.coverageScenes = next
+          this.retainScenes(entry.request, next, 'worker')
+          return
+        }
         entry.scenes = next
-        this.retainScenes(entry.request, next)
+        entry.coverageScenes = next
+        this.retainScenes(entry.request, next, 'worker')
         if (isIncrementalRefresh) {
           getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
         }
@@ -483,26 +566,76 @@ export class ProjectedSceneStore {
     }
   }
 
-  private peekRetainedScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
+  private peekRetainedScenes(request: WorkbookPaneSceneRequest): RetainedSceneEntry | null {
     const key = buildRetainedRequestKey(request)
     const retained = this.retainedScenes.get(key)
     if (!retained) {
       return null
     }
-    this.retainedScenes.set(key, {
+    const next = {
       ...retained,
       lastUsedSeq: ++this.retainedSceneSeq,
-    })
-    return retained.scenes
+    }
+    this.retainedScenes.set(key, next)
+    return next
   }
 
-  private retainScenes(request: WorkbookPaneSceneRequest, scenes: readonly WorkbookPaneScenePacket[]): void {
-    this.retainedScenes.set(buildRetainedRequestKey(request), {
+  private buildAndRetainImmediateScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
+    return this.buildAndRetainImmediateSceneEntry(request)?.scenes ?? null
+  }
+
+  private buildAndRetainImmediateSceneEntry(request: WorkbookPaneSceneRequest): RetainedSceneEntry | null {
+    const scenes = this.buildImmediateSceneSnapshot(request, ++this.nextImmediateSceneGeneration, 0, 0)
+    if (!scenes) {
+      return null
+    }
+    return this.retainScenes(request, scenes, 'immediate')
+  }
+
+  private buildImmediateSceneSnapshot(
+    request: WorkbookPaneSceneRequest,
+    generation: number,
+    requestSeq: number,
+    sceneRevision: number,
+  ): readonly WorkbookPaneScenePacket[] | null {
+    const buildImmediateResidentPaneScenes = this.options.buildImmediateResidentPaneScenes
+    if (!buildImmediateResidentPaneScenes) {
+      return null
+    }
+    const sceneRequest = withRequestMetadata(request, requestSeq, sceneRevision)
+    let next: readonly WorkbookPaneScenePacket[] | null
+    try {
+      next = buildImmediateResidentPaneScenes(sceneRequest, generation)
+    } catch {
+      this.noteScenePacketRejected('immediate-scene-build-failed')
+      return null
+    }
+    if (next === null) {
+      return null
+    }
+    if (!isResidentPaneScenePacketArray(next)) {
+      this.noteScenePacketRejected('invalid-immediate-scene-payload')
+      return null
+    }
+    return next.length === 0 ? null : next
+  }
+
+  private retainScenes(
+    request: WorkbookPaneSceneRequest,
+    scenes: readonly WorkbookPaneScenePacket[],
+    source: RetainedSceneEntry['source'],
+  ): RetainedSceneEntry {
+    const entry = {
       lastUsedSeq: ++this.retainedSceneSeq,
       request,
       scenes,
+      source,
+    }
+    this.retainedScenes.set(buildRetainedRequestKey(request), {
+      ...entry,
     })
     this.evictRetainedScenes()
+    return entry
   }
 
   private evictRetainedScenes(): void {
@@ -548,6 +681,7 @@ export class ProjectedSceneStore {
     this.clearEntryScheduledWork(entry)
     entry.listeners.clear()
     entry.scenes = null
+    entry.coverageScenes = null
     if (this.entries.get(entry.key) === entry) {
       this.entries.delete(entry.key)
     }

@@ -47,6 +47,7 @@ import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import { noteGridScrollInput } from './renderer-v2/grid-render-counters.js'
 import { GridCameraStore } from './renderer-v2/gridCameraStore.js'
 import { visibleRegionFromCamera, viewportFromVisibleRegion } from './useGridCameraState.js'
+import { useGridElementSize } from './useGridElementSize.js'
 import { sameBounds } from './useGridOverlayState.js'
 import { canUseWorkerResidentPaneScenes, noteWorkerResidentPaneScenesApplied } from './useGridSceneResidency.js'
 import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
@@ -241,8 +242,9 @@ export function useWorkbookGridRenderState(input: {
     height: number
   } | null>(null)
   const liveVisibleRegionRef = useRef<VisibleRegionState>(visibleRegion)
-  const hostClientWidth = hostElement?.clientWidth ?? 0
-  const hostClientHeight = hostElement?.clientHeight ?? 0
+  const hostElementSize = useGridElementSize(hostElement)
+  const hostClientWidth = hostElementSize.width
+  const hostClientHeight = hostElementSize.height
   const baseColumnWidths = controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS
   const baseRowHeights = controlledRowHeights ?? rowHeightsBySheet[sheetName] ?? EMPTY_ROW_HEIGHTS
   const sizedColumnWidths = useMemo(() => {
@@ -955,8 +957,8 @@ export function useWorkbookGridRenderState(input: {
       hostBounds: {
         left: 0,
         top: 0,
-        width: hostClientWidth,
-        height: hostClientHeight,
+        width: 0,
+        height: 0,
       },
       getCellBounds: getHeaderCellLocalBounds,
     })
@@ -967,8 +969,6 @@ export function useWorkbookGridRenderState(input: {
     getHeaderCellLocalBounds,
     gridMetrics,
     hostElement,
-    hostClientHeight,
-    hostClientWidth,
     rowHeights,
     sheetName,
     residentHeaderItems,

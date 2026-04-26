@@ -150,6 +150,71 @@ describe('ProjectedSceneStore', () => {
     unsubscribe()
   })
 
+  it('publishes immediate resident scenes and ignores equivalent worker responses', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const workerScenes = [createResidentScene(request, 2, 1)] as const
+    const client = {
+      invoke: vi.fn(async (_method: string, _request: unknown) => workerScenes),
+    }
+    const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+    ])
+    const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
+    const listener = vi.fn()
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, listener)
+
+    expect(buildImmediateResidentPaneScenes).toHaveBeenCalledWith(expect.objectContaining({ requestSeq: 0 }), 1)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    expect(listener).not.toHaveBeenCalled()
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    expect(listener).not.toHaveBeenCalled()
+
+    unsubscribe()
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+  })
+
+  it('exposes immediate resident scenes before subscription and silently adopts equivalent worker versions', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const workerScenes = [createVersionedResidentScene(request, 2, 1, 10)] as const
+    const client = {
+      invoke: vi.fn(async (_method: string, _request: unknown) => workerScenes),
+    }
+    const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+    ])
+    const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
+
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+
+    const listener = vi.fn()
+    const unsubscribe = store.subscribeResidentPaneScenes(request, listener)
+
+    expect(listener).not.toHaveBeenCalled()
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    expect(listener).not.toHaveBeenCalled()
+
+    unsubscribe()
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+  })
+
   it('rejects stale or malformed worker scene responses before publishing', async () => {
     const request = {
       sheetName: 'Sheet1',
@@ -239,7 +304,7 @@ describe('ProjectedSceneStore', () => {
       invoke: vi.fn().mockResolvedValueOnce([createResidentScene(request, 1, 1)]),
     }
     const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
-      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0, { rectSignature: `rect-${generation}` }),
     ])
     const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
     const listener = vi.fn()
@@ -519,7 +584,7 @@ describe('ProjectedSceneStore', () => {
         .mockResolvedValueOnce([createResidentScene(request, 3, 2)]),
     }
     const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
-      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0, { rectSignature: `rect-${generation}` }),
     ])
     const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
     const listener = vi.fn()
