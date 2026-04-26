@@ -1,6 +1,7 @@
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridSelectionSnapshot } from './gridTypes.js'
+import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 
 export type { GridSelectionSnapshot } from './gridTypes.js'
 
@@ -50,6 +51,8 @@ export interface WorkbookGridSurfaceProps {
   onMoveRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void
   onToggleBooleanCell?: ((sheetName: string, address: string, nextValue: boolean) => void) | undefined
   onPaste(this: void, sheetName: string, addr: string, values: readonly (readonly string[])[]): void
+  sheetId?: number | undefined
+  renderTileSource?: GridRenderTileSource | undefined
   subscribeViewport?: SheetGridViewportSubscription | undefined
   columnWidths?: Readonly<Record<number, number>> | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined

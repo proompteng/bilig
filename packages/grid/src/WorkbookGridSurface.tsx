@@ -29,6 +29,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     selectedCellSnapshot: props.selectedCellSnapshot,
     editorValue: props.editorValue,
     isEditingCell: props.isEditingCell,
+    sheetId: props.sheetId,
+    renderTileSource: props.renderTileSource,
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,

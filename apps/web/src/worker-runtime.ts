@@ -56,6 +56,7 @@ import {
   cloneRuntimeMetrics,
   cloneWorkerRuntimeState,
   withExternalSyncState,
+  type WorkbookRuntimeSheetSnapshot,
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { buildResidentPaneSceneCacheKey, buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
@@ -95,6 +96,7 @@ export interface WorkbookWorkerBootstrapOptions {
 
 export interface WorkbookWorkerStateSnapshot {
   workbookName: string
+  sheets?: WorkbookRuntimeSheetSnapshot[] | undefined
   sheetNames: string[]
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics

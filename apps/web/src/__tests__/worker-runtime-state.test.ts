@@ -12,9 +12,9 @@ describe('worker runtime state helpers', () => {
     expect(
       listOrderedSheetNames({
         sheetsByName: new Map([
-          ['c', { name: 'Sheet3', order: 2 }],
-          ['a', { name: 'Sheet1', order: 0 }],
-          ['b', { name: 'Sheet2', order: 1 }],
+          ['c', { id: 3, name: 'Sheet3', order: 2 }],
+          ['a', { id: 1, name: 'Sheet1', order: 0 }],
+          ['b', { id: 2, name: 'Sheet2', order: 1 }],
         ]),
       }),
     ).toEqual(['Sheet1', 'Sheet2', 'Sheet3'])
@@ -40,6 +40,7 @@ describe('worker runtime state helpers', () => {
     expect(publicState.syncState).toBe('syncing')
     expect(cachedState.syncState).toBe('local')
     expect(publicState.localPersistenceMode).toBe('persistent')
+    expect(publicState.sheets).toEqual([{ id: 1, name: 'Sheet1', order: 0 }])
     expect(publicState.metrics).not.toBe(cachedState.metrics)
     expect(publicState.definedNames).not.toBe(cachedState.definedNames)
     expect(publicState.definedNames).toEqual(cachedState.definedNames)
@@ -54,6 +55,7 @@ describe('worker runtime state helpers', () => {
       }),
     ).toEqual({
       workbookName: 'Book',
+      sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
       sheetNames: ['Sheet1'],
       definedNames: [],
       metrics: EMPTY_RUNTIME_METRICS,

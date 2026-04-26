@@ -87,6 +87,7 @@ const BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS = 96
 function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnapshot {
   return {
     workbookName: documentId,
+    sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
     sheetNames: ['Sheet1'],
     definedNames: [],
     metrics: EMPTY_METRICS,
@@ -112,6 +113,17 @@ function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerS
     typeof value['workbookName'] === 'string' &&
     Array.isArray(value['sheetNames']) &&
     value['sheetNames'].every((sheetName) => typeof sheetName === 'string') &&
+    (value['sheets'] === undefined ||
+      (Array.isArray(value['sheets']) &&
+        value['sheets'].every(
+          (sheet) =>
+            isRecord(sheet) &&
+            typeof sheet['id'] === 'number' &&
+            Number.isInteger(sheet['id']) &&
+            sheet['id'] >= 0 &&
+            typeof sheet['name'] === 'string' &&
+            Number.isInteger(sheet['order']),
+        ))) &&
     Array.isArray(value['definedNames']) &&
     typeof value['metrics'] === 'object' &&
     value['metrics'] !== null &&

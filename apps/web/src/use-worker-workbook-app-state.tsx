@@ -753,6 +753,10 @@ export function useWorkerWorkbookAppState(input: {
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
   )
+  const sheetIdsByName = useMemo(() => {
+    const entries = runtimeState?.sheets?.map((sheet) => [sheet.name, sheet.id] as const) ?? []
+    return Object.fromEntries(entries)
+  }, [runtimeState?.sheets])
   const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState])
   const getAgentContext = useCallback(
     () =>
@@ -1062,6 +1066,7 @@ export function useWorkerWorkbookAppState(input: {
     dismissPersistenceTransferRequest,
     handleSelectionChange,
     setSidePanelWidth,
+    sheetIdsByName,
     sheetNames,
     sidePanel,
     sidePanelWidth,

@@ -26,7 +26,14 @@ export const EMPTY_RUNTIME_METRICS: RecalcMetrics = {
   compileMs: 0,
 }
 
+export interface WorkbookRuntimeSheetSnapshot {
+  readonly id: number
+  readonly name: string
+  readonly order: number
+}
+
 interface WorkbookSheetLike {
+  id: number
   name: string
   order: number
 }
@@ -36,7 +43,17 @@ interface WorkbookLike {
 }
 
 export function listOrderedSheetNames(workbook: WorkbookLike): string[] {
-  return [...workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order).map((sheet) => sheet.name)
+  return listOrderedSheets(workbook).map((sheet) => sheet.name)
+}
+
+export function listOrderedSheets(workbook: WorkbookLike): WorkbookRuntimeSheetSnapshot[] {
+  return [...workbook.sheetsByName.values()]
+    .toSorted((left, right) => left.order - right.order)
+    .map((sheet) => ({
+      id: sheet.id,
+      name: sheet.name,
+      order: sheet.order,
+    }))
 }
 
 export function cloneRuntimeMetrics(metrics: RecalcMetrics = EMPTY_RUNTIME_METRICS): RecalcMetrics {
@@ -65,6 +82,7 @@ function clonePendingMutationSummary(
 
 export function cloneWorkerRuntimeState(input: {
   workbookName: string
+  sheets?: readonly WorkbookRuntimeSheetSnapshot[] | undefined
   sheetNames: readonly string[]
   definedNames: readonly WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
@@ -73,6 +91,7 @@ export function cloneWorkerRuntimeState(input: {
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 }): {
   workbookName: string
+  sheets: WorkbookRuntimeSheetSnapshot[]
   sheetNames: string[]
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
@@ -81,8 +100,10 @@ export function cloneWorkerRuntimeState(input: {
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
   const pendingMutationSummary = clonePendingMutationSummary(input.pendingMutationSummary)
+  const sheets = cloneRuntimeSheets(input.sheets, input.sheetNames)
   return {
     workbookName: input.workbookName,
+    sheets,
     sheetNames: [...input.sheetNames],
     definedNames: input.definedNames.map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(input.metrics),
@@ -95,6 +116,7 @@ export function cloneWorkerRuntimeState(input: {
 export function withExternalSyncState(
   state: {
     workbookName: string
+    sheets?: readonly WorkbookRuntimeSheetSnapshot[] | undefined
     sheetNames: readonly string[]
     definedNames: readonly WorkbookDefinedNameSnapshot[]
     metrics: RecalcMetrics
@@ -105,6 +127,7 @@ export function withExternalSyncState(
   externalSyncState: SyncState | null,
 ): {
   workbookName: string
+  sheets: WorkbookRuntimeSheetSnapshot[]
   sheetNames: string[]
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
@@ -119,11 +142,13 @@ export function withExternalSyncState(
 
 export function buildWorkerRuntimeStateFromBootstrap(input: {
   workbookName: string
+  sheets?: readonly WorkbookRuntimeSheetSnapshot[] | undefined
   sheetNames: readonly string[]
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 }): {
   workbookName: string
+  sheets: WorkbookRuntimeSheetSnapshot[]
   sheetNames: string[]
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
@@ -131,8 +156,10 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
+  const sheets = cloneRuntimeSheets(input.sheets, input.sheetNames)
   return {
     workbookName: input.workbookName,
+    sheets,
     sheetNames: [...input.sheetNames],
     definedNames: (input.definedNames ?? []).map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(),
@@ -143,6 +170,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
 
 export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & WorkerEngine): {
   workbookName: string
+  sheets: WorkbookRuntimeSheetSnapshot[]
   sheetNames: string[]
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
@@ -150,11 +178,33 @@ export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & Wo
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
+  const sheets = listOrderedSheets(engine.workbook)
   return {
     workbookName: engine.workbook.workbookName,
-    sheetNames: listOrderedSheetNames(engine.workbook),
+    sheets,
+    sheetNames: sheets.map((sheet) => sheet.name),
     definedNames: engine.getDefinedNames().map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(engine.getLastMetrics()),
     syncState: engine.getSyncState(),
   }
+}
+
+function cloneRuntimeSheets(
+  sheets: readonly WorkbookRuntimeSheetSnapshot[] | undefined,
+  sheetNames: readonly string[],
+): WorkbookRuntimeSheetSnapshot[] {
+  if (sheets && sheets.length > 0) {
+    return sheets
+      .map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+        order: sheet.order,
+      }))
+      .toSorted((left, right) => left.order - right.order)
+  }
+  return sheetNames.map((name, index) => ({
+    id: index + 1,
+    name,
+    order: index,
+  }))
 }
