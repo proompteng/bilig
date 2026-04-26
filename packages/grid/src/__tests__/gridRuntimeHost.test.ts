@@ -38,5 +38,57 @@ describe('GridRuntimeHost', () => {
       cameraSeq: 2,
       count: 1,
     })
+    expect(host.buildTileInterest({ dprBucket: 2, reason: 'scroll', sheetId: 4, sheetOrdinal: 9 })).toMatchObject({
+      seq: 1,
+      sheetId: 4,
+      sheetOrdinal: 9,
+      cameraSeq: 2,
+      axisSeqX: 0,
+      axisSeqY: 0,
+      freezeSeq: 1,
+      visibleTileKeys: host.visibleTileKeys({ dprBucket: 2, sheetOrdinal: 9 }),
+      reason: 'scroll',
+    })
+  })
+
+  it('keeps freeze state in the runtime transaction when update input omits it', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      freezeCols: 1,
+      freezeRows: 1,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    expect(host.snapshot().freezeSeq).toBe(1)
+    expect(host.snapshot().camera.visibleRegion.freezeCols).toBe(1)
+    host.updateCamera({
+      dpr: 1,
+      gridMetrics,
+      scrollLeft: 100,
+      scrollTop: 100,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    expect(host.snapshot().freezeSeq).toBe(1)
+    expect(host.snapshot().camera.visibleRegion.freezeCols).toBe(1)
+
+    host.updateCamera({
+      dpr: 1,
+      freezeCols: 2,
+      freezeRows: 1,
+      gridMetrics,
+      scrollLeft: 100,
+      scrollTop: 100,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+    expect(host.snapshot().freezeSeq).toBe(2)
+    expect(host.snapshot().camera.visibleRegion.freezeCols).toBe(2)
   })
 })

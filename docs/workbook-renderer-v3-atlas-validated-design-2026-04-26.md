@@ -166,6 +166,7 @@ Files:
 - new `packages/grid/src/runtime/gridOverlayRuntime.ts`
 - new `packages/grid/src/renderer-v3/gpu-buffer-arena.ts`
 - new `packages/grid/src/runtime/gridRuntimeHost.ts`
+- new `packages/grid/src/runtime/gridTileCoordinator.ts`
 - new `apps/web/src/projected-damage-bus.ts`
 - new `apps/web/src/worker-runtime-delta-publisher.ts`
 
@@ -184,6 +185,7 @@ Implement:
 - dynamic overlay runtime and packed instance-buffer contract independent from data scene packets.
 - backend-agnostic GPU buffer arena primitive with capacity-class free lists and explicit trim destruction.
 - imperative runtime host that composes axis, camera, overlay, and visible tile-key state for the future React shell adapter.
+- tile coordinator that emits V3 tile-interest batches, consumes visible dirty tile damage, and classifies exact/stale/miss readiness against the V3 residency cache.
 - dirty tile index application of V3 workbook delta batches, including bounded axis dirty ranges that are consumed per visible tile.
 - app-side projected damage bus that applies V3 workbook deltas once per sheet and exposes visible/warm dirty tile queries.
 - worker-side workbook delta publisher and transport channel that converts engine impact events into encoded sheet-level V3 dirty range batches.
@@ -263,6 +265,7 @@ Completed in the first implementation tranche:
 - `packages/grid/src/renderer-v3/overlay-layer.ts` and `packages/grid/src/runtime/gridOverlayRuntime.ts` add small packed overlay batches for selection/resize/hover/presence-style visuals without data tile invalidation.
 - `packages/grid/src/renderer-v3/gpu-buffer-arena.ts` adds a reusable buffer arena contract for V3 GPU resources so normal eviction can release to free lists instead of destroying buffers.
 - `packages/grid/src/runtime/gridRuntimeHost.ts` composes the first V3 runtimes behind an imperative host API that React can eventually mount and dispose instead of coordinating renderer internals.
+- `packages/grid/src/runtime/gridTileCoordinator.ts` gives the host a concrete tile-interest and readiness coordinator over `TileResidencyV3` and `DirtyTileIndexV3`.
 - `packages/grid/src/renderer-v3/tile-damage-index.ts` now applies sheet-level V3 dirty range batches to fixed tile damage and keeps axis dirty ranges bounded by tile rows/columns instead of expanding them over the full sheet.
 - `apps/web/src/projected-damage-bus.ts` is the first app-side replacement seam for per-subscription viewport patch damage: it dedupes workbook delta sequence application per sheet ordinal and feeds the renderer dirty tile index.
 - `apps/web/src/worker-runtime-delta-publisher.ts` and the `workbookDeltas` worker-transport channel provide the first worker-to-browser V3 damage stream, parallel to the legacy viewport patch and render tile delta subscriptions.
