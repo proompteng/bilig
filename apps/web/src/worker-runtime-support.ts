@@ -22,6 +22,7 @@ import type { ViewportAxisPatch, ViewportPatchSubscription } from '@bilig/worker
 import type { PendingWorkbookMutation } from './workbook-sync.js'
 
 export interface WorkerSheet {
+  id?: number
   name: string
   order: number
   grid: {
