@@ -7,11 +7,7 @@ import {
   GRID_SCENE_PACKET_V2_VERSION,
   createGridTileKeyV2,
 } from '../renderer-v2/scene-packet-v2.js'
-import {
-  resolveGridRectSceneSignature,
-  resolveGridTextSceneSignature,
-  shouldDeferPaneTextUpload,
-} from '../renderer-v2/typegpu-buffer-pool.js'
+import { resolveGridRectSceneSignature, resolveGridTextSceneSignature } from '../renderer-v2/typegpu-buffer-pool.js'
 
 describe('typegpu resource cache signatures', () => {
   test('keeps equivalent text scenes stable without relying on object identity', () => {
@@ -137,39 +133,5 @@ describe('typegpu resource cache signatures', () => {
     )
     expect(basePacket.rects.length).toBe(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
     expect(basePacket.rectInstances.length).toBe(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT)
-  })
-
-  test('does not defer the first text upload for a newly visible packed pane', () => {
-    expect(
-      shouldDeferPaneTextUpload({
-        currentTextCount: 0,
-        currentTextSignature: null,
-        deferTextUploads: true,
-        hasTextBuffer: false,
-        nextTextItemCount: 12,
-      }),
-    ).toBe(false)
-  })
-
-  test('defers packed pane text updates only when a resident text resource can keep drawing', () => {
-    expect(
-      shouldDeferPaneTextUpload({
-        currentTextCount: 12,
-        currentTextSignature: 'resident-text',
-        deferTextUploads: true,
-        hasTextBuffer: true,
-        nextTextItemCount: 12,
-      }),
-    ).toBe(true)
-
-    expect(
-      shouldDeferPaneTextUpload({
-        currentTextCount: 0,
-        currentTextSignature: 'empty-text',
-        deferTextUploads: true,
-        hasTextBuffer: false,
-        nextTextItemCount: 12,
-      }),
-    ).toBe(false)
   })
 })

@@ -52,10 +52,6 @@ import { canUseWorkerResidentPaneScenes, noteWorkerResidentPaneScenesApplied } f
 import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
 import { collectViewportSubscriptions } from './useGridViewportSubscriptions.js'
 
-const BASE_HEADER_SELECTED_CELL: Item = [-1, -1]
-const BASE_HEADER_GRID_SELECTION: GridSelection = createGridSelection(-1, -1)
-const BASE_RESIDENT_GRID_SELECTION: GridSelection = createGridSelection(0, 0)
-
 function noteViewportSubscription(): void {
   if (typeof window === 'undefined') {
     return
@@ -818,7 +814,7 @@ export function useWorkbookGridRenderState(input: {
       gridMetrics,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
-      gridSelection: BASE_RESIDENT_GRID_SELECTION,
+      gridSelection,
       selectedCell: [selectedCell.col, selectedCell.row],
       selectedCellSnapshot,
       selectionRange: null,
@@ -838,6 +834,7 @@ export function useWorkbookGridRenderState(input: {
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
+    gridSelection,
     hostElement,
     residentEditingCellItem,
     residentViewport,
@@ -946,14 +943,14 @@ export function useWorkbookGridRenderState(input: {
       columnWidths,
       rowHeights,
       gridMetrics,
-      gridSelection: BASE_HEADER_GRID_SELECTION,
+      gridSelection,
       activeHeaderDrag: null,
       hoveredCell: null,
       hoveredHeader: null,
       resizeGuideColumn: null,
       resizeGuideRow: null,
-      selectedCell: BASE_HEADER_SELECTED_CELL,
-      selectionRange: null,
+      selectedCell: [selectedCell.col, selectedCell.row],
+      selectionRange,
       sheetName,
       visibleItems: residentHeaderItems,
       visibleRegion: residentHeaderRegion,
@@ -968,10 +965,14 @@ export function useWorkbookGridRenderState(input: {
     emptyGpuScene,
     engine,
     getHeaderCellLocalBounds,
+    gridSelection,
     gridMetrics,
     hostElement,
     rowHeights,
     sceneRevision,
+    selectedCell.col,
+    selectedCell.row,
+    selectionRange,
     sheetName,
     residentHeaderItems,
     residentHeaderRegion,
@@ -992,9 +993,9 @@ export function useWorkbookGridRenderState(input: {
       activeHeaderDrag: null,
       hoveredHeader: null,
       resizeGuideColumn: null,
-      selectedCell: BASE_HEADER_SELECTED_CELL,
+      selectedCell: [selectedCell.col, selectedCell.row],
       selectedCellSnapshot,
-      selectionRange: null,
+      selectionRange,
       sheetName,
       visibleItems: residentHeaderItems,
       visibleRegion: residentHeaderRegion,
@@ -1021,6 +1022,7 @@ export function useWorkbookGridRenderState(input: {
     selectedCellSnapshot,
     selectedCell.col,
     selectedCell.row,
+    selectionRange,
     sheetName,
     residentHeaderItems,
     residentHeaderRegion,
@@ -1183,6 +1185,7 @@ export function useWorkbookGridRenderState(input: {
       return
     }
 
+    refreshOverlayBounds({ commitReactState: true })
     const frame = window.requestAnimationFrame(() => refreshOverlayBounds({ commitReactState: true }))
     const unsubscribeScrollTransform = scrollTransformStore.subscribe(() => refreshOverlayBounds({ commitReactState: false }))
     return () => {

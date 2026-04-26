@@ -224,14 +224,13 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await page.goto('/')
   await waitForWorkbookReady(page)
 
-  const grid = page.getByTestId('sheet-grid')
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
   const cellEditor = page.getByTestId('cell-editor-input')
 
   await clickProductCell(page, 0, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
-  await grid.press('h')
+  await page.keyboard.press('h')
   await expect(cellEditor).toBeVisible()
   await expect(cellEditor).toHaveValue('h')
   await page.keyboard.press('Enter')
@@ -243,7 +242,7 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
 
   await clickProductCell(page, 0, 1)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A2')
-  await grid.press('w')
+  await page.keyboard.press('w')
   await expect(cellEditor).toBeVisible()
   await expect(cellEditor).toHaveValue('w')
   await page.keyboard.press('Tab')
@@ -253,9 +252,9 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await clickProductCell(page, 0, 1)
   await expect(formulaInput).toHaveValue('w')
 
-  await grid.press('Enter')
+  await page.keyboard.press('Enter')
   await expect(nameBox).toHaveValue('A3')
-  await grid.press('Shift+Enter')
+  await page.keyboard.press('Shift+Enter')
   await expect(nameBox).toHaveValue('A2')
 })
 

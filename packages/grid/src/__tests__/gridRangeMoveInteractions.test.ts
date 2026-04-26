@@ -126,6 +126,124 @@ describe('gridRangeMoveInteractions', () => {
     expect(previousCleanup).toHaveBeenCalledTimes(1)
     expect(typeof cleanupRef.current).toBe('function')
   })
+
+  it('auto-scrolls the grid edge while range move drag stays active', () => {
+    // Arrange
+    const listenerTarget = createPointerListenerTarget()
+    const cleanupRef = { current: null as (() => void) | null }
+    const frameCallbacks: FrameRequestCallback[] = []
+    const setGridSelection = vi.fn()
+    const scrollViewport = createScrollViewport()
+    const resolvePointerCell = vi.fn((_clientX: number, _clientY: number) => [0, Math.floor(scrollViewport.scrollTop / 10)] as const)
+
+    // Act
+    beginWorkbookGridRangeMove({
+      cleanupRef,
+      listenerTarget,
+      sourceRange: { x: 0, y: 0, width: 1, height: 1 },
+      pointerCell: [0, 0],
+      resolvePointerCell,
+      setGridSelection,
+      onSelectionChange: vi.fn(),
+      onMoveRange: vi.fn(),
+      refreshHoverState: vi.fn(),
+      setIsRangeMoveDragging: vi.fn(),
+      setHoverState: vi.fn(),
+      scrollViewport,
+      requestAnimationFrame: (callback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+    listenerTarget.dispatch('pointermove', { clientX: 50, clientY: 98 })
+    frameCallbacks.shift()?.(performance.now())
+
+    // Assert
+    expect(scrollViewport.scrollTop).toBeGreaterThan(0)
+    expect(scrollViewport.dispatchEvent).toHaveBeenCalledWith(expect.any(Event))
+    expect(setGridSelection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        current: expect.objectContaining({
+          range: { x: 0, y: expect.any(Number), width: 1, height: 1 },
+        }),
+      }),
+    )
+    expect(setGridSelection.mock.lastCall?.[0].current?.range.y).toBeGreaterThan(0)
+  })
+
+  it('applies the auto-scrolled preview range on pointer up', () => {
+    // Arrange
+    const listenerTarget = createPointerListenerTarget()
+    const cleanupRef = { current: null as (() => void) | null }
+    const frameCallbacks: FrameRequestCallback[] = []
+    const scrollViewport = createScrollViewport()
+    const onMoveRange = vi.fn()
+    const resolvePointerCell = vi.fn((_clientX: number, _clientY: number) => [1, 1 + Math.floor(scrollViewport.scrollTop / 10)] as const)
+
+    // Act
+    beginWorkbookGridRangeMove({
+      cleanupRef,
+      listenerTarget,
+      sourceRange: { x: 1, y: 1, width: 2, height: 1 },
+      pointerCell: [1, 1],
+      resolvePointerCell,
+      setGridSelection: vi.fn(),
+      onSelectionChange: vi.fn(),
+      onMoveRange,
+      refreshHoverState: vi.fn(),
+      setIsRangeMoveDragging: vi.fn(),
+      setHoverState: vi.fn(),
+      scrollViewport,
+      requestAnimationFrame: (callback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+    listenerTarget.dispatch('pointermove', { clientX: 50, clientY: 98 })
+    frameCallbacks.shift()?.(performance.now())
+    listenerTarget.dispatch('pointerup', { clientX: 50, clientY: 98 })
+
+    // Assert
+    expect(onMoveRange).toHaveBeenCalledWith('B2', 'C2', 'B5', 'C5')
+  })
+
+  it('recomputes the drop range on pointer up after the viewport scrolls', () => {
+    // Arrange
+    const listenerTarget = createPointerListenerTarget()
+    const cleanupRef = { current: null as (() => void) | null }
+    const scrollViewport = createScrollViewport()
+    const onMoveRange = vi.fn()
+    const resolvePointerCell = vi.fn((_clientX: number, _clientY: number) => [1, 1 + Math.floor(scrollViewport.scrollTop / 10)] as const)
+
+    // Act
+    beginWorkbookGridRangeMove({
+      cleanupRef,
+      listenerTarget,
+      sourceRange: { x: 1, y: 1, width: 2, height: 1 },
+      pointerCell: [1, 1],
+      resolvePointerCell,
+      setGridSelection: vi.fn(),
+      onSelectionChange: vi.fn(),
+      onMoveRange,
+      refreshHoverState: vi.fn(),
+      setIsRangeMoveDragging: vi.fn(),
+      setHoverState: vi.fn(),
+      scrollViewport,
+      requestAnimationFrame: (callback) => {
+        callback(performance.now())
+        return 1
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+    listenerTarget.dispatch('pointermove', { clientX: 50, clientY: 50 })
+    scrollViewport.scrollTop = 80
+    listenerTarget.dispatch('pointerup', { clientX: 50, clientY: 50 })
+
+    // Assert
+    expect(onMoveRange).toHaveBeenCalledWith('B2', 'C2', 'B10', 'C10')
+  })
 })
 
 // Helpers
@@ -149,5 +267,32 @@ function createPointerListenerTarget(): {
     dispatch(type, event) {
       listeners.get(type)?.(event)
     },
+  }
+}
+
+function createScrollViewport(): {
+  clientHeight: number
+  clientWidth: number
+  dispatchEvent: ReturnType<typeof vi.fn>
+  getBoundingClientRect(): Pick<DOMRect, 'bottom' | 'left' | 'right' | 'top'>
+  scrollHeight: number
+  scrollLeft: number
+  scrollTop: number
+  scrollWidth: number
+} {
+  return {
+    clientHeight: 100,
+    clientWidth: 100,
+    dispatchEvent: vi.fn(),
+    getBoundingClientRect: () => ({
+      bottom: 100,
+      left: 0,
+      right: 100,
+      top: 0,
+    }),
+    scrollHeight: 1_000,
+    scrollLeft: 0,
+    scrollTop: 0,
+    scrollWidth: 1_000,
   }
 }

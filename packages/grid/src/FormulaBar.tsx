@@ -37,6 +37,7 @@ export function FormulaBar({
 }: FormulaBarProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const nameBoxRef = useRef<HTMLInputElement | null>(null)
+  const commitRequestedRef = useRef(false)
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
   const [formulaCaret, setFormulaCaret] = useState(value.length)
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
@@ -63,6 +64,12 @@ export function FormulaBar({
     input.setSelectionRange(pending.start, pending.end)
     pendingSelectionRef.current = null
   }, [value])
+
+  useEffect(() => {
+    if (!isEditing) {
+      commitRequestedRef.current = false
+    }
+  }, [isEditing])
 
   useEffect(() => {
     const handleGoToShortcut = (event: KeyboardEvent) => {
@@ -103,6 +110,14 @@ export function FormulaBar({
     ? (assistState.suggestions[highlightedSuggestionIndex] ?? assistState.suggestions[0] ?? null)
     : null
   const selectionStatus = `${sheetName}!${selectionLabel ?? address}`
+
+  const requestCommit = () => {
+    if (commitRequestedRef.current) {
+      return
+    }
+    commitRequestedRef.current = true
+    onCommit()
+  }
 
   const commitSuggestion = (suggestion: FormulaSuggestion) => {
     if (assistState.tokenStart === null || assistState.tokenEnd === null) {
@@ -162,11 +177,12 @@ export function FormulaBar({
                   return
                 }
                 if (isEditing) {
-                  onCommit()
+                  requestCommit()
                 }
               }}
               onChange={(event) => {
                 const nextValue = event.target.value
+                commitRequestedRef.current = false
                 if (!isEditing) {
                   onBeginEdit(nextValue)
                 }
@@ -178,6 +194,7 @@ export function FormulaBar({
               }}
               onFocus={(event) => {
                 setIsFormulaFocused(true)
+                commitRequestedRef.current = false
                 setFormulaCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
                 if (!isEditing) {
                   onBeginEdit(value)
@@ -205,7 +222,7 @@ export function FormulaBar({
                 }
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  onCommit()
+                  requestCommit()
                   return
                 }
                 if (event.key === 'Escape') {

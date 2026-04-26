@@ -80,6 +80,10 @@ function mapConnectionStateToRuntimeSyncState(connectionStateName: ConnectionSta
   }
 }
 
+function sameWorkerRuntimeSelection(left: WorkerRuntimeSelection, right: WorkerRuntimeSelection): boolean {
+  return left.sheetName === right.sheetName && left.address === right.address
+}
+
 function resolveSteadySubstate(input: {
   hasZero: boolean
   connectionStateName: ConnectionStateName
@@ -195,6 +199,9 @@ export function createWorkerRuntimeMachine() {
                 sendBack({ type: 'session.runtime', runtimeState })
               },
               onSelection(selection) {
+                if (!sameWorkerRuntimeSelection(selection, pendingSelection)) {
+                  return
+                }
                 pendingSelection = selection
                 sendBack({ type: 'session.selection', selection })
               },

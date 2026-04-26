@@ -1,13 +1,19 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { CommitOp } from '@bilig/core'
-import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress, translateFormulaReferences } from '@bilig/formula'
 import type { EditSelectionBehavior } from '@bilig/grid'
-import type { CellRangeRef } from '@bilig/protocol'
+import { ValueTag, type CellRangeRef, type CellSnapshot } from '@bilig/protocol'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
 import type { WorkbookMutationMethod } from './workbook-sync.js'
-import { parseEditorInput, type EditingMode, type ParsedEditorInput } from './worker-workbook-app-model.js'
+import { parseEditorInput, parsedEditorInputFromSnapshot, type EditingMode, type ParsedEditorInput } from './worker-workbook-app-model.js'
+import { createOptimisticCellSnapshot, createSupersedingCellSnapshot, evaluateOptimisticFormula } from './workbook-optimistic-cell.js'
 
 type RangeMutationMethod = 'fillRange' | 'copyRange' | 'moveRange'
+
+interface OptimisticViewportStore {
+  getCell(sheetName: string, address: string): CellSnapshot
+  setCellSnapshot(snapshot: CellSnapshot): void
+}
 
 export function buildPasteCommitOps(sheetName: string, startAddr: string, values: readonly (readonly string[])[]): CommitOp[] {
   const start = parseCellAddress(startAddr, sheetName)
@@ -61,6 +67,259 @@ export function createSheetScopedRangePair(
   }
 }
 
+function applyOptimisticMoveRange(
+  viewportStore: OptimisticViewportStore | null,
+  source: CellRangeRef,
+  target: CellRangeRef,
+): (() => void) | null {
+  if (!viewportStore) {
+    return null
+  }
+
+  const sourceBounds = normalizeCellRange(source)
+  const targetBounds = normalizeCellRange(target)
+  const height = sourceBounds.endRow - sourceBounds.startRow + 1
+  const width = sourceBounds.endCol - sourceBounds.startCol + 1
+  if (height !== targetBounds.endRow - targetBounds.startRow + 1 || width !== targetBounds.endCol - targetBounds.startCol + 1) {
+    return null
+  }
+
+  const previousSnapshots: CellSnapshot[] = []
+  const nextSourceSnapshots: CellSnapshot[] = []
+  const nextTargetSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      const sourceAddress = formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset)
+      const targetAddress = formatAddress(targetBounds.startRow + rowOffset, targetBounds.startCol + colOffset)
+      const sourceSnapshot = viewportStore.getCell(source.sheetName, sourceAddress)
+      const targetSnapshot = viewportStore.getCell(target.sheetName, targetAddress)
+      previousSnapshots.push(sourceSnapshot, targetSnapshot)
+      const nextSourceSnapshot = createEmptyOptimisticSnapshot(source.sheetName, sourceAddress, sourceSnapshot.version + 1)
+      const nextTargetSnapshot = {
+        ...sourceSnapshot,
+        sheetName: target.sheetName,
+        address: targetAddress,
+        version: Math.max(sourceSnapshot.version, targetSnapshot.version) + 1,
+      }
+      rollbackVersion = Math.max(rollbackVersion, nextSourceSnapshot.version, nextTargetSnapshot.version)
+      nextSourceSnapshots.push(nextSourceSnapshot)
+      nextTargetSnapshots.push(nextTargetSnapshot)
+    }
+  }
+
+  nextSourceSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+  nextTargetSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+export function applyOptimisticCopyRange(
+  viewportStore: OptimisticViewportStore | null,
+  source: CellRangeRef,
+  target: CellRangeRef,
+): (() => void) | null {
+  if (!viewportStore) {
+    return null
+  }
+
+  const sourceBounds = normalizeCellRange(source)
+  const targetBounds = normalizeCellRange(target)
+  const height = sourceBounds.endRow - sourceBounds.startRow + 1
+  const width = sourceBounds.endCol - sourceBounds.startCol + 1
+  if (height !== targetBounds.endRow - targetBounds.startRow + 1 || width !== targetBounds.endCol - targetBounds.startCol + 1) {
+    return null
+  }
+
+  const previousSnapshots: CellSnapshot[] = []
+  const stagedSnapshots = new Map<string, CellSnapshot>()
+  const nextSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      const sourceAddress = formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset)
+      const targetAddress = formatAddress(targetBounds.startRow + rowOffset, targetBounds.startCol + colOffset)
+      const sourceSnapshot = viewportStore.getCell(source.sheetName, sourceAddress)
+      const targetSnapshot = viewportStore.getCell(target.sheetName, targetAddress)
+      const parsed = parsedInputForCopiedSnapshot(sourceSnapshot, sourceAddress, target.sheetName, targetAddress)
+      const next = createOptimisticCellSnapshot({
+        sheetName: target.sheetName,
+        address: targetAddress,
+        current: targetSnapshot,
+        parsed,
+        evaluateFormula: (formula) =>
+          evaluateOptimisticFormula({
+            sheetName: target.sheetName,
+            address: targetAddress,
+            formula,
+            getCell: (sheetName, address) =>
+              stagedSnapshots.get(optimisticSnapshotKey(sheetName, address)) ?? viewportStore.getCell(sheetName, address),
+          }),
+      })
+      previousSnapshots.push(targetSnapshot)
+      stagedSnapshots.set(optimisticSnapshotKey(target.sheetName, targetAddress), next)
+      nextSnapshots.push(next)
+      rollbackVersion = Math.max(rollbackVersion, next.version)
+    }
+  }
+
+  nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore | null, range: CellRangeRef): (() => void) | null {
+  if (!viewportStore) {
+    return null
+  }
+
+  const bounds = normalizeCellRange(range)
+  const previousSnapshots: CellSnapshot[] = []
+  const nextSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+    for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+      const address = formatAddress(row, col)
+      const previous = viewportStore.getCell(range.sheetName, address)
+      const next = createEmptyOptimisticSnapshot(range.sheetName, address, previous.version + 1)
+      previousSnapshots.push(previous)
+      nextSnapshots.push(next)
+      rollbackVersion = Math.max(rollbackVersion, next.version)
+    }
+  }
+
+  nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+export function applyOptimisticCommitOps(viewportStore: OptimisticViewportStore | null, ops: readonly CommitOp[]): (() => void) | null {
+  if (!viewportStore) {
+    return null
+  }
+
+  const previousSnapshots: CellSnapshot[] = []
+  const nextSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  for (const op of ops) {
+    if ((op.kind !== 'upsertCell' && op.kind !== 'deleteCell') || !op.sheetName || !op.addr) {
+      continue
+    }
+    const opSheetName = op.sheetName
+    const opAddress = op.addr
+    const previous = viewportStore.getCell(opSheetName, opAddress)
+    previousSnapshots.push(previous)
+    const parsed = parsedInputFromCommitOp(op)
+    const next =
+      parsed.kind === 'clear'
+        ? createEmptyOptimisticSnapshot(opSheetName, opAddress, previous.version + 1)
+        : createOptimisticCellSnapshot({
+            sheetName: opSheetName,
+            address: opAddress,
+            current: previous,
+            parsed,
+            evaluateFormula: (formula) =>
+              evaluateOptimisticFormula({
+                sheetName: opSheetName,
+                address: opAddress,
+                formula,
+                getCell: (refSheetName, refAddress) => viewportStore.getCell(refSheetName, refAddress),
+              }),
+          })
+    rollbackVersion = Math.max(rollbackVersion, next.version)
+    nextSnapshots.push(next)
+  }
+
+  if (nextSnapshots.length === 0) {
+    return null
+  }
+
+  nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+function normalizeCellRange(range: CellRangeRef): { startRow: number; endRow: number; startCol: number; endCol: number } {
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
+  return {
+    startRow: Math.min(start.row, end.row),
+    endRow: Math.max(start.row, end.row),
+    startCol: Math.min(start.col, end.col),
+    endCol: Math.max(start.col, end.col),
+  }
+}
+
+function parsedInputForCopiedSnapshot(
+  snapshot: CellSnapshot,
+  sourceAddress: string,
+  targetSheetName: string,
+  targetAddress: string,
+): ParsedEditorInput {
+  if (typeof snapshot.formula === 'string') {
+    return {
+      kind: 'formula',
+      formula:
+        snapshot.sheetName === targetSheetName
+          ? translateFormulaReferences(
+              snapshot.formula,
+              parseCellAddress(targetAddress, targetSheetName).row - parseCellAddress(sourceAddress, snapshot.sheetName).row,
+              parseCellAddress(targetAddress, targetSheetName).col - parseCellAddress(sourceAddress, snapshot.sheetName).col,
+            )
+          : snapshot.formula,
+    }
+  }
+  return parsedEditorInputFromSnapshot(snapshot)
+}
+
+function optimisticSnapshotKey(sheetName: string, address: string): string {
+  return `${sheetName}:${address}`
+}
+
+function parsedInputFromCommitOp(op: CommitOp): ParsedEditorInput {
+  if (op.kind === 'deleteCell') {
+    return { kind: 'clear' }
+  }
+  if (typeof op.formula === 'string') {
+    return { kind: 'formula', formula: op.formula }
+  }
+  return { kind: 'value', value: op.value ?? null }
+}
+
+function createEmptyOptimisticSnapshot(sheetName: string, address: string, version: number): CellSnapshot {
+  return {
+    sheetName,
+    address,
+    value: { tag: ValueTag.Empty },
+    flags: 0,
+    version,
+  }
+}
+
 export function useWorkbookSelectionActions(input: {
   writesAllowed: boolean
   selectionRangeRef: MutableRefObject<CellRangeRef>
@@ -70,6 +329,7 @@ export function useWorkbookSelectionActions(input: {
   editingModeRef: MutableRefObject<EditingMode>
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>
   applyParsedInput: (sheetName: string, address: string, parsed: ParsedEditorInput) => Promise<void>
+  viewportStore?: OptimisticViewportStore | null | undefined
   onPasteApplied?: () => void
   resetEditorConflictTracking: (nextSelection?: WorkerRuntimeSelection) => void
   reportRuntimeError: (error: unknown) => void
@@ -91,6 +351,7 @@ export function useWorkbookSelectionActions(input: {
     setEditingMode,
     setEditorSelectionBehavior,
     setEditorValue,
+    viewportStore,
     writesAllowed,
   } = input
 
@@ -120,33 +381,43 @@ export function useWorkbookSelectionActions(input: {
         targetStartAddr,
         targetEndAddr,
       )
+      const rollbackOptimisticRange =
+        method === 'moveRange'
+          ? applyOptimisticMoveRange(viewportStore ?? null, source, target)
+          : method === 'copyRange'
+            ? applyOptimisticCopyRange(viewportStore ?? null, source, target)
+            : null
       void (async () => {
         try {
           await invokeMutation(method, source, target)
           resetEditingState()
           resetEditorConflictTracking()
         } catch (error) {
+          rollbackOptimisticRange?.()
           reportRuntimeError(error)
         }
       })()
     },
-    [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRef, writesAllowed],
+    [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRef, viewportStore, writesAllowed],
   )
 
   const clearSelectedRange = useCallback(() => {
     if (!writesAllowed) {
       return
     }
+    const range = selectionRangeRef.current
+    const rollbackOptimisticClear = applyOptimisticClearRange(viewportStore ?? null, range)
     resetEditingState('')
     resetEditorConflictTracking()
     void (async () => {
       try {
-        await invokeMutation('clearRange', selectionRangeRef.current)
+        await invokeMutation('clearRange', range)
       } catch (error) {
+        rollbackOptimisticClear?.()
         reportRuntimeError(error)
       }
     })()
-  }, [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, writesAllowed])
+  }, [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, viewportStore, writesAllowed])
 
   const clearSelectedCell = useCallback(() => {
     clearSelectedRange()
@@ -177,18 +448,20 @@ export function useWorkbookSelectionActions(input: {
       if (ops.length === 0) {
         return
       }
+      const rollbackOptimisticPaste = applyOptimisticCommitOps(viewportStore ?? null, ops)
       void (async () => {
         try {
           await invokeMutation('renderCommit', ops)
           onPasteApplied?.()
         } catch (error) {
+          rollbackOptimisticPaste?.()
           reportRuntimeError(error)
         }
       })()
       resetEditingState()
       resetEditorConflictTracking()
     },
-    [invokeMutation, onPasteApplied, reportRuntimeError, resetEditingState, resetEditorConflictTracking, writesAllowed],
+    [invokeMutation, onPasteApplied, reportRuntimeError, resetEditingState, resetEditorConflictTracking, viewportStore, writesAllowed],
   )
 
   const fillSelectionRange = useCallback(

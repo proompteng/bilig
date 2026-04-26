@@ -6,7 +6,10 @@ import type { ProjectedViewportAxisStore } from './projected-viewport-axis-store
 import { applyProjectedViewportPatch, type ProjectedViewportPatchApplicationResult } from './projected-viewport-patch-application.js'
 
 type CellItem = readonly [number, number]
-const ACTIVE_SCROLL_PATCH_DEFER_MS = 96
+export type ProjectedViewportPatchApplied = Pick<
+  ProjectedViewportPatchApplicationResult,
+  'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
+>
 
 export class ProjectedViewportPatchCoordinator {
   constructor(
@@ -14,6 +17,7 @@ export class ProjectedViewportPatchCoordinator {
       client?: WorkerEngineClient
       cellCache: ProjectedViewportCellCache
       axisStore: ProjectedViewportAxisStore
+      onViewportPatchApplied?: ((patch: ViewportPatch, result: ProjectedViewportPatchApplied) => void) | undefined
     },
   ) {}
 
@@ -25,9 +29,7 @@ export class ProjectedViewportPatchCoordinator {
     let frameHandle: number | null = null
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null
     const pendingDamage = new Map<string, { cell: CellItem }>()
-    const pendingPatchBytes: Uint8Array[] = []
     let pendingStructuralChange = false
-    let patchTimeoutHandle: ReturnType<typeof setTimeout> | null = null
     const scheduleFlush = () => {
       if (frameHandle !== null || timeoutHandle !== null) {
         return
@@ -50,34 +52,17 @@ export class ProjectedViewportPatchCoordinator {
       frameHandle = window.requestAnimationFrame(flush)
     }
     const applyPatchBytes = (bytes: Uint8Array) => {
-      const result = this.applyViewportPatchDetailed(decodeViewportPatch(bytes))
+      const patch = decodeViewportPatch(bytes)
+      const result = this.applyViewportPatchDetailed(patch)
+      this.options.onViewportPatchApplied?.(patch, result)
       for (const entry of result.damage) {
         pendingDamage.set(`${entry.cell[0]}:${entry.cell[1]}`, entry)
       }
       pendingStructuralChange = pendingStructuralChange || result.axisChanged || result.freezeChanged
     }
-    const schedulePatchApply = () => {
-      if (patchTimeoutHandle !== null) {
-        return
-      }
-      const collector = getWorkbookScrollPerfCollector()
-      const delay = collector?.isGridScrollRecentlyActive(ACTIVE_SCROLL_PATCH_DEFER_MS) ? ACTIVE_SCROLL_PATCH_DEFER_MS : 0
-      patchTimeoutHandle = setTimeout(() => {
-        patchTimeoutHandle = null
-        if (collector?.isGridScrollRecentlyActive(ACTIVE_SCROLL_PATCH_DEFER_MS) && pendingPatchBytes.length > 0) {
-          schedulePatchApply()
-          return
-        }
-        const patches = pendingPatchBytes.splice(0)
-        for (const patchBytes of patches) {
-          applyPatchBytes(patchBytes)
-        }
-        scheduleFlush()
-      }, delay)
-    }
     const unsubscribe = this.options.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
-      pendingPatchBytes.push(bytes)
-      schedulePatchApply()
+      applyPatchBytes(bytes)
+      scheduleFlush()
     })
     return () => {
       if (frameHandle !== null) {
@@ -88,10 +73,6 @@ export class ProjectedViewportPatchCoordinator {
         clearTimeout(timeoutHandle)
         timeoutHandle = null
       }
-      if (patchTimeoutHandle !== null) {
-        clearTimeout(patchTimeoutHandle)
-        patchTimeoutHandle = null
-      }
       unsubscribe()
       stopTrackingViewport()
     }
@@ -101,9 +82,7 @@ export class ProjectedViewportPatchCoordinator {
     return this.applyViewportPatchDetailed(patch).damage
   }
 
-  applyViewportPatchDetailed(
-    patch: ViewportPatch,
-  ): Pick<ProjectedViewportPatchApplicationResult, 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'> {
+  applyViewportPatchDetailed(patch: ViewportPatch): ProjectedViewportPatchApplied {
     const result = applyProjectedViewportPatch({
       state: {
         ...this.options.cellCache.getPatchState(),

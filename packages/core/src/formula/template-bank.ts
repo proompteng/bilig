@@ -55,6 +55,10 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
   ).compiled
 }
 
+function compileSourceFormula(source: string): CompiledFormula {
+  return tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+}
+
 function resolveTemplateCompiled(template: MutableTemplateRecord, source: string, ownerRow: number, ownerCol: number): CompiledFormula {
   if (source === template.baseSource) {
     return template.compiled
@@ -63,18 +67,19 @@ function resolveTemplateCompiled(template: MutableTemplateRecord, source: string
   if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
     return anchoredPrefixAggregate.compiled
   }
-  if (source === template.baseSource) {
-    return template.compiled
+  const sourceTemplateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
+  if (sourceTemplateKey !== template.templateKey) {
+    return compileSourceFormula(source)
   }
   const rowDelta = ownerRow - template.baseRow
   const colDelta = ownerCol - template.baseCol
   if (rowDelta === 0 && colDelta === 0) {
-    return template.compiled
+    return compileSourceFormula(source)
   }
   try {
     return translateTemplate(template.compiled, rowDelta, colDelta, source)
   } catch {
-    return tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+    return compileSourceFormula(source)
   }
 }
 
@@ -122,7 +127,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
     if (args?.counters) {
       addEngineCounter(args.counters, 'formulasParsed')
     }
-    const compiled = compiledOverride ?? tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+    const compiled = compiledOverride ?? compileSourceFormula(source)
     const record: MutableTemplateRecord = {
       id: nextTemplateId,
       templateKey,

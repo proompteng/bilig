@@ -144,9 +144,20 @@ describe('worker-runtime-render-scene', () => {
       selectionRange: null,
       editingCell: { col: 1, row: 0 },
     })
+    const rangeSelectionKey = buildResidentPaneSceneCacheKey({
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+      selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: { x: 0, y: 0, width: 2, height: 2 },
+      editingCell: null,
+    })
 
     expect(selectionOnlyKey).not.toBe(baseKey)
     expect(editingKey).not.toBe(baseKey)
+    expect(rangeSelectionKey).toBe(baseKey)
   })
 
   it('uses the selected cell snapshot when worker projection has not caught up', () => {
@@ -198,5 +209,76 @@ describe('worker-runtime-render-scene', () => {
         editingCell: null,
       }),
     )
+  })
+
+  it('uses the engine selected-cell snapshot when it is newer than the request snapshot', () => {
+    const staleSelectedCellSnapshot: CellSnapshot = {
+      sheetName: 'Sheet1',
+      address: 'I11',
+      value: { tag: ValueTag.Empty },
+      flags: 0,
+      version: 1,
+    }
+    const newerEngineSnapshot: CellSnapshot = {
+      sheetName: 'Sheet1',
+      address: 'I11',
+      input: 'committed',
+      value: { tag: ValueTag.String, value: 'committed', stringId: 1 },
+      flags: 0,
+      version: 2,
+    }
+
+    const scenes = buildWorkerResidentPaneScenes({
+      engine: {
+        ...engine,
+        getCell: (_sheetName: string, address: string) => (address === 'I11' ? newerEngineSnapshot : emptyCell),
+      },
+      generation: 9,
+      request: {
+        sheetName: 'Sheet1',
+        residentViewport: { rowStart: 10, rowEnd: 20, colStart: 8, colEnd: 16 },
+        freezeRows: 0,
+        freezeCols: 0,
+        selectedCell: { col: 8, row: 10 },
+        selectedCellSnapshot: staleSelectedCellSnapshot,
+        selectionRange: null,
+        editingCell: null,
+      },
+    })
+
+    expect(scenes.find((scene) => scene.paneId === 'body')?.textScene.items.some((item) => item.text === 'committed')).toBe(true)
+  })
+
+  it('keeps range selection geometry out of resident pane scenes', () => {
+    const baseRequest = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+      selectedCell: { col: 1, row: 1 },
+      selectedCellSnapshot: null,
+      editingCell: null,
+    } as const
+    const unselected = buildWorkerResidentPaneScenes({
+      engine,
+      generation: 10,
+      request: {
+        ...baseRequest,
+        selectionRange: null,
+      },
+    })
+    const selected = buildWorkerResidentPaneScenes({
+      engine,
+      generation: 11,
+      request: {
+        ...baseRequest,
+        selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      },
+    })
+
+    const unselectedBody = unselected.find((scene) => scene.paneId === 'body')
+    const selectedBody = selected.find((scene) => scene.paneId === 'body')
+    expect(selectedBody?.gpuScene.fillRects.length).toBe(unselectedBody?.gpuScene.fillRects.length)
+    expect(selectedBody?.gpuScene.borderRects.length).toBe(unselectedBody?.gpuScene.borderRects.length)
   })
 })

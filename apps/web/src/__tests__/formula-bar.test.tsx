@@ -2,7 +2,7 @@
 import { act, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkbookDefinedNameSnapshot } from '@bilig/protocol'
 import { FormulaBar } from '../../../../packages/grid/src/FormulaBar.js'
 
@@ -269,6 +269,53 @@ describe('FormulaBar', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('does not commit twice when Enter is followed by blur before parent editing state catches up', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const outsideButton = document.createElement('button')
+    document.body.appendChild(outsideButton)
+    const root = createRoot(host)
+    const onCommit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={onCommit}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="draft"
+        />,
+      )
+    })
+
+    const input = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    await act(async () => {
+      input.focus()
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      outsideButton.focus()
+    })
+
+    expect(onCommit).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.unmount()
+    })
+    outsideButton.remove()
   })
 
   it('keeps the name box and formula frame flat without raised shadow chrome', async () => {

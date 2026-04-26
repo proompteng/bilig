@@ -73,18 +73,41 @@ export function cellSnapshotSignature(snapshot: CellSnapshot): string {
   ].join('|')
 }
 
-export function shouldKeepCurrentSnapshot(current: CellSnapshot, incoming: CellSnapshot): boolean {
+export function shouldKeepCurrentSnapshot(
+  current: CellSnapshot,
+  incoming: CellSnapshot,
+  options: { readonly allowResetEmptyOverride?: boolean } = {},
+): boolean {
   const incomingIsResetEmptySnapshot = isResetEmptySnapshot(incoming)
-  if (!incomingIsResetEmptySnapshot && current.formula !== undefined && incoming.formula === undefined && incoming.input === undefined) {
+  const allowResetEmptyOverride = options.allowResetEmptyOverride ?? true
+  if (
+    incomingIsResetEmptySnapshot &&
+    current.version > incoming.version &&
+    (current.formula !== undefined || current.input !== undefined)
+  ) {
+    return true
+  }
+  if (
+    !incomingIsResetEmptySnapshot &&
+    incoming.value.tag !== ValueTag.Error &&
+    current.formula !== undefined &&
+    incoming.formula === undefined &&
+    incoming.input === undefined
+  ) {
     return true
   }
   if (current.version > incoming.version) {
-    return !incomingIsResetEmptySnapshot
+    return allowResetEmptyOverride ? !incomingIsResetEmptySnapshot : true
   }
   if (current.version < incoming.version) {
     return false
   }
-  return !incomingIsResetEmptySnapshot && current.formula !== undefined && incoming.formula === undefined
+  return (
+    !incomingIsResetEmptySnapshot &&
+    incoming.value.tag !== ValueTag.Error &&
+    current.formula !== undefined &&
+    incoming.formula === undefined
+  )
 }
 
 function cellStyleSignature(style: CellStyleRecord): string {

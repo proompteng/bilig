@@ -492,7 +492,9 @@ export class WorkbookWorkerRuntime {
   }
 
   async enqueuePendingMutation(input: PendingWorkbookMutationInput): Promise<PendingWorkbookMutation> {
-    return await this.mutationJournal.enqueuePendingMutation(input)
+    const mutation = await this.mutationJournal.enqueuePendingMutation(input)
+    this.broadcastViewportPatches(null, this.getCurrentMetrics())
+    return mutation
   }
 
   async markPendingMutationSubmitted(id: string): Promise<void> {

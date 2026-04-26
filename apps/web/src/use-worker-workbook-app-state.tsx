@@ -3,7 +3,7 @@ import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
-import { isCellSnapshot, type CellRangeRef, type CellSnapshot, type Viewport } from '@bilig/protocol'
+import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
 import { createWorkerRuntimeMachine } from './runtime-machine.js'
 import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
@@ -45,6 +45,12 @@ import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { registerRuntimeDisposalHandlers } from './runtime-disposal-handlers.js'
 import { useWorkbookLocalPersistenceHandoff } from './use-workbook-local-persistence-handoff.js'
 import { loadOrCreateWorkbookPresenceClientId } from './workbook-presence-client.js'
+import {
+  createOptimisticCellSnapshot,
+  createSupersedingCellSnapshot,
+  evaluateOptimisticFormula,
+  optimisticCellKey,
+} from './workbook-optimistic-cell.js'
 
 const workerRuntimeMachine = createWorkerRuntimeMachine()
 
@@ -83,10 +89,6 @@ function selectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelecti
     left.range.startAddress === right.range.startAddress &&
     left.range.endAddress === right.range.endAddress
   )
-}
-
-function optimisticCellKey(sheetName: string, address: string): string {
-  return `${sheetName}:${address}`
 }
 
 function readMountedCellEditorValue(): string | null {
@@ -375,27 +377,35 @@ export function useWorkerWorkbookAppState(input: {
       optimisticCellSeedsRef.current.delete(key)
     }
   }, [])
+  const applyOptimisticParsedInput = useCallback((targetSelection: EditTargetSelection, parsed: ParsedEditorInput) => {
+    const viewportStore = workerHandleRef.current?.viewportStore
+    if (!viewportStore) {
+      return null
+    }
+    const previous = viewportStore.getCell(targetSelection.sheetName, targetSelection.address)
+    const optimistic = createOptimisticCellSnapshot({
+      sheetName: targetSelection.sheetName,
+      address: targetSelection.address,
+      current: previous,
+      parsed,
+      evaluateFormula: (formula) =>
+        evaluateOptimisticFormula({
+          sheetName: targetSelection.sheetName,
+          address: targetSelection.address,
+          formula,
+          getCell: (sheetName, address) => viewportStore.getCell(sheetName, address),
+        }),
+    })
+    viewportStore.setCellSnapshot(optimistic)
+    return (snapshot = previous) => {
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, optimistic.version + 1))
+    }
+  }, [])
 
   const cloneLiveSelectedCell = useCallback(
     (nextSelection = selectionRef.current) => structuredClone(getLiveSelectedCell(nextSelection)),
     [getLiveSelectedCell],
   )
-  const readAuthoritativeCell = useCallback(
-    async (nextSelection = selectionRef.current): Promise<CellSnapshot> => {
-      const controller = runtimeControllerRef.current
-      const viewportStore = workerHandleRef.current?.viewportStore
-      if (controller) {
-        const snapshot = await controller.invoke('getCell', nextSelection.sheetName, nextSelection.address)
-        if (isCellSnapshot(snapshot)) {
-          viewportStore?.setCellSnapshot(snapshot)
-          return snapshot
-        }
-      }
-      return cloneLiveSelectedCell(nextSelection)
-    },
-    [cloneLiveSelectedCell],
-  )
-
   const resetEditorConflictTracking = useCallback(
     (nextSelection = selectionRef.current) => {
       editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextSelection)
@@ -500,49 +510,57 @@ export function useWorkerWorkbookAppState(input: {
       if (!writesAllowed) {
         return
       }
+      if (editingModeRef.current === 'idle' && valueOverride === undefined && targetSelectionOverride === undefined) {
+        return
+      }
       const targetSelection =
         targetSelectionOverride ?? (editingModeRef.current === 'idle' ? selectionRef.current : editorTargetRef.current)
       const nextValue =
         editingModeRef.current === 'idle'
           ? toEditorValue(getLiveSelectedCell(targetSelection))
           : (valueOverride ?? readMountedCellEditorValue() ?? editorValueRef.current)
-      const nextSelection = completeEditNavigation(targetSelection, movement)
       const commitSessionId = editSessionRef.current
       if (pendingEditCommitSessionRef.current === commitSessionId) {
         return
       }
       pendingEditCommitSessionRef.current = commitSessionId
+      const parsed = parseEditorInput(nextValue)
+      const baseSnapshot = editorBaseSnapshotRef.current
+      const liveSnapshot = cloneLiveSelectedCell(targetSelection)
+      const targetBaseSnapshot =
+        baseSnapshot.sheetName === targetSelection.sheetName && baseSnapshot.address === targetSelection.address
+          ? baseSnapshot
+          : liveSnapshot
+      const draftMatchesLiveSnapshot = parsedEditorInputMatchesSnapshot(parsed, liveSnapshot)
+      const draftMatchesBase = parsedEditorInputEquals(parsed, parsedEditorInputFromSnapshot(targetBaseSnapshot))
+
+      if (!sameCellContent(targetBaseSnapshot, liveSnapshot) && !draftMatchesLiveSnapshot) {
+        pendingEditCommitSessionRef.current = null
+        if (draftMatchesBase) {
+          finishEditingWithAuthoritative(targetSelection, movement)
+          return
+        }
+        setEditorConflict({
+          sheetName: targetSelection.sheetName,
+          address: targetSelection.address,
+          phase: 'compare',
+          baseSnapshot: targetBaseSnapshot,
+          authoritativeSnapshot: liveSnapshot,
+        })
+        return
+      }
+
+      if (draftMatchesLiveSnapshot) {
+        pendingEditCommitSessionRef.current = null
+        finishEditingWithAuthoritative(targetSelection, movement)
+        return
+      }
+
+      const nextSelection = completeEditNavigation(targetSelection, movement)
       optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), nextValue)
+      const rollbackOptimisticCell = applyOptimisticParsedInput(targetSelection, parsed)
       void (async () => {
         try {
-          const parsed = parseEditorInput(nextValue)
-          const baseSnapshot = editorBaseSnapshotRef.current
-          const authoritativeSnapshot = await readAuthoritativeCell(targetSelection)
-          const draftMatchesAuthoritative = parsedEditorInputMatchesSnapshot(parsed, authoritativeSnapshot)
-          const draftMatchesBase = parsedEditorInputEquals(parsed, parsedEditorInputFromSnapshot(baseSnapshot))
-
-          if (!sameCellContent(baseSnapshot, authoritativeSnapshot) && !draftMatchesAuthoritative) {
-            if (draftMatchesBase) {
-              clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
-              finishEditingWithAuthoritative(targetSelection, movement)
-              return
-            }
-            setEditorConflict({
-              sheetName: targetSelection.sheetName,
-              address: targetSelection.address,
-              phase: 'compare',
-              baseSnapshot,
-              authoritativeSnapshot,
-            })
-            return
-          }
-
-          if (draftMatchesAuthoritative) {
-            clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
-            finishEditingWithAuthoritative(targetSelection, movement)
-            return
-          }
-
           await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
           clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
           if (editSessionRef.current !== commitSessionId) {
@@ -554,22 +572,28 @@ export function useWorkerWorkbookAppState(input: {
           resetEditorConflictTracking(nextSelection)
         } catch (error) {
           clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
+          rollbackOptimisticCell?.()
           if (editSessionRef.current !== commitSessionId) {
             return
           }
           editingModeRef.current = 'idle'
           setEditingMode('idle')
           reportRuntimeError(error)
+        } finally {
+          if (pendingEditCommitSessionRef.current === commitSessionId) {
+            pendingEditCommitSessionRef.current = null
+          }
         }
       })()
     },
     [
       applyParsedInput,
+      cloneLiveSelectedCell,
       completeEditNavigation,
       finishEditingWithAuthoritative,
       getLiveSelectedCell,
       clearOptimisticCellSeed,
-      readAuthoritativeCell,
+      applyOptimisticParsedInput,
       reportRuntimeError,
       resetEditorConflictTracking,
       writesAllowed,
@@ -597,6 +621,7 @@ export function useWorkerWorkbookAppState(input: {
       editingModeRef,
       invokeMutation,
       applyParsedInput,
+      viewportStore: workerHandle?.viewportStore,
       onPasteApplied: () => {
         perfSession.markFirstPasteApplied?.()
       },
@@ -669,7 +694,11 @@ export function useWorkerWorkbookAppState(input: {
   const handleEditorChange = useCallback(
     (next: string) => {
       if (editingModeRef.current === 'idle') {
-        editorBaseSnapshotRef.current = cloneLiveSelectedCell(selectionRef.current)
+        const nextTarget = selectionRef.current
+        editSessionRef.current += 1
+        pendingEditCommitSessionRef.current = null
+        editorTargetRef.current = nextTarget
+        editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextTarget)
         setEditorConflict(null)
       }
       editorValueRef.current = next

@@ -196,9 +196,9 @@ export function isStaleValidGridTileKeyV2(candidate: GridTileKeyV2, desired: Gri
     candidate.freezeVersion === desired.freezeVersion &&
     candidate.textEpoch === desired.textEpoch &&
     candidate.dprBucket === desired.dprBucket &&
-    candidate.valueVersion <= desired.valueVersion &&
-    candidate.styleVersion <= desired.styleVersion &&
-    candidate.selectionIndependentVersion <= desired.selectionIndependentVersion &&
+    candidate.valueVersion === desired.valueVersion &&
+    candidate.styleVersion === desired.styleVersion &&
+    candidate.selectionIndependentVersion === desired.selectionIndependentVersion &&
     gridTileKeyV2Overlaps(candidate, desired)
   )
 }

@@ -1,11 +1,12 @@
 import type { GridEngineLike } from '@bilig/grid'
-import type { CellSnapshot, CellStyleRecord, Viewport } from '@bilig/protocol'
+import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
 import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
-import { ProjectedViewportPatchCoordinator } from './projected-viewport-patch-coordinator.js'
+import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
 import { ProjectedSceneStore } from './projected-scene-store.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
+import { buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
@@ -19,6 +20,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
   private readonly sceneStore: ProjectedSceneStore
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
+  private lastBatchId = 0
 
   readonly workbook = {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
@@ -29,11 +31,19 @@ export class ProjectedViewportStore implements GridEngineLike {
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),
     })
-    this.sceneStore = new ProjectedSceneStore(client)
+    this.sceneStore = new ProjectedSceneStore(client, {
+      buildImmediateResidentPaneScenes: (request, generation) =>
+        buildWorkerResidentPaneScenes({
+          engine: this,
+          request,
+          generation,
+        }),
+    })
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
       ...(client ? { client } : {}),
+      onViewportPatchApplied: (patch, result) => this.handleViewportPatchApplied(patch, result),
     })
   }
 
@@ -104,6 +114,18 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
     return this.cellCache.getCellStyle(styleId)
+  }
+
+  getColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return buildAxisEntries(this.axisStore.getColumnSizes(sheetName), this.axisStore.getHiddenColumns(sheetName), 'col')
+  }
+
+  getRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return buildAxisEntries(this.axisStore.getRowSizes(sheetName), this.axisStore.getHiddenRows(sheetName), 'row')
+  }
+
+  getLastMetrics(): Pick<NonNullable<ViewportPatch['metrics']>, 'batchId'> {
+    return { batchId: this.lastBatchId }
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
@@ -189,6 +211,15 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
     const result = this.patchCoordinator.applyViewportPatchDetailed(patch)
+    this.handleViewportPatchApplied(patch, result)
+    return result.damage
+  }
+
+  private handleViewportPatchApplied(patch: ViewportPatch, result: ProjectedViewportPatchApplied): void {
+    const batchId = patch.metrics?.batchId
+    if (Number.isInteger(batchId) && batchId >= 0) {
+      this.lastBatchId = batchId
+    }
     this.sceneStore.noteViewportPatch(patch)
     const channels: SheetViewportChannel[] = []
     if (result.columnsChanged) {
@@ -203,7 +234,6 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (channels.length > 0) {
       this.notifySheetChannels(patch.viewport.sheetName, channels)
     }
-    return result.damage
   }
 
   private notifySheetChannels(sheetName: string, channels: readonly SheetViewportChannel[]): void {
@@ -226,4 +256,32 @@ export class ProjectedViewportStore implements GridEngineLike {
       }
     }
   }
+}
+
+function buildAxisEntries(
+  sizes: Readonly<Record<number, number>>,
+  hiddenAxes: Readonly<Record<number, true>>,
+  idPrefix: 'col' | 'row',
+): WorkbookAxisEntrySnapshot[] {
+  const indexes = new Set<number>()
+  for (const key of Object.keys(sizes)) {
+    const index = Number(key)
+    if (Number.isInteger(index) && index >= 0) {
+      indexes.add(index)
+    }
+  }
+  for (const key of Object.keys(hiddenAxes)) {
+    const index = Number(key)
+    if (Number.isInteger(index) && index >= 0) {
+      indexes.add(index)
+    }
+  }
+  return [...indexes]
+    .toSorted((left, right) => left - right)
+    .map((index) => ({
+      id: `${idPrefix}-${index}`,
+      index,
+      size: sizes[index] ?? null,
+      hidden: hiddenAxes[index] === true ? true : null,
+    }))
 }

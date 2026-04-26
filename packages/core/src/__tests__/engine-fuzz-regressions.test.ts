@@ -315,6 +315,38 @@ describe('engine fuzz regressions', () => {
     expect(() => restored.importSnapshot(structuredClone(snapshot))).not.toThrow()
   })
 
+  it('restores structurally rewritten formula templates after refs collapse to #REF', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'structural-template-ref-restore-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'structural-template-ref-restore-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.deleteColumns('Sheet1', 0, 1)
+    engine.setCellFormula('Sheet1', 'A1', 'A1+A1')
+    engine.deleteColumns('Sheet1', 0, 1)
+    engine.deleteRows('Sheet1', 0, 1)
+    engine.setRangeNumberFormat({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, '0.00')
+    engine.fillRange(
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+    )
+
+    const snapshot = engine.exportSnapshot()
+    expect(snapshot.sheets[0]?.cells).toContainEqual({ address: 'C2', formula: 'SUM(#REF!)' })
+
+    const restored = new SpreadsheetEngine({
+      workbookName: snapshot.workbook.name,
+      replicaId: 'structural-template-ref-restore-regression-restored',
+    })
+    await restored.ready()
+    restored.importSnapshot(snapshot)
+
+    expect(restored.exportSnapshot()).toEqual(snapshot)
+  })
+
   it('clears target formats when moving empty cells over formatted blanks and keeps undo aligned', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'move-empty-format-regression' })
     await engine.ready()

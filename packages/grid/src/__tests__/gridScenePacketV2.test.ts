@@ -103,7 +103,7 @@ describe('grid scene packet v2', () => {
     ).toEqual({ ok: false, reason: 'tile key pane mismatch' })
   })
 
-  test('serializes full revision identity and permits stale-valid value/style reuse only across matching geometry', () => {
+  test('serializes full revision identity and rejects stale-valid reuse across data revisions', () => {
     const base = createGridTileKeyV2({
       paneId: 'body',
       sheetName: 'Sheet1',
@@ -114,7 +114,8 @@ describe('grid scene packet v2', () => {
     const desired = { ...base, valueVersion: 4, styleVersion: 3 }
 
     expect(serializeGridTileKeyV2(desired)).not.toBe(serializeGridTileKeyV2(base))
-    expect(isStaleValidGridTileKeyV2(base, desired)).toBe(true)
+    expect(isStaleValidGridTileKeyV2(base, desired)).toBe(false)
+    expect(isStaleValidGridTileKeyV2(base, { ...base, rowStart: 4, rowEnd: 12 })).toBe(true)
     expect(isStaleValidGridTileKeyV2({ ...base, axisVersionX: 1 }, desired)).toBe(false)
   })
 })

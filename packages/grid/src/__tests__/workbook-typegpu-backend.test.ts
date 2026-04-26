@@ -77,17 +77,19 @@ describe('workbook typegpu backend tile fallback', () => {
     expect(resolveTypeGpuDrawPanes({ paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(packet)
   })
 
-  test('substitutes a stale-valid retained pane when the exact revision is not draw-ready', () => {
+  test('does not substitute a retained pane from an older data revision', () => {
     const stalePacket = createPacket(1)
     const exactPacket = createPacket(2)
     const pane = createPane(exactPacket)
     const paneBuffers = new WorkbookPaneBufferCache()
     const tileCache = new TileGpuCache()
+    const onTileMiss = vi.fn()
     tileCache.upsert(stalePacket)
     tileCache.upsert(exactPacket)
     markReady(paneBuffers, stalePacket)
 
-    expect(resolveTypeGpuDrawPanes({ paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(stalePacket)
+    expect(resolveTypeGpuDrawPanes({ onTileMiss, paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(exactPacket)
+    expect(onTileMiss).toHaveBeenCalledWith(buildTileGpuCacheKey(exactPacket))
   })
 
   test('reports a tile miss when neither exact nor stale-valid resources are draw-ready', () => {

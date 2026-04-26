@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { ValueTag } from '@bilig/protocol'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
   GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
@@ -11,6 +10,7 @@ import {
   type GridScenePacketV2,
 } from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedSceneStore } from '../projected-scene-store.js'
+import type { WorkbookPaneSceneRequest } from '../resident-pane-scene-types.js'
 
 interface TestSceneRequest {
   readonly sheetName: string
@@ -137,21 +137,15 @@ describe('ProjectedSceneStore', () => {
         cameraSeq: 99,
         priority: 0,
         reason: 'visible',
-        selectedCell: { col: 4, row: 6 },
-        selectedCellSnapshot: null,
       }),
     ).toEqual(scenes)
     expect(
       store.peekResidentPaneScenes({
         ...request,
+        cameraSeq: 99,
+        priority: 0,
+        reason: 'visible',
         selectedCell: { col: 4, row: 6 },
-        selectedCellSnapshot: {
-          address: 'E7',
-          flags: 0,
-          sheetName: 'Sheet1',
-          value: { tag: ValueTag.Empty },
-          version: 12,
-        },
       }),
     ).toEqual(scenes)
 
@@ -244,6 +238,38 @@ describe('ProjectedSceneStore', () => {
     cleanupPrefetch()
   })
 
+  it('keeps resident scene requests stable across range selection changes', async () => {
+    const cellRequest = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+      selectedCell: { col: 1, row: 1 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: null,
+    }
+    const rangeRequest = {
+      ...cellRequest,
+      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+    }
+    const client = {
+      invoke: vi.fn().mockResolvedValueOnce([createResidentScene(cellRequest, 1, 1)]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const cleanupCell = store.subscribeResidentPaneScenes(cellRequest, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    const cleanupRange = store.subscribeResidentPaneScenes(rangeRequest, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+    expect(store.peekResidentPaneScenes(rangeRequest)?.[0]?.generation).toBe(1)
+
+    cleanupRange()
+    cleanupCell()
+  })
+
   it('coalesces intersecting viewport patches into a refresh', async () => {
     const request = {
       sheetName: 'Sheet1',
@@ -305,9 +331,69 @@ describe('ProjectedSceneStore', () => {
       rows: [],
     })
 
-    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+  })
+
+  it('publishes immediate scenes from viewport patches without queueing worker refresh work', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+      selectedCell: { col: 0, row: 0 },
+      selectedCellSnapshot: null,
+      selectionRange: null,
+      editingCell: null,
+    } as const
+    const client = {
+      invoke: vi
+        .fn()
+        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+        .mockResolvedValueOnce([createResidentScene(request, 3, 2)]),
+    }
+    const buildImmediateResidentPaneScenes = vi.fn((sceneRequest: WorkbookPaneSceneRequest, generation: number) => [
+      createResidentScene(sceneRequest, generation, sceneRequest.requestSeq ?? 0),
+    ])
+    const store = new ProjectedSceneStore(client, { buildImmediateResidentPaneScenes })
+    const listener = vi.fn()
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, listener)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    listener.mockClear()
+
+    store.noteViewportPatch({
+      version: 2,
+      full: true,
+      viewport: { sheetName: 'Sheet1', rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [],
+      cells: [],
+      columns: [],
+      rows: [],
+    })
+
+    expect(buildImmediateResidentPaneScenes).toHaveBeenCalledWith(expect.objectContaining({ sceneRevision: 1 }), 2)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledTimes(1)
 
     unsubscribe()
   })
@@ -357,7 +443,7 @@ describe('ProjectedSceneStore', () => {
       rows: [],
     })
     resolveFirst?.([createResidentScene(request, 1, 1)])
-    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
     expect(listener).toHaveBeenCalledTimes(1)
@@ -408,7 +494,7 @@ describe('ProjectedSceneStore', () => {
       rows: [],
     })
 
-    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
 

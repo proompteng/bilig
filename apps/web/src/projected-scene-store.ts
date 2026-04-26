@@ -17,9 +17,20 @@ interface SceneEntry {
   scenes: readonly WorkbookPaneScenePacket[] | null
   inFlight: Promise<void> | null
   refreshQueued: boolean
+  refreshDelayMs: number
+  refreshTimer: ReturnType<typeof setTimeout> | null
   activeRequestSeq: number
   sceneRevision: number
 }
+
+interface ProjectedSceneStoreOptions {
+  readonly buildImmediateResidentPaneScenes?: (
+    request: WorkbookPaneSceneRequest,
+    generation: number,
+  ) => readonly WorkbookPaneScenePacket[] | null
+}
+
+const BACKGROUND_WORKER_SCENE_REFRESH_DELAY_MS = 64
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -210,16 +221,24 @@ export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
   private readonly retainedScenes = new Map<string, readonly WorkbookPaneScenePacket[]>()
   private nextRequestSeq = 0
+  private nextImmediateSceneGeneration = 0
   private lastRejectedPacketReason: string | null = null
 
-  constructor(private readonly client?: Pick<WorkerEngineClient, 'invoke'>) {}
+  constructor(
+    private readonly client?: Pick<WorkerEngineClient, 'invoke'>,
+    private readonly options: ProjectedSceneStoreOptions = {},
+  ) {}
 
   getLastRejectedPacketReason(): string | null {
     return this.lastRejectedPacketReason
   }
 
   peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
-    return this.entries.get(buildRequestKey(request))?.scenes ?? this.retainedScenes.get(buildRetainedRequestKey(request)) ?? null
+    const entry = this.entries.get(buildRequestKey(request))
+    if (entry) {
+      return entry.scenes
+    }
+    return this.retainedScenes.get(buildRetainedRequestKey(request)) ?? null
   }
 
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
@@ -237,6 +256,8 @@ export class ProjectedSceneStore {
         scenes: null,
         inFlight: null,
         refreshQueued: false,
+        refreshDelayMs: 0,
+        refreshTimer: null,
         activeRequestSeq: 0,
         sceneRevision: 0,
       } satisfies SceneEntry)
@@ -276,14 +297,55 @@ export class ProjectedSceneStore {
         continue
       }
       entry.sceneRevision += 1
-      this.queueRefresh(entry)
+      this.retainedScenes.delete(buildRetainedRequestKey(entry.request))
+      const publishedImmediateScenes = this.publishImmediateScenes(entry)
+      if (!publishedImmediateScenes) {
+        this.queueRefresh(entry, BACKGROUND_WORKER_SCENE_REFRESH_DELAY_MS)
+      }
     }
   }
 
-  private queueRefresh(entry: SceneEntry): void {
-    if (entry.refreshQueued) {
-      return
+  private publishImmediateScenes(entry: SceneEntry): boolean {
+    const buildImmediateResidentPaneScenes = this.options.buildImmediateResidentPaneScenes
+    if (!buildImmediateResidentPaneScenes || entry.listeners.size === 0) {
+      return false
     }
+
+    const generation = this.allocateImmediateSceneGeneration(entry)
+    const request = withRequestMetadata(entry.request, entry.activeRequestSeq, entry.sceneRevision)
+    let next: readonly WorkbookPaneScenePacket[] | null
+    try {
+      next = buildImmediateResidentPaneScenes(request, generation)
+    } catch {
+      this.noteScenePacketRejected('immediate-scene-build-failed')
+      return false
+    }
+    if (next === null) {
+      return false
+    }
+    if (!isResidentPaneScenePacketArray(next)) {
+      this.noteScenePacketRejected('invalid-immediate-scene-payload')
+      return false
+    }
+    if (next.length === 0) {
+      return false
+    }
+
+    entry.scenes = next
+    this.retainedScenes.set(buildRetainedRequestKey(entry.request), next)
+    getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
+    entry.listeners.forEach((listener) => listener())
+    return true
+  }
+
+  private allocateImmediateSceneGeneration(entry: SceneEntry): number {
+    const currentGeneration = entry.scenes?.reduce((max, scene) => Math.max(max, scene.generation), 0) ?? 0
+    this.nextImmediateSceneGeneration = Math.max(this.nextImmediateSceneGeneration, currentGeneration) + 1
+    return this.nextImmediateSceneGeneration
+  }
+
+  private queueRefresh(entry: SceneEntry, delayMs = 0): void {
+    entry.refreshDelayMs = Math.max(entry.refreshDelayMs, delayMs)
     entry.refreshQueued = true
     if (entry.inFlight) {
       return
@@ -292,12 +354,23 @@ export class ProjectedSceneStore {
   }
 
   private scheduleRefresh(entry: SceneEntry): void {
+    if (entry.refreshTimer) {
+      clearTimeout(entry.refreshTimer)
+      entry.refreshTimer = null
+    }
+    const delayMs = entry.refreshDelayMs
     const flush = () => {
-      if (!entry.refreshQueued || entry.inFlight) {
+      entry.refreshTimer = null
+      if (!entry.refreshQueued || entry.inFlight || entry.listeners.size === 0) {
         return
       }
       entry.refreshQueued = false
+      entry.refreshDelayMs = 0
       void this.refreshEntry(entry)
+    }
+    if (delayMs > 0) {
+      entry.refreshTimer = setTimeout(flush, delayMs)
+      return
     }
     queueMicrotask(flush)
   }

@@ -25,4 +25,21 @@ describe('TemplateBank', () => {
     expect(second.templateId).toBe(first.templateId)
     expect(bank.get(first.templateId)?.compiled).toBe(first.compiled)
   })
+
+  it('recompiles a stale template id when structural rewrites change the source at the same owner', () => {
+    const bank = createTemplateBank()
+    const resolved = bank.resolve('SUM(A1:A2)', 2, 3)
+
+    const restored = bank.resolveById(resolved.templateId, 'SUM(#REF!)', 2, 3)
+
+    expect(restored).toBeDefined()
+    expect(restored?.compiled.source).toBe('SUM(#REF!)')
+    expect(restored?.compiled.deps).toEqual([])
+    expect(restored?.compiled.symbolicRanges).toEqual([])
+
+    const shifted = bank.resolveById(resolved.templateId, 'SUM(#REF!)', 1, 2)
+    expect(shifted?.compiled.source).toBe('SUM(#REF!)')
+    expect(shifted?.compiled.deps).toEqual([])
+    expect(shifted?.compiled.symbolicRanges).toEqual([])
+  })
 })

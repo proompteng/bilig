@@ -92,6 +92,49 @@ describe('worker runtime machine', () => {
     actor.stop()
   })
 
+  it('ignores stale session selection echoes after a newer local selection', async () => {
+    const controller = createController()
+    let sessionCallbacks: WorkerRuntimeSessionCallbacks | null = null
+    const createSession = vi.fn(
+      async (
+        _input: CreateWorkerRuntimeSessionInput,
+        callbacks: WorkerRuntimeSessionCallbacks,
+      ): Promise<WorkerRuntimeSessionController> => {
+        sessionCallbacks = callbacks
+        callbacks.onPhase?.('hydratingLocal')
+        callbacks.onRuntimeState(controller.runtimeState)
+        return controller
+      },
+    )
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'localReady' })).toBe(true)
+    })
+
+    const nextSelection = { sheetName: 'Sheet1', address: 'C3' } as const
+    actor.send({ type: 'selection.changed', selection: nextSelection })
+    sessionCallbacks?.onSelection?.({ sheetName: 'Sheet1', address: 'A1' })
+
+    expect(actor.getSnapshot().context.selection).toEqual(nextSelection)
+
+    sessionCallbacks?.onSelection?.(nextSelection)
+    expect(actor.getSnapshot().context.selection).toEqual(nextSelection)
+
+    actor.stop()
+  })
+
   it('tracks connected and offline steady states and transient rebase phases', async () => {
     const controller = createController()
     const createSession = vi.fn(

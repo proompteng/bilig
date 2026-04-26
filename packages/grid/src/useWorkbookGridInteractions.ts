@@ -635,6 +635,7 @@ export function useWorkbookGridInteractions(
         onSelectionChange: emitSelectionChange,
         onMoveRange,
         refreshHoverState,
+        scrollViewport: renderState.scrollViewportRef.current,
         setIsRangeMoveDragging,
         setHoverState,
       })
@@ -645,6 +646,7 @@ export function useWorkbookGridInteractions(
       isEditingCell,
       onMoveRange,
       emitSelectionChange,
+      renderState.scrollViewportRef,
       refreshHoverState,
       resolvePointerCell,
       selectionRange,

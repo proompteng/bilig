@@ -81,6 +81,7 @@ const EMPTY_METRICS: RecalcMetrics = {
   compileMs: 0,
 }
 const EMPTY_UNSUBSCRIBE = () => {}
+const BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS = 96
 
 function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnapshot {
   return {
@@ -271,6 +272,7 @@ export async function createWorkerRuntimeSessionController(
   let rebaseQueue = Promise.resolve()
   let selectionViewportCleanup = EMPTY_UNSUBSCRIBE
   let currentPhase: WorkerRuntimeSessionPhase = 'hydratingLocal'
+  let runtimeStateRefreshTimer: ReturnType<typeof setTimeout> | null = null
   const liveSync = input.zero
     ? new ZeroWorkbookRevisionSync({
         zero: input.zero,
@@ -336,6 +338,24 @@ export async function createWorkerRuntimeSessionController(
     if (reconciledSelection.sheetName !== currentSelection.sheetName || reconciledSelection.address !== currentSelection.address) {
       await applySelection(reconciledSelection)
     }
+  }
+
+  const queueRuntimeStateRefresh = (): void => {
+    if (runtimeStateRefreshTimer) {
+      clearTimeout(runtimeStateRefreshTimer)
+    }
+    runtimeStateRefreshTimer = setTimeout(() => {
+      runtimeStateRefreshTimer = null
+      void (async () => {
+        try {
+          await refreshRuntimeState()
+        } catch (error) {
+          if (!disposed) {
+            callbacks.onError(toErrorMessage(error))
+          }
+        }
+      })()
+    }, BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS)
   }
 
   const syncSelectionAfterRuntimeState = async (runtimeState: WorkbookWorkerStateSnapshot): Promise<void> => {
@@ -478,11 +498,10 @@ export async function createWorkerRuntimeSessionController(
           throw new Error('installAuthoritativeSnapshot requires a valid authoritative snapshot input')
         }
         const result = await client.invoke(method, ...args)
-        if (method === 'enqueuePendingMutation' || method === 'markPendingMutationFailed' || method === 'retryPendingMutation') {
-          await refreshRuntimeState()
-        }
         if (method === 'enqueuePendingMutation') {
-          await refreshSelectedCellSnapshot()
+          queueRuntimeStateRefresh()
+        } else if (method === 'markPendingMutationFailed' || method === 'retryPendingMutation') {
+          await refreshRuntimeState()
         }
         if (method === 'renderCommit' || method === 'installAuthoritativeSnapshot') {
           await refreshRuntimeState()
@@ -517,6 +536,10 @@ export async function createWorkerRuntimeSessionController(
         return
       }
       disposed = true
+      if (runtimeStateRefreshTimer) {
+        clearTimeout(runtimeStateRefreshTimer)
+        runtimeStateRefreshTimer = null
+      }
       selectionViewportCleanup()
       selectionViewportCleanup = EMPTY_UNSUBSCRIBE
       liveSync?.dispose()

@@ -30,7 +30,6 @@ export function syncTypeGpuPaneResources(input: {
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly retainPanes?: readonly WorkbookRenderPaneState[] | undefined
-  readonly deferTextUploads?: boolean | undefined
 }): void {
   const paneIds = new Set((input.retainPanes ?? input.panes).map(resolveWorkbookPaneBufferKey))
   input.paneBuffers.pruneExcept(paneIds)
@@ -42,14 +41,7 @@ export function syncTypeGpuPaneResources(input: {
         ? paneCache.textSignature
         : resolveGridTextSceneSignature(pane.textScene)
     const textSceneChanged = paneCache.textSignature !== textSignature
-    const deferTextUpload = shouldDeferPaneTextUpload({
-      currentTextCount: paneCache.textCount,
-      currentTextSignature: paneCache.textSignature,
-      deferTextUploads: input.deferTextUploads === true,
-      hasTextBuffer: paneCache.textBuffer !== null,
-      nextTextItemCount: pane.textScene.items.length,
-    })
-    if (textSceneChanged && !deferTextUpload) {
+    if (textSceneChanged) {
       syncTextResource({
         artifacts: input.artifacts,
         atlas: input.atlas,
@@ -80,25 +72,6 @@ export function syncTypeGpuPaneResources(input: {
       })
     }
   })
-}
-
-export function shouldDeferPaneTextUpload(input: {
-  readonly deferTextUploads: boolean
-  readonly currentTextSignature: string | null
-  readonly hasTextBuffer: boolean
-  readonly currentTextCount: number
-  readonly nextTextItemCount: number
-}): boolean {
-  if (!input.deferTextUploads) {
-    return false
-  }
-  if (input.currentTextSignature === null) {
-    return false
-  }
-  if (input.nextTextItemCount > 0 && (!input.hasTextBuffer || input.currentTextCount === 0)) {
-    return false
-  }
-  return true
 }
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {

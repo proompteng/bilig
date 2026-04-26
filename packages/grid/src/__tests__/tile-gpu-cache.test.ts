@@ -72,18 +72,20 @@ describe('TileGpuCache', () => {
     expect(cache.get(buildTileGpuCacheKey(packet))?.visible).toBe(true)
   })
 
-  test('finds stale-valid overlapping tiles across value and style revisions', () => {
+  test('finds stale-valid overlapping tiles only within the same data revision', () => {
     const cache = new TileGpuCache()
     const stale = createPacket(1, 0)
     cache.upsert(stale)
 
+    expect(cache.findStaleValid(stale.key)?.packet).toBe(stale)
+    expect(cache.findStaleValid({ ...stale.key, colStart: 32, colEnd: 159 })?.packet).toBe(stale)
     const desired = {
       ...stale.key,
       valueVersion: stale.key.valueVersion + 2,
       styleVersion: stale.key.styleVersion + 1,
     }
 
-    expect(cache.findStaleValid(desired)?.packet).toBe(stale)
+    expect(cache.findStaleValid(desired)).toBeNull()
   })
 
   test('does not use stale tiles across axis or freeze revisions', () => {

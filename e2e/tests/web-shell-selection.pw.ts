@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import {
   PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
@@ -77,6 +77,57 @@ test('web app supports rectangular drag selection', async ({ page }) => {
 
   await dragProductBodySelection(page, 1, 1, 3, 3)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D4')
+})
+
+test('web app keeps moved range data visible when border drag reaches the grid edge', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 420 })
+  await page.goto(`/?document=range-border-edge-drag-${Date.now()}`)
+  await waitForWorkbookReady(page)
+
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await formulaInput.fill('left')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('C2')
+  await nameBox.press('Enter')
+  await formulaInput.fill('right')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('left')
+  await nameBox.fill('C2')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('right')
+
+  await dragProductBodySelection(page, 1, 1, 2, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C2')
+
+  await dragSelectedRangeBorderTowardBottom(page)
+  await expect.poll(() => getGridScrollTop(page)).toBeGreaterThan(0)
+  await page.mouse.up()
+
+  const selection = (await page.getByTestId('status-selection').textContent()) ?? ''
+  const match = /^Sheet1!B(\d+):C\1$/.exec(selection)
+  expect(match).not.toBeNull()
+  const targetRow = Number(match?.[1] ?? 0)
+  expect(targetRow).toBeGreaterThan(2)
+
+  await nameBox.fill(`B${targetRow}`)
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('left')
+
+  await nameBox.fill(`C${targetRow}`)
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('right')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await expect(formulaInput).toHaveValue('')
 })
 
 test('web app keeps the active focus inside the sheet grid when clicking a cell', async ({ page }) => {
@@ -198,3 +249,33 @@ test('web app hit-tests typegpu geometry after hiding rows and columns', async (
   )
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
 })
+
+async function dragSelectedRangeBorderTowardBottom(page: Page): Promise<void> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  const startLeft = await getProductColumnLeft(page, 1)
+  const targetLeft = await getProductColumnLeft(page, 1)
+  const targetWidth = await getProductColumnWidth(page, 1)
+  const sourceX = grid.x + startLeft + 3
+  const sourceY = grid.y + PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + 2
+  const targetX = grid.x + targetLeft + Math.floor(targetWidth / 2)
+  const targetY = grid.y + grid.height - 24
+
+  await page.mouse.move(sourceX, sourceY)
+  await page.mouse.down()
+  await page.mouse.move(targetX, targetY, { steps: 16 })
+}
+
+async function getGridScrollTop(page: Page): Promise<number> {
+  return await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    if (!(viewport instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not an HTMLDivElement')
+    }
+    return viewport.scrollTop
+  })
+}

@@ -14,7 +14,7 @@ import {
 } from './workbook-typegpu-backend.js'
 
 export const TYPEGPU_ACTIVE_RESOURCE_DEFER_MS = 48
-const TYPEGPU_IDLE_RESOURCE_RETRY_MS = 64
+const TYPEGPU_IDLE_PRELOAD_RETRY_MS = 64
 
 export interface WorkbookPaneRendererV2Props {
   readonly active: boolean
@@ -68,7 +68,7 @@ export function resolveTypeGpuV2DrawScrollSnapshot(input: {
   }
 }
 
-export function shouldDeferTypeGpuResourceUploads(input: {
+export function shouldDeferTypeGpuPreloadSync(input: {
   readonly now: number
   readonly lastScrollSignalAt: number
   readonly camera: {
@@ -98,7 +98,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const backendRef = useRef<WorkbookTypeGpuBackend | null>(null)
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
-  const idleTextUploadFrameRef = useRef<number | null>(null)
+  const idlePreloadRetryRef = useRef<number | null>(null)
   const lastScrollSignalAtRef = useRef(0)
   const drawFrameRef = useRef<() => void>(() => {})
   const activeRef = useRef(active)
@@ -237,20 +237,20 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
       const camera = latestGeometry?.camera ?? null
       const now = performance.now()
-      const deferTextUploads = shouldDeferTypeGpuResourceUploads({
+      const deferPreloadSync = shouldDeferTypeGpuPreloadSync({
         camera,
         lastScrollSignalAt: lastScrollSignalAtRef.current,
         now,
       })
-      if (deferTextUploads) {
-        if (idleTextUploadFrameRef.current !== null) {
-          window.clearTimeout(idleTextUploadFrameRef.current)
+      if (deferPreloadSync) {
+        if (idlePreloadRetryRef.current !== null) {
+          window.clearTimeout(idlePreloadRetryRef.current)
         }
-        idleTextUploadFrameRef.current = window.setTimeout(() => {
-          idleTextUploadFrameRef.current = null
+        idlePreloadRetryRef.current = window.setTimeout(() => {
+          idlePreloadRetryRef.current = null
           renderLoopRef.current ??= new GridRenderLoop()
           renderLoopRef.current.requestDraw(drawFrameRef.current)
-        }, TYPEGPU_IDLE_RESOURCE_RETRY_MS)
+        }, TYPEGPU_IDLE_PRELOAD_RETRY_MS)
       }
       const overlayPacket = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
       const resolvedPanePayloads = overlayPacket
@@ -273,10 +273,9 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
       drawWorkbookTypeGpuFrame({
         backend,
-        deferTextUploads,
         panes: resolvedPanePayloads,
         preloadPanes: preloadPanePayloads,
-        syncPreloadPanes: !deferTextUploads,
+        syncPreloadPanes: !deferPreloadSync,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
           geometry: latestGeometry,
@@ -320,9 +319,9 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     return () => {
       renderLoopRef.current?.cancel()
       renderLoopRef.current = null
-      if (idleTextUploadFrameRef.current !== null) {
-        window.clearTimeout(idleTextUploadFrameRef.current)
-        idleTextUploadFrameRef.current = null
+      if (idlePreloadRetryRef.current !== null) {
+        window.clearTimeout(idlePreloadRetryRef.current)
+        idlePreloadRetryRef.current = null
       }
       if (canvas) {
         canvas.width = 0

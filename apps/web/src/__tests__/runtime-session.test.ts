@@ -1023,6 +1023,56 @@ describe('createWorkerRuntimeSessionController', () => {
     controller.dispose()
   })
 
+  it('applies pending range moves through worker viewport patches', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: false,
+        initialSelection: { sheetName: 'Sheet1', address: 'B2' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 1, rowEnd: 4, colStart: 1, colEnd: 2 }, () => {})
+
+    await controller.invoke('setCellValue', 'Sheet1', 'B2', 'left')
+    await controller.invoke('setCellValue', 'Sheet1', 'C2', 'right')
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B2').value).toMatchObject({ tag: ValueTag.String, value: 'left' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C2').value).toMatchObject({ tag: ValueTag.String, value: 'right' })
+    })
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'moveRange',
+      args: [
+        { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C2' },
+        { sheetName: 'Sheet1', startAddress: 'B4', endAddress: 'C4' },
+      ],
+    })
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B4').value).toMatchObject({ tag: ValueTag.String, value: 'left' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C4').value).toMatchObject({ tag: ValueTag.String, value: 'right' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B2').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
   it('applies invalid local formulas through pending worker viewport patches', async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),

@@ -10,7 +10,7 @@ import {
   TYPEGPU_ACTIVE_RESOURCE_DEFER_MS,
   WorkbookPaneRendererV2,
   resolveTypeGpuV2DrawScrollSnapshot,
-  shouldDeferTypeGpuResourceUploads,
+  shouldDeferTypeGpuPreloadSync,
 } from '../renderer-v2/WorkbookPaneRendererV2.js'
 import { packGridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 
@@ -168,9 +168,9 @@ describe('WorkbookPaneRendererV2', () => {
     })
   })
 
-  test('defers resource uploads only while scroll input or camera velocity is fresh', () => {
+  test('defers preload resource sync only while scroll input or camera velocity is fresh', () => {
     expect(
-      shouldDeferTypeGpuResourceUploads({
+      shouldDeferTypeGpuPreloadSync({
         camera: null,
         lastScrollSignalAt: 1_000,
         now: 1_000 + TYPEGPU_ACTIVE_RESOURCE_DEFER_MS - 1,
@@ -178,7 +178,7 @@ describe('WorkbookPaneRendererV2', () => {
     ).toBe(true)
 
     expect(
-      shouldDeferTypeGpuResourceUploads({
+      shouldDeferTypeGpuPreloadSync({
         camera: {
           updatedAt: 2_000,
           velocityX: 1,
@@ -190,7 +190,7 @@ describe('WorkbookPaneRendererV2', () => {
     ).toBe(true)
 
     expect(
-      shouldDeferTypeGpuResourceUploads({
+      shouldDeferTypeGpuPreloadSync({
         camera: {
           updatedAt: 2_000,
           velocityX: 1,

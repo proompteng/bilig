@@ -112,7 +112,7 @@ export class ProjectedViewportCellCache {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
     if (current) {
-      if (shouldKeepCurrentSnapshot(current, snapshot)) {
+      if (shouldKeepCurrentSnapshot(current, snapshot, { allowResetEmptyOverride: false })) {
         return
       }
       if (cellSnapshotSignature(current) === cellSnapshotSignature(snapshot)) {

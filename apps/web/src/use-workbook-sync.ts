@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import { flushSync } from 'react-dom'
 import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from '@bilig/grid'
-import { isCellSnapshot } from '@bilig/protocol'
 import type { WorkerHandle, WorkerRuntimeSessionController } from './runtime-session.js'
 import {
   buildZeroWorkbookMutation,
@@ -104,34 +103,6 @@ export function useWorkbookSync(input: {
       return value
     },
     [runtimeController],
-  )
-
-  const getViewportStore = useCallback(() => workerHandleRef.current?.viewportStore, [workerHandleRef])
-
-  const refreshViewportCellSnapshot = useCallback(
-    async (sheetName: string, address: string): Promise<void> => {
-      const viewportStore = getViewportStore()
-      if (!runtimeController || !viewportStore) {
-        return
-      }
-      const snapshot = await runtimeController.invoke('getCell', sheetName, address)
-      if (isCellSnapshot(snapshot)) {
-        viewportStore.setCellSnapshot(snapshot)
-      }
-    },
-    [getViewportStore, runtimeController],
-  )
-
-  const refreshViewportCellSnapshotDeferred = useCallback(
-    (sheetName: string, address: string, delaysMs: readonly number[] = [0]): void => {
-      const schedule = typeof window === 'undefined' ? setTimeout : window.setTimeout
-      delaysMs.forEach((delayMs) => {
-        schedule(() => {
-          void refreshViewportCellSnapshot(sheetName, address)
-        }, delayMs)
-      })
-    },
-    [refreshViewportCellSnapshot],
   )
 
   const runZeroMutation = useCallback(
@@ -324,15 +295,6 @@ export function useWorkbookSync(input: {
 
       await runSerializedLocalMutationTask(async () => {
         await enqueuePendingMutation(mutation)
-        if (method === 'setCellValue' || method === 'setCellFormula' || method === 'clearCell') {
-          const [sheetName, address] = mutation.args
-          if (typeof sheetName === 'string' && typeof address === 'string') {
-            await refreshViewportCellSnapshot(sheetName, address)
-            if (method === 'setCellFormula') {
-              refreshViewportCellSnapshotDeferred(sheetName, address, [16, 64, 160])
-            }
-          }
-        }
       })
       void (async () => {
         try {
@@ -350,8 +312,6 @@ export function useWorkbookSync(input: {
       connectionStateRef,
       drainPendingMutationsLocked,
       enqueuePendingMutation,
-      refreshViewportCellSnapshot,
-      refreshViewportCellSnapshotDeferred,
       reportRuntimeError,
       runSerializedLocalMutationTask,
       runSerializedSyncTask,
