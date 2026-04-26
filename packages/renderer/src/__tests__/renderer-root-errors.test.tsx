@@ -20,6 +20,21 @@ function isMockContainer(value: unknown): value is {
   return typeof value === 'object' && value !== null && 'root' in value
 }
 
+function DisplayNamedWorkbook({ children }: { name?: string; children?: React.ReactNode }) {
+  return <>{children}</>
+}
+DisplayNamedWorkbook.displayName = 'Workbook'
+
+function DisplayNamedSheet({ children }: { name?: string; children?: React.ReactNode }) {
+  return <>{children}</>
+}
+DisplayNamedSheet.displayName = 'Sheet'
+
+function DisplayNamedCell(_props: { addr?: string; value?: unknown }) {
+  return null
+}
+DisplayNamedCell.displayName = 'Cell'
+
 type UpdateImpl = (element: React.ReactNode, callback: () => void, container: CompatContainer) => void
 
 let capturedContainer: CompatContainer | undefined
@@ -71,6 +86,25 @@ afterEach(() => {
 })
 
 describe('renderer root error handling', () => {
+  it('recognizes display-named workbook DSL wrapper functions during validation', async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock((_element, callback) => {
+      callback()
+    })
+    const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-display-name-dsl' })
+    await engine.ready()
+    const root = createWorkbookRendererRoot(engine)
+
+    await expect(
+      root.render(
+        <DisplayNamedWorkbook name="book">
+          <DisplayNamedSheet name="Sheet1">
+            <DisplayNamedCell addr="A1" value={1} />
+          </DisplayNamedSheet>
+        </DisplayNamedWorkbook>,
+      ),
+    ).resolves.toBeUndefined()
+  })
+
   it('ignores duplicate compat callbacks and deletes committed sheets on unmount', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'renderer-root-double-callback' })
     await engine.ready()
