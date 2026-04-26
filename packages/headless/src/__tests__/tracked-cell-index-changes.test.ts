@@ -21,7 +21,7 @@ describe('materializeTrackedIndexChanges', () => {
     expect(a2).toBeDefined()
     expect(b2).toBeDefined()
 
-    const changes = materializeTrackedIndexChanges(engine, Uint32Array.of(a1!, a2!, b1!, b2!), {
+    const changes = materializeTrackedIndexChanges(engine, Uint32Array.of(a1, a2, b1, b2), {
       explicitChangedCount: 2,
     })
 
