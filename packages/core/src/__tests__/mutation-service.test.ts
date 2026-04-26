@@ -238,6 +238,33 @@ describe('EngineMutationService', () => {
     expect(engine.exportSnapshot()).toMatchObject({ sheets: [] })
   })
 
+  it('replays render-commit fast-path cell mutations on redo', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'render-commit-redo' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A3' }, [[1], [2], [3]])
+
+    engine.renderCommit([
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A1', value: 5 },
+      { kind: 'upsertCell', sheetName: 'Sheet1', addr: 'A2', formula: 'A1+A1' },
+      { kind: 'deleteCell', sheetName: 'Sheet1', addr: 'A3' },
+    ])
+
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 5 })
+    expect(engine.getCell('Sheet1', 'A2')).toMatchObject({ formula: 'A1+A1' })
+    expect(engine.getCellValue('Sheet1', 'A3')).toMatchObject({ tag: ValueTag.Empty })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', 'A3')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    expect(engine.redo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 5 })
+    expect(engine.getCell('Sheet1', 'A2')).toMatchObject({ formula: 'A1+A1' })
+    expect(engine.getCellValue('Sheet1', 'A3')).toMatchObject({ tag: ValueTag.Empty })
+  })
+
   it('routes simple render-commit cell upserts through the cell-mutation fast path when no externally visible batch is needed', () => {
     const workbook = new WorkbookStore('render-commit-fast-path')
     let replayDepth = 0
