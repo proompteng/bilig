@@ -162,6 +162,8 @@ Files:
 - new `packages/worker-transport/src/tile-interest-v3.ts`
 - new `packages/grid/src/runtime/gridAxisRuntime.ts`
 - new `packages/grid/src/runtime/gridCameraRuntime.ts`
+- new `packages/grid/src/renderer-v3/overlay-layer.ts`
+- new `packages/grid/src/runtime/gridOverlayRuntime.ts`
 
 Implement:
 
@@ -175,6 +177,7 @@ Implement:
 - binary V3 contracts for sheet-level dirty range deltas and renderer tile interest batches.
 - runtime-owned axis query primitive for offsets, spans, tile origins, visible ranges, and monotonic axis revisions.
 - runtime-owned camera primitive for visible region computation and fixed visible tile-key derivation.
+- dynamic overlay runtime and packed instance-buffer contract independent from data scene packets.
 
 ### Phase 7: text atlas service
 
@@ -248,6 +251,7 @@ Completed in the first implementation tranche:
 - `packages/worker-transport/src/tile-interest-v3.ts` defines and round-trips visible/warm/pinned tile interest batches using safe-integer tile keys.
 - `packages/grid/src/runtime/gridAxisRuntime.ts` starts the axis runtime split with update-owned prefix indexes and tile-origin queries outside React render state.
 - `packages/grid/src/runtime/gridCameraRuntime.ts` starts the camera runtime split with scroll-to-visible-region math and content tile-interest key derivation outside React render state.
+- `packages/grid/src/renderer-v3/overlay-layer.ts` and `packages/grid/src/runtime/gridOverlayRuntime.ts` add small packed overlay batches for selection/resize/hover/presence-style visuals without data tile invalidation.
 
 Remaining work from this design:
 
