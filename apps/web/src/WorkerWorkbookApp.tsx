@@ -304,7 +304,7 @@ function WorkerWorkbookAppInner({
                 selectedAddr={app.selection.address}
                 selectedCellSnapshot={app.selectedCell}
                 selectionSnapshot={app.selectionSnapshot}
-                sheetId={app.sheetIdsByName[app.selection.sheetName]}
+                sheetId={app.sheetIdsByName?.[app.selection.sheetName]}
                 sheetName={app.selection.sheetName}
                 sheetNames={app.sheetNames}
                 renderTileSource={app.workerHandle?.viewportStore}
