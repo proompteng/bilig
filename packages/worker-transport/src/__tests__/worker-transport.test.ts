@@ -9,10 +9,8 @@ import {
   createWorkerEngineHost,
   decodeRenderTileDeltaBatch,
   decodeViewportPatch,
-  decodeWorkbookDeltaBatchV3,
   encodeRenderTileDeltaBatch,
   encodeViewportPatch,
-  encodeWorkbookDeltaBatchV3,
 } from '../index.js'
 
 async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
@@ -265,65 +263,6 @@ describe('worker transport', () => {
           },
         },
       ],
-    })
-
-    unsubscribe()
-    client.dispose()
-    host.dispose()
-  })
-
-  it('relays workbook delta subscriptions', async () => {
-    const channel = new MessageChannel()
-    const host = createWorkerEngineHost(
-      {
-        subscribeWorkbookDeltas(listener) {
-          listener(
-            encodeWorkbookDeltaBatchV3({
-              magic: 'bilig.workbook.delta.v3',
-              version: 1,
-              seq: 3,
-              source: 'workerAuthoritative',
-              sheetId: 9,
-              sheetOrdinal: 2,
-              valueSeq: 10,
-              styleSeq: 11,
-              axisSeqX: 12,
-              axisSeqY: 13,
-              freezeSeq: 14,
-              calcSeq: 15,
-              dirty: {
-                cellRanges: Uint32Array.from([1, 1, 2, 2, 5]),
-                axisX: new Uint32Array(),
-                axisY: new Uint32Array(),
-              },
-            }),
-          )
-          return () => undefined
-        },
-      },
-      channel.port1,
-    )
-
-    const client = createWorkerEngineClient({ port: channel.port2 })
-    const received: Uint8Array[] = []
-    const unsubscribe = client.subscribeWorkbookDeltas((delta) => {
-      received.push(delta)
-    })
-
-    await waitFor(() => received.length === 1)
-
-    const firstDelta = received[0]
-    expect(firstDelta).toBeDefined()
-    if (!firstDelta) {
-      throw new Error('Expected a workbook delta')
-    }
-    expect(decodeWorkbookDeltaBatchV3(firstDelta)).toMatchObject({
-      seq: 3,
-      sheetId: 9,
-      sheetOrdinal: 2,
-      dirty: {
-        cellRanges: Uint32Array.from([1, 1, 2, 2, 5]),
-      },
     })
 
     unsubscribe()

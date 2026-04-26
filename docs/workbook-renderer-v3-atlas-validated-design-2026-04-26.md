@@ -192,7 +192,7 @@ Implement:
 - tile coordinator that emits V3 tile-interest batches, consumes visible dirty tile damage, and classifies exact/stale/miss readiness against the V3 residency cache.
 - dirty tile index application of V3 workbook delta batches, including bounded axis dirty ranges that are consumed per visible tile.
 - app-side projected damage bus that applies V3 workbook deltas once per sheet and exposes visible/warm dirty tile queries.
-- worker-side workbook delta publisher and transport channel that converts engine impact events into encoded sheet-level V3 dirty range batches.
+- worker-side workbook delta publisher primitive that converts engine impact events into encoded sheet-level V3 dirty range batches without mounting it in the V2 startup bundle.
 
 ### Phase 7: text atlas service
 
@@ -274,7 +274,7 @@ Completed in the first implementation tranche:
 - `packages/grid/src/runtime/gridTileCoordinator.ts` gives the host a concrete tile-interest and readiness coordinator over `TileResidencyV3` and `DirtyTileIndexV3`.
 - `packages/grid/src/renderer-v3/tile-damage-index.ts` now applies sheet-level V3 dirty range batches to fixed tile damage and keeps axis dirty ranges bounded by tile rows/columns instead of expanding them over the full sheet.
 - `apps/web/src/projected-damage-bus.ts` is the first app-side replacement seam for per-subscription viewport patch damage: it dedupes workbook delta sequence application per sheet ordinal and feeds the renderer dirty tile index.
-- `apps/web/src/worker-runtime-delta-publisher.ts` and the `workbookDeltas` worker-transport channel provide the first worker-to-browser V3 damage stream, parallel to the legacy viewport patch and render tile delta subscriptions.
+- `apps/web/src/worker-runtime-delta-publisher.ts` provides the tested V3 damage-stream publisher primitive. The product worker runtime should expose it through transport only when the V3 renderer host owns the subscription, so the current V2 startup worker bundle stays under release size budgets.
 
 Remaining work from this design:
 

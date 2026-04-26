@@ -1,4 +1,4 @@
-import { decodeWorkbookDeltaBatchV3, type WorkbookDeltaBatchV3, type WorkerEngineClient } from '@bilig/worker-transport'
+import { decodeWorkbookDeltaBatchV3, type WorkbookDeltaBatchV3 } from '@bilig/worker-transport'
 import { DirtyTileIndexV3, markWorkbookDeltaDirtyTilesV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import type { TileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
 
@@ -7,11 +7,15 @@ export interface ProjectedDamageBusApplyResult {
   readonly seq: number
 }
 
+export interface WorkbookDeltaSubscriptionClient {
+  subscribeWorkbookDeltas(listener: (delta: Uint8Array) => void): () => void
+}
+
 export class ProjectedDamageBus {
   private readonly dirtyTiles = new DirtyTileIndexV3()
   private readonly lastSeqBySheetOrdinal = new Map<number, number>()
 
-  constructor(private readonly client?: Pick<WorkerEngineClient, 'subscribeWorkbookDeltas'>) {}
+  constructor(private readonly client?: WorkbookDeltaSubscriptionClient) {}
 
   subscribeWorkbookDeltas(
     options: { readonly dprBucket: number },

@@ -6,7 +6,7 @@ import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
 import { ProjectedSceneStore } from './projected-scene-store.js'
-import { ProjectedTileSceneStore, type ProjectedRenderTile, type ProjectedTileSceneChange } from './projected-tile-scene-store.js'
+import type { ProjectedRenderTile, ProjectedTileSceneChange, ProjectedTileSceneStore } from './projected-tile-scene-store.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import { buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 
@@ -24,7 +24,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
   private readonly sceneStore: ProjectedSceneStore
-  private readonly tileSceneStore: ProjectedTileSceneStore
+  private tileSceneStore: ProjectedTileSceneStore | null = null
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
   private lastBatchId = 0
 
@@ -32,7 +32,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
   }
 
-  constructor(client?: WorkerEngineClient) {
+  constructor(private readonly client?: WorkerEngineClient) {
     this.axisStore = new ProjectedViewportAxisStore({
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),
@@ -45,7 +45,6 @@ export class ProjectedViewportStore implements GridEngineLike {
           generation,
         }),
     })
-    this.tileSceneStore = new ProjectedTileSceneStore(client)
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
@@ -200,7 +199,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
     this.sceneStore.dropSheets(removedSheets)
-    this.tileSceneStore.dropSheets(removedSheets)
+    this.tileSceneStore?.dropSheets(removedSheets)
     removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
   }
 
@@ -244,11 +243,24 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (change: ProjectedTileSceneChange) => void): () => void {
-    return this.tileSceneStore.subscribe(subscription, listener)
+    let disposed = false
+    let unsubscribe: (() => void) | null = null
+    void (async () => {
+      const store = await this.getTileSceneStore()
+      if (disposed) {
+        return
+      }
+      unsubscribe = store.subscribe(subscription, listener)
+    })()
+    return () => {
+      disposed = true
+      unsubscribe?.()
+      unsubscribe = null
+    }
   }
 
   peekRenderTile(tileId: number): ProjectedRenderTile | null {
-    return this.tileSceneStore.peekTile(tileId)
+    return this.tileSceneStore?.peekTile(tileId) ?? null
   }
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
@@ -282,6 +294,15 @@ export class ProjectedViewportStore implements GridEngineLike {
     if (channels.length > 0) {
       this.notifySheetChannels(patch.viewport.sheetName, channels)
     }
+  }
+
+  private async getTileSceneStore(): Promise<ProjectedTileSceneStore> {
+    if (this.tileSceneStore) {
+      return this.tileSceneStore
+    }
+    const { ProjectedTileSceneStore } = await import('./projected-tile-scene-store.js')
+    this.tileSceneStore = new ProjectedTileSceneStore(this.client)
+    return this.tileSceneStore
   }
 
   private notifySheetChannels(sheetName: string, channels: readonly SheetViewportChannel[]): void {
