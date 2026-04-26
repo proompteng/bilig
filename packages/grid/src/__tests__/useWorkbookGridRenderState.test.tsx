@@ -2,8 +2,10 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ValueTag, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type CellSnapshot } from '@bilig/protocol'
 import { packGridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
+import { packTileKey53 } from '../renderer-v3/tile-key.js'
+import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
@@ -29,6 +31,47 @@ const engine = {
   subscribeCells(): () => void {
     return () => undefined
   },
+}
+
+function createRenderTile(input: { readonly sheetId: number; readonly rowTile: number; readonly colTile: number }): GridRenderTile {
+  const rowStart = input.rowTile * VIEWPORT_TILE_ROW_COUNT
+  const colStart = input.colTile * VIEWPORT_TILE_COLUMN_COUNT
+  return {
+    bounds: {
+      rowStart,
+      rowEnd: rowStart + VIEWPORT_TILE_ROW_COUNT - 1,
+      colStart,
+      colEnd: colStart + VIEWPORT_TILE_COLUMN_COUNT - 1,
+    },
+    coord: {
+      colTile: input.colTile,
+      dprBucket: 1,
+      paneKind: 'body',
+      rowTile: input.rowTile,
+      sheetId: input.sheetId,
+    },
+    lastBatchId: 3,
+    lastCameraSeq: 5,
+    rectCount: 0,
+    rectInstances: new Float32Array(20),
+    textCount: 0,
+    textMetrics: new Float32Array(8),
+    textRuns: [],
+    tileId: packTileKey53({
+      colTile: input.colTile,
+      dprBucket: 1,
+      rowTile: input.rowTile,
+      sheetOrdinal: input.sheetId,
+    }),
+    version: {
+      axisX: 11,
+      axisY: 12,
+      freeze: 13,
+      styles: 14,
+      text: 15,
+      values: 16,
+    },
+  }
 }
 
 describe('useWorkbookGridRenderState viewport residency', () => {
@@ -246,6 +289,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
 
     await act(async () => {
+      root.render(<Harness />)
       window.dispatchEvent(new Event('resize'))
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
@@ -320,6 +364,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
 
     await act(async () => {
+      root.render(<Harness />)
       window.dispatchEvent(new Event('resize'))
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
@@ -433,6 +478,87 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     expect(subscribeResidentPaneScenes).not.toHaveBeenCalled()
     expect(peekResidentPaneScenes).not.toHaveBeenCalled()
     expect(subscribeViewport).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('retains fixed render tile panes across a transient tile miss', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const tiles = new Map<number, GridRenderTile>()
+    for (let rowTile = 0; rowTile <= 2; rowTile += 1) {
+      for (let colTile = 0; colTile <= 1; colTile += 1) {
+        const tile = createRenderTile({ sheetId: 7, rowTile, colTile })
+        tiles.set(tile.tileId, tile)
+      }
+    }
+    let renderTileListener: (() => void) | null = null
+    let tileMiss = false
+    const subscribeRenderTileDeltas = vi.fn((_subscription, listener: () => void) => {
+      renderTileListener = listener
+      return () => {
+        renderTileListener = null
+      }
+    })
+    const peekRenderTile = vi.fn((tileId: number) => (tileMiss ? null : (tiles.get(tileId) ?? null)))
+    let hostElement: HTMLDivElement | null = null
+    let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
+
+    function Harness() {
+      const renderState = useWorkbookGridRenderState({
+        engine,
+        sheetId: 7,
+        renderTileSource: {
+          subscribeRenderTileDeltas,
+          peekRenderTile,
+        },
+        sheetName: 'Sheet1',
+        selectedAddr: 'A1',
+        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
+        editorValue: '',
+        isEditingCell: false,
+      })
+      latestRenderState = renderState
+
+      return (
+        <div
+          ref={(node) => {
+            renderState.handleHostRef(node)
+            hostElement = node
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
+    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
+
+    await act(async () => {
+      root.render(<Harness />)
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    const bodyPane = latestRenderState?.renderPanes.find((pane) => pane.paneId === 'body')
+    expect(bodyPane?.packedScene.key.valueVersion).toBe(16)
+
+    tileMiss = true
+    await act(async () => {
+      renderTileListener?.()
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(latestRenderState?.renderPanes.find((pane) => pane.paneId === 'body')?.packedScene.key.valueVersion).toBe(16)
 
     await act(async () => {
       root.unmount()

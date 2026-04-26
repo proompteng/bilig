@@ -163,6 +163,10 @@ export function useWorkbookGridRenderState(input: {
   const gridCameraRef = useRef<GridCameraSnapshot | null>(null)
   const canUseWorkerResidentPaneScenesRef = useRef(false)
   const invalidateSceneRef = useRef<() => void>(() => undefined)
+  const retainedFixedRenderTileDataPanesRef = useRef<{
+    readonly sheetId: number
+    readonly panes: readonly WorkbookRenderPaneState[]
+  } | null>(null)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
   const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
@@ -842,11 +846,25 @@ export function useWorkbookGridRenderState(input: {
     sortedRowHeightOverrides,
     viewport,
   ])
+  useEffect(() => {
+    if (sheetId === undefined || !fixedRenderTileDataPanes) {
+      return
+    }
+    retainedFixedRenderTileDataPanesRef.current = {
+      panes: fixedRenderTileDataPanes,
+      sheetId,
+    }
+  }, [fixedRenderTileDataPanes, sheetId])
+  const retainedFixedRenderTileDataPanes =
+    fixedRenderTileDataPanes ??
+    (shouldUseRenderTileSource && sheetId !== undefined && retainedFixedRenderTileDataPanesRef.current?.sheetId === sheetId
+      ? retainedFixedRenderTileDataPanesRef.current.panes
+      : null)
   const residentDataPaneScenes = useMemo(() => {
     if (!hostElement) {
       return []
     }
-    if (fixedRenderTileDataPanes) {
+    if (retainedFixedRenderTileDataPanes) {
       return []
     }
     if (canUseWorkerResidentPaneScenesResult) {
@@ -873,7 +891,6 @@ export function useWorkbookGridRenderState(input: {
     canUseWorkerResidentPaneScenesResult,
     columnWidths,
     engine,
-    fixedRenderTileDataPanes,
     freezeCols,
     freezeRows,
     frozenColumnWidth,
@@ -886,11 +903,12 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    retainedFixedRenderTileDataPanes,
     workerResidentPaneScenes,
   ])
   const residentDataPanes = useMemo(
     () =>
-      fixedRenderTileDataPanes ??
+      retainedFixedRenderTileDataPanes ??
       resolveResidentDataPaneRenderState({
         panes: residentDataPaneScenes,
         residentViewport,
@@ -910,7 +928,6 @@ export function useWorkbookGridRenderState(input: {
         frozenRowHeight,
       }),
     [
-      fixedRenderTileDataPanes,
       gridMetrics,
       frozenColumnWidth,
       frozenRowHeight,
@@ -918,6 +935,7 @@ export function useWorkbookGridRenderState(input: {
       hostClientWidth,
       residentDataPaneScenes,
       residentViewport,
+      retainedFixedRenderTileDataPanes,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
       viewport,
