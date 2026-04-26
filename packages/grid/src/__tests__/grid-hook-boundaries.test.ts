@@ -92,7 +92,6 @@ describe('grid hook boundary helpers', () => {
         hasRowResizePreview: true,
         isEditingCell: false,
         isFillHandleDragging: false,
-        isRangeMoveDragging: false,
       }),
     ).toBe(true)
     expect(
@@ -105,7 +104,6 @@ describe('grid hook boundary helpers', () => {
         hasRowResizePreview: false,
         isEditingCell: true,
         isFillHandleDragging: false,
-        isRangeMoveDragging: false,
       }),
     ).toBe(false)
     expect(resolveResizeGuideColumn({ activeResizeColumn: null, cursor: 'col-resize', header: { kind: 'column', index: 4 } })).toBe(4)

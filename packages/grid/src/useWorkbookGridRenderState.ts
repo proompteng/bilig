@@ -480,7 +480,6 @@ export function useWorkbookGridRenderState(input: {
     hasRowResizePreview: rowResizePreview !== null,
     isEditingCell,
     isFillHandleDragging,
-    isRangeMoveDragging,
   })
 
   const syncVisibleRegion = useCallback(() => {

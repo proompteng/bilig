@@ -2,7 +2,6 @@ export function resolveRequiresLiveViewportState(input: {
   readonly isEditingCell: boolean
   readonly fillPreviewActive: boolean
   readonly isFillHandleDragging: boolean
-  readonly isRangeMoveDragging: boolean
   readonly hasActiveHeaderDrag: boolean
   readonly hasActiveResizeColumn: boolean
   readonly hasActiveResizeRow: boolean
@@ -13,7 +12,6 @@ export function resolveRequiresLiveViewportState(input: {
   return (
     input.fillPreviewActive ||
     input.isFillHandleDragging ||
-    input.isRangeMoveDragging ||
     input.hasActiveHeaderDrag ||
     input.hasActiveResizeColumn ||
     input.hasActiveResizeRow ||

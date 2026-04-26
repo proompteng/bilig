@@ -185,6 +185,47 @@ test('web app keeps normal cell selection out of resident scene invalidation', a
   expect(report?.counters.typeGpuTileMisses).toBe(0)
 })
 
+test('web app keeps range-move preview out of resident scene invalidation', async ({ page }) => {
+  await page.goto(`/?document=range-move-no-resident-refresh-${Date.now()}`)
+  await waitForWorkbookReady(page)
+
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await formulaInput.fill('left')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('C2')
+  await nameBox.press('Enter')
+  await formulaInput.fill('right')
+  await formulaInput.press('Enter')
+
+  await dragProductBodySelection(page, 1, 1, 2, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C2')
+
+  await settleWorkbookScrollPerf(page, 80)
+  await startWorkbookScrollPerf(page, 'range-move-no-resident-refresh', { primeRenderer: false })
+  await settleWorkbookScrollPerf(page, 24)
+
+  let report: Awaited<ReturnType<typeof stopWorkbookScrollPerf>> | null = null
+  try {
+    await dragSelectedRangeBorderPreview(page, 1, 1, 3, 3)
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D4:E4')
+    await settleWorkbookScrollPerf(page, 24)
+    report = await stopWorkbookScrollPerf(page)
+  } finally {
+    await page.mouse.up()
+  }
+
+  expect(report).not.toBeNull()
+  expect(report?.counters.scenePacketRefreshes).toBe(0)
+  expect(report?.counters.typeGpuScenePacketsApplied).toBe(0)
+  expect(report?.counters.typeGpuBufferAllocations).toBe(0)
+  expect(report?.counters.typeGpuTileMisses).toBe(0)
+})
+
 test('web app maps clicks in the upper half of a cell to that same visible cell', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)
@@ -305,6 +346,33 @@ async function dragSelectedRangeBorderTowardBottom(page: Page): Promise<void> {
   await page.mouse.move(sourceX, sourceY)
   await page.mouse.down()
   await page.mouse.move(targetX, targetY, { steps: 16 })
+}
+
+async function dragSelectedRangeBorderPreview(
+  page: Page,
+  startColumn: number,
+  startRow: number,
+  targetColumn: number,
+  targetRow: number,
+): Promise<void> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  const startLeft = await getProductColumnLeft(page, startColumn)
+  const sourceX = grid.x + startLeft + 3
+  const sourceY = grid.y + PRODUCT_HEADER_HEIGHT + startRow * PRODUCT_ROW_HEIGHT + 2
+  const targetLeft = await getProductColumnLeft(page, targetColumn)
+  const targetWidth = await getProductColumnWidth(page, targetColumn)
+  const targetX = grid.x + targetLeft + Math.floor(targetWidth / 2)
+  const targetY = grid.y + PRODUCT_HEADER_HEIGHT + targetRow * PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+
+  await page.mouse.move(sourceX, sourceY)
+  await page.mouse.down()
+  await page.mouse.move(targetX, targetY, { steps: 12 })
 }
 
 async function getGridScrollTop(page: Page): Promise<number> {
